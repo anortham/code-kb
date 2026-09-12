@@ -15,6 +15,8 @@ The design of `code-kb` incorporates critical lessons from real-world agent benc
 - [**005: Cold-Start Reconciliation**](docs/plans/005-startup-reconciliation.md) — Detecting and reconciling offline edits in under 50ms on startup.
 - [**006: Retrospective Lessons from Miller**](docs/plans/006-lessons-from-miller.md) — Analysis of calibration data, performance ledgers, and traps to avoid.
 - [**010: Master Implementation Plan**](docs/plans/010-master-implementation-plan.md) — The phased engineering roadmap from workspace scaffolding to release.
+- [**ADR 001: Zero Workspace Parameters**](docs/decisions/001-zero-workspace-parameters.md) — Decision record forbidding workspace parameters in tool schemas.
+- [**AGENTS.md Guidelines**](AGENTS.md) — Architectural invariants and rules for AI coding assistants working in this repository.
 
 ## Key Principles
 

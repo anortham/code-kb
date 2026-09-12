@@ -26,7 +26,8 @@ Examining Miller reveals both **brilliant successes** to incorporate into `code-
 ### Trap 1: The "Workspace Registry" & `workspace_id` Tax
 - **What Miller Did:** `McpWorkspaceTargetPolicy` strictly enforced that every workspace-bound tool call (`search`, `inspect`, `context`, `trace`, `edit`) had to pass an explicit `workspace_id`. If omitted, the call was rejected with `ToolDiagnostic.Refusal(WorkspaceIdRequiredCode)`.
 - **The Failure:** Agents constantly forgot the ID, hallucinated UUIDs, or wasted tool calls running `workspace operation=list` and `workspace operation=open`.
-- **code-kb Solution:** **1:1 Process-to-Workspace Binding.** The server is bound to the workspace root via MCP protocol roots or launch flags. The LLM agent **never sees or passes a workspace ID**.
+- **The Goldfish Variant:** Goldfish tools expose `workspace: string` across MCP tools because global servers are launched from IDE install directories. This similarly causes prompt pollution and agent friction.
+- **code-kb Solution:** **1:1 Process-to-Workspace Binding & Zero Schema Parameters.** The server is bound to the workspace root via MCP protocol roots, project-local `.mcp.json`, or silent path discovery. Tool schemas NEVER expose `workspace`, keeping tool calls purely semantic.
 
 ---
 

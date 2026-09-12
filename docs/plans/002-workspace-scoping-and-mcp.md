@@ -100,3 +100,24 @@ When an agent calls a tool (e.g., `file_skeleton("src/auth/login.rs")`):
    - The SQLite artifact is opened from `%LOCALAPPDATA%\code-kb\stores\<repo_slug>-<hash>\artifact.db` (or Family Store view).
 
 This guarantees that the LLM agent experiences zero tool errors regarding paths, IDs, or directory confusion.
+
+---
+
+## 5. Architectural Invariant: The Global MCP CWD Trap & Zero Schema Pollution
+
+### The Problem
+When MCP servers are registered globally in host clients (e.g. `~/.gemini/config/mcp_config.json`), the host client frequently spawns the server process with its own application directory as the CWD (e.g. `C:\Users\...\AppData\Local\Programs\antigravity`), where no project repository or `.code-kb/artifact.db` exists.
+
+In previous architectures (e.g. Goldfish), developers reacted to this by adding an optional `workspace: string` parameter to every tool schema, instructing the LLM to provide it on every call.
+
+### Why That Approach Fails
+1. **Prompt Pollution:** Once an LLM sees `workspace` in a tool schema, it feels compelled to append `workspace: "..."` to every tool call, consuming context tokens and increasing latency.
+2. **Path Hallucination:** Models frequently hallucinate path formats, slash directions, or cross-project paths.
+3. **Ergonomic Regression:** The simplicity of semantic tool calling (`find_symbol(query: "Workspace")`) is destroyed.
+
+### The code-kb Contract
+1. **Tool Schemas Are Inviolate:** No tool shall ever expose `workspace`, `workspace_id`, or `repo_path` in its `inputSchema`.
+2. **Silent Backend Auto-Scan:** If the server is bound to a repository directory that has not been indexed yet, `code-kb` runs `scan_workspace` automatically on the first tool call to create `.code-kb/artifact.db` and start the watcher.
+3. **Silent Path Binding:** If a tool call contains an absolute path in `file_path` or `path`, `code-kb` silently anchors to that project root.
+4. **CI Enforcement:** Automated tests (`crates/code-kb-cli/tests/mcp_test.rs`) verify that `tools/list` never exposes `workspace` across any tool schema.
+
