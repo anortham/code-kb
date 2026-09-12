@@ -7,8 +7,8 @@ use code_kb_core::{
     ensure_fresh_file, format_codebase_outline, format_context_slice,
     format_file_skeleton, format_references, get_symbol_by_name, load_file_symbols,
     load_files, open_read_only, reconcile_offline_edits, replace_symbol_body,
-    search_symbols, slice_symbol_body, start_watcher, ContextSlice, WatcherHandle,
-    Workspace, WorkspaceError,
+    scan_workspace, search_symbols, slice_symbol_body, start_watcher, ContextSlice,
+    WatcherHandle, Workspace, WorkspaceError,
 };
 
 use super::protocol::{CallToolResult, JsonRpcRequest, JsonRpcResponse, Tool};
@@ -62,8 +62,12 @@ impl McpServer {
             "Bound workspace dynamically"
         );
 
-        if db_path.exists() && self._watcher.is_none() {
-            self._watcher = start_watcher(ws.clone(), db_path.clone()).ok();
+        if self.workspace.canonical_root != ws.canonical_root || self._watcher.is_none() {
+            if db_path.exists() {
+                self._watcher = start_watcher(ws.clone(), db_path.clone()).ok();
+            } else {
+                self._watcher = None;
+            }
         }
 
         self.workspace = ws;
@@ -86,10 +90,6 @@ impl McpServer {
                         "depth": {
                             "type": "integer",
                             "description": "Directory recursion depth (default: 2)."
-                        },
-                        "workspace": {
-                            "type": "string",
-                            "description": "Host-native absolute project/workspace path (e.g. 'c:/source/code-kb'). Required when server is registered globally without --root."
                         }
                     }
                 }),
@@ -103,10 +103,6 @@ impl McpServer {
                         "file_path": {
                             "type": "string",
                             "description": "File path relative to workspace root or absolute path."
-                        },
-                        "workspace": {
-                            "type": "string",
-                            "description": "Host-native absolute project/workspace path (e.g. 'c:/source/code-kb'). Required when server is registered globally without --root."
                         }
                     },
                     "required": ["file_path"]
@@ -133,10 +129,6 @@ impl McpServer {
                         "limit": {
                             "type": "integer",
                             "description": "Maximum number of symbols to return (default: 20)."
-                        },
-                        "workspace": {
-                            "type": "string",
-                            "description": "Host-native absolute project/workspace path (e.g. 'c:/source/code-kb'). Required when server is registered globally without --root."
                         }
                     },
                     "required": ["query"]
@@ -155,10 +147,6 @@ impl McpServer {
                         "file_path": {
                             "type": "string",
                             "description": "Optional file path to disambiguate identical symbol names."
-                        },
-                        "workspace": {
-                            "type": "string",
-                            "description": "Host-native absolute project/workspace path (e.g. 'c:/source/code-kb'). Required when server is registered globally without --root."
                         }
                     },
                     "required": ["symbol_name"]
@@ -177,10 +165,6 @@ impl McpServer {
                         "file_path": {
                             "type": "string",
                             "description": "Optional file path to disambiguate identical symbol names."
-                        },
-                        "workspace": {
-                            "type": "string",
-                            "description": "Host-native absolute project/workspace path (e.g. 'c:/source/code-kb'). Required when server is registered globally without --root."
                         }
                     },
                     "required": ["symbol_name"]
@@ -204,10 +188,6 @@ impl McpServer {
                         "limit": {
                             "type": "integer",
                             "description": "Maximum references to return (default: 20)."
-                        },
-                        "workspace": {
-                            "type": "string",
-                            "description": "Host-native absolute project/workspace path (e.g. 'c:/source/code-kb'). Required when server is registered globally without --root."
                         }
                     },
                     "required": ["symbol_name", "direction"]
@@ -226,10 +206,6 @@ impl McpServer {
                         "limit": {
                             "type": "integer",
                             "description": "Maximum results to return (default: 30)."
-                        },
-                        "workspace": {
-                            "type": "string",
-                            "description": "Host-native absolute project/workspace path (e.g. 'c:/source/code-kb'). Required when server is registered globally without --root."
                         }
                     },
                     "required": ["category"]
@@ -256,10 +232,6 @@ impl McpServer {
                         "expected_body_hash": {
                             "type": "string",
                             "description": "Optional optimistic lock hash of current body."
-                        },
-                        "workspace": {
-                            "type": "string",
-                            "description": "Host-native absolute project/workspace path (e.g. 'c:/source/code-kb'). Required when server is registered globally without --root."
                         }
                     },
                     "required": ["symbol_name", "file_path", "new_body"]
@@ -283,9 +255,27 @@ impl McpServer {
             }
         }
 
+        // Auto-scan if workspace is a known repository but database artifact does not exist yet
+        if !self.db_path.exists() {
+            let root = &self.workspace.canonical_root;
+            if root.join(".git").exists()
+                || root.join("Cargo.toml").exists()
+                || root.join("package.json").exists()
+                || root.join("go.mod").exists()
+                || root.join("pyproject.toml").exists()
+            {
+                tracing::info!(ws = %root.display(), "Database not found; running automatic initial scan");
+                if let Err(e) = scan_workspace(&self.workspace, &self.db_path, false) {
+                    tracing::error!("Initial scan failed: {e}");
+                } else if self._watcher.is_none() {
+                    self._watcher = start_watcher(self.workspace.clone(), self.db_path.clone()).ok();
+                }
+            }
+        }
+
         if !self.db_path.exists() {
             let msg = format!(
-                "Workspace is not bound or database artifact not found at '{}'. For user-level/global MCP registrations, pass 'workspace': '<absolute-path-to-project>' (e.g. 'c:/source/code-kb') or run `code-kb scan` first.",
+                "Database artifact not found at '{}'. Please configure code-kb with '--root <repo-path>' in your MCP config or invoke a tool with a path inside a project repository.",
                 self.db_path.display()
             );
             tracing::warn!("{}", msg);

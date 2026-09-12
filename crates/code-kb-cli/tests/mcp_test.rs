@@ -78,6 +78,17 @@ fn test_mcp_stdio_handshake_and_tools() {
     assert!(tool_names.contains(&"find_structural_facts"));
     assert!(tool_names.contains(&"replace_symbol_body"));
 
+    // Verify zero workspace pollution across all tools
+    for tool in tools {
+        let schema = &tool["inputSchema"];
+        let props = &schema["properties"];
+        assert!(
+            props.get("workspace").is_none(),
+            "Tool '{}' should NOT expose 'workspace' parameter in schema",
+            tool["name"]
+        );
+    }
+
     // 3. Send tools/call find_symbol
     let call_req = json!({
         "jsonrpc": "2.0",
