@@ -216,19 +216,26 @@ impl McpServer {
     }
 
     pub fn handle_call_tool(&self, name: &str, arguments: &Value) -> CallToolResult {
+        tracing::info!(tool = name, args = %arguments, "MCP tool called");
         if !self.db_path.exists() {
-            return CallToolResult::error(format!(
+            let msg = format!(
                 "Database artifact not found at '{}'. Run `code-kb scan` or `julie-extract scan` first.",
                 self.db_path.display()
-            ));
+            );
+            tracing::warn!("{}", msg);
+            return CallToolResult::error(msg);
         }
 
         let conn = match open_read_only(&self.db_path) {
             Ok(c) => c,
-            Err(e) => return CallToolResult::error(format!("Failed to open database: {e}")),
+            Err(e) => {
+                let msg = format!("Failed to open database: {e}");
+                tracing::error!("{}", msg);
+                return CallToolResult::error(msg);
+            }
         };
 
-        match name {
+        let result = match name {
             "codebase_outline" => {
                 let depth = arguments
                     .get("depth")
@@ -497,10 +504,23 @@ impl McpServer {
                 }
             }
             _ => CallToolResult::error(format!("Unknown tool: '{name}'")),
+        };
+
+        if result.is_error {
+            tracing::warn!(tool = name, "MCP tool returned error");
+        } else {
+            tracing::info!(tool = name, "MCP tool executed successfully");
         }
+
+        result
     }
 
     pub fn run_stdio(&mut self) -> anyhow::Result<()> {
+        tracing::info!(
+            workspace = %self.workspace.canonical_root.display(),
+            db = %self.db_path.display(),
+            "code-kb MCP server listening on stdio"
+        );
         let stdin = std::io::stdin();
         let mut reader = BufReader::new(stdin.lock());
         let mut stdout = std::io::stdout();

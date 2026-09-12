@@ -10,6 +10,7 @@ use code_kb_core::{
     Workspace,
 };
 
+mod logging;
 mod mcp;
 
 #[derive(Debug, Parser)]
@@ -30,6 +31,10 @@ pub struct Cli {
     /// Format output as JSON.
     #[arg(long, global = true)]
     pub json: bool,
+
+    /// Enable verbose debug logging.
+    #[arg(long, short = 'v', global = true)]
+    pub verbose: bool,
 
     #[command(subcommand)]
     pub command: Command,
@@ -57,6 +62,8 @@ pub enum Command {
     Scan(ScanArgs),
     /// Start Model Context Protocol (MCP) server over stdio.
     Serve(ServeArgs),
+    /// View active log file location and recent diagnostic entries.
+    Logs(LogsArgs),
 }
 
 #[derive(Debug, Args)]
@@ -157,12 +164,63 @@ pub struct ServeArgs {
     pub root: Option<PathBuf>,
 }
 
+#[derive(Debug, Args)]
+pub struct LogsArgs {
+    /// Number of recent log lines to display.
+    #[arg(long, default_value_t = 50)]
+    pub lines: usize,
+}
+
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     // Discover workspace
     let ws_root = cli.root.as_deref();
     let workspace = Workspace::discover(ws_root)?;
+
+    // Initialize structured logging to .code-kb/logs/code-kb.log
+    let is_serve = matches!(&cli.command, Command::Serve(_));
+    let _log_guard = logging::init_logging(&workspace.canonical_root, is_serve, cli.verbose);
+    tracing::info!(
+        root = %workspace.canonical_root.display(),
+        command = ?std::env::args().collect::<Vec<_>>(),
+        "code-kb started"
+    );
+
+    // Handle Logs command (does not require existing database)
+    if let Command::Logs(args) = &cli.command {
+        let log_dir = logging::get_log_dir(&workspace.canonical_root);
+        println!("Log directory: {}", log_dir.display());
+
+        let mut log_files = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(&log_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() {
+                    if let Ok(meta) = entry.metadata() {
+                        let mtime = meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+                        log_files.push((path, mtime));
+                    }
+                }
+            }
+        }
+
+        log_files.sort_by(|a, b| b.1.cmp(&a.1));
+
+        if let Some((latest_file, _)) = log_files.first() {
+            println!("Latest log file: {}\n", latest_file.display());
+            if let Ok(content) = std::fs::read_to_string(latest_file) {
+                let all_lines: Vec<&str> = content.lines().collect();
+                let start = all_lines.len().saturating_sub(args.lines);
+                for line in &all_lines[start..] {
+                    println!("{line}");
+                }
+            }
+        } else {
+            println!("No log files found yet in {}", log_dir.display());
+        }
+        return Ok(());
+    }
 
     // Handle Serve command
     if let Command::Serve(args) = &cli.command {
@@ -358,7 +416,7 @@ fn main() -> anyhow::Result<()> {
                 res.symbol_name, res.file_path, res.old_body_hash, res.new_body_hash, res.bytes_written
             );
         }
-        Command::Serve(_) | Command::Scan(_) => unreachable!(),
+        Command::Serve(_) | Command::Scan(_) | Command::Logs(_) => unreachable!(),
     }
 
     Ok(())

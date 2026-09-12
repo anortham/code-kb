@@ -25,6 +25,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 notify = { workspace = true }
 notify-debouncer-mini = { workspace = true }
+tracing-appender = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3.17"

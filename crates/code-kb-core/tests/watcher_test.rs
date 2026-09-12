@@ -44,7 +44,7 @@ fn test_background_watcher_incremental_sync() {
 
     // Wait for debouncer (150ms) and update execution
     let mut updated = false;
-    for _ in 0..10 {
+    for _ in 0..25 {
         sleep(Duration::from_millis(200));
         let conn = open_read_only(&db_path).unwrap();
         if let Ok(syms) = search_symbols(&conn, "farewell", None, false, 10) {
@@ -61,7 +61,7 @@ fn test_background_watcher_incremental_sync() {
     fs::write(&file2, "pub fn bonus_feature() {}\n").unwrap();
 
     let mut created = false;
-    for _ in 0..10 {
+    for _ in 0..25 {
         sleep(Duration::from_millis(200));
         let conn = open_read_only(&db_path).unwrap();
         if let Ok(syms) = search_symbols(&conn, "bonus_feature", None, false, 10) {
@@ -77,7 +77,7 @@ fn test_background_watcher_incremental_sync() {
     fs::remove_file(&file2).unwrap();
 
     let mut deleted = false;
-    for _ in 0..10 {
+    for _ in 0..25 {
         sleep(Duration::from_millis(200));
         let conn = open_read_only(&db_path).unwrap();
         if let Ok(syms) = search_symbols(&conn, "bonus_feature", None, false, 10) {

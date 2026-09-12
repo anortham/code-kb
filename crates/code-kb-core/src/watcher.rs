@@ -82,17 +82,17 @@ pub fn start_watcher(
             // Filter relevant events using gitignore & hard exclusions
             let mut relevant_files = Vec::new();
             for event in &events {
-                let path = &event.path;
-                if let Ok(rel) = path.strip_prefix(&ws_clone.canonical_root) {
+                let norm_path = dunce::simplified(&event.path);
+                if let Ok(rel) = norm_path.strip_prefix(&ws_clone.canonical_root) {
                     let rel_str = to_forward_slash(rel);
                     if is_hard_excluded(&rel_str) {
                         continue;
                     }
-                    let is_dir = path.is_dir();
-                    if gitignore.matched(path, is_dir).is_ignore() {
+                    let is_dir = norm_path.is_dir();
+                    if gitignore.matched(norm_path, is_dir).is_ignore() {
                         continue;
                     }
-                    relevant_files.push((path.clone(), rel_str));
+                    relevant_files.push((norm_path.to_path_buf(), rel_str));
                 }
             }
 
