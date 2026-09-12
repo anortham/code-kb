@@ -1,0 +1,30 @@
+[package]
+name = "code-kb-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "CLI and MCP server for code-kb"
+
+[[bin]]
+name = "code-kb"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+code-kb-core = { path = "../code-kb-core" }
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+notify = { workspace = true }
+notify-debouncer-mini = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3.17"

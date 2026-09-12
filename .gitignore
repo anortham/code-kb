@@ -1,0 +1,18 @@
+/target
+**/*.rs.bk
+Cargo.lock
+
+# Database and store artifacts
+.code-kb/
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+
+# IDE and OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

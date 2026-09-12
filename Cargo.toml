@@ -1,0 +1,37 @@
+[workspace]
+members = [
+    "crates/code-kb-core",
+    "crates/code-kb-cli",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/anortham/code-kb"
+rust-version = "1.95"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = "warn"
+
+[workspace.dependencies]
+rusqlite = { version = "0.40", default-features = false, features = ["bundled", "limits"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+clap = { version = "4.5", features = ["derive", "env"] }
+ignore = "0.4"
+walkdir = "2.5"
+notify = "8.0"
+notify-debouncer-mini = "0.6"
+sha2 = "0.10"
+hex = "0.4"
+thiserror = "2.0"
+anyhow = "1.0"
+directories = "6.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dunce = "1.0"
