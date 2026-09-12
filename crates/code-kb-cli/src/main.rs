@@ -3,10 +3,10 @@ use std::path::{Path, PathBuf};
 use clap::{Args, Parser, Subcommand};
 
 use code_kb_core::{
-    ensure_fresh_file, format_codebase_outline, format_context_slice,
-    format_file_skeleton, format_references, get_file, get_symbol_by_name,
-    load_file_symbols, load_files, open_read_only, replace_symbol_body,
-    scan_workspace, search_symbols, slice_symbol_body, ContextSlice,
+    ensure_fresh_file, ensure_fts_index_path, format_codebase_outline, format_context_slice,
+    format_file_skeleton, format_references, format_search_results, fts_search_symbols,
+    get_file, get_symbol_by_name, load_file_symbols, load_files, open_read_only,
+    replace_symbol_body, scan_workspace, search_symbols, slice_symbol_body, ContextSlice,
     Workspace,
 };
 
@@ -48,6 +48,8 @@ pub enum Command {
     Skeleton(SkeletonArgs),
     /// Search symbols by name, kind, or test flag.
     Symbol(SymbolArgs),
+    /// Conceptual full-text search over symbol names, signatures, and docstrings using FTS5 (BM25).
+    Search(SearchArgs),
     /// Retrieve exact implementation body of a symbol.
     Body(BodyArgs),
     /// Surgical context bundle: target body + callee signatures + types + tests.
@@ -89,6 +91,21 @@ pub struct SymbolArgs {
     #[arg(long)]
     pub kind: Option<String>,
     /// Include test functions.
+    #[arg(long)]
+    pub include_tests: bool,
+    /// Maximum number of results.
+    #[arg(long, default_value_t = 20)]
+    pub limit: usize,
+}
+
+#[derive(Debug, Args)]
+pub struct SearchArgs {
+    /// Natural language keywords or concept to search for.
+    pub query: String,
+    /// Filter by symbol kind (e.g. function, struct, trait, class, interface, enum).
+    #[arg(long)]
+    pub kind: Option<String>,
+    /// Include test functions and test containers.
     #[arg(long)]
     pub include_tests: bool,
     /// Maximum number of results.
@@ -311,6 +328,22 @@ fn main() -> anyhow::Result<()> {
                         println!("  Doc: {first}");
                     }
                 }
+            }
+        }
+        Command::Search(args) => {
+            let _ = ensure_fts_index_path(&db_path);
+            let matches = fts_search_symbols(
+                &conn,
+                &args.query,
+                args.kind.as_deref(),
+                args.include_tests,
+                args.limit,
+            )?;
+
+            if cli.json {
+                println!("{}", serde_json::to_string_pretty(&matches)?);
+            } else {
+                println!("{}", format_search_results(&args.query, &matches));
             }
         }
         Command::Body(args) => {

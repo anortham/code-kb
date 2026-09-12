@@ -62,7 +62,7 @@ fn test_mcp_stdio_handshake_and_tools() {
     let resp2: Value = serde_json::from_str(&response_line2).expect("Failed to parse JSON response");
     assert_eq!(resp2["id"], 2);
     let tools = resp2["result"]["tools"].as_array().expect("Expected tools array");
-    assert_eq!(tools.len(), 8);
+    assert_eq!(tools.len(), 9);
 
     let tool_names: Vec<&str> = tools
         .iter()
@@ -72,6 +72,7 @@ fn test_mcp_stdio_handshake_and_tools() {
     assert!(tool_names.contains(&"codebase_outline"));
     assert!(tool_names.contains(&"file_skeleton"));
     assert!(tool_names.contains(&"find_symbol"));
+    assert!(tool_names.contains(&"search_symbols"));
     assert!(tool_names.contains(&"get_symbol_body"));
     assert!(tool_names.contains(&"get_context_slice"));
     assert!(tool_names.contains(&"find_references"));
@@ -116,6 +117,33 @@ fn test_mcp_stdio_handshake_and_tools() {
     let content_text = resp3["result"]["content"][0]["text"].as_str().unwrap();
     eprintln!("content_text: {content_text}");
     assert!(content_text.contains("Workspace"));
+
+    // 4. Send tools/call search_symbols (FTS5 conceptual search)
+    let search_req = json!({
+        "jsonrpc": "2.0",
+        "id": 4,
+        "method": "tools/call",
+        "params": {
+            "name": "search_symbols",
+            "arguments": {
+                "query": "workspace discovery root"
+            }
+        }
+    });
+
+    let mut line4 = serde_json::to_string(&search_req).unwrap();
+    line4.push('\n');
+    stdin.write_all(line4.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut response_line4 = String::new();
+    reader.read_line(&mut response_line4).unwrap();
+
+    let resp4: Value = serde_json::from_str(&response_line4).expect("Failed to parse JSON response");
+    assert_eq!(resp4["id"], 4);
+    let search_text = resp4["result"]["content"][0]["text"].as_str().unwrap();
+    eprintln!("search_text: {search_text}");
+    assert!(search_text.contains("Workspace"));
 
     drop(stdin);
     let _ = child.wait();

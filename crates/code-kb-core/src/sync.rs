@@ -137,6 +137,10 @@ pub fn scan_workspace(workspace: &Workspace, db_path: &Path, force: bool) -> Res
     }
 
     execute_julie_extract(&args)?;
+
+    // Ensure FTS5 index is built and triggers are established
+    let _ = crate::db::ensure_fts_index_path(db_path);
+
     Ok(())
 }
 

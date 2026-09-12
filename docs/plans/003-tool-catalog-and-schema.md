@@ -81,7 +81,28 @@ Fast semantic lookup across symbols in the repository, replacing text grep.
 
 ---
 
-### 2.4 `get_symbol_body`
+### 2.4 `search_symbols`
+Tier 2 In-Database Full-Text Search (SQLite FTS5) with BM25 ranking over symbol names, signatures, and docstrings. Use when exact symbol names are unknown and searching by functional concepts.
+
+- **Parameters:**
+  - `query` (string, required): Keywords or natural language query (e.g. `parse tokens`, `reconcile offline edits`).
+  - `kind` (string, optional): Filter by kind (`function`, `struct`, `trait`, `class`, `interface`, `enum`).
+  - `is_test` (boolean, optional, default: `false`): When false, excludes test functions and test containers.
+  - `limit` (integer, optional, default: `20`): Maximum number of symbols to return.
+- **Returns:**
+  BM25-ranked symbols with match snippets highlighting query hits.
+- **Example Output (~80 tokens):**
+  ```text
+  Found 1 symbol matching concept "format skeleton":
+
+  - function `format_file_skeleton` [crates/code-kb-core/src/formatters.rs:7-42] (score: -14.56)
+    Signature: pub fn format_file_skeleton(file_path: &str, symbols: &[Symbol], line_count: Option<usize>) -> String
+    Match: [Format] progressive disclosure file [skeleton] with implementation bodies stripped.
+  ```
+
+---
+
+### 2.5 `get_symbol_body`
 Retrieves the exact implementation body of a specific symbol.
 
 - **Parameters:**
@@ -101,7 +122,7 @@ Retrieves the exact implementation body of a specific symbol.
 
 ---
 
-### 2.5 `get_context_slice`
+### 2.6 `get_context_slice`
 The "Surgical Context Bundle". Packages everything an agent needs to edit a symbol in one call.
 
 - **Parameters:**
@@ -135,7 +156,7 @@ The "Surgical Context Bundle". Packages everything an agent needs to edit a symb
 
 ---
 
-### 2.6 `find_references`
+### 2.7 `find_references`
 Discovers callers or callees of a symbol.
 
 - **Parameters:**
@@ -146,7 +167,7 @@ Discovers callers or callees of a symbol.
 
 ---
 
-### 2.7 `find_structural_facts`
+### 2.8 `find_structural_facts`
 Queries framework-level and domain-level facts extracted by tree-sitter.
 
 - **Parameters:**

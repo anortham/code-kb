@@ -49,6 +49,74 @@ pub fn open_read_write(path: &Path) -> Result<Connection, DbError> {
     Ok(conn)
 }
 
+/// Ensures the `symbols_fts` FTS5 virtual table and synchronization triggers exist in the SQLite database.
+/// If `symbols` has rows but `symbols_fts` has not indexed them (e.g. freshly created FTS table),
+/// an index rebuild is executed.
+pub fn ensure_fts_index(conn: &Connection) -> Result<(), rusqlite::Error> {
+    let symbols_table_exists: bool = conn
+        .query_row(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='symbols'",
+            [],
+            |_| Ok(true),
+        )
+        .unwrap_or(false);
+
+    if !symbols_table_exists {
+        return Ok(());
+    }
+
+    conn.execute_batch(
+        "CREATE VIRTUAL TABLE IF NOT EXISTS symbols_fts USING fts5(
+            name,
+            signature,
+            doc_comment,
+            content='symbols',
+            content_rowid='rowid',
+            tokenize='porter unicode61'
+        );
+
+        CREATE TRIGGER IF NOT EXISTS symbols_ai AFTER INSERT ON symbols BEGIN
+            INSERT INTO symbols_fts(rowid, name, signature, doc_comment)
+            VALUES (new.rowid, new.name, new.signature, new.doc_comment);
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS symbols_ad AFTER DELETE ON symbols BEGIN
+            INSERT INTO symbols_fts(symbols_fts, rowid, name, signature, doc_comment)
+            VALUES ('delete', old.rowid, old.name, old.signature, old.doc_comment);
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS symbols_au AFTER UPDATE ON symbols BEGIN
+            INSERT INTO symbols_fts(symbols_fts, rowid, name, signature, doc_comment)
+            VALUES ('delete', old.rowid, old.name, old.signature, old.doc_comment);
+            INSERT INTO symbols_fts(rowid, name, signature, doc_comment)
+            VALUES (new.rowid, new.name, new.signature, new.doc_comment);
+        END;",
+    )?;
+
+    let symbol_count: i64 = conn
+        .query_row("SELECT count(*) FROM symbols", [], |r| r.get(0))
+        .unwrap_or(0);
+    let docsize_count: i64 = conn
+        .query_row("SELECT count(*) FROM symbols_fts_docsize", [], |r| r.get(0))
+        .unwrap_or(0);
+
+    if symbol_count > 0 && docsize_count == 0 {
+        conn.execute("INSERT INTO symbols_fts(symbols_fts) VALUES('rebuild')", [])?;
+    }
+
+    Ok(())
+}
+
+/// Ensures the FTS5 index on `symbols` exists at the specified database file path.
+pub fn ensure_fts_index_path(path: &Path) -> Result<(), DbError> {
+    if !path.exists() {
+        return Err(DbError::NotFound(path.display().to_string()));
+    }
+    let conn = open_read_write(path)?;
+    ensure_fts_index(&conn).map_err(DbError::PragmaFailed)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -84,4 +152,51 @@ mod tests {
         let count: i64 = conn.query_row("SELECT count(*) FROM test_fts WHERE test_fts MATCH 'token'", [], |r| r.get(0)).unwrap();
         assert_eq!(count, 1);
     }
+
+    #[test]
+    fn test_ensure_fts_index_lifecycle() {
+        let temp = tempfile::NamedTempFile::new().unwrap();
+        let conn = open_read_write(temp.path()).unwrap();
+
+        // Create mock symbols table
+        conn.execute_batch(
+            "CREATE TABLE symbols (
+                symbol_id TEXT PRIMARY KEY,
+                name TEXT,
+                signature TEXT,
+                doc_comment TEXT
+            );
+            INSERT INTO symbols VALUES ('1', 'PaymentGateway', 'pub trait PaymentGateway', 'Core payment provider interface');
+            INSERT INTO symbols VALUES ('2', 'StripeClient', 'pub struct StripeClient', 'Handles HTTP requests to stripe API');",
+        )
+        .unwrap();
+
+        // Ensure FTS index initializes and rebuilds existing rows
+        ensure_fts_index(&conn).unwrap();
+
+        let count: i64 = conn
+            .query_row("SELECT count(*) FROM symbols_fts WHERE symbols_fts MATCH 'payment'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+
+        // Test trigger on insert
+        conn.execute(
+            "INSERT INTO symbols VALUES ('3', 'RefundHandler', 'pub fn handle_refund()', 'Processes transaction refunds');",
+            [],
+        )
+        .unwrap();
+
+        let count: i64 = conn
+            .query_row("SELECT count(*) FROM symbols_fts WHERE symbols_fts MATCH 'refund'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+
+        // Test trigger on delete
+        conn.execute("DELETE FROM symbols WHERE symbol_id = '3';", []).unwrap();
+        let count: i64 = conn
+            .query_row("SELECT count(*) FROM symbols_fts WHERE symbols_fts MATCH 'refund'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 0);
+    }
 }
+

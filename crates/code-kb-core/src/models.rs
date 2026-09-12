@@ -104,3 +104,11 @@ pub struct ContextSlice {
     pub related_types: Vec<String>,
     pub related_tests: Vec<Symbol>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SymbolSearchResult {
+    pub symbol: Symbol,
+    pub score: f64,
+    pub snippet: Option<String>,
+}
+

@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
-use crate::models::{ContextSlice, FileFact, ReferenceSite, Symbol};
+use crate::models::{ContextSlice, FileFact, ReferenceSite, Symbol, SymbolSearchResult};
 
 /// Format progressive disclosure file skeleton with implementation bodies stripped.
 pub fn format_file_skeleton(file_path: &str, symbols: &[Symbol], line_count: Option<usize>) -> String {
@@ -295,6 +295,36 @@ pub fn format_references(target_name: &str, refs: &[ReferenceSite], direction: &
     out
 }
 
+/// Formats FTS5 conceptual search results into token-dense markdown.
+pub fn format_search_results(query: &str, results: &[SymbolSearchResult]) -> String {
+    if results.is_empty() {
+        return format!("No symbols found matching concept \"{query}\".");
+    }
+
+    let mut out = format!("Found {} symbols matching concept \"{query}\":\n\n", results.len());
+    for r in results {
+        let s = &r.symbol;
+        let sig = s.signature.as_deref().unwrap_or(&s.name);
+        out.push_str(&format!(
+            "- {} `{}` [{}:{}-{}] (score: {:.2})\n",
+            s.kind, s.name, s.path, s.start_line, s.end_line, r.score
+        ));
+        out.push_str(&format!("  Signature: {sig}\n"));
+        if let Some(snippet) = &r.snippet {
+            let clean_snip = snippet.replace('\r', "").trim().to_string();
+            let first_line = clean_snip.lines().next().unwrap_or(&clean_snip);
+            out.push_str(&format!("  Match: {first_line}\n"));
+        } else if let Some(doc) = &s.doc_comment {
+            let first_line = doc.lines().next().unwrap_or("").trim();
+            if !first_line.is_empty() {
+                out.push_str(&format!("  Doc: {first_line}\n"));
+            }
+        }
+    }
+
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -336,4 +366,48 @@ mod tests {
         assert!(skeleton.contains("/// Performs core work."));
         assert!(skeleton.contains("19 lines hidden: L11-L29"));
     }
+
+    #[test]
+    fn test_format_search_results() {
+        let results = vec![
+            SymbolSearchResult {
+                symbol: Symbol {
+                    symbol_id: "s1".into(),
+                    file_id: "f1".into(),
+                    path: "src/parser.rs".into(),
+                    language: "rust".into(),
+                    name: "parse_tokens".into(),
+                    kind: "function".into(),
+                    signature: Some("pub fn parse_tokens()".into()),
+                    doc_comment: Some("Parses tokens from stream.".into()),
+                    visibility: Some("pub".into()),
+                    parent_symbol_id: None,
+                    start_line: 15,
+                    start_column: 0,
+                    end_line: 25,
+                    end_column: 1,
+                    start_byte: 100,
+                    end_byte: 250,
+                    body_start_line: None,
+                    body_start_column: None,
+                    body_end_line: None,
+                    body_end_column: None,
+                    body_start_byte: None,
+                    body_end_byte: None,
+                    body_hash: None,
+                    semantic_group: None,
+                    is_test: false,
+                    test_container: false,
+                },
+                score: -1.85,
+                snippet: Some("Parses [tokens] from stream.".into()),
+            }
+        ];
+
+        let formatted = format_search_results("tokens", &results);
+        assert!(formatted.contains("Found 1 symbols matching concept \"tokens\":"));
+        assert!(formatted.contains("- function `parse_tokens` [src/parser.rs:15-25] (score: -1.85)"));
+        assert!(formatted.contains("Match: Parses [tokens] from stream."));
+    }
 }
+

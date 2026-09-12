@@ -1,7 +1,9 @@
 use rusqlite::{params, Connection, Row};
 use thiserror::Error;
 
-use crate::models::{FileFact, LiteralFact, ReferenceSite, StructuralFact, Symbol, TypeFact};
+use crate::models::{
+    FileFact, LiteralFact, ReferenceSite, StructuralFact, Symbol, SymbolSearchResult, TypeFact,
+};
 
 #[derive(Debug, Error)]
 pub enum QueryError {
@@ -157,8 +159,169 @@ pub fn search_symbols(
             .collect::<Result<Vec<_>, _>>()?
     };
 
+    if rows.is_empty() {
+        if let Ok(fts_matches) = fts_search_symbols(conn, query, kind_filter, include_tests, limit) {
+            if !fts_matches.is_empty() {
+                return Ok(fts_matches.into_iter().map(|m| m.symbol).collect());
+            }
+        }
+    }
+
     Ok(rows)
 }
+
+/// Sanitizes a free-form user query into `(and_query, or_query)` formatted for SQLite FTS5.
+/// Each alphanumeric/underscore token is quoted and given a prefix wildcard: `"token"*`.
+pub fn sanitize_fts5_query(query: &str) -> (String, String) {
+    let words: Vec<String> = query
+        .split(|c: char| !c.is_alphanumeric() && c != '_')
+        .filter(|s| !s.is_empty())
+        .map(|s| format!("\"{s}\"*"))
+        .collect();
+
+    if words.is_empty() {
+        return (String::new(), String::new());
+    }
+
+    let and_query = words.join(" ");
+    let or_query = words.join(" OR ");
+    (and_query, or_query)
+}
+
+/// Conceptual full-text search over symbol names, signatures, and docstrings using FTS5 (BM25).
+/// Evaluates multi-token AND matching first, falling back to OR ranking if AND yields 0 results.
+pub fn fts_search_symbols(
+    conn: &Connection,
+    query: &str,
+    kind_filter: Option<&str>,
+    include_tests: bool,
+    limit: usize,
+) -> Result<Vec<SymbolSearchResult>, QueryError> {
+    let (and_q, or_q) = sanitize_fts5_query(query);
+    if and_q.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let fts_exists: bool = conn
+        .query_row(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='symbols_fts'",
+            [],
+            |_| Ok(true),
+        )
+        .unwrap_or(false);
+
+    if !fts_exists {
+        let pattern = format!("%{query}%");
+        let mut sql = String::from(
+            "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,
+                    visibility, parent_symbol_id, start_line, start_column, end_line, end_column,
+                    start_byte, end_byte, body_start_line, body_start_column, body_end_line,
+                    body_end_column, body_start_byte, body_end_byte, body_hash, semantic_group,
+                    is_test, test_container
+             FROM symbols
+             WHERE (name = ?1 OR name LIKE ?2)",
+        );
+        if !include_tests {
+            sql.push_str(" AND is_test = 0 AND test_container = 0");
+        }
+        if kind_filter.is_some() {
+            sql.push_str(" AND kind = ?3");
+        }
+        sql.push_str(" ORDER BY (name = ?1) DESC, length(name) ASC, path ASC LIMIT ");
+        sql.push_str(&limit.to_string());
+
+        let mut stmt = conn.prepare(&sql)?;
+        let rows = if let Some(k) = kind_filter {
+            stmt.query_map(params![query, pattern, k], |row| map_symbol(row))?
+                .collect::<Result<Vec<_>, _>>()?
+        } else {
+            stmt.query_map(params![query, pattern], |row| map_symbol(row))?
+                .collect::<Result<Vec<_>, _>>()?
+        };
+
+        return Ok(rows
+            .into_iter()
+            .map(|s| SymbolSearchResult {
+                symbol: s,
+                score: 0.0,
+                snippet: None,
+            })
+            .collect());
+    }
+
+    let execute_search = |match_clause: &str| -> Result<Vec<SymbolSearchResult>, QueryError> {
+        let mut sql = String::from(
+            "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,
+                    s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,
+                    s.start_byte, s.end_byte, s.body_start_line, s.body_start_column, s.body_end_line,
+                    s.body_end_column, s.body_start_byte, s.body_end_byte, s.body_hash, s.semantic_group,
+                    s.is_test, s.test_container,
+                    bm25(symbols_fts, 10.0, 5.0, 1.0) AS rank_score,
+                    snippet(symbols_fts, 2, '[', ']', '...', 12) AS doc_snippet,
+                    snippet(symbols_fts, 1, '[', ']', '...', 12) AS sig_snippet,
+                    snippet(symbols_fts, 0, '[', ']', '...', 12) AS name_snippet
+             FROM symbols_fts
+             JOIN symbols s ON s.rowid = symbols_fts.rowid
+             WHERE symbols_fts MATCH ?1",
+        );
+
+        if !include_tests {
+            sql.push_str(" AND s.is_test = 0 AND s.test_container = 0");
+        }
+
+        if kind_filter.is_some() {
+            sql.push_str(" AND s.kind = ?2");
+        }
+
+        sql.push_str(" ORDER BY rank_score ASC LIMIT ");
+        sql.push_str(&limit.to_string());
+
+        let mut stmt = conn.prepare(&sql)?;
+
+        let map_fn = |row: &Row| -> rusqlite::Result<SymbolSearchResult> {
+            let symbol = map_symbol(row)?;
+            let score: f64 = row.get("rank_score")?;
+            let doc_snip: Option<String> = row.get("doc_snippet").ok();
+            let sig_snip: Option<String> = row.get("sig_snippet").ok();
+            let name_snip: Option<String> = row.get("name_snippet").ok();
+
+            // Pick the snippet containing match highlight brackets
+            let snippet = if doc_snip.as_ref().map(|s| s.contains('[')).unwrap_or(false) {
+                doc_snip
+            } else if sig_snip.as_ref().map(|s| s.contains('[')).unwrap_or(false) {
+                sig_snip
+            } else if name_snip.as_ref().map(|s| s.contains('[')).unwrap_or(false) {
+                name_snip
+            } else {
+                doc_snip.or(sig_snip).or(name_snip)
+            };
+
+            Ok(SymbolSearchResult {
+                symbol,
+                score,
+                snippet,
+            })
+        };
+
+        let rows = if let Some(k) = kind_filter {
+            stmt.query_map(params![match_clause, k], map_fn)?
+                .collect::<Result<Vec<_>, _>>()?
+        } else {
+            stmt.query_map(params![match_clause], map_fn)?
+                .collect::<Result<Vec<_>, _>>()?
+        };
+
+        Ok(rows)
+    };
+
+    let mut results = execute_search(&and_q)?;
+    if results.is_empty() && and_q != or_q {
+        results = execute_search(&or_q)?;
+    }
+
+    Ok(results)
+}
+
 
 /// Find a specific symbol by name, with an optional path filter for disambiguation.
 pub fn get_symbol_by_name(
@@ -454,3 +617,110 @@ pub fn find_type_facts(
     }
     Ok(results)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::{ensure_fts_index, open_read_write};
+
+    #[test]
+    fn test_sanitize_fts5_query() {
+        let (and_q, or_q) = sanitize_fts5_query("parse tokens");
+        assert_eq!(and_q, "\"parse\"* \"tokens\"*");
+        assert_eq!(or_q, "\"parse\"* OR \"tokens\"*");
+
+        let (and_q, or_q) = sanitize_fts5_query("  Option<T>  ");
+        assert_eq!(and_q, "\"Option\"* \"T\"*");
+        assert_eq!(or_q, "\"Option\"* OR \"T\"*");
+
+        let (and_q, or_q) = sanitize_fts5_query("   ");
+        assert!(and_q.is_empty());
+        assert!(or_q.is_empty());
+    }
+
+    #[test]
+    fn test_fts_search_symbols_and_porter_stemming() {
+        let temp = tempfile::NamedTempFile::new().unwrap();
+        let conn = open_read_write(temp.path()).unwrap();
+
+        conn.execute_batch(
+            "CREATE TABLE symbols (
+                symbol_id TEXT PRIMARY KEY,
+                file_id TEXT,
+                path TEXT,
+                language TEXT,
+                name TEXT,
+                kind TEXT,
+                signature TEXT,
+                doc_comment TEXT,
+                visibility TEXT,
+                parent_symbol_id TEXT,
+                start_line INTEGER,
+                start_column INTEGER,
+                end_line INTEGER,
+                end_column INTEGER,
+                start_byte INTEGER,
+                end_byte INTEGER,
+                body_start_line INTEGER,
+                body_start_column INTEGER,
+                body_end_line INTEGER,
+                body_end_column INTEGER,
+                body_start_byte INTEGER,
+                body_end_byte INTEGER,
+                body_hash TEXT,
+                semantic_group TEXT,
+                is_test INTEGER,
+                test_container INTEGER
+            );
+            INSERT INTO symbols VALUES (
+                's1', 'f1', 'src/payment.rs', 'rust', 'PaymentGateway', 'trait',
+                'pub trait PaymentGateway', 'Core payment provider interface for transactions',
+                'pub', NULL, 10, 0, 20, 1, 100, 250, 12, 4, 19, 1, 120, 240, 'hash1', 'type', 0, 0
+            );
+            INSERT INTO symbols VALUES (
+                's2', 'f1', 'src/payment.rs', 'rust', 'StripeClient', 'struct',
+                'pub struct StripeClient', 'Handles HTTP requests to stripe payment API',
+                'pub', NULL, 25, 0, 35, 1, 300, 450, 27, 4, 34, 1, 320, 440, 'hash2', 'type', 0, 0
+            );
+            INSERT INTO symbols VALUES (
+                's3', 'f2', 'src/parser.rs', 'rust', 'parse_tokens', 'function',
+                'pub fn parse_tokens(stream: &TokenStream) -> Result<Vec<Token>>', 'Parses syntax tokens from stream',
+                'pub', NULL, 5, 0, 15, 1, 50, 200, 7, 4, 14, 1, 70, 190, 'hash3', 'function', 0, 0
+            );
+            INSERT INTO symbols VALUES (
+                's4', 'f3', 'tests/payment_test.rs', 'rust', 'test_payment_flow', 'function',
+                'fn test_payment_flow()', 'Tests payment charge workflow',
+                NULL, NULL, 5, 0, 15, 1, 50, 200, 7, 4, 14, 1, 70, 190, 'hash4', 'function', 1, 0
+            );",
+        )
+        .unwrap();
+
+        ensure_fts_index(&conn).unwrap();
+
+        // 1. Porter stemming match: 'parsing' matches 'parse_tokens' and 'Parses' docstring
+        let results = fts_search_symbols(&conn, "parsing tokens", None, false, 10).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].symbol.name, "parse_tokens");
+        assert!(results[0].snippet.is_some());
+
+        // 2. Docstring conceptual search: 'transactions' matches 'PaymentGateway'
+        let results = fts_search_symbols(&conn, "transactions", None, false, 10).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].symbol.name, "PaymentGateway");
+
+        // 3. Test filter: searching 'payment' with include_tests=false ignores 'test_payment_flow'
+        let results = fts_search_symbols(&conn, "payment", None, false, 10).unwrap();
+        assert_eq!(results.len(), 2);
+        assert!(results.iter().all(|r| !r.symbol.is_test));
+
+        // 4. Test filter: searching 'payment' with include_tests=true includes 'test_payment_flow'
+        let results = fts_search_symbols(&conn, "payment", None, true, 10).unwrap();
+        assert_eq!(results.len(), 3);
+
+        // 5. Fallback OR matching: multi-term where only some match
+        let results = fts_search_symbols(&conn, "stripe kafka redis", None, false, 10).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].symbol.name, "StripeClient");
+    }
+}
+

@@ -4,11 +4,11 @@ use std::path::{Path, PathBuf};
 use serde_json::{json, Value};
 
 use code_kb_core::{
-    ensure_fresh_file, format_codebase_outline, format_context_slice,
-    format_file_skeleton, format_references, get_symbol_by_name, load_file_symbols,
-    load_files, open_read_only, reconcile_offline_edits, replace_symbol_body,
-    scan_workspace, search_symbols, slice_symbol_body, start_watcher, ContextSlice,
-    WatcherHandle, Workspace, WorkspaceError,
+    ensure_fresh_file, ensure_fts_index_path, format_codebase_outline, format_context_slice,
+    format_file_skeleton, format_references, format_search_results, fts_search_symbols,
+    get_symbol_by_name, load_file_symbols, load_files, open_read_only, reconcile_offline_edits,
+    replace_symbol_body, scan_workspace, search_symbols, slice_symbol_body, start_watcher,
+    ContextSlice, WatcherHandle, Workspace, WorkspaceError,
 };
 
 use super::protocol::{CallToolResult, JsonRpcRequest, JsonRpcResponse, Tool};
@@ -25,11 +25,12 @@ impl McpServer {
             workspace.canonical_root.join(".code-kb").join("artifact.db")
         });
 
-        // Trigger cold-start reconciliation in background thread if database already exists
+        // Trigger cold-start reconciliation and ensure FTS index in background thread if database exists
         if db_path.exists() {
             let ws_clone = workspace.clone();
             let db_clone = db_path.clone();
             std::thread::spawn(move || {
+                let _ = ensure_fts_index_path(&db_clone);
                 if let Ok(conn) = open_read_only(&db_clone) {
                     let _ = reconcile_offline_edits(&ws_clone, &db_clone, &conn);
                 }
@@ -64,6 +65,7 @@ impl McpServer {
 
         if self.workspace.canonical_root != ws.canonical_root || self._watcher.is_none() {
             if db_path.exists() {
+                let _ = ensure_fts_index_path(&db_path);
                 self._watcher = start_watcher(ws.clone(), db_path.clone()).ok();
             } else {
                 self._watcher = None;
@@ -117,6 +119,32 @@ impl McpServer {
                         "query": {
                             "type": "string",
                             "description": "Symbol name or search pattern."
+                        },
+                        "kind": {
+                            "type": "string",
+                            "description": "Optional filter by kind (e.g. function, struct, trait, class, interface, enum)."
+                        },
+                        "is_test": {
+                            "type": "boolean",
+                            "description": "Include test functions and containers (default: false)."
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Maximum number of symbols to return (default: 20)."
+                        }
+                    },
+                    "required": ["query"]
+                }),
+            },
+            Tool {
+                name: "search_symbols".to_string(),
+                description: "Conceptual and full-text search over symbol names, signatures, and docstrings using SQLite FTS5 BM25 ranking. Use when exact symbol names are unknown.".to_string(),
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Natural language query or keywords (e.g. 'parse tokens', 'authentication middleware', 'retry backoff')."
                         },
                         "kind": {
                             "type": "string",
@@ -243,15 +271,18 @@ impl McpServer {
     pub fn handle_call_tool(&mut self, name: &str, arguments: &Value) -> CallToolResult {
         tracing::info!(tool = name, args = %arguments, "MCP tool called");
 
-        // Dynamically bind workspace if passed explicitly or if file_path is provided
+        // Dynamically bind workspace if passed explicitly or if candidate path is outside current workspace
         if let Some(ws_str) = arguments.get("workspace").and_then(|v| v.as_str()) {
             let _ = self.bind_workspace(Path::new(ws_str));
-        } else if !self.db_path.exists() {
-            if let Some(candidate) = arguments.get("file_path").or_else(|| arguments.get("path")).and_then(|v| v.as_str()) {
-                let p = Path::new(candidate);
-                if p.is_absolute() || p.exists() {
-                    let _ = self.bind_workspace(p);
+        } else if let Some(candidate) = arguments.get("file_path").or_else(|| arguments.get("path")).and_then(|v| v.as_str()) {
+            let p = Path::new(candidate);
+            if p.is_absolute() {
+                let norm = code_kb_core::normalize_path(p);
+                if !norm.starts_with(&self.workspace.canonical_root) {
+                    let _ = self.bind_workspace(&norm);
                 }
+            } else if !self.db_path.exists() && p.exists() {
+                let _ = self.bind_workspace(p);
             }
         }
 
@@ -382,6 +413,30 @@ impl McpServer {
                 }
 
                 CallToolResult::text(out)
+            }
+            "search_symbols" => {
+                let query = match arguments.get("query").and_then(|v| v.as_str()) {
+                    Some(q) => q,
+                    None => return CallToolResult::error("Missing required parameter: query"),
+                };
+                let kind = arguments.get("kind").and_then(|v| v.as_str());
+                let include_tests = arguments
+                    .get("is_test")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let limit = arguments
+                    .get("limit")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(20) as usize;
+
+                let _ = ensure_fts_index_path(&self.db_path);
+
+                let matches = match fts_search_symbols(&conn, query, kind, include_tests, limit) {
+                    Ok(m) => m,
+                    Err(e) => return CallToolResult::error(e.to_string()),
+                };
+
+                CallToolResult::text(format_search_results(query, &matches))
             }
             "get_symbol_body" => {
                 let symbol_name = match arguments.get("symbol_name").and_then(|v| v.as_str()) {

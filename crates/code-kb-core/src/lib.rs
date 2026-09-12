@@ -8,15 +8,20 @@ pub mod sync;
 pub mod watcher;
 pub mod workspace;
 
-pub use db::{open_read_only, open_read_write, DbError};
+pub use db::{ensure_fts_index, ensure_fts_index_path, open_read_only, open_read_write, DbError};
 pub use edit::{replace_symbol_body, EditError, EditResult};
 pub use formatters::{
     format_codebase_outline, format_context_slice, format_file_skeleton, format_references,
+    format_search_results,
 };
-pub use models::{ContextSlice, FileFact, LiteralFact, ReferenceSite, StructuralFact, Symbol, TypeFact};
+pub use models::{
+    ContextSlice, FileFact, LiteralFact, ReferenceSite, StructuralFact, Symbol, SymbolSearchResult,
+    TypeFact,
+};
 pub use queries::{
-    find_literals, find_references, find_structural_facts, find_type_facts, get_file,
-    get_symbol_by_name, load_file_symbols, load_files, search_symbols, QueryError,
+    find_literals, find_references, find_structural_facts, find_type_facts, fts_search_symbols,
+    get_file, get_symbol_by_name, load_file_symbols, load_files, sanitize_fts5_query,
+    search_symbols, QueryError,
 };
 pub use slicer::{slice_symbol, slice_symbol_body, SliceError};
 pub use sync::{
