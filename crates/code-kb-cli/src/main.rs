@@ -266,6 +266,7 @@ fn main() -> anyhow::Result<()> {
                 &files,
                 &symbols_by_file,
                 args.depth,
+                args.path.as_deref(),
             );
             if cli.json {
                 println!("{}", serde_json::to_string_pretty(&files)?);

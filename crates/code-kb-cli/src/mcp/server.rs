@@ -241,6 +241,9 @@ impl McpServer {
                     .get("depth")
                     .and_then(|v| v.as_u64())
                     .unwrap_or(2) as usize;
+                let path_filter = arguments
+                    .get("path")
+                    .and_then(|v| v.as_str());
 
                 let files = match load_files(&conn) {
                     Ok(f) => f,
@@ -259,6 +262,7 @@ impl McpServer {
                     &files,
                     &symbols_by_file,
                     depth,
+                    path_filter,
                 );
                 CallToolResult::text(text)
             }

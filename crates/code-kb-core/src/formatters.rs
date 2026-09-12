@@ -120,11 +120,29 @@ pub fn format_codebase_outline(
     files: &[FileFact],
     symbols_by_file: &HashMap<String, Vec<Symbol>>,
     max_depth: usize,
+    path_filter: Option<&str>,
 ) -> String {
     let mut root_node = OutlineNode::default();
+    let norm_filter = path_filter
+        .map(|f| f.replace('\\', "/").trim_matches('/').to_string())
+        .unwrap_or_default();
 
     for file in files {
-        let path = Path::new(&file.path);
+        let file_path = file.path.replace('\\', "/");
+        let rel_path_str = if norm_filter.is_empty() {
+            file_path.as_str()
+        } else if file_path == norm_filter {
+            Path::new(&file_path)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(&file_path)
+        } else if let Some(stripped) = file_path.strip_prefix(&format!("{norm_filter}/")) {
+            stripped
+        } else {
+            continue;
+        };
+
+        let path = Path::new(rel_path_str);
         let components: Vec<&str> = path
             .components()
             .map(|c| c.as_os_str().to_str().unwrap_or(""))
@@ -157,8 +175,14 @@ pub fn format_codebase_outline(
         }
     }
 
+    let display_root = if norm_filter.is_empty() {
+        format!("{root_label}/")
+    } else {
+        format!("{root_label}/{norm_filter}/")
+    };
+
     let mut out = String::new();
-    out.push_str(&format!("{root_label}/\n"));
+    out.push_str(&format!("{display_root}\n"));
     render_outline_tree(&mut out, &root_node, "", 0, max_depth);
     out
 }

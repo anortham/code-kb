@@ -75,4 +75,13 @@ mod tests {
         let write_res = conn_ro.execute("INSERT INTO test (name) VALUES ('beta');", []);
         assert!(write_res.is_err());
     }
+
+    #[test]
+    fn test_fts5_support() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute("CREATE VIRTUAL TABLE test_fts USING fts5(content);", []).unwrap();
+        conn.execute("INSERT INTO test_fts (content) VALUES ('hello world token search');", []).unwrap();
+        let count: i64 = conn.query_row("SELECT count(*) FROM test_fts WHERE test_fts MATCH 'token'", [], |r| r.get(0)).unwrap();
+        assert_eq!(count, 1);
+    }
 }
