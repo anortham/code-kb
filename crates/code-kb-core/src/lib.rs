@@ -5,6 +5,7 @@ pub mod models;
 pub mod queries;
 pub mod slicer;
 pub mod sync;
+pub mod watcher;
 pub mod workspace;
 
 pub use db::{open_read_only, open_read_write, DbError};
@@ -22,4 +23,5 @@ pub use sync::{
     delete_file, ensure_fresh_file, find_julie_extract_binary, reconcile_offline_edits,
     scan_workspace, update_file, ReconcileReport, SyncError,
 };
+pub use watcher::{start_watcher, WatcherError, WatcherHandle};
 pub use workspace::{normalize_path, to_forward_slash, Workspace, WorkspaceError};

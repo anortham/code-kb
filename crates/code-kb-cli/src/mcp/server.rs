@@ -7,7 +7,8 @@ use code_kb_core::{
     ensure_fresh_file, format_codebase_outline, format_context_slice,
     format_file_skeleton, format_references, get_symbol_by_name, load_file_symbols,
     load_files, open_read_only, reconcile_offline_edits, replace_symbol_body,
-    search_symbols, slice_symbol_body, ContextSlice, Workspace,
+    search_symbols, slice_symbol_body, start_watcher, ContextSlice, WatcherHandle,
+    Workspace,
 };
 
 use super::protocol::{CallToolResult, JsonRpcRequest, JsonRpcResponse, Tool};
@@ -15,6 +16,7 @@ use super::protocol::{CallToolResult, JsonRpcRequest, JsonRpcResponse, Tool};
 pub struct McpServer {
     pub workspace: Workspace,
     pub db_path: PathBuf,
+    pub _watcher: Option<WatcherHandle>,
 }
 
 impl McpServer {
@@ -34,7 +36,18 @@ impl McpServer {
             });
         }
 
-        Ok(Self { workspace, db_path })
+        // Tier 3: Start background file watcher with debounce and git storm circuit breaker
+        let watcher = if db_path.exists() {
+            start_watcher(workspace.clone(), db_path.clone()).ok()
+        } else {
+            None
+        };
+
+        Ok(Self {
+            workspace,
+            db_path,
+            _watcher: watcher,
+        })
     }
 
     pub fn tool_definitions() -> Vec<Tool> {
@@ -542,6 +555,9 @@ impl McpServer {
                                     self.workspace = Workspace::new(path);
                                     if let Ok(loc) = self.workspace.locate_db(None) {
                                         self.db_path = loc;
+                                        if self.db_path.exists() {
+                                            self._watcher = start_watcher(self.workspace.clone(), self.db_path.clone()).ok();
+                                        }
                                     }
                                 }
                             }
