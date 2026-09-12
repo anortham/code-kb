@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "code-kb": {
-      "command": "c:\\source\\code-kb\\target\\release\\code-kb.exe",
+      "command": "./target/release/code-kb",
       "args": ["serve"]
     }
   }
