@@ -8,7 +8,7 @@ use code_kb_core::{
     format_file_skeleton, format_references, get_symbol_by_name, load_file_symbols,
     load_files, open_read_only, reconcile_offline_edits, replace_symbol_body,
     search_symbols, slice_symbol_body, start_watcher, ContextSlice, WatcherHandle,
-    Workspace,
+    Workspace, WorkspaceError,
 };
 
 use super::protocol::{CallToolResult, JsonRpcRequest, JsonRpcResponse, Tool};
@@ -50,6 +50,27 @@ impl McpServer {
         })
     }
 
+    pub fn bind_workspace(&mut self, path: &Path) -> Result<(), WorkspaceError> {
+        let ws = Workspace::discover(Some(path))?;
+        let db_path = ws.locate_db(None).unwrap_or_else(|_| {
+            ws.canonical_root.join(".code-kb").join("artifact.db")
+        });
+
+        tracing::info!(
+            workspace = %ws.canonical_root.display(),
+            db = %db_path.display(),
+            "Bound workspace dynamically"
+        );
+
+        if db_path.exists() && self._watcher.is_none() {
+            self._watcher = start_watcher(ws.clone(), db_path.clone()).ok();
+        }
+
+        self.workspace = ws;
+        self.db_path = db_path;
+        Ok(())
+    }
+
     pub fn tool_definitions() -> Vec<Tool> {
         vec![
             Tool {
@@ -65,6 +86,10 @@ impl McpServer {
                         "depth": {
                             "type": "integer",
                             "description": "Directory recursion depth (default: 2)."
+                        },
+                        "workspace": {
+                            "type": "string",
+                            "description": "Host-native absolute project/workspace path (e.g. 'c:/source/code-kb'). Required when server is registered globally without --root."
                         }
                     }
                 }),
@@ -78,6 +103,10 @@ impl McpServer {
                         "file_path": {
                             "type": "string",
                             "description": "File path relative to workspace root or absolute path."
+                        },
+                        "workspace": {
+                            "type": "string",
+                            "description": "Host-native absolute project/workspace path (e.g. 'c:/source/code-kb'). Required when server is registered globally without --root."
                         }
                     },
                     "required": ["file_path"]
@@ -104,6 +133,10 @@ impl McpServer {
                         "limit": {
                             "type": "integer",
                             "description": "Maximum number of symbols to return (default: 20)."
+                        },
+                        "workspace": {
+                            "type": "string",
+                            "description": "Host-native absolute project/workspace path (e.g. 'c:/source/code-kb'). Required when server is registered globally without --root."
                         }
                     },
                     "required": ["query"]
@@ -122,6 +155,10 @@ impl McpServer {
                         "file_path": {
                             "type": "string",
                             "description": "Optional file path to disambiguate identical symbol names."
+                        },
+                        "workspace": {
+                            "type": "string",
+                            "description": "Host-native absolute project/workspace path (e.g. 'c:/source/code-kb'). Required when server is registered globally without --root."
                         }
                     },
                     "required": ["symbol_name"]
@@ -140,6 +177,10 @@ impl McpServer {
                         "file_path": {
                             "type": "string",
                             "description": "Optional file path to disambiguate identical symbol names."
+                        },
+                        "workspace": {
+                            "type": "string",
+                            "description": "Host-native absolute project/workspace path (e.g. 'c:/source/code-kb'). Required when server is registered globally without --root."
                         }
                     },
                     "required": ["symbol_name"]
@@ -163,6 +204,10 @@ impl McpServer {
                         "limit": {
                             "type": "integer",
                             "description": "Maximum references to return (default: 20)."
+                        },
+                        "workspace": {
+                            "type": "string",
+                            "description": "Host-native absolute project/workspace path (e.g. 'c:/source/code-kb'). Required when server is registered globally without --root."
                         }
                     },
                     "required": ["symbol_name", "direction"]
@@ -181,6 +226,10 @@ impl McpServer {
                         "limit": {
                             "type": "integer",
                             "description": "Maximum results to return (default: 30)."
+                        },
+                        "workspace": {
+                            "type": "string",
+                            "description": "Host-native absolute project/workspace path (e.g. 'c:/source/code-kb'). Required when server is registered globally without --root."
                         }
                     },
                     "required": ["category"]
@@ -207,6 +256,10 @@ impl McpServer {
                         "expected_body_hash": {
                             "type": "string",
                             "description": "Optional optimistic lock hash of current body."
+                        },
+                        "workspace": {
+                            "type": "string",
+                            "description": "Host-native absolute project/workspace path (e.g. 'c:/source/code-kb'). Required when server is registered globally without --root."
                         }
                     },
                     "required": ["symbol_name", "file_path", "new_body"]
@@ -215,11 +268,24 @@ impl McpServer {
         ]
     }
 
-    pub fn handle_call_tool(&self, name: &str, arguments: &Value) -> CallToolResult {
+    pub fn handle_call_tool(&mut self, name: &str, arguments: &Value) -> CallToolResult {
         tracing::info!(tool = name, args = %arguments, "MCP tool called");
+
+        // Dynamically bind workspace if passed explicitly or if file_path is provided
+        if let Some(ws_str) = arguments.get("workspace").and_then(|v| v.as_str()) {
+            let _ = self.bind_workspace(Path::new(ws_str));
+        } else if !self.db_path.exists() {
+            if let Some(candidate) = arguments.get("file_path").or_else(|| arguments.get("path")).and_then(|v| v.as_str()) {
+                let p = Path::new(candidate);
+                if p.is_absolute() || p.exists() {
+                    let _ = self.bind_workspace(p);
+                }
+            }
+        }
+
         if !self.db_path.exists() {
             let msg = format!(
-                "Database artifact not found at '{}'. Run `code-kb scan` or `julie-extract scan` first.",
+                "Workspace is not bound or database artifact not found at '{}'. For user-level/global MCP registrations, pass 'workspace': '<absolute-path-to-project>' (e.g. 'c:/source/code-kb') or run `code-kb scan` first.",
                 self.db_path.display()
             );
             tracing::warn!("{}", msg);
@@ -569,23 +635,33 @@ impl McpServer {
         let id = request.id;
         match request.method.as_str() {
             "initialize" => {
-                // Check if client passed roots in params
+                tracing::info!(params = ?request.params, "MCP initialize received");
                 if let Some(params) = &request.params {
+                    let mut candidate = None;
                     if let Some(roots) = params.get("roots").and_then(|r| r.as_array()) {
-                        if let Some(first_root) = roots.first().and_then(|r| r.get("uri")).and_then(|u| u.as_str()) {
-                            if let Some(stripped) = first_root.strip_prefix("file:///") {
-                                let path = PathBuf::from(stripped);
-                                if path.exists() {
-                                    self.workspace = Workspace::new(path);
-                                    if let Ok(loc) = self.workspace.locate_db(None) {
-                                        self.db_path = loc;
-                                        if self.db_path.exists() {
-                                            self._watcher = start_watcher(self.workspace.clone(), self.db_path.clone()).ok();
-                                        }
-                                    }
-                                }
-                            }
+                        if let Some(u) = roots.first().and_then(|r| r.get("uri")).and_then(|u| u.as_str()) {
+                            candidate = Some(u);
                         }
+                    } else if let Some(u) = params.get("rootUri").and_then(|u| u.as_str()) {
+                        candidate = Some(u);
+                    } else if let Some(u) = params.get("rootPath").and_then(|u| u.as_str()) {
+                        candidate = Some(u);
+                    } else if let Some(folders) = params.get("workspaceFolders").and_then(|f| f.as_array()) {
+                        if let Some(u) = folders.first().and_then(|f| f.get("uri")).and_then(|u| u.as_str()) {
+                            candidate = Some(u);
+                        }
+                    }
+
+                    if let Some(cand) = candidate {
+                        let path_str = if let Some(stripped) = cand.strip_prefix("file:///") {
+                            stripped
+                        } else if let Some(stripped) = cand.strip_prefix("file://") {
+                            stripped
+                        } else {
+                            cand
+                        };
+                        let path = PathBuf::from(path_str);
+                        let _ = self.bind_workspace(&path);
                     }
                 }
 
