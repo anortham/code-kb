@@ -1,0 +1,27 @@
+{
+  "name": "code-kb",
+  "version": "0.1.0",
+  "description": "Fast, token-dense code-intelligence engine and MCP server for AI coding agents",
+  "author": {
+    "name": "Alan Northam"
+  },
+  "homepage": "https://github.com/anortham/code-kb",
+  "repository": "https://github.com/anortham/code-kb",
+  "license": "MIT OR Apache-2.0",
+  "keywords": [
+    "code-intelligence",
+    "ast",
+    "mcp",
+    "tree-sitter",
+    "symbols",
+    "progressive-disclosure"
+  ],
+  "mcpServers": {
+    "code-kb": {
+      "command": "code-kb",
+      "args": [
+        "serve"
+      ]
+    }
+  }
+}
