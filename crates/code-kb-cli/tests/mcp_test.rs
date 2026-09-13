@@ -10,6 +10,13 @@ fn test_mcp_stdio_handshake_and_tools() {
     std::fs::create_dir_all(&db_dir).unwrap();
     let db_path = db_dir.join("artifact.db");
 
+    let src_dir = root.join("src");
+    std::fs::create_dir_all(&src_dir).unwrap();
+    let content = "pub struct Workspace {\n    pub root: String,\n}\n";
+    std::fs::write(src_dir.join("workspace.rs"), content).unwrap();
+    let bytes = content.len() as i64;
+    let hash = format!("blake3:{}", blake3::hash(content.as_bytes()).to_hex());
+
     let conn = code_kb_core::open_read_write(&db_path).unwrap();
     conn.execute_batch(
         "CREATE TABLE files (
@@ -25,13 +32,29 @@ fn test_mcp_stdio_handshake_and_tools() {
             body_start_byte INTEGER, body_end_byte INTEGER, body_hash TEXT,
             semantic_group TEXT, is_test INTEGER, test_container INTEGER
         );
-        INSERT INTO files VALUES ('f1', 'src/workspace.rs', 'rust', 'hash1', 100, 10, '2026-01-01');
-        INSERT INTO symbols VALUES (
+        CREATE TABLE relationships (
+            relationship_id TEXT PRIMARY KEY, from_symbol_id TEXT, to_symbol_id TEXT,
+            kind TEXT, path TEXT, start_line INTEGER, start_column INTEGER
+        );
+        CREATE TABLE pending_relationships (
+            from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT,
+            path TEXT, start_line INTEGER, start_column INTEGER
+        );",
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO files VALUES ('f1', 'src/workspace.rs', 'rust', ?1, ?2, 3, '2026-01-01')",
+        rusqlite::params![hash, bytes],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO symbols VALUES (
             's1', 'f1', 'src/workspace.rs', 'rust', 'Workspace', 'struct',
             'pub struct Workspace', 'Workspace representation for code-kb workspace discovery root', 'pub', NULL,
-            1, 0, 10, 1, 0, 100, 1, 21, 10, 1, 21, 100, 'b3:hash',
+            1, 0, 3, 1, 0, ?1, 1, 21, 3, 1, 21, ?1, 'b3:hash',
             NULL, 0, 0
-        );",
+        )",
+        rusqlite::params![bytes],
     )
     .unwrap();
     code_kb_core::db::ensure_fts_index(&conn).unwrap();
@@ -109,7 +132,7 @@ fn test_mcp_stdio_handshake_and_tools() {
     let tools = resp2["result"]["tools"]
         .as_array()
         .expect("Expected tools array");
-    assert_eq!(tools.len(), 9);
+    assert_eq!(tools.len(), 10);
 
     let tool_names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
 
@@ -121,6 +144,7 @@ fn test_mcp_stdio_handshake_and_tools() {
     assert!(tool_names.contains(&"get_context_slice"));
     assert!(tool_names.contains(&"find_references"));
     assert!(tool_names.contains(&"find_structural_facts"));
+    assert!(tool_names.contains(&"blast_radius"));
     assert!(tool_names.contains(&"replace_symbol_body"));
 
     // Verify zero workspace pollution across all tools
@@ -128,8 +152,11 @@ fn test_mcp_stdio_handshake_and_tools() {
         let schema = &tool["inputSchema"];
         let props = &schema["properties"];
         assert!(
-            props.get("workspace").is_none(),
-            "Tool '{}' should NOT expose 'workspace' parameter in schema",
+            props.get("workspace").is_none()
+                && props.get("workspace_id").is_none()
+                && props.get("repo_path").is_none()
+                && props.get("root_dir").is_none(),
+            "Tool '{}' should NOT expose workspace parameters in schema",
             tool["name"]
         );
     }
@@ -160,7 +187,6 @@ fn test_mcp_stdio_handshake_and_tools() {
         serde_json::from_str(&response_line3).expect("Failed to parse JSON response");
     assert_eq!(resp3["id"], 3);
     let content_text = resp3["result"]["content"][0]["text"].as_str().unwrap();
-    eprintln!("content_text: {content_text}");
     assert!(content_text.contains("Workspace"));
 
     // 4. Send tools/call search_symbols (FTS5 conceptual search)
@@ -183,13 +209,107 @@ fn test_mcp_stdio_handshake_and_tools() {
 
     let mut response_line4 = String::new();
     reader.read_line(&mut response_line4).unwrap();
-
     let resp4: Value =
         serde_json::from_str(&response_line4).expect("Failed to parse JSON response");
     assert_eq!(resp4["id"], 4);
     let search_text = resp4["result"]["content"][0]["text"].as_str().unwrap();
-    eprintln!("search_text: {search_text}");
     assert!(search_text.contains("Workspace"));
+
+    // 5. Test find_references with alias "symbol" and omitted "direction" (should default to callers)
+    let refs_req = json!({
+        "jsonrpc": "2.0",
+        "id": 5,
+        "method": "tools/call",
+        "params": {
+            "name": "find_references",
+            "arguments": {
+                "symbol": "Workspace"
+            }
+        }
+    });
+    let mut line5 = serde_json::to_string(&refs_req).unwrap();
+    line5.push('\n');
+    stdin.write_all(line5.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut response_line5 = String::new();
+    reader.read_line(&mut response_line5).unwrap();
+    let resp5: Value =
+        serde_json::from_str(&response_line5).expect("Failed to parse JSON response");
+    assert_eq!(resp5["id"], 5);
+    assert!(resp5["error"].is_null());
+
+    // 6. Test find_structural_facts with no category argument (lists categories)
+    let facts_req = json!({
+        "jsonrpc": "2.0",
+        "id": 6,
+        "method": "tools/call",
+        "params": {
+            "name": "find_structural_facts",
+            "arguments": {}
+        }
+    });
+    let mut line6 = serde_json::to_string(&facts_req).unwrap();
+    line6.push('\n');
+    stdin.write_all(line6.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut response_line6 = String::new();
+    reader.read_line(&mut response_line6).unwrap();
+    let resp6: Value =
+        serde_json::from_str(&response_line6).expect("Failed to parse JSON response");
+    assert_eq!(resp6["id"], 6);
+    assert!(resp6["error"].is_null());
+
+    // 7. Test file_skeleton with alias "file" instead of "file_path"
+    let skeleton_req = json!({
+        "jsonrpc": "2.0",
+        "id": 7,
+        "method": "tools/call",
+        "params": {
+            "name": "file_skeleton",
+            "arguments": {
+                "file": "src/workspace.rs"
+            }
+        }
+    });
+    let mut line7 = serde_json::to_string(&skeleton_req).unwrap();
+    line7.push('\n');
+    stdin.write_all(line7.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut response_line7 = String::new();
+    reader.read_line(&mut response_line7).unwrap();
+    let resp7: Value =
+        serde_json::from_str(&response_line7).expect("Failed to parse JSON response");
+    assert_eq!(resp7["id"], 7);
+    let skeleton_text = resp7["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(skeleton_text.contains("pub struct Workspace"));
+
+    // 8. Test blast_radius via MCP
+    let blast_req = json!({
+        "jsonrpc": "2.0",
+        "id": 8,
+        "method": "tools/call",
+        "params": {
+            "name": "blast_radius",
+            "arguments": {
+                "symbol": "Workspace"
+            }
+        }
+    });
+    let mut line8 = serde_json::to_string(&blast_req).unwrap();
+    line8.push('\n');
+    stdin.write_all(line8.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut response_line8 = String::new();
+    reader.read_line(&mut response_line8).unwrap();
+    let resp8: Value =
+        serde_json::from_str(&response_line8).expect("Failed to parse JSON response");
+    assert_eq!(resp8["id"], 8);
+    let blast_text = resp8["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(blast_text.contains("Blast Radius"));
 
     let notification = json!({
         "jsonrpc": "2.0",
@@ -201,7 +321,7 @@ fn test_mcp_stdio_handshake_and_tools() {
 
     let ping_req = json!({
         "jsonrpc": "2.0",
-        "id": 5,
+        "id": 9,
         "method": "ping"
     });
     let mut ping_line = serde_json::to_string(&ping_req).unwrap();
@@ -209,11 +329,11 @@ fn test_mcp_stdio_handshake_and_tools() {
     stdin.write_all(ping_line.as_bytes()).unwrap();
     stdin.flush().unwrap();
 
-    let mut response_line5 = String::new();
-    reader.read_line(&mut response_line5).unwrap();
-    let resp5: Value =
-        serde_json::from_str(&response_line5).expect("Failed to parse JSON response");
-    assert_eq!(resp5["id"], 5);
+    let mut response_line9 = String::new();
+    reader.read_line(&mut response_line9).unwrap();
+    let resp9: Value =
+        serde_json::from_str(&response_line9).expect("Failed to parse JSON response");
+    assert_eq!(resp9["id"], 9);
 
     drop(stdin);
     let _ = child.wait();

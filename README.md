@@ -163,33 +163,37 @@ Terminal-based AI harnesses inherit your terminal's current working directory au
 
 ## MCP Tool Catalog
 
-| Tool | Purpose | Key Parameters |
-| :--- | :--- | :--- |
-| `codebase_outline` | High-level architectural orientation of directory layout & symbols. | `path` (opt), `depth` (opt, default 2) |
-| `file_skeleton` | File outline with function & method bodies stripped. | `file_path` (req) |
-| `find_symbol` | Fast semantic symbol search (exact & substring). | `query` (req), `kind` (opt), `is_test` (opt), `limit` (opt) |
-| `search_symbols` | Conceptual BM25 full-text search over symbol signatures & docstrings. | `query` (req), `kind` (opt), `limit` (opt) |
-| `get_symbol_body` | Slices the exact implementation body of a symbol from disk. | `symbol_name` (req), `file_path` (opt) |
-| `get_context_slice` | Surgical bundle: target body + callee signatures + types + tests. | `symbol_name` (req), `file_path` (opt) |
-| `find_references` | Traverses callers or callees of a symbol. | `symbol_name` (req), `direction` ("callers" \| "callees") |
-| `find_structural_facts` | Queries framework facts (routes, SQL queries, config keys, tables). | `category` (req), `limit` (opt) |
-| `replace_symbol_body` | Atomically replaces a symbol's implementation with syntax check. | `symbol_name` (req), `file_path` (req), `new_body` (req) |
+| Tool | Purpose | Key Parameters | Aliases |
+| :--- | :--- | :--- | :--- |
+| `codebase_outline` | High-level architectural orientation of directory layout & symbols. | `path` (opt), `depth` (opt, default 2) | `dir`, `subpath` |
+| `file_skeleton` | File outline with function & method bodies stripped (80–90% token savings). | `file_path` (req) | `file`, `path` |
+| `find_symbol` | Fast semantic symbol search (exact & substring) across repo or scoped path. | `query` (req), `path` (opt), `kind` (opt), `is_test` (opt), `limit` (opt) | `name`, `q` |
+| `search_symbols` | Conceptual BM25 full-text search over symbol signatures & docstrings. | `query` (req), `path` (opt), `kind` (opt), `limit` (opt) | `name`, `q` |
+| `get_symbol_body` | Slices the exact implementation body of a symbol from disk. | `symbol_name` (req), `file_path` (opt) | `symbol`, `name`, `path` |
+| `get_context_slice` | Surgical bundle: target body + callee signatures + parameter types + tests. | `symbol_name` (req), `file_path` (opt) | `symbol`, `name`, `path` |
+| `find_references` | Traverses callers or callees of a symbol (filters external stdlib noise). | `symbol_name` (req), `direction` ("callers" \| "callees", def: callers), `include_external` (opt, def: false) | `symbol`, `name` |
+| `blast_radius` | Multi-hop reverse reachability (CTEs) & targeted test prediction. | `symbol` (opt), `path` (opt), `depth` (opt, def: 3), `limit` (opt) | `name`, `file`, `impact` |
+| `find_structural_facts` | Queries framework facts (routes, SQL queries, config keys, tables). Lists all categories when omitted. | `category` (opt), `limit` (opt) | `kind` |
+| `replace_symbol_body` | Atomically replaces a symbol's implementation with pre-flight AST validation. | `symbol_name` (req), `file_path` (req), `new_body` (req), `expected_body_hash` (opt) | `symbol`, `file`, `body`, `code` |
 
 ---
 
 ## CLI Commands (Direct Terminal Usage)
 
-Every MCP capability can be executed directly from your terminal:
+Every MCP capability can be executed directly from your terminal with 1:1 parity:
 
 ```bash
 # Architectural outline of current repo (depth 2)
 code-kb outline
 
-# Skeleton of a specific file
+# Skeleton of a specific file (implementation bodies stripped)
 code-kb skeleton src/main.rs
 
-# Search symbols by name or kind
-code-kb symbol Workspace --kind struct
+# Search symbols by name, kind, or scoped directory path
+code-kb symbol Workspace --kind struct --path crates/code-kb-core
+
+# Conceptual BM25 full-text search across docstrings and signatures
+code-kb search "syntax validation concurrency"
 
 # Retrieve exact implementation body of a symbol
 code-kb body Workspace
@@ -197,14 +201,29 @@ code-kb body Workspace
 # Get surgical context slice (body + callees + types + tests)
 code-kb slice ensure_fresh_file
 
-# Find callers or callees of a function
+# Find callers or callees of a function (language-agnostically filters stdlib noise)
 code-kb refs open_read_only --direction callers
 
-# Query framework structural facts
-code-kb facts table --limit 10
+# View callees including external standard library tokens
+code-kb refs open_read_only --direction callees --include-external
 
-# Atomically edit a symbol body
+# Predict blast radius and targeted tests to run for a symbol or file
+code-kb blast-radius compute_blast_radius
+
+# Zero-argument blast radius: auto-discovers uncommitted git working-tree changes
+code-kb blast-radius
+# (alias: code-kb impact)
+
+# Query framework structural facts (or omit category to list all detected categories)
+code-kb facts
+code-kb facts route --limit 10
+
+# Atomically edit a symbol body with pre-flight tree-sitter syntax validation
 code-kb edit my_func --file src/lib.rs --body "{\n    println!(\"hello\");\n}"
+
+# Clean up orphaned SQLite stores for deleted worktrees or removed repositories
+code-kb prune --dry-run
+code-kb prune
 
 # View active log file and recent diagnostic messages
 code-kb logs

@@ -9,7 +9,7 @@ use thiserror::Error;
 use tracing::{info, warn};
 
 use crate::sync::{delete_file, scan_workspace, update_file};
-use crate::workspace::{Workspace, to_forward_slash};
+use crate::workspace::{Workspace, is_hard_excluded, to_forward_slash};
 
 #[derive(Debug, Error)]
 pub enum WatcherError {
@@ -24,18 +24,6 @@ pub struct WatcherHandle {
     // Retaining debouncer keeps the background notify thread running
     _debouncer: Debouncer<notify::RecommendedWatcher>,
     pub running: Arc<AtomicBool>,
-}
-
-fn is_hard_excluded(rel_path: &str) -> bool {
-    let p = rel_path.replace('\\', "/");
-    p.split('/').any(|component| {
-        matches!(
-            component,
-            ".git" | ".code-kb" | "target" | "node_modules" | ".idea" | ".vscode"
-        )
-    }) || p.ends_with(".tmp")
-        || p.ends_with(".swp")
-        || p.ends_with("~")
 }
 
 /// Starts debounced background file watcher with git storm circuit breaker.
@@ -66,7 +54,9 @@ pub fn start_watcher(
             let mut ignore_builder = WalkBuilder::new(&ws_clone.canonical_root);
             ignore_builder
                 .standard_filters(true)
-                .add_custom_ignore_filename(".julieignore");
+                .add_custom_ignore_filename(".julieignore")
+                .add_custom_ignore_filename(".code-kb-ignore")
+                .add_custom_ignore_filename(".codekbignore");
             let mut ignore_matcher = ignore_builder
                 .build_matchers()
                 .pop()

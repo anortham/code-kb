@@ -172,10 +172,12 @@ name = "code-kb-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "blake3",
  "clap",
  "code-kb-core",
  "notify",
  "notify-debouncer-mini",
+ "rusqlite",
  "serde",
  "serde_json",
  "tempfile",

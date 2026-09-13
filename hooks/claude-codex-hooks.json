@@ -1,0 +1,29 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/code-kb-session-hook.cjs\"",
+            "timeout": 5,
+            "statusMessage": "Activating code-kb tools..."
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/code-kb-session-hook.cjs\"",
+            "timeout": 5,
+            "statusMessage": "Activating code-kb tools for subagent..."
+          }
+        ]
+      }
+    ]
+  }
+}

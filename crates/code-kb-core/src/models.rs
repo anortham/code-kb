@@ -111,3 +111,28 @@ pub struct SymbolSearchResult {
     pub score: f64,
     pub snippet: Option<String>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct BlastRadiusResult {
+    pub seed_type: String,
+    pub seeds: Vec<String>,
+    pub likely_tests: Vec<TestTarget>,
+    pub impacted_symbols: Vec<ImpactedSymbol>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TestTarget {
+    pub name: String,
+    pub path: String,
+    pub line: usize,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ImpactedSymbol {
+    pub name: String,
+    pub kind: String,
+    pub path: String,
+    pub line: usize,
+    pub depth: usize,
+}

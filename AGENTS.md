@@ -71,3 +71,26 @@ MCP tool schema.**
   never platform-dependent separators.
 - SQLite connections and file handles must be closed before file rename or deletion.
 - Verify path identity by handle (`same-file`), not by case-sensitive string matching.
+
+### 6. Zero-Friction Tool Ergonomics
+- Tool handlers accept intuitive parameter aliases (`file`/`path` for `file_path`,
+  `symbol`/`name` for `symbol_name`, `body`/`code` for `new_body`, `q`/`name` for `query`).
+- Optional parameters provide safe defaults (`direction` in `find_references` defaults to
+  `"callers"`, `category` in `find_structural_facts` lists all categories with counts when omitted).
+- Scoped search: `find_symbol` and `search_symbols` support an optional `path` filter.
+- Language-agnostic callee filtering: `find_references(direction="callees")` and `get_context_slice`
+  filter unresolved AST tokens against workspace symbols, eliminating external stdlib/runtime noise
+  across all ~40 supported languages by default (`include_external: true` / `--include-external` restores them).
+- Blast radius & test prediction: `blast_radius` (alias: `impact`, CLI: `code-kb blast-radius` / `impact`)
+  computes multi-hop reverse reachability via SQLite recursive CTEs and predicts targeted tests to run.
+  Auto-discovers uncommitted git changes when no target is passed.
+- Continuous testing boundary: Execution stays in native agent terminal commands (`cargo test`, `pytest`,
+  `npm test`), while `code-kb` predicts the minimal set of targeted test targets to run before/after edits.
+- Workspace cleanup: `code-kb prune` discovers and deletes orphaned SQLite databases for
+  deleted repositories and removed git worktrees.
+
+### 7. Pinned Extractor & Bundled Distribution
+- `code-kb` pins the exact extractor version in `scripts/julie-pins.json` (currently `2.42.1`).
+- Build guard: `crates/code-kb-cli/build.rs` verifies that `julie-extract` is restored and matches the pinned version. A missing or mismatched extractor fails the build immediately (bypassable for offline packaging via `CODE_KB_ALLOW_MISSING_JULIE_EXTRACT=1`).
+- Single-download distribution: Release archives ship `code-kb` and matching `julie-extract` pre-packaged side-by-side. Users download one archive and receive both binaries ready to execute.
+- Runtime discovery: `code-kb` checks next to its own executable (`current_exe().parent()`), `.tools/julie-extract`, `JULIE_EXTRACT_BIN`, and `PATH`.

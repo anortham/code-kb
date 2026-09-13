@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>code-kb: Surgical Code Intelligence for AI Coding Agents</title>
+  <meta name="description" content="code-kb is an agent-facing code-intelligence engine and Model Context Protocol (MCP) server delivering 80–90% token reduction, sub-5ms query latency, and sub-15MB retained RAM.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <nav class="site-nav">
+    <div class="brand">
+      <span>⚡ code-kb</span>
+    </div>
+    <div class="nav-links">
+      <a href="#why">Why code-kb</a>
+      <a href="#benchmarks">Benchmarks</a>
+      <a href="#workflow">Workflow</a>
+      <a href="#tools">Tool Catalog</a>
+      <a href="#config">Quickstart</a>
+      <a href="https://github.com/anortham/code-kb" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <span class="eyebrow">Token-Dense Model Context Protocol Engine</span>
+    <h1>Surgical Code Intelligence<br>for AI Coding Agents</h1>
+    <p class="hero-lede">
+      Stop burning 10,000 prompt tokens reading entire source files just to inspect a single signature.
+      Backed by tree-sitter AST facts and SQLite in WAL mode, <code>code-kb</code> gives AI coding agents
+      instant skeletons, surgical context slices, and atomic edits at under 15 MB retained RAM.
+    </p>
+
+    <div class="hero-stats">
+      <div class="stat-card">
+        <div class="stat-value">80–98%</div>
+        <div class="stat-label">Prompt Token Savings</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">&lt; 15 MB</div>
+        <div class="stat-label">Retained Heap Memory</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">1–5 ms</div>
+        <div class="stat-label">Warm Query Latency</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">0</div>
+        <div class="stat-label">Workspace Schema Params</div>
+      </div>
+    </div>
+
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="#config">Get Started</a>
+      <a class="btn btn-secondary" href="#benchmarks">View Benchmarks</a>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- Why Section -->
+    <section id="why" class="container">
+      <h2>The Prompt Context Problem</h2>
+      <p class="section-desc">
+        Traditional agents rely on full file reads and naive text grep. A 500-line source file consumes ~5,000 tokens.
+        Over a 10-turn coding task, an agent consumes 50,000+ tokens on irrelevant implementation details, triggering
+        context compaction, lost instructions, and high API costs.
+      </p>
+
+      <div class="step-grid">
+        <div class="step-card">
+          <div class="step-number">Anti-Pattern</div>
+          <h3 class="step-title">The Raw File Reflex</h3>
+          <p class="step-body">Agent runs <code>grep</code>, finds a match, then reads the entire 1,500-line file into its prompt window just to check a function's return type.</p>
+          <pre><code>view_file("queries.rs")
+# Tokens burned: ~13,750 tokens
+# Result: Context window polluted</code></pre>
+        </div>
+
+        <div class="step-card">
+          <div class="step-number">code-kb Solution</div>
+          <h3 class="step-title">File Skeletons</h3>
+          <p class="step-body">Agent inspects types, structs, traits, and signatures with all implementation bodies stripped. Retains full architectural shape at a fraction of the cost.</p>
+          <pre><code>file_skeleton("queries.rs")
+# Tokens used: ~1,630 tokens
+# Savings: 88.1% token reduction</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- Benchmarks Section -->
+    <section id="benchmarks" class="container">
+      <h2>Architectural Benchmark Comparison</h2>
+      <p class="section-desc">
+        Measured on real-world repositories against prior code-intelligence systems (Miller, Julie) and standard agent toolchains.
+      </p>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Metric / Dimension</th>
+              <th>code-kb</th>
+              <th>Miller (.NET)</th>
+              <th>Julie (Rust)</th>
+              <th>Bare Agent (grep/read)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Standalone Binary Size</strong></td>
+              <td class="tag-success"><strong>13.7 MB</strong></td>
+              <td class="tag-warning">~325 MB bundle</td>
+              <td class="tag-warning">~120 MB bundle</td>
+              <td class="tag-neutral">N/A</td>
+            </tr>
+            <tr>
+              <td><strong>Retained Heap RAM</strong></td>
+              <td class="tag-success"><strong>&lt; 15 MB</strong> (SQLite WAL)</td>
+              <td class="tag-warning">1,500–2,000 MB</td>
+              <td class="tag-warning">300–800 MB (Tantivy/Embed)</td>
+              <td class="tag-neutral">0 MB</td>
+            </tr>
+            <tr>
+              <td><strong>Warm Query Latency</strong></td>
+              <td class="tag-success"><strong>1–5 ms</strong></td>
+              <td>150–500 ms</td>
+              <td>50–150 ms</td>
+              <td>10–50 ms</td>
+            </tr>
+            <tr>
+              <td><strong>Workspace Schema Pollution</strong></td>
+              <td class="tag-success"><strong>ZERO (0)</strong></td>
+              <td class="tag-warning">Mandatory <code>workspace_id</code></td>
+              <td class="tag-warning">Mandatory <code>workspace</code></td>
+              <td class="tag-neutral">Path strings</td>
+            </tr>
+            <tr>
+              <td><strong>Symbol Edits</strong></td>
+              <td class="tag-success"><strong>Single-turn atomic (Tree-sitter)</strong></td>
+              <td>2-step preview/apply</td>
+              <td>2-step preview/apply</td>
+              <td>Fragile regex replace</td>
+            </tr>
+            <tr>
+              <td><strong>Test Prediction</strong></td>
+              <td class="tag-success"><strong>Native terminal (blast-radius CTEs)</strong></td>
+              <td>Daemon test runner</td>
+              <td>None</td>
+              <td>Guesswork / Wide runs</td>
+            </tr>
+            <tr>
+              <td><strong>Token Compression</strong></td>
+              <td class="tag-success"><strong>80–98% savings</strong></td>
+              <td>60–85% savings</td>
+              <td>N/A (Raw fact queries)</td>
+              <td>0% (Full file reads)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Workflow Section -->
+    <section id="workflow" class="container">
+      <h2>Progressive Disclosure Workflow</h2>
+      <p class="section-desc">
+        A structured, token-dense lifecycle that guides agents from initial repo orientation to verified atomic edits.
+      </p>
+
+      <div class="step-grid">
+        <div class="step-card">
+          <div class="step-number">Phase 1: Orientation</div>
+          <h3 class="step-title">codebase_outline</h3>
+          <p class="step-body">Understand high-level architecture, module hierarchies, and primary exports in ~200 tokens.</p>
+          <pre><code>codebase_outline(depth=2)</code></pre>
+        </div>
+
+        <div class="step-card">
+          <div class="step-number">Phase 2: Interface Discovery</div>
+          <h3 class="step-title">file_skeleton &amp; search</h3>
+          <p class="step-body">Examine signatures and traits with bodies stripped. Use BM25 FTS5 for conceptual search.</p>
+          <pre><code>file_skeleton("src/server.rs")
+search_symbols("auth token validation")</code></pre>
+        </div>
+
+        <div class="step-card">
+          <div class="step-number">Phase 3: Surgical Context</div>
+          <h3 class="step-title">get_context_slice</h3>
+          <p class="step-body">In a single turn, fetch target function body + callee signatures + parameter types + associated unit tests.</p>
+          <pre><code>get_context_slice("handle_request")</code></pre>
+        </div>
+
+        <div class="step-card">
+          <div class="step-number">Phase 4: Impact &amp; Tests</div>
+          <h3 class="step-title">blast_radius</h3>
+          <p class="step-body">Compute multi-hop reverse reachability via recursive CTEs and pinpoint minimal tests to run before/after editing.</p>
+          <pre><code>blast_radius(symbol="compute_hash")</code></pre>
+        </div>
+
+        <div class="step-card">
+          <div class="step-number">Phase 5: Atomic Edits</div>
+          <h3 class="step-title">replace_symbol_body</h3>
+          <p class="step-body">Perform pre-flight tree-sitter AST validation, optimistic hash concurrency checks, and re-indexing in one turn.</p>
+          <pre><code>replace_symbol_body(
+  symbol="calculate",
+  file="calc.rs",
+  body="{ return a + b; }"
+)</code></pre>
+        </div>
+
+        <div class="step-card">
+          <div class="step-number">Phase 6: Verification</div>
+          <h3 class="step-title">code-kb stats</h3>
+          <p class="step-body">Zero-overhead local telemetry in SQLite WAL mode. Track tool success rates, median latency, and token savings.</p>
+          <pre><code>code-kb stats</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tool Catalog Section -->
+    <section id="tools" class="container">
+      <h2>Complete MCP Tool Catalog</h2>
+      <p class="section-desc">
+        Every MCP tool has an exact 1:1 CLI command for instantaneous terminal verification and dogfooding.
+      </p>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>MCP Tool</th>
+              <th>CLI Equivalent</th>
+              <th>Description</th>
+              <th>Zero-Friction Aliases</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>codebase_outline</code></td>
+              <td><code>code-kb outline [path]</code></td>
+              <td>Hierarchical directory tree &amp; primary symbol outline</td>
+              <td><code>path</code>, <code>dir</code>, <code>depth</code></td>
+            </tr>
+            <tr>
+              <td><code>file_skeleton</code></td>
+              <td><code>code-kb skeleton &lt;file&gt;</code></td>
+              <td>File outline with implementation bodies stripped</td>
+              <td><code>file</code>, <code>path</code></td>
+            </tr>
+            <tr>
+              <td><code>find_symbol</code></td>
+              <td><code>code-kb symbol &lt;query&gt;</code></td>
+              <td>Exact and prefix symbol lookup with optional path filter</td>
+              <td><code>name</code>, <code>q</code>, <code>path</code></td>
+            </tr>
+            <tr>
+              <td><code>search_symbols</code></td>
+              <td><code>code-kb search &lt;query&gt;</code></td>
+              <td>Conceptual BM25 full-text search over docstrings &amp; signatures</td>
+              <td><code>name</code>, <code>q</code>, <code>path</code></td>
+            </tr>
+            <tr>
+              <td><code>get_symbol_body</code></td>
+              <td><code>code-kb body &lt;symbol&gt;</code></td>
+              <td>Exact source code body for a single symbol</td>
+              <td><code>symbol</code>, <code>name</code>, <code>file</code></td>
+            </tr>
+            <tr>
+              <td><code>get_context_slice</code></td>
+              <td><code>code-kb slice &lt;symbol&gt;</code></td>
+              <td>Target body + callee signatures + parameter types + tests</td>
+              <td><code>symbol</code>, <code>name</code>, <code>file</code></td>
+            </tr>
+            <tr>
+              <td><code>find_references</code></td>
+              <td><code>code-kb refs &lt;symbol&gt;</code></td>
+              <td>Traverses callers or callees (filters external stdlib noise)</td>
+              <td><code>direction</code> (default: callers), <code>include_external</code></td>
+            </tr>
+            <tr>
+              <td><code>blast_radius</code></td>
+              <td><code>code-kb blast-radius [target]</code></td>
+              <td>Multi-hop transitive impact &amp; targeted test prediction</td>
+              <td><code>impact</code>, <code>symbol</code>, <code>path</code>, <code>depth</code></td>
+            </tr>
+            <tr>
+              <td><code>find_structural_facts</code></td>
+              <td><code>code-kb facts [category]</code></td>
+              <td>Framework structural facts (routes, queries, models, configs)</td>
+              <td><code>category</code> (omit to list categories)</td>
+            </tr>
+            <tr>
+              <td><code>replace_symbol_body</code></td>
+              <td><code>code-kb edit &lt;symbol&gt;</code></td>
+              <td>Atomic AST-validated symbol replacement</td>
+              <td><code>body</code>, <code>code</code>, <code>expected_hash</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Config Section -->
+    <section id="config" class="container">
+      <h2>Quickstart &amp; Agent Configuration</h2>
+      <p class="section-desc">
+        Configure <code>code-kb</code> in seconds for Claude Code, Cursor, Antigravity, or Codex.
+      </p>
+
+      <h3>1. Claude Code (Anthropic CLI)</h3>
+      <p style="color: var(--text-muted); margin-bottom: 0.5rem;">Add globally for all projects with a single command:</p>
+      <pre><code>claude mcp add --scope user code-kb -- code-kb serve</code></pre>
+
+      <h3 style="margin-top: 2rem;">2. Cursor IDE</h3>
+      <p style="color: var(--text-muted); margin-bottom: 0.5rem;">Create <code>.cursor/mcp.json</code> in your project root:</p>
+      <pre><code>{
+  "mcpServers": {
+    "code-kb": {
+      "command": "code-kb",
+      "args": ["serve", "--root", "${workspaceFolder}"]
+    }
+  }
+}</code></pre>
+
+      <h3 style="margin-top: 2rem;">3. Antigravity (AGY) &amp; Standard MCP</h3>
+      <p style="color: var(--text-muted); margin-bottom: 0.5rem;">Create <code>.mcp.json</code> in your project root:</p>
+      <pre><code>{
+  "mcpServers": {
+    "code-kb": {
+      "command": "code-kb",
+      "args": ["serve"]
+    }
+  }
+}</code></pre>
+    </section>
+
+  </main>
+
+  <footer>
+    <p><code>code-kb</code> is free, open-source software dual-licensed under MIT or Apache-2.0.</p>
+    <p style="margin-top: 0.5rem;"><a href="https://github.com/anortham/code-kb">GitHub Repository</a> &bull; Backed by <a href="https://github.com/anortham/julie-extractors">julie-extractors</a></p>
+  </footer>
+
+</body>
+</html>

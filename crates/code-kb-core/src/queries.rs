@@ -1,9 +1,10 @@
 use rusqlite::{Connection, Row, params};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 
 use crate::models::{
-    FileFact, LiteralFact, ReferenceSite, StructuralFact, Symbol, SymbolSearchResult, TypeFact,
+    BlastRadiusResult, FileFact, ImpactedSymbol, LiteralFact, ReferenceSite, StructuralFact,
+    Symbol, SymbolSearchResult, TestTarget, TypeFact,
 };
 
 #[derive(Debug, Error)]
@@ -260,7 +261,25 @@ pub fn search_symbols(
     include_tests: bool,
     limit: usize,
 ) -> Result<Vec<Symbol>, QueryError> {
+    search_symbols_scoped(conn, query, kind_filter, None, include_tests, limit)
+}
+
+/// Search symbols with optional path scoping filter.
+pub fn search_symbols_scoped(
+    conn: &Connection,
+    query: &str,
+    kind_filter: Option<&str>,
+    path_filter: Option<&str>,
+    include_tests: bool,
+    limit: usize,
+) -> Result<Vec<Symbol>, QueryError> {
     let pattern = format!("%{}%", escape_like(query));
+    let normalized_path = path_filter.map(|p| {
+        p.replace('\\', "/")
+            .trim_start_matches("./")
+            .trim_matches('/')
+            .to_string()
+    });
 
     let mut sql = String::from(
         "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,
@@ -280,21 +299,36 @@ pub fn search_symbols(
         sql.push_str(" AND kind = ?3");
     }
 
-    sql.push_str(" ORDER BY (name = ?1) DESC, length(name) ASC, path ASC LIMIT ");
+    if normalized_path.is_some() {
+        sql.push_str(" AND (path = ?4 OR path LIKE '%' || ?4 || '%')");
+    }
+
+    sql.push_str(
+        " ORDER BY (name = ?1) DESC, (kind IN ('function', 'struct', 'class', 'trait', 'method', 'enum', 'interface', 'type')) DESC, length(name) ASC, path ASC LIMIT ",
+    );
     sql.push_str(&limit.to_string());
 
     let mut stmt = conn.prepare(&sql)?;
 
-    let rows = if let Some(k) = kind_filter {
-        stmt.query_map(params![query, pattern, k], map_symbol)?
-            .collect::<Result<Vec<_>, _>>()?
-    } else {
-        stmt.query_map(params![query, pattern], map_symbol)?
-            .collect::<Result<Vec<_>, _>>()?
+    let path_val = normalized_path.as_deref().unwrap_or("");
+    let rows = match (kind_filter, normalized_path.is_some()) {
+        (Some(k), true) => stmt
+            .query_map(params![query, pattern, k, path_val], map_symbol)?
+            .collect::<Result<Vec<_>, _>>()?,
+        (Some(k), false) => stmt
+            .query_map(params![query, pattern, k], map_symbol)?
+            .collect::<Result<Vec<_>, _>>()?,
+        (None, true) => stmt
+            .query_map(params![query, pattern, "", path_val], map_symbol)?
+            .collect::<Result<Vec<_>, _>>()?,
+        (None, false) => stmt
+            .query_map(params![query, pattern], map_symbol)?
+            .collect::<Result<Vec<_>, _>>()?,
     };
 
     if rows.is_empty()
-        && let Ok(fts_matches) = fts_search_symbols(conn, query, kind_filter, include_tests, limit)
+        && let Ok(fts_matches) =
+            fts_search_symbols_scoped(conn, query, kind_filter, path_filter, include_tests, limit)
         && !fts_matches.is_empty()
     {
         return Ok(fts_matches.into_iter().map(|m| m.symbol).collect());
@@ -330,10 +364,29 @@ pub fn fts_search_symbols(
     include_tests: bool,
     limit: usize,
 ) -> Result<Vec<SymbolSearchResult>, QueryError> {
+    fts_search_symbols_scoped(conn, query, kind_filter, None, include_tests, limit)
+}
+
+/// Conceptual full-text search with optional path scoping filter.
+pub fn fts_search_symbols_scoped(
+    conn: &Connection,
+    query: &str,
+    kind_filter: Option<&str>,
+    path_filter: Option<&str>,
+    include_tests: bool,
+    limit: usize,
+) -> Result<Vec<SymbolSearchResult>, QueryError> {
     let (and_q, or_q) = sanitize_fts5_query(query);
     if and_q.is_empty() {
         return Ok(Vec::new());
     }
+
+    let normalized_path = path_filter.map(|p| {
+        p.replace('\\', "/")
+            .trim_start_matches("./")
+            .trim_matches('/')
+            .to_string()
+    });
 
     let fts_exists: bool = conn
         .query_row(
@@ -360,16 +413,29 @@ pub fn fts_search_symbols(
         if kind_filter.is_some() {
             sql.push_str(" AND kind = ?3");
         }
-        sql.push_str(" ORDER BY (name = ?1) DESC, length(name) ASC, path ASC LIMIT ");
+        if normalized_path.is_some() {
+            sql.push_str(" AND (path = ?4 OR path LIKE '%' || ?4 || '%')");
+        }
+        sql.push_str(
+            " ORDER BY (name = ?1) DESC, (kind IN ('function', 'struct', 'class', 'trait', 'method', 'enum', 'interface', 'type')) DESC, length(name) ASC, path ASC LIMIT ",
+        );
         sql.push_str(&limit.to_string());
 
         let mut stmt = conn.prepare(&sql)?;
-        let rows = if let Some(k) = kind_filter {
-            stmt.query_map(params![query, pattern, k], map_symbol)?
-                .collect::<Result<Vec<_>, _>>()?
-        } else {
-            stmt.query_map(params![query, pattern], map_symbol)?
-                .collect::<Result<Vec<_>, _>>()?
+        let path_val = normalized_path.as_deref().unwrap_or("");
+        let rows = match (kind_filter, normalized_path.is_some()) {
+            (Some(k), true) => stmt
+                .query_map(params![query, pattern, k, path_val], map_symbol)?
+                .collect::<Result<Vec<_>, _>>()?,
+            (Some(k), false) => stmt
+                .query_map(params![query, pattern, k], map_symbol)?
+                .collect::<Result<Vec<_>, _>>()?,
+            (None, true) => stmt
+                .query_map(params![query, pattern, "", path_val], map_symbol)?
+                .collect::<Result<Vec<_>, _>>()?,
+            (None, false) => stmt
+                .query_map(params![query, pattern], map_symbol)?
+                .collect::<Result<Vec<_>, _>>()?,
         };
 
         return Ok(rows
@@ -406,6 +472,10 @@ pub fn fts_search_symbols(
             sql.push_str(" AND s.kind = ?2");
         }
 
+        if normalized_path.is_some() {
+            sql.push_str(" AND (s.path = ?3 OR s.path LIKE '%' || ?3 || '%')");
+        }
+
         sql.push_str(" ORDER BY rank_score ASC LIMIT ");
         sql.push_str(&limit.to_string());
 
@@ -436,12 +506,20 @@ pub fn fts_search_symbols(
             })
         };
 
-        let rows = if let Some(k) = kind_filter {
-            stmt.query_map(params![match_clause, k], map_fn)?
-                .collect::<Result<Vec<_>, _>>()?
-        } else {
-            stmt.query_map(params![match_clause], map_fn)?
-                .collect::<Result<Vec<_>, _>>()?
+        let path_val = normalized_path.as_deref().unwrap_or("");
+        let rows = match (kind_filter, normalized_path.is_some()) {
+            (Some(k), true) => stmt
+                .query_map(params![match_clause, k, path_val], map_fn)?
+                .collect::<Result<Vec<_>, _>>()?,
+            (Some(k), false) => stmt
+                .query_map(params![match_clause, k], map_fn)?
+                .collect::<Result<Vec<_>, _>>()?,
+            (None, true) => stmt
+                .query_map(params![match_clause, "", path_val], map_fn)?
+                .collect::<Result<Vec<_>, _>>()?,
+            (None, false) => stmt
+                .query_map(params![match_clause], map_fn)?
+                .collect::<Result<Vec<_>, _>>()?,
         };
 
         Ok(rows)
@@ -539,23 +617,76 @@ fn get_symbol_by_name_internal(
         return Ok(Some(matches.remove(0)));
     }
 
-    // Check if there's an exact match on full name
-    let exact_name_matches: Vec<_> = matches.iter().filter(|s| s.name == name).cloned().collect();
+    // Exclude imports if non-import candidates exist
+    let candidates: Vec<Symbol> = if matches.iter().any(|s| s.kind != "import") {
+        matches.into_iter().filter(|s| s.kind != "import").collect()
+    } else {
+        matches
+    };
+
+    if candidates.len() == 1 {
+        return Ok(Some(candidates.into_iter().next().unwrap()));
+    }
+
+    // Check if there's an exact match on full name among candidates
+    let exact_name_matches: Vec<_> = candidates
+        .iter()
+        .filter(|s| s.name == name)
+        .cloned()
+        .collect();
     if exact_name_matches.len() == 1 {
         return Ok(Some(exact_name_matches.into_iter().next().unwrap()));
     }
 
+    // Prioritize primary definition kinds (function, struct, class, trait, method, enum, interface, type)
+    let def_matches: Vec<_> = exact_name_matches
+        .iter()
+        .filter(|s| {
+            matches!(
+                s.kind.as_str(),
+                "function"
+                    | "struct"
+                    | "class"
+                    | "trait"
+                    | "method"
+                    | "enum"
+                    | "interface"
+                    | "type"
+            )
+        })
+        .cloned()
+        .collect();
+    if def_matches.len() == 1 {
+        return Ok(Some(def_matches.into_iter().next().unwrap()));
+    }
+
+    let active_pool = if !def_matches.is_empty() {
+        def_matches
+    } else if !exact_name_matches.is_empty() {
+        exact_name_matches
+    } else {
+        candidates
+    };
+
     // If path_filter was given and there's an exact path match
     if let Some(ref p) = normalized_path {
-        let exact_path_matches: Vec<_> = matches.iter().filter(|s| s.path == *p).cloned().collect();
+        let exact_path_matches: Vec<_> = active_pool
+            .iter()
+            .filter(|s| s.path == *p)
+            .cloned()
+            .collect();
         if exact_path_matches.len() == 1 {
             return Ok(Some(exact_path_matches.into_iter().next().unwrap()));
         }
     }
 
+    if active_pool.len() == 1 {
+        return Ok(Some(active_pool.into_iter().next().unwrap()));
+    }
+
     // Ambiguity detected
     let mut candidate_list = String::new();
-    for s in &matches {
+    for s in &active_pool {
         candidate_list.push_str(&format!(
             "- {} `{}` in {}:{}\n",
             s.kind, s.name, s.path, s.start_line
@@ -564,19 +695,30 @@ fn get_symbol_by_name_internal(
 
     Err(QueryError::AmbiguousSymbol(
         name.to_string(),
-        matches.len(),
+        active_pool.len(),
         candidate_list,
     ))
 }
 
-/// Find callers or callees of a symbol.
+/// Find callers or callees of a symbol (filters unresolved external stdlib/runtime primitives by default).
 pub fn find_references(
     conn: &Connection,
     symbol_name: &str,
     direction: &str,
     limit: usize,
 ) -> Result<Vec<ReferenceSite>, QueryError> {
-    find_references_internal(conn, symbol_name, direction, limit, None)
+    find_references_ext(conn, symbol_name, direction, limit, false)
+}
+
+/// Find callers or callees with option to include external runtime/stdlib primitives.
+pub fn find_references_ext(
+    conn: &Connection,
+    symbol_name: &str,
+    direction: &str,
+    limit: usize,
+    include_external: bool,
+) -> Result<Vec<ReferenceSite>, QueryError> {
+    find_references_internal(conn, symbol_name, direction, limit, None, include_external)
 }
 
 pub(crate) fn find_references_for_symbol(
@@ -586,7 +728,7 @@ pub(crate) fn find_references_for_symbol(
     limit: usize,
     symbol_id: &str,
 ) -> Result<Vec<ReferenceSite>, QueryError> {
-    find_references_internal(conn, symbol_name, direction, limit, Some(symbol_id))
+    find_references_internal(conn, symbol_name, direction, limit, Some(symbol_id), false)
 }
 
 fn find_references_internal(
@@ -595,6 +737,7 @@ fn find_references_internal(
     direction: &str,
     limit: usize,
     symbol_id: Option<&str>,
+    include_external: bool,
 ) -> Result<Vec<ReferenceSite>, QueryError> {
     let mut results = Vec::new();
 
@@ -700,8 +843,8 @@ fn find_references_internal(
         // Also query pending_relationships for callees
         if results.len() < limit {
             let remaining = limit - results.len();
-            let mut pending_stmt = conn.prepare(
-                "SELECT s_from.name AS from_name,
+            let sql = if include_external {
+                "SELECT DISTINCT s_from.name AS from_name,
                         p.from_symbol_id,
                         p.target_terminal_name AS to_name,
                         p.kind,
@@ -711,8 +854,22 @@ fn find_references_internal(
                  FROM pending_relationships p
                  JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
                  WHERE s_from.name = ?1 AND (?3 IS NULL OR p.from_symbol_id = ?3)
-                 LIMIT ?2",
-            )?;
+                 LIMIT ?2"
+            } else {
+                "SELECT DISTINCT s_from.name AS from_name,
+                        p.from_symbol_id,
+                        p.target_terminal_name AS to_name,
+                        p.kind,
+                        p.path,
+                        p.start_line,
+                        p.start_column
+                 FROM pending_relationships p
+                 JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
+                 WHERE s_from.name = ?1 AND (?3 IS NULL OR p.from_symbol_id = ?3)
+                   AND EXISTS (SELECT 1 FROM symbols s_to WHERE s_to.name = p.target_terminal_name)
+                 LIMIT ?2"
+            };
+            let mut pending_stmt = conn.prepare(sql)?;
 
             let p_rows = pending_stmt.query_map(
                 params![symbol_name, remaining as i64, symbol_id],
@@ -812,6 +969,34 @@ pub fn find_literals(
     Ok(results)
 }
 
+/// List all available structural fact and literal categories with counts.
+pub fn list_structural_fact_categories(
+    conn: &Connection,
+) -> Result<Vec<(String, usize)>, QueryError> {
+    let mut categories = Vec::new();
+
+    let mut stmt = conn.prepare(
+        "SELECT pattern_id, COUNT(*) AS cnt FROM structural_facts GROUP BY pattern_id ORDER BY cnt DESC",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as usize))
+    })?;
+    for r in rows {
+        categories.push(r?);
+    }
+
+    let mut lit_stmt =
+        conn.prepare("SELECT kind, COUNT(*) AS cnt FROM literals GROUP BY kind ORDER BY cnt DESC")?;
+    let lit_rows = lit_stmt.query_map([], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as usize))
+    })?;
+    for r in lit_rows {
+        categories.push(r?);
+    }
+
+    Ok(categories)
+}
+
 /// Find type facts for a symbol.
 pub fn find_type_facts(conn: &Connection, symbol_id: &str) -> Result<Vec<TypeFact>, QueryError> {
     let mut stmt = conn.prepare(
@@ -835,6 +1020,261 @@ pub fn find_type_facts(conn: &Connection, symbol_id: &str) -> Result<Vec<TypeFac
         results.push(r?);
     }
     Ok(results)
+}
+
+/// Helper to determine if a relative path looks like a test file across ecosystems.
+pub fn is_test_path(path: &str) -> bool {
+    let p = path.to_lowercase().replace('\\', "/");
+    p.contains("/test/")
+        || p.contains("/tests/")
+        || p.contains("/__tests__/")
+        || p.contains("_test.")
+        || p.contains(".test.")
+        || p.contains(".spec.")
+        || p.ends_with("test.rs")
+        || p.ends_with("tests.rs")
+        || p.ends_with("tests.cs")
+        || p.ends_with("test.go")
+        || p.starts_with("test_")
+}
+
+/// Compute blast radius and likely tests for given seed symbols or seed file paths.
+/// Recursively walks reverse reachability (transitive callers) up to `max_depth` in SQLite.
+pub fn compute_blast_radius(
+    conn: &Connection,
+    seed_symbols: &[&str],
+    seed_paths: &[&str],
+    max_depth: usize,
+    limit: usize,
+) -> Result<BlastRadiusResult, QueryError> {
+    let mut seeds = Vec::new();
+    let seed_type = if !seed_symbols.is_empty() {
+        for s in seed_symbols {
+            seeds.push(s.to_string());
+        }
+        "symbol".to_string()
+    } else if !seed_paths.is_empty() {
+        for p in seed_paths {
+            seeds.push(p.to_string());
+        }
+        "file".to_string()
+    } else {
+        return Ok(BlastRadiusResult {
+            seed_type: "none".to_string(),
+            seeds: Vec::new(),
+            likely_tests: Vec::new(),
+            impacted_symbols: Vec::new(),
+        });
+    };
+
+    let mut where_clauses = Vec::new();
+    let mut params_vec: Vec<rusqlite::types::Value> = Vec::new();
+
+    if !seed_symbols.is_empty() {
+        let placeholders: Vec<String> = (1..=seed_symbols.len())
+            .map(|i| format!("?{}", i))
+            .collect();
+        where_clauses.push(format!("name IN ({})", placeholders.join(", ")));
+        for s in seed_symbols {
+            params_vec.push(rusqlite::types::Value::Text((*s).to_string()));
+        }
+    }
+
+    if !seed_paths.is_empty() {
+        let base_idx = params_vec.len();
+        let mut path_conds = Vec::new();
+        for (i, p) in seed_paths.iter().enumerate() {
+            let idx = base_idx + i + 1;
+            path_conds.push(format!("path = ?{idx} OR path LIKE '%' || ?{idx} || '%'"));
+            let norm = p
+                .replace('\\', "/")
+                .trim_start_matches("./")
+                .trim_matches('/')
+                .to_string();
+            params_vec.push(rusqlite::types::Value::Text(norm));
+        }
+        where_clauses.push(format!("({})", path_conds.join(" OR ")));
+    }
+
+    let seed_condition = where_clauses.join(" OR ");
+    let max_depth_idx = params_vec.len() + 1;
+    params_vec.push(rusqlite::types::Value::Integer(max_depth as i64));
+
+    let has_relationships: bool = conn
+        .query_row(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='relationships'",
+            [],
+            |_| Ok(true),
+        )
+        .unwrap_or(false);
+
+    let has_pending: bool = conn
+        .query_row(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='pending_relationships'",
+            [],
+            |_| Ok(true),
+        )
+        .unwrap_or(false);
+
+    let mut likely_tests = Vec::new();
+    let mut impacted_symbols = Vec::new();
+    let mut seen_test_keys = HashSet::new();
+
+    let mut recursive_branches = Vec::new();
+    if has_relationships {
+        recursive_branches.push(format!(
+            "SELECT r.from_symbol_id, iw.depth + 1
+            FROM relationships r
+            JOIN impact_walk iw ON r.to_symbol_id = iw.symbol_id
+            WHERE iw.depth < ?{max_depth_idx}"
+        ));
+    }
+    if has_pending {
+        recursive_branches.push(format!(
+            "SELECT p.from_symbol_id, iw.depth + 1
+            FROM pending_relationships p
+            JOIN symbols s_target ON p.target_terminal_name = s_target.name
+            JOIN impact_walk iw ON s_target.symbol_id = iw.symbol_id
+            WHERE iw.depth < ?{max_depth_idx}"
+        ));
+    }
+
+    if !recursive_branches.is_empty() {
+        let recursive_sql = recursive_branches.join("\n UNION \n");
+        let sql = format!(
+            "WITH RECURSIVE impact_walk(symbol_id, depth) AS (
+                SELECT symbol_id, 0
+                FROM symbols
+                WHERE {seed_condition}
+
+                UNION
+
+                {recursive_sql}
+            )
+            SELECT s.symbol_id, s.name, s.kind, s.path, s.start_line, s.is_test, s.test_container, MIN(iw.depth) as min_depth
+            FROM impact_walk iw
+            JOIN symbols s ON iw.symbol_id = s.symbol_id
+            WHERE iw.depth > 0
+            GROUP BY s.symbol_id, s.name, s.kind, s.path, s.start_line, s.is_test, s.test_container
+            ORDER BY min_depth ASC, s.path ASC, s.name ASC
+            LIMIT 200"
+        );
+
+        let mut stmt = conn.prepare(&sql)?;
+        let param_refs: Vec<&dyn rusqlite::ToSql> = params_vec
+            .iter()
+            .map(|v| v as &dyn rusqlite::ToSql)
+            .collect();
+
+        let rows = stmt.query_map(param_refs.as_slice(), |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, i64>(4)? as usize,
+                row.get::<_, bool>(5)?,
+                row.get::<_, bool>(6)?,
+                row.get::<_, i64>(7)? as usize,
+            ))
+        })?;
+
+        for r in rows {
+            let (_sym_id, name, kind, path, line, is_test, test_container, depth) = r?;
+            let is_test_target = is_test || test_container || is_test_path(&path);
+
+            if is_test_target {
+                let key = format!("{}:{}", path, line);
+                if seen_test_keys.insert(key) {
+                    likely_tests.push(TestTarget {
+                        name,
+                        path,
+                        line,
+                        reason: format!("transitive caller [depth {depth}]"),
+                    });
+                }
+            } else {
+                impacted_symbols.push(ImpactedSymbol {
+                    name,
+                    kind,
+                    path,
+                    line,
+                    depth,
+                });
+            }
+        }
+    }
+
+    // 2. Discover stem-matched test files in the workspace
+    let mut file_stems = Vec::new();
+    for p in seed_paths {
+        if let Some(stem) = std::path::Path::new(p).file_stem().and_then(|s| s.to_str()) {
+            let stem = stem
+                .trim_end_matches(".rs")
+                .trim_end_matches(".ts")
+                .trim_end_matches(".py")
+                .trim_end_matches(".go");
+            if stem.len() >= 3 && !file_stems.contains(&stem.to_string()) {
+                file_stems.push(stem.to_string());
+            }
+        }
+    }
+    for sym in seed_symbols {
+        if let Ok(Some(s)) = get_symbol_by_name(conn, sym, None)
+            && let Some(stem) = std::path::Path::new(&s.path)
+                .file_stem()
+                .and_then(|s| s.to_str())
+            && stem.len() >= 3
+            && !file_stems.contains(&stem.to_string())
+        {
+            file_stems.push(stem.to_string());
+        }
+    }
+
+    let has_files: bool = conn
+        .query_row(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='files'",
+            [],
+            |_| Ok(true),
+        )
+        .unwrap_or(false);
+
+    if has_files {
+        for stem in file_stems {
+            let stem_pattern = format!("%{stem}%");
+            let mut test_files_stmt = conn.prepare(
+                "SELECT DISTINCT path FROM files WHERE (path LIKE '%test%' OR path LIKE '%spec%') AND path LIKE ?1 LIMIT 10",
+            )?;
+            let t_rows =
+                test_files_stmt.query_map([stem_pattern], |row| row.get::<_, String>(0))?;
+            for p in t_rows.flatten() {
+                let key = format!("{}:1", p);
+                if seen_test_keys.insert(key) {
+                    likely_tests.push(TestTarget {
+                        name: p.clone(),
+                        path: p,
+                        line: 1,
+                        reason: "stem-matched test file".to_string(),
+                    });
+                }
+            }
+        }
+    }
+
+    // Truncate to limit
+    if likely_tests.len() > limit {
+        likely_tests.truncate(limit);
+    }
+    if impacted_symbols.len() > limit {
+        impacted_symbols.truncate(limit);
+    }
+
+    Ok(BlastRadiusResult {
+        seed_type,
+        seeds,
+        likely_tests,
+        impacted_symbols,
+    })
 }
 
 #[cfg(test)]

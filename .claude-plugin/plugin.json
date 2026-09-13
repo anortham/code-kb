@@ -16,6 +16,7 @@
     "symbols",
     "progressive-disclosure"
   ],
+  "hooks": "./hooks/claude-codex-hooks.json",
   "mcpServers": {
     "code-kb": {
       "command": "code-kb",

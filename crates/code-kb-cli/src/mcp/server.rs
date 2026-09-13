@@ -3,10 +3,11 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
 use code_kb_core::{
-    WatcherHandle, Workspace, WorkspaceError, codebase_outline_op, ensure_fts_index_path,
-    file_skeleton_op, format_context_slice, format_references, format_search_results,
-    fts_search_symbols, get_context_slice_op, get_symbol_body_op, open_read_only,
-    reconcile_offline_edits, replace_symbol_body, scan_workspace, search_symbols, start_watcher,
+    WatcherHandle, Workspace, WorkspaceError, blast_radius_op, codebase_outline_op,
+    ensure_fts_index_path, file_skeleton_op, format_blast_radius, format_context_slice,
+    format_references, format_search_results, fts_search_symbols_scoped, get_context_slice_op,
+    get_symbol_body_op, list_structural_fact_categories, open_read_only, reconcile_offline_edits,
+    replace_symbol_body, scan_workspace, search_symbols_scoped, start_watcher,
 };
 
 use super::protocol::{CallToolResult, JsonRpcRequest, JsonRpcResponse, Tool};
@@ -67,6 +68,13 @@ impl McpServer {
         if self.workspace.canonical_root != ws.canonical_root || self._watcher.is_none() {
             if db_path.exists() {
                 let _ = ensure_fts_index_path(&db_path);
+                let ws_clone = ws.clone();
+                let db_clone = db_path.clone();
+                std::thread::spawn(move || {
+                    if let Ok(conn) = open_read_only(&db_clone) {
+                        let _ = reconcile_offline_edits(&ws_clone, &db_clone, &conn);
+                    }
+                });
                 self._watcher = start_watcher(ws.clone(), db_path.clone()).ok();
             } else {
                 self._watcher = None;
@@ -121,6 +129,10 @@ impl McpServer {
                             "type": "string",
                             "description": "Symbol name or search pattern."
                         },
+                        "path": {
+                            "type": "string",
+                            "description": "Optional file path or directory prefix to scope search (e.g. 'crates/code-kb-core')."
+                        },
                         "kind": {
                             "type": "string",
                             "description": "Optional filter by kind (e.g. function, struct, trait, class, interface, enum)."
@@ -146,6 +158,10 @@ impl McpServer {
                         "query": {
                             "type": "string",
                             "description": "Natural language query or keywords (e.g. 'parse tokens', 'authentication middleware', 'retry backoff')."
+                        },
+                        "path": {
+                            "type": "string",
+                            "description": "Optional file path or directory prefix to scope search (e.g. 'crates/code-kb-core')."
                         },
                         "kind": {
                             "type": "string",
@@ -212,37 +228,65 @@ impl McpServer {
                         "direction": {
                             "type": "string",
                             "enum": ["callers", "callees"],
-                            "description": "Direction of references ('callers' or 'callees')."
+                            "description": "Direction of references ('callers' or 'callees', default: 'callers')."
                         },
                         "limit": {
                             "type": "integer",
                             "description": "Maximum references to return (default: 20)."
+                        },
+                        "include_external": {
+                            "type": "boolean",
+                            "description": "If true, includes external runtime/stdlib primitives in callees (default: false, only internal workspace symbols)."
                         }
                     },
-                    "required": ["symbol_name", "direction"]
+                    "required": ["symbol_name"]
                 }),
             },
             Tool {
                 name: "find_structural_facts".to_string(),
-                description: "Queries framework-level facts (routes, SQL tables, config keys) extracted from AST.".to_string(),
+                description: "Queries framework-level facts (routes, SQL tables, config keys) extracted from AST. If category is omitted, lists all available categories with counts.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
                         "category": {
                             "type": "string",
-                            "description": "Fact category or pattern to search (e.g. route, query, model, config)."
+                            "description": "Optional fact category or pattern to search (e.g. route, query, model, config). If omitted, lists available categories with counts."
                         },
                         "limit": {
                             "type": "integer",
                             "description": "Maximum results to return (default: 30)."
                         }
-                    },
-                    "required": ["category"]
+                    }
+                }),
+            },
+            Tool {
+                name: "blast_radius".to_string(),
+                description: "Predicts which downstream symbols are affected and which tests to run before or after edits. With NO arguments, it automatically inspects uncommitted git working-tree changes to map edited lines to impacted symbols and likely tests. You can also pass symbol (or symbol_name) or file (or file_path).".to_string(),
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "symbol": {
+                            "type": "string",
+                            "description": "Symbol name to seed the impact walk (aliases: symbol_name, name, target)."
+                        },
+                        "file": {
+                            "type": "string",
+                            "description": "File path to seed the impact walk (aliases: file_path, path)."
+                        },
+                        "depth": {
+                            "type": "integer",
+                            "description": "Maximum relationship hops to walk outward from seeds (default: 2)."
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Maximum visible test and impact rows (default: 20)."
+                        }
+                    }
                 }),
             },
             Tool {
                 name: "replace_symbol_body".to_string(),
-                description: "Atomically replaces the implementation body of a function or method by symbol name.".to_string(),
+                description: "Atomically replaces the implementation body of a function or method by symbol name. Performs pre-flight tree-sitter syntax validation and immediate SQLite re-indexing in a single turn.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -270,6 +314,47 @@ impl McpServer {
     }
 
     pub fn handle_call_tool(&mut self, name: &str, arguments: &Value) -> CallToolResult {
+        let start = std::time::Instant::now();
+        let res = self.handle_call_tool_inner(name, arguments);
+        let duration_ms = start.elapsed().as_millis() as u64;
+
+        let (outcome, error_msg, bytes, est_tokens) = if res.is_error {
+            let err_text = res
+                .content
+                .first()
+                .map(|c| c.text.as_str())
+                .unwrap_or("error");
+            ("error", Some(err_text), err_text.len(), err_text.len() / 4)
+        } else {
+            let bytes: usize = res.content.iter().map(|c| c.text.len()).sum();
+            let est_tokens = bytes / 4;
+            let outcome = if res.content.is_empty()
+                || (res.content.len() == 1 && res.content[0].text.is_empty())
+            {
+                "empty"
+            } else {
+                "ok"
+            };
+            (outcome, None, bytes, est_tokens)
+        };
+
+        code_kb_core::record_tool_call(
+            &self.workspace.root,
+            &code_kb_core::ToolInvocation {
+                tool: name,
+                duration_ms,
+                outcome,
+                error_message: error_msg,
+                result_count: res.content.len(),
+                bytes_returned: bytes,
+                est_tokens,
+            },
+        );
+
+        res
+    }
+
+    fn handle_call_tool_inner(&mut self, name: &str, arguments: &Value) -> CallToolResult {
         tracing::info!(tool = name, args = %arguments, "MCP tool called");
 
         // Dynamically bind workspace if passed explicitly or if candidate path is outside current workspace
@@ -330,8 +415,16 @@ impl McpServer {
 
         let result = match name {
             "codebase_outline" => {
-                let depth = arguments.get("depth").and_then(|v| v.as_u64()).unwrap_or(2) as usize;
-                let path_filter = arguments.get("path").and_then(|v| v.as_str());
+                let depth = arguments
+                    .get("max_depth")
+                    .or_else(|| arguments.get("depth"))
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(2) as usize;
+                let path_filter = arguments
+                    .get("path")
+                    .or_else(|| arguments.get("subpath"))
+                    .or_else(|| arguments.get("dir"))
+                    .and_then(|v| v.as_str());
 
                 match codebase_outline_op(&self.workspace, &conn, depth, path_filter) {
                     Ok(text) => CallToolResult::text(text),
@@ -339,7 +432,12 @@ impl McpServer {
                 }
             }
             "file_skeleton" => {
-                let file_path = match arguments.get("file_path").and_then(|v| v.as_str()) {
+                let file_path = match arguments
+                    .get("file_path")
+                    .or_else(|| arguments.get("file"))
+                    .or_else(|| arguments.get("path"))
+                    .and_then(|v| v.as_str())
+                {
                     Some(p) => p,
                     None => return CallToolResult::error("Missing required parameter: file_path"),
                 };
@@ -350,10 +448,20 @@ impl McpServer {
                 }
             }
             "find_symbol" => {
-                let query = match arguments.get("query").and_then(|v| v.as_str()) {
+                let query = match arguments
+                    .get("query")
+                    .or_else(|| arguments.get("name"))
+                    .or_else(|| arguments.get("q"))
+                    .and_then(|v| v.as_str())
+                {
                     Some(q) => q,
                     None => return CallToolResult::error("Missing required parameter: query"),
                 };
+                let path_filter = arguments
+                    .get("path")
+                    .or_else(|| arguments.get("file_path"))
+                    .or_else(|| arguments.get("file"))
+                    .and_then(|v| v.as_str());
                 let kind = arguments.get("kind").and_then(|v| v.as_str());
                 let include_tests = arguments
                     .get("is_test")
@@ -364,7 +472,14 @@ impl McpServer {
                     .and_then(|v| v.as_u64())
                     .unwrap_or(20) as usize;
 
-                let matches = match search_symbols(&conn, query, kind, include_tests, limit) {
+                let matches = match search_symbols_scoped(
+                    &conn,
+                    query,
+                    kind,
+                    path_filter,
+                    include_tests,
+                    limit,
+                ) {
                     Ok(m) => m,
                     Err(e) => return CallToolResult::error(e.to_string()),
                 };
@@ -386,10 +501,20 @@ impl McpServer {
                 CallToolResult::text(out)
             }
             "search_symbols" => {
-                let query = match arguments.get("query").and_then(|v| v.as_str()) {
+                let query = match arguments
+                    .get("query")
+                    .or_else(|| arguments.get("name"))
+                    .or_else(|| arguments.get("q"))
+                    .and_then(|v| v.as_str())
+                {
                     Some(q) => q,
                     None => return CallToolResult::error("Missing required parameter: query"),
                 };
+                let path_filter = arguments
+                    .get("path")
+                    .or_else(|| arguments.get("file_path"))
+                    .or_else(|| arguments.get("file"))
+                    .and_then(|v| v.as_str());
                 let kind = arguments.get("kind").and_then(|v| v.as_str());
                 let include_tests = arguments
                     .get("is_test")
@@ -402,7 +527,14 @@ impl McpServer {
 
                 let _ = ensure_fts_index_path(&self.db_path);
 
-                let matches = match fts_search_symbols(&conn, query, kind, include_tests, limit) {
+                let matches = match fts_search_symbols_scoped(
+                    &conn,
+                    query,
+                    kind,
+                    path_filter,
+                    include_tests,
+                    limit,
+                ) {
                     Ok(m) => m,
                     Err(e) => return CallToolResult::error(e.to_string()),
                 };
@@ -410,13 +542,22 @@ impl McpServer {
                 CallToolResult::text(format_search_results(query, &matches))
             }
             "get_symbol_body" => {
-                let symbol_name = match arguments.get("symbol_name").and_then(|v| v.as_str()) {
+                let symbol_name = match arguments
+                    .get("symbol_name")
+                    .or_else(|| arguments.get("symbol"))
+                    .or_else(|| arguments.get("name"))
+                    .and_then(|v| v.as_str())
+                {
                     Some(n) => n,
                     None => {
                         return CallToolResult::error("Missing required parameter: symbol_name");
                     }
                 };
-                let file_path = arguments.get("file_path").and_then(|v| v.as_str());
+                let file_path = arguments
+                    .get("file_path")
+                    .or_else(|| arguments.get("file"))
+                    .or_else(|| arguments.get("path"))
+                    .and_then(|v| v.as_str());
 
                 match get_symbol_body_op(
                     &self.workspace,
@@ -437,13 +578,22 @@ impl McpServer {
                 }
             }
             "get_context_slice" => {
-                let symbol_name = match arguments.get("symbol_name").and_then(|v| v.as_str()) {
+                let symbol_name = match arguments
+                    .get("symbol_name")
+                    .or_else(|| arguments.get("symbol"))
+                    .or_else(|| arguments.get("name"))
+                    .and_then(|v| v.as_str())
+                {
                     Some(n) => n,
                     None => {
                         return CallToolResult::error("Missing required parameter: symbol_name");
                     }
                 };
-                let file_path = arguments.get("file_path").and_then(|v| v.as_str());
+                let file_path = arguments
+                    .get("file_path")
+                    .or_else(|| arguments.get("file"))
+                    .or_else(|| arguments.get("path"))
+                    .and_then(|v| v.as_str());
 
                 match get_context_slice_op(
                     &self.workspace,
@@ -457,23 +607,37 @@ impl McpServer {
                 }
             }
             "find_references" => {
-                let symbol_name = match arguments.get("symbol_name").and_then(|v| v.as_str()) {
+                let symbol_name = match arguments
+                    .get("symbol_name")
+                    .or_else(|| arguments.get("symbol"))
+                    .or_else(|| arguments.get("name"))
+                    .and_then(|v| v.as_str())
+                {
                     Some(n) => n,
                     None => {
                         return CallToolResult::error("Missing required parameter: symbol_name");
                     }
                 };
-                let direction = match arguments.get("direction").and_then(|v| v.as_str()) {
-                    Some(d) => d,
-                    None => return CallToolResult::error("Missing required parameter: direction"),
-                };
+                let direction = arguments
+                    .get("direction")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("callers");
                 let limit = arguments
                     .get("limit")
                     .and_then(|v| v.as_u64())
                     .unwrap_or(20) as usize;
+                let include_external = arguments
+                    .get("include_external")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
 
-                let refs = match code_kb_core::find_references(&conn, symbol_name, direction, limit)
-                {
+                let refs = match code_kb_core::find_references_ext(
+                    &conn,
+                    symbol_name,
+                    direction,
+                    limit,
+                    include_external,
+                ) {
                     Ok(r) => r,
                     Err(e) => return CallToolResult::error(e.to_string()),
                 };
@@ -481,10 +645,41 @@ impl McpServer {
                 CallToolResult::text(format_references(symbol_name, &refs, direction))
             }
             "find_structural_facts" => {
-                let category = match arguments.get("category").and_then(|v| v.as_str()) {
-                    Some(c) => c,
-                    None => return CallToolResult::error("Missing required parameter: category"),
-                };
+                let category = arguments
+                    .get("category")
+                    .or_else(|| arguments.get("cat"))
+                    .or_else(|| arguments.get("type"))
+                    .or_else(|| arguments.get("pattern"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .trim();
+
+                if category.is_empty() {
+                    let categories = match list_structural_fact_categories(&conn) {
+                        Ok(c) => c,
+                        Err(e) => return CallToolResult::error(e.to_string()),
+                    };
+
+                    if categories.is_empty() {
+                        return CallToolResult::text(
+                            "No structural facts or literals indexed in this repository."
+                                .to_string(),
+                        );
+                    }
+
+                    let mut out = format!(
+                        "Available structural fact & literal categories ({} found):\n\n",
+                        categories.len()
+                    );
+                    for (cat, count) in categories {
+                        out.push_str(&format!("- `{cat}` ({count} occurrences)\n"));
+                    }
+                    out.push_str(
+                        "\nCall find_structural_facts(category=\"<name>\") to query matches.",
+                    );
+                    return CallToolResult::text(out);
+                }
+
                 let limit = arguments
                     .get("limit")
                     .and_then(|v| v.as_u64())
@@ -525,22 +720,69 @@ impl McpServer {
 
                 CallToolResult::text(out)
             }
+            "blast_radius" | "impact" => {
+                let symbol = arguments
+                    .get("symbol")
+                    .or_else(|| arguments.get("symbol_name"))
+                    .or_else(|| arguments.get("name"))
+                    .or_else(|| arguments.get("target"))
+                    .and_then(|v| v.as_str());
+                let file = arguments
+                    .get("file")
+                    .or_else(|| arguments.get("file_path"))
+                    .or_else(|| arguments.get("path"))
+                    .and_then(|v| v.as_str());
+                let depth = arguments
+                    .get("depth")
+                    .or_else(|| arguments.get("max_depth"))
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(2) as usize;
+                let limit = arguments
+                    .get("limit")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(20) as usize;
+
+                match blast_radius_op(&self.workspace, &conn, symbol, file, depth, limit) {
+                    Ok(res) => CallToolResult::text(format_blast_radius(&res)),
+                    Err(e) => CallToolResult::error(e.to_string()),
+                }
+            }
             "replace_symbol_body" => {
-                let symbol_name = match arguments.get("symbol_name").and_then(|v| v.as_str()) {
+                let symbol_name = match arguments
+                    .get("symbol_name")
+                    .or_else(|| arguments.get("symbol"))
+                    .or_else(|| arguments.get("name"))
+                    .and_then(|v| v.as_str())
+                {
                     Some(n) => n,
                     None => {
                         return CallToolResult::error("Missing required parameter: symbol_name");
                     }
                 };
-                let file_path = match arguments.get("file_path").and_then(|v| v.as_str()) {
+                let file_path = match arguments
+                    .get("file_path")
+                    .or_else(|| arguments.get("file"))
+                    .or_else(|| arguments.get("path"))
+                    .and_then(|v| v.as_str())
+                {
                     Some(p) => p,
                     None => return CallToolResult::error("Missing required parameter: file_path"),
                 };
-                let new_body = match arguments.get("new_body").and_then(|v| v.as_str()) {
+                let new_body = match arguments
+                    .get("new_body")
+                    .or_else(|| arguments.get("body"))
+                    .or_else(|| arguments.get("code"))
+                    .or_else(|| arguments.get("content"))
+                    .and_then(|v| v.as_str())
+                {
                     Some(b) => b,
                     None => return CallToolResult::error("Missing required parameter: new_body"),
                 };
-                let expected_hash = arguments.get("expected_body_hash").and_then(|v| v.as_str());
+                let expected_hash = arguments
+                    .get("expected_body_hash")
+                    .or_else(|| arguments.get("body_hash"))
+                    .or_else(|| arguments.get("expected_hash"))
+                    .and_then(|v| v.as_str());
 
                 match replace_symbol_body(
                     &self.workspace,
@@ -667,7 +909,7 @@ impl McpServer {
                         "name": "code-kb",
                         "version": env!("CARGO_PKG_VERSION")
                     },
-                    "instructions": "For unfamiliar code, start with codebase_outline, then file_skeleton or find_symbol. Use get_symbol_body or get_context_slice for a selected symbol. Pass file_path when a symbol name is ambiguous. replace_symbol_body modifies source files and reindexes them."
+                    "instructions": "For progressive code exploration, start with codebase_outline (~200 tokens) for directory structure. Use file_skeleton to inspect interfaces without bodies. Use find_symbol for exact name lookups and search_symbols for natural-language concepts. Call get_context_slice or get_symbol_body for surgical context before editing. Trace callers/callees with find_references. Use blast_radius to assess downstream impact and predict which tests to run before/after edits. Use replace_symbol_body for atomic, syntax-validated edits with immediate re-indexing."
                 });
                 Some(JsonRpcResponse::success(id, init_result))
             }

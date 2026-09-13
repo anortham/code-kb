@@ -66,6 +66,16 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+      - name: Restore julie-extract
+        shell: bash
+        run: |
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            pwsh scripts/restore-julie-extract.ps1
+          else
+            bash scripts/restore-julie-extract.sh
+          fi
+          echo "$PWD/.tools" >> "$GITHUB_PATH"
+
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }} -p code-kb-cli --bin code-kb
 
@@ -81,23 +91,14 @@ jobs:
           cp "$BIN_SRC" "$PKG_DIR/"
           cp README.md LICENSE-MIT LICENSE-APACHE "$PKG_DIR/"
 
-          # Attempt to bundle pre-built julie-extract binary from anortham/julie-extractors
-          EXTRACT_DIR="target/julie-extract-dl"
-          mkdir -p "$EXTRACT_DIR"
-          if gh release download --repo anortham/julie-extractors --pattern "*${{ matrix.target }}*" --dir "$EXTRACT_DIR" 2>/dev/null; then
-            echo "Downloaded julie-extract archive, extracting..."
-            if ls "$EXTRACT_DIR"/*.tar.gz 1>/dev/null 2>&1; then
-              tar -xzf "$EXTRACT_DIR"/*.tar.gz -C "$EXTRACT_DIR"
-            elif ls "$EXTRACT_DIR"/*.zip 1>/dev/null 2>&1; then
-              unzip -q "$EXTRACT_DIR"/*.zip -d "$EXTRACT_DIR"
-            fi
-            if [[ -f "$EXTRACT_DIR/julie-extract${{ matrix.exe_suffix }}" ]]; then
-              cp "$EXTRACT_DIR/julie-extract${{ matrix.exe_suffix }}" "$PKG_DIR/"
-              echo "Bundled julie-extract binary into release package"
-            fi
-          else
-            echo "Notice: pre-built julie-extract binary not bundled for ${{ matrix.target }}"
+          # Bundle pre-built matching julie-extract binary into release package
+          EXTRACT_BIN=".tools/julie-extract${{ matrix.exe_suffix }}"
+          if [[ ! -f "$EXTRACT_BIN" ]]; then
+            echo "error: required julie-extract binary not found at $EXTRACT_BIN" >&2
+            exit 1
           fi
+          cp "$EXTRACT_BIN" "$PKG_DIR/"
+          echo "Bundled julie-extract binary into release package"
 
           echo "pkg_dir=$PKG_DIR" >> "$GITHUB_OUTPUT"
 

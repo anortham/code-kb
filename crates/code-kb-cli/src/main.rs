@@ -3,9 +3,10 @@ use std::path::{Path, PathBuf};
 
 use code_kb_core::{
     Workspace, codebase_outline_op, ensure_fresh_file, ensure_fts_index_path, file_skeleton_op,
-    format_context_slice, format_references, format_search_results, fts_search_symbols,
-    get_context_slice_op, get_symbol_body_op, load_file_symbols, open_read_only, queries,
-    replace_symbol_body, scan_workspace, search_symbols,
+    format_context_slice, format_references, format_search_results, fts_search_symbols_scoped,
+    get_context_slice_op, get_symbol_body_op, list_structural_fact_categories, load_file_symbols,
+    open_read_only, prune_orphaned_stores, queries, replace_symbol_body, scan_workspace,
+    search_symbols_scoped,
 };
 
 mod logging;
@@ -14,19 +15,19 @@ mod mcp;
 #[derive(Debug, Parser)]
 #[command(
     name = "code-kb",
-    version,
-    about = "Lightweight, token-dense code-intelligence engine and MCP server for AI coding agents"
+    about = "Agent-facing code-intelligence engine & MCP server",
+    version
 )]
 pub struct Cli {
-    /// Workspace root directory. Defaults to CWD or upward Git root discovery.
+    /// Target repository path (defaults to current directory).
     #[arg(long, global = true)]
     pub root: Option<PathBuf>,
 
-    /// Path to SQLite extraction database artifact.
+    /// Path to explicit SQLite artifact database.
     #[arg(long, global = true)]
     pub db: Option<PathBuf>,
 
-    /// Format output as JSON.
+    /// Output results as JSON.
     #[arg(long, global = true)]
     pub json: bool,
 
@@ -40,51 +41,64 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    /// Output compact codebase architectural outline.
+    /// Print hierarchical outline of codebase directory tree.
     Outline(OutlineArgs),
-    /// Progressive disclosure file skeleton with implementation bodies stripped.
+    /// Render file skeleton containing symbol signatures with implementation bodies stripped.
     Skeleton(SkeletonArgs),
-    /// Search symbols by name, kind, or test flag.
+    /// Search for symbols by exact name or prefix.
     Symbol(SymbolArgs),
-    /// Conceptual full-text search over symbol names, signatures, and docstrings using FTS5 (BM25).
+    /// Natural-language and full-text search over symbol names and docstrings using FTS5 (BM25).
     Search(SearchArgs),
     /// Retrieve exact implementation body of a symbol.
     Body(BodyArgs),
-    /// Surgical context bundle: target body + callee signatures + types + tests.
+    /// Generate surgical context bundle (target body + callees + types + tests).
     Slice(SliceArgs),
-    /// Discover callers or callees of a symbol.
+    /// Find callers or callees of a symbol.
     Refs(RefsArgs),
-    /// Query framework-level structural facts and literals.
+    /// Predict downstream impact and which tests to run before/after edits.
+    BlastRadius(BlastRadiusArgs),
+    /// Alias for blast-radius.
+    Impact(BlastRadiusArgs),
+    /// Query framework-level structural facts (routes, tables, models, config keys).
     Facts(FactsArgs),
-    /// Atomically replace symbol body with pre-flight check and immediate re-index.
+    /// Atomically replace the body of a symbol.
     Edit(EditArgs),
-    /// Scan and extract workspace AST facts into SQLite catalog.
+    /// Run initial or full workspace scan.
     Scan(ScanArgs),
-    /// Start Model Context Protocol (MCP) server over stdio.
-    Serve(ServeArgs),
-    /// View active log file location and recent diagnostic entries.
+    /// Prune orphaned artifact databases for workspaces or worktrees that no longer exist on disk.
+    Prune(PruneArgs),
+    /// Stream server activity logs from background file watcher and reconciliation.
     Logs(LogsArgs),
+    /// View tool usage telemetry and token efficiency summary.
+    Stats(StatsArgs),
+    /// Alias for stats.
+    Telemetry(StatsArgs),
+    /// Start Model Context Protocol (MCP) server on stdio.
+    Serve(ServeArgs),
 }
 
 #[derive(Debug, Args)]
 pub struct OutlineArgs {
-    /// Subdirectory to scope the outline to.
+    /// Optional subpath to scope outline.
     pub path: Option<String>,
-    /// Directory recursion depth.
+    /// Maximum directory recursion depth (default: 2).
     #[arg(long, default_value_t = 2)]
     pub depth: usize,
 }
 
 #[derive(Debug, Args)]
 pub struct SkeletonArgs {
-    /// File path relative to workspace root or absolute path.
+    /// Relative or absolute path to source file.
     pub file: String,
 }
 
 #[derive(Debug, Args)]
 pub struct SymbolArgs {
-    /// Symbol name or search query.
+    /// Symbol name or prefix query.
     pub query: String,
+    /// Optional file path or directory prefix to scope search.
+    #[arg(long)]
+    pub path: Option<String>,
     /// Filter by symbol kind (e.g. function, struct, trait, class, interface, enum).
     #[arg(long)]
     pub kind: Option<String>,
@@ -100,6 +114,9 @@ pub struct SymbolArgs {
 pub struct SearchArgs {
     /// Natural language keywords or concept to search for.
     pub query: String,
+    /// Optional file path or directory prefix to scope search.
+    #[arg(long)]
+    pub path: Option<String>,
     /// Filter by symbol kind (e.g. function, struct, trait, class, interface, enum).
     #[arg(long)]
     pub kind: Option<String>,
@@ -133,17 +150,36 @@ pub struct SliceArgs {
 pub struct RefsArgs {
     /// Target symbol name.
     pub symbol: String,
-    /// Direction: "callers" or "callees".
-    #[arg(long)]
+    /// Direction: "callers" or "callees" (default: "callers").
+    #[arg(long, default_value = "callers")]
     pub direction: String,
     /// Maximum number of results.
     #[arg(long, default_value_t = 20)]
+    pub limit: usize,
+    /// Include unresolved external runtime/stdlib primitives in callees.
+    #[arg(long)]
+    pub include_external: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct BlastRadiusArgs {
+    /// Optional symbol name to seed blast radius walk.
+    pub symbol: Option<String>,
+    /// Optional file path to seed blast radius walk.
+    #[arg(long, short = 'f')]
+    pub file: Option<String>,
+    /// Maximum relationship hops (default: 2).
+    #[arg(long, short = 'd', default_value_t = 2)]
+    pub depth: usize,
+    /// Maximum results to return (default: 20).
+    #[arg(long, short = 'l', default_value_t = 20)]
     pub limit: usize,
 }
 
 #[derive(Debug, Args)]
 pub struct FactsArgs {
-    /// Category or pattern (e.g. route, query, model, config).
+    /// Category or pattern (e.g. route, query, model, config). If omitted, lists available categories.
+    #[arg(default_value = "")]
     pub category: String,
     /// Maximum number of results.
     #[arg(long, default_value_t = 30)]
@@ -186,6 +222,20 @@ pub struct LogsArgs {
     pub lines: usize,
 }
 
+#[derive(Debug, Args)]
+pub struct PruneArgs {
+    /// Preview stores that would be deleted without actually removing them.
+    #[arg(long)]
+    pub dry_run: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct StatsArgs {
+    /// Format output as raw JSON instead of human-readable table.
+    #[arg(long)]
+    pub json: bool,
+}
+
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
@@ -201,6 +251,39 @@ fn main() -> anyhow::Result<()> {
         command = ?std::env::args().collect::<Vec<_>>(),
         "code-kb started"
     );
+
+    // Handle Stats / Telemetry command (does not require artifact.db)
+    if let Command::Stats(args) | Command::Telemetry(args) = &cli.command {
+        let summary = code_kb_core::get_telemetry_summary(&workspace.root)
+            .map_err(|e| anyhow::anyhow!("Failed to query telemetry: {e}"))?;
+        if cli.json || args.json {
+            println!("{}", serde_json::to_string_pretty(&summary)?);
+        } else {
+            print!("{}", code_kb_core::format_telemetry_summary(&summary));
+        }
+        return Ok(());
+    }
+
+    // Handle Prune command (does not require existing database in current workspace)
+    if let Command::Prune(args) = &cli.command {
+        let pruned = prune_orphaned_stores(args.dry_run);
+        if cli.json {
+            println!("{}", serde_json::to_string_pretty(&pruned)?);
+        } else if pruned.is_empty() {
+            println!("No orphaned stores found.");
+        } else {
+            let action = if args.dry_run {
+                "Would prune"
+            } else {
+                "Pruned"
+            };
+            println!("{action} {} orphaned store(s):", pruned.len());
+            for p in pruned {
+                println!("- {}", p.display());
+            }
+        }
+        return Ok(());
+    }
 
     // Handle Logs command (does not require existing database)
     if let Command::Logs(args) = &cli.command {
@@ -292,10 +375,11 @@ fn main() -> anyhow::Result<()> {
             }
         }
         Command::Symbol(args) => {
-            let matches = search_symbols(
+            let matches = search_symbols_scoped(
                 &conn,
                 &args.query,
                 args.kind.as_deref(),
+                args.path.as_deref(),
                 args.include_tests,
                 args.limit,
             )?;
@@ -324,10 +408,11 @@ fn main() -> anyhow::Result<()> {
         }
         Command::Search(args) => {
             let _ = ensure_fts_index_path(&db_path);
-            let matches = fts_search_symbols(
+            let matches = fts_search_symbols_scoped(
                 &conn,
                 &args.query,
                 args.kind.as_deref(),
+                args.path.as_deref(),
                 args.include_tests,
                 args.limit,
             )?;
@@ -372,8 +457,13 @@ fn main() -> anyhow::Result<()> {
             }
         }
         Command::Refs(args) => {
-            let refs =
-                code_kb_core::find_references(&conn, &args.symbol, &args.direction, args.limit)?;
+            let refs = code_kb_core::find_references_ext(
+                &conn,
+                &args.symbol,
+                &args.direction,
+                args.limit,
+                args.include_external,
+            )?;
             if cli.json {
                 println!("{}", serde_json::to_string_pretty(&refs)?);
             } else {
@@ -383,37 +473,67 @@ fn main() -> anyhow::Result<()> {
                 );
             }
         }
-        Command::Facts(args) => {
-            let facts = code_kb_core::find_structural_facts(&conn, &args.category, args.limit)?;
-            let literals = code_kb_core::find_literals(&conn, &args.category, args.limit)?;
+        Command::BlastRadius(args) | Command::Impact(args) => {
+            let result = code_kb_core::blast_radius_op(
+                &workspace,
+                &conn,
+                args.symbol.as_deref(),
+                args.file.as_deref(),
+                args.depth,
+                args.limit,
+            )?;
             if cli.json {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&serde_json::json!({
-                        "structural_facts": facts,
-                        "literals": literals
-                    }))?
-                );
+                println!("{}", serde_json::to_string_pretty(&result)?);
             } else {
-                println!(
-                    "Structural facts for '{}' ({} found):\n",
-                    args.category,
-                    facts.len()
-                );
-                for f in &facts {
-                    let parent = f.containing_symbol_name.as_deref().unwrap_or("top-level");
+                println!("{}", code_kb_core::format_blast_radius(&result));
+            }
+        }
+        Command::Facts(args) => {
+            let cat = args.category.trim();
+            if cat.is_empty() {
+                let categories = list_structural_fact_categories(&conn)?;
+                if cli.json {
+                    println!("{}", serde_json::to_string_pretty(&categories)?);
+                } else if categories.is_empty() {
+                    println!("No structural facts or literals indexed in this repository.");
+                } else {
                     println!(
-                        "- {} [{}:{}] (pattern: {}, in: {})",
-                        f.capture_name, f.path, f.start_line, f.pattern_id, parent
+                        "Available structural fact & literal categories ({} found):\n",
+                        categories.len()
                     );
+                    for (name, count) in categories {
+                        println!("- `{name}` ({count} occurrences)");
+                    }
+                    println!("\nRun `code-kb facts <category>` to view matching facts.");
                 }
-                if !literals.is_empty() {
-                    println!("\nMatching literals ({} found):\n", literals.len());
-                    for l in &literals {
+            } else {
+                let facts = code_kb_core::find_structural_facts(&conn, cat, args.limit)?;
+                let literals = code_kb_core::find_literals(&conn, cat, args.limit)?;
+                if cli.json {
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&serde_json::json!({
+                            "structural_facts": facts,
+                            "literals": literals
+                        }))?
+                    );
+                } else {
+                    println!("Structural facts for '{}' ({} found):\n", cat, facts.len());
+                    for f in &facts {
+                        let parent = f.containing_symbol_name.as_deref().unwrap_or("top-level");
                         println!(
-                            "- \"{}\" [{}:{}] (kind: {})",
-                            l.literal_text, l.path, l.start_line, l.kind
+                            "- {} [{}:{}] (pattern: {}, in: {})",
+                            f.capture_name, f.path, f.start_line, f.pattern_id, parent
                         );
+                    }
+                    if !literals.is_empty() {
+                        println!("\nMatching literals ({} found):\n", literals.len());
+                        for l in &literals {
+                            println!(
+                                "- \"{}\" [{}:{}] (kind: {})",
+                                l.literal_text, l.path, l.start_line, l.kind
+                            );
+                        }
                     }
                 }
             }
@@ -438,7 +558,14 @@ fn main() -> anyhow::Result<()> {
                 res.bytes_written
             );
         }
-        Command::Serve(_) | Command::Scan(_) | Command::Logs(_) => unreachable!(),
+        Command::Serve(_)
+        | Command::Scan(_)
+        | Command::Logs(_)
+        | Command::Prune(_)
+        | Command::Stats(_)
+        | Command::Telemetry(_) => {
+            unreachable!()
+        }
     }
 
     Ok(())

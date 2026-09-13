@@ -5,7 +5,7 @@ use thiserror::Error;
 use crate::formatters::{
     OutlineNode, add_path_to_outline, format_file_skeleton, render_outline_tree,
 };
-use crate::models::{ContextSlice, Symbol};
+use crate::models::{BlastRadiusResult, ContextSlice, Symbol};
 use crate::queries::{self, QueryError};
 use crate::slicer::{self, SliceError};
 use crate::sync::{self, SyncError};
@@ -83,13 +83,19 @@ pub fn get_context_slice_op(
         conn,
         &target_symbol.name,
         "callees",
-        10,
+        20,
         &target_symbol.symbol_id,
     ) {
         for c in callees {
             if let Ok(Some(s)) = queries::get_symbol_by_name(conn, &c.to_symbol_name, None) {
                 let sig = s.signature.unwrap_or(s.name);
-                callee_signatures.push(format!("{sig} ({}:{})", s.path, s.start_line));
+                let entry = format!("{sig} ({}:{})", s.path, s.start_line);
+                if !callee_signatures.contains(&entry) {
+                    callee_signatures.push(entry);
+                }
+            }
+            if callee_signatures.len() >= 10 {
+                break;
             }
         }
     }
@@ -98,7 +104,9 @@ pub fn get_context_slice_op(
     let mut related_types = Vec::new();
     if let Ok(types) = queries::find_type_facts(conn, &target_symbol.symbol_id) {
         for t in types {
-            related_types.push(t.resolved_type);
+            if !related_types.contains(&t.resolved_type) {
+                related_types.push(t.resolved_type);
+            }
         }
     }
 
@@ -196,6 +204,72 @@ pub fn codebase_outline_op(
     render_outline_tree(&mut out, &root_node, "", 0, depth);
 
     Ok(out)
+}
+
+/// Compute blast radius and likely tests for a symbol, file, or uncommitted git changes.
+pub fn blast_radius_op(
+    workspace: &Workspace,
+    conn: &Connection,
+    symbol: Option<&str>,
+    file: Option<&str>,
+    max_depth: usize,
+    limit: usize,
+) -> Result<BlastRadiusResult, OpError> {
+    let mut seed_symbols = Vec::new();
+    let mut seed_paths = Vec::new();
+
+    let clean_symbol = symbol.and_then(|s| {
+        let t = s.trim();
+        if t.is_empty() { None } else { Some(t) }
+    });
+    let clean_file = file.and_then(|f| {
+        let t = f.trim();
+        if t.is_empty() { None } else { Some(t) }
+    });
+
+    let mut discovered = Vec::new();
+
+    if let Some(s) = clean_symbol {
+        seed_symbols.push(s);
+    } else if let Some(f) = clean_file {
+        seed_paths.push(f);
+    } else {
+        // Zero arguments: discover uncommitted working tree changes via git status
+        let git_status = std::process::Command::new("git")
+            .args(["status", "--porcelain"])
+            .current_dir(&workspace.root)
+            .output();
+
+        if let Ok(output) = git_status
+            && output.status.success()
+        {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            for line in stdout.lines() {
+                let trimmed = line.trim();
+                if trimmed.len() > 3 {
+                    let path_part = trimmed[2..].trim();
+                    let target = if let Some((_, to)) = path_part.split_once("->") {
+                        to.trim()
+                    } else {
+                        path_part
+                    };
+                    let p = target.trim_matches('"');
+                    if !p.is_empty() && !crate::workspace::is_hard_excluded(p) {
+                        discovered.push(p.to_string());
+                    }
+                }
+            }
+        }
+        for d in &discovered {
+            seed_paths.push(d.as_str());
+        }
+    }
+
+    let depth = if max_depth == 0 { 2 } else { max_depth };
+    let row_limit = if limit == 0 { 20 } else { limit };
+
+    let res = queries::compute_blast_radius(conn, &seed_symbols, &seed_paths, depth, row_limit)?;
+    Ok(res)
 }
 
 #[cfg(test)]

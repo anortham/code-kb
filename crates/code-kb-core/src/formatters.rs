@@ -1,7 +1,9 @@
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
-use crate::models::{ContextSlice, FileFact, ReferenceSite, Symbol, SymbolSearchResult};
+use crate::models::{
+    BlastRadiusResult, ContextSlice, FileFact, ReferenceSite, Symbol, SymbolSearchResult,
+};
 
 /// Format progressive disclosure file skeleton with implementation bodies stripped.
 pub fn format_file_skeleton(
@@ -374,9 +376,65 @@ pub fn format_search_results(query: &str, results: &[SymbolSearchResult]) -> Str
     out
 }
 
+/// Format blast radius and likely test targets into token-dense markdown.
+pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
+    if result.seed_type == "none"
+        || (result.seeds.is_empty()
+            && result.likely_tests.is_empty()
+            && result.impacted_symbols.is_empty())
+    {
+        return "No uncommitted changes detected in git working tree. Pass a 'symbol' or 'file' parameter to analyze blast radius.".to_string();
+    }
+
+    let mut out = String::new();
+    let seed_label = if result.seed_type == "file" {
+        format!("Files: {}", result.seeds.join(", "))
+    } else if result.seed_type == "symbol" {
+        format!("Symbol: {}", result.seeds.join(", "))
+    } else {
+        format!("Seeds: {}", result.seeds.join(", "))
+    };
+
+    out.push_str(&format!("## Blast Radius & Test Impact ({seed_label})\n\n"));
+
+    if !result.likely_tests.is_empty() {
+        out.push_str(&format!(
+            "### Likely Tests to Run ({} found)\n",
+            result.likely_tests.len()
+        ));
+        for t in &result.likely_tests {
+            out.push_str(&format!(
+                "- `{}` [{}:{}] ({})\n",
+                t.name, t.path, t.line, t.reason
+            ));
+        }
+        out.push('\n');
+    } else {
+        out.push_str("### Likely Tests to Run\nNo direct or stem-matched tests found.\n\n");
+    }
+
+    if !result.impacted_symbols.is_empty() {
+        out.push_str(&format!(
+            "### Downstream Impact ({} symbols)\n",
+            result.impacted_symbols.len()
+        ));
+        for s in &result.impacted_symbols {
+            out.push_str(&format!(
+                "- [depth {}] {} `{}` [{}:{}]\n",
+                s.depth, s.kind, s.name, s.path, s.line
+            ));
+        }
+    } else {
+        out.push_str("### Downstream Impact\nNo downstream callers found within depth.\n");
+    }
+
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::{ImpactedSymbol, TestTarget};
 
     #[test]
     fn test_format_file_skeleton() {
@@ -455,5 +513,35 @@ mod tests {
             formatted.contains("- function `parse_tokens` [src/parser.rs:15-25] (score: -1.85)")
         );
         assert!(formatted.contains("Match: Parses [tokens] from stream."));
+    }
+
+    #[test]
+    fn test_format_blast_radius() {
+        let res = BlastRadiusResult {
+            seed_type: "symbol".into(),
+            seeds: vec!["do_work".into()],
+            likely_tests: vec![TestTarget {
+                name: "test_do_work".into(),
+                path: "tests/work_test.rs".into(),
+                line: 15,
+                reason: "transitive caller [depth 1]".into(),
+            }],
+            impacted_symbols: vec![ImpactedSymbol {
+                name: "caller_fn".into(),
+                kind: "function".into(),
+                path: "src/caller.rs".into(),
+                line: 42,
+                depth: 1,
+            }],
+        };
+
+        let formatted = format_blast_radius(&res);
+        assert!(formatted.contains("## Blast Radius & Test Impact (Symbol: do_work)"));
+        assert!(formatted.contains("### Likely Tests to Run (1 found)"));
+        assert!(
+            formatted
+                .contains("- `test_do_work` [tests/work_test.rs:15] (transitive caller [depth 1])")
+        );
+        assert!(formatted.contains("- [depth 1] function `caller_fn` [src/caller.rs:42]"));
     }
 }

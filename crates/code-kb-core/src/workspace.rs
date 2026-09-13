@@ -75,6 +75,59 @@ pub fn to_forward_slash(path: &Path) -> String {
     s.replace('\\', "/")
 }
 
+/// Check if a relative path contains directories or file patterns that must never be indexed or watched.
+pub fn is_hard_excluded(rel_path: &str) -> bool {
+    let p = rel_path.replace('\\', "/");
+    let has_excluded_dir = p.split('/').any(|component| {
+        matches!(
+            component,
+            ".git"
+                | ".hg"
+                | ".svn"
+                | ".julie"
+                | ".code-kb"
+                | ".memories"
+                | ".worktrees"
+                | "worktrees"
+                | ".claude"
+                | ".venv"
+                | "venv"
+                | ".env"
+                | ".tox"
+                | ".vs"
+                | "node_modules"
+                | "vendor"
+                | "target"
+                | "dist"
+                | "build"
+                | ".cache"
+                | "obj"
+                | "TestResults"
+                | ".idea"
+                | ".vscode"
+        )
+    });
+
+    if has_excluded_dir {
+        return true;
+    }
+
+    const EXCLUDED_SUFFIXES: &[&str] = &[
+        ".min.js",
+        ".bundle.js",
+        ".generated.js",
+        ".generated.jsx",
+        ".generated.ts",
+        ".generated.tsx",
+        ".generated.d.ts",
+        ".tmp",
+        ".swp",
+        "~",
+    ];
+
+    EXCLUDED_SUFFIXES.iter().any(|suffix| p.ends_with(suffix))
+}
+
 /// Represents a bound workspace session.
 #[derive(Debug, Clone)]
 pub struct Workspace {
@@ -295,6 +348,77 @@ impl Workspace {
             )
         })
     }
+}
+
+/// Prunes global cache stores whose original workspace root paths no longer exist on disk.
+/// Returns a list of pruned store directory paths.
+/// Prunes global cache stores whose original workspace root paths no longer exist on disk.
+/// Returns a list of pruned store directory paths.
+pub fn prune_orphaned_stores(dry_run: bool) -> Vec<PathBuf> {
+    let proj_dirs = match directories::ProjectDirs::from("com", "code-kb", "code-kb") {
+        Some(d) => d,
+        None => return Vec::new(),
+    };
+
+    let stores_dir = proj_dirs.cache_dir().join("stores");
+    prune_orphaned_stores_at(&stores_dir, dry_run)
+}
+
+/// Prunes stores within a specified directory whose recorded root_path no longer exists on disk.
+pub fn prune_orphaned_stores_at(stores_dir: &Path, dry_run: bool) -> Vec<PathBuf> {
+    let mut pruned = Vec::new();
+
+    if !stores_dir.exists() || !stores_dir.is_dir() {
+        return pruned;
+    }
+
+    let entries = match std::fs::read_dir(stores_dir) {
+        Ok(e) => e,
+        Err(_) => return pruned,
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+
+        let db_candidate = path.join("artifact.db");
+        let store_db_candidate = path.join("store.db");
+        let active_db = if db_candidate.exists() {
+            Some(db_candidate)
+        } else if store_db_candidate.exists() {
+            Some(store_db_candidate)
+        } else {
+            None
+        };
+
+        if let Some(db_file) = active_db
+            && let Ok(conn) = rusqlite::Connection::open_with_flags(
+                &db_file,
+                rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY
+                    | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+            )
+        {
+            let root_path: rusqlite::Result<String> = conn.query_row(
+                "SELECT value FROM artifact_metadata WHERE key = 'root_path'",
+                [],
+                |row| row.get(0),
+            );
+
+            if let Ok(root_str) = root_path {
+                let root_p = Path::new(&root_str);
+                if !root_p.exists() {
+                    pruned.push(path.clone());
+                    if !dry_run {
+                        let _ = std::fs::remove_dir_all(&path);
+                    }
+                }
+            }
+        }
+    }
+
+    pruned
 }
 
 #[cfg(test)]

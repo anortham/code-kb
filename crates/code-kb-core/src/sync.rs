@@ -27,17 +27,52 @@ pub fn find_julie_extract_binary() -> Option<PathBuf> {
     if let Ok(path_str) = std::env::var("JULIE_EXTRACT_BIN") {
         let p = PathBuf::from(path_str);
         if p.exists() {
-            return Some(p);
+            return Some(crate::workspace::normalize_path(&p));
         }
     }
 
-    // Check adjacent release/debug paths in local development
     let exe_name = if cfg!(windows) {
         "julie-extract.exe"
     } else {
         "julie-extract"
     };
-    let dev_candidates = [
+
+    // 1. Check next to current running executable (bundled release distribution)
+    if let Some(parent) = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+    {
+        let sibling = parent.join(exe_name);
+        if sibling.exists() {
+            return Some(crate::workspace::normalize_path(&sibling));
+        }
+        let tools_sibling = parent.join(".tools").join(exe_name);
+        if tools_sibling.exists() {
+            return Some(crate::workspace::normalize_path(&tools_sibling));
+        }
+    }
+
+    // 2. Check upward traversal for .tools/julie-extract from CWD
+    if let Ok(cwd) = std::env::current_dir() {
+        let mut probe = cwd;
+        loop {
+            let candidate = probe.join(".tools").join(exe_name);
+            if candidate.exists() {
+                return Some(crate::workspace::normalize_path(&candidate));
+            }
+            if let Some(parent) = probe.parent() {
+                if parent == probe {
+                    break;
+                }
+                probe = parent.to_path_buf();
+            } else {
+                break;
+            }
+        }
+    }
+
+    // 3. Check adjacent release/debug paths in local development
+    let mut dev_candidates = vec![
         PathBuf::from(format!(
             r"c:\source\julie-extractors\target\release\{exe_name}"
         )),
@@ -46,7 +81,27 @@ pub fn find_julie_extract_binary() -> Option<PathBuf> {
         )),
         PathBuf::from(format!("../julie-extractors/target/release/{exe_name}")),
         PathBuf::from(format!("../julie-extractors/target/debug/{exe_name}")),
+        PathBuf::from(format!("../../julie-extractors/target/release/{exe_name}")),
+        PathBuf::from(format!("../../julie-extractors/target/debug/{exe_name}")),
     ];
+
+    if let Some(user_dirs) = directories::UserDirs::new() {
+        let home = user_dirs.home_dir();
+        dev_candidates.push(
+            home.join("source")
+                .join("julie-extractors")
+                .join("target")
+                .join("release")
+                .join(exe_name),
+        );
+        dev_candidates.push(
+            home.join("source")
+                .join("julie-extractors")
+                .join("target")
+                .join("debug")
+                .join(exe_name),
+        );
+    }
 
     for c in &dev_candidates {
         if c.exists() {
@@ -244,7 +299,13 @@ pub fn reconcile_offline_edits(
     let mut walker = ignore::WalkBuilder::new(&workspace.canonical_root);
     walker
         .standard_filters(true)
-        .add_custom_ignore_filename(".julieignore");
+        .add_custom_ignore_filename(".julieignore")
+        .add_custom_ignore_filename(".code-kb-ignore")
+        .add_custom_ignore_filename(".codekbignore")
+        .filter_entry(|entry| {
+            let name = entry.file_name().to_string_lossy();
+            !crate::workspace::is_hard_excluded(&name)
+        });
     let walker = walker.build();
 
     temp_conn
@@ -271,6 +332,9 @@ pub fn reconcile_offline_edits(
             let path = entry.path();
             if let Ok(rel) = path.strip_prefix(&workspace.canonical_root) {
                 let rel_str = crate::workspace::to_forward_slash(rel);
+                if crate::workspace::is_hard_excluded(&rel_str) {
+                    continue;
+                }
                 let bytes = match entry.metadata() {
                     Ok(m) => m.len() as i64,
                     Err(e) => {

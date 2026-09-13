@@ -15,3 +15,13 @@
 *.swo
 .DS_Store
 Thumbs.db
+
+# Git worktrees
+.worktrees/
+worktrees/
+
+# Benchmarks
+benchmark_report.json
+
+# Tooling
+.tools/
