@@ -1,6 +1,6 @@
 use code_kb_core::{
     Workspace, find_julie_extract_binary, get_context_slice_op, get_symbol_by_name, open_read_only,
-    scan_workspace,
+    safe_tempdir, scan_workspace,
 };
 use std::fs;
 
@@ -9,7 +9,7 @@ fn test_qualified_parent_disambiguation() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = safe_tempdir();
     let root = temp_dir.path().to_path_buf();
 
     let src_dir = root.join("src");
@@ -68,7 +68,7 @@ fn test_path_filter_boundary_matching() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = safe_tempdir();
     let root = temp_dir.path().to_path_buf();
 
     let src_dir = root.join("src");
@@ -97,7 +97,7 @@ fn test_ambiguous_symbol_detection() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = safe_tempdir();
     let root = temp_dir.path().to_path_buf();
 
     let src_dir = root.join("src");
@@ -138,7 +138,7 @@ fn test_file_skeleton_exact_path_isolation() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = safe_tempdir();
     let root = temp_dir.path().to_path_buf();
 
     let src1 = root.join("src");
@@ -173,7 +173,7 @@ fn test_context_slice_qualified_method_uses_its_own_callees() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = safe_tempdir();
     let root = temp_dir.path().to_path_buf();
     let src_dir = root.join("src");
     fs::create_dir_all(&src_dir).unwrap();
@@ -193,8 +193,15 @@ fn test_context_slice_qualified_method_uses_its_own_callees() {
     scan_workspace(&workspace, &db_path, true).expect("Scan failed");
     let conn = open_read_only(&db_path).unwrap();
 
-    let slice = get_context_slice_op(&workspace, &db_path, &conn, "A::new", Some("src/types.rs"))
-        .expect("context slice failed");
+    let slice = get_context_slice_op(
+        &workspace,
+        &db_path,
+        &conn,
+        "A::new",
+        Some("src/types.rs"),
+        false,
+    )
+    .expect("context slice failed");
 
     assert!(
         slice
@@ -215,7 +222,7 @@ fn test_get_symbol_by_name_not_crowded_out_by_imports() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = safe_tempdir();
     let root = temp_dir.path().to_path_buf();
     let src_dir = root.join("src");
     fs::create_dir_all(&src_dir).unwrap();
@@ -258,7 +265,7 @@ fn test_context_slice_finds_related_tests() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = safe_tempdir();
     let root = temp_dir.path().to_path_buf();
     let src_dir = root.join("src");
     fs::create_dir_all(&src_dir).unwrap();
@@ -292,19 +299,104 @@ fn test_context_slice_finds_related_tests() {
     scan_workspace(&ws, &db_path, true).expect("Scan failed");
     let conn = open_read_only(&db_path).unwrap();
 
-    let slice = get_context_slice_op(&ws, &db_path, &conn, "calculate_price", Some("src/calc.rs"))
-        .expect("get_context_slice_op failed");
+    let slice = get_context_slice_op(
+        &ws,
+        &db_path,
+        &conn,
+        "calculate_price",
+        Some("src/calc.rs"),
+        false,
+    )
+    .expect("get_context_slice_op failed");
 
     assert!(
         slice
             .related_tests
             .iter()
-            .any(|t| t.name.contains("calculate_price") || t.is_test),
+            .any(|t| t.name.contains("calculate_price")),
         "Context slice must find related test, got: {:?}",
         slice
             .related_tests
             .iter()
             .map(|t| &t.name)
             .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_context_slice_include_external() {
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+
+    let temp_dir = safe_tempdir();
+    let root = temp_dir.path().to_path_buf();
+    let src_dir = root.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
+
+    fs::write(
+        src_dir.join("service.py"),
+        "def helper():\n    return 42\n\ndef execute():\n    helper()\n    print('done')\n    len([1, 2])\n",
+    )
+    .unwrap();
+
+    let ws = Workspace::new(root.clone());
+    let db_path = root.join("test.db");
+    scan_workspace(&ws, &db_path, true).expect("Scan failed");
+    let conn = open_read_only(&db_path).unwrap();
+
+    // Default: include_external = false
+    let slice_default = get_context_slice_op(
+        &ws,
+        &db_path,
+        &conn,
+        "execute",
+        Some("src/service.py"),
+        false,
+    )
+    .expect("get_context_slice_op failed");
+
+    assert!(
+        slice_default
+            .callee_signatures
+            .iter()
+            .any(|s| s.contains("helper")),
+        "Default slice should include workspace callee helper, got: {:?}",
+        slice_default.callee_signatures
+    );
+    assert!(
+        !slice_default
+            .callee_signatures
+            .iter()
+            .any(|s| s.contains("print")),
+        "Default slice should filter external call print, got: {:?}",
+        slice_default.callee_signatures
+    );
+
+    // With include_external = true
+    let slice_ext = get_context_slice_op(
+        &ws,
+        &db_path,
+        &conn,
+        "execute",
+        Some("src/service.py"),
+        true,
+    )
+    .expect("get_context_slice_op failed");
+
+    assert!(
+        slice_ext
+            .callee_signatures
+            .iter()
+            .any(|s| s.contains("helper")),
+        "Extended slice should include helper, got: {:?}",
+        slice_ext.callee_signatures
+    );
+    assert!(
+        slice_ext
+            .callee_signatures
+            .iter()
+            .any(|s| s.contains("print")),
+        "Extended slice should include external print, got: {:?}",
+        slice_ext.callee_signatures
     );
 }

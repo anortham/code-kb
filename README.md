@@ -197,7 +197,7 @@ Terminal-based AI harnesses inherit your terminal's current working directory au
 | `find_symbol` | Fast semantic symbol search (exact & substring) across repo or scoped path. | `query` (req), `path` (opt), `kind` (opt), `is_test` (opt), `limit` (opt) | `name`, `q` |
 | `search_symbols` | Conceptual BM25 full-text search over symbol signatures & docstrings. | `query` (req), `path` (opt), `kind` (opt), `limit` (opt) | `name`, `q` |
 | `get_symbol_body` | Slices the exact implementation body of a symbol from disk. | `symbol_name` (req), `file_path` (opt) | `symbol`, `name`, `path` |
-| `get_context_slice` | Surgical bundle: target body + callee signatures + parameter types + tests. | `symbol_name` (req), `file_path` (opt) | `symbol`, `name`, `path` |
+| `get_context_slice` | Surgical bundle: target body + callee signatures + parameter types + tests. | `symbol_name` (req), `file_path` (opt), `include_external` (opt, def: false) | `symbol`, `name`, `path` |
 | `find_references` | Traverses callers or callees of a symbol (filters external stdlib noise). | `symbol_name` (req), `direction` ("callers" \| "callees", def: callers), `include_external` (opt, def: false) | `symbol`, `name` |
 | `blast_radius` | Multi-hop reverse reachability (CTEs) & targeted test prediction. | `symbol` (opt), `file` (opt), `depth` (opt, def: 2), `limit` (opt) | `name`, `path`, `impact` |
 | `find_structural_facts` | Queries framework facts (routes, SQL queries, config keys, tables). Lists all categories when omitted. | `category` (opt), `limit` (opt) | `cat`, `kind`, `type` |

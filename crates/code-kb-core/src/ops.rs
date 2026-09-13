@@ -106,13 +106,19 @@ pub fn get_context_slice_op(
     conn: &Connection,
     symbol_name: &str,
     file_path: Option<&str>,
+    include_external: bool,
 ) -> Result<ContextSlice, OpError> {
     let (target_symbol, target_body) =
         get_symbol_body_op(workspace, db_path, conn, symbol_name, file_path)?;
 
-    let callee_signatures =
-        queries::find_callee_signatures(conn, &target_symbol.name, &target_symbol.symbol_id, 10)
-            .unwrap_or_default();
+    let callee_signatures = queries::find_callee_signatures(
+        conn,
+        &target_symbol.name,
+        &target_symbol.symbol_id,
+        10,
+        include_external,
+    )
+    .unwrap_or_default();
 
     // Find related types
     let mut related_types = Vec::new();

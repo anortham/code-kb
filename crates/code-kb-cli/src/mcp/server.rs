@@ -233,6 +233,10 @@ impl McpServer {
                         "file_path": {
                             "type": "string",
                             "description": "Optional file path to disambiguate identical symbol names."
+                        },
+                        "include_external": {
+                            "type": "boolean",
+                            "description": "Include external stdlib/runtime calls in callee signatures (default: false)."
                         }
                     },
                     "required": ["symbol_name"]
@@ -695,6 +699,10 @@ impl McpServer {
                     .or_else(|| arguments.get("file"))
                     .or_else(|| arguments.get("path"))
                     .and_then(|v| v.as_str());
+                let include_external = arguments
+                    .get("include_external")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
 
                 match get_context_slice_op(
                     &self.workspace,
@@ -702,6 +710,7 @@ impl McpServer {
                     &conn,
                     symbol_name,
                     file_path,
+                    include_external,
                 ) {
                     Ok(slice) => CallToolResult::text(format_context_slice(&slice)),
                     Err(e) => CallToolResult::error(e.to_string()),

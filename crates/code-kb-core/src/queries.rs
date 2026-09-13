@@ -1046,6 +1046,7 @@ pub fn find_callee_signatures(
     symbol_name: &str,
     symbol_id: &str,
     limit: usize,
+    include_external: bool,
 ) -> Result<Vec<String>, QueryError> {
     let mut stmt = conn.prepare(
         "SELECT s_to.name, s_to.signature, s_to.path, s_to.start_line, s_to.kind
@@ -1114,6 +1115,35 @@ pub fn find_callee_signatures(
                     variants.push(entry);
                 }
             } else if !signatures.contains(&entry) {
+                signatures.push(entry);
+            }
+        }
+    }
+
+    if include_external && signatures.len() < limit {
+        let remaining = (limit - signatures.len()) * 2;
+        let mut ext_stmt = conn.prepare(
+            "SELECT DISTINCT p.target_terminal_name, p.path, p.start_line
+             FROM pending_relationships p
+             JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
+             WHERE s_from.name = ?1 AND p.from_symbol_id = ?2
+               AND NOT EXISTS (SELECT 1 FROM symbols s_to WHERE s_to.name = p.target_terminal_name)
+             LIMIT ?3",
+        )?;
+
+        let ext_rows =
+            ext_stmt.query_map(params![symbol_name, symbol_id, remaining as i64], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<i64>>(2)?.unwrap_or(1) as usize,
+                ))
+            })?;
+
+        for r in ext_rows.flatten() {
+            let (name, path, line) = r;
+            let entry = format!("{name} ({path}:{line})");
+            if !signatures.contains(&entry) {
                 signatures.push(entry);
             }
         }

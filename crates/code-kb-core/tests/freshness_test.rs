@@ -1,6 +1,6 @@
 use code_kb_core::{
     Workspace, ensure_fresh_file, find_julie_extract_binary, get_symbol_by_name, open_read_only,
-    reconcile_offline_edits, scan_workspace,
+    reconcile_offline_edits, safe_tempdir, scan_workspace,
 };
 use std::fs;
 #[cfg(unix)]
@@ -11,7 +11,7 @@ fn test_ensure_fresh_file_detects_equal_size_edit() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = safe_tempdir();
     let root = temp_dir.path().to_path_buf();
 
     let src_dir = root.join("src");
@@ -28,20 +28,20 @@ fn test_ensure_fresh_file_detects_equal_size_edit() {
     scan_workspace(&ws, &db_path, true).expect("Scan failed");
     let conn = open_read_only(&db_path).unwrap();
 
-    // Equal-size edit: replace 'foo_fn' with 'bar_fn' (exact same byte count: 40 bytes)
+    // Modify file with exactly equal length (40 bytes): replace 'foo_fn' with 'bar_fn'
     let modified_code = "pub fn bar_fn() -> i32 {\n    100\n}\n";
     assert_eq!(initial_code.len(), modified_code.len());
     fs::write(&file_path, modified_code).unwrap();
 
-    // ensure_fresh_file must detect that the content changed despite identical byte count!
-    let was_dirty =
-        ensure_fresh_file(&ws, &db_path, &conn, "src/calc.rs").expect("ensure_fresh_file failed");
+    // ensure_fresh_file should detect content change via content_hash check
+    let changed = ensure_fresh_file(&ws, &db_path, &conn, "src/calc.rs").unwrap();
+    assert!(changed, "ensure_fresh_file should report file changed");
 
-    assert!(was_dirty, "Equal-size edit must be detected as dirty");
-
-    // Verify the symbol in DB was actually updated to bar_fn
-    let symbol = code_kb_core::get_symbol_by_name(&conn, "bar_fn", Some("src/calc.rs")).unwrap();
-    assert!(symbol.is_some(), "Database must now contain 'bar_fn'");
+    // Symbol in database should now be bar_fn
+    let symbol = get_symbol_by_name(&conn, "bar_fn", Some("src/calc.rs"))
+        .unwrap()
+        .expect("bar_fn should exist in db");
+    assert_eq!(symbol.name, "bar_fn");
 }
 
 #[test]
@@ -49,7 +49,7 @@ fn test_ensure_fresh_file_removes_deleted_file_from_index() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = safe_tempdir();
     let root = temp_dir.path().to_path_buf();
     let src_dir = root.join("src");
     fs::create_dir_all(&src_dir).unwrap();
@@ -77,7 +77,7 @@ fn test_ensure_fresh_file_propagates_read_failure() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = safe_tempdir();
     let root = temp_dir.path().to_path_buf();
     let src_dir = root.join("src");
     fs::create_dir_all(&src_dir).unwrap();
@@ -101,7 +101,7 @@ fn test_reconcile_offline_edits_equal_size() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = safe_tempdir();
     let root = temp_dir.path().to_path_buf();
 
     let src_dir = root.join("src");
@@ -137,7 +137,7 @@ fn test_get_symbol_body_fresh_after_comment_added() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = safe_tempdir();
     let root = temp_dir.path().to_path_buf();
 
     let src_dir = root.join("src");
@@ -183,7 +183,7 @@ fn test_reconcile_offline_edits_added_and_deleted() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = safe_tempdir();
     let root = temp_dir.path().to_path_buf();
 
     let src_dir = root.join("src");
@@ -226,7 +226,7 @@ fn test_reconcile_offline_edits_preserves_unreadable_directory_records() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = safe_tempdir();
     let root = temp_dir.path().to_path_buf();
     let src_dir = root.join("src");
     fs::create_dir_all(&src_dir).unwrap();
@@ -256,12 +256,13 @@ fn test_reconcile_offline_edits_preserves_unreadable_directory_records() {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn test_reconcile_offline_edits_continues_when_individual_update_fails() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = safe_tempdir();
     let root = temp_dir.path().to_path_buf();
     let src_dir = root.join("src");
     fs::create_dir_all(&src_dir).unwrap();
@@ -272,16 +273,31 @@ fn test_reconcile_offline_edits_continues_when_individual_update_fails() {
     scan_workspace(&ws, &db_path, true).unwrap();
     let conn = open_read_only(&db_path).unwrap();
 
-    // Add another file
+    // Add another valid file and an unreadable file that will fail during update_file
     fs::write(src_dir.join("another.rs"), "pub fn another_symbol() {}\n").unwrap();
+    let unreadable_path = src_dir.join("unreadable.rs");
+    fs::write(&unreadable_path, "pub fn unreadable_symbol() {}\n").unwrap();
+    fs::set_permissions(&unreadable_path, fs::Permissions::from_mode(0o000)).unwrap();
+
+    let result = reconcile_offline_edits(&ws, &db_path, &conn);
+    // Restore permissions so cleanup succeeds
+    fs::set_permissions(&unreadable_path, fs::Permissions::from_mode(0o644)).unwrap();
 
     let report =
-        reconcile_offline_edits(&ws, &db_path, &conn).expect("reconciliation should succeed");
+        result.expect("reconciliation should succeed even when an individual update fails");
     assert!(report.added.contains(&"src/another.rs".to_string()));
+    assert!(report.added.contains(&"src/unreadable.rs".to_string()));
     assert!(
         get_symbol_by_name(&conn, "another_symbol", Some("src/another.rs"))
             .unwrap()
-            .is_some()
+            .is_some(),
+        "Valid file must be successfully indexed into database"
+    );
+    assert!(
+        get_symbol_by_name(&conn, "unreadable_symbol", Some("src/unreadable.rs"))
+            .unwrap()
+            .is_none(),
+        "Failed file must not be indexed into database"
     );
 }
 
@@ -290,7 +306,7 @@ fn test_codebase_outline_depth_bounded_symbols() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = safe_tempdir();
     let root = temp_dir.path().to_path_buf();
 
     let deep_dir = root.join("src").join("nested");
@@ -352,7 +368,7 @@ fn test_reconcile_offline_edits_preserves_hidden_files() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = safe_tempdir();
     let root = temp_dir.path().to_path_buf();
 
     let hidden_dir = root.join(".config");

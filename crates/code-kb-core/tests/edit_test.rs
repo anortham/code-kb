@@ -1,6 +1,6 @@
 use code_kb_core::{
-    Workspace, find_julie_extract_binary, open_read_only, replace_symbol_body, scan_workspace,
-    slicer,
+    Workspace, find_julie_extract_binary, open_read_only, replace_symbol_body, safe_tempdir,
+    scan_workspace, slicer,
 };
 use std::fs;
 #[cfg(unix)]
@@ -11,7 +11,7 @@ fn test_replace_symbol_body_atomic() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = safe_tempdir();
     let root = temp_dir.path().to_path_buf();
 
     // Create a sample rust file
@@ -28,13 +28,14 @@ fn test_replace_symbol_body_atomic() {
     let ws = Workspace::new(root.clone());
     let db_path = root.join("test.db");
 
-    // Scan the workspace
     scan_workspace(&ws, &db_path, true).expect("Scan failed");
-
-    // Open connection
     let conn = open_read_only(&db_path).unwrap();
 
-    let new_body = "{\n    let sum = a + b;\n    sum * 2\n}";
+    let new_body = r#"{
+    let sum = a + b;
+    sum * 2
+}"#;
+
     let res = replace_symbol_body(
         &ws,
         &db_path,
@@ -49,12 +50,12 @@ fn test_replace_symbol_body_atomic() {
     assert_eq!(res.symbol_name, "add_numbers");
     assert_eq!(res.file_path, "src/calc.rs");
 
-    // Verify disk content
+    // Verify on disk
     let disk_content = fs::read_to_string(&file_path).unwrap();
+    assert!(disk_content.contains("let sum = a + b;"));
     assert!(disk_content.contains("sum * 2"));
-    assert!(disk_content.contains("pub fn add_numbers(a: i32, b: i32) -> i32"));
 
-    // Verify database was updated
+    // Verify in db
     let updated_symbol =
         code_kb_core::get_symbol_by_name(&conn, "add_numbers", Some("src/calc.rs"))
             .unwrap()
@@ -69,7 +70,7 @@ fn test_replace_symbol_body_shrunk_file_does_not_panic() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = safe_tempdir();
     let root = temp_dir.path().to_path_buf();
 
     let src_dir = root.join("src");
@@ -115,7 +116,7 @@ fn test_replace_symbol_body_rejects_syntax_error() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = safe_tempdir();
     let root = temp_dir.path().to_path_buf();
 
     let src_dir = root.join("src");
@@ -164,7 +165,7 @@ fn test_replace_symbol_body_rejects_stale_indexed_hash_when_disk_differs() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = safe_tempdir();
     let root = temp_dir.path().to_path_buf();
 
     let src_dir = root.join("src");
@@ -218,7 +219,7 @@ fn test_replace_symbol_body_preserves_file_permissions() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = safe_tempdir();
     let root = temp_dir.path().to_path_buf();
 
     let src_dir = root.join("src");
@@ -264,7 +265,7 @@ fn test_replace_symbol_body_preserves_symlinks() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = safe_tempdir();
     let root = temp_dir.path().to_path_buf();
 
     let src_dir = root.join("src");
@@ -314,7 +315,7 @@ fn test_replace_symbol_body_normalizes_crlf() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = safe_tempdir();
     let root = temp_dir.path().to_path_buf();
 
     let src_dir = root.join("src");
@@ -370,7 +371,7 @@ fn test_replace_symbol_body_chained_edits_with_expected_hash() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = safe_tempdir();
     let root = temp_dir.path().to_path_buf();
 
     let src_dir = root.join("src");

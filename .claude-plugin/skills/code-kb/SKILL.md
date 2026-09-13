@@ -49,7 +49,7 @@ When modifying an existing function or method:
 | Locate function by name | `grep -rn "fn do_work"` | `find_symbol(query="do_work", path="...")` | `code-kb symbol <query> [--path <p>]` |
 | Search by concept | `grep -rn "retry"` | `search_symbols(query="retry backoff", path="...")` | `code-kb search <query> [--path <p>]` |
 | Read function body | Full file read | `get_symbol_body(symbol_name)` | `code-kb body <symbol>` |
-| Prep for editing function | Read caller/callee files | `get_context_slice(symbol_name)` | `code-kb slice <symbol>` |
+| Prep for editing function | Read caller/callee files | `get_context_slice(symbol_name)` | `code-kb slice <symbol> [--include-external]` |
 | Trace callers / callees | Text grep for call sites | `find_references(symbol_name)` | `code-kb refs <symbol> [--include-external]` |
 | Assess impact & find tests | Wide test suite runs | `blast_radius(symbol="...")` | `code-kb blast-radius [target]` |
 | Discover routes / models | Search string literals | `find_structural_facts(category="route")` | `code-kb facts [category]` |
@@ -65,7 +65,7 @@ To provide a zero-friction happy path, all MCP tools support common aliases and 
 * `expected_body_hash`: accepts `body_hash`, `expected_hash`.
 * `subpath`: accepts `path`, `dir`.
 * `direction` in `find_references`: defaults to `"callers"`.
-* `include_external` in `find_references`: defaults to `false` (filters noise across all ~40 languages).
+* `include_external` in `find_references` & `get_context_slice`: defaults to `false` (filters noise across all ~40 languages).
 * `blast_radius`: accepts `symbol`/`name`, `path`/`file`, `depth`/`max_depth`, `limit`. When target is omitted, automatically discovers uncommitted working-tree changes via git. Alias: `impact`.
 * `category` in `find_structural_facts`: optional (omitting lists all detected categories and counts).
 * `path` in `find_symbol` / `search_symbols`: optional filter by directory or file path prefix.

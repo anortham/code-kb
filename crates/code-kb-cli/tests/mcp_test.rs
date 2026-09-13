@@ -1,6 +1,28 @@
 use serde_json::{Value, json};
 use std::io::Write;
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
+
+struct ChildGuard(Child);
+
+impl std::ops::Deref for ChildGuard {
+    type Target = Child;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for ChildGuard {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl Drop for ChildGuard {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
 
 #[test]
 fn test_mcp_stdio_handshake_and_tools() {
@@ -73,14 +95,16 @@ fn test_mcp_stdio_handshake_and_tools() {
     code_kb_core::db::ensure_fts_index(&conn).unwrap();
     drop(conn);
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_code-kb"))
-        .arg("serve")
-        .arg("--root")
-        .arg(&root)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("Failed to spawn code-kb serve");
+    let mut child = ChildGuard(
+        Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .arg("serve")
+            .arg("--root")
+            .arg(&root)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("Failed to spawn code-kb serve"),
+    );
 
     let mut stdin = child.stdin.take().expect("Failed to open stdin");
     let stdout = child.stdout.take().expect("Failed to open stdout");
@@ -337,6 +361,33 @@ fn test_mcp_stdio_handshake_and_tools() {
     let blast_text = resp8["result"]["content"][0]["text"].as_str().unwrap();
     assert!(blast_text.contains("Blast Radius"));
 
+    // 9. Test get_context_slice via MCP (verifies include_external parameter and tool dispatch)
+    let slice_req = json!({
+        "jsonrpc": "2.0",
+        "id": 9,
+        "method": "tools/call",
+        "params": {
+            "name": "get_context_slice",
+            "arguments": {
+                "symbol_name": "Workspace",
+                "include_external": false
+            }
+        }
+    });
+    let mut line9 = serde_json::to_string(&slice_req).unwrap();
+    line9.push('\n');
+    stdin.write_all(line9.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut response_line9 = String::new();
+    reader.read_line(&mut response_line9).unwrap();
+    let resp9: Value =
+        serde_json::from_str(&response_line9).expect("Failed to parse JSON response");
+    assert_eq!(resp9["id"], 9);
+    assert_ne!(resp9["result"]["isError"], true);
+    let slice_text = resp9["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(slice_text.contains("Workspace"));
+
     let notification = json!({
         "jsonrpc": "2.0",
         "method": "notifications/roots/list_changed"
@@ -424,14 +475,16 @@ fn test_mcp_invalid_path_does_not_poison_session() {
     code_kb_core::db::ensure_fts_index(&conn).unwrap();
     drop(conn);
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_code-kb"))
-        .arg("serve")
-        .arg("--root")
-        .arg(&root)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("Failed to spawn code-kb serve");
+    let mut child = ChildGuard(
+        Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .arg("serve")
+            .arg("--root")
+            .arg(&root)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("Failed to spawn code-kb serve"),
+    );
 
     let mut stdin = child.stdin.take().expect("Failed to open stdin");
     let stdout = child.stdout.take().expect("Failed to open stdout");
@@ -634,14 +687,16 @@ fn test_mcp_worktree_rebind() {
     drop(conn_wt);
 
     // Spawn server pointing to main_root
-    let mut child = Command::new(env!("CARGO_BIN_EXE_code-kb"))
-        .arg("serve")
-        .arg("--root")
-        .arg(&main_root)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("Failed to spawn code-kb serve");
+    let mut child = ChildGuard(
+        Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .arg("serve")
+            .arg("--root")
+            .arg(&main_root)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("Failed to spawn code-kb serve"),
+    );
 
     let mut stdin = child.stdin.take().expect("Failed to open stdin");
     let stdout = child.stdout.take().expect("Failed to open stdout");
@@ -823,14 +878,16 @@ fn test_mcp_worktree_auto_copy_fast_path() {
     assert!(!wt_db.exists(), "Worktree DB must NOT exist initially");
 
     // Spawn server pointing to main_root
-    let mut child = Command::new(env!("CARGO_BIN_EXE_code-kb"))
-        .arg("serve")
-        .arg("--root")
-        .arg(&main_root)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("Failed to spawn code-kb serve");
+    let mut child = ChildGuard(
+        Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .arg("serve")
+            .arg("--root")
+            .arg(&main_root)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("Failed to spawn code-kb serve"),
+    );
 
     let mut stdin = child.stdin.take().expect("Failed to open stdin");
     let stdout = child.stdout.take().expect("Failed to open stdout");

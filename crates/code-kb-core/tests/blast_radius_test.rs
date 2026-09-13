@@ -1,9 +1,8 @@
 use rusqlite::Connection;
-use tempfile::tempdir;
 
 use code_kb_core::{
     Workspace, blast_radius_op, compute_blast_radius, find_references, find_references_ext,
-    format_blast_radius, open_read_write,
+    format_blast_radius, open_read_write, safe_tempdir,
 };
 
 fn setup_test_db(conn: &Connection) {
@@ -35,7 +34,7 @@ fn setup_test_db(conn: &Connection) {
 
 #[test]
 fn test_language_agnostic_callee_filtering() {
-    let temp = tempdir().unwrap();
+    let temp = safe_tempdir();
     let conn = open_read_write(&temp.path().join("index.db")).unwrap();
     setup_test_db(&conn);
 
@@ -70,7 +69,7 @@ fn test_language_agnostic_callee_filtering() {
 
 #[test]
 fn test_blast_radius_multi_hop_and_likely_tests() {
-    let temp = tempdir().unwrap();
+    let temp = safe_tempdir();
     let conn = open_read_write(&temp.path().join("index.db")).unwrap();
     setup_test_db(&conn);
 
@@ -122,7 +121,7 @@ fn test_blast_radius_multi_hop_and_likely_tests() {
 
 #[test]
 fn test_blast_radius_op_file_seed_and_stem_matching() {
-    let temp = tempdir().unwrap();
+    let temp = safe_tempdir();
     let workspace = Workspace::new(temp.path().to_path_buf());
     let conn = open_read_write(&temp.path().join("index.db")).unwrap();
     setup_test_db(&conn);

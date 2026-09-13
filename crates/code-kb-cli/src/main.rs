@@ -150,6 +150,9 @@ pub struct SliceArgs {
     /// Optional file path for disambiguation.
     #[arg(long)]
     pub file: Option<String>,
+    /// Include external stdlib/runtime calls in callee signatures (default: false).
+    #[arg(long, default_value_t = false)]
+    pub include_external: bool,
 }
 
 #[derive(Debug, Args)]
@@ -494,6 +497,7 @@ fn main() -> anyhow::Result<()> {
                 &conn,
                 &args.symbol,
                 args.file.as_deref(),
+                args.include_external,
             )?;
 
             if cli.json {

@@ -1,6 +1,6 @@
 use code_kb_core::{
-    Workspace, find_julie_extract_binary, open_read_only, scan_workspace, search_symbols,
-    start_watcher,
+    Workspace, find_julie_extract_binary, open_read_only, safe_tempdir, scan_workspace,
+    search_symbols, start_watcher,
 };
 use std::fs;
 use std::thread::sleep;
@@ -11,7 +11,7 @@ fn test_background_watcher_incremental_sync() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = safe_tempdir();
     let root = temp_dir.path().to_path_buf();
 
     let src_dir = root.join("src");
@@ -95,7 +95,7 @@ fn test_watcher_updates_directory_named_targeted() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = safe_tempdir();
     let root = temp_dir.path().to_path_buf();
     let src_dir = root.join("targeted");
     fs::create_dir_all(&src_dir).unwrap();
@@ -128,7 +128,7 @@ fn test_watcher_respects_nested_ignore_files() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = safe_tempdir();
     let root = temp_dir.path().to_path_buf();
     let src_dir = root.join("src");
     fs::create_dir_all(&src_dir).unwrap();
@@ -177,7 +177,7 @@ fn test_watcher_does_not_reindex_on_reads() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = safe_tempdir();
     let root = temp_dir.path().to_path_buf();
     let src_dir = root.join("src");
     fs::create_dir_all(&src_dir).unwrap();

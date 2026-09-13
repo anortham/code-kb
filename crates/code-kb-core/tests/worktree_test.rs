@@ -1,6 +1,6 @@
 use code_kb_core::{
-    Workspace, find_julie_extract_binary, open_read_only, reconcile_offline_edits, scan_workspace,
-    search_symbols,
+    Workspace, find_julie_extract_binary, open_read_only, reconcile_offline_edits, safe_tempdir,
+    scan_workspace, search_symbols,
 };
 use std::fs;
 use std::process::Command;
@@ -10,7 +10,7 @@ fn test_git_worktree_lifecycle_and_index_isolation() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = safe_tempdir();
     let root = temp_dir.path().to_path_buf();
 
     // 1. Initialize git repository
