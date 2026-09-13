@@ -39,6 +39,19 @@ fn test_mcp_stdio_handshake_and_tools() {
         CREATE TABLE pending_relationships (
             from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT,
             path TEXT, start_line INTEGER, start_column INTEGER
+        );
+        CREATE TABLE structural_facts (
+            fact_id TEXT PRIMARY KEY, file_id TEXT, path TEXT, language TEXT,
+            pattern_id TEXT, kind TEXT, name TEXT, receiver TEXT, symbol_id TEXT,
+            scope_symbol_id TEXT, parent_fact_id TEXT, start_line INTEGER,
+            start_column INTEGER, end_line INTEGER, end_column INTEGER,
+            start_byte INTEGER, end_byte INTEGER, confidence REAL, payload TEXT
+        );
+        CREATE TABLE literals (
+            literal_id TEXT PRIMARY KEY, file_id TEXT, path TEXT, language TEXT,
+            kind TEXT, value TEXT, scope_symbol_id TEXT, start_line INTEGER,
+            start_column INTEGER, end_line INTEGER, end_column INTEGER,
+            start_byte INTEGER, end_byte INTEGER
         );",
     )
     .unwrap();
@@ -238,6 +251,13 @@ fn test_mcp_stdio_handshake_and_tools() {
         serde_json::from_str(&response_line5).expect("Failed to parse JSON response");
     assert_eq!(resp5["id"], 5);
     assert!(resp5["error"].is_null());
+    assert_ne!(resp5["result"]["isError"], true);
+    let refs_text = resp5["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(
+        refs_text.contains("Callers")
+            || refs_text.contains("No callers found")
+            || refs_text.contains("Workspace")
+    );
 
     // 6. Test find_structural_facts with no category argument (lists categories)
     let facts_req = json!({
@@ -260,6 +280,12 @@ fn test_mcp_stdio_handshake_and_tools() {
         serde_json::from_str(&response_line6).expect("Failed to parse JSON response");
     assert_eq!(resp6["id"], 6);
     assert!(resp6["error"].is_null());
+    assert_ne!(resp6["result"]["isError"], true);
+    let facts_text = resp6["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(
+        facts_text.contains("Available structural fact categories")
+            || facts_text.contains("No structural facts")
+    );
 
     // 7. Test file_skeleton with alias "file" instead of "file_path"
     let skeleton_req = json!({

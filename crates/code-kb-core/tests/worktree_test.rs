@@ -7,11 +7,8 @@ use std::process::Command;
 
 #[test]
 fn test_git_worktree_lifecycle_and_index_isolation() {
-    let extract_bin = find_julie_extract_binary();
-    if extract_bin.is_none() {
-        eprintln!("Skipping worktree test: julie-extract binary not found");
-        return;
-    }
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
     let temp_dir = tempfile::tempdir().unwrap();
     let root = temp_dir.path().to_path_buf();

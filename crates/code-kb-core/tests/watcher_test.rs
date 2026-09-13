@@ -8,11 +8,8 @@ use std::time::Duration;
 
 #[test]
 fn test_background_watcher_incremental_sync() {
-    let extract_bin = find_julie_extract_binary();
-    if extract_bin.is_none() {
-        eprintln!("Skipping watcher test: julie-extract binary not found");
-        return;
-    }
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
     let temp_dir = tempfile::tempdir().unwrap();
     let root = temp_dir.path().to_path_buf();
@@ -95,11 +92,8 @@ fn test_background_watcher_incremental_sync() {
 
 #[test]
 fn test_watcher_updates_directory_named_targeted() {
-    let extract_bin = find_julie_extract_binary();
-    if extract_bin.is_none() {
-        eprintln!("Skipping watcher test: julie-extract binary not found");
-        return;
-    }
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
     let temp_dir = tempfile::tempdir().unwrap();
     let root = temp_dir.path().to_path_buf();
@@ -131,11 +125,8 @@ fn test_watcher_updates_directory_named_targeted() {
 
 #[test]
 fn test_watcher_respects_nested_ignore_files() {
-    let extract_bin = find_julie_extract_binary();
-    if extract_bin.is_none() {
-        eprintln!("Skipping watcher test: julie-extract binary not found");
-        return;
-    }
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
     let temp_dir = tempfile::tempdir().unwrap();
     let root = temp_dir.path().to_path_buf();
@@ -183,11 +174,8 @@ fn test_watcher_respects_nested_ignore_files() {
 
 #[test]
 fn test_watcher_does_not_reindex_on_reads() {
-    let extract_bin = find_julie_extract_binary();
-    if extract_bin.is_none() {
-        eprintln!("Skipping watcher test: julie-extract binary not found");
-        return;
-    }
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
     let temp_dir = tempfile::tempdir().unwrap();
     let root = temp_dir.path().to_path_buf();

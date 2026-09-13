@@ -8,11 +8,8 @@ use std::os::unix::fs::PermissionsExt;
 
 #[test]
 fn test_ensure_fresh_file_detects_equal_size_edit() {
-    let extract_bin = find_julie_extract_binary();
-    if extract_bin.is_none() {
-        eprintln!("Skipping integration test: julie-extract binary not found");
-        return;
-    }
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
     let temp_dir = tempfile::tempdir().unwrap();
     let root = temp_dir.path().to_path_buf();
@@ -49,11 +46,8 @@ fn test_ensure_fresh_file_detects_equal_size_edit() {
 
 #[test]
 fn test_ensure_fresh_file_removes_deleted_file_from_index() {
-    let extract_bin = find_julie_extract_binary();
-    if extract_bin.is_none() {
-        eprintln!("Skipping integration test: julie-extract binary not found");
-        return;
-    }
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
     let temp_dir = tempfile::tempdir().unwrap();
     let root = temp_dir.path().to_path_buf();
@@ -80,11 +74,8 @@ fn test_ensure_fresh_file_removes_deleted_file_from_index() {
 #[cfg(unix)]
 #[test]
 fn test_ensure_fresh_file_propagates_read_failure() {
-    let extract_bin = find_julie_extract_binary();
-    if extract_bin.is_none() {
-        eprintln!("Skipping integration test: julie-extract binary not found");
-        return;
-    }
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
     let temp_dir = tempfile::tempdir().unwrap();
     let root = temp_dir.path().to_path_buf();
@@ -107,11 +98,8 @@ fn test_ensure_fresh_file_propagates_read_failure() {
 
 #[test]
 fn test_reconcile_offline_edits_equal_size() {
-    let extract_bin = find_julie_extract_binary();
-    if extract_bin.is_none() {
-        eprintln!("Skipping integration test: julie-extract binary not found");
-        return;
-    }
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
     let temp_dir = tempfile::tempdir().unwrap();
     let root = temp_dir.path().to_path_buf();
@@ -146,11 +134,8 @@ fn test_reconcile_offline_edits_equal_size() {
 
 #[test]
 fn test_get_symbol_body_fresh_after_comment_added() {
-    let extract_bin = find_julie_extract_binary();
-    if extract_bin.is_none() {
-        eprintln!("Skipping integration test: julie-extract binary not found");
-        return;
-    }
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
     let temp_dir = tempfile::tempdir().unwrap();
     let root = temp_dir.path().to_path_buf();
@@ -195,11 +180,8 @@ fn test_get_symbol_body_fresh_after_comment_added() {
 
 #[test]
 fn test_reconcile_offline_edits_added_and_deleted() {
-    let extract_bin = find_julie_extract_binary();
-    if extract_bin.is_none() {
-        eprintln!("Skipping integration test: julie-extract binary not found");
-        return;
-    }
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
     let temp_dir = tempfile::tempdir().unwrap();
     let root = temp_dir.path().to_path_buf();
@@ -241,11 +223,8 @@ fn test_reconcile_offline_edits_added_and_deleted() {
 #[cfg(unix)]
 #[test]
 fn test_reconcile_offline_edits_preserves_unreadable_directory_records() {
-    let extract_bin = find_julie_extract_binary();
-    if extract_bin.is_none() {
-        eprintln!("Skipping integration test: julie-extract binary not found");
-        return;
-    }
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
     let temp_dir = tempfile::tempdir().unwrap();
     let root = temp_dir.path().to_path_buf();
@@ -279,11 +258,8 @@ fn test_reconcile_offline_edits_preserves_unreadable_directory_records() {
 
 #[test]
 fn test_reconcile_offline_edits_continues_when_individual_update_fails() {
-    let extract_bin = find_julie_extract_binary();
-    if extract_bin.is_none() {
-        eprintln!("Skipping integration test: julie-extract binary not found");
-        return;
-    }
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
     let temp_dir = tempfile::tempdir().unwrap();
     let root = temp_dir.path().to_path_buf();
@@ -311,11 +287,8 @@ fn test_reconcile_offline_edits_continues_when_individual_update_fails() {
 
 #[test]
 fn test_codebase_outline_depth_bounded_symbols() {
-    let extract_bin = find_julie_extract_binary();
-    if extract_bin.is_none() {
-        eprintln!("Skipping integration test: julie-extract binary not found");
-        return;
-    }
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
     let temp_dir = tempfile::tempdir().unwrap();
     let root = temp_dir.path().to_path_buf();
@@ -376,11 +349,8 @@ fn test_codebase_outline_depth_bounded_symbols() {
 
 #[test]
 fn test_reconcile_offline_edits_preserves_hidden_files() {
-    let extract_bin = find_julie_extract_binary();
-    if extract_bin.is_none() {
-        eprintln!("Skipping integration test: julie-extract binary not found");
-        return;
-    }
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
     let temp_dir = tempfile::tempdir().unwrap();
     let root = temp_dir.path().to_path_buf();

@@ -463,10 +463,8 @@ mod tests {
 
     #[test]
     fn test_find_julie_extract_binary() {
-        if let Some(path) = find_julie_extract_binary() {
-            assert!(path.exists(), "Discovered path must exist: {:?}", path);
-        } else {
-            eprintln!("Notice: julie-extract not found on PATH or dev candidate locations");
-        }
+        let path = find_julie_extract_binary()
+            .expect("julie-extract binary must be present for tests (see scripts/julie-pins.json)");
+        assert!(path.exists(), "Discovered path must exist: {:?}", path);
     }
 }

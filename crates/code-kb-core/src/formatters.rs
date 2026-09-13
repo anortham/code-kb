@@ -1,9 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
-use crate::models::{
-    BlastRadiusResult, ContextSlice, ReferenceSite, Symbol, SymbolSearchResult,
-};
+use crate::models::{BlastRadiusResult, ContextSlice, ReferenceSite, Symbol, SymbolSearchResult};
 
 /// Format progressive disclosure file skeleton with implementation bodies stripped.
 pub fn format_file_skeleton(

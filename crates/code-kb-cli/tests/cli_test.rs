@@ -170,7 +170,23 @@ fn test_cli_symbol_and_search() {
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Workspace"));
+    assert!(stdout.contains("pub struct Workspace"));
+    assert!(!stdout.contains("Found 0 symbols"));
+
+    let json_output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("symbol")
+        .arg("Workspace")
+        .output()
+        .expect("Failed to execute symbol --json");
+
+    assert!(json_output.status.success());
+    let json_val: serde_json::Value = serde_json::from_slice(&json_output.stdout).unwrap();
+    assert!(json_val.is_array());
+    assert_eq!(json_val.as_array().unwrap().len(), 1);
+    assert_eq!(json_val[0]["name"], "Workspace");
 
     let search_output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
         .arg("--root")
@@ -182,7 +198,8 @@ fn test_cli_symbol_and_search() {
 
     assert!(search_output.status.success());
     let search_stdout = String::from_utf8_lossy(&search_output.stdout);
-    assert!(search_stdout.contains("Workspace"));
+    assert!(search_stdout.contains("pub struct Workspace"));
+    assert!(!search_stdout.contains("Found 0 symbols"));
 }
 
 #[test]
@@ -328,10 +345,8 @@ fn test_cli_facts() {
 
 #[test]
 fn test_cli_edit_atomic_replacement() {
-    if code_kb_core::find_julie_extract_binary().is_none() {
-        eprintln!("Skipping test_cli_edit_atomic_replacement: julie-extract not found");
-        return;
-    }
+    let _extract_bin = code_kb_core::find_julie_extract_binary()
+        .expect("julie-extract binary must be present for tests");
 
     let temp_dir = tempfile::tempdir().unwrap();
     let root = temp_dir.path().to_path_buf();

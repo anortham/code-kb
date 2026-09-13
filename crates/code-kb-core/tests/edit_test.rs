@@ -8,11 +8,8 @@ use std::os::unix::fs::PermissionsExt;
 
 #[test]
 fn test_replace_symbol_body_atomic() {
-    let extract_bin = find_julie_extract_binary();
-    if extract_bin.is_none() {
-        eprintln!("Skipping integration test: julie-extract binary not found");
-        return;
-    }
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
     let temp_dir = tempfile::tempdir().unwrap();
     let root = temp_dir.path().to_path_buf();
@@ -69,11 +66,8 @@ fn test_replace_symbol_body_atomic() {
 
 #[test]
 fn test_replace_symbol_body_shrunk_file_does_not_panic() {
-    let extract_bin = find_julie_extract_binary();
-    if extract_bin.is_none() {
-        eprintln!("Skipping integration test: julie-extract binary not found");
-        return;
-    }
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
     let temp_dir = tempfile::tempdir().unwrap();
     let root = temp_dir.path().to_path_buf();
@@ -118,11 +112,8 @@ fn test_replace_symbol_body_shrunk_file_does_not_panic() {
 
 #[test]
 fn test_replace_symbol_body_rejects_syntax_error() {
-    let extract_bin = find_julie_extract_binary();
-    if extract_bin.is_none() {
-        eprintln!("Skipping integration test: julie-extract binary not found");
-        return;
-    }
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
     let temp_dir = tempfile::tempdir().unwrap();
     let root = temp_dir.path().to_path_buf();
@@ -170,11 +161,8 @@ fn test_replace_symbol_body_rejects_syntax_error() {
 
 #[test]
 fn test_replace_symbol_body_rejects_stale_indexed_hash_when_disk_differs() {
-    let extract_bin = find_julie_extract_binary();
-    if extract_bin.is_none() {
-        eprintln!("Skipping integration test: julie-extract binary not found");
-        return;
-    }
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
     let temp_dir = tempfile::tempdir().unwrap();
     let root = temp_dir.path().to_path_buf();
@@ -227,11 +215,8 @@ fn test_replace_symbol_body_rejects_stale_indexed_hash_when_disk_differs() {
 #[cfg(unix)]
 #[test]
 fn test_replace_symbol_body_preserves_file_permissions() {
-    let extract_bin = find_julie_extract_binary();
-    if extract_bin.is_none() {
-        eprintln!("Skipping integration test: julie-extract binary not found");
-        return;
-    }
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
     let temp_dir = tempfile::tempdir().unwrap();
     let root = temp_dir.path().to_path_buf();
@@ -276,11 +261,8 @@ fn test_replace_symbol_body_preserves_file_permissions() {
 #[cfg(unix)]
 #[test]
 fn test_replace_symbol_body_preserves_symlinks() {
-    let extract_bin = find_julie_extract_binary();
-    if extract_bin.is_none() {
-        eprintln!("Skipping integration test: julie-extract binary not found");
-        return;
-    }
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
     let temp_dir = tempfile::tempdir().unwrap();
     let root = temp_dir.path().to_path_buf();
@@ -329,11 +311,8 @@ fn test_replace_symbol_body_preserves_symlinks() {
 
 #[test]
 fn test_replace_symbol_body_normalizes_crlf() {
-    let extract_bin = find_julie_extract_binary();
-    if extract_bin.is_none() {
-        eprintln!("Skipping integration test: julie-extract binary not found");
-        return;
-    }
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
     let temp_dir = tempfile::tempdir().unwrap();
     let root = temp_dir.path().to_path_buf();
@@ -384,4 +363,69 @@ fn test_replace_symbol_body_normalizes_crlf() {
         }
         prev_char = ch;
     }
+}
+
+#[test]
+fn test_replace_symbol_body_chained_edits_with_expected_hash() {
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let root = temp_dir.path().to_path_buf();
+
+    let src_dir = root.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
+    let file_path = src_dir.join("calc.rs");
+
+    let initial_code = "pub fn add_numbers(a: i32, b: i32) -> i32 {\n    a + b\n}\n";
+    fs::write(&file_path, initial_code).unwrap();
+
+    let ws = Workspace::new(root.clone());
+    let db_path = root.join("test.db");
+
+    scan_workspace(&ws, &db_path, true).expect("Scan failed");
+    let conn = open_read_only(&db_path).unwrap();
+
+    // 1. First edit: no expected hash passed
+    let res1 = replace_symbol_body(
+        &ws,
+        &db_path,
+        &conn,
+        "add_numbers",
+        "src/calc.rs",
+        "{\n    let sum = a + b;\n    sum * 2\n}",
+        None,
+    )
+    .expect("first edit should succeed");
+
+    assert!(!res1.new_body_hash.is_empty());
+
+    // 2. Second edit: passing valid expected_hash matching res1.new_body_hash
+    let res2 = replace_symbol_body(
+        &ws,
+        &db_path,
+        &conn,
+        "add_numbers",
+        "src/calc.rs",
+        "{\n    let sum = a + b;\n    sum * 3\n}",
+        Some(&res1.new_body_hash),
+    )
+    .expect("second edit with correct expected_hash should succeed");
+
+    assert_ne!(res1.new_body_hash, res2.new_body_hash);
+
+    // 3. Third edit: passing stale expected_hash (res1.new_body_hash) must fail
+    let res3 = replace_symbol_body(
+        &ws,
+        &db_path,
+        &conn,
+        "add_numbers",
+        "src/calc.rs",
+        "{\n    let sum = a + b;\n    sum * 4\n}",
+        Some(&res1.new_body_hash),
+    );
+
+    assert!(res3.is_err(), "Edit with stale expected_hash must fail");
+    let err_msg = res3.unwrap_err().to_string();
+    assert!(err_msg.contains("Optimistic lock failed") || err_msg.contains("expected body hash"));
 }

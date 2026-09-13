@@ -6,11 +6,8 @@ use std::fs;
 
 #[test]
 fn test_qualified_parent_disambiguation() {
-    let extract_bin = find_julie_extract_binary();
-    if extract_bin.is_none() {
-        eprintln!("Skipping integration test: julie-extract binary not found");
-        return;
-    }
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
     let temp_dir = tempfile::tempdir().unwrap();
     let root = temp_dir.path().to_path_buf();
@@ -68,11 +65,8 @@ impl Beta {
 
 #[test]
 fn test_path_filter_boundary_matching() {
-    let extract_bin = find_julie_extract_binary();
-    if extract_bin.is_none() {
-        eprintln!("Skipping integration test: julie-extract binary not found");
-        return;
-    }
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
     let temp_dir = tempfile::tempdir().unwrap();
     let root = temp_dir.path().to_path_buf();
@@ -100,11 +94,8 @@ fn test_path_filter_boundary_matching() {
 
 #[test]
 fn test_ambiguous_symbol_detection() {
-    let extract_bin = find_julie_extract_binary();
-    if extract_bin.is_none() {
-        eprintln!("Skipping integration test: julie-extract binary not found");
-        return;
-    }
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
     let temp_dir = tempfile::tempdir().unwrap();
     let root = temp_dir.path().to_path_buf();
@@ -144,11 +135,8 @@ impl Beta {
 
 #[test]
 fn test_file_skeleton_exact_path_isolation() {
-    let extract_bin = find_julie_extract_binary();
-    if extract_bin.is_none() {
-        eprintln!("Skipping integration test: julie-extract binary not found");
-        return;
-    }
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
     let temp_dir = tempfile::tempdir().unwrap();
     let root = temp_dir.path().to_path_buf();
@@ -182,11 +170,8 @@ fn test_file_skeleton_exact_path_isolation() {
 
 #[test]
 fn test_context_slice_qualified_method_uses_its_own_callees() {
-    let extract_bin = find_julie_extract_binary();
-    if extract_bin.is_none() {
-        eprintln!("Skipping integration test: julie-extract binary not found");
-        return;
-    }
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
     let temp_dir = tempfile::tempdir().unwrap();
     let root = temp_dir.path().to_path_buf();
@@ -227,11 +212,8 @@ fn test_context_slice_qualified_method_uses_its_own_callees() {
 
 #[test]
 fn test_get_symbol_by_name_not_crowded_out_by_imports() {
-    let extract_bin = find_julie_extract_binary();
-    if extract_bin.is_none() {
-        eprintln!("Skipping integration test: julie-extract binary not found");
-        return;
-    }
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
     let temp_dir = tempfile::tempdir().unwrap();
     let root = temp_dir.path().to_path_buf();
@@ -273,11 +255,8 @@ fn test_get_symbol_by_name_not_crowded_out_by_imports() {
 
 #[test]
 fn test_context_slice_finds_related_tests() {
-    let extract_bin = find_julie_extract_binary();
-    if extract_bin.is_none() {
-        eprintln!("Skipping integration test: julie-extract binary not found");
-        return;
-    }
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
     let temp_dir = tempfile::tempdir().unwrap();
     let root = temp_dir.path().to_path_buf();
