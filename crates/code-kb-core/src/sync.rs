@@ -299,6 +299,7 @@ pub fn reconcile_offline_edits(
     let mut walker = ignore::WalkBuilder::new(&workspace.canonical_root);
     walker
         .standard_filters(true)
+        .hidden(false)
         .add_custom_ignore_filename(".julieignore")
         .add_custom_ignore_filename(".code-kb-ignore")
         .add_custom_ignore_filename(".codekbignore")

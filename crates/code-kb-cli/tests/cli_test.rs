@@ -407,9 +407,15 @@ fn test_cli_hook_session_start() {
 
     assert!(output.status.success());
     let val: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    let hook_output = val.get("hookSpecificOutput").expect("hookSpecificOutput key");
+    let hook_output = val
+        .get("hookSpecificOutput")
+        .expect("hookSpecificOutput key");
     assert_eq!(hook_output.get("hookEventName").unwrap(), "SessionStart");
-    let ctx = hook_output.get("additionalContext").unwrap().as_str().unwrap();
+    let ctx = hook_output
+        .get("additionalContext")
+        .unwrap()
+        .as_str()
+        .unwrap();
     assert!(ctx.contains("Code Intelligence: Always use `code-kb` MCP tools"));
 }
 
@@ -422,7 +428,9 @@ fn test_cli_hook_default_is_session_start() {
 
     assert!(output.status.success());
     let val: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    let hook_output = val.get("hookSpecificOutput").expect("hookSpecificOutput key");
+    let hook_output = val
+        .get("hookSpecificOutput")
+        .expect("hookSpecificOutput key");
     assert_eq!(hook_output.get("hookEventName").unwrap(), "SessionStart");
 }
 
@@ -436,9 +444,15 @@ fn test_cli_hook_subagent_start() {
 
     assert!(output.status.success());
     let val: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    let hook_output = val.get("hookSpecificOutput").expect("hookSpecificOutput key");
+    let hook_output = val
+        .get("hookSpecificOutput")
+        .expect("hookSpecificOutput key");
     assert_eq!(hook_output.get("hookEventName").unwrap(), "SubagentStart");
-    let ctx = hook_output.get("additionalContext").unwrap().as_str().unwrap();
+    let ctx = hook_output
+        .get("additionalContext")
+        .unwrap()
+        .as_str()
+        .unwrap();
     assert!(ctx.contains("Code Intelligence: Always use `code-kb` MCP tools"));
 }
 
@@ -482,4 +496,3 @@ fn test_cli_hook_copilot_env() {
     let val2: serde_json::Value = serde_json::from_slice(&subagent_output.stdout).unwrap();
     assert!(val2.as_object().unwrap().is_empty());
 }
-

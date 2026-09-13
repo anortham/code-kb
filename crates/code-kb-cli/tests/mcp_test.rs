@@ -338,3 +338,526 @@ fn test_mcp_stdio_handshake_and_tools() {
     drop(stdin);
     let _ = child.wait();
 }
+
+#[test]
+fn test_mcp_invalid_path_does_not_poison_session() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let root = temp_dir.path().to_path_buf();
+    let db_dir = root.join(".code-kb");
+    std::fs::create_dir_all(&db_dir).unwrap();
+    let db_path = db_dir.join("artifact.db");
+
+    let src_dir = root.join("src");
+    std::fs::create_dir_all(&src_dir).unwrap();
+    let content = "pub fn valid_func() {}\n";
+    let file_path = src_dir.join("lib.rs");
+    std::fs::write(&file_path, content).unwrap();
+
+    let conn = code_kb_core::open_read_write(&db_path).unwrap();
+    conn.execute_batch(
+        "CREATE TABLE files (
+            file_id TEXT PRIMARY KEY, path TEXT, language TEXT, content_hash TEXT,
+            content_bytes INTEGER, line_count INTEGER, indexed_at TEXT
+        );
+        CREATE TABLE symbols (
+            symbol_id TEXT PRIMARY KEY, file_id TEXT, path TEXT, language TEXT, name TEXT, kind TEXT,
+            signature TEXT, doc_comment TEXT, visibility TEXT, parent_symbol_id TEXT,
+            start_line INTEGER, start_column INTEGER, end_line INTEGER, end_column INTEGER,
+            start_byte INTEGER, end_byte INTEGER, body_start_line INTEGER,
+            body_start_column INTEGER, body_end_line INTEGER, body_end_column INTEGER,
+            body_start_byte INTEGER, body_end_byte INTEGER, body_hash TEXT,
+            semantic_group TEXT, is_test INTEGER, test_container INTEGER
+        );
+        CREATE TABLE relationships (
+            relationship_id TEXT PRIMARY KEY, from_symbol_id TEXT, to_symbol_id TEXT,
+            kind TEXT, path TEXT, start_line INTEGER, start_column INTEGER
+        );
+        CREATE TABLE pending_relationships (
+            from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT,
+            path TEXT, start_line INTEGER, start_column INTEGER
+        );",
+    )
+    .unwrap();
+    let bytes = content.len() as i64;
+    let hash = format!("blake3:{}", blake3::hash(content.as_bytes()).to_hex());
+    conn.execute(
+        "INSERT INTO files VALUES ('f1', 'src/lib.rs', 'rust', ?1, ?2, 1, '2026-01-01')",
+        rusqlite::params![hash, bytes],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO symbols VALUES (
+            's1', 'f1', 'src/lib.rs', 'rust', 'valid_func', 'function',
+            'pub fn valid_func()', NULL, 'pub', NULL,
+            1, 0, 1, 22, 0, ?1, 1, 0, 1, 22, 0, ?1, 'b3:hash',
+            NULL, 0, 0
+        )",
+        rusqlite::params![bytes],
+    )
+    .unwrap();
+    code_kb_core::db::ensure_fts_index(&conn).unwrap();
+    drop(conn);
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("serve")
+        .arg("--root")
+        .arg(&root)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn code-kb serve");
+
+    let mut stdin = child.stdin.take().expect("Failed to open stdin");
+    let stdout = child.stdout.take().expect("Failed to open stdout");
+    let mut reader = std::io::BufReader::new(stdout);
+    use std::io::BufRead;
+
+    // 1. Initialize
+    let init_req = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": { "name": "test-agent", "version": "1.0" }
+        }
+    });
+    let mut line = serde_json::to_string(&init_req).unwrap();
+    line.push('\n');
+    stdin.write_all(line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+    let mut resp_line = String::new();
+    reader.read_line(&mut resp_line).unwrap();
+
+    // 2. Call file_skeleton with an invalid non-workspace path
+    let invalid_call = json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+            "name": "file_skeleton",
+            "arguments": {
+                "file": "/nonexistent_abs_path/nowhere/does_not_exist.rs"
+            }
+        }
+    });
+    let mut line2 = serde_json::to_string(&invalid_call).unwrap();
+    line2.push('\n');
+    stdin.write_all(line2.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+    let mut resp_line2 = String::new();
+    reader.read_line(&mut resp_line2).unwrap();
+    let resp2: Value = serde_json::from_str(&resp_line2).unwrap();
+    assert_eq!(resp2["id"], 2);
+    assert!(resp2["result"]["isError"] == true || resp2["error"].is_object());
+
+    // 3. Subsequent call with valid relative path must STILL succeed (session not poisoned)
+    let valid_call = json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+            "name": "file_skeleton",
+            "arguments": {
+                "file": "src/lib.rs"
+            }
+        }
+    });
+    let mut line3 = serde_json::to_string(&valid_call).unwrap();
+    line3.push('\n');
+    stdin.write_all(line3.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+    let mut resp_line3 = String::new();
+    reader.read_line(&mut resp_line3).unwrap();
+    let resp3: Value = serde_json::from_str(&resp_line3).unwrap();
+    assert_eq!(resp3["id"], 3);
+    assert_ne!(resp3["result"]["isError"], true);
+    let text = resp3["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(
+        text.contains("valid_func"),
+        "Must retrieve valid_func from original workspace"
+    );
+
+    drop(stdin);
+    let _ = child.wait();
+}
+
+#[test]
+fn test_mcp_worktree_rebind() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let main_root = temp_dir.path().join("main_repo");
+    let wt_root = main_root.join(".worktrees").join("feature-x");
+
+    std::fs::create_dir_all(main_root.join(".git")).unwrap();
+    std::fs::create_dir_all(main_root.join(".code-kb")).unwrap();
+    std::fs::create_dir_all(main_root.join("src")).unwrap();
+
+    let main_file = main_root.join("src").join("main.rs");
+    let main_content = "pub fn main_fn() {}\n";
+    std::fs::write(&main_file, main_content).unwrap();
+
+    // Set up main repo DB
+    let main_db = main_root.join(".code-kb").join("artifact.db");
+    let conn = code_kb_core::open_read_write(&main_db).unwrap();
+    conn.execute_batch(
+        "CREATE TABLE files (
+            file_id TEXT PRIMARY KEY, path TEXT, language TEXT, content_hash TEXT,
+            content_bytes INTEGER, line_count INTEGER, indexed_at TEXT
+        );
+        CREATE TABLE symbols (
+            symbol_id TEXT PRIMARY KEY, file_id TEXT, path TEXT, language TEXT, name TEXT, kind TEXT,
+            signature TEXT, doc_comment TEXT, visibility TEXT, parent_symbol_id TEXT,
+            start_line INTEGER, start_column INTEGER, end_line INTEGER, end_column INTEGER,
+            start_byte INTEGER, end_byte INTEGER, body_start_line INTEGER,
+            body_start_column INTEGER, body_end_line INTEGER, body_end_column INTEGER,
+            body_start_byte INTEGER, body_end_byte INTEGER, body_hash TEXT,
+            semantic_group TEXT, is_test INTEGER, test_container INTEGER
+        );
+        CREATE TABLE relationships (
+            relationship_id TEXT PRIMARY KEY, from_symbol_id TEXT, to_symbol_id TEXT,
+            kind TEXT, path TEXT, start_line INTEGER, start_column INTEGER
+        );
+        CREATE TABLE pending_relationships (
+            from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT,
+            path TEXT, start_line INTEGER, start_column INTEGER
+        );",
+    )
+    .unwrap();
+    let bytes = main_content.len() as i64;
+    let hash = format!("blake3:{}", blake3::hash(main_content.as_bytes()).to_hex());
+    conn.execute(
+        "INSERT INTO files VALUES ('f1', 'src/main.rs', 'rust', ?1, ?2, 1, '2026-01-01')",
+        rusqlite::params![hash, bytes],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO symbols VALUES (
+            's1', 'f1', 'src/main.rs', 'rust', 'main_fn', 'function',
+            'pub fn main_fn()', NULL, 'pub', NULL,
+            1, 0, 1, 19, 0, ?1, 1, 0, 1, 19, 0, ?1, 'b3:hash',
+            NULL, 0, 0
+        )",
+        rusqlite::params![bytes],
+    )
+    .unwrap();
+    code_kb_core::db::ensure_fts_index(&conn).unwrap();
+    drop(conn);
+
+    // Set up worktree: .git file pointing to main gitdir, plus its own DB
+    std::fs::create_dir_all(wt_root.join(".code-kb")).unwrap();
+    std::fs::create_dir_all(wt_root.join("src")).unwrap();
+    let gitdir_path = main_root.join(".git").join("worktrees").join("feature-x");
+    std::fs::create_dir_all(&gitdir_path).unwrap();
+    std::fs::write(
+        wt_root.join(".git"),
+        format!("gitdir: {}\n", gitdir_path.display()),
+    )
+    .unwrap();
+
+    let wt_file = wt_root.join("src").join("feature.rs");
+    let wt_content = "pub fn feature_fn() {}\n";
+    std::fs::write(&wt_file, wt_content).unwrap();
+
+    let wt_db = wt_root.join(".code-kb").join("artifact.db");
+    let conn_wt = code_kb_core::open_read_write(&wt_db).unwrap();
+    conn_wt.execute_batch(
+        "CREATE TABLE files (
+            file_id TEXT PRIMARY KEY, path TEXT, language TEXT, content_hash TEXT,
+            content_bytes INTEGER, line_count INTEGER, indexed_at TEXT
+        );
+        CREATE TABLE symbols (
+            symbol_id TEXT PRIMARY KEY, file_id TEXT, path TEXT, language TEXT, name TEXT, kind TEXT,
+            signature TEXT, doc_comment TEXT, visibility TEXT, parent_symbol_id TEXT,
+            start_line INTEGER, start_column INTEGER, end_line INTEGER, end_column INTEGER,
+            start_byte INTEGER, end_byte INTEGER, body_start_line INTEGER,
+            body_start_column INTEGER, body_end_line INTEGER, body_end_column INTEGER,
+            body_start_byte INTEGER, body_end_byte INTEGER, body_hash TEXT,
+            semantic_group TEXT, is_test INTEGER, test_container INTEGER
+        );
+        CREATE TABLE relationships (
+            relationship_id TEXT PRIMARY KEY, from_symbol_id TEXT, to_symbol_id TEXT,
+            kind TEXT, path TEXT, start_line INTEGER, start_column INTEGER
+        );
+        CREATE TABLE pending_relationships (
+            from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT,
+            path TEXT, start_line INTEGER, start_column INTEGER
+        );",
+    )
+    .unwrap();
+    let wt_bytes = wt_content.len() as i64;
+    let wt_hash = format!("blake3:{}", blake3::hash(wt_content.as_bytes()).to_hex());
+    conn_wt
+        .execute(
+            "INSERT INTO files VALUES ('f2', 'src/feature.rs', 'rust', ?1, ?2, 1, '2026-01-01')",
+            rusqlite::params![wt_hash, wt_bytes],
+        )
+        .unwrap();
+    conn_wt
+        .execute(
+            "INSERT INTO symbols VALUES (
+            's2', 'f2', 'src/feature.rs', 'rust', 'feature_fn', 'function',
+            'pub fn feature_fn()', NULL, 'pub', NULL,
+            1, 0, 1, 22, 0, ?1, 1, 0, 1, 22, 0, ?1, 'b3:hash',
+            NULL, 0, 0
+        )",
+            rusqlite::params![wt_bytes],
+        )
+        .unwrap();
+    code_kb_core::db::ensure_fts_index(&conn_wt).unwrap();
+    drop(conn_wt);
+
+    // Spawn server pointing to main_root
+    let mut child = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("serve")
+        .arg("--root")
+        .arg(&main_root)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn code-kb serve");
+
+    let mut stdin = child.stdin.take().expect("Failed to open stdin");
+    let stdout = child.stdout.take().expect("Failed to open stdout");
+    let mut reader = std::io::BufReader::new(stdout);
+    use std::io::BufRead;
+
+    // 1. Initialize
+    let init_req = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": { "name": "test-agent", "version": "1.0" }
+        }
+    });
+    let mut line = serde_json::to_string(&init_req).unwrap();
+    line.push('\n');
+    stdin.write_all(line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+    let mut resp_line = String::new();
+    reader.read_line(&mut resp_line).unwrap();
+
+    // 2. Query symbol from main_repo
+    let main_call = json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+            "name": "find_symbol",
+            "arguments": { "query": "main_fn" }
+        }
+    });
+    let mut line2 = serde_json::to_string(&main_call).unwrap();
+    line2.push('\n');
+    stdin.write_all(line2.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+    let mut resp_line2 = String::new();
+    reader.read_line(&mut resp_line2).unwrap();
+    let resp2: Value = serde_json::from_str(&resp_line2).unwrap();
+    assert_eq!(resp2["id"], 2);
+    assert!(
+        resp2["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("main_fn")
+    );
+
+    // 3. Query file_skeleton with absolute path to file in worktree
+    let wt_call = json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+            "name": "file_skeleton",
+            "arguments": { "file": wt_file.to_string_lossy().to_string() }
+        }
+    });
+    let mut line3 = serde_json::to_string(&wt_call).unwrap();
+    line3.push('\n');
+    stdin.write_all(line3.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+    let mut resp_line3 = String::new();
+    reader.read_line(&mut resp_line3).unwrap();
+    let resp3: Value = serde_json::from_str(&resp_line3).unwrap();
+    assert_eq!(resp3["id"], 3);
+    assert!(
+        resp3["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("feature_fn")
+    );
+
+    // 4. Query file_skeleton with absolute path back to main repo
+    let back_call = json!({
+        "jsonrpc": "2.0",
+        "id": 4,
+        "method": "tools/call",
+        "params": {
+            "name": "file_skeleton",
+            "arguments": { "file": main_file.to_string_lossy().to_string() }
+        }
+    });
+    let mut line4 = serde_json::to_string(&back_call).unwrap();
+    line4.push('\n');
+    stdin.write_all(line4.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+    let mut resp_line4 = String::new();
+    reader.read_line(&mut resp_line4).unwrap();
+    let resp4: Value = serde_json::from_str(&resp_line4).unwrap();
+    assert_eq!(resp4["id"], 4);
+    assert!(
+        resp4["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("main_fn")
+    );
+
+    drop(stdin);
+    let _ = child.wait();
+}
+
+#[test]
+fn test_mcp_worktree_auto_copy_fast_path() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let main_root = temp_dir.path().join("main_repo");
+    let wt_root = main_root.join(".worktrees").join("feature-y");
+
+    std::fs::create_dir_all(main_root.join(".git")).unwrap();
+    std::fs::create_dir_all(main_root.join(".code-kb")).unwrap();
+    std::fs::create_dir_all(main_root.join("src")).unwrap();
+
+    let main_file = main_root.join("src").join("main.rs");
+    let main_content = "pub fn shared_fn() {}\n";
+    std::fs::write(&main_file, main_content).unwrap();
+
+    // Set up main repo DB
+    let main_db = main_root.join(".code-kb").join("artifact.db");
+    let conn = code_kb_core::open_read_write(&main_db).unwrap();
+    conn.execute_batch(
+        "CREATE TABLE files (
+            file_id TEXT PRIMARY KEY, path TEXT, language TEXT, content_hash TEXT,
+            content_bytes INTEGER, line_count INTEGER, indexed_at TEXT
+        );
+        CREATE TABLE symbols (
+            symbol_id TEXT PRIMARY KEY, file_id TEXT, path TEXT, language TEXT, name TEXT, kind TEXT,
+            signature TEXT, doc_comment TEXT, visibility TEXT, parent_symbol_id TEXT,
+            start_line INTEGER, start_column INTEGER, end_line INTEGER, end_column INTEGER,
+            start_byte INTEGER, end_byte INTEGER, body_start_line INTEGER,
+            body_start_column INTEGER, body_end_line INTEGER, body_end_column INTEGER,
+            body_start_byte INTEGER, body_end_byte INTEGER, body_hash TEXT,
+            semantic_group TEXT, is_test INTEGER, test_container INTEGER
+        );
+        CREATE TABLE relationships (
+            relationship_id TEXT PRIMARY KEY, from_symbol_id TEXT, to_symbol_id TEXT,
+            kind TEXT, path TEXT, start_line INTEGER, start_column INTEGER
+        );
+        CREATE TABLE pending_relationships (
+            from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT,
+            path TEXT, start_line INTEGER, start_column INTEGER
+        );",
+    )
+    .unwrap();
+    let bytes = main_content.len() as i64;
+    let hash = format!("blake3:{}", blake3::hash(main_content.as_bytes()).to_hex());
+    conn.execute(
+        "INSERT INTO files VALUES ('f1', 'src/main.rs', 'rust', ?1, ?2, 1, '2026-01-01')",
+        rusqlite::params![hash, bytes],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO symbols VALUES (
+            's1', 'f1', 'src/main.rs', 'rust', 'shared_fn', 'function',
+            'pub fn shared_fn()', NULL, 'pub', NULL,
+            1, 0, 1, 21, 0, ?1, 1, 0, 1, 21, 0, ?1, 'b3:hash',
+            NULL, 0, 0
+        )",
+        rusqlite::params![bytes],
+    )
+    .unwrap();
+    code_kb_core::db::ensure_fts_index(&conn).unwrap();
+    drop(conn);
+
+    // Set up worktree: .git file pointing to main gitdir, and identical file in src/, but NO .code-kb folder!
+    std::fs::create_dir_all(wt_root.join("src")).unwrap();
+    let gitdir_path = main_root.join(".git").join("worktrees").join("feature-y");
+    std::fs::create_dir_all(&gitdir_path).unwrap();
+    std::fs::write(
+        wt_root.join(".git"),
+        format!("gitdir: {}\n", gitdir_path.display()),
+    )
+    .unwrap();
+
+    let wt_file = wt_root.join("src").join("main.rs");
+    std::fs::write(&wt_file, main_content).unwrap();
+
+    let wt_db = wt_root.join(".code-kb").join("artifact.db");
+    assert!(!wt_db.exists(), "Worktree DB must NOT exist initially");
+
+    // Spawn server pointing to main_root
+    let mut child = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("serve")
+        .arg("--root")
+        .arg(&main_root)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn code-kb serve");
+
+    let mut stdin = child.stdin.take().expect("Failed to open stdin");
+    let stdout = child.stdout.take().expect("Failed to open stdout");
+    let mut reader = std::io::BufReader::new(stdout);
+    use std::io::BufRead;
+
+    // 1. Initialize
+    let init_req = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": { "name": "test-agent", "version": "1.0" }
+        }
+    });
+    let mut line = serde_json::to_string(&init_req).unwrap();
+    line.push('\n');
+    stdin.write_all(line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+    let mut resp_line = String::new();
+    reader.read_line(&mut resp_line).unwrap();
+
+    // 2. Query file_skeleton on worktree file -> triggers auto-copy of parent DB!
+    let wt_call = json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+            "name": "file_skeleton",
+            "arguments": { "file": wt_file.to_string_lossy().to_string() }
+        }
+    });
+    let mut line2 = serde_json::to_string(&wt_call).unwrap();
+    line2.push('\n');
+    stdin.write_all(line2.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+    let mut resp_line2 = String::new();
+    reader.read_line(&mut resp_line2).unwrap();
+    let resp2: Value = serde_json::from_str(&resp_line2).unwrap();
+    assert_eq!(resp2["id"], 2);
+    assert!(
+        resp2["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("shared_fn"),
+        "Worktree query should succeed using copied parent DB"
+    );
+
+    // Verify worktree DB was copied
+    assert!(wt_db.exists(), "Worktree DB should now exist on disk");
+
+    drop(stdin);
+    let _ = child.wait();
+}

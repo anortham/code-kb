@@ -1,6 +1,6 @@
 use ignore::WalkBuilder;
 use notify::RecursiveMode;
-use notify_debouncer_mini::{DebouncedEvent, Debouncer, new_debouncer};
+use notify_debouncer_full::{DebouncedEvent, Debouncer, RecommendedCache, new_debouncer};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -8,7 +8,7 @@ use std::time::Duration;
 use thiserror::Error;
 use tracing::{info, warn};
 
-use crate::sync::{delete_file, scan_workspace, update_file};
+use crate::sync::{delete_file, ensure_fresh_file, scan_workspace, update_file};
 use crate::workspace::{Workspace, is_hard_excluded, to_forward_slash};
 
 #[derive(Debug, Error)]
@@ -22,7 +22,7 @@ pub enum WatcherError {
 /// Active background file watcher handle.
 pub struct WatcherHandle {
     // Retaining debouncer keeps the background notify thread running
-    _debouncer: Debouncer<notify::RecommendedWatcher>,
+    _debouncer: Debouncer<notify::RecommendedWatcher, RecommendedCache>,
     pub running: Arc<AtomicBool>,
 }
 
@@ -38,6 +38,7 @@ pub fn start_watcher(
     // 150ms debounce window
     let mut debouncer = new_debouncer(
         Duration::from_millis(150),
+        None,
         move |res: Result<Vec<DebouncedEvent>, _>| {
             let events = match res {
                 Ok(evts) => evts,
@@ -54,6 +55,7 @@ pub fn start_watcher(
             let mut ignore_builder = WalkBuilder::new(&ws_clone.canonical_root);
             ignore_builder
                 .standard_filters(true)
+                .hidden(false)
                 .add_custom_ignore_filename(".julieignore")
                 .add_custom_ignore_filename(".code-kb-ignore")
                 .add_custom_ignore_filename(".codekbignore");
@@ -64,27 +66,38 @@ pub fn start_watcher(
 
             let mut relevant_files = Vec::new();
             for event in &events {
-                let norm_path = dunce::simplified(&event.path);
-                if let Ok(rel) = norm_path.strip_prefix(&ws_clone.canonical_root) {
-                    let rel_str = to_forward_slash(rel);
-                    if is_hard_excluded(&rel_str) {
-                        continue;
+                // Ignore read/access events (e.g. inotify IN_OPEN / IN_ACCESS)
+                if event.kind.is_access() {
+                    continue;
+                }
+
+                for path in &event.paths {
+                    let norm_path = dunce::simplified(path);
+                    if let Ok(rel) = norm_path.strip_prefix(&ws_clone.canonical_root) {
+                        let rel_str = to_forward_slash(rel);
+                        if is_hard_excluded(&rel_str) {
+                            continue;
+                        }
+                        let is_dir = norm_path.is_dir();
+                        let (matched, error) = ignore_matcher.matched_with_errors(rel, is_dir);
+                        if let Some(error) = error {
+                            warn!("Failed to load ignore rule: {error}");
+                        }
+                        if matched.is_ignore() {
+                            continue;
+                        }
+                        relevant_files.push((norm_path.to_path_buf(), rel_str));
                     }
-                    let is_dir = norm_path.is_dir();
-                    let (matched, error) = ignore_matcher.matched_with_errors(rel, is_dir);
-                    if let Some(error) = error {
-                        warn!("Failed to load ignore rule: {error}");
-                    }
-                    if matched.is_ignore() {
-                        continue;
-                    }
-                    relevant_files.push((norm_path.to_path_buf(), rel_str));
                 }
             }
 
             if relevant_files.is_empty() {
                 return;
             }
+
+            // Deduplicate paths in this window
+            relevant_files.sort_by(|a, b| a.1.cmp(&b.1));
+            relevant_files.dedup_by(|a, b| a.1 == b.1);
 
             // Git checkout storm circuit-breaker:
             // If more than 50 files changed within the debounce window,
@@ -101,9 +114,18 @@ pub fn start_watcher(
             }
 
             // Otherwise, process incremental updates in lock-free WAL mode
+            let conn_opt = crate::db::open_read_only(&db_clone).ok();
             for (abs, rel) in relevant_files {
                 if abs.exists() && abs.is_file() {
-                    let _ = update_file(&ws_clone, &db_clone, &rel);
+                    let mut handled = false;
+                    if let Some(ref conn) = conn_opt
+                        && let Ok(_fresh) = ensure_fresh_file(&ws_clone, &db_clone, conn, &rel)
+                    {
+                        handled = true;
+                    }
+                    if !handled {
+                        let _ = update_file(&ws_clone, &db_clone, &rel);
+                    }
                 } else if !abs.exists() {
                     let _ = delete_file(&ws_clone, &db_clone, &rel);
                 }
@@ -112,9 +134,7 @@ pub fn start_watcher(
     )?;
 
     // Watch workspace root recursively
-    debouncer
-        .watcher()
-        .watch(&workspace.canonical_root, RecursiveMode::Recursive)?;
+    debouncer.watch(&workspace.canonical_root, RecursiveMode::Recursive)?;
 
     info!(
         "Tier 3 file watcher active on '{}' (150ms debounce)",

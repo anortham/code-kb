@@ -203,6 +203,11 @@ impl Workspace {
             if probe.join(".code-kb").exists() || probe.join(".git").exists() {
                 return Ok(probe);
             }
+            if let Some(name) = probe.file_name().and_then(|n| n.to_str())
+                && is_hard_excluded(name)
+            {
+                break;
+            }
             if let Some(parent) = probe.parent() {
                 if parent == probe {
                     break;
@@ -222,6 +227,11 @@ impl Workspace {
             {
                 return Ok(curr);
             }
+            if let Some(name) = curr.file_name().and_then(|n| n.to_str())
+                && is_hard_excluded(name)
+            {
+                break;
+            }
 
             if let Some(parent) = curr.parent() {
                 if parent == curr {
@@ -234,7 +244,12 @@ impl Workspace {
         }
 
         // Default to start directory if no markers found
-        Ok(start.to_path_buf())
+        let start_dir = if start.is_file() {
+            start.parent().unwrap_or(start).to_path_buf()
+        } else {
+            start.to_path_buf()
+        };
+        Ok(start_dir)
     }
 
     /// Resolves an input path (relative or absolute) to a canonical absolute path and relative path.

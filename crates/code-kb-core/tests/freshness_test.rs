@@ -373,3 +373,51 @@ fn test_codebase_outline_depth_bounded_symbols() {
     // At depth 1, src/lib.rs should not be rendered as a file
     assert!(!outline.contains("lib.rs"));
 }
+
+#[test]
+fn test_reconcile_offline_edits_preserves_hidden_files() {
+    let extract_bin = find_julie_extract_binary();
+    if extract_bin.is_none() {
+        eprintln!("Skipping integration test: julie-extract binary not found");
+        return;
+    }
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let root = temp_dir.path().to_path_buf();
+
+    let hidden_dir = root.join(".config");
+    fs::create_dir_all(&hidden_dir).unwrap();
+    let file_path = hidden_dir.join("helper.rs");
+    fs::write(&file_path, "pub fn hidden_helper() -> i32 { 42 }\n").unwrap();
+
+    let ws = Workspace::new(root.clone());
+    let db_path = root.join("test.db");
+
+    scan_workspace(&ws, &db_path, true).expect("Scan failed");
+    let conn = open_read_only(&db_path).unwrap();
+
+    // Verify it was indexed
+    let sym = code_kb_core::get_symbol_by_name(&conn, "hidden_helper", Some(".config/helper.rs"))
+        .unwrap();
+    assert!(sym.is_some(), "Symbol in hidden dir should be indexed");
+
+    // Run reconciliation without changing the file
+    let report =
+        reconcile_offline_edits(&ws, &db_path, &conn).expect("reconcile_offline_edits failed");
+
+    // Hidden file must NOT be reported as deleted
+    assert!(
+        !report.deleted.contains(&".config/helper.rs".to_string()),
+        "Hidden file should not be reported as deleted: {:?}",
+        report.deleted
+    );
+
+    // Verify symbol still exists in DB
+    let sym_after =
+        code_kb_core::get_symbol_by_name(&conn, "hidden_helper", Some(".config/helper.rs"))
+            .unwrap();
+    assert!(
+        sym_after.is_some(),
+        "Symbol in hidden dir should still exist after reconciliation"
+    );
+}

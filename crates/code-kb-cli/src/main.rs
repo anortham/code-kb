@@ -255,7 +255,8 @@ fn main() -> anyhow::Result<()> {
         let is_copilot = std::env::var("COPILOT_PLUGIN_DATA").is_ok();
         let event = args.event.as_str();
 
-        let content = if let Ok(custom) = std::fs::read_to_string("hooks/code-kb-routing-block.md") {
+        let content = if let Ok(custom) = std::fs::read_to_string("hooks/code-kb-routing-block.md")
+        {
             custom
         } else if let Ok(custom) = std::fs::read_to_string(".code-kb/routing.md") {
             custom

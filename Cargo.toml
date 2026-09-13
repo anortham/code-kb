@@ -26,7 +26,7 @@ clap = { version = "4.5", features = ["derive", "env"] }
 ignore = "0.4.33"
 walkdir = "2.5"
 notify = "8.0"
-notify-debouncer-mini = "0.6"
+notify-debouncer-full = "0.7"
 sha2 = "0.10"
 hex = "0.4"
 thiserror = "2.0"

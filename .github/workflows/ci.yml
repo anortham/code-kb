@@ -16,6 +16,8 @@ jobs:
   lint:
     name: Lint & Style
     runs-on: ubuntu-latest
+    env:
+      CODE_KB_ALLOW_MISSING_JULIE_EXTRACT: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -24,12 +26,16 @@ jobs:
       - name: Format Check
         run: cargo fmt --all -- --check
       - name: Sync Contract (AGENTS.md vs CLAUDE.md)
+        if: ${{ !cancelled() }}
         run: cmp AGENTS.md CLAUDE.md
       - name: Restore julie-extract
+        if: ${{ !cancelled() }}
         run: bash scripts/restore-julie-extract.sh
       - name: Clippy
+        if: ${{ !cancelled() }}
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Core Package Verification
+        if: ${{ !cancelled() }}
         run: cargo package -p code-kb-core --locked
 
   test:

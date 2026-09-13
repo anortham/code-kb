@@ -15,6 +15,7 @@ use super::protocol::{CallToolResult, JsonRpcRequest, JsonRpcResponse, Tool};
 pub struct McpServer {
     pub workspace: Workspace,
     pub db_path: PathBuf,
+    pub explicit_db: Option<PathBuf>,
     pub _watcher: Option<WatcherHandle>,
 }
 
@@ -49,6 +50,7 @@ impl McpServer {
         Ok(Self {
             workspace,
             db_path,
+            explicit_db: explicit_db.map(|p| p.to_path_buf()),
             _watcher: watcher,
         })
     }
@@ -56,8 +58,21 @@ impl McpServer {
     pub fn bind_workspace(&mut self, path: &Path) -> Result<(), WorkspaceError> {
         let ws = Workspace::discover(Some(path))?;
         let db_path = ws
-            .locate_db(None)
+            .locate_db(self.explicit_db.as_deref())
             .unwrap_or_else(|_| ws.canonical_root.join(".code-kb").join("artifact.db"));
+
+        // Guard: only commit binding if target db exists OR target root has a repository marker
+        let root = &ws.canonical_root;
+        let is_valid = db_path.exists()
+            || root.join(".git").exists()
+            || root.join("Cargo.toml").exists()
+            || root.join("package.json").exists()
+            || root.join("go.mod").exists()
+            || root.join("pyproject.toml").exists();
+
+        if !is_valid {
+            return Err(WorkspaceError::ArtifactNotFound(db_path));
+        }
 
         tracing::info!(
             workspace = %ws.canonical_root.display(),
@@ -357,22 +372,29 @@ impl McpServer {
     fn handle_call_tool_inner(&mut self, name: &str, arguments: &Value) -> CallToolResult {
         tracing::info!(tool = name, args = %arguments, "MCP tool called");
 
-        // Dynamically bind workspace if passed explicitly or if candidate path is outside current workspace
+        // Dynamically bind workspace if passed explicitly or if candidate path points to a different workspace
         if let Some(ws_str) = arguments.get("workspace").and_then(|v| v.as_str()) {
             let _ = self.bind_workspace(Path::new(ws_str));
         } else if let Some(candidate) = arguments
             .get("file_path")
             .or_else(|| arguments.get("path"))
+            .or_else(|| arguments.get("file"))
             .and_then(|v| v.as_str())
         {
             let p = Path::new(candidate);
-            if p.is_absolute() {
-                let norm = code_kb_core::normalize_path(p);
-                if !norm.starts_with(&self.workspace.canonical_root) {
-                    let _ = self.bind_workspace(&norm);
+            let abs_candidate = if p.is_absolute() {
+                code_kb_core::normalize_path(p)
+            } else {
+                code_kb_core::normalize_path(&self.workspace.canonical_root.join(p))
+            };
+
+            // Detect if this path belongs to another workspace or a nested git worktree
+            if let Ok(target_root) = Workspace::find_workspace_root(&abs_candidate) {
+                if target_root != self.workspace.canonical_root {
+                    let _ = self.bind_workspace(&target_root);
                 }
-            } else if !self.db_path.exists() && p.exists() {
-                let _ = self.bind_workspace(p);
+            } else if !self.db_path.exists() && abs_candidate.exists() {
+                let _ = self.bind_workspace(&abs_candidate);
             }
         }
 
@@ -386,9 +408,63 @@ impl McpServer {
                 || root.join("pyproject.toml").exists()
             {
                 tracing::info!(ws = %root.display(), "Database not found; running automatic initial scan");
-                if let Err(e) = scan_workspace(&self.workspace, &self.db_path, false) {
+
+                // Worktree fast-path: if this is a git worktree and parent repo has artifact.db,
+                // copy parent DB and reconcile instead of scanning from scratch.
+                let mut fast_path_taken = false;
+                let git_marker = root.join(".git");
+                if git_marker.is_file()
+                    && let Ok(git_content) = std::fs::read_to_string(&git_marker)
+                    && let Some(gitdir_line) =
+                        git_content.lines().find(|l| l.starts_with("gitdir:"))
+                {
+                    let gitdir_str = gitdir_line.trim_start_matches("gitdir:").trim();
+                    let gitdir_path = Path::new(gitdir_str);
+                    let mut parent_probe = if gitdir_path.is_absolute() {
+                        gitdir_path.to_path_buf()
+                    } else {
+                        root.join(gitdir_path)
+                    };
+                    while let Some(parent) = parent_probe.parent() {
+                        if parent == parent_probe {
+                            break;
+                        }
+                        if parent.join(".git").exists() {
+                            let parent_db = parent.join(".code-kb").join("artifact.db");
+                            if parent_db.exists() {
+                                if let Some(db_dir) = self.db_path.parent() {
+                                    let _ = std::fs::create_dir_all(db_dir);
+                                }
+                                if std::fs::copy(&parent_db, &self.db_path).is_ok() {
+                                    tracing::info!(
+                                        from = %parent_db.display(),
+                                        to = %self.db_path.display(),
+                                        "Worktree fast-path: copied parent database, reconciling"
+                                    );
+                                    let _ = ensure_fts_index_path(&self.db_path);
+                                    if let Ok(conn) = open_read_only(&self.db_path) {
+                                        let _ = reconcile_offline_edits(
+                                            &self.workspace,
+                                            &self.db_path,
+                                            &conn,
+                                        );
+                                        fast_path_taken = true;
+                                    }
+                                }
+                            }
+                            break;
+                        }
+                        parent_probe = parent.to_path_buf();
+                    }
+                }
+
+                if !fast_path_taken
+                    && let Err(e) = scan_workspace(&self.workspace, &self.db_path, false)
+                {
                     tracing::error!("Initial scan failed: {e}");
-                } else if self._watcher.is_none() {
+                }
+
+                if self.db_path.exists() && self._watcher.is_none() {
                     self._watcher =
                         start_watcher(self.workspace.clone(), self.db_path.clone()).ok();
                 }
