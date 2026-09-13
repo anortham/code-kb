@@ -12,6 +12,8 @@ use code_kb_core::{
 mod logging;
 mod mcp;
 
+static DEFAULT_ROUTING_BLOCK: &str = include_str!("../../../hooks/code-kb-routing-block.md");
+
 #[derive(Debug, Parser)]
 #[command(
     name = "code-kb",
@@ -75,6 +77,8 @@ pub enum Command {
     Telemetry(StatsArgs),
     /// Start Model Context Protocol (MCP) server on stdio.
     Serve(ServeArgs),
+    /// Output agent lifecycle hook payload (SessionStart, SubagentStart).
+    Hook(HookArgs),
 }
 
 #[derive(Debug, Args)]
@@ -236,8 +240,49 @@ pub struct StatsArgs {
     pub json: bool,
 }
 
+#[derive(Debug, Args)]
+pub struct HookArgs {
+    /// Hook event name (default: "SessionStart", or "SubagentStart").
+    #[arg(default_value = "SessionStart")]
+    pub event: String,
+}
+
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
+
+    // Handle Hook command immediately without requiring workspace discovery or database
+    if let Command::Hook(args) = &cli.command {
+        let is_copilot = std::env::var("COPILOT_PLUGIN_DATA").is_ok();
+        let event = args.event.as_str();
+
+        let content = if let Ok(custom) = std::fs::read_to_string("hooks/code-kb-routing-block.md") {
+            custom
+        } else if let Ok(custom) = std::fs::read_to_string(".code-kb/routing.md") {
+            custom
+        } else {
+            DEFAULT_ROUTING_BLOCK.to_string()
+        };
+
+        let trimmed = content.trim();
+
+        let output = if is_copilot {
+            if event == "SessionStart" {
+                serde_json::json!({ "additionalContext": trimmed })
+            } else {
+                serde_json::json!({})
+            }
+        } else {
+            serde_json::json!({
+                "hookSpecificOutput": {
+                    "hookEventName": event,
+                    "additionalContext": trimmed,
+                }
+            })
+        };
+
+        println!("{}", serde_json::to_string(&output)?);
+        return Ok(());
+    }
 
     // Discover workspace
     let ws_root = cli.root.as_deref();
@@ -563,7 +608,8 @@ fn main() -> anyhow::Result<()> {
         | Command::Logs(_)
         | Command::Prune(_)
         | Command::Stats(_)
-        | Command::Telemetry(_) => {
+        | Command::Telemetry(_)
+        | Command::Hook(_) => {
             unreachable!()
         }
     }

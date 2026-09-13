@@ -396,3 +396,90 @@ fn test_cli_edit_atomic_replacement() {
     let disk_content = std::fs::read_to_string(root.join("src/workspace.rs")).unwrap();
     assert!(disk_content.contains("let _x = 42;"));
 }
+
+#[test]
+fn test_cli_hook_session_start() {
+    let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("hook")
+        .arg("SessionStart")
+        .output()
+        .expect("Failed to execute hook SessionStart");
+
+    assert!(output.status.success());
+    let val: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let hook_output = val.get("hookSpecificOutput").expect("hookSpecificOutput key");
+    assert_eq!(hook_output.get("hookEventName").unwrap(), "SessionStart");
+    let ctx = hook_output.get("additionalContext").unwrap().as_str().unwrap();
+    assert!(ctx.contains("Code Intelligence: Always use `code-kb` MCP tools"));
+}
+
+#[test]
+fn test_cli_hook_default_is_session_start() {
+    let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("hook")
+        .output()
+        .expect("Failed to execute hook");
+
+    assert!(output.status.success());
+    let val: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let hook_output = val.get("hookSpecificOutput").expect("hookSpecificOutput key");
+    assert_eq!(hook_output.get("hookEventName").unwrap(), "SessionStart");
+}
+
+#[test]
+fn test_cli_hook_subagent_start() {
+    let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("hook")
+        .arg("SubagentStart")
+        .output()
+        .expect("Failed to execute hook SubagentStart");
+
+    assert!(output.status.success());
+    let val: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let hook_output = val.get("hookSpecificOutput").expect("hookSpecificOutput key");
+    assert_eq!(hook_output.get("hookEventName").unwrap(), "SubagentStart");
+    let ctx = hook_output.get("additionalContext").unwrap().as_str().unwrap();
+    assert!(ctx.contains("Code Intelligence: Always use `code-kb` MCP tools"));
+}
+
+#[test]
+fn test_cli_hook_outside_repo() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .current_dir(temp_dir.path())
+        .arg("hook")
+        .output()
+        .expect("Failed to execute hook outside repo");
+
+    assert!(output.status.success());
+    let val: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(val.get("hookSpecificOutput").is_some());
+}
+
+#[test]
+fn test_cli_hook_copilot_env() {
+    let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .env("COPILOT_PLUGIN_DATA", "1")
+        .arg("hook")
+        .arg("SessionStart")
+        .output()
+        .expect("Failed to execute hook with COPILOT_PLUGIN_DATA");
+
+    assert!(output.status.success());
+    let val: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(val.get("hookSpecificOutput").is_none());
+    let ctx = val.get("additionalContext").unwrap().as_str().unwrap();
+    assert!(ctx.contains("Code Intelligence: Always use `code-kb` MCP tools"));
+
+    let subagent_output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .env("COPILOT_PLUGIN_DATA", "1")
+        .arg("hook")
+        .arg("SubagentStart")
+        .output()
+        .expect("Failed to execute hook SubagentStart with COPILOT_PLUGIN_DATA");
+
+    assert!(subagent_output.status.success());
+    let val2: serde_json::Value = serde_json::from_slice(&subagent_output.stdout).unwrap();
+    assert!(val2.as_object().unwrap().is_empty());
+}
+

@@ -4,10 +4,33 @@
 
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 
 const isCopilot = Boolean(process.env.COPILOT_PLUGIN_DATA);
 const isCodex = !isCopilot && Boolean(process.env.PLUGIN_DATA);
 const isQoder = !isCopilot && !isCodex && Boolean(process.env.QODER_SESSION_ID);
+
+function determineEvent() {
+  for (const arg of process.argv.slice(2)) {
+    if (arg === 'SessionStart' || arg === 'SubagentStart') {
+      return arg;
+    }
+  }
+  return 'SessionStart';
+}
+
+const event = determineEvent();
+
+// Try native code-kb CLI first if available
+try {
+  const stdout = execSync(`code-kb hook ${event}`, { stdio: ['ignore', 'pipe', 'ignore'], timeout: 2000 });
+  if (stdout && stdout.length > 0) {
+    process.stdout.write(stdout);
+    process.exit(0);
+  }
+} catch (_) {
+  // Fall back to JS logic below
+}
 
 function getRoutingContext() {
   const mdPath = path.join(__dirname, 'code-kb-routing-block.md');
@@ -23,16 +46,6 @@ function getRoutingContext() {
   }
 }
 
-function determineEvent() {
-  // Check CLI arguments first (e.g. node script.js SessionStart)
-  for (const arg of process.argv.slice(2)) {
-    if (arg === 'SessionStart' || arg === 'SubagentStart') {
-      return arg;
-    }
-  }
-  return 'SessionStart';
-}
-
 function writeHookOutput(event, context) {
   if (isCopilot) {
     process.stdout.write(JSON.stringify(
@@ -41,43 +54,18 @@ function writeHookOutput(event, context) {
     return;
   }
 
-  if (isCodex || isQoder) {
-    const output = {
-      hookSpecificOutput: {
-        hookEventName: event,
-        additionalContext: context,
-      }
-    };
-    process.stdout.write(JSON.stringify(output));
-    return;
-  }
-
-  // Claude Code
-  if (event === 'SubagentStart') {
-    process.stdout.write(JSON.stringify({
-      hookSpecificOutput: {
-        hookEventName: event,
-        additionalContext: context,
-      }
-    }));
-    return;
-  }
-
-  // SessionStart in Claude Code accepts raw text or hookSpecificOutput.
-  // Using JSON hookSpecificOutput ensures consistency across agent hosts.
-  process.stdout.write(JSON.stringify({
+  const output = {
     hookSpecificOutput: {
       hookEventName: event,
       additionalContext: context,
     }
-  }));
+  };
+  process.stdout.write(JSON.stringify(output));
 }
 
 try {
-  const event = determineEvent();
   const context = getRoutingContext();
   writeHookOutput(event, context);
 } catch (e) {
-  // Best effort: never block session launch on hook error
   process.exit(0);
 }

@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/code-kb-session-hook.cjs\"",
+            "command": "code-kb hook SessionStart",
             "timeout": 5,
             "statusMessage": "Activating code-kb tools..."
           }
@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/code-kb-session-hook.cjs\"",
+            "command": "code-kb hook SubagentStart",
             "timeout": 5,
             "statusMessage": "Activating code-kb tools for subagent..."
           }

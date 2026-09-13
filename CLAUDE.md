@@ -88,6 +88,8 @@ MCP tool schema.**
   `npm test`), while `code-kb` predicts the minimal set of targeted test targets to run before/after edits.
 - Workspace cleanup: `code-kb prune` discovers and deletes orphaned SQLite databases for
   deleted repositories and removed git worktrees.
+- Cross-platform agent hooks: `code-kb hook [SessionStart|SubagentStart]` outputs agent routing instructions
+  directly from the native binary without external runtime dependencies (Node.js, bash, python).
 
 ### 7. Pinned Extractor & Bundled Distribution
 - `code-kb` pins the exact extractor version in `scripts/julie-pins.json` (currently `2.42.1`).

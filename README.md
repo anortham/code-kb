@@ -110,21 +110,46 @@ In your project root, create `.cursor/mcp.json` (or add to Cursor Settings > Fea
 
 ### 3. Antigravity (AGY)
 
-#### Project-Level (`.mcp.json` in repo root — Recommended)
-Create `.mcp.json` in your repository root:
+#### Option A: CLI Command (Recommended)
+```bash
+agy mcp add code-kb code-kb serve
+```
+
+#### Option B: Global Config (`~/.gemini/config/mcp_config.json`)
+Add to `mcpServers` in your config (setting `"force_all_tools_eager": true` registers all tools directly as native agent tools without lazy schema lookups):
 ```json
 {
   "mcpServers": {
     "code-kb": {
       "command": "code-kb",
-      "args": ["serve"]
+      "args": ["serve"],
+      "disabled": false,
+      "force_all_tools_eager": true
     }
   }
 }
 ```
 
-#### Global Level (`~/.gemini/config/mcp_config.json`)
-Add to `mcpServers` in your global config:
+#### Skill Setup (Progressive Disclosure)
+To enable the `code-kb` progressive disclosure workflow in AGY:
+```bash
+ln -sf /path/to/code-kb/skills/code-kb ~/.gemini/config/skills/code-kb
+```
+
+---
+
+### 4. Grok CLI (xAI)
+
+#### Option A: Plugin Install (Recommended — MCP + Skills + Hooks)
+Grok natively supports Claude-compatible plugin manifests:
+```bash
+grok plugin install anortham/code-kb --trust
+# or from a local checkout:
+grok plugin install /path/to/code-kb --trust
+```
+
+#### Option B: Project-Level (`.mcp.json`)
+Grok automatically detects `.mcp.json` in your repository root:
 ```json
 {
   "mcpServers": {
@@ -138,7 +163,7 @@ Add to `mcpServers` in your global config:
 
 ---
 
-### 4. Claude Desktop
+### 5. Claude Desktop
 
 Add to your `claude_desktop_config.json` (located at `%APPDATA%\Claude\claude_desktop_config.json` on Windows or `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
 
@@ -155,7 +180,7 @@ Add to your `claude_desktop_config.json` (located at `%APPDATA%\Claude\claude_de
 
 ---
 
-### 5. Codex CLI, Pi & Terminal Agents
+### 6. Codex CLI, Pi & Terminal Agents
 
 Terminal-based AI harnesses inherit your terminal's current working directory automatically. Simply configure the harness to execute `code-kb serve` on startup.
 
@@ -227,6 +252,10 @@ code-kb prune
 
 # View active log file and recent diagnostic messages
 code-kb logs
+
+# Output agent lifecycle hook payload (SessionStart / SubagentStart)
+code-kb hook SessionStart
+code-kb hook SubagentStart
 ```
 
 ---
