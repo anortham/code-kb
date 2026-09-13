@@ -7,6 +7,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+# Invoke-WebRequest's progress bar writes to the console buffer, which throws "Access is denied"
+# under a non-interactive host (SSH, CI service) and leaves a 0-byte archive behind.
+$ProgressPreference = "SilentlyContinue"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot = Split-Path -Parent $ScriptDir
 $PinsPath = Join-Path $ScriptDir "julie-pins.json"
