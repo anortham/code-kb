@@ -352,8 +352,6 @@ impl Workspace {
 
 /// Prunes global cache stores whose original workspace root paths no longer exist on disk.
 /// Returns a list of pruned store directory paths.
-/// Prunes global cache stores whose original workspace root paths no longer exist on disk.
-/// Returns a list of pruned store directory paths.
 pub fn prune_orphaned_stores(dry_run: bool) -> Vec<PathBuf> {
     let proj_dirs = match directories::ProjectDirs::from("com", "code-kb", "code-kb") {
         Some(d) => d,
@@ -393,27 +391,37 @@ pub fn prune_orphaned_stores_at(stores_dir: &Path, dry_run: bool) -> Vec<PathBuf
             None
         };
 
-        if let Some(db_file) = active_db
-            && let Ok(conn) = rusqlite::Connection::open_with_flags(
+        let is_orphaned = if let Some(db_file) = active_db {
+            if let Ok(conn) = rusqlite::Connection::open_with_flags(
                 &db_file,
                 rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY
                     | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
-            )
-        {
-            let root_path: rusqlite::Result<String> = conn.query_row(
-                "SELECT value FROM artifact_metadata WHERE key = 'root_path'",
-                [],
-                |row| row.get(0),
-            );
+            ) {
+                let root_path: rusqlite::Result<String> = conn.query_row(
+                    "SELECT value FROM artifact_metadata WHERE key = 'root_path'",
+                    [],
+                    |row| row.get(0),
+                );
+                // Invariant 5: Close SQLite connection and release file handles before deletion on Windows
+                drop(conn);
 
-            if let Ok(root_str) = root_path {
-                let root_p = Path::new(&root_str);
-                if !root_p.exists() {
-                    pruned.push(path.clone());
-                    if !dry_run {
-                        let _ = std::fs::remove_dir_all(&path);
-                    }
+                if let Ok(root_str) = root_path {
+                    let root_p = Path::new(&root_str);
+                    !root_p.exists()
+                } else {
+                    false
                 }
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
+        if is_orphaned {
+            pruned.push(path.clone());
+            if !dry_run {
+                let _ = std::fs::remove_dir_all(&path);
             }
         }
     }
