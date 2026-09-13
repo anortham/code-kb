@@ -240,6 +240,10 @@ pub fn ensure_fresh_file(
         Err(error) => return Err(SyncError::Io(error)),
     };
 
+    if meta.is_dir() {
+        return Ok(false);
+    }
+
     let disk_bytes = meta.len() as i64;
 
     // Look up file in SQLite files table

@@ -15,6 +15,10 @@ use crate::workspace::{Workspace, WorkspaceError};
 pub enum OpError {
     #[error("Symbol '{0}' not found")]
     SymbolNotFound(String),
+    #[error("File '{0}' not found")]
+    FileNotFound(String),
+    #[error("Path '{0}' is a directory, not a file")]
+    IsADirectory(String),
     #[error("Workspace error: {0}")]
     Workspace(#[from] WorkspaceError),
     #[error("Synchronization error: {0}")]
@@ -35,7 +39,13 @@ pub fn get_symbol_body_op(
 ) -> Result<(Symbol, String), OpError> {
     // 1. If file_path is provided, resolve and refresh file BEFORE querying the symbol
     let resolved_rel = if let Some(fp) = file_path {
-        let (_, rel) = workspace.resolve_path(Path::new(fp))?;
+        let (effective_abs, rel) = workspace.resolve_path(Path::new(fp))?;
+        if !effective_abs.exists() {
+            return Err(OpError::FileNotFound(rel));
+        }
+        if effective_abs.is_dir() {
+            return Err(OpError::IsADirectory(rel));
+        }
         sync::ensure_fresh_file(workspace, db_path, conn, &rel)?;
         Some(rel)
     } else {
@@ -44,7 +54,27 @@ pub fn get_symbol_body_op(
 
     // 2. Query symbol from database
     let initial_symbol = queries::get_symbol_by_name(conn, symbol_name, resolved_rel.as_deref())?
-        .ok_or_else(|| OpError::SymbolNotFound(symbol_name.to_string()))?;
+        .ok_or_else(|| {
+        let suggestions = queries::search_symbols_scoped(
+            conn,
+            symbol_name,
+            None,
+            resolved_rel.as_deref(),
+            false,
+            3,
+        )
+        .unwrap_or_default();
+        if suggestions.is_empty() {
+            OpError::SymbolNotFound(symbol_name.to_string())
+        } else {
+            let list = suggestions
+                .into_iter()
+                .map(|s| format!("  - {} `{}` ({}:{})", s.kind, s.name, s.path, s.start_line))
+                .collect::<Vec<_>>()
+                .join("\n");
+            OpError::SymbolNotFound(format!("{symbol_name}'. Did you mean one of:\n{list}"))
+        }
+    })?;
 
     // 3. If file_path was not provided initially, refresh the file found from the symbol
     let symbol = if resolved_rel.is_none() {
@@ -128,7 +158,13 @@ pub fn file_skeleton_op(
     conn: &Connection,
     file_path: &str,
 ) -> Result<String, OpError> {
-    let (_, rel_path) = workspace.resolve_path(Path::new(file_path))?;
+    let (effective_abs, rel_path) = workspace.resolve_path(Path::new(file_path))?;
+    if !effective_abs.exists() {
+        return Err(OpError::FileNotFound(rel_path));
+    }
+    if effective_abs.is_dir() {
+        return Err(OpError::IsADirectory(rel_path));
+    }
     sync::ensure_fresh_file(workspace, db_path, conn, &rel_path)?;
 
     let symbols = queries::load_file_symbols(conn, &rel_path)?;
@@ -145,16 +181,8 @@ pub fn codebase_outline_op(
     depth: usize,
     path_filter: Option<&str>,
 ) -> Result<String, OpError> {
-    let resolved_path_filter = path_filter
-        .map(|path| {
-            workspace
-                .resolve_path(Path::new(path))
-                .map(|(_, relative)| relative)
-        })
-        .transpose()?;
-    let path_filter = resolved_path_filter
-        .as_deref()
-        .filter(|path| !path.is_empty());
+    let rel_filter = path_filter.map(|p| workspace.relativize_filter(p));
+    let path_filter = rel_filter.as_deref().filter(|path| !path.is_empty());
     let symbols_by_file = queries::load_scoped_outline_symbols(conn, path_filter, depth, 5)?;
     let norm = path_filter.map(|p| p.replace('\\', "/").trim_matches('/').to_string());
     let prefix = norm
@@ -178,8 +206,10 @@ pub fn codebase_outline_op(
 
     let mut root_node = OutlineNode::default();
     let norm_filter = norm.as_deref().unwrap_or_default();
+    let mut files_found = 0;
 
     while let Some(row) = rows.next().map_err(QueryError::Sqlite)? {
+        files_found += 1;
         let file_path: String = row.get(0).map_err(QueryError::Sqlite)?;
         add_path_to_outline(
             &mut root_node,
@@ -188,6 +218,12 @@ pub fn codebase_outline_op(
             depth,
             norm_filter,
         );
+    }
+
+    if let Some(filter) = path_filter
+        && files_found == 0
+    {
+        return Err(OpError::FileNotFound(filter.to_string()));
     }
 
     let display_root = if norm_filter.is_empty() {
@@ -221,15 +257,19 @@ pub fn blast_radius_op(
     });
     let clean_file = file.and_then(|f| {
         let t = f.trim();
-        if t.is_empty() { None } else { Some(t) }
+        if t.is_empty() {
+            None
+        } else {
+            Some(workspace.relativize_filter(t))
+        }
     });
 
     let mut discovered = Vec::new();
 
     if let Some(s) = clean_symbol {
         seed_symbols.push(s);
-    } else if let Some(f) = clean_file {
-        seed_paths.push(f);
+    } else if let Some(ref f) = clean_file {
+        seed_paths.push(f.as_str());
     } else {
         // Zero arguments: discover uncommitted working tree changes via git status
         let git_status = std::process::Command::new("git")
@@ -262,7 +302,7 @@ pub fn blast_radius_op(
         }
     }
 
-    let depth = if max_depth == 0 { 2 } else { max_depth };
+    let depth = if max_depth == 0 { 2 } else { max_depth.min(5) };
     let row_limit = if limit == 0 { 20 } else { limit };
 
     let res = queries::compute_blast_radius(conn, &seed_symbols, &seed_paths, depth, row_limit)?;

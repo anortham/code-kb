@@ -11,11 +11,15 @@ pub mod telemetry;
 pub mod watcher;
 pub mod workspace;
 
-pub use db::{DbError, ensure_fts_index, ensure_fts_index_path, open_read_only, open_read_write};
+pub use db::{
+    Connection, DbError, ensure_fts_index, ensure_fts_index_path, open_read_only, open_read_write,
+};
 pub use edit::{EditError, EditResult, replace_symbol_body};
 pub use formatters::{
-    format_blast_radius, format_codebase_outline, format_context_slice, format_file_skeleton,
-    format_references, format_search_results,
+    format_blast_radius, format_codebase_outline, format_context_slice, format_fact_categories,
+    format_file_skeleton, format_find_symbol_results, format_references,
+    format_replace_symbol_result, format_search_results, format_structural_facts,
+    format_symbol_body,
 };
 pub use models::{
     BlastRadiusResult, ContextSlice, FileFact, ImpactedSymbol, LiteralFact, ReferenceSite,
@@ -30,7 +34,8 @@ pub use queries::{
     find_related_tests, find_structural_facts, find_type_facts, fts_search_symbols,
     fts_search_symbols_scoped, get_file, get_symbol_by_name, get_symbol_by_name_exact,
     is_test_path, list_structural_fact_categories, load_file_symbols, load_files,
-    load_scoped_outline_symbols, sanitize_fts5_query, search_symbols, search_symbols_scoped,
+    load_scoped_outline_symbols, normalize_kind, sanitize_fts5_query, search_symbols,
+    search_symbols_scoped,
 };
 pub use slicer::{SliceError, slice_symbol, slice_symbol_body};
 pub use sync::{
@@ -40,7 +45,7 @@ pub use sync::{
 pub use syntax::{SyntaxError, validate_syntax};
 pub use telemetry::{
     TelemetryErrorRecord, TelemetrySummary, ToolInvocation, ToolStat, format_telemetry_summary,
-    get_telemetry_summary, record_tool_call,
+    get_telemetry_summary, open_telemetry_db, record_tool_call, record_tool_call_conn,
 };
 pub use watcher::{WatcherError, WatcherHandle, start_watcher};
 pub use workspace::{

@@ -315,6 +315,58 @@ impl Workspace {
         Ok((effective_abs, rel))
     }
 
+    /// Relativizes a path filter string (which may be absolute, file:// URI, or relative)
+    /// against this workspace root into a forward-slash relative path suitable for SQLite queries.
+    pub fn relativize_filter(&self, filter: &str) -> String {
+        let trimmed = filter.trim();
+        if trimmed.is_empty() {
+            return String::new();
+        }
+
+        // Handle file:// URI
+        let path_str = if trimmed.starts_with("file://") {
+            parse_file_uri(trimmed)
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|| trimmed.to_string())
+        } else {
+            trimmed.to_string()
+        };
+
+        let raw_path = Path::new(&path_str);
+        let simplified = dunce::simplified(raw_path);
+
+        if simplified.is_absolute() {
+            if let Ok((_, rel)) = self.resolve_path(simplified) {
+                return rel;
+            }
+            // If resolve_path failed (e.g. non-existent path), try prefix stripping on normalized strings
+            let norm_simplified = normalize_path(simplified);
+            let norm_root = normalize_path(&self.canonical_root);
+            if let Ok(rel) = norm_simplified.strip_prefix(&norm_root) {
+                let forward = to_forward_slash(rel);
+                if !forward.starts_with("../") && forward != ".." {
+                    return forward.trim_matches('/').to_string();
+                }
+            }
+            let norm_raw_root = normalize_path(&self.root);
+            if let Ok(rel) = norm_simplified.strip_prefix(&norm_raw_root) {
+                let forward = to_forward_slash(rel);
+                if !forward.starts_with("../") && forward != ".." {
+                    return forward.trim_matches('/').to_string();
+                }
+            }
+        }
+
+        // Relative path: normalize slashes and trim leading ./ or /
+        let forward = to_forward_slash(Path::new(&path_str));
+        let trimmed = forward.trim_start_matches("./").trim_matches('/');
+        if trimmed == "." {
+            String::new()
+        } else {
+            trimmed.to_string()
+        }
+    }
+
     /// Resolve candidate database paths for this workspace:
     /// 1. Explicit override path (if provided)
     /// 2. In-tree `.code-kb/artifact.db` or `.code-kb/store.db`
@@ -495,5 +547,32 @@ mod tests {
         // Plain path fallback
         let p2 = parse_file_uri("C:/direct/path").unwrap();
         assert_eq!(p2, normalize_path(Path::new("C:/direct/path")));
+    }
+
+    #[test]
+    fn test_relativize_filter() {
+        let temp = tempfile::tempdir().unwrap();
+        let ws = Workspace::new(temp.path().to_path_buf());
+
+        // Relative path
+        assert_eq!(ws.relativize_filter("."), "");
+        assert_eq!(ws.relativize_filter("./"), "");
+        assert_eq!(ws.relativize_filter("src/models"), "src/models");
+        assert_eq!(ws.relativize_filter("./src/models/"), "src/models");
+        assert_eq!(
+            ws.relativize_filter(r"src\models\mod.rs"),
+            "src/models/mod.rs"
+        );
+
+        // Absolute path inside workspace
+        let abs_file = temp.path().join("src").join("lib.rs");
+        assert_eq!(
+            ws.relativize_filter(&abs_file.to_string_lossy()),
+            "src/lib.rs"
+        );
+
+        // File URI
+        let uri = format!("file://{}", abs_file.to_string_lossy().replace('\\', "/"));
+        assert_eq!(ws.relativize_filter(&uri), "src/lib.rs");
     }
 }

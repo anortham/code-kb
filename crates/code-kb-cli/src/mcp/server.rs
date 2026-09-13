@@ -3,11 +3,14 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
 use code_kb_core::{
-    WatcherHandle, Workspace, WorkspaceError, blast_radius_op, codebase_outline_op,
+    Connection, WatcherHandle, Workspace, WorkspaceError, blast_radius_op, codebase_outline_op,
     ensure_fts_index_path, file_skeleton_op, format_blast_radius, format_context_slice,
-    format_references, format_search_results, fts_search_symbols_scoped, get_context_slice_op,
-    get_symbol_body_op, list_structural_fact_categories, open_read_only, reconcile_offline_edits,
-    replace_symbol_body, scan_workspace, search_symbols_scoped, start_watcher,
+    format_fact_categories, format_find_symbol_results, format_references,
+    format_replace_symbol_result, format_search_results, format_structural_facts,
+    format_symbol_body, fts_search_symbols_scoped, get_context_slice_op, get_symbol_body_op,
+    list_structural_fact_categories, open_read_only, open_telemetry_db, reconcile_offline_edits,
+    record_tool_call, record_tool_call_conn, replace_symbol_body, scan_workspace,
+    search_symbols_scoped, start_watcher,
 };
 
 use super::protocol::{CallToolResult, JsonRpcRequest, JsonRpcResponse, Tool};
@@ -17,6 +20,7 @@ pub struct McpServer {
     pub db_path: PathBuf,
     pub explicit_db: Option<PathBuf>,
     pub _watcher: Option<WatcherHandle>,
+    pub telemetry_conn: Option<Connection>,
 }
 
 impl McpServer {
@@ -47,11 +51,14 @@ impl McpServer {
             None
         };
 
+        let telemetry_conn = open_telemetry_db(&workspace.root).ok();
+
         Ok(Self {
             workspace,
             db_path,
             explicit_db: explicit_db.map(|p| p.to_path_buf()),
             _watcher: watcher,
+            telemetry_conn,
         })
     }
 
@@ -96,6 +103,7 @@ impl McpServer {
             }
         }
 
+        self.telemetry_conn = open_telemetry_db(&ws.root).ok();
         self.workspace = ws;
         self.db_path = db_path;
         Ok(())
@@ -319,7 +327,7 @@ impl McpServer {
                         },
                         "expected_body_hash": {
                             "type": "string",
-                            "description": "Optional optimistic lock hash of current body."
+                            "description": "Optional optimistic lock hash of current body (obtained from get_symbol_body or get_context_slice)."
                         }
                     },
                     "required": ["symbol_name", "file_path", "new_body"]
@@ -353,18 +361,21 @@ impl McpServer {
             (outcome, None, bytes, est_tokens)
         };
 
-        code_kb_core::record_tool_call(
-            &self.workspace.root,
-            &code_kb_core::ToolInvocation {
-                tool: name,
-                duration_ms,
-                outcome,
-                error_message: error_msg,
-                result_count: res.content.len(),
-                bytes_returned: bytes,
-                est_tokens,
-            },
-        );
+        let invocation = code_kb_core::ToolInvocation {
+            tool: name,
+            duration_ms,
+            outcome,
+            error_message: error_msg,
+            result_count: res.content.len(),
+            bytes_returned: bytes,
+            est_tokens,
+        };
+
+        if let Some(ref conn) = self.telemetry_conn {
+            record_tool_call_conn(conn, &invocation);
+        } else {
+            record_tool_call(&self.workspace.root, &invocation);
+        }
 
         res
     }
@@ -533,11 +544,14 @@ impl McpServer {
                     Some(q) => q,
                     None => return CallToolResult::error("Missing required parameter: query"),
                 };
-                let path_filter = arguments
+                let raw_path_filter = arguments
                     .get("path")
                     .or_else(|| arguments.get("file_path"))
                     .or_else(|| arguments.get("file"))
                     .and_then(|v| v.as_str());
+                let rel_path = raw_path_filter.map(|p| self.workspace.relativize_filter(p));
+                let path_filter = rel_path.as_deref();
+
                 let kind = arguments.get("kind").and_then(|v| v.as_str());
                 let include_tests = arguments
                     .get("is_test")
@@ -548,33 +562,46 @@ impl McpServer {
                     .and_then(|v| v.as_u64())
                     .unwrap_or(20) as usize;
 
-                let matches = match search_symbols_scoped(
-                    &conn,
-                    query,
-                    kind,
-                    path_filter,
-                    include_tests,
-                    limit,
-                ) {
-                    Ok(m) => m,
-                    Err(e) => return CallToolResult::error(e.to_string()),
+                let matches = if (query.contains("::") || query.contains('.'))
+                    && let Ok(Some(sym)) =
+                        code_kb_core::get_symbol_by_name(&conn, query, path_filter)
+                {
+                    vec![sym]
+                } else {
+                    match search_symbols_scoped(
+                        &conn,
+                        query,
+                        kind,
+                        path_filter,
+                        include_tests,
+                        limit,
+                    ) {
+                        Ok(m) => m,
+                        Err(e) => return CallToolResult::error(e.to_string()),
+                    }
                 };
 
-                let mut out = format!("Found {} symbols matching \"{query}\":\n\n", matches.len());
-                for s in matches {
-                    let sig = s.signature.as_deref().unwrap_or(&s.name);
-                    out.push_str(&format!(
-                        "- {} `{}` [{}:{}-{}]\n",
-                        s.kind, s.name, s.path, s.start_line, s.end_line
-                    ));
-                    out.push_str(&format!("  Signature: {sig}\n"));
-                    if let Some(doc) = s.doc_comment {
-                        let first_line = doc.lines().next().unwrap_or("").trim();
-                        out.push_str(&format!("  Doc: {first_line}\n"));
-                    }
-                }
+                let (exact_matches, fts_matches) = if matches.is_empty() {
+                    let _ = ensure_fts_index_path(&self.db_path);
+                    let fts = fts_search_symbols_scoped(
+                        &conn,
+                        query,
+                        kind,
+                        path_filter,
+                        include_tests,
+                        limit,
+                    )
+                    .unwrap_or_default();
+                    (Vec::new(), fts)
+                } else {
+                    (matches, Vec::new())
+                };
 
-                CallToolResult::text(out)
+                CallToolResult::text(format_find_symbol_results(
+                    query,
+                    &exact_matches,
+                    &fts_matches,
+                ))
             }
             "search_symbols" => {
                 let query = match arguments
@@ -586,11 +613,14 @@ impl McpServer {
                     Some(q) => q,
                     None => return CallToolResult::error("Missing required parameter: query"),
                 };
-                let path_filter = arguments
+                let raw_path_filter = arguments
                     .get("path")
                     .or_else(|| arguments.get("file_path"))
                     .or_else(|| arguments.get("file"))
                     .and_then(|v| v.as_str());
+                let rel_path = raw_path_filter.map(|p| self.workspace.relativize_filter(p));
+                let path_filter = rel_path.as_deref();
+
                 let kind = arguments.get("kind").and_then(|v| v.as_str());
                 let include_tests = arguments
                     .get("is_test")
@@ -642,14 +672,7 @@ impl McpServer {
                     symbol_name,
                     file_path,
                 ) {
-                    Ok((symbol, body)) => {
-                        let mut out = format!(
-                            "// {}:{}-{} ({})\n",
-                            symbol.path, symbol.start_line, symbol.end_line, symbol.name
-                        );
-                        out.push_str(&body);
-                        CallToolResult::text(out)
-                    }
+                    Ok((symbol, body)) => CallToolResult::text(format_symbol_body(&symbol, &body)),
                     Err(e) => CallToolResult::error(e.to_string()),
                 }
             }
@@ -718,7 +741,7 @@ impl McpServer {
                     Err(e) => return CallToolResult::error(e.to_string()),
                 };
 
-                CallToolResult::text(format_references(symbol_name, &refs, direction))
+                CallToolResult::text(format_references(symbol_name, &refs, direction, limit))
             }
             "find_structural_facts" => {
                 let category = arguments
@@ -736,23 +759,12 @@ impl McpServer {
                         Err(e) => return CallToolResult::error(e.to_string()),
                     };
 
-                    if categories.is_empty() {
-                        return CallToolResult::text(
-                            "No structural facts or literals indexed in this repository."
-                                .to_string(),
+                    let mut out = format_fact_categories(&categories);
+                    if !categories.is_empty() {
+                        out.push_str(
+                            "\nCall find_structural_facts(category=\"<name>\") to query matches.",
                         );
                     }
-
-                    let mut out = format!(
-                        "Available structural fact & literal categories ({} found):\n\n",
-                        categories.len()
-                    );
-                    for (cat, count) in categories {
-                        out.push_str(&format!("- `{cat}` ({count} occurrences)\n"));
-                    }
-                    out.push_str(
-                        "\nCall find_structural_facts(category=\"<name>\") to query matches.",
-                    );
                     return CallToolResult::text(out);
                 }
 
@@ -769,32 +781,7 @@ impl McpServer {
                 let literals =
                     code_kb_core::find_literals(&conn, category, limit).unwrap_or_default();
 
-                let mut out = format!(
-                    "Structural facts for '{category}' ({} found):\n",
-                    facts.len()
-                );
-                for f in &facts {
-                    let parent = f.containing_symbol_name.as_deref().unwrap_or("top-level");
-                    out.push_str(&format!(
-                        "- {} [{}:{}] (pattern: {}, in: {})\n",
-                        f.capture_name, f.path, f.start_line, f.pattern_id, parent
-                    ));
-                }
-
-                if !literals.is_empty() {
-                    out.push_str(&format!(
-                        "\nMatching literals ({} found):\n",
-                        literals.len()
-                    ));
-                    for l in &literals {
-                        out.push_str(&format!(
-                            "- \"{}\" [{}:{}] (kind: {})\n",
-                            l.literal_text, l.path, l.start_line, l.kind
-                        ));
-                    }
-                }
-
-                CallToolResult::text(out)
+                CallToolResult::text(format_structural_facts(&facts, &literals, category))
             }
             "blast_radius" | "impact" => {
                 let symbol = arguments
@@ -869,14 +856,7 @@ impl McpServer {
                     new_body,
                     expected_hash,
                 ) {
-                    Ok(res) => CallToolResult::text(format!(
-                        "Successfully replaced body of `{}` in `{}`.\nOld Hash: {}\nNew Hash: {}\nBytes Written: {}",
-                        res.symbol_name,
-                        res.file_path,
-                        res.old_body_hash,
-                        res.new_body_hash,
-                        res.bytes_written
-                    )),
+                    Ok(res) => CallToolResult::text(format_replace_symbol_result(&res)),
                     Err(e) => CallToolResult::error(e.to_string()),
                 }
             }

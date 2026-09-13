@@ -58,6 +58,16 @@ fn is_skippable_kind(kind: &str) -> bool {
     matches!(kind, "variable" | "parameter" | "import")
 }
 
+fn sanitize_skeleton_sig<'a>(sig: &'a str, name: &'a str) -> &'a str {
+    let clean = if let Some(idx) = sig.find('{') {
+        sig[..idx].trim_end()
+    } else {
+        sig.trim_end()
+    };
+    let trimmed = clean.trim_end_matches(';').trim_end();
+    if trimmed.is_empty() { name } else { trimmed }
+}
+
 fn render_symbol_skeleton(
     out: &mut String,
     sym: &Symbol,
@@ -70,10 +80,18 @@ fn render_symbol_skeleton(
 
     let indent = "    ".repeat(indent_level);
 
-    // Doc comment
+    // Doc comment: cap at 3 lines to prevent dumping huge blocks
     if let Some(ref doc) = sym.doc_comment {
-        for line in doc.lines() {
+        let lines: Vec<_> = doc.lines().collect();
+        let cap = 3;
+        for line in lines.iter().take(cap) {
             out.push_str(&format!("{indent}/// {line}\n"));
+        }
+        if lines.len() > cap {
+            out.push_str(&format!(
+                "{indent}/// ... ({} more lines)\n",
+                lines.len() - cap
+            ));
         }
     }
 
@@ -83,7 +101,8 @@ fn render_symbol_skeleton(
     let children = children_map.get(&Some(sym.symbol_id.clone()));
 
     if is_container_kind(&sym.kind) && children.is_some() {
-        let sig = sym.signature.as_deref().unwrap_or(&sym.name);
+        let raw_sig = sym.signature.as_deref().unwrap_or(&sym.name);
+        let sig = sanitize_skeleton_sig(raw_sig, &sym.name);
         out.push_str(&format!("{indent}{sig} {{\n"));
         if let Some(child_list) = children {
             for child in child_list {
@@ -94,7 +113,8 @@ fn render_symbol_skeleton(
     } else {
         // Leaf symbol or function/method
         if let Some(count) = sym.hidden_body_line_count() {
-            let sig = sym.signature.as_deref().unwrap_or(&sym.name);
+            let raw_sig = sym.signature.as_deref().unwrap_or(&sym.name);
+            let sig = sanitize_skeleton_sig(raw_sig, &sym.name);
             let b_start = sym.body_start_line.unwrap_or(sym.start_line);
             let b_end = sym.body_end_line.unwrap_or(sym.end_line);
 
@@ -105,7 +125,8 @@ fn render_symbol_skeleton(
             } else {
                 out.push_str(&format!("{indent}{sig}; // {span_str}\n"));
             }
-        } else if let Some(ref sig) = sym.signature {
+        } else if let Some(ref raw_sig) = sym.signature {
+            let sig = sanitize_skeleton_sig(raw_sig, &sym.name);
             out.push_str(&format!("{indent}{sig}; // {span_str}\n"));
         } else {
             out.push_str(&format!(
@@ -173,7 +194,9 @@ pub fn add_path_to_outline(
                         sym_tags.push(format!("+{} more", syms.len() - 5));
                     }
                 }
-                curr.files.insert(comp.to_string(), sym_tags);
+                if !sym_tags.is_empty() {
+                    curr.files.insert(comp.to_string(), sym_tags);
+                }
             }
         } else if i < max_depth {
             curr = curr.subdirs.entry(comp.to_string()).or_default();
@@ -259,15 +282,40 @@ pub fn render_outline_tree(
     }
 }
 
+/// Format symbol body with metadata header, signature, and body content.
+pub fn format_symbol_body(symbol: &Symbol, body: &str) -> String {
+    let body_hash = crate::edit::hash_content(body);
+    let mut out = format!(
+        "// {}:{}-{} ({}) body_hash={body_hash}\n",
+        symbol.path, symbol.start_line, symbol.end_line, symbol.name
+    );
+    if let Some(ref sig) = symbol.signature {
+        out.push_str(sig);
+        if !sig.ends_with('\n') {
+            out.push('\n');
+        }
+    }
+    out.push_str(body);
+    if !body.ends_with('\n') {
+        out.push('\n');
+    }
+    out
+}
+
 /// Format surgical context bundle for a symbol.
 pub fn format_context_slice(slice: &ContextSlice) -> String {
     let sym = &slice.target_symbol;
     let mut out = String::new();
+    let body_hash = crate::edit::hash_content(&slice.target_body);
 
     out.push_str(&format!(
-        "### Target: `{}` ({}:{}-{})\n\n",
+        "### Target: `{}` ({}:{}-{}) body_hash={body_hash}\n\n",
         sym.name, sym.path, sym.start_line, sym.end_line
     ));
+
+    if let Some(ref sig) = sym.signature {
+        out.push_str(&format!("Signature: `{sig}`\n\n"));
+    }
 
     out.push_str(&format!("```{}\n", sym.language));
     out.push_str(&slice.target_body);
@@ -306,8 +354,13 @@ pub fn format_context_slice(slice: &ContextSlice) -> String {
     out
 }
 
-/// Format references list for callers/callees.
-pub fn format_references(target_name: &str, refs: &[ReferenceSite], direction: &str) -> String {
+/// Format references list for callers/callees with optional limit footer.
+pub fn format_references(
+    target_name: &str,
+    refs: &[ReferenceSite],
+    direction: &str,
+    limit: usize,
+) -> String {
     let mut out = String::new();
     let dir_label = if direction == "callers" {
         "Callers of"
@@ -340,7 +393,125 @@ pub fn format_references(target_name: &str, refs: &[ReferenceSite], direction: &
         ));
     }
 
+    if refs.len() >= limit {
+        out.push_str(&format!(
+            "\n[Showing {} references (limit reached). Increase limit to see more.]\n",
+            refs.len()
+        ));
+    }
+
     out
+}
+
+/// Formats exact or FTS fallback symbol results with transparent header labeling.
+pub fn format_find_symbol_results(
+    query: &str,
+    exact_matches: &[Symbol],
+    fts_matches: &[SymbolSearchResult],
+) -> String {
+    if !exact_matches.is_empty() {
+        let mut out = format!(
+            "Found {} symbols matching \"{query}\":\n\n",
+            exact_matches.len()
+        );
+        for s in exact_matches {
+            let sig = s.signature.as_deref().unwrap_or(&s.name);
+            out.push_str(&format!(
+                "- {} `{}` [{}:{}-{}]\n",
+                s.kind, s.name, s.path, s.start_line, s.end_line
+            ));
+            out.push_str(&format!("  Signature: {sig}\n"));
+            if let Some(doc) = &s.doc_comment {
+                let first = doc.lines().next().unwrap_or("").trim();
+                if !first.is_empty() {
+                    out.push_str(&format!("  Doc: {first}\n"));
+                }
+            }
+        }
+        out
+    } else if !fts_matches.is_empty() {
+        let mut out = format!(
+            "No exact name match; {} full-text matches for \"{query}\":\n\n",
+            fts_matches.len()
+        );
+        for r in fts_matches {
+            let s = &r.symbol;
+            let sig = s.signature.as_deref().unwrap_or(&s.name);
+            out.push_str(&format!(
+                "- {} `{}` [{}:{}-{}] (score: {:.2})\n",
+                s.kind, s.name, s.path, s.start_line, s.end_line, r.score
+            ));
+            out.push_str(&format!("  Signature: {sig}\n"));
+            if let Some(snippet) = &r.snippet {
+                let clean = snippet.replace('\r', "").trim().to_string();
+                let first = clean.lines().next().unwrap_or(&clean);
+                out.push_str(&format!("  Match: {first}\n"));
+            } else if let Some(doc) = &s.doc_comment {
+                let first = doc.lines().next().unwrap_or("").trim();
+                if !first.is_empty() {
+                    out.push_str(&format!("  Doc: {first}\n"));
+                }
+            }
+        }
+        out
+    } else {
+        format!("No symbols found matching \"{query}\".\n")
+    }
+}
+
+/// Format available structural fact & literal categories.
+pub fn format_fact_categories(categories: &[(String, usize)]) -> String {
+    if categories.is_empty() {
+        return "No structural facts or literals indexed in this repository.".to_string();
+    }
+    let mut out = format!(
+        "Available structural fact & literal categories ({} found):\n\n",
+        categories.len()
+    );
+    for (name, count) in categories {
+        out.push_str(&format!("- `{name}` ({count} occurrences)\n"));
+    }
+    out
+}
+
+/// Format structural facts and matching literals into token-dense markdown.
+pub fn format_structural_facts(
+    facts: &[crate::models::StructuralFact],
+    literals: &[crate::models::LiteralFact],
+    category: &str,
+) -> String {
+    let mut out = format!(
+        "Structural facts for '{category}' ({} found):\n",
+        facts.len()
+    );
+    for f in facts {
+        let parent = f.containing_symbol_name.as_deref().unwrap_or("top-level");
+        out.push_str(&format!(
+            "- {} [{}:{}] (pattern: {}, in: {})\n",
+            f.capture_name, f.path, f.start_line, f.pattern_id, parent
+        ));
+    }
+    if !literals.is_empty() {
+        out.push_str(&format!(
+            "\nMatching literals ({} found):\n",
+            literals.len()
+        ));
+        for l in literals {
+            out.push_str(&format!(
+                "- \"{}\" [{}:{}] (kind: {})\n",
+                l.literal_text, l.path, l.start_line, l.kind
+            ));
+        }
+    }
+    out
+}
+
+/// Format result of atomic symbol body replacement.
+pub fn format_replace_symbol_result(res: &crate::edit::EditResult) -> String {
+    format!(
+        "Successfully replaced body of `{}` in `{}`.\nOld Hash: {}\nNew Hash: {}\nBytes Written: {}",
+        res.symbol_name, res.file_path, res.old_body_hash, res.new_body_hash, res.bytes_written
+    )
 }
 
 /// Formats FTS5 conceptual search results into token-dense markdown.

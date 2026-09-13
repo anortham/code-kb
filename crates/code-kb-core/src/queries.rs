@@ -17,6 +17,8 @@ pub enum QueryError {
         "Ambiguous symbol '{0}': found {1} matching candidates. Specify file_path or qualified name to disambiguate:\n{2}"
     )]
     AmbiguousSymbol(String, usize, String),
+    #[error("Invalid direction '{0}': must be 'callers' or 'callees'")]
+    InvalidDirection(String),
 }
 
 fn map_symbol(row: &Row) -> rusqlite::Result<Symbol> {
@@ -147,6 +149,8 @@ pub fn load_scoped_outline_symbols(
             FROM symbols
             WHERE (:path IS NULL OR path = :path OR path LIKE :path_prefix ESCAPE '\\')
               AND (length(path) - length(replace(path, '/', '')) <= :max_slashes)
+              AND kind IN ('function', 'method', 'struct', 'enum', 'trait', 'class', 'interface', 'type')
+              AND parent_symbol_id IS NULL
         )
         SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,
                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,
@@ -193,28 +197,6 @@ pub fn get_file(conn: &Connection, path: &str) -> Result<Option<FileFact>, Query
 
     let mut rows = stmt.query(params![normalized, backslash])?;
     if let Some(row) = rows.next()? {
-        return Ok(Some(FileFact {
-            file_id: row.get(0)?,
-            path: row.get(1)?,
-            language: row.get(2)?,
-            content_hash: row.get(3)?,
-            content_bytes: row.get(4)?,
-            line_count: row.get(5)?,
-            indexed_at: row.get(6)?,
-        }));
-    }
-
-    // Fallback: boundary match only if exact match is absent
-    let escaped_normalized = escape_like(&normalized);
-    let mut fallback_stmt = conn.prepare(
-        "SELECT file_id, path, language, content_hash, content_bytes, line_count, indexed_at
-         FROM files
-         WHERE path LIKE '%/' || ?1 ESCAPE '\\'
-         LIMIT 1",
-    )?;
-
-    let mut f_rows = fallback_stmt.query(params![escaped_normalized])?;
-    if let Some(row) = f_rows.next()? {
         Ok(Some(FileFact {
             file_id: row.get(0)?,
             path: row.get(1)?,
@@ -253,6 +235,25 @@ pub fn load_file_symbols(conn: &Connection, file_path: &str) -> Result<Vec<Symbo
     Ok(rows)
 }
 
+/// Normalizes common symbol kind aliases to their canonical database representation.
+pub fn normalize_kind(kind: &str) -> String {
+    let lower = kind.trim().to_lowercase();
+    match lower.as_str() {
+        "fn" | "func" | "function" => "function".to_string(),
+        "method" => "method".to_string(),
+        "struct" => "struct".to_string(),
+        "class" => "class".to_string(),
+        "enum" => "enum".to_string(),
+        "trait" => "trait".to_string(),
+        "interface" => "interface".to_string(),
+        "type" | "typedef" => "type".to_string(),
+        "mod" | "module" => "module".to_string(),
+        "const" | "constant" => "constant".to_string(),
+        "var" | "variable" => "variable".to_string(),
+        _ => lower,
+    }
+}
+
 /// Search symbols by name query, kind filter, and test flag.
 pub fn search_symbols(
     conn: &Connection,
@@ -273,6 +274,13 @@ pub fn search_symbols_scoped(
     include_tests: bool,
     limit: usize,
 ) -> Result<Vec<Symbol>, QueryError> {
+    // Try get_symbol_by_name first for qualified queries (e.g. McpServer::new, Class.method)
+    if (query.contains("::") || query.contains('.'))
+        && let Ok(Some(sym)) = get_symbol_by_name(conn, query, path_filter)
+    {
+        return Ok(vec![sym]);
+    }
+
     let pattern = format!("%{}%", escape_like(query));
     let normalized_path = path_filter.map(|p| {
         p.replace('\\', "/")
@@ -280,6 +288,7 @@ pub fn search_symbols_scoped(
             .trim_matches('/')
             .to_string()
     });
+    let norm_kind = kind_filter.map(normalize_kind);
 
     let mut sql = String::from(
         "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,
@@ -295,7 +304,7 @@ pub fn search_symbols_scoped(
         sql.push_str(" AND is_test = 0 AND test_container = 0");
     }
 
-    if kind_filter.is_some() {
+    if norm_kind.is_some() {
         sql.push_str(" AND kind = ?3");
     }
 
@@ -311,28 +320,21 @@ pub fn search_symbols_scoped(
     let mut stmt = conn.prepare(&sql)?;
 
     let path_val = normalized_path.as_deref().unwrap_or("");
-    let rows = match (kind_filter, normalized_path.is_some()) {
-        (Some(k), true) => stmt
-            .query_map(params![query, pattern, k, path_val], map_symbol)?
+    let kind_val = norm_kind.as_deref().unwrap_or("");
+    let rows = match (norm_kind.is_some(), normalized_path.is_some()) {
+        (true, true) => stmt
+            .query_map(params![query, pattern, kind_val, path_val], map_symbol)?
             .collect::<Result<Vec<_>, _>>()?,
-        (Some(k), false) => stmt
-            .query_map(params![query, pattern, k], map_symbol)?
+        (true, false) => stmt
+            .query_map(params![query, pattern, kind_val], map_symbol)?
             .collect::<Result<Vec<_>, _>>()?,
-        (None, true) => stmt
+        (false, true) => stmt
             .query_map(params![query, pattern, "", path_val], map_symbol)?
             .collect::<Result<Vec<_>, _>>()?,
-        (None, false) => stmt
+        (false, false) => stmt
             .query_map(params![query, pattern], map_symbol)?
             .collect::<Result<Vec<_>, _>>()?,
     };
-
-    if rows.is_empty()
-        && let Ok(fts_matches) =
-            fts_search_symbols_scoped(conn, query, kind_filter, path_filter, include_tests, limit)
-        && !fts_matches.is_empty()
-    {
-        return Ok(fts_matches.into_iter().map(|m| m.symbol).collect());
-    }
 
     Ok(rows)
 }
@@ -387,6 +389,7 @@ pub fn fts_search_symbols_scoped(
             .trim_matches('/')
             .to_string()
     });
+    let norm_kind = kind_filter.map(normalize_kind);
 
     let fts_exists: bool = conn
         .query_row(
@@ -410,7 +413,7 @@ pub fn fts_search_symbols_scoped(
         if !include_tests {
             sql.push_str(" AND is_test = 0 AND test_container = 0");
         }
-        if kind_filter.is_some() {
+        if norm_kind.is_some() {
             sql.push_str(" AND kind = ?3");
         }
         if normalized_path.is_some() {
@@ -423,17 +426,18 @@ pub fn fts_search_symbols_scoped(
 
         let mut stmt = conn.prepare(&sql)?;
         let path_val = normalized_path.as_deref().unwrap_or("");
-        let rows = match (kind_filter, normalized_path.is_some()) {
-            (Some(k), true) => stmt
-                .query_map(params![query, pattern, k, path_val], map_symbol)?
+        let kind_val = norm_kind.as_deref().unwrap_or("");
+        let rows = match (norm_kind.is_some(), normalized_path.is_some()) {
+            (true, true) => stmt
+                .query_map(params![query, pattern, kind_val, path_val], map_symbol)?
                 .collect::<Result<Vec<_>, _>>()?,
-            (Some(k), false) => stmt
-                .query_map(params![query, pattern, k], map_symbol)?
+            (true, false) => stmt
+                .query_map(params![query, pattern, kind_val], map_symbol)?
                 .collect::<Result<Vec<_>, _>>()?,
-            (None, true) => stmt
+            (false, true) => stmt
                 .query_map(params![query, pattern, "", path_val], map_symbol)?
                 .collect::<Result<Vec<_>, _>>()?,
-            (None, false) => stmt
+            (false, false) => stmt
                 .query_map(params![query, pattern], map_symbol)?
                 .collect::<Result<Vec<_>, _>>()?,
         };
@@ -468,7 +472,7 @@ pub fn fts_search_symbols_scoped(
             sql.push_str(" AND s.is_test = 0 AND s.test_container = 0");
         }
 
-        if kind_filter.is_some() {
+        if norm_kind.is_some() {
             sql.push_str(" AND s.kind = ?2");
         }
 
@@ -507,17 +511,18 @@ pub fn fts_search_symbols_scoped(
         };
 
         let path_val = normalized_path.as_deref().unwrap_or("");
-        let rows = match (kind_filter, normalized_path.is_some()) {
-            (Some(k), true) => stmt
-                .query_map(params![match_clause, k, path_val], map_fn)?
+        let kind_val = norm_kind.as_deref().unwrap_or("");
+        let rows = match (norm_kind.is_some(), normalized_path.is_some()) {
+            (true, true) => stmt
+                .query_map(params![match_clause, kind_val, path_val], map_fn)?
                 .collect::<Result<Vec<_>, _>>()?,
-            (Some(k), false) => stmt
-                .query_map(params![match_clause, k], map_fn)?
+            (true, false) => stmt
+                .query_map(params![match_clause, kind_val], map_fn)?
                 .collect::<Result<Vec<_>, _>>()?,
-            (None, true) => stmt
+            (false, true) => stmt
                 .query_map(params![match_clause, "", path_val], map_fn)?
                 .collect::<Result<Vec<_>, _>>()?,
-            (None, false) => stmt
+            (false, false) => stmt
                 .query_map(params![match_clause], map_fn)?
                 .collect::<Result<Vec<_>, _>>()?,
         };
@@ -828,7 +833,36 @@ pub fn find_references_ext(
     limit: usize,
     include_external: bool,
 ) -> Result<Vec<ReferenceSite>, QueryError> {
-    find_references_internal(conn, symbol_name, direction, limit, None, include_external)
+    if direction != "callers" && direction != "callees" {
+        return Err(QueryError::InvalidDirection(direction.to_string()));
+    }
+
+    match get_symbol_by_name(conn, symbol_name, None)? {
+        Some(target) => find_references_internal(
+            conn,
+            &target.name,
+            direction,
+            limit,
+            Some(&target.symbol_id),
+            include_external,
+        ),
+        None => {
+            let suggestions =
+                search_symbols_scoped(conn, symbol_name, None, None, false, 3).unwrap_or_default();
+            if suggestions.is_empty() {
+                Err(QueryError::SymbolNotFound(symbol_name.to_string()))
+            } else {
+                let list = suggestions
+                    .into_iter()
+                    .map(|s| format!("  - {} `{}` ({}:{})", s.kind, s.name, s.path, s.start_line))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                Err(QueryError::SymbolNotFound(format!(
+                    "{symbol_name}'. Did you mean one of:\n{list}"
+                )))
+            }
+        }
+    }
 }
 
 pub(crate) fn find_references_for_symbol(
@@ -884,37 +918,51 @@ fn find_references_internal(
             results.push(r?);
         }
 
-        // Also query pending_relationships for callers
+        // Also query pending_relationships for callers if top-level symbol or symbol_id is none
         if results.len() < limit {
-            let remaining = limit - results.len();
-            let mut pending_stmt = conn.prepare(
-                "SELECT s_from.name AS from_name,
-                        p.from_symbol_id,
-                        p.target_terminal_name AS to_name,
-                        p.kind,
-                        p.path,
-                        p.start_line,
-                        p.start_column
-                 FROM pending_relationships p
-                 JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
-                 WHERE p.target_terminal_name = ?1
-                 LIMIT ?2",
-            )?;
+            let is_nested = if let Some(sid) = symbol_id {
+                conn.query_row(
+                    "SELECT 1 FROM symbols WHERE symbol_id = ?1 AND parent_symbol_id IS NOT NULL",
+                    params![sid],
+                    |_| Ok(true),
+                )
+                .unwrap_or(false)
+            } else {
+                false
+            };
 
-            let p_rows = pending_stmt.query_map(params![symbol_name, remaining as i64], |row| {
-                Ok(ReferenceSite {
-                    from_symbol_name: row.get(0)?,
-                    from_symbol_id: row.get(1)?,
-                    to_symbol_name: row.get(2)?,
-                    kind: row.get(3)?,
-                    path: row.get(4)?,
-                    start_line: Some(row.get::<_, i64>(5)? as usize),
-                    start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
-                })
-            })?;
+            if !is_nested {
+                let remaining = limit - results.len();
+                let mut pending_stmt = conn.prepare(
+                    "SELECT s_from.name AS from_name,
+                            p.from_symbol_id,
+                            p.target_terminal_name AS to_name,
+                            p.kind,
+                            p.path,
+                            p.start_line,
+                            p.start_column
+                     FROM pending_relationships p
+                     JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
+                     WHERE p.target_terminal_name = ?1
+                     LIMIT ?2",
+                )?;
 
-            for r in p_rows {
-                results.push(r?);
+                let p_rows =
+                    pending_stmt.query_map(params![symbol_name, remaining as i64], |row| {
+                        Ok(ReferenceSite {
+                            from_symbol_name: row.get(0)?,
+                            from_symbol_id: row.get(1)?,
+                            to_symbol_name: row.get(2)?,
+                            kind: row.get(3)?,
+                            path: row.get(4)?,
+                            start_line: Some(row.get::<_, i64>(5)? as usize),
+                            start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
+                        })
+                    })?;
+
+                for r in p_rows {
+                    results.push(r?);
+                }
             }
         }
     } else {
@@ -1245,7 +1293,8 @@ pub fn compute_blast_radius(
             FROM pending_relationships p
             JOIN symbols s_target ON p.target_terminal_name = s_target.name
             JOIN impact_walk iw ON s_target.symbol_id = iw.symbol_id
-            WHERE iw.depth < ?{max_depth_idx}"
+            WHERE iw.depth < ?{max_depth_idx}
+              AND s_target.kind NOT IN ('import','variable','parameter','field','property','module','namespace')"
         ));
     }
 
@@ -1255,7 +1304,8 @@ pub fn compute_blast_radius(
             "WITH RECURSIVE impact_walk(symbol_id, depth) AS (
                 SELECT symbol_id, 0
                 FROM symbols
-                WHERE {seed_condition}
+                WHERE ({seed_condition})
+                  AND kind NOT IN ('import','variable','parameter','field','property','module','namespace')
 
                 UNION
 
@@ -1265,6 +1315,7 @@ pub fn compute_blast_radius(
             FROM impact_walk iw
             JOIN symbols s ON iw.symbol_id = s.symbol_id
             WHERE iw.depth > 0
+              AND s.kind NOT IN ('import','variable','parameter','field','property','module','namespace')
             GROUP BY s.symbol_id, s.name, s.kind, s.path, s.start_line, s.is_test, s.test_container
             ORDER BY min_depth ASC, s.path ASC, s.name ASC
             LIMIT 200"

@@ -103,7 +103,7 @@ pub fn start_watcher(
             // If more than 50 files changed within the debounce window,
             // cancel micro-updates and run a single bulk scan.
             if relevant_files.len() > 50 {
-                info!(
+                tracing::debug!(
                     "Git storm detected ({} files changed in window). Running bulk scan...",
                     relevant_files.len()
                 );

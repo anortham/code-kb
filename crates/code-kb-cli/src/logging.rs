@@ -30,8 +30,19 @@ pub fn init_logging(workspace_root: &Path, is_serve: bool, verbose: bool) -> Opt
         return None;
     }
 
-    // Rolling daily log appender in .code-kb/logs/
-    let file_appender = tracing_appender::rolling::daily(&log_dir, "code-kb.log");
+    // Rolling daily log appender in .code-kb/logs/ capped at 7 files
+    let file_appender = match tracing_appender::rolling::RollingFileAppender::builder()
+        .rotation(tracing_appender::rolling::Rotation::DAILY)
+        .filename_prefix("code-kb.log")
+        .max_log_files(7)
+        .build(&log_dir)
+    {
+        Ok(appender) => appender,
+        Err(e) => {
+            eprintln!("Warning: Failed to initialize rolling file appender: {e}");
+            return None;
+        }
+    };
     let (non_blocking_file, guard) = tracing_appender::non_blocking(file_appender);
 
     // Build default EnvFilter
@@ -52,27 +63,24 @@ pub fn init_logging(workspace_root: &Path, is_serve: bool, verbose: bool) -> Opt
         .with_file(true)
         .with_line_number(true);
 
-    if is_serve {
-        // In MCP serve mode: ONLY write to file, never to stdout/stderr
-        let subscriber = tracing_subscriber::registry()
-            .with(env_filter)
-            .with(file_layer);
-
-        let _ = subscriber.try_init();
+    // Stderr layer only in CLI mode when verbose or RUST_LOG is set
+    let stderr_layer = if !is_serve && (verbose || std::env::var_os("RUST_LOG").is_some()) {
+        Some(
+            fmt::layer()
+                .with_writer(std::io::stderr)
+                .with_ansi(true)
+                .with_target(false),
+        )
     } else {
-        // In CLI mode: write to file AND write to stderr if verbose or RUST_LOG is set
-        let stderr_layer = fmt::layer()
-            .with_writer(std::io::stderr)
-            .with_ansi(true)
-            .with_target(false);
+        None
+    };
 
-        let subscriber = tracing_subscriber::registry()
-            .with(env_filter)
-            .with(file_layer)
-            .with(stderr_layer);
+    let subscriber = tracing_subscriber::registry()
+        .with(env_filter)
+        .with(file_layer)
+        .with(stderr_layer);
 
-        let _ = subscriber.try_init();
-    }
+    let _ = subscriber.try_init();
 
     Some(guard)
 }

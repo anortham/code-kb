@@ -46,8 +46,9 @@ pub struct TelemetryErrorRecord {
     pub error_message: String,
 }
 
-/// Open or initialize the telemetry database in WAL mode.
-fn open_telemetry_db(workspace_root: &Path) -> Result<Connection, QueryError> {
+/// Open or initialize the telemetry database in WAL mode with synchronous=NORMAL.
+/// Prunes telemetry records older than 30 days upon opening.
+pub fn open_telemetry_db(workspace_root: &Path) -> Result<Connection, QueryError> {
     let db_dir = workspace_root.join(".code-kb");
     if !db_dir.exists() {
         let _ = std::fs::create_dir_all(&db_dir);
@@ -56,6 +57,7 @@ fn open_telemetry_db(workspace_root: &Path) -> Result<Connection, QueryError> {
     let conn = Connection::open(&db_path)?;
     conn.execute_batch(
         "PRAGMA journal_mode = WAL;
+         PRAGMA synchronous = NORMAL;
          PRAGMA busy_timeout = 2000;
          CREATE TABLE IF NOT EXISTS tool_telemetry (
              id TEXT PRIMARY KEY,
@@ -70,40 +72,46 @@ fn open_telemetry_db(workspace_root: &Path) -> Result<Connection, QueryError> {
              code_kb_version TEXT NOT NULL
          );
          CREATE INDEX IF NOT EXISTS idx_tool_telemetry_tool ON tool_telemetry(tool, timestamp DESC);
-         CREATE INDEX IF NOT EXISTS idx_tool_telemetry_ts ON tool_telemetry(timestamp DESC);",
+         CREATE INDEX IF NOT EXISTS idx_tool_telemetry_ts ON tool_telemetry(timestamp DESC);
+         DELETE FROM tool_telemetry WHERE timestamp < datetime('now', '-30 days');",
     )?;
     Ok(conn)
+}
+
+/// Fast record of a tool invocation using an existing persistent SQLite connection.
+pub fn record_tool_call_conn(conn: &Connection, invocation: &ToolInvocation) {
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_default();
+    let ts = format!("{:?}", SystemTime::now());
+    let id_source = format!("{}:{}:{}", invocation.tool, ts, now.as_nanos());
+    let id = blake3::hash(id_source.as_bytes()).to_hex().to_string();
+    let version = env!("CARGO_PKG_VERSION");
+
+    let _ = conn.execute(
+        "INSERT INTO tool_telemetry (
+            id, timestamp, tool, duration_ms, outcome, error_message,
+            result_count, bytes_returned, est_tokens, code_kb_version
+        ) VALUES (?1, datetime('now'), ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        params![
+            id,
+            invocation.tool,
+            invocation.duration_ms as i64,
+            invocation.outcome,
+            invocation.error_message,
+            invocation.result_count as i64,
+            invocation.bytes_returned as i64,
+            invocation.est_tokens as i64,
+            version
+        ],
+    );
 }
 
 /// Record a tool call to telemetry.db.
 /// This function is best-effort and will never panic or return an error to callers.
 pub fn record_tool_call(workspace_root: &Path, invocation: &ToolInvocation) {
     if let Ok(conn) = open_telemetry_db(workspace_root) {
-        let now = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap_or_default();
-        let ts = format!("{:?}", SystemTime::now());
-        let id_source = format!("{}:{}:{}", invocation.tool, ts, now.as_nanos());
-        let id = blake3::hash(id_source.as_bytes()).to_hex().to_string();
-        let version = env!("CARGO_PKG_VERSION");
-
-        let _ = conn.execute(
-            "INSERT INTO tool_telemetry (
-                id, timestamp, tool, duration_ms, outcome, error_message,
-                result_count, bytes_returned, est_tokens, code_kb_version
-            ) VALUES (?1, datetime('now'), ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-            params![
-                id,
-                invocation.tool,
-                invocation.duration_ms as i64,
-                invocation.outcome,
-                invocation.error_message,
-                invocation.result_count as i64,
-                invocation.bytes_returned as i64,
-                invocation.est_tokens as i64,
-                version
-            ],
-        );
+        record_tool_call_conn(&conn, invocation);
     }
 }
 

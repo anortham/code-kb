@@ -1,4 +1,5 @@
-use rusqlite::{Connection, OpenFlags};
+pub use rusqlite::Connection;
+use rusqlite::OpenFlags;
 use std::path::Path;
 use thiserror::Error;
 

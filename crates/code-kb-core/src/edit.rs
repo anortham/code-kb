@@ -112,11 +112,10 @@ pub fn replace_symbol_body(
         })?;
 
     let current_sha256 = hash_content(existing_body);
-    let current_blake3 = blake3::hash(existing_body.as_bytes()).to_hex().to_string();
 
     // Verify optimistic lock if caller specified expected_body_hash
     if let Some(expected) = expected_body_hash {
-        let mut matches = expected == current_sha256 || expected == current_blake3;
+        let mut matches = expected == current_sha256;
 
         // If expected matches the indexed body_hash from julie-extract, verify that the
         // file on disk has NOT been modified since the index was created.

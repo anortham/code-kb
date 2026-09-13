@@ -3,10 +3,11 @@ use std::path::{Path, PathBuf};
 
 use code_kb_core::{
     Workspace, codebase_outline_op, ensure_fresh_file, ensure_fts_index_path, file_skeleton_op,
-    format_context_slice, format_references, format_search_results, fts_search_symbols_scoped,
-    get_context_slice_op, get_symbol_body_op, list_structural_fact_categories, load_file_symbols,
-    open_read_only, prune_orphaned_stores, queries, replace_symbol_body, scan_workspace,
-    search_symbols_scoped,
+    format_context_slice, format_fact_categories, format_find_symbol_results, format_references,
+    format_replace_symbol_result, format_search_results, format_structural_facts,
+    format_symbol_body, fts_search_symbols_scoped, get_context_slice_op, get_symbol_body_op,
+    list_structural_fact_categories, load_file_symbols, open_read_only, prune_orphaned_stores,
+    queries, replace_symbol_body, scan_workspace, search_symbols_scoped,
 };
 
 mod logging;
@@ -155,7 +156,7 @@ pub struct RefsArgs {
     /// Target symbol name.
     pub symbol: String,
     /// Direction: "callers" or "callees" (default: "callers").
-    #[arg(long, default_value = "callers")]
+    #[arg(long, default_value = "callers", value_parser = ["callers", "callees"])]
     pub direction: String,
     /// Maximum number of results.
     #[arg(long, default_value_t = 20)]
@@ -400,12 +401,13 @@ fn main() -> anyhow::Result<()> {
 
     match cli.command {
         Command::Outline(args) => {
+            let rel_path = args.path.as_deref().map(|p| workspace.relativize_filter(p));
+            let path_filter = rel_path.as_deref();
             if cli.json {
-                let files = queries::load_scoped_files(&conn, args.path.as_deref())?;
+                let files = queries::load_scoped_files(&conn, path_filter)?;
                 println!("{}", serde_json::to_string_pretty(&files)?);
             } else {
-                let text =
-                    codebase_outline_op(&workspace, &conn, args.depth, args.path.as_deref())?;
+                let text = codebase_outline_op(&workspace, &conn, args.depth, path_filter)?;
                 println!("{text}");
             }
         }
@@ -421,44 +423,62 @@ fn main() -> anyhow::Result<()> {
             }
         }
         Command::Symbol(args) => {
-            let matches = search_symbols_scoped(
-                &conn,
-                &args.query,
-                args.kind.as_deref(),
-                args.path.as_deref(),
-                args.include_tests,
-                args.limit,
-            )?;
+            let rel_path = args.path.as_deref().map(|p| workspace.relativize_filter(p));
+            let path_filter = rel_path.as_deref();
+
+            let matches = if (args.query.contains("::") || args.query.contains('.'))
+                && let Ok(Some(sym)) = queries::get_symbol_by_name(&conn, &args.query, path_filter)
+            {
+                vec![sym]
+            } else {
+                search_symbols_scoped(
+                    &conn,
+                    &args.query,
+                    args.kind.as_deref(),
+                    path_filter,
+                    args.include_tests,
+                    args.limit,
+                )?
+            };
+
+            let (exact_matches, fts_matches) = if matches.is_empty() {
+                let _ = ensure_fts_index_path(&db_path);
+                let fts = fts_search_symbols_scoped(
+                    &conn,
+                    &args.query,
+                    args.kind.as_deref(),
+                    path_filter,
+                    args.include_tests,
+                    args.limit,
+                )
+                .unwrap_or_default();
+                (Vec::new(), fts)
+            } else {
+                (matches, Vec::new())
+            };
 
             if cli.json {
-                println!("{}", serde_json::to_string_pretty(&matches)?);
-            } else {
-                println!(
-                    "Found {} symbols matching \"{}\":\n",
-                    matches.len(),
-                    args.query
-                );
-                for s in matches {
-                    let sig = s.signature.as_deref().unwrap_or(&s.name);
-                    println!(
-                        "- {} `{}` [{}:{}-{}]",
-                        s.kind, s.name, s.path, s.start_line, s.end_line
-                    );
-                    println!("  Signature: {sig}");
-                    if let Some(doc) = s.doc_comment {
-                        let first = doc.lines().next().unwrap_or("").trim();
-                        println!("  Doc: {first}");
-                    }
+                if !exact_matches.is_empty() {
+                    println!("{}", serde_json::to_string_pretty(&exact_matches)?);
+                } else {
+                    println!("{}", serde_json::to_string_pretty(&fts_matches)?);
                 }
+            } else {
+                print!(
+                    "{}",
+                    format_find_symbol_results(&args.query, &exact_matches, &fts_matches)
+                );
             }
         }
         Command::Search(args) => {
+            let rel_path = args.path.as_deref().map(|p| workspace.relativize_filter(p));
+            let path_filter = rel_path.as_deref();
             let _ = ensure_fts_index_path(&db_path);
             let matches = fts_search_symbols_scoped(
                 &conn,
                 &args.query,
                 args.kind.as_deref(),
-                args.path.as_deref(),
+                path_filter,
                 args.include_tests,
                 args.limit,
             )?;
@@ -479,12 +499,13 @@ fn main() -> anyhow::Result<()> {
             )?;
 
             if cli.json {
-                println!("{}", serde_json::json!({ "symbol": symbol, "body": body }));
-            } else {
+                let body_hash = code_kb_core::edit::hash_content(&body);
                 println!(
-                    "// {}:{}-{} ({})\n{body}",
-                    symbol.path, symbol.start_line, symbol.end_line, symbol.name
+                    "{}",
+                    serde_json::json!({ "symbol": symbol, "body": body, "body_hash": body_hash })
                 );
+            } else {
+                print!("{}", format_symbol_body(&symbol, &body));
             }
         }
         Command::Slice(args) => {
@@ -515,7 +536,7 @@ fn main() -> anyhow::Result<()> {
             } else {
                 println!(
                     "{}",
-                    format_references(&args.symbol, &refs, &args.direction)
+                    format_references(&args.symbol, &refs, &args.direction, args.limit)
                 );
             }
         }
@@ -540,17 +561,11 @@ fn main() -> anyhow::Result<()> {
                 let categories = list_structural_fact_categories(&conn)?;
                 if cli.json {
                     println!("{}", serde_json::to_string_pretty(&categories)?);
-                } else if categories.is_empty() {
-                    println!("No structural facts or literals indexed in this repository.");
                 } else {
-                    println!(
-                        "Available structural fact & literal categories ({} found):\n",
-                        categories.len()
-                    );
-                    for (name, count) in categories {
-                        println!("- `{name}` ({count} occurrences)");
+                    println!("{}", format_fact_categories(&categories));
+                    if !categories.is_empty() {
+                        println!("\nRun `code-kb facts <category>` to view matching facts.");
                     }
-                    println!("\nRun `code-kb facts <category>` to view matching facts.");
                 }
             } else {
                 let facts = code_kb_core::find_structural_facts(&conn, cat, args.limit)?;
@@ -564,23 +579,7 @@ fn main() -> anyhow::Result<()> {
                         }))?
                     );
                 } else {
-                    println!("Structural facts for '{}' ({} found):\n", cat, facts.len());
-                    for f in &facts {
-                        let parent = f.containing_symbol_name.as_deref().unwrap_or("top-level");
-                        println!(
-                            "- {} [{}:{}] (pattern: {}, in: {})",
-                            f.capture_name, f.path, f.start_line, f.pattern_id, parent
-                        );
-                    }
-                    if !literals.is_empty() {
-                        println!("\nMatching literals ({} found):\n", literals.len());
-                        for l in &literals {
-                            println!(
-                                "- \"{}\" [{}:{}] (kind: {})",
-                                l.literal_text, l.path, l.start_line, l.kind
-                            );
-                        }
-                    }
+                    print!("{}", format_structural_facts(&facts, &literals, cat));
                 }
             }
         }
@@ -595,14 +594,7 @@ fn main() -> anyhow::Result<()> {
                 args.expected_hash.as_deref(),
             )?;
 
-            println!(
-                "Successfully replaced body of `{}` in `{}`.\nOld Hash: {}\nNew Hash: {}\nBytes Written: {}",
-                res.symbol_name,
-                res.file_path,
-                res.old_body_hash,
-                res.new_body_hash,
-                res.bytes_written
-            );
+            println!("{}", format_replace_symbol_result(&res));
         }
         Command::Serve(_)
         | Command::Scan(_)
