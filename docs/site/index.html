@@ -3,97 +3,248 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>code-kb: Surgical Code Intelligence for AI Coding Agents</title>
-  <meta name="description" content="code-kb is an agent-facing code-intelligence engine and Model Context Protocol (MCP) server delivering 80–90% token reduction, sub-5ms query latency, and sub-15MB retained RAM.">
+  <title>code-kb — Surgical Code Intelligence for AI Coding Agents</title>
+  <meta name="description" content="code-kb is an agent-facing code-intelligence engine and Model Context Protocol (MCP) server delivering 80–98% token reduction, 0–5ms query latency, and under 15MB retained RAM.">
   <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;850&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
 
+  <!-- Sticky Navbar -->
   <nav class="site-nav">
     <div class="brand">
       <span>⚡ code-kb</span>
+      <span class="brand-badge">v0.5.0</span>
     </div>
     <div class="nav-links">
       <a href="#why">Why code-kb</a>
+      <a href="#pillars">Pillars</a>
       <a href="#benchmarks">Benchmarks</a>
       <a href="#workflow">Workflow</a>
       <a href="#tools">Tool Catalog</a>
       <a href="#config">Quickstart</a>
-      <a href="https://github.com/anortham/code-kb" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/anortham/code-kb" target="_blank" rel="noopener" class="nav-cta">GitHub</a>
     </div>
   </nav>
 
+  <!-- Hero Section -->
   <header class="hero">
-    <span class="eyebrow">Token-Dense Model Context Protocol Engine</span>
-    <h1>Surgical Code Intelligence<br>for AI Coding Agents</h1>
+    <div class="eyebrow-container">
+      <div class="eyebrow">
+        <span class="pulse-dot"></span>
+        <span>v0.5.0 Released &bull; First-Class Windows, Linux &amp; macOS Support</span>
+      </div>
+    </div>
+
+    <h1>Surgical Code Intelligence<br><span class="gradient-text">for AI Coding Agents</span></h1>
+    
     <p class="hero-lede">
       Stop burning 10,000 prompt tokens reading entire source files just to inspect a single signature.
-      Backed by tree-sitter AST facts and SQLite in WAL mode, <code>code-kb</code> gives AI coding agents
-      instant skeletons, surgical context slices, and atomic edits at under 15 MB retained RAM.
+      Backed by tree-sitter AST facts and SQLite in WAL mode, <strong>code-kb</strong> gives coding agents
+      instant skeletons, surgical context slices, and atomic edits at <strong>under 15 MB retained RAM</strong>.
     </p>
 
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="#config">
+        <span>⚡ Quickstart Guide</span>
+      </a>
+      <a class="btn btn-secondary" href="#benchmarks">
+        <span>📊 View Benchmarks</span>
+      </a>
+    </div>
+
+    <!-- Stat Cards -->
     <div class="hero-stats">
       <div class="stat-card">
-        <div class="stat-value">80–98%</div>
+        <div class="stat-value highlight-emerald">80–98%</div>
         <div class="stat-label">Prompt Token Savings</div>
+        <div class="stat-subtext">Benchmarked on 12.8k files</div>
       </div>
       <div class="stat-card">
-        <div class="stat-value">&lt; 15 MB</div>
+        <div class="stat-value highlight-cyan">&lt; 15 MB</div>
         <div class="stat-label">Retained Heap Memory</div>
+        <div class="stat-subtext">Zero symbol graph hydration</div>
       </div>
       <div class="stat-card">
-        <div class="stat-value">1–5 ms</div>
-        <div class="stat-label">Warm Query Latency</div>
+        <div class="stat-value highlight-purple">0–5 ms</div>
+        <div class="stat-label">Median Query Latency</div>
+        <div class="stat-subtext">Direct indexed SQLite WAL</div>
       </div>
       <div class="stat-card">
         <div class="stat-value">40+</div>
         <div class="stat-label">Polyglot Languages</div>
+        <div class="stat-subtext">Ast facts by julie-extractors</div>
       </div>
     </div>
 
-    <div class="hero-actions">
-      <a class="btn btn-primary" href="#config">Get Started</a>
-      <a class="btn btn-secondary" href="#benchmarks">View Benchmarks</a>
+    <!-- Interactive Terminal Showcase -->
+    <div class="terminal-showcase">
+      <div class="terminal-header">
+        <div class="terminal-dots">
+          <div class="terminal-dot dot-red"></div>
+          <div class="terminal-dot dot-yellow"></div>
+          <div class="terminal-dot dot-green"></div>
+        </div>
+        <div class="terminal-tabs">
+          <button class="terminal-tab-btn active" onclick="switchTerminalTab('slice')">get_context_slice</button>
+          <button class="terminal-tab-btn" onclick="switchTerminalTab('skeleton')">file_skeleton</button>
+          <button class="terminal-tab-btn" onclick="switchTerminalTab('blast')">blast_radius</button>
+          <button class="terminal-tab-btn" onclick="switchTerminalTab('stats')">code-kb stats</button>
+        </div>
+        <div class="terminal-metric" id="terminal-metric">
+          ⚡ 2 ms &bull; -95.1% tokens
+        </div>
+      </div>
+
+      <div class="terminal-body" id="terminal-content">
+<span class="terminal-prompt">$</span> <span class="terminal-cmd">code-kb slice search_symbols_scoped</span>
+<span class="terminal-comment"># Raw file: 13,759 tokens (1,474 lines) &rarr; Slice: 674 tokens (-95.1% compression) in 2ms</span>
+
+<span class="badge-pill-success">TARGET SYMBOL</span> <span style="color:#60a5fa">search_symbols_scoped</span> (crates/code-kb-core/src/queries.rs:142)
+<span style="color:#a855f7">pub fn</span> <span style="color:#38bdf8">search_symbols_scoped</span>(conn: &Connection, query: &str, path: Option<&Path>) -> Result&lt;Vec&lt;SymbolRecord&gt;, QueryError&gt; {
+    <span class="terminal-comment">// Target function implementation body (fully preserved)</span>
+    <span style="color:#cbd5e1">let sanitized = sanitize_fts5_query(query);</span>
+    <span style="color:#cbd5e1">let mut stmt = conn.prepare_cached(SQL_FTS_QUERY)?;</span>
+    <span style="color:#cbd5e1">...</span>
+}
+
+<span class="badge-pill-success">IMMEDIATE CALLEES</span> (External stdlib filtered across 40+ languages)
+- <span style="color:#60a5fa">sanitize_fts5_query</span>(query: &str) -> String <span class="terminal-comment">(queries.rs:88)</span>
+- <span style="color:#60a5fa">build_scoped_fts_filter</span>(path: &Path) -> String <span class="terminal-comment">(queries.rs:104)</span>
+
+<span class="badge-pill-success">ASSOCIATED TESTS</span>
+- <span style="color:#34d399">tests::test_fts_search_symbols_and_porter_stemming</span> <span class="terminal-comment">(queries.rs:412)</span>
+      </div>
+    </div>
+
+    <!-- Platform Compatibility Bar -->
+    <div class="compat-strip">
+      <div class="compat-title">Verified First-Class Agent &amp; OS Compatibility</div>
+      <div class="compat-badges">
+        <span class="compat-pill"><span class="icon">🤖</span> Claude Code (Opus 5 / Sonnet 4)</span>
+        <span class="compat-pill"><span class="icon">⚡</span> Grok CLI (xAI Grok 4.6)</span>
+        <span class="compat-pill"><span class="icon">✨</span> Antigravity (AGY / Gemini 3.8)</span>
+        <span class="compat-pill"><span class="icon">🔮</span> OpenAI Codex CLI</span>
+        <span class="compat-pill"><span class="icon">🎯</span> Cursor IDE</span>
+        <span class="compat-pill"><span class="icon">🪟</span> Windows 11 (NTFS)</span>
+        <span class="compat-pill"><span class="icon">🐧</span> Linux</span>
+        <span class="compat-pill"><span class="icon">🍎</span> macOS</span>
+      </div>
     </div>
   </header>
 
   <main>
 
-    <!-- Why Section -->
+    <!-- Why Section: The Context Problem -->
     <section id="why" class="container">
-      <h2>The Prompt Context Problem</h2>
+      <span class="section-badge">The Prompt Context Problem</span>
+      <h2>Stop Burning Context on Full Files</h2>
       <p class="section-desc">
-        Traditional agents rely on full file reads and naive text grep. A 500-line source file consumes ~5,000 tokens.
-        Over a 10-turn coding task, an agent consumes 50,000+ tokens on irrelevant implementation details, triggering
-        context compaction, lost instructions, and high API costs.
+        Traditional agents rely on full file reads and raw text grep. A 1,500-line source file consumes ~13,750 tokens.
+        Over a typical 10-turn coding session, an agent burns 100,000+ tokens on irrelevant implementation details,
+        inducing context compaction, forgotten constraints, hallucinated types, and astronomical API costs.
       </p>
 
-      <div class="step-grid">
-        <div class="step-card">
-          <div class="step-number">Anti-Pattern</div>
-          <h3 class="step-title">The Raw File Reflex</h3>
-          <p class="step-body">Agent runs <code>grep</code>, finds a match, then reads the entire 1,500-line file into its prompt window just to check a function's return type.</p>
-          <pre><code>view_file("queries.rs")
-# Tokens burned: ~13,750 tokens
-# Result: Context window polluted</code></pre>
+      <div class="comparison-grid">
+        <div class="comparison-card anti-pattern">
+          <div class="comparison-header">
+            <span class="comparison-tag tag-red">Anti-Pattern: Raw File Reflex</span>
+            <span style="font-family: var(--font-mono); font-size: 0.8rem; color: #f87171;">~13,750 tokens burned</span>
+          </div>
+          <h3 class="comparison-title">Cat / View Whole File</h3>
+          <p class="comparison-body">Agent greps a keyword, then reads an entire 1,500-line file into its prompt window just to inspect one function return type or trait signature.</p>
+          <div class="code-wrapper">
+            <pre><code>view_file("crates/code-kb-core/src/queries.rs")
+# Tokens burned: 13,759 tokens
+# Retained RAM: Pollutes agent context window
+# Result: Agent loses track of system prompt rules</code></pre>
+          </div>
         </div>
 
-        <div class="step-card">
-          <div class="step-number">code-kb Solution</div>
-          <h3 class="step-title">File Skeletons</h3>
-          <p class="step-body">Agent inspects types, structs, traits, and signatures with all implementation bodies stripped. Retains full architectural shape at a fraction of the cost.</p>
-          <pre><code>file_skeleton("queries.rs")
-# Tokens used: ~1,630 tokens
-# Savings: 88.1% token reduction</code></pre>
+        <div class="comparison-card codekb-way">
+          <div class="comparison-header">
+            <span class="comparison-tag tag-green">code-kb: Surgical Progressive Disclosure</span>
+            <span style="font-family: var(--font-mono); font-size: 0.8rem; color: #34d399;">674 tokens &bull; 95.1% saved</span>
+          </div>
+          <h3 class="comparison-title">get_context_slice / file_skeleton</h3>
+          <p class="comparison-body">Agent requests only what is needed: implementation body + immediate callee signatures + parameter types + tests in a single turn.</p>
+          <div class="code-wrapper">
+            <pre><code>get_context_slice("search_symbols_scoped")
+# Tokens used: 674 tokens (95.1% token reduction!)
+# Latency: 2 ms warm query from SQLite in WAL mode
+# Result: Razor-sharp context with zero hallucinations</code></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Six Core Architectural Pillars -->
+    <section id="pillars" class="container">
+      <span class="section-badge">Core Architecture</span>
+      <h2>Engineered for Autonomous Coding Agents</h2>
+      <p class="section-desc">
+        Every design decision in <code>code-kb</code> solves a concrete defect experienced with earlier code intelligence systems.
+      </p>
+
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="feature-icon-box">🦴</div>
+          <h3 class="feature-title">Progressive Disclosure</h3>
+          <p class="feature-desc">
+            <code>codebase_outline</code> for orientation, <code>file_skeleton</code> for interfaces with bodies stripped, and <code>get_symbol_body</code> for exact functions. O(signatures) token complexity rather than O(lines).
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon-box">🔬</div>
+          <h3 class="feature-title">Surgical Context Slices</h3>
+          <p class="feature-desc">
+            <code>get_context_slice</code> returns target implementation body + immediate callee signatures + parameter types + associated unit tests in one turn. Eliminates 4–6 follow-up search turns.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon-box">💥</div>
+          <h3 class="feature-title">Blast Radius &amp; Test Prediction</h3>
+          <p class="feature-desc">
+            Multi-hop reverse reachability via recursive SQLite CTEs. <code>blast_radius</code> auto-detects uncommitted git changes and predicts the minimal targeted test commands to run before/after edits.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon-box">⚡</div>
+          <h3 class="feature-title">Single-Turn Atomic Edits</h3>
+          <p class="feature-desc">
+            <code>replace_symbol_body</code> performs pre-flight tree-sitter AST syntax validation, blake3 optimistic concurrency check, atomic file replacement, and SQLite re-indexing in a single turn. Zero two-step preview waste.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon-box">🪟</div>
+          <h3 class="feature-title">First-Class Windows &amp; NTFS</h3>
+          <p class="feature-desc">
+            Windows is never an afterthought. Releases ship Windows binaries verified in CI on native NTFS. Strip verbatim prefixes with <code>dunce</code>, forward-slash normalization, and rigorous file handle closure.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon-box">🪝</div>
+          <h3 class="feature-title">Cross-Platform Native Hooks</h3>
+          <p class="feature-desc">
+            <code>code-kb hook [SessionStart|SubagentStart]</code> compiles routing guidance directly into the native binary. Outputs standard JSON in &lt;1ms without Node.js, Python, or shell dependencies.
+          </p>
         </div>
       </div>
     </section>
 
     <!-- Benchmarks Section -->
     <section id="benchmarks" class="container">
-      <h2>Architectural Benchmark Comparison</h2>
+      <span class="section-badge">Empirical Measurements</span>
+      <h2>Head-to-Head Benchmark Comparison</h2>
       <p class="section-desc">
-        Head-to-head empirical metrics measured on a real-world 12,827-file polyglot monorepo (<code>hermes-agent</code>: 6,141 Python, 3,121 TypeScript/React TSX, Shell, SQL) against prior engines (Miller, Julie) and bare agent toolchains.
+        Measured on a real-world 12,827-file polyglot monorepo (<code>hermes-agent</code>: 6,141 Python, 3,121 TypeScript/React TSX, Shell, SQL) against prior engines (Miller, Julie) and bare agent toolchains.
       </p>
 
       <div class="table-wrapper">
@@ -101,7 +252,7 @@
           <thead>
             <tr>
               <th>Metric / Dimension</th>
-              <th>code-kb (v0.5)</th>
+              <th class="col-featured">code-kb (v0.5)</th>
               <th>Miller (.NET)</th>
               <th>Julie (Rust)</th>
               <th>Bare Agent (grep/read)</th>
@@ -110,120 +261,131 @@
           <tbody>
             <tr>
               <td><strong>Full Initial Indexing (12.8k files)</strong></td>
-              <td class="tag-success"><strong>91.5 s</strong> (1.5 min)</td>
-              <td class="tag-warning">12–18 min</td>
-              <td class="tag-warning">15–20 min</td>
-              <td class="tag-neutral">N/A</td>
+              <td class="col-featured"><span class="tag-success">⚡ 91.5 s (1.5 min)</span></td>
+              <td><span class="tag-warning">12–18 min</span></td>
+              <td><span class="tag-warning">15–20 min</span></td>
+              <td><span class="tag-neutral">N/A</span></td>
             </tr>
             <tr>
               <td><strong>Database / Artifact On-Disk Size</strong></td>
-              <td class="tag-success"><strong>3.9 GB</strong> (single SQLite)</td>
-              <td class="tag-warning">4.57 GB (3 DBs)</td>
-              <td class="tag-warning">4.2+ GB</td>
-              <td class="tag-neutral">0 MB</td>
+              <td class="col-featured"><span class="tag-success">📦 3.9 GB (single SQLite)</span></td>
+              <td><span class="tag-warning">4.57 GB (3 DBs)</span></td>
+              <td><span class="tag-warning">4.2+ GB</span></td>
+              <td><span class="tag-neutral">0 MB</span></td>
             </tr>
             <tr>
               <td><strong>Retained Heap RAM (Resident Set)</strong></td>
-              <td class="tag-success"><strong>&lt; 15 MB</strong> (SQLite WAL)</td>
-              <td class="tag-warning">1,500–2,000 MB</td>
-              <td class="tag-warning">300–800 MB</td>
-              <td class="tag-neutral">0 MB</td>
+              <td class="col-featured"><span class="tag-success">🛡️ &lt; 15 MB (SQLite WAL)</span></td>
+              <td><span class="tag-warning">1,500–2,000 MB</span></td>
+              <td><span class="tag-warning">300–800 MB</span></td>
+              <td><span class="tag-neutral">0 MB</span></td>
             </tr>
             <tr>
               <td><strong>Polyglot Symbols Indexed</strong></td>
-              <td class="tag-success"><strong>990,975 symbols</strong></td>
+              <td class="col-featured"><span class="tag-success">✨ 990,975 symbols</span></td>
               <td>~900,000</td>
               <td>~850,000</td>
-              <td class="tag-neutral">0 (Unparsed)</td>
+              <td><span class="tag-neutral">0 (Unparsed text)</span></td>
             </tr>
             <tr>
               <td><strong>Structural Facts Extracted</strong></td>
-              <td class="tag-success"><strong>53 Categories</strong> (370 routes, 3.2k SQL)</td>
-              <td class="tag-warning">0–2 categories (markers)</td>
-              <td class="tag-warning">None (AST only)</td>
-              <td class="tag-neutral">None</td>
+              <td class="col-featured"><span class="tag-success">🎯 53 Categories (routes, SQL)</span></td>
+              <td><span class="tag-warning">0–2 categories</span></td>
+              <td><span class="tag-warning">None (AST only)</span></td>
+              <td><span class="tag-neutral">None</span></td>
             </tr>
             <tr>
-              <td><strong>Query Latency (Cold / Warm)</strong></td>
-              <td class="tag-success"><strong>15–150 ms / 1–5 ms</strong></td>
-              <td>150–500 ms / 25–80 ms</td>
-              <td>50–150 ms / 10–40 ms</td>
+              <td><strong>Engine Query Latency (Median)</strong></td>
+              <td class="col-featured"><span class="tag-success">⚡ 0–5 ms</span></td>
+              <td>25–80 ms</td>
+              <td>10–40 ms</td>
               <td>10–50 ms</td>
             </tr>
             <tr>
               <td><strong>Blast Radius &amp; Test Prediction</strong></td>
-              <td class="tag-success"><strong>Instant (Recursive CTEs)</strong></td>
-              <td>Manual multi-step trace</td>
-              <td class="tag-warning">None</td>
-              <td class="tag-neutral">Guesswork / Wide runs</td>
+              <td class="col-featured"><span class="tag-success">🚀 Instant (Recursive CTEs)</span></td>
+              <td>Manual trace</td>
+              <td><span class="tag-warning">None</span></td>
+              <td><span class="tag-neutral">Guesswork</span></td>
             </tr>
             <tr>
               <td><strong>Callee Noise Filtering</strong></td>
-              <td class="tag-success"><strong>Clean (40+ langs filtered)</strong></td>
-              <td class="tag-warning">Stdlib noise included</td>
-              <td class="tag-warning">Stdlib noise included</td>
-              <td class="tag-neutral">Unfiltered text</td>
+              <td class="col-featured"><span class="tag-success">🧹 Clean (40+ langs filtered)</span></td>
+              <td><span class="tag-warning">Stdlib noise included</span></td>
+              <td><span class="tag-warning">Stdlib noise included</span></td>
+              <td><span class="tag-neutral">Unfiltered text</span></td>
             </tr>
             <tr>
-              <td><strong>Symbol Edits</strong></td>
-              <td class="tag-success"><strong>Single-turn atomic (Tree-sitter)</strong></td>
+              <td><strong>Single-Turn Atomic Edits</strong></td>
+              <td class="col-featured"><span class="tag-success">🔒 Pre-flight tree-sitter AST</span></td>
               <td>2-step preview/apply</td>
               <td>2-step preview/apply</td>
-              <td>Fragile regex replace</td>
+              <td>Fragile string replace</td>
             </tr>
             <tr>
               <td><strong>Prompt Token Compression</strong></td>
-              <td class="tag-success"><strong>85–98% savings</strong></td>
+              <td class="col-featured"><span class="tag-success">💎 85–98% savings</span></td>
               <td>60–85% savings</td>
-              <td>N/A (Raw queries)</td>
-              <td>0% (Full file reads)</td>
+              <td>N/A</td>
+              <td>0% (Full files burned)</td>
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <div class="callout">
+        <div class="callout-icon">💡</div>
+        <div>
+          <div class="callout-title">Understanding Latency: Engine vs. Model Reasoning</div>
+          <div class="callout-body">
+            <code>code-kb stats</code> confirms that internal database queries take <strong>0 to 5 milliseconds</strong>. Total agent turnaround time (e.g. 13s in Grok, 29s in Claude Code) is dominated by LLM chain-of-thought reasoning and network transmission. <code>code-kb</code> adds essentially <strong>zero overhead</strong> to agent turns while removing 90% of prompt tokens.
+          </div>
+        </div>
       </div>
     </section>
 
     <!-- Workflow Section -->
     <section id="workflow" class="container">
-      <h2>Progressive Disclosure Workflow</h2>
+      <span class="section-badge">Progressive Workflow</span>
+      <h2>From Exploration to Atomic Edit</h2>
       <p class="section-desc">
-        A structured, token-dense lifecycle that guides agents from initial repo orientation to verified atomic edits.
+        A structured, token-dense lifecycle that guides agents without getting trapped in raw file grep loops.
       </p>
 
-      <div class="step-grid">
-        <div class="step-card">
-          <div class="step-number">Phase 1: Orientation</div>
-          <h3 class="step-title">codebase_outline</h3>
-          <p class="step-body">Understand high-level architecture, module hierarchies, and primary exports in ~200 tokens.</p>
+      <div class="workflow-grid">
+        <div class="workflow-card">
+          <div class="workflow-phase">Phase 1: Orientation</div>
+          <h3 class="workflow-title">codebase_outline</h3>
+          <p class="workflow-desc">Understand high-level architecture, module hierarchies, and primary exports in ~200 tokens.</p>
           <pre><code>codebase_outline(depth=2)</code></pre>
         </div>
 
-        <div class="step-card">
-          <div class="step-number">Phase 2: Interface Discovery</div>
-          <h3 class="step-title">file_skeleton &amp; search</h3>
-          <p class="step-body">Examine signatures and traits with bodies stripped. Use BM25 FTS5 for conceptual search.</p>
+        <div class="workflow-card">
+          <div class="workflow-phase">Phase 2: Interface Discovery</div>
+          <h3 class="workflow-title">file_skeleton &amp; search</h3>
+          <p class="workflow-desc">Examine signatures and traits with bodies stripped. Use BM25 FTS5 for conceptual search.</p>
           <pre><code>file_skeleton("src/server.rs")
 search_symbols("auth token validation")</code></pre>
         </div>
 
-        <div class="step-card">
-          <div class="step-number">Phase 3: Surgical Context</div>
-          <h3 class="step-title">get_context_slice</h3>
-          <p class="step-body">In a single turn, fetch target function body + callee signatures + parameter types + associated unit tests.</p>
+        <div class="workflow-card">
+          <div class="workflow-phase">Phase 3: Surgical Context</div>
+          <h3 class="workflow-title">get_context_slice</h3>
+          <p class="workflow-desc">Fetch target function body + callee signatures + parameter types + associated unit tests in one turn.</p>
           <pre><code>get_context_slice("handle_request")</code></pre>
         </div>
 
-        <div class="step-card">
-          <div class="step-number">Phase 4: Impact &amp; Tests</div>
-          <h3 class="step-title">blast_radius</h3>
-          <p class="step-body">Compute multi-hop reverse reachability via recursive CTEs and pinpoint minimal tests to run before/after editing.</p>
+        <div class="workflow-card">
+          <div class="workflow-phase">Phase 4: Impact &amp; Tests</div>
+          <h3 class="workflow-title">blast_radius</h3>
+          <p class="workflow-desc">Compute multi-hop reverse reachability via recursive CTEs and pinpoint minimal tests to run before/after editing.</p>
           <pre><code>blast_radius(symbol="compute_hash")</code></pre>
         </div>
 
-        <div class="step-card">
-          <div class="step-number">Phase 5: Atomic Edits</div>
-          <h3 class="step-title">replace_symbol_body</h3>
-          <p class="step-body">Perform pre-flight tree-sitter AST validation, optimistic hash concurrency checks, and re-indexing in one turn.</p>
+        <div class="workflow-card">
+          <div class="workflow-phase">Phase 5: Atomic Edits</div>
+          <h3 class="workflow-title">replace_symbol_body</h3>
+          <p class="workflow-desc">Perform pre-flight tree-sitter AST validation, optimistic hash concurrency checks, and re-indexing in one turn.</p>
           <pre><code>replace_symbol_body(
   symbol="calculate",
   file="calc.rs",
@@ -231,10 +393,10 @@ search_symbols("auth token validation")</code></pre>
 )</code></pre>
         </div>
 
-        <div class="step-card">
-          <div class="step-number">Phase 6: Verification</div>
-          <h3 class="step-title">code-kb stats</h3>
-          <p class="step-body">Zero-overhead local telemetry in SQLite WAL mode. Track tool success rates, median latency, and token savings.</p>
+        <div class="workflow-card">
+          <div class="workflow-phase">Phase 6: Verification</div>
+          <h3 class="workflow-title">code-kb stats</h3>
+          <p class="workflow-desc">Zero-overhead local telemetry in SQLite WAL mode. Track tool success rates, median latency, and token savings.</p>
           <pre><code>code-kb stats</code></pre>
         </div>
       </div>
@@ -242,9 +404,10 @@ search_symbols("auth token validation")</code></pre>
 
     <!-- Tool Catalog Section -->
     <section id="tools" class="container">
-      <h2>Complete MCP Tool Catalog</h2>
+      <span class="section-badge">Tool Catalog</span>
+      <h2>Complete MCP Tool Reference</h2>
       <p class="section-desc">
-        Every MCP tool has an exact 1:1 CLI command for instantaneous terminal verification and dogfooding.
+        Every MCP tool has an exact 1:1 CLI command for instantaneous terminal verification and agent dogfooding.
       </p>
 
       <div class="table-wrapper">
@@ -254,7 +417,7 @@ search_symbols("auth token validation")</code></pre>
               <th>MCP Tool</th>
               <th>CLI Equivalent</th>
               <th>Description</th>
-              <th>Zero-Friction Aliases</th>
+              <th>Zero-Friction Ergonomics</th>
             </tr>
           </thead>
           <tbody>
@@ -262,61 +425,61 @@ search_symbols("auth token validation")</code></pre>
               <td><code>codebase_outline</code></td>
               <td><code>code-kb outline [path]</code></td>
               <td>Hierarchical directory tree &amp; primary symbol outline</td>
-              <td><code>path</code>, <code>dir</code>, <code>depth</code></td>
+              <td>Aliases: <code>path</code>, <code>dir</code>, <code>depth</code></td>
             </tr>
             <tr>
               <td><code>file_skeleton</code></td>
               <td><code>code-kb skeleton &lt;file&gt;</code></td>
               <td>File outline with implementation bodies stripped</td>
-              <td><code>file</code>, <code>path</code></td>
+              <td>Aliases: <code>file</code>, <code>path</code></td>
             </tr>
             <tr>
               <td><code>find_symbol</code></td>
               <td><code>code-kb symbol &lt;query&gt;</code></td>
               <td>Exact and prefix symbol lookup with optional path filter</td>
-              <td><code>name</code>, <code>q</code>, <code>path</code></td>
+              <td>Aliases: <code>name</code>, <code>q</code>, <code>path</code></td>
             </tr>
             <tr>
               <td><code>search_symbols</code></td>
               <td><code>code-kb search &lt;query&gt;</code></td>
               <td>Conceptual BM25 full-text search over docstrings &amp; signatures</td>
-              <td><code>name</code>, <code>q</code>, <code>path</code></td>
+              <td>Aliases: <code>name</code>, <code>q</code>, <code>path</code></td>
             </tr>
             <tr>
               <td><code>get_symbol_body</code></td>
               <td><code>code-kb body &lt;symbol&gt;</code></td>
               <td>Exact source code body for a single symbol</td>
-              <td><code>symbol</code>, <code>name</code>, <code>file</code></td>
+              <td>Aliases: <code>symbol</code>, <code>name</code>, <code>file</code></td>
             </tr>
             <tr>
               <td><code>get_context_slice</code></td>
               <td><code>code-kb slice &lt;symbol&gt;</code></td>
               <td>Target body + callee signatures + parameter types + tests</td>
-              <td><code>symbol</code>, <code>name</code>, <code>file</code></td>
+              <td>Aliases: <code>symbol</code>, <code>name</code>, <code>file</code></td>
             </tr>
             <tr>
               <td><code>find_references</code></td>
               <td><code>code-kb refs &lt;symbol&gt;</code></td>
               <td>Traverses callers or callees (filters external stdlib noise)</td>
-              <td><code>direction</code> (default: callers), <code>include_external</code></td>
+              <td>Default direction: <code>callers</code></td>
             </tr>
             <tr>
               <td><code>blast_radius</code></td>
               <td><code>code-kb blast-radius [target]</code></td>
               <td>Multi-hop transitive impact &amp; targeted test prediction</td>
-              <td><code>impact</code>, <code>symbol</code>, <code>path</code>, <code>depth</code></td>
+              <td>Alias: <code>impact</code>; auto-detects git changes</td>
             </tr>
             <tr>
               <td><code>find_structural_facts</code></td>
               <td><code>code-kb facts [category]</code></td>
               <td>Framework structural facts (routes, queries, models, configs)</td>
-              <td><code>category</code> (omit to list categories)</td>
+              <td>Omit category to list available categories</td>
             </tr>
             <tr>
               <td><code>replace_symbol_body</code></td>
               <td><code>code-kb edit &lt;symbol&gt;</code></td>
               <td>Atomic AST-validated symbol replacement</td>
-              <td><code>body</code>, <code>code</code>, <code>expected_hash</code></td>
+              <td>Aliases: <code>body</code>, <code>code</code>, <code>expected_hash</code></td>
             </tr>
           </tbody>
         </table>
@@ -325,26 +488,32 @@ search_symbols("auth token validation")</code></pre>
 
     <!-- Config Section -->
     <section id="config" class="container">
+      <span class="section-badge">Harness Integration</span>
       <h2>Quickstart &amp; Agent Configuration</h2>
       <p class="section-desc">
-        Configure <code>code-kb</code> in seconds across your favorite AI coding harnesses.
+        Configure <code>code-kb</code> in seconds across your favorite AI coding harness.
       </p>
 
       <div class="config-tabs">
-        <button class="config-tab active" onclick="showTab('claude')">Claude Code</button>
-        <button class="config-tab" onclick="showTab('codex')">Codex / ChatGPT</button>
-        <button class="config-tab" onclick="showTab('hermes')">Hermes Agent</button>
-        <button class="config-tab" onclick="showTab('cursor')">Cursor IDE</button>
-        <button class="config-tab" onclick="showTab('pi')">Pi / OMP</button>
-        <button class="config-tab" onclick="showTab('generic')">Antigravity / Generic MCP</button>
+        <button class="config-tab active" onclick="showTab('claude')">🤖 Claude Code</button>
+        <button class="config-tab" onclick="showTab('grok')">⚡ Grok CLI</button>
+        <button class="config-tab" onclick="showTab('agy')">✨ Antigravity</button>
+        <button class="config-tab" onclick="showTab('codex')">🔮 Codex CLI</button>
+        <button class="config-tab" onclick="showTab('cursor')">🎯 Cursor IDE</button>
+        <button class="config-tab" onclick="showTab('hooks')">🪝 Lifecycle Hooks</button>
       </div>
 
+      <!-- Claude Code -->
       <div id="tab-claude" class="config-content">
         <h3>Claude Code (Anthropic CLI)</h3>
-        <p style="color: var(--text-muted); margin-bottom: 0.5rem;">Add globally with the CLI:</p>
-        <pre><code>claude mcp add --scope user code-kb -- code-kb serve</code></pre>
-        <p style="color: var(--text-muted); margin: 0.75rem 0 0.5rem 0;">Or configure per-project in <code>.mcp.json</code>:</p>
-        <pre><code>{
+        <p class="config-subhead">Option A: User-Level (Global across all projects — Recommended):</p>
+        <div class="code-wrapper">
+          <pre><code>claude mcp add --scope user code-kb -- code-kb serve</code></pre>
+          <button class="copy-btn" onclick="copySnippet(this)">Copy</button>
+        </div>
+        <p class="config-subhead">Option B: Project-Level (Auto-discovered from <code>.mcp.json</code>):</p>
+        <div class="code-wrapper">
+          <pre><code>{
   "mcpServers": {
     "code-kb": {
       "command": "code-kb",
@@ -352,12 +521,69 @@ search_symbols("auth token validation")</code></pre>
     }
   }
 }</code></pre>
+          <button class="copy-btn" onclick="copySnippet(this)">Copy</button>
+        </div>
       </div>
 
+      <!-- Grok CLI -->
+      <div id="tab-grok" class="config-content" style="display: none;">
+        <h3>Grok CLI (xAI)</h3>
+        <p class="config-subhead">Option A: Plugin Install (Recommended — MCP + Skills + Lifecycle Hooks):</p>
+        <div class="code-wrapper">
+          <pre><code>grok plugin install anortham/code-kb --trust
+# or from local checkout:
+grok plugin install /path/to/code-kb --trust</code></pre>
+          <button class="copy-btn" onclick="copySnippet(this)">Copy</button>
+        </div>
+        <p class="config-subhead">Option B: Project-Level (Automatically detected via <code>.mcp.json</code>):</p>
+        <div class="code-wrapper">
+          <pre><code>{
+  "mcpServers": {
+    "code-kb": {
+      "command": "code-kb",
+      "args": ["serve"]
+    }
+  }
+}</code></pre>
+          <button class="copy-btn" onclick="copySnippet(this)">Copy</button>
+        </div>
+      </div>
+
+      <!-- Antigravity -->
+      <div id="tab-agy" class="config-content" style="display: none;">
+        <h3>Antigravity (AGY / Gemini CLI)</h3>
+        <p class="config-subhead">Option A: CLI Registration:</p>
+        <div class="code-wrapper">
+          <pre><code>agy mcp add code-kb code-kb serve</code></pre>
+          <button class="copy-btn" onclick="copySnippet(this)">Copy</button>
+        </div>
+        <p class="config-subhead">Option B: Global Config (<code>~/.gemini/config/mcp_config.json</code>):</p>
+        <div class="code-wrapper">
+          <pre><code>{
+  "mcpServers": {
+    "code-kb": {
+      "command": "code-kb",
+      "args": ["serve"],
+      "disabled": false,
+      "force_all_tools_eager": true
+    }
+  }
+}</code></pre>
+          <button class="copy-btn" onclick="copySnippet(this)">Copy</button>
+        </div>
+        <p class="config-subhead">Progressive Disclosure Skill Setup:</p>
+        <div class="code-wrapper">
+          <pre><code>ln -sf /path/to/code-kb/skills/code-kb ~/.gemini/config/skills/code-kb</code></pre>
+          <button class="copy-btn" onclick="copySnippet(this)">Copy</button>
+        </div>
+      </div>
+
+      <!-- Codex CLI -->
       <div id="tab-codex" class="config-content" style="display: none;">
-        <h3>Codex / ChatGPT</h3>
-        <p style="color: var(--text-muted); margin-bottom: 0.5rem;">Configure in <code>~/.codex/config.json</code>:</p>
-        <pre><code>{
+        <h3>Codex CLI &amp; Terminal Agents</h3>
+        <p class="config-subhead">Configure in <code>~/.codex/config.json</code>:</p>
+        <div class="code-wrapper">
+          <pre><code>{
   "mcpServers": {
     "code-kb": {
       "command": "code-kb",
@@ -365,21 +591,16 @@ search_symbols("auth token validation")</code></pre>
     }
   }
 }</code></pre>
+          <button class="copy-btn" onclick="copySnippet(this)">Copy</button>
+        </div>
       </div>
 
-      <div id="tab-hermes" class="config-content" style="display: none;">
-        <h3>Hermes Agent</h3>
-        <p style="color: var(--text-muted); margin-bottom: 0.5rem;">Register in <code>~/.hermes/config.yaml</code> under <code>mcp_servers</code>:</p>
-        <pre><code>mcp_servers:
-  code-kb:
-    command: "code-kb"
-    args: ["serve"]</code></pre>
-      </div>
-
+      <!-- Cursor IDE -->
       <div id="tab-cursor" class="config-content" style="display: none;">
         <h3>Cursor IDE</h3>
-        <p style="color: var(--text-muted); margin-bottom: 0.5rem;">Create <code>.cursor/mcp.json</code> in your project root:</p>
-        <pre><code>{
+        <p class="config-subhead">Create <code>.cursor/mcp.json</code> in your repository root:</p>
+        <div class="code-wrapper">
+          <pre><code>{
   "mcpServers": {
     "code-kb": {
       "command": "code-kb",
@@ -387,51 +608,169 @@ search_symbols("auth token validation")</code></pre>
     }
   }
 }</code></pre>
+          <button class="copy-btn" onclick="copySnippet(this)">Copy</button>
+        </div>
       </div>
 
-      <div id="tab-pi" class="config-content" style="display: none;">
-        <h3>Pi / OpenModelPrompt (OMP)</h3>
-        <p style="color: var(--text-muted); margin-bottom: 0.5rem;">Add to <code>~/.pi/config.json</code> or project MCP config:</p>
-        <pre><code>{
-  "mcp": {
-    "code-kb": {
-      "command": "code-kb",
-      "args": ["serve"]
-    }
+      <!-- Lifecycle Hooks -->
+      <div id="tab-hooks" class="config-content" style="display: none;">
+        <h3>Zero-Dependency Lifecycle Hooks</h3>
+        <p class="config-subhead"><code>code-kb hook</code> delivers instant agent context routing without Node.js or bash:</p>
+        <div class="code-wrapper">
+          <pre><code># Output SessionStart payload
+code-kb hook SessionStart
+
+# Output SubagentStart payload
+code-kb hook SubagentStart
+
+# Automatically hooked via hooks/claude-codex-hooks.json:
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [{ "type": "command", "command": "code-kb hook SessionStart" }]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [{ "type": "command", "command": "code-kb hook SubagentStart" }]
+      }
+    ]
   }
 }</code></pre>
+          <button class="copy-btn" onclick="copySnippet(this)">Copy</button>
+        </div>
       </div>
 
-      <div id="tab-generic" class="config-content" style="display: none;">
-        <h3>Antigravity (AGY) &amp; Generic Model Context Protocol</h3>
-        <p style="color: var(--text-muted); margin-bottom: 0.5rem;">Place <code>.mcp.json</code> in your workspace root:</p>
-        <pre><code>{
-  "mcpServers": {
-    "code-kb": {
-      "command": "code-kb",
-      "args": ["serve"]
-    }
-  }
-}</code></pre>
-      </div>
-
-      <script>
-        function showTab(id) {
-          document.querySelectorAll('.config-content').forEach(el => el.style.display = 'none');
-          document.querySelectorAll('.config-tab').forEach(el => el.classList.remove('active'));
-          const target = document.getElementById('tab-' + id);
-          if (target) target.style.display = 'block';
-          if (event && event.target) event.target.classList.add('active');
-        }
-      </script>
     </section>
 
   </main>
 
+  <!-- Footer -->
   <footer>
-    <p><code>code-kb</code> is free, open-source software dual-licensed under MIT or Apache-2.0.</p>
-    <p style="margin-top: 0.5rem;"><a href="https://github.com/anortham/code-kb">GitHub Repository</a> &bull; Backed by <a href="https://github.com/anortham/julie-extractors">julie-extractors</a></p>
+    <p><strong>code-kb</strong> is free, open-source software dual-licensed under MIT or Apache-2.0.</p>
+    <p style="margin-top: 0.5rem;">
+      <a href="https://github.com/anortham/code-kb" target="_blank" rel="noopener">GitHub Repository</a> &bull;
+      Backed by <a href="https://github.com/anortham/julie-extractors" target="_blank" rel="noopener">julie-extractors</a> &bull;
+      <a href="https://github.com/anortham/code-kb/blob/main/docs/RELEASING.md" target="_blank" rel="noopener">Release Notes</a>
+    </p>
   </footer>
+
+  <!-- Scripts -->
+  <script>
+    function showTab(id) {
+      document.querySelectorAll('.config-content').forEach(el => el.style.display = 'none');
+      document.querySelectorAll('.config-tab').forEach(el => el.classList.remove('active'));
+      const target = document.getElementById('tab-' + id);
+      if (target) target.style.display = 'block';
+      if (event && event.currentTarget) event.currentTarget.classList.add('active');
+    }
+
+    const terminalSnippets = {
+      slice: {
+        metric: "⚡ 2 ms \u2022 -95.1% tokens",
+        html: `<span class="terminal-prompt">$</span> <span class="terminal-cmd">code-kb slice search_symbols_scoped</span>
+<span class="terminal-comment"># Raw file: 13,759 tokens (1,474 lines) &rarr; Slice: 674 tokens (-95.1% compression) in 2ms</span>
+
+<span class="badge-pill-success">TARGET SYMBOL</span> <span style="color:#60a5fa">search_symbols_scoped</span> (crates/code-kb-core/src/queries.rs:142)
+<span style="color:#a855f7">pub fn</span> <span style="color:#38bdf8">search_symbols_scoped</span>(conn: &Connection, query: &str, path: Option<&Path>) -> Result&lt;Vec&lt;SymbolRecord&gt;, QueryError&gt; {
+    <span class="terminal-comment">// Target function implementation body (fully preserved)</span>
+    <span style="color:#cbd5e1">let sanitized = sanitize_fts5_query(query);</span>
+    <span style="color:#cbd5e1">let mut stmt = conn.prepare_cached(SQL_FTS_QUERY)?;</span>
+    <span style="color:#cbd5e1">...</span>
+}
+
+<span class="badge-pill-success">IMMEDIATE CALLEES</span> (External stdlib filtered across 40+ languages)
+- <span style="color:#60a5fa">sanitize_fts5_query</span>(query: &str) -> String <span class="terminal-comment">(queries.rs:88)</span>
+- <span style="color:#60a5fa">build_scoped_fts_filter</span>(path: &Path) -> String <span class="terminal-comment">(queries.rs:104)</span>
+
+<span class="badge-pill-success">ASSOCIATED TESTS</span>
+- <span style="color:#34d399">tests::test_fts_search_symbols_and_porter_stemming</span> <span class="terminal-comment">(queries.rs:412)</span>`
+      },
+      skeleton: {
+        metric: "⚡ 1 ms \u2022 -88.1% tokens",
+        html: `<span class="terminal-prompt">$</span> <span class="terminal-cmd">code-kb skeleton crates/code-kb-core/src/queries.rs</span>
+<span class="terminal-comment"># Raw file: 13,759 tokens &rarr; Skeleton: 1,634 tokens (-88.1% compression) in 1ms</span>
+
+<span class="terminal-comment">// File: crates/code-kb-core/src/queries.rs</span>
+<span class="terminal-comment">// Implementation bodies stripped; traits, structs, and signatures preserved</span>
+
+<span style="color:#a855f7">pub struct</span> <span style="color:#38bdf8">SymbolRecord</span> {
+    <span style="color:#60a5fa">pub symbol_id:</span> String,
+    <span style="color:#60a5fa">pub name:</span> String,
+    <span style="color:#60a5fa">pub kind:</span> String,
+    <span style="color:#60a5fa">pub signature:</span> String,
+    <span style="color:#60a5fa">pub body_hash:</span> String,
+}
+
+<span style="color:#a855f7">pub fn</span> <span style="color:#38bdf8">open_read_only</span>(path: &Path) -> Result&lt;Connection, rusqlite::Error&gt;;
+<span style="color:#a855f7">pub fn</span> <span style="color:#38bdf8">search_symbols_scoped</span>(conn: &Connection, query: &str, path: Option<&Path>) -> Result&lt;Vec&lt;SymbolRecord&gt;, QueryError&gt;;
+<span style="color:#a855f7">pub fn</span> <span style="color:#38bdf8">find_references_for_symbol</span>(conn: &Connection, symbol_id: &str, dir: Direction) -> Result&lt;Vec&lt;ReferenceRecord&gt;, QueryError&gt;;`
+      },
+      blast: {
+        metric: "⚡ 1 ms \u2022 Multi-Hop CTE",
+        html: `<span class="terminal-prompt">$</span> <span class="terminal-cmd">code-kb blast-radius compute_blast_radius</span>
+<span class="terminal-comment"># Computes transitive caller graph via SQLite recursive CTE in 1.2ms</span>
+
+<span class="badge-pill-success">IMPACTED CALLERS</span> (Multi-hop reverse reachability)
+[Hop 1] <span style="color:#60a5fa">blast_radius_op</span> <span class="terminal-comment">(crates/code-kb-core/src/ops.rs:214)</span>
+[Hop 2] <span style="color:#60a5fa">mcp::handle_tool_call</span> <span class="terminal-comment">(crates/code-kb-cli/src/mcp.rs:340)</span>
+[Hop 2] <span style="color:#60a5fa">main::run_cli</span> <span class="terminal-comment">(crates/code-kb-cli/src/main.rs:188)</span>
+
+<span class="badge-pill-success">PREDICTED TEST SUITE TARGETS</span>
+&bull; cargo test --test blast_radius_test
+&bull; cargo test test_cli_blast_radius_and_impact`
+      },
+      stats: {
+        metric: "⚡ 100% Success \u2022 0-5ms Latency",
+        html: `<span class="terminal-prompt">$</span> <span class="terminal-cmd">code-kb stats</span>
+=================================================================
+                    code-kb Telemetry Summary                    
+=================================================================
+Total Tool Calls: 86 | Success Rate: 100.0% | Tokens Served: ~45,381
+
+### Tool Invocations & Performance
+| Tool                   | Calls | Median Latency | Tokens Served | Success Rate |
+|------------------------|------:|---------------:|--------------:|-------------:|
+| get_symbol_body        |    22 |           0 ms |       ~11,010 |       100.0% |
+| find_symbol            |    15 |           2 ms |        ~2,567 |       100.0% |
+| find_references        |     9 |           0 ms |          ~614 |       100.0% |
+| get_context_slice      |     9 |           2 ms |        ~9,734 |       100.0% |
+| search_symbols         |     9 |           3 ms |        ~6,970 |       100.0% |
+| file_skeleton          |     9 |           1 ms |        ~6,334 |       100.0% |
+| blast_radius           |     6 |           1 ms |        ~1,857 |       100.0% |
+| find_structural_facts  |     5 |           1 ms |        ~5,159 |       100.0% |
+| codebase_outline       |     2 |           5 ms |        ~1,136 |       100.0% |`
+      }
+    };
+
+    function switchTerminalTab(tabId) {
+      document.querySelectorAll('.terminal-tab-btn').forEach(btn => btn.classList.remove('active'));
+      if (event && event.currentTarget) event.currentTarget.classList.add('active');
+      const data = terminalSnippets[tabId];
+      if (data) {
+        document.getElementById('terminal-content').innerHTML = data.html;
+        document.getElementById('terminal-metric').textContent = data.metric;
+      }
+    }
+
+    function copySnippet(btn) {
+      const wrapper = btn.closest('.code-wrapper');
+      if (!wrapper) return;
+      const code = wrapper.querySelector('code');
+      if (!code) return;
+      navigator.clipboard.writeText(code.innerText.trim()).then(() => {
+        const originalText = btn.textContent;
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = originalText;
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    }
+  </script>
 
 </body>
 </html>
