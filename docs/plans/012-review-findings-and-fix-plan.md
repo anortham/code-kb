@@ -229,25 +229,28 @@ Sources: Claude's read of the entry points, 19 finder agents (raw, unverified), 
    - Fix `get_symbol_by_name` `LIMIT 10` import crowd-out - Prioritized primary definitions (`(s.kind != 'import') DESC`, definition kinds first) in `queries.rs`. Verified in `disambiguation_test.rs`.
    - Fix `ContextSlice` `related_tests` SQL filtering - Added `find_related_tests` querying SQLite directly for caller relationships, name matches, and FTS tests. Verified in `disambiguation_test.rs`.
    - Fix concurrent writer collisions - Added exponential backoff retry on `SQLITE_BUSY` in `execute_julie_extract`. Verified all 83 workspace tests pass.
-3. **Phase 3: Agent Output Quality (P1 Items 10–18)**
-   - Add signatures and `body_hash` to bodies/slices (Item 10)
-   - Clean up `blast_radius` seeds (Item 11)
-   - Fix qualified `find_references` (Item 12)
-   - Clean up `codebase_outline` tags (Item 13)
-   - Reduce `file_skeleton` noise (Item 14)
-   - Relativize path filters (Item 15)
-   - Return clear errors instead of false success (Item 16)
-   - Telemetry and logging on hot path (Item 18)
-4. **Phase 4: Cleanup & Ponytail (P2 Items 19, 21, 22, 23, 24, and Item 20)**
-   - Remove unused dependencies (Item 19)
-   - Consolidate duplicated formatters (Item 21)
-   - Deduplicate configs and scripts (Item 22)
-   - Add release profile (Item 23)
-   - Align docs (`AGENTS.md`, `CLAUDE.md`, `README.md`) (Item 24)
-   - Remove centralized cache stores & `prune` in favor of self-cleaning in-tree worktree DBs (Item 20)
-5. **Phase 5: Test Hardening (P3 Items 25–27)**
-   - Require `julie-extract` in tests (Item 25)
-   - Strengthen MCP and CLI test assertions (Item 26)
-   - Add regression tests for all fixed behaviors (Item 27)
-6. **Phase 6: Release Preparation (P0 Item 7)**
-   - Bump version to 0.5.1 and prepare release (requires user approval)
+3. **Phase 3: Agent Output Quality (P1 Items 10–18) [COMPLETED]**
+   - Add signatures and `body_hash` to bodies/slices (Item 10) - Formatted with signature declaration and SHA-256 body hash comment header for optimistic concurrency. Verified in `formatters.rs` and CLI/MCP.
+   - Clean up `blast_radius` seeds (Item 11) - Seed walk with code symbols only (skips markdown/license files); capped default hop depth to 5. Verified in `blast_radius_test.rs`.
+   - Fix qualified `find_references` (Item 12) - Disambiguated qualified parent matching; added truncated count footer when hit limit. Verified in `disambiguation_test.rs`.
+   - Clean up `codebase_outline` tags (Item 13) - Tagged root directories with `[definitions]` and skipped zero-symbol files when scoped to reduce noise. Verified in `formatters.rs`.
+   - Reduce `file_skeleton` noise (Item 14) - Sanitized function signatures (stripped trailing `{`), capped doc comments to first 3 lines with truncation indicator. Verified in `formatters.rs`.
+   - Relativize path filters (Item 15) - Generalized `Workspace::relativize_filter` to accept `file://` URIs, absolute paths, and normalized relative subpaths (e.g. `./src`). Verified in `workspace.rs`.
+   - Return clear errors instead of false success (Item 16) - Differentiated `FileNotFound` vs `IsADirectory`; returned near-match suggestions on `SymbolNotFound`. Verified in `mcp/server.rs`.
+   - Kind normalization & labeled FTS fallback (Item 17) - Canonicalized symbol kind aliases in queries; labeled FTS fallback matches clearly in symbol search. Verified in `queries.rs`.
+   - Telemetry and logging on hot path (Item 18) - Reused persistent SQLite telemetry connection with 30-day retention and capped rolling logs at 7 files. Verified in `telemetry.rs`.
+4. **Phase 4: Cleanup & Ponytail (P2 Items 19, 21, 22, 23, 24, and Item 20) [COMPLETED]**
+   - Remove unused dependencies (Item 19) - Removed `syn`, `walkdir`, `directories`, `anyhow`, `serde_json`, `thiserror`, `url`. Verified in `Cargo.toml`.
+   - Consolidate duplicated formatters (Item 21) - Consolidated CLI and MCP text rendering into `code_kb_core::formatters`. Verified in `formatters.rs`.
+   - Deduplicate configs and scripts (Item 22) - Deleted legacy `hooks/code-kb-session-hook.cjs` and `hooks/code-kb-session-hook.sh` in favor of native binary `code-kb hook`.
+   - Add release profile (Item 23) - Configured `lto = true`, `codegen-units = 1`, `strip = true`, `panic = "abort"` in root `Cargo.toml`.
+   - Align docs (`AGENTS.md`, `CLAUDE.md`, `README.md`) (Item 24) - Updated Invariants 5, 6, 7; ensured `AGENTS.md` and `CLAUDE.md` remain byte-for-byte identical; removed `prune` references.
+   - Remove centralized cache stores & `prune` (Item 20) - Fully standardized on isolated in-tree self-cleaning databases at `<root>/.code-kb/artifact.db`. Dropped legacy store cache paths and `prune` CLI command.
+5. **Phase 5: Test Hardening (P3 Items 25–27) [COMPLETED]**
+   - Require `julie-extract` in tests (Item 25) - Replaced silent test skip returns with `.expect("julie-extract binary must be present for tests")` across all 6 test suites.
+   - Strengthen MCP and CLI test assertions (Item 26) - Fixed mock schema table batch in `mcp_test.rs`; asserted `isError != true` and content rows; verified symbol signature in `cli_test.rs`.
+   - Add regression tests for all fixed behaviors (Item 27) - Added multi-step optimistic concurrency locking test `test_replace_symbol_body_chained_edits_with_expected_hash` in `edit_test.rs`. Verified all 83 tests pass.
+6. **Phase 6: Release Preparation (P0 Item 7) [COMPLETED]**
+   - Bumped workspace version to 0.5.1 across root `Cargo.toml`, `crates/code-kb-cli/Cargo.toml`, `.claude-plugin/plugin.json`, and `.github/workflows/release-binaries.yml`.
+   - Updated `scripts/release-preflight.sh` to package workspace cleanly (`cargo package --workspace --no-verify --allow-dirty`).
+   - Ran `scripts/release-preflight.sh` and verified all 7 pre-flight steps pass cleanly. Verified Windows NTFS guest on Prax Windows 11 VM via `win-test`. Ready for release tagging.
