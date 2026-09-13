@@ -222,11 +222,13 @@ Sources: Claude's read of the entry points, 19 finder agents (raw, unverified), 
    - Fix dynamic rebind poison & add Worktree-aware rebind + auto-copy fast path (Item 4) - Rebind validation guard, worktree switching, parent DB auto-copy + fast reconciliation, boundary enforcement in `find_workspace_root`. Verified in `mcp_test.rs`.
    - Fix hidden files reconciliation (Item 2) - Added `.hidden(false)` to `WalkBuilder` in `reconcile_workspace`. Verified in `freshness_test.rs`.
    - Fix formatting & CI workflow (Item 3) - Formatted with `cargo fmt --all`, added `CODE_KB_ALLOW_MISSING_JULIE_EXTRACT=1` and non-cancelling steps in `ci.yml`, resolved clippy warnings. Verified all 78 tests pass.
-2. **Phase 2: Correctness & Data Integrity (P0 Items 5, 6, 8, 9, plus `queries.rs` & `ops.rs` query bugs)**
-   - Permissions preservation (Item 5) & symlink preservation (Item 6)
-   - Packaging / pins fallback (Items 8, 9)
-   - Fix `get_symbol_by_name` `LIMIT 10` import crowd-out
-   - Fix `ContextSlice` `related_tests` SQL filtering
+2. **Phase 2: Correctness & Data Integrity (P0 Items 5, 6, 8, 9, plus `queries.rs` & `ops.rs` query bugs) [COMPLETED]**
+   - Permissions preservation (Item 5) & symlink preservation (Item 6) - Preserves existing file permissions (e.g. 0755) during edit and rollback; canonicalizes path in `resolve_path` to preserve symlinks. Verified in `edit_test.rs`.
+   - Line ending normalization - Detects target file CRLF vs LF and normalizes replacement body to match target file line breaks. Verified in `edit_test.rs`.
+   - Packaging / pins fallback (Items 8, 9) - Bundled `routing-block.md` inside `code-kb-cli` crate; graceful build guard bypass in `build.rs` when `julie-pins.json` is missing; fixed `read_pin` python3 fallback and exact binary name pattern in `restore-julie-extract.sh`.
+   - Fix `get_symbol_by_name` `LIMIT 10` import crowd-out - Prioritized primary definitions (`(s.kind != 'import') DESC`, definition kinds first) in `queries.rs`. Verified in `disambiguation_test.rs`.
+   - Fix `ContextSlice` `related_tests` SQL filtering - Added `find_related_tests` querying SQLite directly for caller relationships, name matches, and FTS tests. Verified in `disambiguation_test.rs`.
+   - Fix concurrent writer collisions - Added exponential backoff retry on `SQLITE_BUSY` in `execute_julie_extract`. Verified all 83 workspace tests pass.
 3. **Phase 3: Agent Output Quality (P1 Items 10–18)**
    - Add signatures and `body_hash` to bodies/slices (Item 10)
    - Clean up `blast_radius` seeds (Item 11)

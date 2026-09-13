@@ -121,18 +121,32 @@ pub fn find_julie_extract_binary() -> Option<PathBuf> {
 pub fn execute_julie_extract(args: &[&str]) -> Result<String, SyncError> {
     let bin = find_julie_extract_binary().ok_or(SyncError::BinaryNotFound)?;
 
-    let output = Command::new(bin)
-        .args(args)
-        .output()
-        .map_err(SyncError::Io)?;
+    let mut attempts = 0;
+    loop {
+        let output = Command::new(&bin)
+            .args(args)
+            .output()
+            .map_err(SyncError::Io)?;
 
-    if !output.status.success() {
+        if output.status.success() {
+            return Ok(String::from_utf8_lossy(&output.stdout).to_string());
+        }
+
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        // Retry on database lock / busy collisions with backoff
+        if (stderr.contains("database is locked")
+            || stderr.contains("busy")
+            || stderr.contains("SQLITE_BUSY"))
+            && attempts < 5
+        {
+            attempts += 1;
+            std::thread::sleep(std::time::Duration::from_millis(50 * (1 << attempts)));
+            continue;
+        }
+
         let code = output.status.code().unwrap_or(-1);
         return Err(SyncError::ExtractionFailed(code, stderr));
     }
-
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
 /// Tier 1 & Incremental Update: updates a single file in the database.

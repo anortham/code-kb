@@ -296,7 +296,7 @@ impl Workspace {
                         let forward = to_forward_slash(r);
                         if forward.starts_with("../") || forward == ".." {
                             return Err(WorkspaceError::PathOutsideWorkspace(
-                                abs_path,
+                                effective_abs,
                                 self.canonical_root.clone(),
                             ));
                         }
@@ -304,7 +304,7 @@ impl Workspace {
                     }
                     Err(_) => {
                         return Err(WorkspaceError::PathOutsideWorkspace(
-                            abs_path,
+                            effective_abs,
                             self.canonical_root.clone(),
                         ));
                     }
@@ -312,7 +312,7 @@ impl Workspace {
             }
         };
 
-        Ok((abs_path, rel))
+        Ok((effective_abs, rel))
     }
 
     /// Resolve candidate database paths for this workspace:

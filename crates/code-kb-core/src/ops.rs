@@ -110,10 +110,7 @@ pub fn get_context_slice_op(
         }
     }
 
-    let related_tests = match queries::search_symbols(conn, &target_symbol.name, None, true, 5) {
-        Ok(tests) => tests.into_iter().filter(|s| s.is_test).collect(),
-        Err(_) => Vec::new(),
-    };
+    let related_tests = queries::find_related_tests(conn, &target_symbol, 5).unwrap_or_default();
 
     Ok(ContextSlice {
         target_symbol,

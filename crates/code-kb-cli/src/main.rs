@@ -12,7 +12,7 @@ use code_kb_core::{
 mod logging;
 mod mcp;
 
-static DEFAULT_ROUTING_BLOCK: &str = include_str!("../../../hooks/code-kb-routing-block.md");
+static DEFAULT_ROUTING_BLOCK: &str = include_str!("routing-block.md");
 
 #[derive(Debug, Parser)]
 #[command(

@@ -2,13 +2,6 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn main() {
-    println!("cargo:rerun-if-changed=../../scripts/julie-pins.json");
-    println!("cargo:rerun-if-changed=../../.tools/julie-extract");
-    println!("cargo:rerun-if-changed=../../.tools/julie-extract.exe");
-    println!("cargo:rerun-if-env-changed=CODE_KB_ALLOW_MISSING_JULIE_EXTRACT");
-    println!("cargo:rerun-if-env-changed=JULIE_EXTRACT_BIN");
-
-    // Read pinned version from scripts/julie-pins.json
     let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     let repo_root = manifest_dir
         .parent()
@@ -16,13 +9,17 @@ fn main() {
         .unwrap_or(&manifest_dir);
     let pins_file = repo_root.join("scripts").join("julie-pins.json");
 
-    let pinned_version = if pins_file.exists() {
-        let content =
-            std::fs::read_to_string(&pins_file).expect("Failed to read scripts/julie-pins.json");
-        parse_version(&content).unwrap_or_else(|| "2.42.1".to_string())
-    } else {
-        "2.42.1".to_string()
-    };
+    if pins_file.exists() {
+        println!("cargo:rerun-if-changed=../../scripts/julie-pins.json");
+    }
+    if repo_root.join(".tools").join("julie-extract").exists() {
+        println!("cargo:rerun-if-changed=../../.tools/julie-extract");
+    }
+    if repo_root.join(".tools").join("julie-extract.exe").exists() {
+        println!("cargo:rerun-if-changed=../../.tools/julie-extract.exe");
+    }
+    println!("cargo:rerun-if-env-changed=CODE_KB_ALLOW_MISSING_JULIE_EXTRACT");
+    println!("cargo:rerun-if-env-changed=JULIE_EXTRACT_BIN");
 
     // Check if bypass is requested
     if std::env::var("CODE_KB_ALLOW_MISSING_JULIE_EXTRACT").as_deref() == Ok("1") {
@@ -31,6 +28,18 @@ fn main() {
         );
         return;
     }
+
+    // Read pinned version from scripts/julie-pins.json; if pins file is absent (e.g. packaged on crates.io), skip verification
+    let pinned_version = if pins_file.exists() {
+        let content =
+            std::fs::read_to_string(&pins_file).expect("Failed to read scripts/julie-pins.json");
+        parse_version(&content).unwrap_or_else(|| "2.42.1".to_string())
+    } else {
+        println!(
+            "cargo:warning=scripts/julie-pins.json not found; bypassing julie-extract build verification"
+        );
+        return;
+    };
 
     let exe_name = if cfg!(windows) {
         "julie-extract.exe"

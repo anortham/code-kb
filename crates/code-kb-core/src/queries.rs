@@ -533,6 +533,112 @@ pub fn fts_search_symbols_scoped(
     Ok(results)
 }
 
+/// Find tests related to a target symbol by caller relationships, naming pattern, or FTS matching.
+pub fn find_related_tests(
+    conn: &Connection,
+    target_symbol: &Symbol,
+    limit: usize,
+) -> Result<Vec<Symbol>, QueryError> {
+    if limit == 0 {
+        return Ok(Vec::new());
+    }
+
+    let mut tests = Vec::new();
+    let mut seen_ids = std::collections::HashSet::new();
+
+    // 1. Direct callers / references that are marked as test or located in test files
+    let callers_sql = "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,
+            s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,
+            s.start_byte, s.end_byte, s.body_start_line, s.body_start_column, s.body_end_line,
+            s.body_end_column, s.body_start_byte, s.body_end_byte, s.body_hash, s.semantic_group,
+            s.is_test, s.test_container
+     FROM symbols s
+     JOIN relationships r ON r.from_symbol_id = s.symbol_id
+     WHERE r.to_symbol_id = ?1 AND (s.is_test = 1 OR s.test_container = 1)
+     LIMIT ?2";
+
+    if let Ok(mut stmt) = conn.prepare(callers_sql)
+        && let Ok(rows) = stmt.query_map(params![target_symbol.symbol_id, limit as i64], map_symbol)
+    {
+        for row in rows.flatten() {
+            if seen_ids.insert(row.symbol_id.clone()) {
+                tests.push(row);
+                if tests.len() >= limit {
+                    return Ok(tests);
+                }
+            }
+        }
+    }
+
+    // 2. Name-matching tests in SQLite
+    let remaining = limit - tests.len();
+    let name_sql = "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,
+            s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,
+            s.start_byte, s.end_byte, s.body_start_line, s.body_start_column, s.body_end_line,
+            s.body_end_column, s.body_start_byte, s.body_end_byte, s.body_hash, s.semantic_group,
+            s.is_test, s.test_container
+     FROM symbols s
+     WHERE (s.is_test = 1 OR s.test_container = 1)
+       AND (s.name LIKE '%' || ?1 || '%' OR s.signature LIKE '%' || ?1 || '%')
+     ORDER BY (s.name LIKE '%' || ?1 || '%') DESC
+     LIMIT ?2";
+
+    if let Ok(mut stmt) = conn.prepare(name_sql)
+        && let Ok(rows) = stmt.query_map(
+            params![target_symbol.name, (remaining * 2) as i64],
+            map_symbol,
+        )
+    {
+        for row in rows.flatten() {
+            if seen_ids.insert(row.symbol_id.clone()) {
+                tests.push(row);
+                if tests.len() >= limit {
+                    return Ok(tests);
+                }
+            }
+        }
+    }
+
+    // 3. FTS5 search restricted to tests
+    let remaining = limit - tests.len();
+    let fts_exists: bool = conn
+        .query_row(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='symbols_fts'",
+            [],
+            |_| Ok(true),
+        )
+        .unwrap_or(false);
+
+    if remaining > 0 && fts_exists {
+        let fts_sql = "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,
+                s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,
+                s.start_byte, s.end_byte, s.body_start_line, s.body_start_column, s.body_end_line,
+                s.body_end_column, s.body_start_byte, s.body_end_byte, s.body_hash, s.semantic_group,
+                s.is_test, s.test_container
+         FROM symbols_fts
+         JOIN symbols s ON s.rowid = symbols_fts.rowid
+         WHERE symbols_fts MATCH ?1 AND (s.is_test = 1 OR s.test_container = 1)
+         LIMIT ?2";
+
+        let (and_q, _or_q) = sanitize_fts5_query(&target_symbol.name);
+        if !and_q.is_empty()
+            && let Ok(mut stmt) = conn.prepare(fts_sql)
+            && let Ok(rows) = stmt.query_map(params![and_q, (remaining * 2) as i64], map_symbol)
+        {
+            for row in rows.flatten() {
+                if seen_ids.insert(row.symbol_id.clone()) {
+                    tests.push(row);
+                    if tests.len() >= limit {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(tests)
+}
+
 /// Find a specific symbol by name, with an optional path filter for disambiguation.
 pub fn get_symbol_by_name(
     conn: &Connection,
@@ -589,7 +695,11 @@ fn get_symbol_by_name_internal(
          LEFT JOIN symbols p ON s.parent_symbol_id = p.symbol_id
          WHERE (s.name = :name OR (s.name = :term AND (:parent IS NULL OR p.name = :parent)))
            AND (:path IS NULL OR s.path = :path OR (:exact = 0 AND s.path LIKE '%/' || :path_like ESCAPE '\\'))
-         ORDER BY (s.name = :name) DESC, s.is_test ASC LIMIT 10";
+         ORDER BY (s.kind != 'import') DESC,
+                  (s.kind IN ('function', 'struct', 'class', 'trait', 'method', 'enum', 'interface', 'type')) DESC,
+                  (s.name = :name) DESC,
+                  s.is_test ASC
+         LIMIT 25";
 
     let mut stmt = conn.prepare(sql)?;
     let normalized_path = path_filter.map(|p| p.replace('\\', "/"));

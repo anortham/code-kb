@@ -19,7 +19,7 @@ read_pin() {
   if command -v jq >/dev/null 2>&1; then
     jq -r "${expr}" "${PINS}"
   elif command -v python3 >/dev/null 2>&1; then
-    python3 -c "import json, sys; data=json.load(open('${PINS}')); print(eval('data' + sys.argv[1].replace('.', '[\"').replace(']', '\"]')))" "$expr"
+    python3 -c "import json, sys, re; data=json.load(open(sys.argv[1])); val=data; [val:=val[k] for k in re.findall(r'[\w-]+', sys.argv[2])]; print(val)" "${PINS}" "$expr"
   else
     echo "error: need either jq or python3 to read ${PINS}" >&2
     exit 1
@@ -151,7 +151,7 @@ elif [[ "${ARCHIVE}" == *.zip ]]; then
   unzip -q "${ARCHIVE}" -d "${STAGING}"
 fi
 
-FOUND="$(find "${STAGING}" -type f -name "julie-extract*" -print -quit)"
+FOUND="$(find "${STAGING}" -type f \( -name "julie-extract" -o -name "julie-extract.exe" \) -print -quit)"
 if [[ -z "${FOUND}" ]]; then
   echo "error: julie-extract binary not found in archive" >&2
   exit 1

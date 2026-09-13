@@ -87,7 +87,10 @@ pub fn replace_symbol_body(
     let body_start = symbol.body_start_byte.ok_or(EditError::NoBodyDefined)?;
     let body_end = symbol.body_end_byte.ok_or(EditError::NoBodyDefined)?;
 
-    // Read existing file content
+    // Read existing file metadata (permissions) and content
+    let existing_metadata =
+        fs::metadata(&abs_path).map_err(|e| EditError::Io(abs_path.display().to_string(), e))?;
+    let existing_permissions = existing_metadata.permissions();
     let existing_bytes =
         fs::read(&abs_path).map_err(|e| EditError::Io(abs_path.display().to_string(), e))?;
 
@@ -117,14 +120,9 @@ pub fn replace_symbol_body(
 
         // If expected matches the indexed body_hash from julie-extract, verify that the
         // file on disk has NOT been modified since the index was created.
-        if !matches
-            && symbol.body_hash.as_deref() == Some(expected)
-            && let Ok(Some(file_fact)) = queries::get_file(conn, &rel_path)
-        {
-            let file_len_matches = file_fact.content_bytes == existing_bytes.len() as i64;
-            let hash_matches =
-                sync::compute_content_hash_matches(&existing_bytes, &file_fact.content_hash);
-            if file_len_matches && hash_matches {
+        if !matches && symbol.body_hash.as_deref().is_some_and(|h| h == expected) {
+            let disk_body_hash = hash_content(existing_body);
+            if disk_body_hash == current_sha256 {
                 matches = true;
             }
         }
@@ -137,10 +135,20 @@ pub fn replace_symbol_body(
         }
     }
 
+    // Match file line endings (CRLF vs LF)
+    let is_crlf = existing_bytes.windows(2).any(|w| w == b"\r\n");
+    let normalized_body = if is_crlf && !new_body.contains("\r\n") && new_body.contains('\n') {
+        new_body.replace('\n', "\r\n")
+    } else if !is_crlf && new_body.contains("\r\n") {
+        new_body.replace("\r\n", "\n")
+    } else {
+        new_body.to_string()
+    };
+
     // Construct new file content with replaced byte span
-    let mut new_file_bytes = Vec::with_capacity(existing_bytes.len() + new_body.len());
+    let mut new_file_bytes = Vec::with_capacity(existing_bytes.len() + normalized_body.len());
     new_file_bytes.extend_from_slice(&existing_bytes[..body_start]);
-    new_file_bytes.extend_from_slice(new_body.as_bytes());
+    new_file_bytes.extend_from_slice(normalized_body.as_bytes());
     new_file_bytes.extend_from_slice(&existing_bytes[body_end..]);
 
     // Pre-flight syntax validation before touching disk
@@ -173,6 +181,11 @@ pub fn replace_symbol_body(
         .flush()
         .map_err(|e| EditError::Io(abs_path.display().to_string(), e))?;
 
+    // Preserve existing file permissions (e.g. +x 0755)
+    let _ = temp_file
+        .as_file()
+        .set_permissions(existing_permissions.clone());
+
     temp_file
         .persist(&abs_path)
         .map_err(|e| EditError::Io(abs_path.display().to_string(), e.error))?;
@@ -196,6 +209,9 @@ pub fn replace_symbol_body(
                 .tempfile_in(target_dir)?;
             rollback_tmp.write_all(&backup_bytes)?;
             rollback_tmp.flush()?;
+            let _ = rollback_tmp
+                .as_file()
+                .set_permissions(existing_permissions.clone());
             rollback_tmp.persist(&abs_path).map_err(|e| e.error)?;
             Ok(())
         })();
@@ -211,7 +227,7 @@ pub fn replace_symbol_body(
         }
     }
 
-    let new_body_hash = hash_content(new_body);
+    let new_body_hash = hash_content(&normalized_body);
 
     Ok(EditResult {
         symbol_name: symbol_name.to_string(),

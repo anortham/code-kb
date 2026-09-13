@@ -3,6 +3,8 @@ use code_kb_core::{
     slicer,
 };
 use std::fs;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 
 #[test]
 fn test_replace_symbol_body_atomic() {
@@ -220,4 +222,166 @@ fn test_replace_symbol_body_rejects_stale_indexed_hash_when_disk_differs() {
         "Must reject edit when expected hash does not match current disk body, got: {:?}",
         res
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_replace_symbol_body_preserves_file_permissions() {
+    let extract_bin = find_julie_extract_binary();
+    if extract_bin.is_none() {
+        eprintln!("Skipping integration test: julie-extract binary not found");
+        return;
+    }
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let root = temp_dir.path().to_path_buf();
+
+    let src_dir = root.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
+    let file_path = src_dir.join("script.rs");
+
+    let initial_code = "pub fn run_script() -> i32 {\n    1\n}\n";
+    fs::write(&file_path, initial_code).unwrap();
+
+    // Set 0755 executable permissions
+    fs::set_permissions(&file_path, fs::Permissions::from_mode(0o755)).unwrap();
+
+    let ws = Workspace::new(root.clone());
+    let db_path = root.join("test.db");
+
+    scan_workspace(&ws, &db_path, true).expect("Scan failed");
+    let conn = open_read_only(&db_path).unwrap();
+
+    let res = replace_symbol_body(
+        &ws,
+        &db_path,
+        &conn,
+        "run_script",
+        "src/script.rs",
+        "{\n    42\n}",
+        None,
+    );
+    assert!(res.is_ok(), "replace_symbol_body should succeed: {:?}", res);
+
+    // Verify permissions were preserved (not clobbered to 0600 by tempfile)
+    let perms = fs::metadata(&file_path).unwrap().permissions();
+    assert_eq!(
+        perms.mode() & 0o777,
+        0o755,
+        "Permissions must remain 0755 after edit, got: {:o}",
+        perms.mode() & 0o777
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_replace_symbol_body_preserves_symlinks() {
+    let extract_bin = find_julie_extract_binary();
+    if extract_bin.is_none() {
+        eprintln!("Skipping integration test: julie-extract binary not found");
+        return;
+    }
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let root = temp_dir.path().to_path_buf();
+
+    let src_dir = root.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
+    let real_file = src_dir.join("real.rs");
+    let link_file = src_dir.join("link.rs");
+
+    let initial_code = "pub fn linked_fn() -> i32 {\n    10\n}\n";
+    fs::write(&real_file, initial_code).unwrap();
+    std::os::unix::fs::symlink(&real_file, &link_file).unwrap();
+
+    let ws = Workspace::new(root.clone());
+    let db_path = root.join("test.db");
+
+    scan_workspace(&ws, &db_path, true).expect("Scan failed");
+    let conn = open_read_only(&db_path).unwrap();
+
+    // Edit through the symlink path
+    let res = replace_symbol_body(
+        &ws,
+        &db_path,
+        &conn,
+        "linked_fn",
+        "src/link.rs",
+        "{\n    99\n}",
+        None,
+    );
+    assert!(res.is_ok(), "replace_symbol_body should succeed: {:?}", res);
+
+    // Verify link.rs is STILL a symlink
+    let sym_meta = fs::symlink_metadata(&link_file).unwrap();
+    assert!(
+        sym_meta.is_symlink(),
+        "Symlink must NOT be replaced by a regular file"
+    );
+
+    // Verify real file received the edit
+    let real_content = fs::read_to_string(&real_file).unwrap();
+    assert!(
+        real_content.contains("99"),
+        "Real file must contain edited content"
+    );
+}
+
+#[test]
+fn test_replace_symbol_body_normalizes_crlf() {
+    let extract_bin = find_julie_extract_binary();
+    if extract_bin.is_none() {
+        eprintln!("Skipping integration test: julie-extract binary not found");
+        return;
+    }
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let root = temp_dir.path().to_path_buf();
+
+    let src_dir = root.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
+    let file_path = src_dir.join("crlf.rs");
+
+    // File with CRLF line endings
+    let initial_code = "pub fn crlf_fn() -> i32 {\r\n    1\r\n}\r\n";
+    fs::write(&file_path, initial_code).unwrap();
+
+    let ws = Workspace::new(root.clone());
+    let db_path = root.join("test.db");
+
+    scan_workspace(&ws, &db_path, true).expect("Scan failed");
+    let conn = open_read_only(&db_path).unwrap();
+
+    // Pass replacement body with LF only
+    let new_body = "{\n    let a = 10;\n    a * 2\n}";
+    let res = replace_symbol_body(
+        &ws,
+        &db_path,
+        &conn,
+        "crlf_fn",
+        "src/crlf.rs",
+        new_body,
+        None,
+    );
+    assert!(res.is_ok(), "replace_symbol_body should succeed: {:?}", res);
+
+    // Verify disk content preserves CRLF consistently throughout
+    let disk_bytes = fs::read(&file_path).unwrap();
+    let disk_str = String::from_utf8(disk_bytes.clone()).unwrap();
+    assert!(
+        disk_str.contains("\r\n"),
+        "File must maintain CRLF line endings"
+    );
+
+    // Check there are no bare LF (\n without \r before it)
+    let mut prev_char = ' ';
+    for ch in disk_str.chars() {
+        if ch == '\n' {
+            assert_eq!(
+                prev_char, '\r',
+                "Every newline in CRLF file must be preceded by carriage return (CRLF)"
+            );
+        }
+        prev_char = ch;
+    }
 }

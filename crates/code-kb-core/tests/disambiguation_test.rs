@@ -224,3 +224,108 @@ fn test_context_slice_qualified_method_uses_its_own_callees() {
             .any(|signature| signature.contains("other_dep"))
     );
 }
+
+#[test]
+fn test_get_symbol_by_name_not_crowded_out_by_imports() {
+    let extract_bin = find_julie_extract_binary();
+    if extract_bin.is_none() {
+        eprintln!("Skipping integration test: julie-extract binary not found");
+        return;
+    }
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let root = temp_dir.path().to_path_buf();
+    let src_dir = root.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
+
+    // 1 definition
+    fs::write(
+        src_dir.join("target.rs"),
+        "pub struct TargetConfig {\n    pub x: i32,\n}\n",
+    )
+    .unwrap();
+
+    // 12 files importing TargetConfig
+    for i in 1..=12 {
+        fs::write(
+            src_dir.join(format!("user_{}.rs", i)),
+            format!(
+                "use crate::target::TargetConfig;\npub fn user_{}() {{}}\n",
+                i
+            ),
+        )
+        .unwrap();
+    }
+
+    let ws = Workspace::new(root.clone());
+    let db_path = root.join("test.db");
+    scan_workspace(&ws, &db_path, true).expect("Scan failed");
+    let conn = open_read_only(&db_path).unwrap();
+
+    // Query without path filter; imports must NOT crowd out the struct definition!
+    let sym = get_symbol_by_name(&conn, "TargetConfig", None)
+        .expect("Query failed")
+        .expect("TargetConfig struct definition must be found");
+
+    assert_eq!(sym.kind, "struct");
+    assert_eq!(sym.path, "src/target.rs");
+}
+
+#[test]
+fn test_context_slice_finds_related_tests() {
+    let extract_bin = find_julie_extract_binary();
+    if extract_bin.is_none() {
+        eprintln!("Skipping integration test: julie-extract binary not found");
+        return;
+    }
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let root = temp_dir.path().to_path_buf();
+    let src_dir = root.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
+
+    fs::write(
+        src_dir.join("calc.rs"),
+        "pub fn calculate_price(base: i32) -> i32 {\n    base * 2\n}\n",
+    )
+    .unwrap();
+
+    // Create 6 non-test functions matching "calculate_price" to saturate general search
+    for i in 1..=6 {
+        fs::write(
+            src_dir.join(format!("other_{}.rs", i)),
+            format!("pub fn calculate_price_helper_{}() -> i32 {{ {} }}\n", i, i),
+        )
+        .unwrap();
+    }
+
+    // Create test referencing calculate_price
+    let tests_dir = root.join("tests");
+    fs::create_dir_all(&tests_dir).unwrap();
+    fs::write(
+        tests_dir.join("calc_test.rs"),
+        "#[test]\nfn test_calculate_price() {\n    let _ = calculate_price(5);\n}\n",
+    )
+    .unwrap();
+
+    let ws = Workspace::new(root.clone());
+    let db_path = root.join("test.db");
+    scan_workspace(&ws, &db_path, true).expect("Scan failed");
+    let conn = open_read_only(&db_path).unwrap();
+
+    let slice = get_context_slice_op(&ws, &db_path, &conn, "calculate_price", Some("src/calc.rs"))
+        .expect("get_context_slice_op failed");
+
+    assert!(
+        slice
+            .related_tests
+            .iter()
+            .any(|t| t.name.contains("calculate_price") || t.is_test),
+        "Context slice must find related test, got: {:?}",
+        slice
+            .related_tests
+            .iter()
+            .map(|t| &t.name)
+            .collect::<Vec<_>>()
+    );
+}
