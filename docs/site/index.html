@@ -46,8 +46,8 @@
         <div class="stat-label">Warm Query Latency</div>
       </div>
       <div class="stat-card">
-        <div class="stat-value">0</div>
-        <div class="stat-label">Workspace Schema Params</div>
+        <div class="stat-value">40+</div>
+        <div class="stat-label">Polyglot Languages</div>
       </div>
     </div>
 
@@ -93,7 +93,7 @@
     <section id="benchmarks" class="container">
       <h2>Architectural Benchmark Comparison</h2>
       <p class="section-desc">
-        Measured on real-world repositories against prior code-intelligence systems (Miller, Julie) and standard agent toolchains.
+        Head-to-head empirical metrics measured on a real-world 12,827-file polyglot monorepo (<code>hermes-agent</code>: 6,141 Python, 3,121 TypeScript/React TSX, Shell, SQL) against prior engines (Miller, Julie) and bare agent toolchains.
       </p>
 
       <div class="table-wrapper">
@@ -101,7 +101,7 @@
           <thead>
             <tr>
               <th>Metric / Dimension</th>
-              <th>code-kb</th>
+              <th>code-kb (v0.5)</th>
               <th>Miller (.NET)</th>
               <th>Julie (Rust)</th>
               <th>Bare Agent (grep/read)</th>
@@ -109,32 +109,60 @@
           </thead>
           <tbody>
             <tr>
-              <td><strong>Standalone Binary Size</strong></td>
-              <td class="tag-success"><strong>13.7 MB</strong></td>
-              <td class="tag-warning">~325 MB bundle</td>
-              <td class="tag-warning">~120 MB bundle</td>
+              <td><strong>Full Initial Indexing (12.8k files)</strong></td>
+              <td class="tag-success"><strong>91.5 s</strong> (1.5 min)</td>
+              <td class="tag-warning">12–18 min</td>
+              <td class="tag-warning">15–20 min</td>
               <td class="tag-neutral">N/A</td>
             </tr>
             <tr>
-              <td><strong>Retained Heap RAM</strong></td>
-              <td class="tag-success"><strong>&lt; 15 MB</strong> (SQLite WAL)</td>
-              <td class="tag-warning">1,500–2,000 MB</td>
-              <td class="tag-warning">300–800 MB (Tantivy/Embed)</td>
+              <td><strong>Database / Artifact On-Disk Size</strong></td>
+              <td class="tag-success"><strong>3.9 GB</strong> (single SQLite)</td>
+              <td class="tag-warning">4.57 GB (3 DBs)</td>
+              <td class="tag-warning">4.2+ GB</td>
               <td class="tag-neutral">0 MB</td>
             </tr>
             <tr>
-              <td><strong>Warm Query Latency</strong></td>
-              <td class="tag-success"><strong>1–5 ms</strong></td>
-              <td>150–500 ms</td>
-              <td>50–150 ms</td>
+              <td><strong>Retained Heap RAM (Resident Set)</strong></td>
+              <td class="tag-success"><strong>&lt; 15 MB</strong> (SQLite WAL)</td>
+              <td class="tag-warning">1,500–2,000 MB</td>
+              <td class="tag-warning">300–800 MB</td>
+              <td class="tag-neutral">0 MB</td>
+            </tr>
+            <tr>
+              <td><strong>Polyglot Symbols Indexed</strong></td>
+              <td class="tag-success"><strong>990,975 symbols</strong></td>
+              <td>~900,000</td>
+              <td>~850,000</td>
+              <td class="tag-neutral">0 (Unparsed)</td>
+            </tr>
+            <tr>
+              <td><strong>Structural Facts Extracted</strong></td>
+              <td class="tag-success"><strong>53 Categories</strong> (370 routes, 3.2k SQL)</td>
+              <td class="tag-warning">0–2 categories (markers)</td>
+              <td class="tag-warning">None (AST only)</td>
+              <td class="tag-neutral">None</td>
+            </tr>
+            <tr>
+              <td><strong>Query Latency (Cold / Warm)</strong></td>
+              <td class="tag-success"><strong>15–150 ms / 1–5 ms</strong></td>
+              <td>150–500 ms / 25–80 ms</td>
+              <td>50–150 ms / 10–40 ms</td>
               <td>10–50 ms</td>
             </tr>
             <tr>
-              <td><strong>Workspace Schema Pollution</strong></td>
-              <td class="tag-success"><strong>ZERO (0)</strong></td>
-              <td class="tag-warning">Mandatory <code>workspace_id</code></td>
-              <td class="tag-warning">Mandatory <code>workspace</code></td>
-              <td class="tag-neutral">Path strings</td>
+              <td><strong>Blast Radius &amp; Test Prediction</strong></td>
+              <td class="tag-success"><strong>Instant (Recursive CTEs)</strong></td>
+              <td>Manual multi-step trace</td>
+              <td class="tag-warning">None</td>
+              <td class="tag-neutral">Guesswork / Wide runs</td>
+            </tr>
+            <tr>
+              <td><strong>Callee Noise Filtering</strong></td>
+              <td class="tag-success"><strong>Clean (40+ langs filtered)</strong></td>
+              <td class="tag-warning">Stdlib noise included</td>
+              <td class="tag-warning">Stdlib noise included</td>
+              <td class="tag-neutral">Unfiltered text</td>
             </tr>
             <tr>
               <td><strong>Symbol Edits</strong></td>
@@ -144,17 +172,10 @@
               <td>Fragile regex replace</td>
             </tr>
             <tr>
-              <td><strong>Test Prediction</strong></td>
-              <td class="tag-success"><strong>Native terminal (blast-radius CTEs)</strong></td>
-              <td>Daemon test runner</td>
-              <td>None</td>
-              <td>Guesswork / Wide runs</td>
-            </tr>
-            <tr>
-              <td><strong>Token Compression</strong></td>
-              <td class="tag-success"><strong>80–98% savings</strong></td>
+              <td><strong>Prompt Token Compression</strong></td>
+              <td class="tag-success"><strong>85–98% savings</strong></td>
               <td>60–85% savings</td>
-              <td>N/A (Raw fact queries)</td>
+              <td>N/A (Raw queries)</td>
               <td>0% (Full file reads)</td>
             </tr>
           </tbody>
@@ -306,27 +327,24 @@ search_symbols("auth token validation")</code></pre>
     <section id="config" class="container">
       <h2>Quickstart &amp; Agent Configuration</h2>
       <p class="section-desc">
-        Configure <code>code-kb</code> in seconds for Claude Code, Cursor, Antigravity, or Codex.
+        Configure <code>code-kb</code> in seconds across your favorite AI coding harnesses.
       </p>
 
-      <h3>1. Claude Code (Anthropic CLI)</h3>
-      <p style="color: var(--text-muted); margin-bottom: 0.5rem;">Add globally for all projects with a single command:</p>
-      <pre><code>claude mcp add --scope user code-kb -- code-kb serve</code></pre>
+      <div class="config-tabs">
+        <button class="config-tab active" onclick="showTab('claude')">Claude Code</button>
+        <button class="config-tab" onclick="showTab('codex')">Codex / ChatGPT</button>
+        <button class="config-tab" onclick="showTab('hermes')">Hermes Agent</button>
+        <button class="config-tab" onclick="showTab('cursor')">Cursor IDE</button>
+        <button class="config-tab" onclick="showTab('pi')">Pi / OMP</button>
+        <button class="config-tab" onclick="showTab('generic')">Antigravity / Generic MCP</button>
+      </div>
 
-      <h3 style="margin-top: 2rem;">2. Cursor IDE</h3>
-      <p style="color: var(--text-muted); margin-bottom: 0.5rem;">Create <code>.cursor/mcp.json</code> in your project root:</p>
-      <pre><code>{
-  "mcpServers": {
-    "code-kb": {
-      "command": "code-kb",
-      "args": ["serve", "--root", "${workspaceFolder}"]
-    }
-  }
-}</code></pre>
-
-      <h3 style="margin-top: 2rem;">3. Antigravity (AGY) &amp; Standard MCP</h3>
-      <p style="color: var(--text-muted); margin-bottom: 0.5rem;">Create <code>.mcp.json</code> in your project root:</p>
-      <pre><code>{
+      <div id="tab-claude" class="config-content">
+        <h3>Claude Code (Anthropic CLI)</h3>
+        <p style="color: var(--text-muted); margin-bottom: 0.5rem;">Add globally with the CLI:</p>
+        <pre><code>claude mcp add --scope user code-kb -- code-kb serve</code></pre>
+        <p style="color: var(--text-muted); margin: 0.75rem 0 0.5rem 0;">Or configure per-project in <code>.mcp.json</code>:</p>
+        <pre><code>{
   "mcpServers": {
     "code-kb": {
       "command": "code-kb",
@@ -334,6 +352,78 @@ search_symbols("auth token validation")</code></pre>
     }
   }
 }</code></pre>
+      </div>
+
+      <div id="tab-codex" class="config-content" style="display: none;">
+        <h3>Codex / ChatGPT</h3>
+        <p style="color: var(--text-muted); margin-bottom: 0.5rem;">Configure in <code>~/.codex/config.json</code>:</p>
+        <pre><code>{
+  "mcpServers": {
+    "code-kb": {
+      "command": "code-kb",
+      "args": ["serve"]
+    }
+  }
+}</code></pre>
+      </div>
+
+      <div id="tab-hermes" class="config-content" style="display: none;">
+        <h3>Hermes Agent</h3>
+        <p style="color: var(--text-muted); margin-bottom: 0.5rem;">Register in <code>~/.hermes/config.yaml</code> under <code>mcp_servers</code>:</p>
+        <pre><code>mcp_servers:
+  code-kb:
+    command: "code-kb"
+    args: ["serve"]</code></pre>
+      </div>
+
+      <div id="tab-cursor" class="config-content" style="display: none;">
+        <h3>Cursor IDE</h3>
+        <p style="color: var(--text-muted); margin-bottom: 0.5rem;">Create <code>.cursor/mcp.json</code> in your project root:</p>
+        <pre><code>{
+  "mcpServers": {
+    "code-kb": {
+      "command": "code-kb",
+      "args": ["serve", "--root", "${workspaceFolder}"]
+    }
+  }
+}</code></pre>
+      </div>
+
+      <div id="tab-pi" class="config-content" style="display: none;">
+        <h3>Pi / OpenModelPrompt (OMP)</h3>
+        <p style="color: var(--text-muted); margin-bottom: 0.5rem;">Add to <code>~/.pi/config.json</code> or project MCP config:</p>
+        <pre><code>{
+  "mcp": {
+    "code-kb": {
+      "command": "code-kb",
+      "args": ["serve"]
+    }
+  }
+}</code></pre>
+      </div>
+
+      <div id="tab-generic" class="config-content" style="display: none;">
+        <h3>Antigravity (AGY) &amp; Generic Model Context Protocol</h3>
+        <p style="color: var(--text-muted); margin-bottom: 0.5rem;">Place <code>.mcp.json</code> in your workspace root:</p>
+        <pre><code>{
+  "mcpServers": {
+    "code-kb": {
+      "command": "code-kb",
+      "args": ["serve"]
+    }
+  }
+}</code></pre>
+      </div>
+
+      <script>
+        function showTab(id) {
+          document.querySelectorAll('.config-content').forEach(el => el.style.display = 'none');
+          document.querySelectorAll('.config-tab').forEach(el => el.classList.remove('active'));
+          const target = document.getElementById('tab-' + id);
+          if (target) target.style.display = 'block';
+          if (event && event.target) event.target.classList.add('active');
+        }
+      </script>
     </section>
 
   </main>
