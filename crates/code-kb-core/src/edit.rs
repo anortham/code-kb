@@ -42,6 +42,8 @@ pub enum EditError {
     ConcurrentModification(String),
     #[error("Synchronization failed after edit: {0}")]
     Sync(#[from] sync::SyncError),
+    #[error("Workspace path error: {0}")]
+    Workspace(#[from] crate::workspace::WorkspaceError),
     #[error("Query error: {0}")]
     Query(#[from] queries::QueryError),
 }
@@ -73,9 +75,7 @@ pub fn replace_symbol_body(
     new_body: &str,
     expected_body_hash: Option<&str>,
 ) -> Result<EditResult, EditError> {
-    let (abs_path, rel_path) = workspace
-        .resolve_path(Path::new(file_path))
-        .map_err(|e| EditError::SymbolNotFound(symbol_name.to_string(), e.to_string()))?;
+    let (abs_path, rel_path) = workspace.resolve_path(Path::new(file_path))?;
 
     // Tier 2: Refresh file in index before querying symbol offsets, propagating any sync errors
     sync::ensure_fresh_file(workspace, db_path, conn, &rel_path)?;
@@ -114,24 +114,13 @@ pub fn replace_symbol_body(
     let current_sha256 = hash_content(existing_body);
 
     // Verify optimistic lock if caller specified expected_body_hash
-    if let Some(expected) = expected_body_hash {
-        let mut matches = expected == current_sha256;
-
-        // If expected matches the indexed body_hash from julie-extract, verify that the
-        // file on disk has NOT been modified since the index was created.
-        if !matches && symbol.body_hash.as_deref().is_some_and(|h| h == expected) {
-            let disk_body_hash = hash_content(existing_body);
-            if disk_body_hash == current_sha256 {
-                matches = true;
-            }
-        }
-
-        if !matches {
-            return Err(EditError::HashMismatch(
-                expected.to_string(),
-                current_sha256,
-            ));
-        }
+    if let Some(expected) = expected_body_hash
+        && expected != current_sha256
+    {
+        return Err(EditError::HashMismatch(
+            expected.to_string(),
+            current_sha256,
+        ));
     }
 
     // Match file line endings (CRLF vs LF)

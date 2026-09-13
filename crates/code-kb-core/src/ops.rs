@@ -15,6 +15,8 @@ use crate::workspace::{Workspace, WorkspaceError};
 pub enum OpError {
     #[error("Symbol '{0}' not found")]
     SymbolNotFound(String),
+    #[error("Symbol '{0}' not found. Did you mean one of:\n{1}")]
+    SymbolNotFoundWithSuggestions(String, String),
     #[error("File '{0}' not found")]
     FileNotFound(String),
     #[error("Path '{0}' is a directory, not a file")]
@@ -72,7 +74,7 @@ pub fn get_symbol_body_op(
                 .map(|s| format!("  - {} `{}` ({}:{})", s.kind, s.name, s.path, s.start_line))
                 .collect::<Vec<_>>()
                 .join("\n");
-            OpError::SymbolNotFound(format!("{symbol_name}'. Did you mean one of:\n{list}"))
+            OpError::SymbolNotFoundWithSuggestions(symbol_name.to_string(), list)
         }
     })?;
 

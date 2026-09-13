@@ -13,6 +13,8 @@ pub enum QueryError {
     Sqlite(#[from] rusqlite::Error),
     #[error("Symbol '{0}' not found")]
     SymbolNotFound(String),
+    #[error("Symbol '{0}' not found. Did you mean one of:\n{1}")]
+    SymbolNotFoundWithSuggestions(String, String),
     #[error(
         "Ambiguous symbol '{0}': found {1} matching candidates. Specify file_path or qualified name to disambiguate:\n{2}"
     )]
@@ -350,18 +352,6 @@ pub fn sanitize_fts5_query(query: &str) -> (String, String) {
     let and_query = words.join(" ");
     let or_query = words.join(" OR ");
     (and_query, or_query)
-}
-
-/// Conceptual full-text search over symbol names, signatures, and docstrings using FTS5 (BM25).
-/// Evaluates multi-token AND matching first, falling back to OR ranking if AND yields 0 results.
-pub fn fts_search_symbols(
-    conn: &Connection,
-    query: &str,
-    kind_filter: Option<&str>,
-    include_tests: bool,
-    limit: usize,
-) -> Result<Vec<SymbolSearchResult>, QueryError> {
-    fts_search_symbols_scoped(conn, query, kind_filter, None, include_tests, limit)
 }
 
 /// Conceptual full-text search with optional path scoping filter.
@@ -852,9 +842,10 @@ pub fn find_references_ext(
                     .map(|s| format!("  - {} `{}` ({}:{})", s.kind, s.name, s.path, s.start_line))
                     .collect::<Vec<_>>()
                     .join("\n");
-                Err(QueryError::SymbolNotFound(format!(
-                    "{symbol_name}'. Did you mean one of:\n{list}"
-                )))
+                Err(QueryError::SymbolNotFoundWithSuggestions(
+                    symbol_name.to_string(),
+                    list,
+                ))
             }
         }
     }
@@ -1339,12 +1330,15 @@ pub fn compute_blast_radius(
         let mut path_conds = Vec::new();
         for (i, p) in seed_paths.iter().enumerate() {
             let idx = base_idx + i + 1;
-            path_conds.push(format!("path = ?{idx} OR path LIKE '%' || ?{idx} || '%'"));
-            let norm = p
+            path_conds.push(format!(
+                "path = ?{idx} OR path LIKE '%' || ?{idx} || '%' ESCAPE '\\'"
+            ));
+            let raw = p
                 .replace('\\', "/")
                 .trim_start_matches("./")
                 .trim_matches('/')
                 .to_string();
+            let norm = escape_like(&raw);
             params_vec.push(rusqlite::types::Value::Text(norm));
         }
         where_clauses.push(format!("({})", path_conds.join(" OR ")));
@@ -1465,15 +1459,11 @@ pub fn compute_blast_radius(
     // 2. Discover stem-matched test files in the workspace
     let mut file_stems = Vec::new();
     for p in seed_paths {
-        if let Some(stem) = std::path::Path::new(p).file_stem().and_then(|s| s.to_str()) {
-            let stem = stem
-                .trim_end_matches(".rs")
-                .trim_end_matches(".ts")
-                .trim_end_matches(".py")
-                .trim_end_matches(".go");
-            if stem.len() >= 3 && !file_stems.contains(&stem.to_string()) {
-                file_stems.push(stem.to_string());
-            }
+        if let Some(stem) = std::path::Path::new(p).file_stem().and_then(|s| s.to_str())
+            && stem.len() >= 3
+            && !file_stems.contains(&stem.to_string())
+        {
+            file_stems.push(stem.to_string());
         }
     }
     for sym in seed_symbols {
@@ -1497,11 +1487,11 @@ pub fn compute_blast_radius(
         .unwrap_or(false);
 
     if has_files {
+        let mut test_files_stmt = conn.prepare(
+            "SELECT DISTINCT path FROM files WHERE (path LIKE '%test%' OR path LIKE '%spec%') AND path LIKE ?1 ESCAPE '\\' LIMIT 10",
+        )?;
         for stem in file_stems {
-            let stem_pattern = format!("%{stem}%");
-            let mut test_files_stmt = conn.prepare(
-                "SELECT DISTINCT path FROM files WHERE (path LIKE '%test%' OR path LIKE '%spec%') AND path LIKE ?1 LIMIT 10",
-            )?;
+            let stem_pattern = format!("%{}%", escape_like(&stem));
             let t_rows =
                 test_files_stmt.query_map([stem_pattern], |row| row.get::<_, String>(0))?;
             for p in t_rows.flatten() {
@@ -1704,27 +1694,30 @@ mod tests {
         ensure_fts_index(&conn).unwrap();
 
         // 1. Porter stemming match: 'parsing' matches 'parse_tokens' and 'Parses' docstring
-        let results = fts_search_symbols(&conn, "parsing tokens", None, false, 10).unwrap();
+        let results =
+            fts_search_symbols_scoped(&conn, "parsing tokens", None, None, false, 10).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].symbol.name, "parse_tokens");
         assert!(results[0].snippet.is_some());
 
         // 2. Docstring conceptual search: 'transactions' matches 'PaymentGateway'
-        let results = fts_search_symbols(&conn, "transactions", None, false, 10).unwrap();
+        let results =
+            fts_search_symbols_scoped(&conn, "transactions", None, None, false, 10).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].symbol.name, "PaymentGateway");
 
         // 3. Test filter: searching 'payment' with include_tests=false ignores 'test_payment_flow'
-        let results = fts_search_symbols(&conn, "payment", None, false, 10).unwrap();
+        let results = fts_search_symbols_scoped(&conn, "payment", None, None, false, 10).unwrap();
         assert_eq!(results.len(), 2);
         assert!(results.iter().all(|r| !r.symbol.is_test));
 
         // 4. Test filter: searching 'payment' with include_tests=true includes 'test_payment_flow'
-        let results = fts_search_symbols(&conn, "payment", None, true, 10).unwrap();
+        let results = fts_search_symbols_scoped(&conn, "payment", None, None, true, 10).unwrap();
         assert_eq!(results.len(), 3);
 
         // 5. Fallback OR matching: multi-term where only some match
-        let results = fts_search_symbols(&conn, "stripe kafka redis", None, false, 10).unwrap();
+        let results =
+            fts_search_symbols_scoped(&conn, "stripe kafka redis", None, None, false, 10).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].symbol.name, "StripeClient");
     }

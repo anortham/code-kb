@@ -10,12 +10,6 @@ pub fn get_log_dir(workspace_root: &Path) -> PathBuf {
     workspace_root.join(".code-kb").join("logs")
 }
 
-/// Returns the full path to the active log file.
-#[allow(dead_code)]
-pub fn get_log_file(workspace_root: &Path) -> PathBuf {
-    get_log_dir(workspace_root).join("code-kb.log")
-}
-
 /// Initializes structured logging to `.code-kb/logs/code-kb.log` and optionally stderr.
 ///
 /// NOTE: When `is_serve` is true (MCP mode over stdio), all stdout logging is strictly
