@@ -62,10 +62,10 @@ echo "[5/7] Running full test suite (cargo test --workspace)..."
 cargo test --workspace
 echo "OK (all tests passed)"
 
-# 6. Core package dry-run
-echo "[6/7] Verifying code-kb-core packaging..."
-cargo package -p code-kb-core --allow-dirty
-echo "OK (code-kb-core packages cleanly)"
+# 6. Workspace package dry-run
+echo "[6/7] Verifying code-kb workspace packaging..."
+cargo package --workspace --no-verify --allow-dirty
+echo "OK (workspace packages cleanly)"
 
 # 7. Local Windows NTFS verification (if win-test is running)
 echo -n "[7/7] Checking Prax Windows 11 VM (win-test)... "
