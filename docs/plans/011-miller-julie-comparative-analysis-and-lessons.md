@@ -23,7 +23,7 @@ This document details the comparative findings, benchmark evidence, and architec
 | **Edit Protocol** | **Single-Turn Atomic Edit** (`replace_symbol_body`). Pre-flight tree-sitter validation. | **2-Step Preview Handshake** (`apply=false` then `apply=true`). | **2-Step Preview Handshake** (`dry_run=true` then `false`). |
 | **Search Engine** | SQLite **FTS5 BM25 + Porter Stemming** + path prefix scoping. | Complex multi-phase (exact -> trigram -> vector). Prone to noise. | Tantivy BM25 + ONNX embedding sidecar + centrality graph. |
 | **File Freshness & Watcher** | In-process notify watcher + mtime/size checks in SQLite (<10ms). | `FreshnessService` rebuilt entire index on every revision (101.5 GB reads; PERF-002). | File watcher + Tantivy commit pipeline. |
-| **Worktree Lifecycle** | Per-worktree `.code-kb/artifact.db` + `code-kb prune` for dead worktrees. | CAS family store with shared blobs, but required manual cache purge. | Multi-workspace index directory. |
+| **Worktree Lifecycle** | Per-worktree `.code-kb/artifact.db` (self-cleaning with worktree directory removal; superseded earlier centralized index `code-kb prune` design). | CAS family store with shared blobs, but required manual cache purge. | Multi-workspace index directory. |
 
 ---
 
@@ -84,4 +84,4 @@ The benchmark suite (`scripts/benchmark_quality.py`) measures live performance a
 
 `code-kb` was validated against isolated git worktrees (`crates/code-kb-core/tests/worktree_test.rs`):
 1. **Isolated Indexes:** A new git worktree creates its own local index. Modifying files in the worktree updates only the worktree's database; the main repository's database remains unmodified.
-2. **Post-Removal Pruning:** When a worktree or workspace is removed, running `code-kb prune` automatically inspects SQLite metadata (`artifact_metadata.root_path`) and cleans up orphaned database files.
+2. **Self-Cleaning Storage:** Worktrees maintain their isolated database at `<worktree-root>/.code-kb/artifact.db`. Deleting the worktree directory or running `git worktree remove` automatically cleans up the database with no orphaned state left behind. *(Historical note: An early centralized database design used `code-kb prune`, which was deprecated in Plan 012 in favor of self-cleaning in-tree databases).*

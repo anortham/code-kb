@@ -307,7 +307,7 @@ mod tests {
 
     #[test]
     fn test_telemetry_recording_and_summary() {
-        let temp = tempfile::tempdir().unwrap();
+        let temp = crate::safe_tempdir();
         let root = temp.path();
 
         let inv1 = ToolInvocation {

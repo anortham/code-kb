@@ -8,21 +8,28 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 cd "${REPO_ROOT}"
+mkdir -p "${REPO_ROOT}/target/tmp"
+export TMPDIR="${REPO_ROOT}/target/tmp"
 
 echo "========================================================"
 echo " Starting code-kb Release Pre-Flight Verification"
 echo "========================================================"
 
-# 1. Sync contract (AGENTS.md vs CLAUDE.md)
-echo -n "[1/7] Verifying sync contract (AGENTS.md vs CLAUDE.md)... "
-if cmp -s AGENTS.md CLAUDE.md; then
-  echo "OK (byte-for-byte identical)"
-else
+# 1. Sync contract (AGENTS.md vs CLAUDE.md and SKILL.md)
+echo -n "[1/7] Verifying sync contracts (AGENTS.md vs CLAUDE.md, SKILL.md copies)... "
+if ! cmp -s AGENTS.md CLAUDE.md; then
   echo "FAIL"
   echo "error: AGENTS.md and CLAUDE.md differ. Keep them byte-for-byte identical." >&2
   cmp AGENTS.md CLAUDE.md || true
   exit 1
 fi
+if ! cmp -s skills/code-kb/SKILL.md .claude-plugin/skills/code-kb/SKILL.md; then
+  echo "FAIL"
+  echo "error: skills/code-kb/SKILL.md and .claude-plugin/skills/code-kb/SKILL.md differ." >&2
+  cmp skills/code-kb/SKILL.md .claude-plugin/skills/code-kb/SKILL.md || true
+  exit 1
+fi
+echo "OK (byte-for-byte identical)"
 
 # 2. Version consistency check
 echo -n "[2/7] Checking version consistency across manifests... "

@@ -495,3 +495,28 @@ fn test_cli_hook_copilot_env() {
     let val2: serde_json::Value = serde_json::from_slice(&subagent_output.stdout).unwrap();
     assert!(val2.as_object().unwrap().is_empty());
 }
+
+#[test]
+fn test_agents_and_claude_md_sync_contract() {
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let root = manifest_dir.parent().unwrap().parent().unwrap();
+    let agents = std::fs::read_to_string(root.join("AGENTS.md")).unwrap();
+    let claude = std::fs::read_to_string(root.join("CLAUDE.md")).unwrap();
+    assert_eq!(
+        agents, claude,
+        "AGENTS.md and CLAUDE.md must be byte-for-byte identical"
+    );
+}
+
+#[test]
+fn test_skills_md_sync_contract() {
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let root = manifest_dir.parent().unwrap().parent().unwrap();
+    let skill_root = std::fs::read_to_string(root.join("skills/code-kb/SKILL.md")).unwrap();
+    let skill_plugin =
+        std::fs::read_to_string(root.join(".claude-plugin/skills/code-kb/SKILL.md")).unwrap();
+    assert_eq!(
+        skill_root, skill_plugin,
+        "skills/code-kb/SKILL.md and .claude-plugin/skills/code-kb/SKILL.md must be byte-for-byte identical"
+    );
+}

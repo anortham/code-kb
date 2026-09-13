@@ -555,6 +555,7 @@ impl McpServer {
                 let kind = arguments.get("kind").and_then(|v| v.as_str());
                 let include_tests = arguments
                     .get("is_test")
+                    .or_else(|| arguments.get("include_tests"))
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false);
                 let limit = arguments
@@ -624,6 +625,7 @@ impl McpServer {
                 let kind = arguments.get("kind").and_then(|v| v.as_str());
                 let include_tests = arguments
                     .get("is_test")
+                    .or_else(|| arguments.get("include_tests"))
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false);
                 let limit = arguments
@@ -748,6 +750,7 @@ impl McpServer {
                     .get("category")
                     .or_else(|| arguments.get("cat"))
                     .or_else(|| arguments.get("type"))
+                    .or_else(|| arguments.get("kind"))
                     .or_else(|| arguments.get("pattern"))
                     .and_then(|v| v.as_str())
                     .unwrap_or("")

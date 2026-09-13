@@ -300,14 +300,13 @@ mod tests {
     use std::fs;
 
     use rusqlite::Connection;
-    use tempfile::tempdir;
 
     use super::codebase_outline_op;
     use crate::workspace::Workspace;
 
     #[test]
     fn codebase_outline_accepts_absolute_workspace_root_filter() {
-        let temp = tempdir().unwrap();
+        let temp = crate::safe_tempdir();
         fs::write(temp.path().join("root.rs"), "pub fn root() {}\n").unwrap();
         let workspace = Workspace::new(temp.path().to_path_buf());
         let conn = Connection::open(temp.path().join("index.db")).unwrap();

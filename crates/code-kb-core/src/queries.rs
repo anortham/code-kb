@@ -1546,8 +1546,9 @@ mod tests {
 
     #[test]
     fn search_symbols_treats_like_wildcards_as_literals() {
-        let temp = tempfile::NamedTempFile::new().unwrap();
-        let conn = open_read_write(temp.path()).unwrap();
+        let dir = crate::safe_tempdir();
+        let db_path = dir.path().join("search_symbols_treats_like_wildcards.db");
+        let conn = open_read_write(&db_path).unwrap();
         conn.execute_batch(
             "CREATE TABLE symbols (
                 symbol_id TEXT, file_id TEXT, path TEXT, language TEXT, name TEXT, kind TEXT,
@@ -1598,8 +1599,9 @@ mod tests {
 
     #[test]
     fn find_references_for_symbol_limits_callees_by_symbol_id() {
-        let temp = tempfile::NamedTempFile::new().unwrap();
-        let conn = open_read_write(temp.path()).unwrap();
+        let dir = crate::safe_tempdir();
+        let db_path = dir.path().join("find_references_for_symbol.db");
+        let conn = open_read_write(&db_path).unwrap();
         conn.execute_batch(
             "CREATE TABLE symbols (
                 symbol_id TEXT, file_id TEXT, path TEXT, language TEXT, name TEXT, kind TEXT,
@@ -1636,8 +1638,9 @@ mod tests {
 
     #[test]
     fn test_fts_search_symbols_and_porter_stemming() {
-        let temp = tempfile::NamedTempFile::new().unwrap();
-        let conn = open_read_write(temp.path()).unwrap();
+        let dir = crate::safe_tempdir();
+        let db_path = dir.path().join("fts_search_symbols.db");
+        let conn = open_read_write(&db_path).unwrap();
 
         conn.execute_batch(
             "CREATE TABLE symbols (

@@ -83,7 +83,10 @@ pub enum Command {
 #[derive(Debug, Args)]
 pub struct OutlineArgs {
     /// Optional subpath to scope outline.
+    #[arg(long, short = 'p')]
     pub path: Option<String>,
+    /// Positional path to scope outline if --path is not provided.
+    pub positional_path: Option<String>,
     /// Maximum directory recursion depth (default: 2).
     #[arg(long, default_value_t = 2)]
     pub depth: usize,
@@ -106,7 +109,7 @@ pub struct SymbolArgs {
     #[arg(long)]
     pub kind: Option<String>,
     /// Include test functions.
-    #[arg(long)]
+    #[arg(long, alias = "is-test")]
     pub include_tests: bool,
     /// Maximum number of results.
     #[arg(long, default_value_t = 20)]
@@ -124,7 +127,7 @@ pub struct SearchArgs {
     #[arg(long)]
     pub kind: Option<String>,
     /// Include test functions and test containers.
-    #[arg(long)]
+    #[arg(long, alias = "is-test")]
     pub include_tests: bool,
     /// Maximum number of results.
     #[arg(long, default_value_t = 20)]
@@ -182,8 +185,11 @@ pub struct BlastRadiusArgs {
 #[derive(Debug, Args)]
 pub struct FactsArgs {
     /// Category or pattern (e.g. route, query, model, config). If omitted, lists available categories.
+    #[arg(long, short = 'c')]
+    pub category: Option<String>,
+    /// Positional category if --category is not provided.
     #[arg(default_value = "")]
-    pub category: String,
+    pub positional_category: String,
     /// Maximum number of results.
     #[arg(long, default_value_t = 30)]
     pub limit: usize,
@@ -371,7 +377,10 @@ fn main() -> anyhow::Result<()> {
 
     match cli.command {
         Command::Outline(args) => {
-            let rel_path = args.path.as_deref().map(|p| workspace.relativize_filter(p));
+            let target_path = args.path.or(args.positional_path);
+            let rel_path = target_path
+                .as_deref()
+                .map(|p| workspace.relativize_filter(p));
             let path_filter = rel_path.as_deref();
             if cli.json {
                 let files = queries::load_scoped_files(&conn, path_filter)?;
@@ -526,7 +535,8 @@ fn main() -> anyhow::Result<()> {
             }
         }
         Command::Facts(args) => {
-            let cat = args.category.trim();
+            let raw_cat = args.category.unwrap_or(args.positional_category);
+            let cat = raw_cat.trim();
             if cat.is_empty() {
                 let categories = list_structural_fact_categories(&conn)?;
                 if cli.json {
@@ -564,7 +574,11 @@ fn main() -> anyhow::Result<()> {
                 args.expected_hash.as_deref(),
             )?;
 
-            println!("{}", format_replace_symbol_result(&res));
+            if cli.json {
+                println!("{}", serde_json::to_string_pretty(&res)?);
+            } else {
+                println!("{}", format_replace_symbol_result(&res));
+            }
         }
         Command::Serve(_)
         | Command::Scan(_)

@@ -124,8 +124,9 @@ mod tests {
 
     #[test]
     fn test_open_read_write_and_read_only() {
-        let temp = tempfile::NamedTempFile::new().unwrap();
-        let conn_rw = open_read_write(temp.path()).unwrap();
+        let dir = crate::safe_tempdir();
+        let db_path = dir.path().join("test.db");
+        let conn_rw = open_read_write(&db_path).unwrap();
         conn_rw
             .execute("CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT);", [])
             .unwrap();
@@ -134,7 +135,7 @@ mod tests {
             .unwrap();
         drop(conn_rw);
 
-        let conn_ro = open_read_only(temp.path()).unwrap();
+        let conn_ro = open_read_only(&db_path).unwrap();
         let name: String = conn_ro
             .query_row("SELECT name FROM test WHERE id = 1", [], |r| r.get(0))
             .unwrap();
@@ -167,8 +168,9 @@ mod tests {
 
     #[test]
     fn test_ensure_fts_index_lifecycle() {
-        let temp = tempfile::NamedTempFile::new().unwrap();
-        let conn = open_read_write(temp.path()).unwrap();
+        let dir = crate::safe_tempdir();
+        let db_path = dir.path().join("fts_lifecycle.db");
+        let conn = open_read_write(&db_path).unwrap();
 
         // Create mock symbols table
         conn.execute_batch(

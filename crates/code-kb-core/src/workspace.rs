@@ -410,7 +410,7 @@ mod tests {
 
     #[test]
     fn test_workspace_resolve_path_traversal_escape() {
-        let temp = tempfile::tempdir().unwrap();
+        let temp = crate::safe_tempdir();
         let ws = Workspace::new(temp.path().to_path_buf());
         let res = ws.resolve_path(Path::new("sub/../../outside.rs"));
         assert!(
@@ -437,7 +437,7 @@ mod tests {
 
     #[test]
     fn test_relativize_filter() {
-        let temp = tempfile::tempdir().unwrap();
+        let temp = crate::safe_tempdir();
         let ws = Workspace::new(temp.path().to_path_buf());
 
         // Relative path

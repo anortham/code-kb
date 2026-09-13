@@ -1,4 +1,5 @@
 use rusqlite::Connection;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::Write;
@@ -49,7 +50,7 @@ pub enum EditError {
 }
 
 /// Result of an atomic symbol body replacement.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EditResult {
     pub symbol_name: String,
     pub file_path: String,

@@ -28,6 +28,9 @@ jobs:
       - name: Sync Contract (AGENTS.md vs CLAUDE.md)
         if: ${{ !cancelled() }}
         run: cmp AGENTS.md CLAUDE.md
+      - name: Sync Contract (SKILL.md)
+        if: ${{ !cancelled() }}
+        run: cmp skills/code-kb/SKILL.md .claude-plugin/skills/code-kb/SKILL.md
       - name: Restore julie-extract
         if: ${{ !cancelled() }}
         run: bash scripts/restore-julie-extract.sh

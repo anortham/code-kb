@@ -52,11 +52,11 @@ pub use workspace::{
 };
 
 /// Creates a temporary directory in a safe location, prioritizing `CARGO_TARGET_TMPDIR`,
-/// `TMPDIR`, and `./target/tmp` over `/tmp` to avoid tmpfs quota limits.
+/// `TMPDIR`, and workspace `./target/tmp` over `/tmp` to avoid tmpfs quota limits.
 pub fn safe_tempdir() -> tempfile::TempDir {
     if let Ok(target_tmp) = std::env::var("CARGO_TARGET_TMPDIR") {
         let path = std::path::PathBuf::from(&target_tmp);
-        if path.exists()
+        if (path.exists() || std::fs::create_dir_all(&path).is_ok())
             && let Ok(dir) = tempfile::TempDir::new_in(&path)
         {
             return dir;
@@ -64,17 +64,36 @@ pub fn safe_tempdir() -> tempfile::TempDir {
     }
     if let Ok(tmp) = std::env::var("TMPDIR") {
         let path = std::path::PathBuf::from(tmp);
-        if path.exists()
+        if (path.exists() || std::fs::create_dir_all(&path).is_ok())
             && let Ok(dir) = tempfile::TempDir::new_in(&path)
         {
             return dir;
         }
     }
-    let local_target_tmp = std::path::PathBuf::from("target/tmp");
-    if (local_target_tmp.exists() || std::fs::create_dir_all(&local_target_tmp).is_ok())
-        && let Ok(dir) = tempfile::TempDir::new_in(&local_target_tmp)
-    {
-        return dir;
+
+    // Search ancestors of CARGO_MANIFEST_DIR or current_dir for workspace target/tmp
+    let mut search_dirs = Vec::new();
+    if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+        search_dirs.push(std::path::PathBuf::from(manifest_dir));
     }
+    if let Ok(cwd) = std::env::current_dir() {
+        search_dirs.push(cwd);
+    }
+    for base in search_dirs {
+        let mut cur = base;
+        loop {
+            let candidate = cur.join("target/tmp");
+            if (cur.join("Cargo.toml").exists() || cur.join(".git").exists())
+                && (candidate.exists() || std::fs::create_dir_all(&candidate).is_ok())
+                && let Ok(dir) = tempfile::TempDir::new_in(&candidate)
+            {
+                return dir;
+            }
+            if !cur.pop() {
+                break;
+            }
+        }
+    }
+
     tempfile::tempdir().expect("failed to create temporary directory")
 }

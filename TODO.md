@@ -4,12 +4,12 @@
 - [x] **MCP server instructions & tool adoption:** Tuned tool descriptions with progressive disclosure contrast keywords; verified `initialize` instructions.
 - [x] **Hooks and/or skills:** Created token-dense agent skill `skills/code-kb/SKILL.md` (and `.claude-plugin/skills/code-kb/SKILL.md`).
 - [x] **License files:** Added `LICENSE-MIT` and `LICENSE-APACHE` to repository root; aligned `Cargo.toml` to `MIT OR Apache-2.0`.
-- [x] **v0.5.0 GitHub Release:** Published binary release on GitHub with bundled `julie-extract` v2.42.1 for Linux x86_64, macOS Apple Silicon, macOS Intel (`macos-15-intel`), and Windows x86_64.
+- [x] **v0.5.0 & v0.5.1 GitHub Releases:** Published binary releases on GitHub with bundled `julie-extract` v2.42.1 for Linux x86_64, macOS Apple Silicon, macOS Intel (`macos-15-intel`), and Windows x86_64.
 - [x] **Release documentation & pre-flight:** Created `docs/RELEASING.md` and `scripts/release-preflight.sh` automating all 7 pre-flight checks across Linux and Windows.
 - [x] **GitHub Pages deployment:** Configured and deployed showcase site at https://anortham.github.io/code-kb/ via `.github/workflows/pages.yml`.
 - [ ] **Crates.io publication:**
-  - Publish `code-kb-core` v0.5.0 (`cargo publish -p code-kb-core`).
-  - Publish `code-kb-cli` v0.5.0 (`cargo publish -p code-kb-cli`).
+  - Publish `code-kb-core` v0.5.1 (`cargo publish -p code-kb-core`).
+  - Publish `code-kb-cli` v0.5.1 (`cargo publish -p code-kb-cli`).
 - [x] **Directories/Files to ignore:** Aligned hard exclusion lists across `julie-extract` (`HARD_EXCLUDE_DIRS`) and `code-kb` (`is_hard_excluded`), adding `.claude`, `.venv`, `venv`, `.env`, `.tox`, `.vs`, `.code-kb-ignore`, `.codekbignore`.
 - [x] **Worktrees:** Validated git worktree lifecycle and index isolation in `crates/code-kb-core/tests/worktree_test.rs`; implemented self-cleaning in-tree databases at `<root>/.code-kb/artifact.db` with parent DB auto-copy and fast reconciliation.
 - [x] **julie-extract:** Synchronized hard exclusions in `julie-extract-cli` (commit `0ef89729`), passed all 13 contract tests, and verified binary discovery.
