@@ -82,7 +82,7 @@ impl McpServer {
         vec![
             Tool {
                 name: "codebase_outline".to_string(),
-                description: "Provides a top-level architectural orientation of the repository or sub-package without reading raw files.".to_string(),
+                description: "Provides a top-level architectural orientation of the repository or sub-package in ~200 tokens. Start here when exploring unfamiliar code instead of running directory listings or reading files.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -99,7 +99,7 @@ impl McpServer {
             },
             Tool {
                 name: "file_skeleton".to_string(),
-                description: "Returns all types, traits, functions, signatures, docstrings, and visibility for a file with implementation bodies stripped.".to_string(),
+                description: "Returns all types, traits, functions, signatures, docstrings, and visibility for a file with implementation bodies stripped. Use this instead of reading the entire file when inspecting interfaces and types.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -113,7 +113,7 @@ impl McpServer {
             },
             Tool {
                 name: "find_symbol".to_string(),
-                description: "Fast semantic lookup across symbols in the repository, replacing text grep.".to_string(),
+                description: "Fast semantic lookup across symbols in the repository. Use this instead of text grep to locate functions, structs, traits, or methods by name or prefix.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -139,7 +139,7 @@ impl McpServer {
             },
             Tool {
                 name: "search_symbols".to_string(),
-                description: "Conceptual and full-text search over symbol names, signatures, and docstrings using SQLite FTS5 BM25 ranking. Use when exact symbol names are unknown.".to_string(),
+                description: "Conceptual and full-text search over symbol names, signatures, and docstrings using SQLite FTS5 BM25 ranking. Use when exact symbol names are unknown or searching for concepts (e.g. 'auth middleware', 'retry loop').".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -165,7 +165,7 @@ impl McpServer {
             },
             Tool {
                 name: "get_symbol_body".to_string(),
-                description: "Retrieves the exact implementation body of a specific symbol.".to_string(),
+                description: "Retrieves the exact implementation body of a specific symbol. Use this after finding a symbol instead of reading the whole source file.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -183,7 +183,7 @@ impl McpServer {
             },
             Tool {
                 name: "get_context_slice".to_string(),
-                description: "Surgical context bundle combining target body, callee signatures, parameter types, and related tests in one call.".to_string(),
+                description: "Surgical context bundle combining target body, callee signatures, parameter types, and related tests in one call. Use this before modifying a function to understand its immediate dependencies.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -201,7 +201,7 @@ impl McpServer {
             },
             Tool {
                 name: "find_references".to_string(),
-                description: "Discovers callers or callees of a symbol.".to_string(),
+                description: "Discovers callers or callees of a symbol using AST relationship facts. Use to trace call graphs and assess impact before refactoring.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {

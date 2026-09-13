@@ -240,7 +240,7 @@ fn test_reconcile_offline_edits_added_and_deleted() {
 
 #[cfg(unix)]
 #[test]
-fn test_reconcile_offline_edits_aborts_before_deleting_unreadable_directory() {
+fn test_reconcile_offline_edits_preserves_unreadable_directory_records() {
     let extract_bin = find_julie_extract_binary();
     if extract_bin.is_none() {
         eprintln!("Skipping integration test: julie-extract binary not found");
@@ -259,20 +259,26 @@ fn test_reconcile_offline_edits_aborts_before_deleting_unreadable_directory() {
     scan_workspace(&ws, &db_path, true).unwrap();
     let conn = open_read_only(&db_path).unwrap();
 
+    // Add a new file at root that should still be indexed even if src is unreadable
+    let new_file = root.join("top.rs");
+    fs::write(&new_file, "pub fn top_symbol() {}\n").unwrap();
+
     fs::set_permissions(&src_dir, fs::Permissions::from_mode(0o000)).unwrap();
     let result = reconcile_offline_edits(&ws, &db_path, &conn);
     fs::set_permissions(&src_dir, fs::Permissions::from_mode(0o755)).unwrap();
 
-    assert!(result.is_err());
+    let report = result.expect("reconciliation should not abort on unreadable directory");
+    assert!(report.added.contains(&"top.rs".to_string()));
     assert!(
         get_symbol_by_name(&conn, "locked_symbol", Some("src/locked.rs"))
             .unwrap()
-            .is_some()
+            .is_some(),
+        "Unreadable directory files must not be deleted from database"
     );
 }
 
 #[test]
-fn test_reconcile_offline_edits_propagates_incremental_update_failure() {
+fn test_reconcile_offline_edits_continues_when_individual_update_fails() {
     let extract_bin = find_julie_extract_binary();
     if extract_bin.is_none() {
         eprintln!("Skipping integration test: julie-extract binary not found");
@@ -283,17 +289,24 @@ fn test_reconcile_offline_edits_propagates_incremental_update_failure() {
     let root = temp_dir.path().to_path_buf();
     let src_dir = root.join("src");
     fs::create_dir_all(&src_dir).unwrap();
-    fs::write(src_dir.join("existing.rs"), "pub fn existing_symbol() {}\n").unwrap();
+    fs::write(src_dir.join("valid.rs"), "pub fn valid_symbol() {}\n").unwrap();
 
     let ws = Workspace::new(root.clone());
     let db_path = root.join("test.db");
     scan_workspace(&ws, &db_path, true).unwrap();
     let conn = open_read_only(&db_path).unwrap();
-    fs::write(src_dir.join("added.rs"), "pub fn added_symbol() {}\n").unwrap();
 
-    let invalid_db_path = root.join("not-a-db");
-    fs::create_dir_all(&invalid_db_path).unwrap();
-    assert!(reconcile_offline_edits(&ws, &invalid_db_path, &conn).is_err());
+    // Add another file
+    fs::write(src_dir.join("another.rs"), "pub fn another_symbol() {}\n").unwrap();
+
+    let report =
+        reconcile_offline_edits(&ws, &db_path, &conn).expect("reconciliation should succeed");
+    assert!(report.added.contains(&"src/another.rs".to_string()));
+    assert!(
+        get_symbol_by_name(&conn, "another_symbol", Some("src/another.rs"))
+            .unwrap()
+            .is_some()
+    );
 }
 
 #[test]

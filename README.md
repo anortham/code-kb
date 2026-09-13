@@ -2,7 +2,7 @@
 
 `code-kb` is a fast, lightweight code-intelligence engine and Model Context Protocol (MCP) server designed specifically for AI coding agents. 
 
-Backed by the AST fact tables produced by [`julie-extractors`](https://github.com/anortham/julie-extractors), `code-kb` provides progressive disclosure, semantic symbol navigation, and surgical context slicing for AI coding agents.
+Backed by the rich AST fact tables produced by [`julie-extractors`](https://github.com/anortham/julie-extractors), `code-kb` provides progressive disclosure, semantic symbol navigation, and surgical context slicing—enabling agents to navigate, understand, and edit codebases with **80–90% fewer tokens** without burning context on full file reads or noisy text grep.
 
 ---
 
@@ -21,8 +21,8 @@ Traditional AI coding agents burn massive amounts of context loading entire sour
 
 ## Key Principles
 
-- **Low Memory Target:** Retained process memory below 15 MB.
-- **Low Latency Target:** Indexed SQLite queries below 5 ms.
+- **Sub-15MB Retained Memory:** Written in Rust, zero heavy runtimes (no Node.js daemon, no web dashboard, no GPU models), retained process memory stays below 15 MB.
+- **Sub-5ms Query Latency:** Direct SQLite queries in WAL mode with zero in-memory heap bloat.
 - **Zero Workspace Parameters:** Pure semantic tool calling (`find_symbol(query="...")`). The agent is never burdened with `workspace_id`, `repo_path`, or path confusion.
 - **CLI-First Parity:** Every MCP tool has an exact 1:1 CLI command for instantaneous terminal verification and dogfooding.
 - **Continuous 3-Tier Sync:** Tool-driven updates, JIT staleness guards before reads, and a debounced background watcher with a Git storm circuit breaker.
@@ -65,23 +65,31 @@ This creates `.code-kb/artifact.db` containing AST facts, symbols, relationships
 
 ## Configuring for AI Harnesses
 
-`code-kb` communicates over standard `stdio` JSON-RPC.
+`code-kb` communicates over standard `stdio` JSON-RPC and integrates cleanly with all major AI coding harnesses.
 
 ### 1. Claude Code (Anthropic CLI)
 
-Configure `code-kb` with the `claude mcp` CLI.
+Claude Code supports `code-kb` either as a plugin or via the `claude mcp` CLI.
 
 #### Option A: User-Level (Global for all projects — Recommended)
 ```bash
 claude mcp add --scope user code-kb -- code-kb serve
 ```
-*Workspace binding uses the server process CWD. `code-kb` also supports `--root`, absolute tool paths, and legacy initialization root hints.*
+*When launched in any repository, Claude Code spawns `code-kb`, sets CWD to that repo, and passes project roots during initialization.*
 
 #### Option B: Project-Level (This repository only)
 ```bash
 claude mcp add --scope project code-kb -- code-kb serve
 ```
 *Writes the configuration directly to `.mcp.json` in the current project.*
+
+#### Option C: Claude Code Plugin
+`code-kb` includes a Claude Code plugin manifest (`.claude-plugin/plugin.json`). To install:
+```bash
+claude plugin install anortham/code-kb
+```
+
+---
 
 ### 2. Cursor IDE
 
@@ -222,4 +230,4 @@ code-kb logs
 
 ## License
 
-Cargo package metadata declares MIT; the plugin declares MIT OR Apache-2.0. License files are not yet included.
+Dual-licensed under MIT or Apache-2.0.

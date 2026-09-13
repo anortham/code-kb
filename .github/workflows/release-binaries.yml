@@ -1,0 +1,180 @@
+name: Release Binaries
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. 0.1.0)"
+        required: true
+        default: "0.1.0"
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            exe_suffix: ""
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            exe_suffix: ""
+          - os: macos-13
+            target: x86_64-apple-darwin
+            exe_suffix: ""
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            exe_suffix: ".exe"
+
+    steps:
+      - name: Checkout code-kb
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Resolve release version
+        id: version
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          DISPATCH_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            version="$DISPATCH_VERSION"
+          else
+            version="${REF_NAME#v}"
+          fi
+          if [[ -z "$version" ]]; then
+            echo "Release version could not be resolved" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }} -p code-kb-cli --bin code-kb
+
+      - name: Stage release package
+        id: stage
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          PKG_DIR="target/package/code-kb-v${VERSION}-${{ matrix.target }}"
+          mkdir -p "$PKG_DIR"
+
+          BIN_SRC="target/${{ matrix.target }}/release/code-kb${{ matrix.exe_suffix }}"
+          cp "$BIN_SRC" "$PKG_DIR/"
+          cp README.md LICENSE-MIT LICENSE-APACHE "$PKG_DIR/"
+
+          # Attempt to bundle pre-built julie-extract binary from anortham/julie-extractors
+          EXTRACT_DIR="target/julie-extract-dl"
+          mkdir -p "$EXTRACT_DIR"
+          if gh release download --repo anortham/julie-extractors --pattern "*${{ matrix.target }}*" --dir "$EXTRACT_DIR" 2>/dev/null; then
+            echo "Downloaded julie-extract archive, extracting..."
+            if ls "$EXTRACT_DIR"/*.tar.gz 1>/dev/null 2>&1; then
+              tar -xzf "$EXTRACT_DIR"/*.tar.gz -C "$EXTRACT_DIR"
+            elif ls "$EXTRACT_DIR"/*.zip 1>/dev/null 2>&1; then
+              unzip -q "$EXTRACT_DIR"/*.zip -d "$EXTRACT_DIR"
+            fi
+            if [[ -f "$EXTRACT_DIR/julie-extract${{ matrix.exe_suffix }}" ]]; then
+              cp "$EXTRACT_DIR/julie-extract${{ matrix.exe_suffix }}" "$PKG_DIR/"
+              echo "Bundled julie-extract binary into release package"
+            fi
+          else
+            echo "Notice: pre-built julie-extract binary not bundled for ${{ matrix.target }}"
+          fi
+
+          echo "pkg_dir=$PKG_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Create release archive
+        id: archive
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          PKG_DIR="${{ steps.stage.outputs.pkg_dir }}"
+
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            ARCHIVE="code-kb-v${VERSION}-${{ matrix.target }}.zip"
+            (cd "$PKG_DIR" && 7z a "$GITHUB_WORKSPACE/$ARCHIVE" .)
+          else
+            ARCHIVE="code-kb-v${VERSION}-${{ matrix.target }}.tar.gz"
+            tar -czf "$ARCHIVE" -C "$PKG_DIR" .
+          fi
+
+          # Generate SHA256 checksum
+          if command -v sha256sum &>/dev/null; then
+            sha256sum "$ARCHIVE" > "${ARCHIVE}.sha256"
+          else
+            shasum -a 256 "$ARCHIVE" > "${ARCHIVE}.sha256"
+          fi
+
+          echo "archive=$ARCHIVE" >> "$GITHUB_OUTPUT"
+          echo "checksum=${ARCHIVE}.sha256" >> "$GITHUB_OUTPUT"
+
+      - name: Upload release archive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.archive.outputs.archive }}
+          path: |
+            ${{ steps.archive.outputs.archive }}
+            ${{ steps.archive.outputs.checksum }}
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub Release
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Resolve release version
+        id: version
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          DISPATCH_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            version="$DISPATCH_VERSION"
+          else
+            version="${REF_NAME#v}"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Flatten release assets
+        run: |
+          mkdir -p dist
+          find release-artifacts -type f -exec cp {} dist/ \;
+          ls -la dist/
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ steps.version.outputs.version }}"
+          name: "code-kb v${{ steps.version.outputs.version }}"
+          files: dist/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
