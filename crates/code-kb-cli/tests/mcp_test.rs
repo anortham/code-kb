@@ -19,8 +19,10 @@ impl std::ops::DerefMut for ChildGuard {
 
 impl Drop for ChildGuard {
     fn drop(&mut self) {
-        let _ = self.0.kill();
-        let _ = self.0.wait();
+        if matches!(self.0.try_wait(), Ok(None)) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
     }
 }
 
@@ -90,6 +92,11 @@ fn test_mcp_stdio_handshake_and_tools() {
             NULL, 0, 0
         )",
         rusqlite::params![bytes],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO pending_relationships VALUES ('s1', 'println', 'call', 'src/workspace.rs', 2, 4)",
+        [],
     )
     .unwrap();
     code_kb_core::db::ensure_fts_index(&conn).unwrap();
@@ -361,7 +368,7 @@ fn test_mcp_stdio_handshake_and_tools() {
     let blast_text = resp8["result"]["content"][0]["text"].as_str().unwrap();
     assert!(blast_text.contains("Blast Radius"));
 
-    // 9. Test get_context_slice via MCP (verifies include_external parameter and tool dispatch)
+    // 9. Test get_context_slice via MCP with include_external: false
     let slice_req = json!({
         "jsonrpc": "2.0",
         "id": 9,
@@ -387,6 +394,41 @@ fn test_mcp_stdio_handshake_and_tools() {
     assert_ne!(resp9["result"]["isError"], true);
     let slice_text = resp9["result"]["content"][0]["text"].as_str().unwrap();
     assert!(slice_text.contains("Workspace"));
+    assert!(
+        !slice_text.contains("println"),
+        "Default get_context_slice should not contain external callee println"
+    );
+
+    // 10. Test get_context_slice via MCP with include_external: true
+    let slice_req10 = json!({
+        "jsonrpc": "2.0",
+        "id": 10,
+        "method": "tools/call",
+        "params": {
+            "name": "get_context_slice",
+            "arguments": {
+                "symbol_name": "Workspace",
+                "include_external": true
+            }
+        }
+    });
+    let mut line10 = serde_json::to_string(&slice_req10).unwrap();
+    line10.push('\n');
+    stdin.write_all(line10.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut response_line10 = String::new();
+    reader.read_line(&mut response_line10).unwrap();
+    let resp10: Value =
+        serde_json::from_str(&response_line10).expect("Failed to parse JSON response");
+    assert_eq!(resp10["id"], 10);
+    assert_ne!(resp10["result"]["isError"], true);
+    let slice_text10 = resp10["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(slice_text10.contains("Workspace"));
+    assert!(
+        slice_text10.contains("println"),
+        "Extended get_context_slice must contain external callee println"
+    );
 
     let notification = json!({
         "jsonrpc": "2.0",
@@ -398,7 +440,7 @@ fn test_mcp_stdio_handshake_and_tools() {
 
     let ping_req = json!({
         "jsonrpc": "2.0",
-        "id": 9,
+        "id": 11,
         "method": "ping"
     });
     let mut ping_line = serde_json::to_string(&ping_req).unwrap();
@@ -406,11 +448,11 @@ fn test_mcp_stdio_handshake_and_tools() {
     stdin.write_all(ping_line.as_bytes()).unwrap();
     stdin.flush().unwrap();
 
-    let mut response_line9 = String::new();
-    reader.read_line(&mut response_line9).unwrap();
-    let resp9: Value =
-        serde_json::from_str(&response_line9).expect("Failed to parse JSON response");
-    assert_eq!(resp9["id"], 9);
+    let mut response_line11 = String::new();
+    reader.read_line(&mut response_line11).unwrap();
+    let resp11: Value =
+        serde_json::from_str(&response_line11).expect("Failed to parse JSON response");
+    assert_eq!(resp11["id"], 11);
 
     drop(stdin);
     let _ = child.wait();

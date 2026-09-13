@@ -1127,7 +1127,11 @@ pub fn find_callee_signatures(
              FROM pending_relationships p
              JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
              WHERE s_from.name = ?1 AND p.from_symbol_id = ?2
-               AND NOT EXISTS (SELECT 1 FROM symbols s_to WHERE s_to.name = p.target_terminal_name)
+               AND NOT EXISTS (
+                   SELECT 1 FROM symbols s_to
+                   WHERE s_to.name = p.target_terminal_name
+                     AND s_to.kind NOT IN ('import', 'variable', 'parameter', 'field', 'property', 'module', 'namespace')
+               )
              LIMIT ?3",
         )?;
 

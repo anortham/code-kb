@@ -335,7 +335,7 @@ fn test_context_slice_include_external() {
 
     fs::write(
         src_dir.join("service.py"),
-        "def helper():\n    return 42\n\ndef execute():\n    helper()\n    print('done')\n    len([1, 2])\n",
+        "from json import dumps\n\ndef helper():\n    return 42\n\ndef execute():\n    helper()\n    print('done')\n    dumps({'a': 1})\n",
     )
     .unwrap();
 
@@ -371,6 +371,14 @@ fn test_context_slice_include_external() {
         "Default slice should filter external call print, got: {:?}",
         slice_default.callee_signatures
     );
+    assert!(
+        !slice_default
+            .callee_signatures
+            .iter()
+            .any(|s| s.contains("dumps")),
+        "Default slice should filter imported external call dumps, got: {:?}",
+        slice_default.callee_signatures
+    );
 
     // With include_external = true
     let slice_ext = get_context_slice_op(
@@ -397,6 +405,14 @@ fn test_context_slice_include_external() {
             .iter()
             .any(|s| s.contains("print")),
         "Extended slice should include external print, got: {:?}",
+        slice_ext.callee_signatures
+    );
+    assert!(
+        slice_ext
+            .callee_signatures
+            .iter()
+            .any(|s| s.contains("dumps")),
+        "Extended slice should include imported external dumps, got: {:?}",
         slice_ext.callee_signatures
     );
 }
