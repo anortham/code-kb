@@ -55,10 +55,13 @@ pub fn start_watcher(
                 .add_custom_ignore_filename(".julieignore")
                 .add_custom_ignore_filename(".code-kb-ignore")
                 .add_custom_ignore_filename(".codekbignore");
-            let mut ignore_matcher = ignore_builder
-                .build_matchers()
-                .pop()
-                .expect("workspace root creates one ignore matcher");
+            let mut ignore_matcher = match ignore_builder.build_matchers().pop() {
+                Some(m) => m,
+                None => {
+                    warn!("Failed to initialize ignore matcher for workspace root; skipping tick");
+                    return;
+                }
+            };
 
             let mut relevant_files = Vec::new();
             for event in &events {

@@ -86,6 +86,8 @@ pub fn is_hard_excluded(rel_path: &str) -> bool {
                 | ".julie"
                 | ".code-kb"
                 | ".memories"
+                | ".agents"
+                | ".razorback"
                 | ".worktrees"
                 | "worktrees"
                 | ".claude"

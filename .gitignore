@@ -26,3 +26,4 @@ benchmark_report.json
 # Tooling
 .tools/
 .razorback/
+.agents/
