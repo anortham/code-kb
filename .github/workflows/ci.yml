@@ -36,9 +36,41 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            exe_suffix: ""
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            exe_suffix: ""
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            exe_suffix: ".exe"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - name: Install julie-extract (optional)
+        shell: bash
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          EXTRACT_DIR="${RUNNER_TEMP}/julie-extract-bin"
+          mkdir -p "$EXTRACT_DIR"
+          if gh release download --repo anortham/julie-extractors --pattern "*${{ matrix.target }}*" --dir "$EXTRACT_DIR" 2>/dev/null; then
+            if ls "$EXTRACT_DIR"/*.tar.gz 1>/dev/null 2>&1; then
+              tar -xzf "$EXTRACT_DIR"/*.tar.gz -C "$EXTRACT_DIR"
+            elif ls "$EXTRACT_DIR"/*.zip 1>/dev/null 2>&1; then
+              if command -v unzip >/dev/null 2>&1; then
+                unzip -q "$EXTRACT_DIR"/*.zip -d "$EXTRACT_DIR"
+              elif command -v 7z >/dev/null 2>&1; then
+                7z x "$EXTRACT_DIR"/*.zip -o"$EXTRACT_DIR" -y
+              else
+                tar -xf "$EXTRACT_DIR"/*.zip -C "$EXTRACT_DIR"
+              fi
+            fi
+            echo "$EXTRACT_DIR" >> "$GITHUB_PATH"
+            echo "JULIE_EXTRACT_BIN=$EXTRACT_DIR/julie-extract${{ matrix.exe_suffix }}" >> "$GITHUB_ENV"
+          fi
       - name: Run Tests
         run: cargo test --workspace --locked

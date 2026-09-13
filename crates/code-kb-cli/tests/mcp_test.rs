@@ -4,8 +4,43 @@ use std::process::{Command, Stdio};
 
 #[test]
 fn test_mcp_stdio_handshake_and_tools() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let root = temp_dir.path().to_path_buf();
+    let db_dir = root.join(".code-kb");
+    std::fs::create_dir_all(&db_dir).unwrap();
+    let db_path = db_dir.join("artifact.db");
+
+    let conn = code_kb_core::open_read_write(&db_path).unwrap();
+    conn.execute_batch(
+        "CREATE TABLE files (
+            file_id TEXT PRIMARY KEY, path TEXT, language TEXT, content_hash TEXT,
+            content_bytes INTEGER, line_count INTEGER, indexed_at TEXT
+        );
+        CREATE TABLE symbols (
+            symbol_id TEXT PRIMARY KEY, file_id TEXT, path TEXT, language TEXT, name TEXT, kind TEXT,
+            signature TEXT, doc_comment TEXT, visibility TEXT, parent_symbol_id TEXT,
+            start_line INTEGER, start_column INTEGER, end_line INTEGER, end_column INTEGER,
+            start_byte INTEGER, end_byte INTEGER, body_start_line INTEGER,
+            body_start_column INTEGER, body_end_line INTEGER, body_end_column INTEGER,
+            body_start_byte INTEGER, body_end_byte INTEGER, body_hash TEXT,
+            semantic_group TEXT, is_test INTEGER, test_container INTEGER
+        );
+        INSERT INTO files VALUES ('f1', 'src/workspace.rs', 'rust', 'hash1', 100, 10, '2026-01-01');
+        INSERT INTO symbols VALUES (
+            's1', 'f1', 'src/workspace.rs', 'rust', 'Workspace', 'struct',
+            'pub struct Workspace', 'Workspace representation for code-kb workspace discovery root', 'pub', NULL,
+            1, 0, 10, 1, 0, 100, 1, 21, 10, 1, 21, 100, 'b3:hash',
+            NULL, 0, 0
+        );",
+    )
+    .unwrap();
+    code_kb_core::db::ensure_fts_index(&conn).unwrap();
+    drop(conn);
+
     let mut child = Command::new(env!("CARGO_BIN_EXE_code-kb"))
         .arg("serve")
+        .arg("--root")
+        .arg(&root)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
