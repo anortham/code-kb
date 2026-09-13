@@ -98,12 +98,15 @@
         </div>
       </div>
 
-      <div class="terminal-body" id="terminal-content">
-<span class="terminal-prompt">$</span> <span class="terminal-cmd">code-kb slice search_symbols_scoped</span>
+      <pre class="terminal-body" id="terminal-content"><span class="terminal-prompt">$</span> <span class="terminal-cmd">code-kb slice search_symbols_scoped</span>
 <span class="terminal-comment"># Raw file: 13,759 tokens (1,474 lines) &rarr; Slice: 674 tokens (-95.1% compression) in 2ms</span>
 
 <span class="badge-pill-success">TARGET SYMBOL</span> <span style="color:#60a5fa">search_symbols_scoped</span> (crates/code-kb-core/src/queries.rs:142)
-<span style="color:#a855f7">pub fn</span> <span style="color:#38bdf8">search_symbols_scoped</span>(conn: &Connection, query: &str, path: Option<&Path>) -> Result&lt;Vec&lt;SymbolRecord&gt;, QueryError&gt; {
+<span style="color:#a855f7">pub fn</span> <span style="color:#38bdf8">search_symbols_scoped</span>(
+    conn: &Connection,
+    query: &str,
+    path: Option<&Path>
+) -> Result&lt;Vec&lt;SymbolRecord&gt;, QueryError&gt; {
     <span class="terminal-comment">// Target function implementation body (fully preserved)</span>
     <span style="color:#cbd5e1">let sanitized = sanitize_fts5_query(query);</span>
     <span style="color:#cbd5e1">let mut stmt = conn.prepare_cached(SQL_FTS_QUERY)?;</span>
@@ -115,8 +118,7 @@
 - <span style="color:#60a5fa">build_scoped_fts_filter</span>(path: &Path) -> String <span class="terminal-comment">(queries.rs:104)</span>
 
 <span class="badge-pill-success">ASSOCIATED TESTS</span>
-- <span style="color:#34d399">tests::test_fts_search_symbols_and_porter_stemming</span> <span class="terminal-comment">(queries.rs:412)</span>
-      </div>
+- <span style="color:#34d399">tests::test_fts_search_symbols_and_porter_stemming</span> <span class="terminal-comment">(queries.rs:412)</span></pre>
     </div>
 
     <!-- Platform Compatibility Bar -->
@@ -674,7 +676,11 @@ code-kb hook SubagentStart
 <span class="terminal-comment"># Raw file: 13,759 tokens (1,474 lines) &rarr; Slice: 674 tokens (-95.1% compression) in 2ms</span>
 
 <span class="badge-pill-success">TARGET SYMBOL</span> <span style="color:#60a5fa">search_symbols_scoped</span> (crates/code-kb-core/src/queries.rs:142)
-<span style="color:#a855f7">pub fn</span> <span style="color:#38bdf8">search_symbols_scoped</span>(conn: &Connection, query: &str, path: Option<&Path>) -> Result&lt;Vec&lt;SymbolRecord&gt;, QueryError&gt; {
+<span style="color:#a855f7">pub fn</span> <span style="color:#38bdf8">search_symbols_scoped</span>(
+    conn: &Connection,
+    query: &str,
+    path: Option<&Path>
+) -> Result&lt;Vec&lt;SymbolRecord&gt;, QueryError&gt; {
     <span class="terminal-comment">// Target function implementation body (fully preserved)</span>
     <span style="color:#cbd5e1">let sanitized = sanitize_fts5_query(query);</span>
     <span style="color:#cbd5e1">let mut stmt = conn.prepare_cached(SQL_FTS_QUERY)?;</span>
