@@ -243,93 +243,71 @@
 
     <!-- Benchmarks Section -->
     <section id="benchmarks" class="container">
-      <span class="section-badge">Empirical Measurements</span>
-      <h2>Head-to-Head Benchmark Comparison</h2>
+      <span class="section-badge">Head-to-Head Comparison</span>
+      <h2>code-kb vs. Bare Agent</h2>
       <p class="section-desc">
-        Measured on a real-world 12,827-file polyglot monorepo (<code>hermes-agent</code>: 6,141 Python, 3,121 TypeScript/React TSX, Shell, SQL) against prior engines (Miller, Julie) and bare agent toolchains.
+        How <code>code-kb</code> transforms an AI coding agent from brute-force full-file grep loops into surgical precision intelligence.
       </p>
 
       <div class="table-wrapper">
         <table>
           <thead>
             <tr>
-              <th>Metric / Dimension</th>
+              <th>Dimension / Capability</th>
               <th class="col-featured">code-kb (v0.5)</th>
-              <th>Miller (.NET)</th>
-              <th>Julie (Rust)</th>
-              <th>Bare Agent (grep/read)</th>
+              <th>Bare Agent (grep / cat / read)</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td><strong>Full Initial Indexing (12.8k files)</strong></td>
-              <td class="col-featured"><span class="tag-success">⚡ 91.5 s (1.5 min)</span></td>
-              <td><span class="tag-warning">12–18 min</span></td>
-              <td><span class="tag-warning">15–20 min</span></td>
-              <td><span class="tag-neutral">N/A</span></td>
+              <td><strong>Prompt Token Consumption</strong></td>
+              <td class="col-featured"><span class="tag-success">💎 85–98% Token Reduction</span></td>
+              <td><span class="tag-warning">Burns 5,000–15,000 tokens per file read</span></td>
             </tr>
             <tr>
-              <td><strong>Database / Artifact On-Disk Size</strong></td>
-              <td class="col-featured"><span class="tag-success">📦 3.9 GB (single SQLite)</span></td>
-              <td><span class="tag-warning">4.57 GB (3 DBs)</span></td>
-              <td><span class="tag-warning">4.2+ GB</span></td>
-              <td><span class="tag-neutral">0 MB</span></td>
+              <td><strong>Interface &amp; Signature Discovery</strong></td>
+              <td class="col-featured"><span class="tag-success">🦴 <code>file_skeleton</code> (stripped bodies)</span></td>
+              <td><span class="tag-neutral">Full file read into prompt window</span></td>
             </tr>
             <tr>
-              <td><strong>Retained Heap RAM (Resident Set)</strong></td>
-              <td class="col-featured"><span class="tag-success">🛡️ &lt; 15 MB (SQLite WAL)</span></td>
-              <td><span class="tag-warning">1,500–2,000 MB</span></td>
-              <td><span class="tag-warning">300–800 MB</span></td>
-              <td><span class="tag-neutral">0 MB</span></td>
+              <td><strong>Symbol &amp; Concept Search</strong></td>
+              <td class="col-featured"><span class="tag-success">⚡ Instant BM25 FTS5 (&lt;3 ms)</span></td>
+              <td><span class="tag-neutral">Noisy text grep (matches comments, strings, logs)</span></td>
             </tr>
             <tr>
-              <td><strong>Polyglot Symbols Indexed</strong></td>
-              <td class="col-featured"><span class="tag-success">✨ 990,975 symbols</span></td>
-              <td>~900,000</td>
-              <td>~850,000</td>
-              <td><span class="tag-neutral">0 (Unparsed text)</span></td>
-            </tr>
-            <tr>
-              <td><strong>Structural Facts Extracted</strong></td>
-              <td class="col-featured"><span class="tag-success">🎯 53 Categories (routes, SQL)</span></td>
-              <td><span class="tag-warning">0–2 categories</span></td>
-              <td><span class="tag-warning">None (AST only)</span></td>
-              <td><span class="tag-neutral">None</span></td>
-            </tr>
-            <tr>
-              <td><strong>Engine Query Latency (Median)</strong></td>
-              <td class="col-featured"><span class="tag-success">⚡ 0–5 ms</span></td>
-              <td>25–80 ms</td>
-              <td>10–40 ms</td>
-              <td>10–50 ms</td>
-            </tr>
-            <tr>
-              <td><strong>Blast Radius &amp; Test Prediction</strong></td>
-              <td class="col-featured"><span class="tag-success">🚀 Instant (Recursive CTEs)</span></td>
-              <td>Manual trace</td>
-              <td><span class="tag-warning">None</span></td>
-              <td><span class="tag-neutral">Guesswork</span></td>
+              <td><strong>Editing Preparation &amp; Call Graph</strong></td>
+              <td class="col-featured"><span class="tag-success">🔬 <code>get_context_slice</code> (Single-turn bundle)</span></td>
+              <td><span class="tag-warning">4–6 separate file searches across turns</span></td>
             </tr>
             <tr>
               <td><strong>Callee Noise Filtering</strong></td>
-              <td class="col-featured"><span class="tag-success">🧹 Clean (40+ langs filtered)</span></td>
-              <td><span class="tag-warning">Stdlib noise included</span></td>
-              <td><span class="tag-warning">Stdlib noise included</span></td>
-              <td><span class="tag-neutral">Unfiltered text</span></td>
+              <td class="col-featured"><span class="tag-success">🧹 40+ languages filtered against workspace</span></td>
+              <td><span class="tag-warning">Unfiltered stdlib &amp; runtime token flood</span></td>
             </tr>
             <tr>
-              <td><strong>Single-Turn Atomic Edits</strong></td>
-              <td class="col-featured"><span class="tag-success">🔒 Pre-flight tree-sitter AST</span></td>
-              <td>2-step preview/apply</td>
-              <td>2-step preview/apply</td>
-              <td>Fragile string replace</td>
+              <td><strong>Blast Radius &amp; Test Prediction</strong></td>
+              <td class="col-featured"><span class="tag-success">🚀 Instant recursive SQLite CTEs</span></td>
+              <td><span class="tag-neutral">Guesswork or running entire test suite</span></td>
             </tr>
             <tr>
-              <td><strong>Prompt Token Compression</strong></td>
-              <td class="col-featured"><span class="tag-success">💎 85–98% savings</span></td>
-              <td>60–85% savings</td>
-              <td>N/A</td>
-              <td>0% (Full files burned)</td>
+              <td><strong>Symbol Edits</strong></td>
+              <td class="col-featured"><span class="tag-success">🔒 Pre-flight tree-sitter AST validation</span></td>
+              <td><span class="tag-warning">Fragile text / regex replacement</span></td>
+            </tr>
+            <tr>
+              <td><strong>Engine Query Latency</strong></td>
+              <td class="col-featured"><span class="tag-success">⚡ 0–5 ms (Median)</span></td>
+              <td><span class="tag-neutral">10–50 ms disk I/O + heavy LLM token ingestion</span></td>
+            </tr>
+            <tr>
+              <td><strong>Process Memory Footprint</strong></td>
+              <td class="col-featured"><span class="tag-success">🛡️ &lt; 15 MB retained RAM</span></td>
+              <td><span class="tag-neutral">0 MB (at cost of agent prompt bloat)</span></td>
+            </tr>
+            <tr>
+              <td><strong>Agent Context Retention</strong></td>
+              <td class="col-featured"><span class="tag-success">✨ Zero compaction; instructions preserved</span></td>
+              <td><span class="tag-warning">Frequent context overflow &amp; forgotten constraints</span></td>
             </tr>
           </tbody>
         </table>
@@ -340,7 +318,8 @@
         <div>
           <div class="callout-title">Understanding Latency: Engine vs. Model Reasoning</div>
           <div class="callout-body">
-            <code>code-kb stats</code> confirms that internal database queries take <strong>0 to 5 milliseconds</strong>. Total agent turnaround time (e.g. 13s in Grok, 29s in Claude Code) is dominated by LLM chain-of-thought reasoning and network transmission. <code>code-kb</code> adds essentially <strong>zero overhead</strong> to agent turns while removing 90% of prompt tokens.
+            <code>code-kb stats</code> confirms that internal database queries take <strong>0 to 5 milliseconds</strong>. Total agent turnaround time (e.g. 13s in Grok, 29s in Claude Code) is dominated by LLM chain-of-thought reasoning and network transmission. <code>code-kb</code> adds essentially <strong>zero overhead</strong> to agent turns while removing 90% of prompt tokens.<br><br>
+            <em>Looking for engine architecture benchmarks? See the <a href="https://github.com/anortham/code-kb/blob/main/docs/plans/011-miller-julie-comparative-analysis-and-lessons.md" target="_blank" rel="noopener">Comparative Architectural Analysis</a> in the project documentation.</em>
           </div>
         </div>
       </div>
