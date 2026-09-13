@@ -4,7 +4,11 @@ use std::path::Path;
 use crate::models::{ContextSlice, FileFact, ReferenceSite, Symbol, SymbolSearchResult};
 
 /// Format progressive disclosure file skeleton with implementation bodies stripped.
-pub fn format_file_skeleton(file_path: &str, symbols: &[Symbol], line_count: Option<usize>) -> String {
+pub fn format_file_skeleton(
+    file_path: &str,
+    symbols: &[Symbol],
+    line_count: Option<usize>,
+) -> String {
     let mut out = String::new();
     let lines_str = match line_count {
         Some(c) => format!(" (Lines 1-{c})"),
@@ -102,7 +106,11 @@ fn render_symbol_skeleton(
         } else if let Some(ref sig) = sym.signature {
             out.push_str(&format!("{indent}{sig}; // {span_str}\n"));
         } else {
-            out.push_str(&format!("{indent}{} {sym_name}; // {span_str}\n", sym.kind, sym_name = sym.name));
+            out.push_str(&format!(
+                "{indent}{} {sym_name}; // {span_str}\n",
+                sym.kind,
+                sym_name = sym.name
+            ));
         }
     }
 }
@@ -187,7 +195,13 @@ pub fn format_codebase_outline(
         .unwrap_or_default();
 
     for file in files {
-        add_path_to_outline(&mut root_node, &file.path, symbols_by_file, max_depth, &norm_filter);
+        add_path_to_outline(
+            &mut root_node,
+            &file.path,
+            symbols_by_file,
+            max_depth,
+            &norm_filter,
+        );
     }
 
     let display_root = if norm_filter.is_empty() {
@@ -279,7 +293,10 @@ pub fn format_context_slice(slice: &ContextSlice) -> String {
     if !slice.related_tests.is_empty() {
         out.push_str("### Related Tests:\n");
         for test in &slice.related_tests {
-            out.push_str(&format!("- `{}` ({}:{})\n", test.name, test.path, test.start_line));
+            out.push_str(&format!(
+                "- `{}` ({}:{})\n",
+                test.name, test.path, test.start_line
+            ));
         }
         out.push('\n');
     }
@@ -290,8 +307,15 @@ pub fn format_context_slice(slice: &ContextSlice) -> String {
 /// Format references list for callers/callees.
 pub fn format_references(target_name: &str, refs: &[ReferenceSite], direction: &str) -> String {
     let mut out = String::new();
-    let dir_label = if direction == "callers" { "Callers of" } else { "Callees called by" };
-    out.push_str(&format!("{dir_label} `{target_name}` ({} found):\n", refs.len()));
+    let dir_label = if direction == "callers" {
+        "Callers of"
+    } else {
+        "Callees called by"
+    };
+    out.push_str(&format!(
+        "{dir_label} `{target_name}` ({} found):\n",
+        refs.len()
+    ));
 
     if refs.is_empty() {
         out.push_str("  (none)\n");
@@ -303,8 +327,15 @@ pub fn format_references(target_name: &str, refs: &[ReferenceSite], direction: &
             Some(l) => format!(":{l}"),
             None => String::new(),
         };
-        let other = if direction == "callers" { &r.from_symbol_name } else { &r.to_symbol_name };
-        out.push_str(&format!("- `{other}` [{}{line_info}] (kind: {})\n", r.path, r.kind));
+        let other = if direction == "callers" {
+            &r.from_symbol_name
+        } else {
+            &r.to_symbol_name
+        };
+        out.push_str(&format!(
+            "- `{other}` [{}{line_info}] (kind: {})\n",
+            r.path, r.kind
+        ));
     }
 
     out
@@ -316,7 +347,10 @@ pub fn format_search_results(query: &str, results: &[SymbolSearchResult]) -> Str
         return format!("No symbols found matching concept \"{query}\".");
     }
 
-    let mut out = format!("Found {} symbols matching concept \"{query}\":\n\n", results.len());
+    let mut out = format!(
+        "Found {} symbols matching concept \"{query}\":\n\n",
+        results.len()
+    );
     for r in results {
         let s = &r.symbol;
         let sig = s.signature.as_deref().unwrap_or(&s.name);
@@ -346,36 +380,34 @@ mod tests {
 
     #[test]
     fn test_format_file_skeleton() {
-        let syms = vec![
-            Symbol {
-                symbol_id: "s1".into(),
-                file_id: "f1".into(),
-                path: "src/lib.rs".into(),
-                language: "rust".into(),
-                name: "do_work".into(),
-                kind: "function".into(),
-                signature: Some("pub fn do_work() -> Result<()>".into()),
-                doc_comment: Some("Performs core work.".into()),
-                visibility: Some("pub".into()),
-                parent_symbol_id: None,
-                start_line: 10,
-                start_column: 0,
-                end_line: 30,
-                end_column: 1,
-                start_byte: 100,
-                end_byte: 300,
-                body_start_line: Some(11),
-                body_start_column: Some(0),
-                body_end_line: Some(29),
-                body_end_column: Some(1),
-                body_start_byte: Some(130),
-                body_end_byte: Some(298),
-                body_hash: None,
-                semantic_group: None,
-                is_test: false,
-                test_container: false,
-            }
-        ];
+        let syms = vec![Symbol {
+            symbol_id: "s1".into(),
+            file_id: "f1".into(),
+            path: "src/lib.rs".into(),
+            language: "rust".into(),
+            name: "do_work".into(),
+            kind: "function".into(),
+            signature: Some("pub fn do_work() -> Result<()>".into()),
+            doc_comment: Some("Performs core work.".into()),
+            visibility: Some("pub".into()),
+            parent_symbol_id: None,
+            start_line: 10,
+            start_column: 0,
+            end_line: 30,
+            end_column: 1,
+            start_byte: 100,
+            end_byte: 300,
+            body_start_line: Some(11),
+            body_start_column: Some(0),
+            body_end_line: Some(29),
+            body_end_column: Some(1),
+            body_start_byte: Some(130),
+            body_end_byte: Some(298),
+            body_hash: None,
+            semantic_group: None,
+            is_test: false,
+            test_container: false,
+        }];
 
         let skeleton = format_file_skeleton("src/lib.rs", &syms, Some(35));
         assert!(skeleton.contains("/// Performs core work."));
@@ -384,45 +416,44 @@ mod tests {
 
     #[test]
     fn test_format_search_results() {
-        let results = vec![
-            SymbolSearchResult {
-                symbol: Symbol {
-                    symbol_id: "s1".into(),
-                    file_id: "f1".into(),
-                    path: "src/parser.rs".into(),
-                    language: "rust".into(),
-                    name: "parse_tokens".into(),
-                    kind: "function".into(),
-                    signature: Some("pub fn parse_tokens()".into()),
-                    doc_comment: Some("Parses tokens from stream.".into()),
-                    visibility: Some("pub".into()),
-                    parent_symbol_id: None,
-                    start_line: 15,
-                    start_column: 0,
-                    end_line: 25,
-                    end_column: 1,
-                    start_byte: 100,
-                    end_byte: 250,
-                    body_start_line: None,
-                    body_start_column: None,
-                    body_end_line: None,
-                    body_end_column: None,
-                    body_start_byte: None,
-                    body_end_byte: None,
-                    body_hash: None,
-                    semantic_group: None,
-                    is_test: false,
-                    test_container: false,
-                },
-                score: -1.85,
-                snippet: Some("Parses [tokens] from stream.".into()),
-            }
-        ];
+        let results = vec![SymbolSearchResult {
+            symbol: Symbol {
+                symbol_id: "s1".into(),
+                file_id: "f1".into(),
+                path: "src/parser.rs".into(),
+                language: "rust".into(),
+                name: "parse_tokens".into(),
+                kind: "function".into(),
+                signature: Some("pub fn parse_tokens()".into()),
+                doc_comment: Some("Parses tokens from stream.".into()),
+                visibility: Some("pub".into()),
+                parent_symbol_id: None,
+                start_line: 15,
+                start_column: 0,
+                end_line: 25,
+                end_column: 1,
+                start_byte: 100,
+                end_byte: 250,
+                body_start_line: None,
+                body_start_column: None,
+                body_end_line: None,
+                body_end_column: None,
+                body_start_byte: None,
+                body_end_byte: None,
+                body_hash: None,
+                semantic_group: None,
+                is_test: false,
+                test_container: false,
+            },
+            score: -1.85,
+            snippet: Some("Parses [tokens] from stream.".into()),
+        }];
 
         let formatted = format_search_results("tokens", &results);
         assert!(formatted.contains("Found 1 symbols matching concept \"tokens\":"));
-        assert!(formatted.contains("- function `parse_tokens` [src/parser.rs:15-25] (score: -1.85)"));
+        assert!(
+            formatted.contains("- function `parse_tokens` [src/parser.rs:15-25] (score: -1.85)")
+        );
         assert!(formatted.contains("Match: Parses [tokens] from stream."));
     }
 }
-

@@ -1,8 +1,8 @@
+use rusqlite::Connection;
+use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::Write;
 use std::path::Path;
-use rusqlite::Connection;
-use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 use crate::queries;
@@ -19,7 +19,9 @@ pub enum EditError {
     NoBodyDefined,
     #[error("Optimistic lock failed: expected body hash '{0}', found '{1}'")]
     HashMismatch(String, String),
-    #[error("File offsets out of bounds: range [{0}..{1}], but file length is {2} bytes (file may have shrunk or changed)")]
+    #[error(
+        "File offsets out of bounds: range [{0}..{1}], but file length is {2} bytes (file may have shrunk or changed)"
+    )]
     InvalidOffsetRange(usize, usize, usize),
     #[error("Pre-flight syntax validation failed: {0}")]
     Syntax(#[from] SyntaxError),
@@ -29,7 +31,9 @@ pub enum EditError {
     Io(String, #[source] std::io::Error),
     #[error("Synchronization failed and file was rolled back: {0}")]
     SyncWithRollback(String),
-    #[error("Synchronization failed after edit ({sync_error}) and rollback also failed: {rollback_error}")]
+    #[error(
+        "Synchronization failed after edit ({sync_error}) and rollback also failed: {rollback_error}"
+    )]
     SyncRollbackFailed {
         sync_error: String,
         rollback_error: String,
@@ -80,16 +84,12 @@ pub fn replace_symbol_body(
     let symbol = queries::get_symbol_by_name_exact(conn, symbol_name, &rel_path)?
         .ok_or_else(|| EditError::SymbolNotFound(symbol_name.to_string(), rel_path.clone()))?;
 
-    let body_start = symbol
-        .body_start_byte
-        .ok_or(EditError::NoBodyDefined)?;
-    let body_end = symbol
-        .body_end_byte
-        .ok_or(EditError::NoBodyDefined)?;
+    let body_start = symbol.body_start_byte.ok_or(EditError::NoBodyDefined)?;
+    let body_end = symbol.body_end_byte.ok_or(EditError::NoBodyDefined)?;
 
     // Read existing file content
-    let existing_bytes = fs::read(&abs_path)
-        .map_err(|e| EditError::Io(abs_path.display().to_string(), e))?;
+    let existing_bytes =
+        fs::read(&abs_path).map_err(|e| EditError::Io(abs_path.display().to_string(), e))?;
 
     // Bounds check to prevent out-of-bounds panics
     if body_start > body_end || body_end > existing_bytes.len() {
@@ -100,8 +100,13 @@ pub fn replace_symbol_body(
         ));
     }
 
-    let existing_body = slicer::slice_bytes_safe(&existing_bytes, body_start, body_end)
-        .map_err(|e| EditError::Io(abs_path.display().to_string(), std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string())))?;
+    let existing_body =
+        slicer::slice_bytes_safe(&existing_bytes, body_start, body_end).map_err(|e| {
+            EditError::Io(
+                abs_path.display().to_string(),
+                std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()),
+            )
+        })?;
 
     let current_sha256 = hash_content(existing_body);
     let current_blake3 = blake3::hash(existing_body.as_bytes()).to_hex().to_string();
@@ -117,14 +122,18 @@ pub fn replace_symbol_body(
             && let Ok(Some(file_fact)) = queries::get_file(conn, &rel_path)
         {
             let file_len_matches = file_fact.content_bytes == existing_bytes.len() as i64;
-            let hash_matches = sync::compute_content_hash_matches(&existing_bytes, &file_fact.content_hash);
+            let hash_matches =
+                sync::compute_content_hash_matches(&existing_bytes, &file_fact.content_hash);
             if file_len_matches && hash_matches {
                 matches = true;
             }
         }
 
         if !matches {
-            return Err(EditError::HashMismatch(expected.to_string(), current_sha256));
+            return Err(EditError::HashMismatch(
+                expected.to_string(),
+                current_sha256,
+            ));
         }
     }
 
@@ -135,16 +144,16 @@ pub fn replace_symbol_body(
     new_file_bytes.extend_from_slice(&existing_bytes[body_end..]);
 
     // Pre-flight syntax validation before touching disk
-    let new_file_str = std::str::from_utf8(&new_file_bytes)
-        .map_err(|e| EditError::InvalidUtf8(e.to_string()))?;
+    let new_file_str =
+        std::str::from_utf8(&new_file_bytes).map_err(|e| EditError::InvalidUtf8(e.to_string()))?;
     syntax::validate_syntax(&rel_path, new_file_str)?;
 
     // Backup original bytes for rollback if re-indexing fails
     let backup_bytes = existing_bytes.clone();
 
     // Final pre-commit disk check: ensure file was not concurrently modified between read and write
-    let current_disk = fs::read(&abs_path)
-        .map_err(|e| EditError::Io(abs_path.display().to_string(), e))?;
+    let current_disk =
+        fs::read(&abs_path).map_err(|e| EditError::Io(abs_path.display().to_string(), e))?;
     if current_disk != existing_bytes {
         return Err(EditError::ConcurrentModification(rel_path));
     }

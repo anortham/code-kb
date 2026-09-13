@@ -1,5 +1,5 @@
-use std::path::Path;
 use rusqlite::{Connection, OpenFlags};
+use std::path::Path;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -35,8 +35,8 @@ pub fn open_read_only(path: &Path) -> Result<Connection, DbError> {
 
 /// Opens a read-write SQLite connection (used when creating fresh or test databases).
 pub fn open_read_write(path: &Path) -> Result<Connection, DbError> {
-    let conn = Connection::open(path)
-        .map_err(|e| DbError::OpenFailed(path.display().to_string(), e))?;
+    let conn =
+        Connection::open(path).map_err(|e| DbError::OpenFailed(path.display().to_string(), e))?;
 
     conn.execute_batch(
         "PRAGMA journal_mode = WAL;
@@ -147,9 +147,20 @@ mod tests {
     #[test]
     fn test_fts5_support() {
         let conn = rusqlite::Connection::open_in_memory().unwrap();
-        conn.execute("CREATE VIRTUAL TABLE test_fts USING fts5(content);", []).unwrap();
-        conn.execute("INSERT INTO test_fts (content) VALUES ('hello world token search');", []).unwrap();
-        let count: i64 = conn.query_row("SELECT count(*) FROM test_fts WHERE test_fts MATCH 'token'", [], |r| r.get(0)).unwrap();
+        conn.execute("CREATE VIRTUAL TABLE test_fts USING fts5(content);", [])
+            .unwrap();
+        conn.execute(
+            "INSERT INTO test_fts (content) VALUES ('hello world token search');",
+            [],
+        )
+        .unwrap();
+        let count: i64 = conn
+            .query_row(
+                "SELECT count(*) FROM test_fts WHERE test_fts MATCH 'token'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
         assert_eq!(count, 1);
     }
 
@@ -175,7 +186,11 @@ mod tests {
         ensure_fts_index(&conn).unwrap();
 
         let count: i64 = conn
-            .query_row("SELECT count(*) FROM symbols_fts WHERE symbols_fts MATCH 'payment'", [], |r| r.get(0))
+            .query_row(
+                "SELECT count(*) FROM symbols_fts WHERE symbols_fts MATCH 'payment'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(count, 1);
 
@@ -187,16 +202,24 @@ mod tests {
         .unwrap();
 
         let count: i64 = conn
-            .query_row("SELECT count(*) FROM symbols_fts WHERE symbols_fts MATCH 'refund'", [], |r| r.get(0))
+            .query_row(
+                "SELECT count(*) FROM symbols_fts WHERE symbols_fts MATCH 'refund'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(count, 1);
 
         // Test trigger on delete
-        conn.execute("DELETE FROM symbols WHERE symbol_id = '3';", []).unwrap();
+        conn.execute("DELETE FROM symbols WHERE symbol_id = '3';", [])
+            .unwrap();
         let count: i64 = conn
-            .query_row("SELECT count(*) FROM symbols_fts WHERE symbols_fts MATCH 'refund'", [], |r| r.get(0))
+            .query_row(
+                "SELECT count(*) FROM symbols_fts WHERE symbols_fts MATCH 'refund'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(count, 0);
     }
 }
-

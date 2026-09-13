@@ -1,11 +1,11 @@
-use std::path::{Path, PathBuf};
 use clap::{Args, Parser, Subcommand};
+use std::path::{Path, PathBuf};
 
 use code_kb_core::{
-    codebase_outline_op, ensure_fresh_file, ensure_fts_index_path, file_skeleton_op,
+    Workspace, codebase_outline_op, ensure_fresh_file, ensure_fts_index_path, file_skeleton_op,
     format_context_slice, format_references, format_search_results, fts_search_symbols,
     get_context_slice_op, get_symbol_body_op, load_file_symbols, open_read_only, queries,
-    replace_symbol_body, scan_workspace, search_symbols, Workspace,
+    replace_symbol_body, scan_workspace, search_symbols,
 };
 
 mod logging;
@@ -250,7 +250,10 @@ fn main() -> anyhow::Result<()> {
 
     // Handle Scan command
     if let Command::Scan(args) = &cli.command {
-        println!("Scanning workspace at '{}'...", workspace.canonical_root.display());
+        println!(
+            "Scanning workspace at '{}'...",
+            workspace.canonical_root.display()
+        );
         scan_workspace(&workspace, &db_path, args.force)?;
         println!("Database updated at '{}'.", db_path.display());
         return Ok(());
@@ -272,7 +275,8 @@ fn main() -> anyhow::Result<()> {
                 let files = queries::load_scoped_files(&conn, args.path.as_deref())?;
                 println!("{}", serde_json::to_string_pretty(&files)?);
             } else {
-                let text = codebase_outline_op(&workspace, &conn, args.depth, args.path.as_deref())?;
+                let text =
+                    codebase_outline_op(&workspace, &conn, args.depth, args.path.as_deref())?;
                 println!("{text}");
             }
         }
@@ -299,10 +303,17 @@ fn main() -> anyhow::Result<()> {
             if cli.json {
                 println!("{}", serde_json::to_string_pretty(&matches)?);
             } else {
-                println!("Found {} symbols matching \"{}\":\n", matches.len(), args.query);
+                println!(
+                    "Found {} symbols matching \"{}\":\n",
+                    matches.len(),
+                    args.query
+                );
                 for s in matches {
                     let sig = s.signature.as_deref().unwrap_or(&s.name);
-                    println!("- {} `{}` [{}:{}-{}]", s.kind, s.name, s.path, s.start_line, s.end_line);
+                    println!(
+                        "- {} `{}` [{}:{}-{}]",
+                        s.kind, s.name, s.path, s.start_line, s.end_line
+                    );
                     println!("  Signature: {sig}");
                     if let Some(doc) = s.doc_comment {
                         let first = doc.lines().next().unwrap_or("").trim();
@@ -361,31 +372,48 @@ fn main() -> anyhow::Result<()> {
             }
         }
         Command::Refs(args) => {
-            let refs = code_kb_core::find_references(&conn, &args.symbol, &args.direction, args.limit)?;
+            let refs =
+                code_kb_core::find_references(&conn, &args.symbol, &args.direction, args.limit)?;
             if cli.json {
                 println!("{}", serde_json::to_string_pretty(&refs)?);
             } else {
-                println!("{}", format_references(&args.symbol, &refs, &args.direction));
+                println!(
+                    "{}",
+                    format_references(&args.symbol, &refs, &args.direction)
+                );
             }
         }
         Command::Facts(args) => {
             let facts = code_kb_core::find_structural_facts(&conn, &args.category, args.limit)?;
             let literals = code_kb_core::find_literals(&conn, &args.category, args.limit)?;
             if cli.json {
-                println!("{}", serde_json::to_string_pretty(&serde_json::json!({
-                    "structural_facts": facts,
-                    "literals": literals
-                }))?);
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "structural_facts": facts,
+                        "literals": literals
+                    }))?
+                );
             } else {
-                println!("Structural facts for '{}' ({} found):\n", args.category, facts.len());
+                println!(
+                    "Structural facts for '{}' ({} found):\n",
+                    args.category,
+                    facts.len()
+                );
                 for f in &facts {
                     let parent = f.containing_symbol_name.as_deref().unwrap_or("top-level");
-                    println!("- {} [{}:{}] (pattern: {}, in: {})", f.capture_name, f.path, f.start_line, f.pattern_id, parent);
+                    println!(
+                        "- {} [{}:{}] (pattern: {}, in: {})",
+                        f.capture_name, f.path, f.start_line, f.pattern_id, parent
+                    );
                 }
                 if !literals.is_empty() {
                     println!("\nMatching literals ({} found):\n", literals.len());
                     for l in &literals {
-                        println!("- \"{}\" [{}:{}] (kind: {})", l.literal_text, l.path, l.start_line, l.kind);
+                        println!(
+                            "- \"{}\" [{}:{}] (kind: {})",
+                            l.literal_text, l.path, l.start_line, l.kind
+                        );
                     }
                 }
             }
@@ -403,7 +431,11 @@ fn main() -> anyhow::Result<()> {
 
             println!(
                 "Successfully replaced body of `{}` in `{}`.\nOld Hash: {}\nNew Hash: {}\nBytes Written: {}",
-                res.symbol_name, res.file_path, res.old_body_hash, res.new_body_hash, res.bytes_written
+                res.symbol_name,
+                res.file_path,
+                res.old_body_hash,
+                res.new_body_hash,
+                res.bytes_written
             );
         }
         Command::Serve(_) | Command::Scan(_) | Command::Logs(_) => unreachable!(),

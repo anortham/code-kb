@@ -1,6 +1,6 @@
+use serde_json::{Value, json};
 use std::io::Write;
 use std::process::{Command, Stdio};
-use serde_json::{json, Value};
 
 #[test]
 fn test_mcp_stdio_handshake_and_tools() {
@@ -42,6 +42,15 @@ fn test_mcp_stdio_handshake_and_tools() {
     let resp: Value = serde_json::from_str(&response_line).expect("Failed to parse JSON response");
     assert_eq!(resp["id"], 1);
     assert_eq!(resp["result"]["serverInfo"]["name"], "code-kb");
+    assert_eq!(
+        resp["result"]["serverInfo"]["version"],
+        env!("CARGO_PKG_VERSION")
+    );
+    assert!(
+        resp["result"]["instructions"]
+            .as_str()
+            .is_some_and(|instructions| !instructions.is_empty())
+    );
 
     // 2. Send tools/list
     let list_req = json!({
@@ -59,15 +68,15 @@ fn test_mcp_stdio_handshake_and_tools() {
     let mut response_line2 = String::new();
     reader.read_line(&mut response_line2).unwrap();
 
-    let resp2: Value = serde_json::from_str(&response_line2).expect("Failed to parse JSON response");
+    let resp2: Value =
+        serde_json::from_str(&response_line2).expect("Failed to parse JSON response");
     assert_eq!(resp2["id"], 2);
-    let tools = resp2["result"]["tools"].as_array().expect("Expected tools array");
+    let tools = resp2["result"]["tools"]
+        .as_array()
+        .expect("Expected tools array");
     assert_eq!(tools.len(), 9);
 
-    let tool_names: Vec<&str> = tools
-        .iter()
-        .filter_map(|t| t["name"].as_str())
-        .collect();
+    let tool_names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
 
     assert!(tool_names.contains(&"codebase_outline"));
     assert!(tool_names.contains(&"file_skeleton"));
@@ -112,7 +121,8 @@ fn test_mcp_stdio_handshake_and_tools() {
     let mut response_line3 = String::new();
     reader.read_line(&mut response_line3).unwrap();
 
-    let resp3: Value = serde_json::from_str(&response_line3).expect("Failed to parse JSON response");
+    let resp3: Value =
+        serde_json::from_str(&response_line3).expect("Failed to parse JSON response");
     assert_eq!(resp3["id"], 3);
     let content_text = resp3["result"]["content"][0]["text"].as_str().unwrap();
     eprintln!("content_text: {content_text}");
@@ -139,11 +149,36 @@ fn test_mcp_stdio_handshake_and_tools() {
     let mut response_line4 = String::new();
     reader.read_line(&mut response_line4).unwrap();
 
-    let resp4: Value = serde_json::from_str(&response_line4).expect("Failed to parse JSON response");
+    let resp4: Value =
+        serde_json::from_str(&response_line4).expect("Failed to parse JSON response");
     assert_eq!(resp4["id"], 4);
     let search_text = resp4["result"]["content"][0]["text"].as_str().unwrap();
     eprintln!("search_text: {search_text}");
     assert!(search_text.contains("Workspace"));
+
+    let notification = json!({
+        "jsonrpc": "2.0",
+        "method": "notifications/roots/list_changed"
+    });
+    let mut notification_line = serde_json::to_string(&notification).unwrap();
+    notification_line.push('\n');
+    stdin.write_all(notification_line.as_bytes()).unwrap();
+
+    let ping_req = json!({
+        "jsonrpc": "2.0",
+        "id": 5,
+        "method": "ping"
+    });
+    let mut ping_line = serde_json::to_string(&ping_req).unwrap();
+    ping_line.push('\n');
+    stdin.write_all(ping_line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut response_line5 = String::new();
+    reader.read_line(&mut response_line5).unwrap();
+    let resp5: Value =
+        serde_json::from_str(&response_line5).expect("Failed to parse JSON response");
+    assert_eq!(resp5["id"], 5);
 
     drop(stdin);
     let _ = child.wait();

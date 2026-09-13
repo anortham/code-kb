@@ -10,9 +10,8 @@ pub mod syntax;
 pub mod watcher;
 pub mod workspace;
 
-pub use db::{ensure_fts_index, ensure_fts_index_path, open_read_only, open_read_write, DbError};
-pub use edit::{replace_symbol_body, EditError, EditResult};
-pub use syntax::{validate_syntax, SyntaxError};
+pub use db::{DbError, ensure_fts_index, ensure_fts_index_path, open_read_only, open_read_write};
+pub use edit::{EditError, EditResult, replace_symbol_body};
 pub use formatters::{
     format_codebase_outline, format_context_slice, format_file_skeleton, format_references,
     format_search_results,
@@ -22,17 +21,18 @@ pub use models::{
     TypeFact,
 };
 pub use ops::{
-    codebase_outline_op, file_skeleton_op, get_context_slice_op, get_symbol_body_op, OpError,
+    OpError, codebase_outline_op, file_skeleton_op, get_context_slice_op, get_symbol_body_op,
 };
 pub use queries::{
-    find_literals, find_references, find_structural_facts, find_type_facts, fts_search_symbols,
-    get_file, get_symbol_by_name, get_symbol_by_name_exact, load_file_symbols, load_files,
-    load_scoped_outline_symbols, sanitize_fts5_query, search_symbols, QueryError,
+    QueryError, find_literals, find_references, find_structural_facts, find_type_facts,
+    fts_search_symbols, get_file, get_symbol_by_name, get_symbol_by_name_exact, load_file_symbols,
+    load_files, load_scoped_outline_symbols, sanitize_fts5_query, search_symbols,
 };
-pub use slicer::{slice_symbol, slice_symbol_body, SliceError};
+pub use slicer::{SliceError, slice_symbol, slice_symbol_body};
 pub use sync::{
-    delete_file, ensure_fresh_file, find_julie_extract_binary, reconcile_offline_edits,
-    scan_workspace, update_file, ReconcileReport, SyncError,
+    ReconcileReport, SyncError, delete_file, ensure_fresh_file, find_julie_extract_binary,
+    reconcile_offline_edits, scan_workspace, update_file,
 };
-pub use watcher::{start_watcher, WatcherError, WatcherHandle};
-pub use workspace::{normalize_path, parse_file_uri, to_forward_slash, Workspace, WorkspaceError};
+pub use syntax::{SyntaxError, validate_syntax};
+pub use watcher::{WatcherError, WatcherHandle, start_watcher};
+pub use workspace::{Workspace, WorkspaceError, normalize_path, parse_file_uri, to_forward_slash};

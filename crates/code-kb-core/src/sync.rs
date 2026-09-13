@@ -1,7 +1,7 @@
+use rusqlite::Connection;
+use sha2::Digest;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use sha2::Digest;
-use rusqlite::Connection;
 use thiserror::Error;
 use tracing::info;
 
@@ -18,6 +18,8 @@ pub enum SyncError {
     Io(#[from] std::io::Error),
     #[error("Database error during synchronization: {0}")]
     Db(#[from] rusqlite::Error),
+    #[error("workspace traversal failed: {0}")]
+    Walk(#[from] ignore::Error),
 }
 
 /// Discovers the location of the `julie-extract` binary.
@@ -30,10 +32,18 @@ pub fn find_julie_extract_binary() -> Option<PathBuf> {
     }
 
     // Check adjacent release/debug paths in local development
-    let exe_name = if cfg!(windows) { "julie-extract.exe" } else { "julie-extract" };
+    let exe_name = if cfg!(windows) {
+        "julie-extract.exe"
+    } else {
+        "julie-extract"
+    };
     let dev_candidates = [
-        PathBuf::from(format!(r"c:\source\julie-extractors\target\release\{exe_name}")),
-        PathBuf::from(format!(r"c:\source\julie-extractors\target\debug\{exe_name}")),
+        PathBuf::from(format!(
+            r"c:\source\julie-extractors\target\release\{exe_name}"
+        )),
+        PathBuf::from(format!(
+            r"c:\source\julie-extractors\target\debug\{exe_name}"
+        )),
         PathBuf::from(format!("../julie-extractors/target/release/{exe_name}")),
         PathBuf::from(format!("../julie-extractors/target/debug/{exe_name}")),
     ];
@@ -76,13 +86,7 @@ pub fn update_file(workspace: &Workspace, db_path: &Path, rel_path: &str) -> Res
     let db_str = db_path.to_string_lossy();
 
     execute_julie_extract(&[
-        "update",
-        "--root",
-        &root_str,
-        "--db",
-        &db_str,
-        "--file",
-        rel_path,
+        "update", "--root", &root_str, "--db", &db_str, "--file", rel_path,
     ])?;
 
     Ok(())
@@ -94,13 +98,7 @@ pub fn delete_file(workspace: &Workspace, db_path: &Path, rel_path: &str) -> Res
     let db_str = db_path.to_string_lossy();
 
     execute_julie_extract(&[
-        "delete",
-        "--root",
-        &root_str,
-        "--db",
-        &db_str,
-        "--file",
-        rel_path,
+        "delete", "--root", &root_str, "--db", &db_str, "--file", rel_path,
     ])?;
 
     Ok(())
@@ -116,13 +114,7 @@ pub fn scan_workspace(workspace: &Workspace, db_path: &Path, force: bool) -> Res
         std::fs::create_dir_all(parent)?;
     }
 
-    let mut args = vec![
-        "scan",
-        "--root",
-        &root_str,
-        "--db",
-        &db_str,
-    ];
+    let mut args = vec!["scan", "--root", &root_str, "--db", &db_str];
 
     if force {
         args.push("--force");
@@ -163,13 +155,20 @@ pub fn ensure_fresh_file(
     rel_path: &str,
 ) -> Result<bool, SyncError> {
     let abs_path = workspace.canonical_root.join(rel_path);
-    if !abs_path.exists() {
-        return Ok(false);
-    }
-
     let meta = match std::fs::metadata(&abs_path) {
-        Ok(m) => m,
-        Err(_) => return Ok(false),
+        Ok(meta) => meta,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            let existing_file = queries::get_file(conn, rel_path).map_err(|e| match e {
+                queries::QueryError::Sqlite(err) => SyncError::Db(err),
+                _ => SyncError::Db(rusqlite::Error::QueryReturnedNoRows),
+            })?;
+            if existing_file.is_some() {
+                delete_file(workspace, db_path, rel_path)?;
+                return Ok(true);
+            }
+            return Ok(false);
+        }
+        Err(error) => return Err(SyncError::Io(error)),
     };
 
     let disk_bytes = meta.len() as i64;
@@ -187,12 +186,8 @@ pub fn ensure_fresh_file(
             if f.content_bytes != disk_bytes {
                 true
             } else {
-                // Byte count is identical: read bytes and verify hash to detect equal-size edits
-                if let Ok(disk_content) = std::fs::read(&abs_path) {
-                    !compute_content_hash_matches(&disk_content, &f.content_hash)
-                } else {
-                    false
-                }
+                let disk_content = std::fs::read(&abs_path)?;
+                !compute_content_hash_matches(&disk_content, &f.content_hash)
             }
         }
     };
@@ -214,7 +209,7 @@ pub struct ReconcileReport {
 }
 
 /// Cold-start background sweep: checks filesystem against SQLite `files` records.
-/// Streams disk checks and uses an in-memory SQLite index to eliminate repository-wide heap HashMaps.
+/// Streams disk checks through a temporary SQLite index.
 pub fn reconcile_offline_edits(
     workspace: &Workspace,
     db_path: &Path,
@@ -222,8 +217,8 @@ pub fn reconcile_offline_edits(
 ) -> Result<ReconcileReport, SyncError> {
     let mut report = ReconcileReport::default();
 
-    // In-memory table to track paths seen on disk without allocating repository-wide HashMaps in heap
-    let temp_conn = Connection::open_in_memory().map_err(SyncError::Db)?;
+    let seen_db = tempfile::NamedTempFile::new()?;
+    let temp_conn = Connection::open(seen_db.path()).map_err(SyncError::Db)?;
     temp_conn
         .execute("CREATE TABLE _seen (path TEXT PRIMARY KEY)", [])
         .map_err(SyncError::Db)?;
@@ -236,44 +231,37 @@ pub fn reconcile_offline_edits(
         .prepare("SELECT content_bytes, content_hash FROM files WHERE path = ?1")
         .map_err(SyncError::Db)?;
 
-    // Walk disk using ignore crate
-    let walker = ignore::WalkBuilder::new(&workspace.canonical_root)
+    let mut walker = ignore::WalkBuilder::new(&workspace.canonical_root);
+    walker
         .standard_filters(true)
-        .build();
+        .add_custom_ignore_filename(".julieignore");
+    let walker = walker.build();
 
     temp_conn
         .execute("BEGIN TRANSACTION", [])
         .map_err(SyncError::Db)?;
 
     for result in walker {
-        let entry = match result {
-            Ok(e) => e,
-            Err(_) => continue,
-        };
+        let entry = result?;
 
         if entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
             let path = entry.path();
             if let Ok(rel) = path.strip_prefix(&workspace.canonical_root) {
                 let rel_str = crate::workspace::to_forward_slash(rel);
-                let meta = entry.metadata().ok();
-                let bytes = meta.map(|m| m.len() as i64).unwrap_or(0);
+                let bytes = entry.metadata()?.len() as i64;
 
                 insert_seen_stmt
                     .execute([&rel_str])
                     .map_err(SyncError::Db)?;
 
-                let mut rows = check_file_stmt
-                    .query([&rel_str])
-                    .map_err(SyncError::Db)?;
+                let mut rows = check_file_stmt.query([&rel_str]).map_err(SyncError::Db)?;
 
                 if let Some(row) = rows.next().map_err(SyncError::Db)? {
                     let indexed_bytes: i64 = row.get(0).map_err(SyncError::Db)?;
                     let stored_hash: String = row.get(1).map_err(SyncError::Db)?;
 
-                    if indexed_bytes != bytes {
-                        report.modified.push(rel_str);
-                    } else if let Ok(disk_content) = std::fs::read(path)
-                        && !compute_content_hash_matches(&disk_content, &stored_hash)
+                    if indexed_bytes != bytes
+                        || !compute_content_hash_matches(&std::fs::read(path)?, &stored_hash)
                     {
                         report.modified.push(rel_str);
                     }
@@ -284,11 +272,8 @@ pub fn reconcile_offline_edits(
         }
     }
 
-    temp_conn
-        .execute("COMMIT", [])
-        .map_err(SyncError::Db)?;
+    temp_conn.execute("COMMIT", []).map_err(SyncError::Db)?;
 
-    // Check for deleted files by streaming indexed files against in-memory _seen index
     let mut files_stmt = conn
         .prepare("SELECT path FROM files")
         .map_err(SyncError::Db)?;
@@ -314,6 +299,7 @@ pub fn reconcile_offline_edits(
     drop(exists_seen_stmt);
     drop(insert_seen_stmt);
     drop(temp_conn);
+    drop(seen_db);
 
     let total_changes = report.added.len() + report.modified.len() + report.deleted.len();
     if total_changes > 0 {
@@ -331,13 +317,13 @@ pub fn reconcile_offline_edits(
         } else {
             // Incremental single-file updates
             for added in &report.added {
-                let _ = update_file(workspace, db_path, added);
+                update_file(workspace, db_path, added)?;
             }
             for modified in &report.modified {
-                let _ = update_file(workspace, db_path, modified);
+                update_file(workspace, db_path, modified)?;
             }
             for deleted in &report.deleted {
-                let _ = delete_file(workspace, db_path, deleted);
+                delete_file(workspace, db_path, deleted)?;
             }
         }
     }
@@ -352,7 +338,10 @@ mod tests {
     #[test]
     fn test_find_julie_extract_binary() {
         let bin = find_julie_extract_binary();
-        assert!(bin.is_some(), "Expected julie-extract binary to be discovered via candidates or PATH");
+        assert!(
+            bin.is_some(),
+            "Expected julie-extract binary to be discovered via candidates or PATH"
+        );
         let path = bin.unwrap();
         assert!(path.exists(), "Discovered path must exist: {:?}", path);
     }

@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::{fmt, EnvFilter};
+use tracing_subscriber::{EnvFilter, fmt};
 
 /// Returns the primary log directory for the given workspace root.
 pub fn get_log_dir(workspace_root: &Path) -> PathBuf {
@@ -20,14 +20,13 @@ pub fn get_log_file(workspace_root: &Path) -> PathBuf {
 ///
 /// NOTE: When `is_serve` is true (MCP mode over stdio), all stdout logging is strictly
 /// suppressed to prevent protocol stream corruption.
-pub fn init_logging(
-    workspace_root: &Path,
-    is_serve: bool,
-    verbose: bool,
-) -> Option<WorkerGuard> {
+pub fn init_logging(workspace_root: &Path, is_serve: bool, verbose: bool) -> Option<WorkerGuard> {
     let log_dir = get_log_dir(workspace_root);
     if let Err(e) = fs::create_dir_all(&log_dir) {
-        eprintln!("Warning: Failed to create log directory '{}': {e}", log_dir.display());
+        eprintln!(
+            "Warning: Failed to create log directory '{}': {e}",
+            log_dir.display()
+        );
         return None;
     }
 
@@ -42,8 +41,8 @@ pub fn init_logging(
         "code_kb_core=info,code_kb_cli=info,code_kb=info,warn"
     };
 
-    let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(default_filter));
+    let env_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default_filter));
 
     let file_layer = fmt::layer()
         .with_writer(non_blocking_file)

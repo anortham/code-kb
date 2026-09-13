@@ -37,7 +37,11 @@ fn snap_to_char_boundary_ceil(bytes: &[u8], mut idx: usize) -> usize {
 }
 
 /// Slices exact byte content from an in-memory buffer with safe UTF-8 snapping.
-pub fn slice_bytes_safe(content: &[u8], start_byte: usize, end_byte: usize) -> Result<&str, SliceError> {
+pub fn slice_bytes_safe(
+    content: &[u8],
+    start_byte: usize,
+    end_byte: usize,
+) -> Result<&str, SliceError> {
     if start_byte > end_byte {
         return Err(SliceError::InvalidRange(start_byte, end_byte));
     }
@@ -50,8 +54,8 @@ pub fn slice_bytes_safe(content: &[u8], start_byte: usize, end_byte: usize) -> R
 
 /// Slice the entire symbol declaration (signature + body) from file on disk.
 pub fn slice_symbol(file_path: &Path, symbol: &Symbol) -> Result<String, SliceError> {
-    let bytes = fs::read(file_path)
-        .map_err(|e| SliceError::Io(file_path.display().to_string(), e))?;
+    let bytes =
+        fs::read(file_path).map_err(|e| SliceError::Io(file_path.display().to_string(), e))?;
 
     if bytes.is_empty() {
         return Err(SliceError::EmptyFile(file_path.display().to_string()));
@@ -72,8 +76,8 @@ pub fn slice_symbol(file_path: &Path, symbol: &Symbol) -> Result<String, SliceEr
 
 /// Slice only the symbol's implementation body from file on disk.
 pub fn slice_symbol_body(file_path: &Path, symbol: &Symbol) -> Result<String, SliceError> {
-    let bytes = fs::read(file_path)
-        .map_err(|e| SliceError::Io(file_path.display().to_string(), e))?;
+    let bytes =
+        fs::read(file_path).map_err(|e| SliceError::Io(file_path.display().to_string(), e))?;
 
     if bytes.is_empty() {
         return Err(SliceError::EmptyFile(file_path.display().to_string()));

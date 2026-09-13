@@ -48,7 +48,11 @@ fn find_first_error(node: tree_sitter::Node) -> Option<(usize, usize, String)> {
     }
     if node.is_missing() {
         let start = node.start_position();
-        return Some((start.row + 1, start.column + 1, format!("missing {}", node.kind())));
+        return Some((
+            start.row + 1,
+            start.column + 1,
+            format!("missing {}", node.kind()),
+        ));
     }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
@@ -71,7 +75,10 @@ pub fn validate_syntax(file_path: &str, content: &str) -> Result<(), SyntaxError
     let language = get_language(grammar);
     let mut parser = Parser::new();
     parser.set_language(&language).map_err(|e| {
-        SyntaxError::ParseError(file_path.to_string(), format!("failed to initialize parser: {e}"))
+        SyntaxError::ParseError(
+            file_path.to_string(),
+            format!("failed to initialize parser: {e}"),
+        )
     })?;
 
     let tree = parser.parse(content, None).ok_or_else(|| {
@@ -119,7 +126,10 @@ mod tests {
             name
         }
         "##;
-        assert!(validate_syntax("greet.rs", code).is_ok(), "Valid Rust with lifetime and raw string should pass");
+        assert!(
+            validate_syntax("greet.rs", code).is_ok(),
+            "Valid Rust with lifetime and raw string should pass"
+        );
     }
 
     #[test]
@@ -138,7 +148,10 @@ mod tests {
     #[test]
     fn test_invalid_javascript_syntax() {
         let code = "function f() { const x = ; }";
-        assert!(validate_syntax("app.js", code).is_err(), "Invalid JavaScript should fail syntax validation");
+        assert!(
+            validate_syntax("app.js", code).is_err(),
+            "Invalid JavaScript should fail syntax validation"
+        );
     }
 
     #[test]
@@ -162,7 +175,10 @@ mod tests {
     #[test]
     fn test_invalid_python_syntax() {
         let code = "def foo(:\n    pass";
-        assert!(validate_syntax("script.py", code).is_err(), "Invalid Python should fail syntax validation");
+        assert!(
+            validate_syntax("script.py", code).is_err(),
+            "Invalid Python should fail syntax validation"
+        );
     }
 
     #[test]

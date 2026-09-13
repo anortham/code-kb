@@ -72,7 +72,11 @@ pub struct TextContent {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CallToolResult {
     pub content: Vec<TextContent>,
-    #[serde(rename = "isError", skip_serializing_if = "std::ops::Not::not", default)]
+    #[serde(
+        rename = "isError",
+        skip_serializing_if = "std::ops::Not::not",
+        default
+    )]
     pub is_error: bool,
 }
 

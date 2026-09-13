@@ -1,10 +1,10 @@
+use code_kb_core::{
+    Workspace, find_julie_extract_binary, open_read_only, scan_workspace, search_symbols,
+    start_watcher,
+};
 use std::fs;
 use std::thread::sleep;
 use std::time::Duration;
-use code_kb_core::{
-    find_julie_extract_binary, open_read_only, scan_workspace, search_symbols,
-    start_watcher, Workspace,
-};
 
 #[test]
 fn test_background_watcher_incremental_sync() {
@@ -54,7 +54,10 @@ fn test_background_watcher_incremental_sync() {
             break;
         }
     }
-    assert!(updated, "Watcher failed to detect external modification to greet.rs");
+    assert!(
+        updated,
+        "Watcher failed to detect external modification to greet.rs"
+    );
 
     // 2. External creation of new file
     let file2 = src_dir.join("extra.rs");
@@ -88,4 +91,92 @@ fn test_background_watcher_incremental_sync() {
         }
     }
     assert!(deleted, "Watcher failed to detect deletion of extra.rs");
+}
+
+#[test]
+fn test_watcher_updates_directory_named_targeted() {
+    let extract_bin = find_julie_extract_binary();
+    if extract_bin.is_none() {
+        eprintln!("Skipping watcher test: julie-extract binary not found");
+        return;
+    }
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let root = temp_dir.path().to_path_buf();
+    let src_dir = root.join("targeted");
+    fs::create_dir_all(&src_dir).unwrap();
+    let file_path = src_dir.join("sample.rs");
+    fs::write(&file_path, "pub fn before_update() {}\n").unwrap();
+
+    let ws = Workspace::new(root.clone());
+    let db_path = root.join("watcher_test.db");
+    scan_workspace(&ws, &db_path, true).unwrap();
+    let _watcher = start_watcher(ws, db_path.clone()).unwrap();
+
+    fs::write(&file_path, "pub fn after_update() {}\n").unwrap();
+
+    for _ in 0..25 {
+        sleep(Duration::from_millis(200));
+        let conn = open_read_only(&db_path).unwrap();
+        if !search_symbols(&conn, "after_update", None, false, 10)
+            .unwrap()
+            .is_empty()
+        {
+            return;
+        }
+    }
+
+    panic!("Watcher did not update a directory named targeted");
+}
+
+#[test]
+fn test_watcher_respects_nested_ignore_files() {
+    let extract_bin = find_julie_extract_binary();
+    if extract_bin.is_none() {
+        eprintln!("Skipping watcher test: julie-extract binary not found");
+        return;
+    }
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let root = temp_dir.path().to_path_buf();
+    let src_dir = root.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
+    fs::write(src_dir.join(".gitignore"), "ignored.rs\n").unwrap();
+    fs::write(src_dir.join(".julieignore"), "julie_ignored.rs\n").unwrap();
+
+    let ws = Workspace::new(root.clone());
+    let db_path = root.join("watcher_test.db");
+    scan_workspace(&ws, &db_path, true).unwrap();
+    let _watcher = start_watcher(ws, db_path.clone()).unwrap();
+
+    fs::write(src_dir.join("ignored.rs"), "pub fn ignored_symbol() {}\n").unwrap();
+    fs::write(
+        src_dir.join("julie_ignored.rs"),
+        "pub fn julie_ignored_symbol() {}\n",
+    )
+    .unwrap();
+    fs::write(src_dir.join("tracked.rs"), "pub fn tracked_symbol() {}\n").unwrap();
+
+    for _ in 0..25 {
+        sleep(Duration::from_millis(200));
+        let conn = open_read_only(&db_path).unwrap();
+        if !search_symbols(&conn, "tracked_symbol", None, false, 10)
+            .unwrap()
+            .is_empty()
+        {
+            assert!(
+                search_symbols(&conn, "ignored_symbol", None, false, 10)
+                    .unwrap()
+                    .is_empty()
+            );
+            assert!(
+                search_symbols(&conn, "julie_ignored_symbol", None, false, 10)
+                    .unwrap()
+                    .is_empty()
+            );
+            return;
+        }
+    }
+
+    panic!("Watcher did not index tracked file");
 }

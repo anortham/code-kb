@@ -1,12 +1,12 @@
+use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
-use serde_json::{json, Value};
 
 use code_kb_core::{
-    codebase_outline_op, ensure_fts_index_path, file_skeleton_op, format_context_slice,
-    format_references, format_search_results, fts_search_symbols, get_context_slice_op,
-    get_symbol_body_op, open_read_only, reconcile_offline_edits, replace_symbol_body,
-    scan_workspace, search_symbols, start_watcher, WatcherHandle, Workspace, WorkspaceError,
+    WatcherHandle, Workspace, WorkspaceError, codebase_outline_op, ensure_fts_index_path,
+    file_skeleton_op, format_context_slice, format_references, format_search_results,
+    fts_search_symbols, get_context_slice_op, get_symbol_body_op, open_read_only,
+    reconcile_offline_edits, replace_symbol_body, scan_workspace, search_symbols, start_watcher,
 };
 
 use super::protocol::{CallToolResult, JsonRpcRequest, JsonRpcResponse, Tool};
@@ -20,7 +20,10 @@ pub struct McpServer {
 impl McpServer {
     pub fn new(workspace: Workspace, explicit_db: Option<&Path>) -> anyhow::Result<Self> {
         let db_path = workspace.locate_db(explicit_db).unwrap_or_else(|_| {
-            workspace.canonical_root.join(".code-kb").join("artifact.db")
+            workspace
+                .canonical_root
+                .join(".code-kb")
+                .join("artifact.db")
         });
 
         // Trigger cold-start reconciliation and ensure FTS index in background thread if database exists
@@ -51,9 +54,9 @@ impl McpServer {
 
     pub fn bind_workspace(&mut self, path: &Path) -> Result<(), WorkspaceError> {
         let ws = Workspace::discover(Some(path))?;
-        let db_path = ws.locate_db(None).unwrap_or_else(|_| {
-            ws.canonical_root.join(".code-kb").join("artifact.db")
-        });
+        let db_path = ws
+            .locate_db(None)
+            .unwrap_or_else(|_| ws.canonical_root.join(".code-kb").join("artifact.db"));
 
         tracing::info!(
             workspace = %ws.canonical_root.display(),
@@ -272,7 +275,11 @@ impl McpServer {
         // Dynamically bind workspace if passed explicitly or if candidate path is outside current workspace
         if let Some(ws_str) = arguments.get("workspace").and_then(|v| v.as_str()) {
             let _ = self.bind_workspace(Path::new(ws_str));
-        } else if let Some(candidate) = arguments.get("file_path").or_else(|| arguments.get("path")).and_then(|v| v.as_str()) {
+        } else if let Some(candidate) = arguments
+            .get("file_path")
+            .or_else(|| arguments.get("path"))
+            .and_then(|v| v.as_str())
+        {
             let p = Path::new(candidate);
             if p.is_absolute() {
                 let norm = code_kb_core::normalize_path(p);
@@ -297,7 +304,8 @@ impl McpServer {
                 if let Err(e) = scan_workspace(&self.workspace, &self.db_path, false) {
                     tracing::error!("Initial scan failed: {e}");
                 } else if self._watcher.is_none() {
-                    self._watcher = start_watcher(self.workspace.clone(), self.db_path.clone()).ok();
+                    self._watcher =
+                        start_watcher(self.workspace.clone(), self.db_path.clone()).ok();
                 }
             }
         }
@@ -322,13 +330,8 @@ impl McpServer {
 
         let result = match name {
             "codebase_outline" => {
-                let depth = arguments
-                    .get("depth")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(2) as usize;
-                let path_filter = arguments
-                    .get("path")
-                    .and_then(|v| v.as_str());
+                let depth = arguments.get("depth").and_then(|v| v.as_u64()).unwrap_or(2) as usize;
+                let path_filter = arguments.get("path").and_then(|v| v.as_str());
 
                 match codebase_outline_op(&self.workspace, &conn, depth, path_filter) {
                     Ok(text) => CallToolResult::text(text),
@@ -409,11 +412,19 @@ impl McpServer {
             "get_symbol_body" => {
                 let symbol_name = match arguments.get("symbol_name").and_then(|v| v.as_str()) {
                     Some(n) => n,
-                    None => return CallToolResult::error("Missing required parameter: symbol_name"),
+                    None => {
+                        return CallToolResult::error("Missing required parameter: symbol_name");
+                    }
                 };
                 let file_path = arguments.get("file_path").and_then(|v| v.as_str());
 
-                match get_symbol_body_op(&self.workspace, &self.db_path, &conn, symbol_name, file_path) {
+                match get_symbol_body_op(
+                    &self.workspace,
+                    &self.db_path,
+                    &conn,
+                    symbol_name,
+                    file_path,
+                ) {
                     Ok((symbol, body)) => {
                         let mut out = format!(
                             "// {}:{}-{} ({})\n",
@@ -428,11 +439,19 @@ impl McpServer {
             "get_context_slice" => {
                 let symbol_name = match arguments.get("symbol_name").and_then(|v| v.as_str()) {
                     Some(n) => n,
-                    None => return CallToolResult::error("Missing required parameter: symbol_name"),
+                    None => {
+                        return CallToolResult::error("Missing required parameter: symbol_name");
+                    }
                 };
                 let file_path = arguments.get("file_path").and_then(|v| v.as_str());
 
-                match get_context_slice_op(&self.workspace, &self.db_path, &conn, symbol_name, file_path) {
+                match get_context_slice_op(
+                    &self.workspace,
+                    &self.db_path,
+                    &conn,
+                    symbol_name,
+                    file_path,
+                ) {
                     Ok(slice) => CallToolResult::text(format_context_slice(&slice)),
                     Err(e) => CallToolResult::error(e.to_string()),
                 }
@@ -440,7 +459,9 @@ impl McpServer {
             "find_references" => {
                 let symbol_name = match arguments.get("symbol_name").and_then(|v| v.as_str()) {
                     Some(n) => n,
-                    None => return CallToolResult::error("Missing required parameter: symbol_name"),
+                    None => {
+                        return CallToolResult::error("Missing required parameter: symbol_name");
+                    }
                 };
                 let direction = match arguments.get("direction").and_then(|v| v.as_str()) {
                     Some(d) => d,
@@ -451,7 +472,8 @@ impl McpServer {
                     .and_then(|v| v.as_u64())
                     .unwrap_or(20) as usize;
 
-                let refs = match code_kb_core::find_references(&conn, symbol_name, direction, limit) {
+                let refs = match code_kb_core::find_references(&conn, symbol_name, direction, limit)
+                {
                     Ok(r) => r,
                     Err(e) => return CallToolResult::error(e.to_string()),
                 };
@@ -473,9 +495,13 @@ impl McpServer {
                     Err(e) => return CallToolResult::error(e.to_string()),
                 };
 
-                let literals = code_kb_core::find_literals(&conn, category, limit).unwrap_or_default();
+                let literals =
+                    code_kb_core::find_literals(&conn, category, limit).unwrap_or_default();
 
-                let mut out = format!("Structural facts for '{category}' ({} found):\n", facts.len());
+                let mut out = format!(
+                    "Structural facts for '{category}' ({} found):\n",
+                    facts.len()
+                );
                 for f in &facts {
                     let parent = f.containing_symbol_name.as_deref().unwrap_or("top-level");
                     out.push_str(&format!(
@@ -485,7 +511,10 @@ impl McpServer {
                 }
 
                 if !literals.is_empty() {
-                    out.push_str(&format!("\nMatching literals ({} found):\n", literals.len()));
+                    out.push_str(&format!(
+                        "\nMatching literals ({} found):\n",
+                        literals.len()
+                    ));
                     for l in &literals {
                         out.push_str(&format!(
                             "- \"{}\" [{}:{}] (kind: {})\n",
@@ -499,7 +528,9 @@ impl McpServer {
             "replace_symbol_body" => {
                 let symbol_name = match arguments.get("symbol_name").and_then(|v| v.as_str()) {
                     Some(n) => n,
-                    None => return CallToolResult::error("Missing required parameter: symbol_name"),
+                    None => {
+                        return CallToolResult::error("Missing required parameter: symbol_name");
+                    }
                 };
                 let file_path = match arguments.get("file_path").and_then(|v| v.as_str()) {
                     Some(p) => p,
@@ -522,7 +553,11 @@ impl McpServer {
                 ) {
                     Ok(res) => CallToolResult::text(format!(
                         "Successfully replaced body of `{}` in `{}`.\nOld Hash: {}\nNew Hash: {}\nBytes Written: {}",
-                        res.symbol_name, res.file_path, res.old_body_hash, res.new_body_hash, res.bytes_written
+                        res.symbol_name,
+                        res.file_path,
+                        res.old_body_hash,
+                        res.new_body_hash,
+                        res.bytes_written
                     )),
                     Err(e) => CallToolResult::error(e.to_string()),
                 }
@@ -561,7 +596,8 @@ impl McpServer {
             let request: JsonRpcRequest = match serde_json::from_str(trimmed) {
                 Ok(r) => r,
                 Err(e) => {
-                    let err_resp = JsonRpcResponse::error(None, -32700, format!("Parse error: {e}"));
+                    let err_resp =
+                        JsonRpcResponse::error(None, -32700, format!("Parse error: {e}"));
                     let mut serialized = serde_json::to_string(&err_resp)?;
                     serialized.push('\n');
                     stdout.write_all(serialized.as_bytes())?;
@@ -593,15 +629,22 @@ impl McpServer {
                 if let Some(params) = &request.params {
                     let mut candidate = None;
                     if let Some(roots) = params.get("roots").and_then(|r| r.as_array())
-                        && let Some(u) = roots.first().and_then(|r| r.get("uri")).and_then(|u| u.as_str())
+                        && let Some(u) = roots
+                            .first()
+                            .and_then(|r| r.get("uri"))
+                            .and_then(|u| u.as_str())
                     {
                         candidate = Some(u);
                     } else if let Some(u) = params.get("rootUri").and_then(|u| u.as_str()) {
                         candidate = Some(u);
                     } else if let Some(u) = params.get("rootPath").and_then(|u| u.as_str()) {
                         candidate = Some(u);
-                    } else if let Some(folders) = params.get("workspaceFolders").and_then(|f| f.as_array())
-                        && let Some(u) = folders.first().and_then(|f| f.get("uri")).and_then(|u| u.as_str())
+                    } else if let Some(folders) =
+                        params.get("workspaceFolders").and_then(|f| f.as_array())
+                        && let Some(u) = folders
+                            .first()
+                            .and_then(|f| f.get("uri"))
+                            .and_then(|u| u.as_str())
                     {
                         candidate = Some(u);
                     }
@@ -622,8 +665,9 @@ impl McpServer {
                     },
                     "serverInfo": {
                         "name": "code-kb",
-                        "version": "0.1.0"
-                    }
+                        "version": env!("CARGO_PKG_VERSION")
+                    },
+                    "instructions": "For unfamiliar code, start with codebase_outline, then file_skeleton or find_symbol. Use get_symbol_body or get_context_slice for a selected symbol. Pass file_path when a symbol name is ambiguous. replace_symbol_body modifies source files and reindexes them."
                 });
                 Some(JsonRpcResponse::success(id, init_result))
             }
@@ -639,8 +683,12 @@ impl McpServer {
                 let arguments = params.get("arguments").unwrap_or(&Value::Null);
 
                 let result = self.handle_call_tool(tool_name, arguments);
-                Some(JsonRpcResponse::success(id, serde_json::to_value(result).unwrap_or(Value::Null)))
+                Some(JsonRpcResponse::success(
+                    id,
+                    serde_json::to_value(result).unwrap_or(Value::Null),
+                ))
             }
+            _ if id.is_none() => None,
             _ => Some(JsonRpcResponse::error(
                 id,
                 -32601,

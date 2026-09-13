@@ -1,5 +1,5 @@
-use std::path::{Path, PathBuf};
 use sha2::{Digest, Sha256};
+use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -93,7 +93,8 @@ impl Workspace {
         };
 
         let root = Self::find_workspace_root(&current)?;
-        let canonical_root = normalize_path(&dunce::canonicalize(&root).unwrap_or_else(|_| root.clone()));
+        let canonical_root =
+            normalize_path(&dunce::canonicalize(&root).unwrap_or_else(|_| root.clone()));
 
         let repo_name = canonical_root
             .file_name()
@@ -115,7 +116,8 @@ impl Workspace {
 
     /// Create workspace binding directly for a known root directory.
     pub fn new(root: PathBuf) -> Self {
-        let canonical_root = normalize_path(&dunce::canonicalize(&root).unwrap_or_else(|_| root.clone()));
+        let canonical_root =
+            normalize_path(&dunce::canonicalize(&root).unwrap_or_else(|_| root.clone()));
         let repo_name = canonical_root
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
@@ -212,7 +214,10 @@ impl Workspace {
             Ok(r) => {
                 let forward = to_forward_slash(r);
                 if forward.starts_with("../") || forward == ".." {
-                    return Err(WorkspaceError::PathOutsideWorkspace(abs_path, self.canonical_root.clone()));
+                    return Err(WorkspaceError::PathOutsideWorkspace(
+                        abs_path,
+                        self.canonical_root.clone(),
+                    ));
                 }
                 forward
             }
@@ -222,12 +227,18 @@ impl Workspace {
                     Ok(r) => {
                         let forward = to_forward_slash(r);
                         if forward.starts_with("../") || forward == ".." {
-                            return Err(WorkspaceError::PathOutsideWorkspace(abs_path, self.canonical_root.clone()));
+                            return Err(WorkspaceError::PathOutsideWorkspace(
+                                abs_path,
+                                self.canonical_root.clone(),
+                            ));
                         }
                         forward
                     }
                     Err(_) => {
-                        return Err(WorkspaceError::PathOutsideWorkspace(abs_path, self.canonical_root.clone()))
+                        return Err(WorkspaceError::PathOutsideWorkspace(
+                            abs_path,
+                            self.canonical_root.clone(),
+                        ));
                     }
                 }
             }
@@ -256,7 +267,12 @@ impl Workspace {
         if let Some(proj_dirs) = directories::ProjectDirs::from("com", "code-kb", "code-kb") {
             let cache_dir = proj_dirs.cache_dir();
             let store_slug = format!("{}-{}", self.repo_name, self.repo_id);
-            candidates.push(cache_dir.join("stores").join(&store_slug).join("artifact.db"));
+            candidates.push(
+                cache_dir
+                    .join("stores")
+                    .join(&store_slug)
+                    .join("artifact.db"),
+            );
             candidates.push(cache_dir.join("stores").join(&store_slug).join("store.db"));
         }
 
@@ -274,7 +290,9 @@ impl Workspace {
 
         // Return first non-explicit candidate as default if none exist yet
         candidates.into_iter().next().ok_or_else(|| {
-            WorkspaceError::ArtifactNotFound(self.canonical_root.join(".code-kb").join("artifact.db"))
+            WorkspaceError::ArtifactNotFound(
+                self.canonical_root.join(".code-kb").join("artifact.db"),
+            )
         })
     }
 }
@@ -284,6 +302,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg(windows)]
     fn test_normalize_path() {
         let p = PathBuf::from(r"\\?\C:\source\code-kb\src\main.rs");
         let norm = normalize_path(&p);
@@ -318,9 +337,13 @@ mod tests {
 
     #[test]
     fn test_parse_file_uri() {
-        // Percent-encoded with spaces
-        let p1 = parse_file_uri("file:///C:/my%20folder/project").unwrap();
-        assert_eq!(p1, normalize_path(Path::new("C:/my folder/project")));
+        #[cfg(windows)]
+        let (uri, expected) = ("file:///C:/my%20folder/project", "C:/my folder/project");
+        #[cfg(not(windows))]
+        let (uri, expected) = ("file:///tmp/my%20folder/project", "/tmp/my folder/project");
+
+        let p1 = parse_file_uri(uri).unwrap();
+        assert_eq!(p1, normalize_path(Path::new(expected)));
 
         // Plain path fallback
         let p2 = parse_file_uri("C:/direct/path").unwrap();

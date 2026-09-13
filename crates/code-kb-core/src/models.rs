@@ -111,4 +111,3 @@ pub struct SymbolSearchResult {
     pub score: f64,
     pub snippet: Option<String>,
 }
-

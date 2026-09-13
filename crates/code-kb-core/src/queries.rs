@@ -1,5 +1,5 @@
+use rusqlite::{Connection, Row, params};
 use std::collections::HashMap;
-use rusqlite::{params, Connection, Row};
 use thiserror::Error;
 
 use crate::models::{
@@ -12,7 +12,9 @@ pub enum QueryError {
     Sqlite(#[from] rusqlite::Error),
     #[error("Symbol '{0}' not found")]
     SymbolNotFound(String),
-    #[error("Ambiguous symbol '{0}': found {1} matching candidates. Specify file_path or qualified name to disambiguate:\n{2}")]
+    #[error(
+        "Ambiguous symbol '{0}': found {1} matching candidates. Specify file_path or qualified name to disambiguate:\n{2}"
+    )]
     AmbiguousSymbol(String, usize, String),
 }
 
@@ -34,17 +36,36 @@ fn map_symbol(row: &Row) -> rusqlite::Result<Symbol> {
         end_column: row.get::<_, i64>("end_column")? as usize,
         start_byte: row.get::<_, i64>("start_byte")? as usize,
         end_byte: row.get::<_, i64>("end_byte")? as usize,
-        body_start_line: row.get::<_, Option<i64>>("body_start_line")?.map(|v| v as usize),
-        body_start_column: row.get::<_, Option<i64>>("body_start_column")?.map(|v| v as usize),
-        body_end_line: row.get::<_, Option<i64>>("body_end_line")?.map(|v| v as usize),
-        body_end_column: row.get::<_, Option<i64>>("body_end_column")?.map(|v| v as usize),
-        body_start_byte: row.get::<_, Option<i64>>("body_start_byte")?.map(|v| v as usize),
-        body_end_byte: row.get::<_, Option<i64>>("body_end_byte")?.map(|v| v as usize),
+        body_start_line: row
+            .get::<_, Option<i64>>("body_start_line")?
+            .map(|v| v as usize),
+        body_start_column: row
+            .get::<_, Option<i64>>("body_start_column")?
+            .map(|v| v as usize),
+        body_end_line: row
+            .get::<_, Option<i64>>("body_end_line")?
+            .map(|v| v as usize),
+        body_end_column: row
+            .get::<_, Option<i64>>("body_end_column")?
+            .map(|v| v as usize),
+        body_start_byte: row
+            .get::<_, Option<i64>>("body_start_byte")?
+            .map(|v| v as usize),
+        body_end_byte: row
+            .get::<_, Option<i64>>("body_end_byte")?
+            .map(|v| v as usize),
         body_hash: row.get("body_hash")?,
         semantic_group: row.get("semantic_group")?,
         is_test: row.get::<_, i64>("is_test")? != 0,
         test_container: row.get::<_, i64>("test_container")? != 0,
     })
+}
+
+pub(crate) fn escape_like(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
 }
 
 /// Retrieve all indexed files from `files` table.
@@ -58,11 +79,11 @@ pub fn load_scoped_files(
     path_filter: Option<&str>,
 ) -> Result<Vec<FileFact>, QueryError> {
     let norm = path_filter.map(|p| p.replace('\\', "/").trim_matches('/').to_string());
-    let prefix = norm.as_ref().map(|p| format!("{p}/%"));
+    let prefix = norm.as_ref().map(|path| format!("{}/%", escape_like(path)));
 
     let sql = "SELECT file_id, path, language, content_hash, content_bytes, line_count, indexed_at
                FROM files
-               WHERE (:path IS NULL OR path = :path OR path LIKE :path_prefix)
+               WHERE (:path IS NULL OR path = :path OR path LIKE :path_prefix ESCAPE '\\')
                ORDER BY path ASC";
 
     let mut stmt = conn.prepare(sql)?;
@@ -98,7 +119,7 @@ pub fn load_scoped_outline_symbols(
     limit_per_file: usize,
 ) -> Result<HashMap<String, Vec<Symbol>>, QueryError> {
     let norm = path_filter.map(|p| p.replace('\\', "/").trim_matches('/').to_string());
-    let prefix = norm.as_ref().map(|p| format!("{p}/%"));
+    let prefix = norm.as_ref().map(|path| format!("{}/%", escape_like(path)));
 
     let max_slashes = match &norm {
         None => {
@@ -123,7 +144,7 @@ pub fn load_scoped_outline_symbols(
                    is_test, test_container,
                    ROW_NUMBER() OVER (PARTITION BY path ORDER BY start_line ASC) as rn
             FROM symbols
-            WHERE (:path IS NULL OR path = :path OR path LIKE :path_prefix)
+            WHERE (:path IS NULL OR path = :path OR path LIKE :path_prefix ESCAPE '\\')
               AND (length(path) - length(replace(path, '/', '')) <= :max_slashes)
         )
         SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,
@@ -147,7 +168,10 @@ pub fn load_scoped_outline_symbols(
     let mut symbols_by_file: HashMap<String, Vec<Symbol>> = HashMap::new();
     while let Some(row) = rows.next()? {
         let sym = map_symbol(row)?;
-        symbols_by_file.entry(sym.path.clone()).or_default().push(sym);
+        symbols_by_file
+            .entry(sym.path.clone())
+            .or_default()
+            .push(sym);
     }
 
     Ok(symbols_by_file)
@@ -180,14 +204,15 @@ pub fn get_file(conn: &Connection, path: &str) -> Result<Option<FileFact>, Query
     }
 
     // Fallback: boundary match only if exact match is absent
+    let escaped_normalized = escape_like(&normalized);
     let mut fallback_stmt = conn.prepare(
         "SELECT file_id, path, language, content_hash, content_bytes, line_count, indexed_at
          FROM files
-         WHERE path LIKE '%/' || ?1
+         WHERE path LIKE '%/' || ?1 ESCAPE '\\'
          LIMIT 1",
     )?;
 
-    let mut f_rows = fallback_stmt.query(params![normalized])?;
+    let mut f_rows = fallback_stmt.query(params![escaped_normalized])?;
     if let Some(row) = f_rows.next()? {
         Ok(Some(FileFact {
             file_id: row.get(0)?,
@@ -235,7 +260,7 @@ pub fn search_symbols(
     include_tests: bool,
     limit: usize,
 ) -> Result<Vec<Symbol>, QueryError> {
-    let pattern = format!("%{query}%");
+    let pattern = format!("%{}%", escape_like(query));
 
     let mut sql = String::from(
         "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,
@@ -244,7 +269,7 @@ pub fn search_symbols(
                 body_end_column, body_start_byte, body_end_byte, body_hash, semantic_group,
                 is_test, test_container
          FROM symbols
-         WHERE (name = ?1 OR name LIKE ?2)",
+         WHERE (name = ?1 OR name LIKE ?2 ESCAPE '\\')",
     );
 
     if !include_tests {
@@ -319,7 +344,7 @@ pub fn fts_search_symbols(
         .unwrap_or(false);
 
     if !fts_exists {
-        let pattern = format!("%{query}%");
+        let pattern = format!("%{}%", escape_like(query));
         let mut sql = String::from(
             "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,
                     visibility, parent_symbol_id, start_line, start_column, end_line, end_column,
@@ -327,7 +352,7 @@ pub fn fts_search_symbols(
                     body_end_column, body_start_byte, body_end_byte, body_hash, semantic_group,
                     is_test, test_container
              FROM symbols
-             WHERE (name = ?1 OR name LIKE ?2)",
+             WHERE (name = ?1 OR name LIKE ?2 ESCAPE '\\')",
         );
         if !include_tests {
             sql.push_str(" AND is_test = 0 AND test_container = 0");
@@ -430,7 +455,6 @@ pub fn fts_search_symbols(
     Ok(results)
 }
 
-
 /// Find a specific symbol by name, with an optional path filter for disambiguation.
 pub fn get_symbol_by_name(
     conn: &Connection,
@@ -486,17 +510,19 @@ fn get_symbol_by_name_internal(
          FROM symbols s
          LEFT JOIN symbols p ON s.parent_symbol_id = p.symbol_id
          WHERE (s.name = :name OR (s.name = :term AND (:parent IS NULL OR p.name = :parent)))
-           AND (:path IS NULL OR s.path = :path OR (:exact = 0 AND s.path LIKE '%/' || :path))
+           AND (:path IS NULL OR s.path = :path OR (:exact = 0 AND s.path LIKE '%/' || :path_like ESCAPE '\\'))
          ORDER BY (s.name = :name) DESC, s.is_test ASC LIMIT 10";
 
     let mut stmt = conn.prepare(sql)?;
     let normalized_path = path_filter.map(|p| p.replace('\\', "/"));
+    let path_like = normalized_path.as_deref().map(escape_like);
 
     let mut rows = stmt.query(rusqlite::named_params! {
         ":name": name,
         ":term": terminal_name,
         ":parent": parent_name,
         ":path": normalized_path.as_deref(),
+        ":path_like": path_like.as_deref(),
         ":exact": if exact_path { 1 } else { 0 },
     })?;
 
@@ -530,10 +556,17 @@ fn get_symbol_by_name_internal(
     // Ambiguity detected
     let mut candidate_list = String::new();
     for s in &matches {
-        candidate_list.push_str(&format!("- {} `{}` in {}:{}\n", s.kind, s.name, s.path, s.start_line));
+        candidate_list.push_str(&format!(
+            "- {} `{}` in {}:{}\n",
+            s.kind, s.name, s.path, s.start_line
+        ));
     }
 
-    Err(QueryError::AmbiguousSymbol(name.to_string(), matches.len(), candidate_list))
+    Err(QueryError::AmbiguousSymbol(
+        name.to_string(),
+        matches.len(),
+        candidate_list,
+    ))
 }
 
 /// Find callers or callees of a symbol.
@@ -542,6 +575,26 @@ pub fn find_references(
     symbol_name: &str,
     direction: &str,
     limit: usize,
+) -> Result<Vec<ReferenceSite>, QueryError> {
+    find_references_internal(conn, symbol_name, direction, limit, None)
+}
+
+pub(crate) fn find_references_for_symbol(
+    conn: &Connection,
+    symbol_name: &str,
+    direction: &str,
+    limit: usize,
+    symbol_id: &str,
+) -> Result<Vec<ReferenceSite>, QueryError> {
+    find_references_internal(conn, symbol_name, direction, limit, Some(symbol_id))
+}
+
+fn find_references_internal(
+    conn: &Connection,
+    symbol_name: &str,
+    direction: &str,
+    limit: usize,
+    symbol_id: Option<&str>,
 ) -> Result<Vec<ReferenceSite>, QueryError> {
     let mut results = Vec::new();
 
@@ -558,11 +611,11 @@ pub fn find_references(
              FROM relationships r
              JOIN symbols s_from ON r.from_symbol_id = s_from.symbol_id
              JOIN symbols s_to ON r.to_symbol_id = s_to.symbol_id
-             WHERE s_to.name = ?1
+             WHERE s_to.name = ?1 AND (?3 IS NULL OR r.to_symbol_id = ?3)
              LIMIT ?2",
         )?;
 
-        let rows = stmt.query_map(params![symbol_name, limit as i64], |row| {
+        let rows = stmt.query_map(params![symbol_name, limit as i64, symbol_id], |row| {
             Ok(ReferenceSite {
                 from_symbol_name: row.get(0)?,
                 from_symbol_id: row.get(1)?,
@@ -624,11 +677,11 @@ pub fn find_references(
              FROM relationships r
              JOIN symbols s_from ON r.from_symbol_id = s_from.symbol_id
              JOIN symbols s_to ON r.to_symbol_id = s_to.symbol_id
-             WHERE s_from.name = ?1
+             WHERE s_from.name = ?1 AND (?3 IS NULL OR r.from_symbol_id = ?3)
              LIMIT ?2",
         )?;
 
-        let rows = stmt.query_map(params![symbol_name, limit as i64], |row| {
+        let rows = stmt.query_map(params![symbol_name, limit as i64, symbol_id], |row| {
             Ok(ReferenceSite {
                 from_symbol_name: row.get(0)?,
                 from_symbol_id: row.get(1)?,
@@ -657,21 +710,24 @@ pub fn find_references(
                         p.start_column
                  FROM pending_relationships p
                  JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
-                 WHERE s_from.name = ?1
+                 WHERE s_from.name = ?1 AND (?3 IS NULL OR p.from_symbol_id = ?3)
                  LIMIT ?2",
             )?;
 
-            let p_rows = pending_stmt.query_map(params![symbol_name, remaining as i64], |row| {
-                Ok(ReferenceSite {
-                    from_symbol_name: row.get(0)?,
-                    from_symbol_id: row.get(1)?,
-                    to_symbol_name: row.get(2)?,
-                    kind: row.get(3)?,
-                    path: row.get(4)?,
-                    start_line: Some(row.get::<_, i64>(5)? as usize),
-                    start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
-                })
-            })?;
+            let p_rows = pending_stmt.query_map(
+                params![symbol_name, remaining as i64, symbol_id],
+                |row| {
+                    Ok(ReferenceSite {
+                        from_symbol_name: row.get(0)?,
+                        from_symbol_id: row.get(1)?,
+                        to_symbol_name: row.get(2)?,
+                        kind: row.get(3)?,
+                        path: row.get(4)?,
+                        start_line: Some(row.get::<_, i64>(5)? as usize),
+                        start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
+                    })
+                },
+            )?;
 
             for r in p_rows {
                 results.push(r?);
@@ -688,14 +744,14 @@ pub fn find_structural_facts(
     category: &str,
     limit: usize,
 ) -> Result<Vec<StructuralFact>, QueryError> {
-    let pattern = format!("%{category}%");
+    let pattern = format!("%{}%", escape_like(category));
     let mut stmt = conn.prepare(
         "SELECT sf.structural_fact_id, sf.path, sf.language, sf.pattern_id,
                 sf.capture_name, sf.node_kind, s.name AS containing_symbol_name,
                 sf.start_line, sf.end_line, sf.confidence
          FROM structural_facts sf
          LEFT JOIN symbols s ON sf.containing_symbol_id = s.symbol_id
-         WHERE sf.pattern_id LIKE ?1 OR sf.capture_name LIKE ?1 OR sf.node_kind LIKE ?1
+         WHERE sf.pattern_id LIKE ?1 ESCAPE '\\' OR sf.capture_name LIKE ?1 ESCAPE '\\' OR sf.node_kind LIKE ?1 ESCAPE '\\'
          LIMIT ?2",
     )?;
 
@@ -727,13 +783,13 @@ pub fn find_literals(
     category: &str,
     limit: usize,
 ) -> Result<Vec<LiteralFact>, QueryError> {
-    let pattern = format!("%{category}%");
+    let pattern = format!("%{}%", escape_like(category));
     let mut stmt = conn.prepare(
         "SELECT l.literal_id, l.path, l.literal_text, l.kind, l.carrier,
                 l.start_line, s.name AS containing_symbol_name
          FROM literals l
          LEFT JOIN symbols s ON l.containing_symbol_id = s.symbol_id
-         WHERE l.kind LIKE ?1 OR l.literal_text LIKE ?1
+         WHERE l.kind LIKE ?1 ESCAPE '\\' OR l.literal_text LIKE ?1 ESCAPE '\\'
          LIMIT ?2",
     )?;
 
@@ -757,10 +813,7 @@ pub fn find_literals(
 }
 
 /// Find type facts for a symbol.
-pub fn find_type_facts(
-    conn: &Connection,
-    symbol_id: &str,
-) -> Result<Vec<TypeFact>, QueryError> {
+pub fn find_type_facts(conn: &Connection, symbol_id: &str) -> Result<Vec<TypeFact>, QueryError> {
     let mut stmt = conn.prepare(
         "SELECT type_fact_id, symbol_id, language, resolved_type, generic_params_json
          FROM type_facts
@@ -802,6 +855,96 @@ mod tests {
         let (and_q, or_q) = sanitize_fts5_query("   ");
         assert!(and_q.is_empty());
         assert!(or_q.is_empty());
+    }
+
+    #[test]
+    fn search_symbols_treats_like_wildcards_as_literals() {
+        let temp = tempfile::NamedTempFile::new().unwrap();
+        let conn = open_read_write(temp.path()).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE symbols (
+                symbol_id TEXT, file_id TEXT, path TEXT, language TEXT, name TEXT, kind TEXT,
+                signature TEXT, doc_comment TEXT, visibility TEXT, parent_symbol_id TEXT,
+                start_line INTEGER, start_column INTEGER, end_line INTEGER, end_column INTEGER,
+                start_byte INTEGER, end_byte INTEGER, body_start_line INTEGER,
+                body_start_column INTEGER, body_end_line INTEGER, body_end_column INTEGER,
+                body_start_byte INTEGER, body_end_byte INTEGER, body_hash TEXT,
+                semantic_group TEXT, is_test INTEGER, test_container INTEGER
+            );
+            INSERT INTO symbols VALUES (
+                's', 'f', 'src/lib.rs', 'rust', 'ordinary', 'function', NULL, NULL, NULL, NULL,
+                1, 0, 1, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0
+            );
+            INSERT INTO symbols VALUES (
+                'p', 'f', 'src/lib.rs', 'rust', 'literal%name', 'function', NULL, NULL, NULL, NULL,
+                1, 0, 1, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0
+            );
+            INSERT INTO symbols VALUES (
+                'u', 'f', 'src/lib.rs', 'rust', 'literal_name', 'function', NULL, NULL, NULL, NULL,
+                1, 0, 1, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0
+            );
+            CREATE TABLE files (
+                file_id TEXT, path TEXT, language TEXT, content_hash TEXT,
+                content_bytes INTEGER, line_count INTEGER, indexed_at TEXT
+            );
+            INSERT INTO files VALUES ('f1', 'src/literal_path/lib.rs', 'rust', 'hash', 0, 0, 'now');
+            INSERT INTO files VALUES ('f2', 'src/literalXpath/lib.rs', 'rust', 'hash', 0, 0, 'now'
+            );",
+        )
+        .unwrap();
+
+        assert_eq!(
+            search_symbols(&conn, "%", None, false, 10).unwrap()[0].name,
+            "literal%name"
+        );
+        assert_eq!(
+            search_symbols(&conn, "_", None, false, 10).unwrap()[0].name,
+            "literal_name"
+        );
+        assert_eq!(
+            load_scoped_files(&conn, Some("src/literal_path"))
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn find_references_for_symbol_limits_callees_by_symbol_id() {
+        let temp = tempfile::NamedTempFile::new().unwrap();
+        let conn = open_read_write(temp.path()).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE symbols (
+                symbol_id TEXT, file_id TEXT, path TEXT, language TEXT, name TEXT, kind TEXT,
+                signature TEXT, doc_comment TEXT, visibility TEXT, parent_symbol_id TEXT,
+                start_line INTEGER, start_column INTEGER, end_line INTEGER, end_column INTEGER,
+                start_byte INTEGER, end_byte INTEGER, body_start_line INTEGER,
+                body_start_column INTEGER, body_end_line INTEGER, body_end_column INTEGER,
+                body_start_byte INTEGER, body_end_byte INTEGER, body_hash TEXT,
+                semantic_group TEXT, is_test INTEGER, test_container INTEGER
+            );
+            CREATE TABLE relationships (
+                from_symbol_id TEXT, to_symbol_id TEXT, kind TEXT, path TEXT,
+                start_line INTEGER, start_column INTEGER
+            );
+            CREATE TABLE pending_relationships (
+                from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT, path TEXT,
+                start_line INTEGER, start_column INTEGER
+            );
+            INSERT INTO symbols VALUES
+                ('wanted', 'f', 'a.rs', 'rust', 'new', 'method', NULL, NULL, NULL, NULL, 1, 0, 1, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
+                ('other', 'f', 'b.rs', 'rust', 'new', 'method', NULL, NULL, NULL, NULL, 1, 0, 1, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
+                ('wanted-callee', 'f', 'a.rs', 'rust', 'wanted_dep', 'function', NULL, NULL, NULL, NULL, 1, 0, 1, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
+                ('other-callee', 'f', 'b.rs', 'rust', 'other_dep', 'function', NULL, NULL, NULL, NULL, 1, 0, 1, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0);
+            INSERT INTO relationships VALUES
+                ('other', 'other-callee', 'calls', 'b.rs', 1, 0),
+                ('wanted', 'wanted-callee', 'calls', 'a.rs', 1, 0);",
+        )
+        .unwrap();
+
+        let references = find_references_for_symbol(&conn, "new", "callees", 1, "wanted").unwrap();
+        assert_eq!(references.len(), 1);
+        assert_eq!(references[0].to_symbol_name, "wanted_dep");
     }
 
     #[test]
@@ -889,4 +1032,3 @@ mod tests {
         assert_eq!(results[0].symbol.name, "StripeClient");
     }
 }
-

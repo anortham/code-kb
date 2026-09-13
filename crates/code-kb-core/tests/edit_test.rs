@@ -1,8 +1,8 @@
-use std::fs;
 use code_kb_core::{
-    find_julie_extract_binary, open_read_only, replace_symbol_body, scan_workspace,
-    slicer, Workspace,
+    Workspace, find_julie_extract_binary, open_read_only, replace_symbol_body, scan_workspace,
+    slicer,
 };
+use std::fs;
 
 #[test]
 fn test_replace_symbol_body_atomic() {
@@ -56,9 +56,10 @@ fn test_replace_symbol_body_atomic() {
     assert!(disk_content.contains("pub fn add_numbers(a: i32, b: i32) -> i32"));
 
     // Verify database was updated
-    let updated_symbol = code_kb_core::get_symbol_by_name(&conn, "add_numbers", Some("src/calc.rs"))
-        .unwrap()
-        .unwrap();
+    let updated_symbol =
+        code_kb_core::get_symbol_by_name(&conn, "add_numbers", Some("src/calc.rs"))
+            .unwrap()
+            .unwrap();
 
     let body = slicer::slice_symbol_body(&file_path, &updated_symbol).unwrap();
     assert_eq!(body.trim(), new_body.trim());
@@ -107,7 +108,10 @@ fn test_replace_symbol_body_shrunk_file_does_not_panic() {
         None,
     );
 
-    assert!(res.is_err(), "Replacing in shrunk file must return an Err, not panic");
+    assert!(
+        res.is_err(),
+        "Replacing in shrunk file must return an Err, not panic"
+    );
 }
 
 #[test]
@@ -149,11 +153,17 @@ fn test_replace_symbol_body_rejects_syntax_error() {
         None,
     );
 
-    assert!(res.is_err(), "Replacement with invalid syntax must be rejected");
+    assert!(
+        res.is_err(),
+        "Replacement with invalid syntax must be rejected"
+    );
 
     // File on disk must remain uncorrupted and unchanged!
     let disk_content = fs::read_to_string(&file_path).unwrap();
-    assert_eq!(disk_content, initial_code, "Disk content must not be modified when syntax error occurs");
+    assert_eq!(
+        disk_content, initial_code,
+        "Disk content must not be modified when syntax error occurs"
+    );
 }
 
 #[test]
@@ -183,7 +193,10 @@ fn test_replace_symbol_body_rejects_stale_indexed_hash_when_disk_differs() {
     let sym = code_kb_core::get_symbol_by_name_exact(&conn, "my_calc", "src/calc.rs")
         .unwrap()
         .unwrap();
-    let indexed_hash = sym.body_hash.clone().expect("Indexed symbol should have body_hash");
+    let indexed_hash = sym
+        .body_hash
+        .clone()
+        .expect("Indexed symbol should have body_hash");
 
     // Manually edit the file on disk so the body is different from indexed state,
     // and keep file length same or different

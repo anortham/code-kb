@@ -1,7 +1,8 @@
-use std::fs;
 use code_kb_core::{
-    find_julie_extract_binary, get_symbol_by_name, open_read_only, scan_workspace, Workspace,
+    Workspace, find_julie_extract_binary, get_context_slice_op, get_symbol_by_name, open_read_only,
+    scan_workspace,
 };
+use std::fs;
 
 #[test]
 fn test_qualified_parent_disambiguation() {
@@ -48,7 +49,10 @@ impl Beta {
 
     assert_eq!(alpha_create.name, "create");
     // Line 4 is Alpha's create, not Beta's create (line 11)
-    assert_eq!(alpha_create.start_line, 4, "Must match Alpha::create on line 4");
+    assert_eq!(
+        alpha_create.start_line, 4,
+        "Must match Alpha::create on line 4"
+    );
 
     // Query Beta::create
     let beta_create = get_symbol_by_name(&conn, "Beta::create", Some("src/types.rs"))
@@ -56,7 +60,10 @@ impl Beta {
         .expect("Beta::create must be found");
 
     assert_eq!(beta_create.name, "create");
-    assert_eq!(beta_create.start_line, 11, "Must match Beta::create on line 11");
+    assert_eq!(
+        beta_create.start_line, 11,
+        "Must match Beta::create on line 11"
+    );
 }
 
 #[test]
@@ -72,7 +79,7 @@ fn test_path_filter_boundary_matching() {
 
     let src_dir = root.join("src");
     fs::create_dir_all(&src_dir).unwrap();
-    
+
     // Two files: domain.rs and main.rs, both with a function named run_it
     fs::write(src_dir.join("domain.rs"), "pub fn run_it() {}\n").unwrap();
     fs::write(src_dir.join("main.rs"), "pub fn run_it() {}\n").unwrap();
@@ -170,5 +177,50 @@ fn test_file_skeleton_exact_path_isolation() {
     assert!(
         !skeleton.contains("nested_lib_func"),
         "Skeleton for src/lib.rs must NOT contain nested_lib_func from nested/src/lib.rs, got:\n{skeleton}"
+    );
+}
+
+#[test]
+fn test_context_slice_qualified_method_uses_its_own_callees() {
+    let extract_bin = find_julie_extract_binary();
+    if extract_bin.is_none() {
+        eprintln!("Skipping integration test: julie-extract binary not found");
+        return;
+    }
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let root = temp_dir.path().to_path_buf();
+    let src_dir = root.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
+    fs::write(
+        src_dir.join("types.rs"),
+        "pub struct A;\n\
+         impl A { pub fn new() -> A { wanted_dep(); A } }\n\
+         pub struct B;\n\
+         impl B { pub fn new() -> B { other_dep(); B } }\n\
+         pub fn wanted_dep() {}\n\
+         pub fn other_dep() {}\n",
+    )
+    .unwrap();
+
+    let workspace = Workspace::new(root.clone());
+    let db_path = root.join("test.db");
+    scan_workspace(&workspace, &db_path, true).expect("Scan failed");
+    let conn = open_read_only(&db_path).unwrap();
+
+    let slice = get_context_slice_op(&workspace, &db_path, &conn, "A::new", Some("src/types.rs"))
+        .expect("context slice failed");
+
+    assert!(
+        slice
+            .callee_signatures
+            .iter()
+            .any(|signature| signature.contains("wanted_dep"))
+    );
+    assert!(
+        !slice
+            .callee_signatures
+            .iter()
+            .any(|signature| signature.contains("other_dep"))
     );
 }

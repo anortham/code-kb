@@ -1,15 +1,15 @@
-use std::path::PathBuf;
-use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
-use std::time::Duration;
-use ignore::gitignore::GitignoreBuilder;
+use ignore::WalkBuilder;
 use notify::RecursiveMode;
-use notify_debouncer_mini::{new_debouncer, DebouncedEvent, Debouncer};
+use notify_debouncer_mini::{DebouncedEvent, Debouncer, new_debouncer};
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::time::Duration;
 use thiserror::Error;
 use tracing::{info, warn};
 
 use crate::sync::{delete_file, scan_workspace, update_file};
-use crate::workspace::{to_forward_slash, Workspace};
+use crate::workspace::{Workspace, to_forward_slash};
 
 #[derive(Debug, Error)]
 pub enum WatcherError {
@@ -28,13 +28,12 @@ pub struct WatcherHandle {
 
 fn is_hard_excluded(rel_path: &str) -> bool {
     let p = rel_path.replace('\\', "/");
-    p.starts_with(".git")
-        || p.starts_with(".code-kb")
-        || p.starts_with("target")
-        || p.starts_with("node_modules")
-        || p.starts_with(".idea")
-        || p.starts_with(".vscode")
-        || p.ends_with(".tmp")
+    p.split('/').any(|component| {
+        matches!(
+            component,
+            ".git" | ".code-kb" | "target" | "node_modules" | ".idea" | ".vscode"
+        )
+    }) || p.ends_with(".tmp")
         || p.ends_with(".swp")
         || p.ends_with("~")
 }
@@ -44,21 +43,6 @@ pub fn start_watcher(
     workspace: Workspace,
     db_path: PathBuf,
 ) -> Result<WatcherHandle, WatcherError> {
-    let mut gitignore_builder = GitignoreBuilder::new(&workspace.canonical_root);
-    let gitignore_path = workspace.canonical_root.join(".gitignore");
-    if gitignore_path.exists() {
-        let _ = gitignore_builder.add(&gitignore_path);
-    }
-    let julieignore_path = workspace.canonical_root.join(".julieignore");
-    if julieignore_path.exists() {
-        let _ = gitignore_builder.add(&julieignore_path);
-    }
-    let gitignore = gitignore_builder.build().unwrap_or_else(|_| {
-        GitignoreBuilder::new(&workspace.canonical_root)
-            .build()
-            .unwrap()
-    });
-
     let running = Arc::new(AtomicBool::new(true));
     let ws_clone = workspace.clone();
     let db_clone = db_path.clone();
@@ -79,7 +63,15 @@ pub fn start_watcher(
                 return;
             }
 
-            // Filter relevant events using gitignore & hard exclusions
+            let mut ignore_builder = WalkBuilder::new(&ws_clone.canonical_root);
+            ignore_builder
+                .standard_filters(true)
+                .add_custom_ignore_filename(".julieignore");
+            let mut ignore_matcher = ignore_builder
+                .build_matchers()
+                .pop()
+                .expect("workspace root creates one ignore matcher");
+
             let mut relevant_files = Vec::new();
             for event in &events {
                 let norm_path = dunce::simplified(&event.path);
@@ -89,7 +81,11 @@ pub fn start_watcher(
                         continue;
                     }
                     let is_dir = norm_path.is_dir();
-                    if gitignore.matched(norm_path, is_dir).is_ignore() {
+                    let (matched, error) = ignore_matcher.matched_with_errors(rel, is_dir);
+                    if let Some(error) = error {
+                        warn!("Failed to load ignore rule: {error}");
+                    }
+                    if matched.is_ignore() {
                         continue;
                     }
                     relevant_files.push((norm_path.to_path_buf(), rel_str));

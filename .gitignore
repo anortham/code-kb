@@ -1,6 +1,5 @@
 /target
 **/*.rs.bk
-Cargo.lock
 
 # Database and store artifacts
 .code-kb/

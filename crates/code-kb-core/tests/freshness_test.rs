@@ -1,8 +1,10 @@
-use std::fs;
 use code_kb_core::{
-    ensure_fresh_file, find_julie_extract_binary, open_read_only, reconcile_offline_edits,
-    scan_workspace, Workspace,
+    Workspace, ensure_fresh_file, find_julie_extract_binary, get_symbol_by_name, open_read_only,
+    reconcile_offline_edits, scan_workspace,
 };
+use std::fs;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 
 #[test]
 fn test_ensure_fresh_file_detects_equal_size_edit() {
@@ -35,15 +37,72 @@ fn test_ensure_fresh_file_detects_equal_size_edit() {
     fs::write(&file_path, modified_code).unwrap();
 
     // ensure_fresh_file must detect that the content changed despite identical byte count!
-    let was_dirty = ensure_fresh_file(&ws, &db_path, &conn, "src/calc.rs")
-        .expect("ensure_fresh_file failed");
+    let was_dirty =
+        ensure_fresh_file(&ws, &db_path, &conn, "src/calc.rs").expect("ensure_fresh_file failed");
 
     assert!(was_dirty, "Equal-size edit must be detected as dirty");
 
     // Verify the symbol in DB was actually updated to bar_fn
-    let symbol = code_kb_core::get_symbol_by_name(&conn, "bar_fn", Some("src/calc.rs"))
-        .unwrap();
+    let symbol = code_kb_core::get_symbol_by_name(&conn, "bar_fn", Some("src/calc.rs")).unwrap();
     assert!(symbol.is_some(), "Database must now contain 'bar_fn'");
+}
+
+#[test]
+fn test_ensure_fresh_file_removes_deleted_file_from_index() {
+    let extract_bin = find_julie_extract_binary();
+    if extract_bin.is_none() {
+        eprintln!("Skipping integration test: julie-extract binary not found");
+        return;
+    }
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let root = temp_dir.path().to_path_buf();
+    let src_dir = root.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
+    let file_path = src_dir.join("removed.rs");
+    fs::write(&file_path, "pub fn removed_symbol() {}\n").unwrap();
+
+    let ws = Workspace::new(root.clone());
+    let db_path = root.join("test.db");
+    scan_workspace(&ws, &db_path, true).unwrap();
+    let conn = open_read_only(&db_path).unwrap();
+
+    fs::remove_file(&file_path).unwrap();
+
+    assert!(ensure_fresh_file(&ws, &db_path, &conn, "src/removed.rs").unwrap());
+    assert!(
+        get_symbol_by_name(&conn, "removed_symbol", Some("src/removed.rs"))
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_ensure_fresh_file_propagates_read_failure() {
+    let extract_bin = find_julie_extract_binary();
+    if extract_bin.is_none() {
+        eprintln!("Skipping integration test: julie-extract binary not found");
+        return;
+    }
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let root = temp_dir.path().to_path_buf();
+    let src_dir = root.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
+    let file_path = src_dir.join("unreadable.rs");
+    fs::write(&file_path, "pub fn unreadable_symbol() {}\n").unwrap();
+
+    let ws = Workspace::new(root.clone());
+    let db_path = root.join("test.db");
+    scan_workspace(&ws, &db_path, true).unwrap();
+    let conn = open_read_only(&db_path).unwrap();
+
+    fs::set_permissions(&file_path, fs::Permissions::from_mode(0o000)).unwrap();
+    let result = ensure_fresh_file(&ws, &db_path, &conn, "src/unreadable.rs");
+    fs::set_permissions(&file_path, fs::Permissions::from_mode(0o644)).unwrap();
+
+    assert!(result.is_err());
 }
 
 #[test]
@@ -75,8 +134,8 @@ fn test_reconcile_offline_edits_equal_size() {
     assert_eq!(initial_code.len(), modified_code.len());
     fs::write(&file_path, modified_code).unwrap();
 
-    let report = reconcile_offline_edits(&ws, &db_path, &conn)
-        .expect("reconcile_offline_edits failed");
+    let report =
+        reconcile_offline_edits(&ws, &db_path, &conn).expect("reconcile_offline_edits failed");
 
     assert!(
         report.modified.contains(&"src/calc.rs".to_string()),
@@ -114,12 +173,24 @@ fn test_get_symbol_body_fresh_after_comment_added() {
     fs::write(&file_path, modified_code).unwrap();
 
     // Call get_symbol_body_op (without passing file_path explicitly)
-    let (symbol, body) = code_kb_core::get_symbol_body_op(&ws, &db_path, &conn, "my_function", None)
-        .expect("get_symbol_body_op failed");
+    let (symbol, body) =
+        code_kb_core::get_symbol_body_op(&ws, &db_path, &conn, "my_function", None)
+            .expect("get_symbol_body_op failed");
 
-    assert!(body.contains("12345"), "Body must contain 12345, got: {}", body);
-    assert!(!body.contains("// Line"), "Body must not contain comments from above, got: {}", body);
-    assert_eq!(symbol.start_line, 6, "Symbol line number must be refreshed to line 6");
+    assert!(
+        body.contains("12345"),
+        "Body must contain 12345, got: {}",
+        body
+    );
+    assert!(
+        !body.contains("// Line"),
+        "Body must not contain comments from above, got: {}",
+        body
+    );
+    assert_eq!(
+        symbol.start_line, 6,
+        "Symbol line number must be refreshed to line 6"
+    );
 }
 
 #[test]
@@ -152,8 +223,8 @@ fn test_reconcile_offline_edits_added_and_deleted() {
     let c_path = src_dir.join("c.rs");
     fs::write(&c_path, "pub fn func_c() {}\n").unwrap();
 
-    let report = reconcile_offline_edits(&ws, &db_path, &conn)
-        .expect("reconcile_offline_edits failed");
+    let report =
+        reconcile_offline_edits(&ws, &db_path, &conn).expect("reconcile_offline_edits failed");
 
     assert!(
         report.deleted.contains(&"src/b.rs".to_string()),
@@ -165,6 +236,64 @@ fn test_reconcile_offline_edits_added_and_deleted() {
         "Added file must be detected, got: {:?}",
         report.added
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_reconcile_offline_edits_aborts_before_deleting_unreadable_directory() {
+    let extract_bin = find_julie_extract_binary();
+    if extract_bin.is_none() {
+        eprintln!("Skipping integration test: julie-extract binary not found");
+        return;
+    }
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let root = temp_dir.path().to_path_buf();
+    let src_dir = root.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
+    let file_path = src_dir.join("locked.rs");
+    fs::write(&file_path, "pub fn locked_symbol() {}\n").unwrap();
+
+    let ws = Workspace::new(root.clone());
+    let db_path = root.join("test.db");
+    scan_workspace(&ws, &db_path, true).unwrap();
+    let conn = open_read_only(&db_path).unwrap();
+
+    fs::set_permissions(&src_dir, fs::Permissions::from_mode(0o000)).unwrap();
+    let result = reconcile_offline_edits(&ws, &db_path, &conn);
+    fs::set_permissions(&src_dir, fs::Permissions::from_mode(0o755)).unwrap();
+
+    assert!(result.is_err());
+    assert!(
+        get_symbol_by_name(&conn, "locked_symbol", Some("src/locked.rs"))
+            .unwrap()
+            .is_some()
+    );
+}
+
+#[test]
+fn test_reconcile_offline_edits_propagates_incremental_update_failure() {
+    let extract_bin = find_julie_extract_binary();
+    if extract_bin.is_none() {
+        eprintln!("Skipping integration test: julie-extract binary not found");
+        return;
+    }
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let root = temp_dir.path().to_path_buf();
+    let src_dir = root.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
+    fs::write(src_dir.join("existing.rs"), "pub fn existing_symbol() {}\n").unwrap();
+
+    let ws = Workspace::new(root.clone());
+    let db_path = root.join("test.db");
+    scan_workspace(&ws, &db_path, true).unwrap();
+    let conn = open_read_only(&db_path).unwrap();
+    fs::write(src_dir.join("added.rs"), "pub fn added_symbol() {}\n").unwrap();
+
+    let invalid_db_path = root.join("not-a-db");
+    fs::create_dir_all(&invalid_db_path).unwrap();
+    assert!(reconcile_offline_edits(&ws, &invalid_db_path, &conn).is_err());
 }
 
 #[test]
@@ -224,8 +353,8 @@ fn test_codebase_outline_depth_bounded_symbols() {
     );
 
     // Verify codebase_outline_op outputs correctly
-    let outline = code_kb_core::codebase_outline_op(&ws, &conn, 1, None)
-        .expect("codebase_outline_op failed");
+    let outline =
+        code_kb_core::codebase_outline_op(&ws, &conn, 1, None).expect("codebase_outline_op failed");
     assert!(outline.contains("root.rs"));
     assert!(outline.contains("src/"));
     // At depth 1, src/lib.rs should not be rendered as a file
