@@ -108,27 +108,9 @@ pub fn get_context_slice_op(
     let (target_symbol, target_body) =
         get_symbol_body_op(workspace, db_path, conn, symbol_name, file_path)?;
 
-    let mut callee_signatures = Vec::new();
-    if let Ok(callees) = queries::find_references_for_symbol(
-        conn,
-        &target_symbol.name,
-        "callees",
-        20,
-        &target_symbol.symbol_id,
-    ) {
-        for c in callees {
-            if let Ok(Some(s)) = queries::get_symbol_by_name(conn, &c.to_symbol_name, None) {
-                let sig = s.signature.unwrap_or(s.name);
-                let entry = format!("{sig} ({}:{})", s.path, s.start_line);
-                if !callee_signatures.contains(&entry) {
-                    callee_signatures.push(entry);
-                }
-            }
-            if callee_signatures.len() >= 10 {
-                break;
-            }
-        }
-    }
+    let callee_signatures =
+        queries::find_callee_signatures(conn, &target_symbol.name, &target_symbol.symbol_id, 10)
+            .unwrap_or_default();
 
     // Find related types
     let mut related_types = Vec::new();
@@ -268,9 +250,11 @@ pub fn blast_radius_op(
 
     if let Some(s) = clean_symbol {
         seed_symbols.push(s);
-    } else if let Some(ref f) = clean_file {
+    }
+    if let Some(ref f) = clean_file {
         seed_paths.push(f.as_str());
-    } else {
+    }
+    if seed_symbols.is_empty() && seed_paths.is_empty() {
         // Zero arguments: discover uncommitted working tree changes via git status
         let git_status = std::process::Command::new("git")
             .args(["status", "--porcelain"])

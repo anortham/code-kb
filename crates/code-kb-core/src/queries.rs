@@ -459,7 +459,7 @@ pub fn fts_search_symbols_scoped(
                     snippet(symbols_fts, 1, '[', ']', '...', 12) AS sig_snippet,
                     snippet(symbols_fts, 0, '[', ']', '...', 12) AS name_snippet
              FROM symbols_fts
-             JOIN symbols s ON s.rowid = symbols_fts.rowid
+             CROSS JOIN symbols s ON s.rowid = symbols_fts.rowid
              WHERE symbols_fts MATCH ?1",
         );
 
@@ -616,7 +616,7 @@ pub fn find_related_tests(
                 s.body_end_column, s.body_start_byte, s.body_end_byte, s.body_hash, s.semantic_group,
                 s.is_test, s.test_container
          FROM symbols_fts
-         JOIN symbols s ON s.rowid = symbols_fts.rowid
+         CROSS JOIN symbols s ON s.rowid = symbols_fts.rowid
          WHERE symbols_fts MATCH ?1 AND (s.is_test = 1 OR s.test_container = 1)
          LIMIT ?2";
 
@@ -860,7 +860,7 @@ pub fn find_references_ext(
     }
 }
 
-pub(crate) fn find_references_for_symbol(
+pub fn find_references_for_symbol(
     conn: &Connection,
     symbol_name: &str,
     direction: &str,
@@ -1048,6 +1048,99 @@ fn find_references_internal(
     Ok(results)
 }
 
+/// Resolve callee signatures directly in a single joined query, avoiding N+1 queries
+/// and preserving ambiguous methods across types. Prioritizes functions/methods over enum variants.
+pub fn find_callee_signatures(
+    conn: &Connection,
+    symbol_name: &str,
+    symbol_id: &str,
+    limit: usize,
+) -> Result<Vec<String>, QueryError> {
+    let mut stmt = conn.prepare(
+        "SELECT s_to.name, s_to.signature, s_to.path, s_to.start_line, s_to.kind
+         FROM relationships r
+         JOIN symbols s_from ON r.from_symbol_id = s_from.symbol_id
+         JOIN symbols s_to ON r.to_symbol_id = s_to.symbol_id
+         WHERE s_from.name = ?1 AND r.from_symbol_id = ?2
+         LIMIT ?3",
+    )?;
+
+    let rows = stmt.query_map(params![symbol_name, symbol_id, (limit * 2) as i64], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, Option<String>>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, Option<i64>>(3)?.unwrap_or(1) as usize,
+            row.get::<_, String>(4)?,
+        ))
+    })?;
+
+    let mut signatures = Vec::new();
+    let mut variants = Vec::new();
+
+    for r in rows.flatten() {
+        let (name, sig_opt, path, line, kind) = r;
+        let sig = sig_opt.unwrap_or(name);
+        let entry = format!("{sig} ({path}:{line})");
+        if kind == "variant" {
+            if !variants.contains(&entry) {
+                variants.push(entry);
+            }
+        } else if !signatures.contains(&entry) {
+            signatures.push(entry);
+        }
+    }
+
+    if signatures.len() < limit {
+        let remaining = (limit - signatures.len()) * 2;
+        let mut p_stmt = conn.prepare(
+            "SELECT DISTINCT s_to.name, s_to.signature, s_to.path, s_to.start_line, s_to.kind
+             FROM pending_relationships p
+             JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
+             JOIN symbols s_to ON s_to.name = p.target_terminal_name
+             WHERE s_from.name = ?1 AND p.from_symbol_id = ?2
+               AND s_to.kind NOT IN ('import', 'variable', 'parameter', 'field', 'property', 'module', 'namespace')
+             LIMIT ?3",
+        )?;
+
+        let p_rows =
+            p_stmt.query_map(params![symbol_name, symbol_id, remaining as i64], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, Option<i64>>(3)?.unwrap_or(1) as usize,
+                    row.get::<_, String>(4)?,
+                ))
+            })?;
+
+        for r in p_rows.flatten() {
+            let (name, sig_opt, path, line, kind) = r;
+            let sig = sig_opt.unwrap_or(name);
+            let entry = format!("{sig} ({path}:{line})");
+            if kind == "variant" {
+                if !variants.contains(&entry) {
+                    variants.push(entry);
+                }
+            } else if !signatures.contains(&entry) {
+                signatures.push(entry);
+            }
+        }
+    }
+
+    for v in variants {
+        if signatures.len() >= limit {
+            break;
+        }
+        if !signatures.contains(&v) {
+            signatures.push(v);
+        }
+    }
+
+    signatures.truncate(limit);
+    Ok(signatures)
+}
+
 /// Find structural facts by category (e.g. route, query, model, config).
 pub fn find_structural_facts(
     conn: &Connection,
@@ -1201,7 +1294,15 @@ pub fn compute_blast_radius(
     limit: usize,
 ) -> Result<BlastRadiusResult, QueryError> {
     let mut seeds = Vec::new();
-    let seed_type = if !seed_symbols.is_empty() {
+    let seed_type = if !seed_symbols.is_empty() && !seed_paths.is_empty() {
+        for s in seed_symbols {
+            seeds.push(s.to_string());
+        }
+        for p in seed_paths {
+            seeds.push(p.to_string());
+        }
+        "mixed".to_string()
+    } else if !seed_symbols.is_empty() {
         for s in seed_symbols {
             seeds.push(s.to_string());
         }
@@ -1308,7 +1409,7 @@ pub fn compute_blast_radius(
             )
             SELECT s.symbol_id, s.name, s.kind, s.path, s.start_line, s.is_test, s.test_container, MIN(iw.depth) as min_depth
             FROM impact_walk iw
-            JOIN symbols s ON iw.symbol_id = s.symbol_id
+            CROSS JOIN symbols s ON iw.symbol_id = s.symbol_id
             WHERE iw.depth > 0
               AND s.kind NOT IN ('import','variable','parameter','field','property','module','namespace')
             GROUP BY s.symbol_id, s.name, s.kind, s.path, s.start_line, s.is_test, s.test_container

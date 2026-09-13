@@ -165,7 +165,7 @@ impl Workspace {
 
     /// Find root by searching upwards for .git, .code-kb, or workspace markers.
     pub fn find_workspace_root(start: &Path) -> Result<PathBuf, WorkspaceError> {
-        let mut curr = if start.is_file() {
+        let curr = if start.is_file() {
             start.parent().unwrap_or(start).to_path_buf()
         } else {
             start.to_path_buf()
@@ -175,7 +175,8 @@ impl Workspace {
         let mut probe = curr.clone();
         loop {
             if probe.join(".code-kb").exists() || probe.join(".git").exists() {
-                return Ok(probe);
+                let canon = dunce::canonicalize(&probe).unwrap_or(probe);
+                return Ok(normalize_path(&canon));
             }
             if let Some(name) = probe.file_name().and_then(|n| n.to_str())
                 && is_hard_excluded(name)
@@ -193,25 +194,27 @@ impl Workspace {
         }
 
         // Pass 2: Look for language project markers
+        let mut curr_marker = curr.clone();
         loop {
-            if curr.join("Cargo.toml").exists()
-                || curr.join("package.json").exists()
-                || curr.join("go.mod").exists()
-                || curr.join("pyproject.toml").exists()
+            if curr_marker.join("Cargo.toml").exists()
+                || curr_marker.join("package.json").exists()
+                || curr_marker.join("go.mod").exists()
+                || curr_marker.join("pyproject.toml").exists()
             {
-                return Ok(curr);
+                let canon = dunce::canonicalize(&curr_marker).unwrap_or(curr_marker);
+                return Ok(normalize_path(&canon));
             }
-            if let Some(name) = curr.file_name().and_then(|n| n.to_str())
+            if let Some(name) = curr_marker.file_name().and_then(|n| n.to_str())
                 && is_hard_excluded(name)
             {
                 break;
             }
 
-            if let Some(parent) = curr.parent() {
-                if parent == curr {
+            if let Some(parent) = curr_marker.parent() {
+                if parent == curr_marker {
                     break;
                 }
-                curr = parent.to_path_buf();
+                curr_marker = parent.to_path_buf();
             } else {
                 break;
             }
@@ -223,7 +226,8 @@ impl Workspace {
         } else {
             start.to_path_buf()
         };
-        Ok(start_dir)
+        let canon = dunce::canonicalize(&start_dir).unwrap_or(start_dir);
+        Ok(normalize_path(&canon))
     }
 
     /// Resolves an input path (relative or absolute) to a canonical absolute path and relative path.

@@ -363,18 +363,22 @@ pub fn reconcile_offline_edits(
                     let indexed_bytes: i64 = row.get(0).map_err(SyncError::Db)?;
                     let stored_hash: String = row.get(1).map_err(SyncError::Db)?;
 
-                    let hash_matches = match std::fs::read(path) {
-                        Ok(content) => compute_content_hash_matches(&content, &stored_hash),
-                        Err(e) => {
-                            warn!(
-                                "Failed to read '{}' for hash verification: {e}",
-                                path.display()
-                            );
-                            true
+                    let is_modified = if indexed_bytes != bytes {
+                        true
+                    } else {
+                        match std::fs::read(path) {
+                            Ok(content) => !compute_content_hash_matches(&content, &stored_hash),
+                            Err(e) => {
+                                warn!(
+                                    "Failed to read '{}' for hash verification: {e}",
+                                    path.display()
+                                );
+                                false
+                            }
                         }
                     };
 
-                    if indexed_bytes != bytes || !hash_matches {
+                    if is_modified {
                         report.modified.push(rel_str);
                     }
                 } else {

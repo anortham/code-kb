@@ -1,7 +1,7 @@
 use std::process::Command;
 
 fn setup_test_repo() -> tempfile::TempDir {
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = code_kb_core::safe_tempdir();
     let root = temp_dir.path().to_path_buf();
     let db_dir = root.join(".code-kb");
     std::fs::create_dir_all(&db_dir).unwrap();
@@ -348,7 +348,7 @@ fn test_cli_edit_atomic_replacement() {
     let _extract_bin = code_kb_core::find_julie_extract_binary()
         .expect("julie-extract binary must be present for tests");
 
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = code_kb_core::safe_tempdir();
     let root = temp_dir.path().to_path_buf();
     let src_dir = root.join("src");
     std::fs::create_dir_all(&src_dir).unwrap();
@@ -357,6 +357,7 @@ fn test_cli_edit_atomic_replacement() {
 
     // Scan the workspace first to initialize schema and artifact_metadata
     let scan_output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .env("TMPDIR", temp_dir.path())
         .arg("--root")
         .arg(&root)
         .arg("scan")
@@ -370,6 +371,7 @@ fn test_cli_edit_atomic_replacement() {
 
     let new_body = "{\n    // updated task body\n    let _x = 42;\n    helper();\n}";
     let edit_output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .env("TMPDIR", temp_dir.path())
         .arg("--root")
         .arg(&root)
         .arg("edit")
@@ -455,7 +457,7 @@ fn test_cli_hook_subagent_start() {
 
 #[test]
 fn test_cli_hook_outside_repo() {
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = code_kb_core::safe_tempdir();
     let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
         .current_dir(temp_dir.path())
         .arg("hook")

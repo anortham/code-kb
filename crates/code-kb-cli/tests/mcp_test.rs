@@ -4,7 +4,7 @@ use std::process::{Command, Stdio};
 
 #[test]
 fn test_mcp_stdio_handshake_and_tools() {
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = code_kb_core::safe_tempdir();
     let root = temp_dir.path().to_path_buf();
     let db_dir = root.join(".code-kb");
     std::fs::create_dir_all(&db_dir).unwrap();
@@ -367,7 +367,7 @@ fn test_mcp_stdio_handshake_and_tools() {
 
 #[test]
 fn test_mcp_invalid_path_does_not_poison_session() {
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = code_kb_core::safe_tempdir();
     let root = temp_dir.path().to_path_buf();
     let db_dir = root.join(".code-kb");
     std::fs::create_dir_all(&db_dir).unwrap();
@@ -511,7 +511,7 @@ fn test_mcp_invalid_path_does_not_poison_session() {
 
 #[test]
 fn test_mcp_worktree_rebind() {
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = code_kb_core::safe_tempdir();
     let main_root = temp_dir.path().join("main_repo");
     let wt_root = main_root.join(".worktrees").join("feature-x");
 
@@ -747,7 +747,7 @@ fn test_mcp_worktree_rebind() {
 
 #[test]
 fn test_mcp_worktree_auto_copy_fast_path() {
-    let temp_dir = tempfile::tempdir().unwrap();
+    let temp_dir = code_kb_core::safe_tempdir();
     let main_root = temp_dir.path().join("main_repo");
     let wt_root = main_root.join(".worktrees").join("feature-y");
 
