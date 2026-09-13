@@ -1,13 +1,11 @@
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use clap::{Args, Parser, Subcommand};
 
 use code_kb_core::{
-    ensure_fresh_file, ensure_fts_index_path, format_codebase_outline, format_context_slice,
-    format_file_skeleton, format_references, format_search_results, fts_search_symbols,
-    get_file, get_symbol_by_name, load_file_symbols, load_files, open_read_only,
-    replace_symbol_body, scan_workspace, search_symbols, slice_symbol_body, ContextSlice,
-    Workspace,
+    codebase_outline_op, ensure_fresh_file, ensure_fts_index_path, file_skeleton_op,
+    format_context_slice, format_references, format_search_results, fts_search_symbols,
+    get_context_slice_op, get_symbol_body_op, load_file_symbols, open_read_only, queries,
+    replace_symbol_body, scan_workspace, search_symbols, Workspace,
 };
 
 mod logging;
@@ -213,16 +211,16 @@ fn main() -> anyhow::Result<()> {
         if let Ok(entries) = std::fs::read_dir(&log_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.is_file() {
-                    if let Ok(meta) = entry.metadata() {
-                        let mtime = meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH);
-                        log_files.push((path, mtime));
-                    }
+                if path.is_file()
+                    && let Ok(meta) = entry.metadata()
+                {
+                    let mtime = meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+                    log_files.push((path, mtime));
                 }
             }
         }
 
-        log_files.sort_by(|a, b| b.1.cmp(&a.1));
+        log_files.sort_by_key(|a| std::cmp::Reverse(a.1));
 
         if let Some((latest_file, _)) = log_files.first() {
             println!("Latest log file: {}\n", latest_file.display());
@@ -270,39 +268,22 @@ fn main() -> anyhow::Result<()> {
 
     match cli.command {
         Command::Outline(args) => {
-            let files = load_files(&conn)?;
-            let mut symbols_by_file = HashMap::new();
-            for f in &files {
-                if let Ok(syms) = load_file_symbols(&conn, &f.path) {
-                    symbols_by_file.insert(f.path.clone(), syms);
-                }
-            }
-
-            let text = format_codebase_outline(
-                &workspace.repo_name,
-                &files,
-                &symbols_by_file,
-                args.depth,
-                args.path.as_deref(),
-            );
             if cli.json {
+                let files = queries::load_scoped_files(&conn, args.path.as_deref())?;
                 println!("{}", serde_json::to_string_pretty(&files)?);
             } else {
+                let text = codebase_outline_op(&workspace, &conn, args.depth, args.path.as_deref())?;
                 println!("{text}");
             }
         }
         Command::Skeleton(args) => {
-            let (_, rel_path) = workspace.resolve_path(Path::new(&args.file))?;
-            let _ = ensure_fresh_file(&workspace, &db_path, &conn, &rel_path);
-
-            let symbols = load_file_symbols(&conn, &rel_path)?;
-            let file_meta = get_file(&conn, &rel_path).ok().flatten();
-            let line_count = file_meta.and_then(|m| m.line_count.map(|l| l as usize));
-
-            let skeleton = format_file_skeleton(&rel_path, &symbols, line_count);
             if cli.json {
+                let (_, rel_path) = workspace.resolve_path(Path::new(&args.file))?;
+                let _ = ensure_fresh_file(&workspace, &db_path, &conn, &rel_path);
+                let symbols = load_file_symbols(&conn, &rel_path)?;
                 println!("{}", serde_json::to_string_pretty(&symbols)?);
             } else {
+                let skeleton = file_skeleton_op(&workspace, &db_path, &conn, &args.file)?;
                 println!("{skeleton}");
             }
         }
@@ -347,56 +328,31 @@ fn main() -> anyhow::Result<()> {
             }
         }
         Command::Body(args) => {
-            let symbol = get_symbol_by_name(&conn, &args.symbol, args.file.as_deref())?
-                .ok_or_else(|| anyhow::anyhow!("Symbol '{}' not found", args.symbol))?;
-
-            let _ = ensure_fresh_file(&workspace, &db_path, &conn, &symbol.path);
-            let abs_file = workspace.canonical_root.join(&symbol.path);
-            let body = slice_symbol_body(&abs_file, &symbol)?;
+            let (symbol, body) = get_symbol_body_op(
+                &workspace,
+                &db_path,
+                &conn,
+                &args.symbol,
+                args.file.as_deref(),
+            )?;
 
             if cli.json {
                 println!("{}", serde_json::json!({ "symbol": symbol, "body": body }));
             } else {
-                println!("// {}:{}-{} ({})\n{body}", symbol.path, symbol.start_line, symbol.end_line, symbol.name);
+                println!(
+                    "// {}:{}-{} ({})\n{body}",
+                    symbol.path, symbol.start_line, symbol.end_line, symbol.name
+                );
             }
         }
         Command::Slice(args) => {
-            let target_symbol = get_symbol_by_name(&conn, &args.symbol, args.file.as_deref())?
-                .ok_or_else(|| anyhow::anyhow!("Symbol '{}' not found", args.symbol))?;
-
-            let _ = ensure_fresh_file(&workspace, &db_path, &conn, &target_symbol.path);
-            let abs_file = workspace.canonical_root.join(&target_symbol.path);
-            let target_body = slice_symbol_body(&abs_file, &target_symbol)?;
-
-            let mut callee_signatures = Vec::new();
-            if let Ok(callees) = code_kb_core::find_references(&conn, &args.symbol, "callees", 10) {
-                for c in callees {
-                    if let Ok(Some(s)) = get_symbol_by_name(&conn, &c.to_symbol_name, None) {
-                        let sig = s.signature.unwrap_or(s.name);
-                        callee_signatures.push(format!("{sig} ({}:{})", s.path, s.start_line));
-                    }
-                }
-            }
-
-            let mut related_types = Vec::new();
-            if let Ok(types) = code_kb_core::find_type_facts(&conn, &target_symbol.symbol_id) {
-                for t in types {
-                    related_types.push(t.resolved_type);
-                }
-            }
-
-            let related_tests = match search_symbols(&conn, &args.symbol, None, true, 5) {
-                Ok(tests) => tests.into_iter().filter(|s| s.is_test).collect(),
-                Err(_) => Vec::new(),
-            };
-
-            let slice = ContextSlice {
-                target_symbol,
-                target_body,
-                callee_signatures,
-                related_types,
-                related_tests,
-            };
+            let slice = get_context_slice_op(
+                &workspace,
+                &db_path,
+                &conn,
+                &args.symbol,
+                args.file.as_deref(),
+            )?;
 
             if cli.json {
                 println!("{}", serde_json::to_string_pretty(&slice)?);

@@ -47,11 +47,11 @@ fn test_background_watcher_incremental_sync() {
     for _ in 0..25 {
         sleep(Duration::from_millis(200));
         let conn = open_read_only(&db_path).unwrap();
-        if let Ok(syms) = search_symbols(&conn, "farewell", None, false, 10) {
-            if !syms.is_empty() {
-                updated = true;
-                break;
-            }
+        if let Ok(syms) = search_symbols(&conn, "farewell", None, false, 10)
+            && !syms.is_empty()
+        {
+            updated = true;
+            break;
         }
     }
     assert!(updated, "Watcher failed to detect external modification to greet.rs");
@@ -64,11 +64,11 @@ fn test_background_watcher_incremental_sync() {
     for _ in 0..25 {
         sleep(Duration::from_millis(200));
         let conn = open_read_only(&db_path).unwrap();
-        if let Ok(syms) = search_symbols(&conn, "bonus_feature", None, false, 10) {
-            if !syms.is_empty() {
-                created = true;
-                break;
-            }
+        if let Ok(syms) = search_symbols(&conn, "bonus_feature", None, false, 10)
+            && !syms.is_empty()
+        {
+            created = true;
+            break;
         }
     }
     assert!(created, "Watcher failed to detect new file extra.rs");
@@ -80,11 +80,11 @@ fn test_background_watcher_incremental_sync() {
     for _ in 0..25 {
         sleep(Duration::from_millis(200));
         let conn = open_read_only(&db_path).unwrap();
-        if let Ok(syms) = search_symbols(&conn, "bonus_feature", None, false, 10) {
-            if syms.is_empty() {
-                deleted = true;
-                break;
-            }
+        if let Ok(syms) = search_symbols(&conn, "bonus_feature", None, false, 10)
+            && syms.is_empty()
+        {
+            deleted = true;
+            break;
         }
     }
     assert!(deleted, "Watcher failed to detect deletion of extra.rs");

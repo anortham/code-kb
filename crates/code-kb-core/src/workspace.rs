@@ -18,6 +18,52 @@ pub enum WorkspaceError {
     ArtifactNotFound(PathBuf),
 }
 
+/// Lexically clean a path by collapsing `.` and `..` components.
+pub fn clean_path(path: &Path) -> PathBuf {
+    use std::path::Component;
+    let mut stack = Vec::new();
+    for comp in path.components() {
+        match comp {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if let Some(Component::Normal(_)) = stack.last() {
+                    stack.pop();
+                } else {
+                    stack.push(comp);
+                }
+            }
+            _ => stack.push(comp),
+        }
+    }
+    stack.into_iter().collect()
+}
+
+/// Parse an MCP file URI or plain path into a normalized PathBuf.
+/// Handles standard file URIs (`file:///path`), URI percent-encoding (e.g. `%20`), and plain paths.
+pub fn parse_file_uri(cand: &str) -> Option<PathBuf> {
+    if cand.starts_with("file://") {
+        if let Ok(url) = url::Url::parse(cand)
+            && let Ok(path) = url.to_file_path()
+        {
+            return Some(normalize_path(&path));
+        }
+        // Fallback for non-standard file:// patterns
+        if let Some(s) = cand.strip_prefix("file:///") {
+            if cfg!(windows) {
+                Some(normalize_path(Path::new(s)))
+            } else {
+                Some(normalize_path(&PathBuf::from(format!("/{}", s))))
+            }
+        } else if let Some(s) = cand.strip_prefix("file://") {
+            Some(normalize_path(Path::new(s)))
+        } else {
+            Some(normalize_path(Path::new(cand)))
+        }
+    } else {
+        Some(normalize_path(Path::new(cand)))
+    }
+}
+
 /// Strip Windows verbatim prefix (\\?\, \\?\UNC\) using dunce.
 pub fn normalize_path(path: &Path) -> PathBuf {
     dunce::simplified(path).to_path_buf()
@@ -138,22 +184,51 @@ impl Workspace {
 
     /// Resolves an input path (relative or absolute) to a canonical absolute path and relative path.
     pub fn resolve_path(&self, input: &Path) -> Result<(PathBuf, String), WorkspaceError> {
-        let abs_path = if input.is_absolute() {
-            normalize_path(input)
+        let joined = if input.is_absolute() {
+            input.to_path_buf()
         } else {
-            normalize_path(&self.canonical_root.join(input))
+            self.canonical_root.join(input)
         };
 
+        // Lexically clean the path to collapse `.` and `..` components
+        let cleaned = clean_path(&joined);
+        let abs_path = normalize_path(&cleaned);
+
+        // If file exists, canonicalize to resolve any symlinks
+        let effective_abs = if abs_path.exists() {
+            dunce::canonicalize(&abs_path)
+                .map(|p| normalize_path(&p))
+                .unwrap_or_else(|_| abs_path.clone())
+        } else {
+            abs_path.clone()
+        };
+
+        let norm_root = dunce::canonicalize(&self.canonical_root)
+            .map(|p| normalize_path(&p))
+            .unwrap_or_else(|_| self.canonical_root.clone());
+
         // Check if within canonical root
-        let rel = match abs_path.strip_prefix(&self.canonical_root) {
-            Ok(r) => to_forward_slash(r),
+        let rel = match effective_abs.strip_prefix(&norm_root) {
+            Ok(r) => {
+                let forward = to_forward_slash(r);
+                if forward.starts_with("../") || forward == ".." {
+                    return Err(WorkspaceError::PathOutsideWorkspace(abs_path, self.canonical_root.clone()));
+                }
+                forward
+            }
             Err(_) => {
-                // Check if dunce-canonicalized root matches
-                let norm_abs = dunce::canonicalize(&abs_path).unwrap_or_else(|_| abs_path.clone());
-                let norm_root = dunce::canonicalize(&self.canonical_root).unwrap_or_else(|_| self.canonical_root.clone());
-                match norm_abs.strip_prefix(&norm_root) {
-                    Ok(r) => to_forward_slash(r),
-                    Err(_) => return Err(WorkspaceError::PathOutsideWorkspace(abs_path, self.canonical_root.clone())),
+                // Fallback check against raw canonical_root
+                match effective_abs.strip_prefix(&self.canonical_root) {
+                    Ok(r) => {
+                        let forward = to_forward_slash(r);
+                        if forward.starts_with("../") || forward == ".." {
+                            return Err(WorkspaceError::PathOutsideWorkspace(abs_path, self.canonical_root.clone()));
+                        }
+                        forward
+                    }
+                    Err(_) => {
+                        return Err(WorkspaceError::PathOutsideWorkspace(abs_path, self.canonical_root.clone()))
+                    }
                 }
             }
         };
@@ -227,5 +302,28 @@ mod tests {
         let (abs, rel) = ws.resolve_path(Path::new("src/lib.rs")).unwrap();
         assert_eq!(rel, "src/lib.rs");
         assert!(abs.to_string_lossy().contains("test-project"));
+    }
+
+    #[test]
+    fn test_workspace_resolve_path_traversal_escape() {
+        let temp = tempfile::tempdir().unwrap();
+        let ws = Workspace::new(temp.path().to_path_buf());
+        let res = ws.resolve_path(Path::new("sub/../../outside.rs"));
+        assert!(
+            matches!(res, Err(WorkspaceError::PathOutsideWorkspace(..))),
+            "Expected PathOutsideWorkspace error, but got: {:?}",
+            res
+        );
+    }
+
+    #[test]
+    fn test_parse_file_uri() {
+        // Percent-encoded with spaces
+        let p1 = parse_file_uri("file:///C:/my%20folder/project").unwrap();
+        assert_eq!(p1, normalize_path(Path::new("C:/my folder/project")));
+
+        // Plain path fallback
+        let p2 = parse_file_uri("C:/direct/path").unwrap();
+        assert_eq!(p2, normalize_path(Path::new("C:/direct/path")));
     }
 }

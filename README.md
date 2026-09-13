@@ -32,7 +32,7 @@ Traditional AI coding agents burn massive amounts of context loading entire sour
 ## Installation
 
 ### Prerequisites
-- [Rust](https://www.rust-lang.org/) (Cargo 1.80+)
+- [Rust](https://www.rust-lang.org/) (1.85+ / Edition 2024)
 - [`julie-extract`](https://github.com/anortham/julie-extractors) installed in your `PATH` (used by `code-kb scan` for initial extraction)
 
 ### Install via Cargo

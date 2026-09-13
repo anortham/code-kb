@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use rusqlite::{params, Connection, Row};
 use thiserror::Error;
 
@@ -11,6 +12,8 @@ pub enum QueryError {
     Sqlite(#[from] rusqlite::Error),
     #[error("Symbol '{0}' not found")]
     SymbolNotFound(String),
+    #[error("Ambiguous symbol '{0}': found {1} matching candidates. Specify file_path or qualified name to disambiguate:\n{2}")]
+    AmbiguousSymbol(String, usize, String),
 }
 
 fn map_symbol(row: &Row) -> rusqlite::Result<Symbol> {
@@ -46,40 +49,146 @@ fn map_symbol(row: &Row) -> rusqlite::Result<Symbol> {
 
 /// Retrieve all indexed files from `files` table.
 pub fn load_files(conn: &Connection) -> Result<Vec<FileFact>, QueryError> {
-    let mut stmt = conn.prepare(
-        "SELECT file_id, path, language, content_hash, content_bytes, line_count, indexed_at
-         FROM files
-         ORDER BY path ASC",
-    )?;
+    load_scoped_files(conn, None)
+}
 
+/// Retrieve indexed files optionally scoped by path filter, pushed down to SQLite.
+pub fn load_scoped_files(
+    conn: &Connection,
+    path_filter: Option<&str>,
+) -> Result<Vec<FileFact>, QueryError> {
+    let norm = path_filter.map(|p| p.replace('\\', "/").trim_matches('/').to_string());
+    let prefix = norm.as_ref().map(|p| format!("{p}/%"));
+
+    let sql = "SELECT file_id, path, language, content_hash, content_bytes, line_count, indexed_at
+               FROM files
+               WHERE (:path IS NULL OR path = :path OR path LIKE :path_prefix)
+               ORDER BY path ASC";
+
+    let mut stmt = conn.prepare(sql)?;
     let files = stmt
-        .query_map([], |row| {
-            Ok(FileFact {
-                file_id: row.get(0)?,
-                path: row.get(1)?,
-                language: row.get(2)?,
-                content_hash: row.get(3)?,
-                content_bytes: row.get(4)?,
-                line_count: row.get(5)?,
-                indexed_at: row.get(6)?,
-            })
-        })?
+        .query_map(
+            rusqlite::named_params! {
+                ":path": norm.as_deref(),
+                ":path_prefix": prefix.as_deref(),
+            },
+            |row| {
+                Ok(FileFact {
+                    file_id: row.get(0)?,
+                    path: row.get(1)?,
+                    language: row.get(2)?,
+                    content_hash: row.get(3)?,
+                    content_bytes: row.get(4)?,
+                    line_count: row.get(5)?,
+                    indexed_at: row.get(6)?,
+                })
+            },
+        )?
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(files)
 }
 
-/// Lookup single file metadata by path.
+/// Load up to `limit_per_file` symbols per file for scoped files, directly aggregated in SQLite.
+/// Files deeper than `depth` are filtered out in SQLite to keep memory strictly bounded.
+pub fn load_scoped_outline_symbols(
+    conn: &Connection,
+    path_filter: Option<&str>,
+    depth: usize,
+    limit_per_file: usize,
+) -> Result<HashMap<String, Vec<Symbol>>, QueryError> {
+    let norm = path_filter.map(|p| p.replace('\\', "/").trim_matches('/').to_string());
+    let prefix = norm.as_ref().map(|p| format!("{p}/%"));
+
+    let max_slashes = match &norm {
+        None => {
+            if depth > 0 {
+                (depth - 1) as i64
+            } else {
+                0
+            }
+        }
+        Some(f) => {
+            let filter_slashes = f.chars().filter(|&c| c == '/').count();
+            (filter_slashes + depth) as i64
+        }
+    };
+
+    let sql = "
+        WITH ranked AS (
+            SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,
+                   visibility, parent_symbol_id, start_line, start_column, end_line, end_column,
+                   start_byte, end_byte, body_start_line, body_start_column, body_end_line,
+                   body_end_column, body_start_byte, body_end_byte, body_hash, semantic_group,
+                   is_test, test_container,
+                   ROW_NUMBER() OVER (PARTITION BY path ORDER BY start_line ASC) as rn
+            FROM symbols
+            WHERE (:path IS NULL OR path = :path OR path LIKE :path_prefix)
+              AND (length(path) - length(replace(path, '/', '')) <= :max_slashes)
+        )
+        SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,
+               visibility, parent_symbol_id, start_line, start_column, end_line, end_column,
+               start_byte, end_byte, body_start_line, body_start_column, body_end_line,
+               body_end_column, body_start_byte, body_end_byte, body_hash, semantic_group,
+               is_test, test_container
+        FROM ranked
+        WHERE rn <= :limit
+        ORDER BY path ASC, start_line ASC
+    ";
+
+    let mut stmt = conn.prepare(sql)?;
+    let mut rows = stmt.query(rusqlite::named_params! {
+        ":path": norm.as_deref(),
+        ":path_prefix": prefix.as_deref(),
+        ":max_slashes": max_slashes,
+        ":limit": limit_per_file as i64,
+    })?;
+
+    let mut symbols_by_file: HashMap<String, Vec<Symbol>> = HashMap::new();
+    while let Some(row) = rows.next()? {
+        let sym = map_symbol(row)?;
+        symbols_by_file.entry(sym.path.clone()).or_default().push(sym);
+    }
+
+    Ok(symbols_by_file)
+}
+
+/// Lookup single file metadata by path with slash-boundary matching.
 pub fn get_file(conn: &Connection, path: &str) -> Result<Option<FileFact>, QueryError> {
+    let normalized = path.replace('\\', "/");
+    let backslash = path.replace('/', "\\");
+
+    // Check exact path match first
     let mut stmt = conn.prepare(
         "SELECT file_id, path, language, content_hash, content_bytes, line_count, indexed_at
          FROM files
-         WHERE path = ?1 OR path LIKE '%' || ?1
+         WHERE path = ?1 OR path = ?2
          LIMIT 1",
     )?;
 
-    let mut rows = stmt.query(params![path])?;
+    let mut rows = stmt.query(params![normalized, backslash])?;
     if let Some(row) = rows.next()? {
+        return Ok(Some(FileFact {
+            file_id: row.get(0)?,
+            path: row.get(1)?,
+            language: row.get(2)?,
+            content_hash: row.get(3)?,
+            content_bytes: row.get(4)?,
+            line_count: row.get(5)?,
+            indexed_at: row.get(6)?,
+        }));
+    }
+
+    // Fallback: boundary match only if exact match is absent
+    let mut fallback_stmt = conn.prepare(
+        "SELECT file_id, path, language, content_hash, content_bytes, line_count, indexed_at
+         FROM files
+         WHERE path LIKE '%/' || ?1
+         LIMIT 1",
+    )?;
+
+    let mut f_rows = fallback_stmt.query(params![normalized])?;
+    if let Some(row) = f_rows.next()? {
         Ok(Some(FileFact {
             file_id: row.get(0)?,
             path: row.get(1)?,
@@ -103,7 +212,7 @@ pub fn load_file_symbols(conn: &Connection, file_path: &str) -> Result<Vec<Symbo
                 body_end_column, body_start_byte, body_end_byte, body_hash, semantic_group,
                 is_test, test_container
          FROM symbols
-         WHERE path = ?1 OR path = ?2 OR path LIKE '%' || ?1
+         WHERE path = ?1 OR path = ?2
          ORDER BY start_line ASC, start_column ASC",
     )?;
 
@@ -112,7 +221,7 @@ pub fn load_file_symbols(conn: &Connection, file_path: &str) -> Result<Vec<Symbo
     let backslash = file_path.replace('/', "\\");
 
     let rows = stmt
-        .query_map(params![normalized, backslash], |row| map_symbol(row))?
+        .query_map(params![normalized, backslash], map_symbol)?
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(rows)
@@ -152,19 +261,18 @@ pub fn search_symbols(
     let mut stmt = conn.prepare(&sql)?;
 
     let rows = if let Some(k) = kind_filter {
-        stmt.query_map(params![query, pattern, k], |row| map_symbol(row))?
+        stmt.query_map(params![query, pattern, k], map_symbol)?
             .collect::<Result<Vec<_>, _>>()?
     } else {
-        stmt.query_map(params![query, pattern], |row| map_symbol(row))?
+        stmt.query_map(params![query, pattern], map_symbol)?
             .collect::<Result<Vec<_>, _>>()?
     };
 
-    if rows.is_empty() {
-        if let Ok(fts_matches) = fts_search_symbols(conn, query, kind_filter, include_tests, limit) {
-            if !fts_matches.is_empty() {
-                return Ok(fts_matches.into_iter().map(|m| m.symbol).collect());
-            }
-        }
+    if rows.is_empty()
+        && let Ok(fts_matches) = fts_search_symbols(conn, query, kind_filter, include_tests, limit)
+        && !fts_matches.is_empty()
+    {
+        return Ok(fts_matches.into_iter().map(|m| m.symbol).collect());
     }
 
     Ok(rows)
@@ -232,10 +340,10 @@ pub fn fts_search_symbols(
 
         let mut stmt = conn.prepare(&sql)?;
         let rows = if let Some(k) = kind_filter {
-            stmt.query_map(params![query, pattern, k], |row| map_symbol(row))?
+            stmt.query_map(params![query, pattern, k], map_symbol)?
                 .collect::<Result<Vec<_>, _>>()?
         } else {
-            stmt.query_map(params![query, pattern], |row| map_symbol(row))?
+            stmt.query_map(params![query, pattern], map_symbol)?
                 .collect::<Result<Vec<_>, _>>()?
         };
 
@@ -329,45 +437,103 @@ pub fn get_symbol_by_name(
     name: &str,
     path_filter: Option<&str>,
 ) -> Result<Option<Symbol>, QueryError> {
+    get_symbol_by_name_internal(conn, name, path_filter, false)
+}
+
+/// Find a specific symbol by name, requiring exact path match (used for atomic edits).
+pub fn get_symbol_by_name_exact(
+    conn: &Connection,
+    name: &str,
+    exact_path: &str,
+) -> Result<Option<Symbol>, QueryError> {
+    get_symbol_by_name_internal(conn, name, Some(exact_path), true)
+}
+
+fn get_symbol_by_name_internal(
+    conn: &Connection,
+    name: &str,
+    path_filter: Option<&str>,
+    exact_path: bool,
+) -> Result<Option<Symbol>, QueryError> {
     // Check if name is qualified like `Struct::method` or `Class.method`
-    let terminal_name = if let Some(idx) = name.rfind("::") {
-        &name[idx + 2..]
+    let (parent_name, terminal_name) = if let Some(idx) = name.rfind("::") {
+        let parent = &name[..idx];
+        let term = &name[idx + 2..];
+        let immediate_parent = if let Some(p_idx) = parent.rfind("::") {
+            &parent[p_idx + 2..]
+        } else {
+            parent
+        };
+        (Some(immediate_parent), term)
     } else if let Some(idx) = name.rfind('.') {
-        &name[idx + 1..]
+        let parent = &name[..idx];
+        let term = &name[idx + 1..];
+        let immediate_parent = if let Some(p_idx) = parent.rfind('.') {
+            &parent[p_idx + 1..]
+        } else {
+            parent
+        };
+        (Some(immediate_parent), term)
     } else {
-        name
+        (None, name)
     };
 
-    let mut sql = String::from(
-        "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,
-                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,
-                start_byte, end_byte, body_start_line, body_start_column, body_end_line,
-                body_end_column, body_start_byte, body_end_byte, body_hash, semantic_group,
-                is_test, test_container
-         FROM symbols
-         WHERE (name = ?1 OR name = ?2)",
-    );
+    let sql = "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,
+                s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,
+                s.start_byte, s.end_byte, s.body_start_line, s.body_start_column, s.body_end_line,
+                s.body_end_column, s.body_start_byte, s.body_end_byte, s.body_hash, s.semantic_group,
+                s.is_test, s.test_container
+         FROM symbols s
+         LEFT JOIN symbols p ON s.parent_symbol_id = p.symbol_id
+         WHERE (s.name = :name OR (s.name = :term AND (:parent IS NULL OR p.name = :parent)))
+           AND (:path IS NULL OR s.path = :path OR (:exact = 0 AND s.path LIKE '%/' || :path))
+         ORDER BY (s.name = :name) DESC, s.is_test ASC LIMIT 10";
 
-    if path_filter.is_some() {
-        sql.push_str(" AND (path = ?3 OR path LIKE '%' || ?3)");
+    let mut stmt = conn.prepare(sql)?;
+    let normalized_path = path_filter.map(|p| p.replace('\\', "/"));
+
+    let mut rows = stmt.query(rusqlite::named_params! {
+        ":name": name,
+        ":term": terminal_name,
+        ":parent": parent_name,
+        ":path": normalized_path.as_deref(),
+        ":exact": if exact_path { 1 } else { 0 },
+    })?;
+
+    let mut matches: Vec<Symbol> = Vec::new();
+    while let Some(row) = rows.next()? {
+        matches.push(map_symbol(row)?);
     }
 
-    sql.push_str(" ORDER BY (name = ?1) DESC, is_test ASC LIMIT 1");
-
-    let mut stmt = conn.prepare(&sql)?;
-
-    let mut rows = if let Some(p) = path_filter {
-        let normalized = p.replace('\\', "/");
-        stmt.query(params![name, terminal_name, normalized])?
-    } else {
-        stmt.query(params![name, terminal_name])?
-    };
-
-    if let Some(row) = rows.next()? {
-        Ok(Some(map_symbol(row)?))
-    } else {
-        Ok(None)
+    if matches.is_empty() {
+        return Ok(None);
     }
+
+    if matches.len() == 1 {
+        return Ok(Some(matches.remove(0)));
+    }
+
+    // Check if there's an exact match on full name
+    let exact_name_matches: Vec<_> = matches.iter().filter(|s| s.name == name).cloned().collect();
+    if exact_name_matches.len() == 1 {
+        return Ok(Some(exact_name_matches.into_iter().next().unwrap()));
+    }
+
+    // If path_filter was given and there's an exact path match
+    if let Some(ref p) = normalized_path {
+        let exact_path_matches: Vec<_> = matches.iter().filter(|s| s.path == *p).cloned().collect();
+        if exact_path_matches.len() == 1 {
+            return Ok(Some(exact_path_matches.into_iter().next().unwrap()));
+        }
+    }
+
+    // Ambiguity detected
+    let mut candidate_list = String::new();
+    for s in &matches {
+        candidate_list.push_str(&format!("- {} `{}` in {}:{}\n", s.kind, s.name, s.path, s.start_line));
+    }
+
+    Err(QueryError::AmbiguousSymbol(name.to_string(), matches.len(), candidate_list))
 }
 
 /// Find callers or callees of a symbol.

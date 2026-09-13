@@ -1,14 +1,12 @@
-use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use serde_json::{json, Value};
 
 use code_kb_core::{
-    ensure_fresh_file, ensure_fts_index_path, format_codebase_outline, format_context_slice,
-    format_file_skeleton, format_references, format_search_results, fts_search_symbols,
-    get_symbol_by_name, load_file_symbols, load_files, open_read_only, reconcile_offline_edits,
-    replace_symbol_body, scan_workspace, search_symbols, slice_symbol_body, start_watcher,
-    ContextSlice, WatcherHandle, Workspace, WorkspaceError,
+    codebase_outline_op, ensure_fts_index_path, file_skeleton_op, format_context_slice,
+    format_references, format_search_results, fts_search_symbols, get_context_slice_op,
+    get_symbol_body_op, open_read_only, reconcile_offline_edits, replace_symbol_body,
+    scan_workspace, search_symbols, start_watcher, WatcherHandle, Workspace, WorkspaceError,
 };
 
 use super::protocol::{CallToolResult, JsonRpcRequest, JsonRpcResponse, Tool};
@@ -332,26 +330,10 @@ impl McpServer {
                     .get("path")
                     .and_then(|v| v.as_str());
 
-                let files = match load_files(&conn) {
-                    Ok(f) => f,
-                    Err(e) => return CallToolResult::error(e.to_string()),
-                };
-
-                let mut symbols_by_file = HashMap::new();
-                for f in &files {
-                    if let Ok(syms) = load_file_symbols(&conn, &f.path) {
-                        symbols_by_file.insert(f.path.clone(), syms);
-                    }
+                match codebase_outline_op(&self.workspace, &conn, depth, path_filter) {
+                    Ok(text) => CallToolResult::text(text),
+                    Err(e) => CallToolResult::error(e.to_string()),
                 }
-
-                let text = format_codebase_outline(
-                    &self.workspace.repo_name,
-                    &files,
-                    &symbols_by_file,
-                    depth,
-                    path_filter,
-                );
-                CallToolResult::text(text)
             }
             "file_skeleton" => {
                 let file_path = match arguments.get("file_path").and_then(|v| v.as_str()) {
@@ -359,24 +341,10 @@ impl McpServer {
                     None => return CallToolResult::error("Missing required parameter: file_path"),
                 };
 
-                let (_, rel_path) = match self.workspace.resolve_path(Path::new(file_path)) {
-                    Ok(res) => res,
-                    Err(e) => return CallToolResult::error(e.to_string()),
-                };
-
-                // Tier 2: JIT Staleness Guard
-                let _ = ensure_fresh_file(&self.workspace, &self.db_path, &conn, &rel_path);
-
-                let symbols = match load_file_symbols(&conn, &rel_path) {
-                    Ok(s) => s,
-                    Err(e) => return CallToolResult::error(e.to_string()),
-                };
-
-                let file_meta = code_kb_core::get_file(&conn, &rel_path).ok().flatten();
-                let line_count = file_meta.and_then(|m| m.line_count.map(|l| l as usize));
-
-                let skeleton = format_file_skeleton(&rel_path, &symbols, line_count);
-                CallToolResult::text(skeleton)
+                match file_skeleton_op(&self.workspace, &self.db_path, &conn, file_path) {
+                    Ok(skeleton) => CallToolResult::text(skeleton),
+                    Err(e) => CallToolResult::error(e.to_string()),
+                }
             }
             "find_symbol" => {
                 let query = match arguments.get("query").and_then(|v| v.as_str()) {
@@ -445,29 +413,17 @@ impl McpServer {
                 };
                 let file_path = arguments.get("file_path").and_then(|v| v.as_str());
 
-                let symbol = match get_symbol_by_name(&conn, symbol_name, file_path) {
-                    Ok(Some(s)) => s,
-                    Ok(None) => {
-                        return CallToolResult::error(format!("Symbol '{symbol_name}' not found"));
+                match get_symbol_body_op(&self.workspace, &self.db_path, &conn, symbol_name, file_path) {
+                    Ok((symbol, body)) => {
+                        let mut out = format!(
+                            "// {}:{}-{} ({})\n",
+                            symbol.path, symbol.start_line, symbol.end_line, symbol.name
+                        );
+                        out.push_str(&body);
+                        CallToolResult::text(out)
                     }
-                    Err(e) => return CallToolResult::error(e.to_string()),
-                };
-
-                // Tier 2: JIT Staleness Guard
-                let _ = ensure_fresh_file(&self.workspace, &self.db_path, &conn, &symbol.path);
-
-                let abs_file = self.workspace.canonical_root.join(&symbol.path);
-                let body = match slice_symbol_body(&abs_file, &symbol) {
-                    Ok(b) => b,
-                    Err(e) => return CallToolResult::error(e.to_string()),
-                };
-
-                let mut out = format!(
-                    "// {}:{}-{} ({})\n",
-                    symbol.path, symbol.start_line, symbol.end_line, symbol.name
-                );
-                out.push_str(&body);
-                CallToolResult::text(out)
+                    Err(e) => CallToolResult::error(e.to_string()),
+                }
             }
             "get_context_slice" => {
                 let symbol_name = match arguments.get("symbol_name").and_then(|v| v.as_str()) {
@@ -476,57 +432,10 @@ impl McpServer {
                 };
                 let file_path = arguments.get("file_path").and_then(|v| v.as_str());
 
-                let target_symbol = match get_symbol_by_name(&conn, symbol_name, file_path) {
-                    Ok(Some(s)) => s,
-                    Ok(None) => {
-                        return CallToolResult::error(format!("Symbol '{symbol_name}' not found"));
-                    }
-                    Err(e) => return CallToolResult::error(e.to_string()),
-                };
-
-                // Tier 2: JIT Staleness Guard
-                let _ = ensure_fresh_file(&self.workspace, &self.db_path, &conn, &target_symbol.path);
-
-                let abs_file = self.workspace.canonical_root.join(&target_symbol.path);
-                let target_body = match slice_symbol_body(&abs_file, &target_symbol) {
-                    Ok(b) => b,
-                    Err(e) => return CallToolResult::error(e.to_string()),
-                };
-
-                // Find callees
-                let mut callee_signatures = Vec::new();
-                if let Ok(callees) = code_kb_core::find_references(&conn, symbol_name, "callees", 10) {
-                    for c in callees {
-                        if let Ok(Some(s)) = get_symbol_by_name(&conn, &c.to_symbol_name, None) {
-                            let sig = s.signature.unwrap_or(s.name);
-                            callee_signatures.push(format!("{sig} ({}:{})", s.path, s.start_line));
-                        }
-                    }
+                match get_context_slice_op(&self.workspace, &self.db_path, &conn, symbol_name, file_path) {
+                    Ok(slice) => CallToolResult::text(format_context_slice(&slice)),
+                    Err(e) => CallToolResult::error(e.to_string()),
                 }
-
-                // Find related types
-                let mut related_types = Vec::new();
-                if let Ok(types) = code_kb_core::find_type_facts(&conn, &target_symbol.symbol_id) {
-                    for t in types {
-                        related_types.push(t.resolved_type);
-                    }
-                }
-
-                // Find tests related to this symbol
-                let related_tests = match search_symbols(&conn, symbol_name, None, true, 5) {
-                    Ok(tests) => tests.into_iter().filter(|s| s.is_test).collect(),
-                    Err(_) => Vec::new(),
-                };
-
-                let slice = ContextSlice {
-                    target_symbol,
-                    target_body,
-                    callee_signatures,
-                    related_types,
-                    related_tests,
-                };
-
-                CallToolResult::text(format_context_slice(&slice))
             }
             "find_references" => {
                 let symbol_name = match arguments.get("symbol_name").and_then(|v| v.as_str()) {
@@ -683,29 +592,23 @@ impl McpServer {
                 tracing::info!(params = ?request.params, "MCP initialize received");
                 if let Some(params) = &request.params {
                     let mut candidate = None;
-                    if let Some(roots) = params.get("roots").and_then(|r| r.as_array()) {
-                        if let Some(u) = roots.first().and_then(|r| r.get("uri")).and_then(|u| u.as_str()) {
-                            candidate = Some(u);
-                        }
+                    if let Some(roots) = params.get("roots").and_then(|r| r.as_array())
+                        && let Some(u) = roots.first().and_then(|r| r.get("uri")).and_then(|u| u.as_str())
+                    {
+                        candidate = Some(u);
                     } else if let Some(u) = params.get("rootUri").and_then(|u| u.as_str()) {
                         candidate = Some(u);
                     } else if let Some(u) = params.get("rootPath").and_then(|u| u.as_str()) {
                         candidate = Some(u);
-                    } else if let Some(folders) = params.get("workspaceFolders").and_then(|f| f.as_array()) {
-                        if let Some(u) = folders.first().and_then(|f| f.get("uri")).and_then(|u| u.as_str()) {
-                            candidate = Some(u);
-                        }
+                    } else if let Some(folders) = params.get("workspaceFolders").and_then(|f| f.as_array())
+                        && let Some(u) = folders.first().and_then(|f| f.get("uri")).and_then(|u| u.as_str())
+                    {
+                        candidate = Some(u);
                     }
 
-                    if let Some(cand) = candidate {
-                        let path_str = if let Some(stripped) = cand.strip_prefix("file:///") {
-                            stripped
-                        } else if let Some(stripped) = cand.strip_prefix("file://") {
-                            stripped
-                        } else {
-                            cand
-                        };
-                        let path = PathBuf::from(path_str);
+                    if let Some(cand) = candidate
+                        && let Some(path) = code_kb_core::parse_file_uri(cand)
+                    {
                         let _ = self.bind_workspace(&path);
                     }
                 }

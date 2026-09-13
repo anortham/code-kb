@@ -58,10 +58,12 @@ pub fn slice_symbol(file_path: &Path, symbol: &Symbol) -> Result<String, SliceEr
     }
 
     // Try byte span first
-    if symbol.end_byte <= bytes.len() && symbol.start_byte <= symbol.end_byte && symbol.end_byte > 0 {
-        if let Ok(slice) = slice_bytes_safe(&bytes, symbol.start_byte, symbol.end_byte) {
-            return Ok(slice.to_string());
-        }
+    if symbol.end_byte <= bytes.len()
+        && symbol.start_byte <= symbol.end_byte
+        && symbol.end_byte > 0
+        && let Ok(slice) = slice_bytes_safe(&bytes, symbol.start_byte, symbol.end_byte)
+    {
+        return Ok(slice.to_string());
     }
 
     // Fallback to line slicing
@@ -78,12 +80,12 @@ pub fn slice_symbol_body(file_path: &Path, symbol: &Symbol) -> Result<String, Sl
     }
 
     // Check if body byte spans are present
-    if let (Some(body_start), Some(body_end)) = (symbol.body_start_byte, symbol.body_end_byte) {
-        if body_end <= bytes.len() && body_start <= body_end {
-            if let Ok(slice) = slice_bytes_safe(&bytes, body_start, body_end) {
-                return Ok(slice.to_string());
-            }
-        }
+    if let (Some(body_start), Some(body_end)) = (symbol.body_start_byte, symbol.body_end_byte)
+        && body_end <= bytes.len()
+        && body_start <= body_end
+        && let Ok(slice) = slice_bytes_safe(&bytes, body_start, body_end)
+    {
+        return Ok(slice.to_string());
     }
 
     // Fallback to body line span

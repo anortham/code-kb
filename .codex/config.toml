@@ -1,0 +1,3 @@
+[mcp_servers.code-kb]
+command = "./target/release/code-kb"
+args = ["serve"]

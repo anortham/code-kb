@@ -109,9 +109,68 @@ fn render_symbol_skeleton(
 
 /// Node representing directory or file in codebase outline tree.
 #[derive(Default)]
-struct OutlineNode {
-    files: BTreeMap<String, Vec<String>>, // file_name -> list of top symbol names with kinds
-    subdirs: BTreeMap<String, OutlineNode>,
+pub struct OutlineNode {
+    pub files: BTreeMap<String, Vec<String>>, // file_name -> list of top symbol names with kinds
+    pub subdirs: BTreeMap<String, OutlineNode>,
+}
+
+/// Add a file path into the outline tree, bounded by max_depth.
+pub fn add_path_to_outline(
+    root_node: &mut OutlineNode,
+    file_path: &str,
+    symbols_by_file: &HashMap<String, Vec<Symbol>>,
+    max_depth: usize,
+    norm_filter: &str,
+) {
+    let normalized = file_path.replace('\\', "/");
+    let rel_path_str = if norm_filter.is_empty() {
+        normalized.as_str()
+    } else if normalized == norm_filter {
+        Path::new(&normalized)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(&normalized)
+    } else if let Some(stripped) = normalized.strip_prefix(&format!("{norm_filter}/")) {
+        stripped
+    } else {
+        return;
+    };
+
+    let path = Path::new(rel_path_str);
+    let components: Vec<&str> = path
+        .components()
+        .map(|c| c.as_os_str().to_str().unwrap_or(""))
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    if components.is_empty() {
+        return;
+    }
+
+    let mut curr = root_node;
+    let depth = components.len();
+
+    for (i, comp) in components.iter().enumerate() {
+        if i == depth - 1 {
+            // Leaf file: only insert if it is within max_depth
+            if depth <= max_depth {
+                let mut sym_tags = Vec::new();
+                if let Some(syms) = symbols_by_file.get(&normalized) {
+                    for s in syms.iter().take(5) {
+                        sym_tags.push(format!("{} {}", s.kind, s.name));
+                    }
+                    if syms.len() > 5 {
+                        sym_tags.push(format!("+{} more", syms.len() - 5));
+                    }
+                }
+                curr.files.insert(comp.to_string(), sym_tags);
+            }
+        } else if i < max_depth {
+            curr = curr.subdirs.entry(comp.to_string()).or_default();
+        } else {
+            break;
+        }
+    }
 }
 
 /// Format compact architectural outline of the repository.
@@ -128,51 +187,7 @@ pub fn format_codebase_outline(
         .unwrap_or_default();
 
     for file in files {
-        let file_path = file.path.replace('\\', "/");
-        let rel_path_str = if norm_filter.is_empty() {
-            file_path.as_str()
-        } else if file_path == norm_filter {
-            Path::new(&file_path)
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or(&file_path)
-        } else if let Some(stripped) = file_path.strip_prefix(&format!("{norm_filter}/")) {
-            stripped
-        } else {
-            continue;
-        };
-
-        let path = Path::new(rel_path_str);
-        let components: Vec<&str> = path
-            .components()
-            .map(|c| c.as_os_str().to_str().unwrap_or(""))
-            .filter(|s| !s.is_empty())
-            .collect();
-
-        if components.is_empty() {
-            continue;
-        }
-
-        let mut curr = &mut root_node;
-        let depth = components.len();
-
-        for (i, comp) in components.iter().enumerate() {
-            if i == depth - 1 {
-                // Leaf file
-                let mut sym_tags = Vec::new();
-                if let Some(syms) = symbols_by_file.get(&file.path) {
-                    for s in syms.iter().take(5) {
-                        sym_tags.push(format!("{} {}", s.kind, s.name));
-                    }
-                    if syms.len() > 5 {
-                        sym_tags.push(format!("+{} more", syms.len() - 5));
-                    }
-                }
-                curr.files.insert(comp.to_string(), sym_tags);
-            } else if i < max_depth {
-                curr = curr.subdirs.entry(comp.to_string()).or_default();
-            }
-        }
+        add_path_to_outline(&mut root_node, &file.path, symbols_by_file, max_depth, &norm_filter);
     }
 
     let display_root = if norm_filter.is_empty() {
@@ -187,7 +202,7 @@ pub fn format_codebase_outline(
     out
 }
 
-fn render_outline_tree(
+pub fn render_outline_tree(
     out: &mut String,
     node: &OutlineNode,
     prefix: &str,
