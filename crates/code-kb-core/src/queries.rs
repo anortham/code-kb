@@ -71,11 +71,6 @@ pub(crate) fn escape_like(value: &str) -> String {
         .replace('_', "\\_")
 }
 
-/// Retrieve all indexed files from `files` table.
-pub fn load_files(conn: &Connection) -> Result<Vec<FileFact>, QueryError> {
-    load_scoped_files(conn, None)
-}
-
 /// Retrieve indexed files optionally scoped by path filter, pushed down to SQLite.
 pub fn load_scoped_files(
     conn: &Connection,

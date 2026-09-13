@@ -22,8 +22,36 @@ pub enum SyncError {
     Walk(#[from] ignore::Error),
 }
 
-/// Discovers the location of the `julie-extract` binary.
+pub const PINNED_JULIE_VERSION: &str = "2.42.1";
+
+static CACHED_JULIE_BIN: std::sync::OnceLock<Option<PathBuf>> = std::sync::OnceLock::new();
+
+/// Discovers the location of the `julie-extract` binary and caches the result.
 pub fn find_julie_extract_binary() -> Option<PathBuf> {
+    CACHED_JULIE_BIN
+        .get_or_init(|| {
+            let bin = discover_julie_extract_binary()?;
+
+            // Validate version against pinned extractor release
+            if let Ok(output) = Command::new(&bin).arg("--version").output() {
+                let ver_str = String::from_utf8_lossy(&output.stdout);
+                if !ver_str.contains(PINNED_JULIE_VERSION) {
+                    tracing::warn!(
+                        found = %ver_str.trim(),
+                        pinned = %PINNED_JULIE_VERSION,
+                        binary = %bin.display(),
+                        "julie-extract version differs from pinned version; AST facts may drift"
+                    );
+                }
+            }
+
+            Some(bin)
+        })
+        .clone()
+}
+
+fn discover_julie_extract_binary() -> Option<PathBuf> {
+    // 1. Check JULIE_EXTRACT_BIN env var
     if let Ok(path_str) = std::env::var("JULIE_EXTRACT_BIN") {
         let p = PathBuf::from(path_str);
         if p.exists() {
@@ -37,7 +65,7 @@ pub fn find_julie_extract_binary() -> Option<PathBuf> {
         "julie-extract"
     };
 
-    // 1. Check next to current running executable (bundled release distribution)
+    // 2. Check next to current running executable (bundled release distribution)
     if let Some(parent) = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|d| d.to_path_buf()))
@@ -52,7 +80,7 @@ pub fn find_julie_extract_binary() -> Option<PathBuf> {
         }
     }
 
-    // 2. Check upward traversal for .tools/julie-extract from CWD
+    // 3. Check upward traversal for .tools/julie-extract from CWD
     if let Ok(cwd) = std::env::current_dir() {
         let mut probe = cwd;
         loop {
@@ -71,45 +99,7 @@ pub fn find_julie_extract_binary() -> Option<PathBuf> {
         }
     }
 
-    // 3. Check adjacent release/debug paths in local development
-    let mut dev_candidates = vec![
-        PathBuf::from(format!(
-            r"c:\source\julie-extractors\target\release\{exe_name}"
-        )),
-        PathBuf::from(format!(
-            r"c:\source\julie-extractors\target\debug\{exe_name}"
-        )),
-        PathBuf::from(format!("../julie-extractors/target/release/{exe_name}")),
-        PathBuf::from(format!("../julie-extractors/target/debug/{exe_name}")),
-        PathBuf::from(format!("../../julie-extractors/target/release/{exe_name}")),
-        PathBuf::from(format!("../../julie-extractors/target/debug/{exe_name}")),
-    ];
-
-    if let Some(user_dirs) = directories::UserDirs::new() {
-        let home = user_dirs.home_dir();
-        dev_candidates.push(
-            home.join("source")
-                .join("julie-extractors")
-                .join("target")
-                .join("release")
-                .join(exe_name),
-        );
-        dev_candidates.push(
-            home.join("source")
-                .join("julie-extractors")
-                .join("target")
-                .join("debug")
-                .join(exe_name),
-        );
-    }
-
-    for c in &dev_candidates {
-        if c.exists() {
-            return Some(crate::workspace::normalize_path(c));
-        }
-    }
-
-    // Check PATH using platform-agnostic which crate
+    // 4. Check PATH using platform-agnostic which crate
     if let Ok(p) = which::which("julie-extract") {
         return Some(crate::workspace::normalize_path(&p));
     }

@@ -70,7 +70,7 @@ MCP tool schema.**
 - Contract relative paths and JSON outputs must use explicit forward slashes `/`,
   never platform-dependent separators.
 - SQLite connections and file handles must be closed before file rename or deletion.
-- Verify path identity by handle (`same-file`), not by case-sensitive string matching.
+- Verify path identity using canonical paths and `dunce::simplified`, not by raw case-sensitive string matching.
 
 ### 6. Zero-Friction Tool Ergonomics
 - Tool handlers accept intuitive parameter aliases (`file`/`path` for `file_path`,
@@ -86,8 +86,9 @@ MCP tool schema.**
   Auto-discovers uncommitted git changes when no target is passed.
 - Continuous testing boundary: Execution stays in native agent terminal commands (`cargo test`, `pytest`,
   `npm test`), while `code-kb` predicts the minimal set of targeted test targets to run before/after edits.
-- Workspace cleanup: `code-kb prune` discovers and deletes orphaned SQLite databases for
-  deleted repositories and removed git worktrees.
+- Self-cleaning workspaces: Every repository and git worktree maintains its own isolated database at
+  `<root>/.code-kb/artifact.db`. Deleting a repository directory or running `git worktree remove`
+  automatically cleans up the database with no orphaned external state.
 - Cross-platform agent hooks: `code-kb hook [SessionStart|SubagentStart]` outputs agent routing instructions
   directly from the native binary without external runtime dependencies (Node.js, bash, python).
 
@@ -95,5 +96,5 @@ MCP tool schema.**
 - `code-kb` pins the exact extractor version in `scripts/julie-pins.json` (currently `2.42.1`).
 - Build guard: `crates/code-kb-cli/build.rs` verifies that `julie-extract` is restored and matches the pinned version. A missing or mismatched extractor fails the build immediately (bypassable for offline packaging via `CODE_KB_ALLOW_MISSING_JULIE_EXTRACT=1`).
 - Single-download distribution: Release archives ship `code-kb` and matching `julie-extract` pre-packaged side-by-side. Users download one archive and receive both binaries ready to execute.
-- Runtime discovery: `code-kb` checks next to its own executable (`current_exe().parent()`), `.tools/julie-extract`, `JULIE_EXTRACT_BIN`, and `PATH`.
+- Runtime discovery: `code-kb` checks `JULIE_EXTRACT_BIN`, next to its own executable (`current_exe().parent()`), `.tools/julie-extract`, and `PATH`.
 - Release workflow: Documented step-by-step in `docs/RELEASING.md`; automated pre-flight check via `scripts/release-preflight.sh`.

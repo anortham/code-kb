@@ -248,10 +248,6 @@ code-kb facts route --limit 10
 # Atomically edit a symbol body with pre-flight tree-sitter syntax validation
 code-kb edit my_func --file src/lib.rs --body "{\n    println!(\"hello\");\n}"
 
-# Clean up orphaned SQLite stores for deleted worktrees or removed repositories
-code-kb prune --dry-run
-code-kb prune
-
 # View active log file and recent diagnostic messages
 code-kb logs
 

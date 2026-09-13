@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
 use crate::models::{
-    BlastRadiusResult, ContextSlice, FileFact, ReferenceSite, Symbol, SymbolSearchResult,
+    BlastRadiusResult, ContextSlice, ReferenceSite, Symbol, SymbolSearchResult,
 };
 
 /// Format progressive disclosure file skeleton with implementation bodies stripped.
@@ -204,41 +204,6 @@ pub fn add_path_to_outline(
             break;
         }
     }
-}
-
-/// Format compact architectural outline of the repository.
-pub fn format_codebase_outline(
-    root_label: &str,
-    files: &[FileFact],
-    symbols_by_file: &HashMap<String, Vec<Symbol>>,
-    max_depth: usize,
-    path_filter: Option<&str>,
-) -> String {
-    let mut root_node = OutlineNode::default();
-    let norm_filter = path_filter
-        .map(|f| f.replace('\\', "/").trim_matches('/').to_string())
-        .unwrap_or_default();
-
-    for file in files {
-        add_path_to_outline(
-            &mut root_node,
-            &file.path,
-            symbols_by_file,
-            max_depth,
-            &norm_filter,
-        );
-    }
-
-    let display_root = if norm_filter.is_empty() {
-        format!("{root_label}/")
-    } else {
-        format!("{root_label}/{norm_filter}/")
-    };
-
-    let mut out = String::new();
-    out.push_str(&format!("{display_root}\n"));
-    render_outline_tree(&mut out, &root_node, "", 0, max_depth);
-    out
 }
 
 pub fn render_outline_tree(

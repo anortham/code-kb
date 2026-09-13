@@ -1,4 +1,3 @@
-use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
@@ -134,7 +133,6 @@ pub struct Workspace {
     pub root: PathBuf,
     pub canonical_root: PathBuf,
     pub repo_name: String,
-    pub repo_id: String,
 }
 
 impl Workspace {
@@ -146,25 +144,7 @@ impl Workspace {
         };
 
         let root = Self::find_workspace_root(&current)?;
-        let canonical_root =
-            normalize_path(&dunce::canonicalize(&root).unwrap_or_else(|_| root.clone()));
-
-        let repo_name = canonical_root
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| "repo".to_string());
-
-        let mut hasher = Sha256::new();
-        hasher.update(to_forward_slash(&canonical_root).as_bytes());
-        let hash = hex::encode(hasher.finalize());
-        let repo_id = hash[..16].to_string();
-
-        Ok(Self {
-            root,
-            canonical_root,
-            repo_name,
-            repo_id,
-        })
+        Ok(Self::new(root))
     }
 
     /// Create workspace binding directly for a known root directory.
@@ -176,16 +156,10 @@ impl Workspace {
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| "repo".to_string());
 
-        let mut hasher = Sha256::new();
-        hasher.update(to_forward_slash(&canonical_root).as_bytes());
-        let hash = hex::encode(hasher.finalize());
-        let repo_id = hash[..16].to_string();
-
         Self {
             root,
             canonical_root,
             repo_name,
-            repo_id,
         }
     }
 
@@ -370,7 +344,6 @@ impl Workspace {
     /// Resolve candidate database paths for this workspace:
     /// 1. Explicit override path (if provided)
     /// 2. In-tree `.code-kb/artifact.db` or `.code-kb/store.db`
-    /// 3. Centralized user cache `%LOCALAPPDATA%\code-kb\stores\<repo_slug>-<hash>\artifact.db`
     pub fn candidate_db_paths(&self, explicit_db: Option<&Path>) -> Vec<PathBuf> {
         let mut candidates = Vec::new();
 
@@ -383,117 +356,24 @@ impl Workspace {
         candidates.push(self.canonical_root.join(".code-kb").join("store.db"));
         candidates.push(self.canonical_root.join("artifact.db"));
 
-        // Global user cache
-        if let Some(proj_dirs) = directories::ProjectDirs::from("com", "code-kb", "code-kb") {
-            let cache_dir = proj_dirs.cache_dir();
-            let store_slug = format!("{}-{}", self.repo_name, self.repo_id);
-            candidates.push(
-                cache_dir
-                    .join("stores")
-                    .join(&store_slug)
-                    .join("artifact.db"),
-            );
-            candidates.push(cache_dir.join("stores").join(&store_slug).join("store.db"));
-        }
-
         candidates
     }
 
     /// Finds the first existing database file, or returns the default target location.
     pub fn locate_db(&self, explicit_db: Option<&Path>) -> Result<PathBuf, WorkspaceError> {
-        let candidates = self.candidate_db_paths(explicit_db);
+        if let Some(p) = explicit_db {
+            return Ok(p.to_path_buf());
+        }
+
+        let candidates = self.candidate_db_paths(None);
         for candidate in &candidates {
             if candidate.exists() && candidate.is_file() {
                 return Ok(candidate.clone());
             }
         }
 
-        // Return first non-explicit candidate as default if none exist yet
-        candidates.into_iter().next().ok_or_else(|| {
-            WorkspaceError::ArtifactNotFound(
-                self.canonical_root.join(".code-kb").join("artifact.db"),
-            )
-        })
+        Ok(self.canonical_root.join(".code-kb").join("artifact.db"))
     }
-}
-
-/// Prunes global cache stores whose original workspace root paths no longer exist on disk.
-/// Returns a list of pruned store directory paths.
-pub fn prune_orphaned_stores(dry_run: bool) -> Vec<PathBuf> {
-    let proj_dirs = match directories::ProjectDirs::from("com", "code-kb", "code-kb") {
-        Some(d) => d,
-        None => return Vec::new(),
-    };
-
-    let stores_dir = proj_dirs.cache_dir().join("stores");
-    prune_orphaned_stores_at(&stores_dir, dry_run)
-}
-
-/// Prunes stores within a specified directory whose recorded root_path no longer exists on disk.
-pub fn prune_orphaned_stores_at(stores_dir: &Path, dry_run: bool) -> Vec<PathBuf> {
-    let mut pruned = Vec::new();
-
-    if !stores_dir.exists() || !stores_dir.is_dir() {
-        return pruned;
-    }
-
-    let entries = match std::fs::read_dir(stores_dir) {
-        Ok(e) => e,
-        Err(_) => return pruned,
-    };
-
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if !path.is_dir() {
-            continue;
-        }
-
-        let db_candidate = path.join("artifact.db");
-        let store_db_candidate = path.join("store.db");
-        let active_db = if db_candidate.exists() {
-            Some(db_candidate)
-        } else if store_db_candidate.exists() {
-            Some(store_db_candidate)
-        } else {
-            None
-        };
-
-        let is_orphaned = if let Some(db_file) = active_db {
-            if let Ok(conn) = rusqlite::Connection::open_with_flags(
-                &db_file,
-                rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY
-                    | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
-            ) {
-                let root_path: rusqlite::Result<String> = conn.query_row(
-                    "SELECT value FROM artifact_metadata WHERE key = 'root_path'",
-                    [],
-                    |row| row.get(0),
-                );
-                // Invariant 5: Close SQLite connection and release file handles before deletion on Windows
-                drop(conn);
-
-                if let Ok(root_str) = root_path {
-                    let root_p = Path::new(&root_str);
-                    !root_p.exists()
-                } else {
-                    false
-                }
-            } else {
-                false
-            }
-        } else {
-            false
-        };
-
-        if is_orphaned {
-            pruned.push(path.clone());
-            if !dry_run {
-                let _ = std::fs::remove_dir_all(&path);
-            }
-        }
-    }
-
-    pruned
 }
 
 #[cfg(test)]

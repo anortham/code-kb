@@ -6,8 +6,8 @@ use code_kb_core::{
     format_context_slice, format_fact_categories, format_find_symbol_results, format_references,
     format_replace_symbol_result, format_search_results, format_structural_facts,
     format_symbol_body, fts_search_symbols_scoped, get_context_slice_op, get_symbol_body_op,
-    list_structural_fact_categories, load_file_symbols, open_read_only, prune_orphaned_stores,
-    queries, replace_symbol_body, scan_workspace, search_symbols_scoped,
+    list_structural_fact_categories, load_file_symbols, open_read_only, queries,
+    replace_symbol_body, scan_workspace, search_symbols_scoped,
 };
 
 mod logging;
@@ -68,8 +68,6 @@ pub enum Command {
     Edit(EditArgs),
     /// Run initial or full workspace scan.
     Scan(ScanArgs),
-    /// Prune orphaned artifact databases for workspaces or worktrees that no longer exist on disk.
-    Prune(PruneArgs),
     /// Stream server activity logs from background file watcher and reconciliation.
     Logs(LogsArgs),
     /// View tool usage telemetry and token efficiency summary.
@@ -228,13 +226,6 @@ pub struct LogsArgs {
 }
 
 #[derive(Debug, Args)]
-pub struct PruneArgs {
-    /// Preview stores that would be deleted without actually removing them.
-    #[arg(long)]
-    pub dry_run: bool,
-}
-
-#[derive(Debug, Args)]
 pub struct StatsArgs {
     /// Format output as raw JSON instead of human-readable table.
     #[arg(long)]
@@ -307,27 +298,6 @@ fn main() -> anyhow::Result<()> {
             println!("{}", serde_json::to_string_pretty(&summary)?);
         } else {
             print!("{}", code_kb_core::format_telemetry_summary(&summary));
-        }
-        return Ok(());
-    }
-
-    // Handle Prune command (does not require existing database in current workspace)
-    if let Command::Prune(args) = &cli.command {
-        let pruned = prune_orphaned_stores(args.dry_run);
-        if cli.json {
-            println!("{}", serde_json::to_string_pretty(&pruned)?);
-        } else if pruned.is_empty() {
-            println!("No orphaned stores found.");
-        } else {
-            let action = if args.dry_run {
-                "Would prune"
-            } else {
-                "Pruned"
-            };
-            println!("{action} {} orphaned store(s):", pruned.len());
-            for p in pruned {
-                println!("- {}", p.display());
-            }
         }
         return Ok(());
     }
@@ -599,7 +569,6 @@ fn main() -> anyhow::Result<()> {
         Command::Serve(_)
         | Command::Scan(_)
         | Command::Logs(_)
-        | Command::Prune(_)
         | Command::Stats(_)
         | Command::Telemetry(_)
         | Command::Hook(_) => {

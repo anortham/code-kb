@@ -207,7 +207,7 @@ def main():
     print("| Workspace Parameter in Schemas | **ZERO (0)** | Mandatory `workspace_id` | Mandatory `workspace` |")
     print("| Atomic Edits | **Single-Turn (Tree-sitter)** | 2-step preview/apply | 2-step preview/apply |")
     print("| Natural Language / Search | **FTS5 BM25 + Porter** | Multi-phase (noisy) | Tantivy + Vector sidecar |")
-    print("| Worktree Cleanup | `code-kb prune` | Manual cache purge | Manual clean |")
+    print("| Worktree Cleanup | **Automatic (in-tree)** | Manual cache purge | Manual clean |")
     print()
 
     report = {

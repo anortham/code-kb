@@ -2,8 +2,6 @@ use ignore::WalkBuilder;
 use notify::RecursiveMode;
 use notify_debouncer_full::{DebouncedEvent, Debouncer, RecommendedCache, new_debouncer};
 use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use thiserror::Error;
 use tracing::{info, warn};
@@ -23,7 +21,6 @@ pub enum WatcherError {
 pub struct WatcherHandle {
     // Retaining debouncer keeps the background notify thread running
     _debouncer: Debouncer<notify::RecommendedWatcher, RecommendedCache>,
-    pub running: Arc<AtomicBool>,
 }
 
 /// Starts debounced background file watcher with git storm circuit breaker.
@@ -31,7 +28,6 @@ pub fn start_watcher(
     workspace: Workspace,
     db_path: PathBuf,
 ) -> Result<WatcherHandle, WatcherError> {
-    let running = Arc::new(AtomicBool::new(true));
     let ws_clone = workspace.clone();
     let db_clone = db_path.clone();
 
@@ -143,6 +139,5 @@ pub fn start_watcher(
 
     Ok(WatcherHandle {
         _debouncer: debouncer,
-        running,
     })
 }

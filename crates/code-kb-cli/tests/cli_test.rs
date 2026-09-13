@@ -310,24 +310,6 @@ fn test_cli_stats_and_telemetry() {
 }
 
 #[test]
-fn test_cli_prune() {
-    let repo = setup_test_repo();
-    let root = repo.path();
-
-    let prune_output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
-        .arg("--root")
-        .arg(root)
-        .arg("prune")
-        .arg("--dry-run")
-        .output()
-        .expect("Failed to execute prune");
-
-    assert!(prune_output.status.success());
-    let stdout = String::from_utf8_lossy(&prune_output.stdout);
-    assert!(stdout.contains("No orphaned stores found") || stdout.contains("orphaned"));
-}
-
-#[test]
 fn test_cli_facts() {
     let repo = setup_test_repo();
     let root = repo.path();
