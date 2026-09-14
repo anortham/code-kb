@@ -1705,10 +1705,15 @@ pub fn compute_blast_radius(
     max_depth: usize,
     limit: usize,
 ) -> Result<BlastRadiusResult, QueryError> {
+    let path_hint = if seed_paths.len() == 1 {
+        Some(seed_paths[0])
+    } else {
+        None
+    };
     let resolved_seed_symbols = seed_symbols
         .iter()
         .map(|name| {
-            get_symbol_by_name(conn, name, None)?
+            get_symbol_by_name(conn, name, path_hint)?
                 .ok_or_else(|| QueryError::SymbolNotFound((*name).to_string()))
         })
         .collect::<Result<Vec<_>, _>>()?;

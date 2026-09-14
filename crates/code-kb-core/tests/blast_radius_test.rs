@@ -199,3 +199,24 @@ fn blast_radius_rejects_unknown_or_ambiguous_symbol_seeds() {
         Err(code_kb_core::QueryError::SymbolNotFound(name)) if name == "missing"
     ));
 }
+
+#[test]
+fn blast_radius_disambiguates_symbol_seed_using_seed_path() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+
+    conn.execute_batch(
+        "INSERT INTO symbols VALUES
+            ('s1', 'f1', 'src/alpha.rs', 'rust', 'handle', 'function', NULL, NULL, NULL, NULL, 1, 0, 1, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
+            ('s2', 'f2', 'src/beta.rs', 'rust', 'handle', 'function', NULL, NULL, NULL, NULL, 1, 0, 1, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
+            ('c1', 'f3', 'src/caller_alpha.rs', 'rust', 'call_alpha', 'function', NULL, NULL, NULL, NULL, 1, 0, 1, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0);
+        INSERT INTO relationships VALUES
+            ('c1', 's1', 'calls', 'src/caller_alpha.rs', 1, 0);",
+    )
+    .unwrap();
+
+    let res = compute_blast_radius(&conn, &["handle"], &["src/alpha.rs"], 1, 20).unwrap();
+    assert_eq!(res.impacted_symbols.len(), 1);
+    assert_eq!(res.impacted_symbols[0].name, "call_alpha");
+}
