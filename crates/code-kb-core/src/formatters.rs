@@ -298,6 +298,9 @@ pub fn format_context_slice(slice: &ContextSlice) -> String {
         for callee in &slice.callee_signatures {
             out.push_str(&format!("- {callee}\n"));
         }
+        if slice.callee_signatures.len() >= 10 {
+            out.push_str("[Showing 10 dependencies (limit reached)]\n");
+        }
         out.push('\n');
     }
 
@@ -316,6 +319,9 @@ pub fn format_context_slice(slice: &ContextSlice) -> String {
                 "- `{}` ({}:{})\n",
                 test.name, test.path, test.start_line
             ));
+        }
+        if slice.related_tests.len() >= 5 {
+            out.push_str("[Showing 5 tests (limit reached)]\n");
         }
         out.push('\n');
     }
@@ -606,7 +612,11 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
             }
         }
 
-        out.push_str(&format!("### Downstream Impact ({} symbols)\n", total));
+        if total >= 200 {
+            out.push_str("### Downstream Impact (200+ symbols - traversal ceiling reached; increase depth/limit or narrow target)\n");
+        } else {
+            out.push_str(&format!("### Downstream Impact ({} symbols)\n", total));
+        }
 
         if visible.is_empty() && low_signal_count > 0 {
             let row_word = if low_signal_count == 1 {
@@ -867,4 +877,91 @@ mod tests {
         let out_skipped = format_replace_symbol_result(&res_skipped);
         assert!(out_skipped.contains("Syntax: Skipped (grammar not available for file extension)"));
     }
+
+    fn sample_symbol(name: &str) -> Symbol {
+        Symbol {
+            symbol_id: format!("id_{name}"),
+            file_id: "f1".into(),
+            path: "src/lib.rs".into(),
+            language: "rust".into(),
+            name: name.into(),
+            kind: "function".into(),
+            signature: Some(format!("pub fn {name}()")),
+            doc_comment: None,
+            visibility: Some("pub".into()),
+            parent_symbol_id: None,
+            start_line: 1,
+            start_column: 0,
+            end_line: 10,
+            end_column: 1,
+            start_byte: 0,
+            end_byte: 100,
+            body_start_line: Some(2),
+            body_start_column: Some(0),
+            body_end_line: Some(9),
+            body_end_column: Some(1),
+            body_start_byte: Some(10),
+            body_end_byte: Some(99),
+            body_hash: None,
+            semantic_group: None,
+            is_test: false,
+            test_container: false,
+        }
+    }
+
+    fn sample_context_slice() -> ContextSlice {
+        ContextSlice {
+            target_symbol: sample_symbol("target_fn"),
+            target_body: "    println!(\"hello\");\n".into(),
+            callee_signatures: Vec::new(),
+            related_types: Vec::new(),
+            related_tests: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn test_context_slice_shows_truncation_notice_when_caps_hit() {
+        let mut slice = sample_context_slice();
+        slice.callee_signatures = (1..=10).map(|i| format!("fn callee_{i}()")).collect();
+        let text = format_context_slice(&slice);
+        assert!(text.contains("[Showing 10 dependencies (limit reached)]"));
+
+        let mut slice_tests = sample_context_slice();
+        slice_tests.related_tests = (1..=5)
+            .map(|i| {
+                let mut sym = sample_symbol(&format!("test_fn_{i}"));
+                sym.path = format!("tests/test_{i}.rs");
+                sym.is_test = true;
+                sym
+            })
+            .collect();
+        let text_tests = format_context_slice(&slice_tests);
+        assert!(text_tests.contains("[Showing 5 tests (limit reached)]"));
+    }
+
+    #[test]
+    fn test_blast_radius_shows_traversal_ceiling_at_200_symbols() {
+        let impacted_symbols = (1..=200)
+            .map(|i| ImpactedSymbol {
+                name: format!("sym_{i}"),
+                kind: "function".into(),
+                path: format!("src/mod_{}.rs", i % 10),
+                line: i,
+                depth: 1,
+            })
+            .collect();
+
+        let res = BlastRadiusResult {
+            seed_type: "symbol".into(),
+            seeds: vec!["root_fn".into()],
+            likely_tests: Vec::new(),
+            impacted_symbols,
+        };
+
+        let formatted = format_blast_radius(&res);
+        assert!(formatted.contains(
+            "### Downstream Impact (200+ symbols - traversal ceiling reached; increase depth/limit or narrow target)\n"
+        ));
+    }
 }
+
