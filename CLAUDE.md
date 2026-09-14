@@ -77,7 +77,7 @@ MCP tool schema.**
   `symbol`/`name` for `symbol_name`, `body`/`code` for `new_body`, `q`/`name` for `query`).
 - Optional parameters provide safe defaults (`direction` in `find_references` defaults to
   `"callers"`, `category` in `find_structural_facts` lists all categories with counts when omitted).
-- Scoped search: `lookup_symbol` and `search_symbols` support an optional `path` filter.
+- Scoped search: `lookup_symbol`, `search_symbols`, and `find_references` support an optional `path`/`file_path` filter.
 - Language-agnostic callee filtering: `find_references(direction="callees")` and `get_symbol_context`
   filter unresolved AST tokens against workspace symbols, eliminating external stdlib/runtime noise
   across all ~40 supported languages by default (`include_external: true` / `--include-external` restores them).

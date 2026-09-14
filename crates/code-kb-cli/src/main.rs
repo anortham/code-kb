@@ -167,6 +167,9 @@ pub type ContextArgs = SliceArgs;
 pub struct RefsArgs {
     /// Target symbol name.
     pub symbol: String,
+    /// Optional file path for disambiguation.
+    #[arg(short = 'f', long)]
+    pub file: Option<String>,
     /// Direction: "callers" or "callees" (default: "callers").
     #[arg(long, default_value = "callers", value_parser = ["callers", "callees"])]
     pub direction: String,
@@ -587,12 +590,14 @@ fn main() -> anyhow::Result<()> {
             }
         }
         Command::Refs(args) => {
-            let refs = code_kb_core::find_references_ext(
+            let rel_file = args.file.as_deref().map(|p| workspace.relativize_filter(p));
+            let refs = code_kb_core::find_references_scoped(
                 &conn,
                 &args.symbol,
                 &args.direction,
                 args.limit,
                 args.include_external,
+                rel_file.as_deref(),
             )?;
             if cli.json {
                 println!("{}", serde_json::to_string_pretty(&refs)?);

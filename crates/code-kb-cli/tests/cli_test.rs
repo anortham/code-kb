@@ -330,6 +330,40 @@ fn test_cli_refs() {
 }
 
 #[test]
+fn test_cli_refs_with_file_filter() {
+    let repo = setup_test_repo();
+    let root = repo.path();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .arg("refs")
+        .arg("helper")
+        .arg("--file")
+        .arg("src/workspace.rs")
+        .output()
+        .expect("Failed to execute refs with file filter");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("run_task"));
+
+    let short_output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .arg("refs")
+        .arg("helper")
+        .arg("-f")
+        .arg("src/workspace.rs")
+        .output()
+        .expect("Failed to execute refs with -f");
+
+    assert!(short_output.status.success());
+    let short_stdout = String::from_utf8_lossy(&short_output.stdout);
+    assert!(short_stdout.contains("run_task"));
+}
+
+#[test]
 fn test_cli_blast_radius_and_impact() {
     let repo = setup_test_repo();
     let root = repo.path();

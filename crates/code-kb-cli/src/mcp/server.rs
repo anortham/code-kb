@@ -263,6 +263,10 @@ impl McpServer {
                             "type": "string",
                             "description": "Target symbol name."
                         },
+                        "file_path": {
+                            "type": "string",
+                            "description": "Optional file path to disambiguate symbols with identical names across files."
+                        },
                         "direction": {
                             "type": "string",
                             "enum": ["callers", "callees"],
@@ -947,6 +951,13 @@ impl McpServer {
                     }
                 };
                 let symbol_name = Self::sanitize_symbol_name(raw_name);
+                let raw_file_path = arguments
+                    .get("file_path")
+                    .or_else(|| arguments.get("file"))
+                    .or_else(|| arguments.get("path"))
+                    .and_then(|v| v.as_str());
+                let rel_file_path = raw_file_path.map(|p| self.workspace.relativize_filter(p));
+                let file_path = rel_file_path.as_deref();
                 let direction = arguments
                     .get("direction")
                     .and_then(|v| v.as_str())
@@ -960,12 +971,13 @@ impl McpServer {
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false);
 
-                let refs = match code_kb_core::find_references_ext(
+                let refs = match code_kb_core::find_references_scoped(
                     &conn,
                     &symbol_name,
                     direction,
                     limit,
                     include_external,
+                    file_path,
                 ) {
                     Ok(r) => r,
                     Err(e) => return CallToolResult::error(e.to_string()),

@@ -879,11 +879,23 @@ pub fn find_references_ext(
     limit: usize,
     include_external: bool,
 ) -> Result<Vec<ReferenceSite>, QueryError> {
+    find_references_scoped(conn, symbol_name, direction, limit, include_external, None)
+}
+
+/// Find callers or callees with optional file path disambiguation filter and external symbols toggle.
+pub fn find_references_scoped(
+    conn: &Connection,
+    symbol_name: &str,
+    direction: &str,
+    limit: usize,
+    include_external: bool,
+    path_filter: Option<&str>,
+) -> Result<Vec<ReferenceSite>, QueryError> {
     if direction != "callers" && direction != "callees" {
         return Err(QueryError::InvalidDirection(direction.to_string()));
     }
 
-    match get_symbol_by_name(conn, symbol_name, None)? {
+    match get_symbol_by_name(conn, symbol_name, path_filter)? {
         Some(target) => find_references_internal(
             conn,
             &target.name,
@@ -894,7 +906,7 @@ pub fn find_references_ext(
         ),
         None => {
             let suggestions =
-                search_symbols_scoped(conn, symbol_name, None, None, false, 3).unwrap_or_default();
+                search_symbols_scoped(conn, symbol_name, None, path_filter, false, 3).unwrap_or_default();
             if suggestions.is_empty() {
                 Err(QueryError::SymbolNotFound(symbol_name.to_string()))
             } else {

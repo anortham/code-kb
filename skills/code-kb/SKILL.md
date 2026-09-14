@@ -29,7 +29,7 @@ Before modifying or understanding a specific function/method:
   3. Parameter type definitions.
   4. Associated unit tests.
 * Call `get_symbol_body(symbol_name, file_path)` if only the exact implementation body is needed.
-* Call `find_references(symbol_name)` (or `direction="callees"`) to check callers/callees. Callee search excludes external stdlib/runtime tokens language-agnostically across all ~40 supported languages; pass `include_external=true` to view external runtime calls.
+* Call `find_references(symbol_name, file_path?)` (or `direction="callees"`) to check callers/callees. Callee search excludes external stdlib/runtime tokens language-agnostically across all ~40 supported languages; pass `include_external=true` to view external runtime calls.
 * Call `blast_radius(symbol="...")` or `blast_radius(file="...")` or `blast_radius()` (auto-detects uncommitted git changes) to calculate multi-hop transitive callers and pinpoint targeted tests to run before/after editing. (Tool alias: `impact`).
 * Call `find_structural_facts()` to list all detected framework categories, or `find_structural_facts(category="route")` to query specific routes, SQL queries, models, or config keys.
 
@@ -66,7 +66,7 @@ When diagnosing unexpected tool errors or when assisting a user with filing an i
 | Search by concept | `grep -rn "retry"` | `search_symbols(query="retry backoff", path="...")` | `code-kb search <query> [--path <p>]` |
 | Read function body | Full file read | `get_symbol_body(symbol_name)` | `code-kb body <symbol>` |
 | Prep for editing function | Read caller/callee files | `get_symbol_context(symbol_name)` | `code-kb context <symbol> [--include-external]` |
-| Trace callers / callees | Text grep for call sites | `find_references(symbol_name)` | `code-kb refs <symbol> [--include-external]` |
+| Trace callers / callees | Text grep for call sites | `find_references(symbol_name, file_path?)` | `code-kb refs <symbol> [--file <f>] [--include-external]` |
 | Assess impact & find tests | Wide test suite runs | `blast_radius(symbol="...")` | `code-kb blast-radius [target]` |
 | Discover routes / models | Search string literals | `find_structural_facts(category="route")` | `code-kb facts [category]` |
 | Edit implementation | Multi-line search/replace | `replace_symbol_body(...)` | `code-kb edit <symbol> --file <f> --body <b>` |
@@ -88,6 +88,7 @@ Use the canonical names from the MCP schema in tool calls. The aliases below are
 * `blast_radius`: accepts `symbol`/`name`, `path`/`file`, `depth`/`max_depth`, `limit`. When target is omitted, automatically discovers uncommitted working-tree changes via git. Alias: `impact`.
 * `category` in `find_structural_facts`: optional (omitting lists all detected categories and counts).
 * `path` in `lookup_symbol` / `search_symbols`: optional filter by directory or file path prefix.
+* `file_path` in `find_references`: optional file path to disambiguate symbols with identical names across files.
 * `telemetry_summary`: accepts `time_window` (aliases: `since`, `window`; defaults to `"all"`), `workspace_only` (defaults to `false`), `json` (defaults to `false`). Tool name alias: `code_kb_stats`.
 
 ## Core Invariants

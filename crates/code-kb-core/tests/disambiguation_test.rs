@@ -1,6 +1,6 @@
 use code_kb_core::{
-    Workspace, find_julie_extract_binary, get_context_slice_op, get_symbol_by_name, open_read_only,
-    safe_tempdir, scan_workspace,
+    Workspace, find_julie_extract_binary, find_references_scoped, get_context_slice_op,
+    get_symbol_by_name, open_read_only, open_read_write, safe_tempdir, scan_workspace,
 };
 use std::fs;
 
@@ -442,3 +442,52 @@ fn test_context_slice_include_external() {
         slice_ext.callee_signatures
     );
 }
+
+fn setup_test_db(conn: &rusqlite::Connection) {
+    conn.execute_batch(
+        "CREATE TABLE files (
+            file_id TEXT PRIMARY KEY, path TEXT, language TEXT, content_hash TEXT,
+            content_bytes INTEGER, line_count INTEGER, indexed_at TEXT
+        );
+        CREATE TABLE symbols (
+            symbol_id TEXT PRIMARY KEY, file_id TEXT, path TEXT, language TEXT, name TEXT, kind TEXT,
+            signature TEXT, doc_comment TEXT, visibility TEXT, parent_symbol_id TEXT,
+            start_line INTEGER, start_column INTEGER, end_line INTEGER, end_column INTEGER,
+            start_byte INTEGER, end_byte INTEGER, body_start_line INTEGER,
+            body_start_column INTEGER, body_end_line INTEGER, body_end_column INTEGER,
+            body_start_byte INTEGER, body_end_byte INTEGER, body_hash TEXT,
+            semantic_group TEXT, is_test INTEGER, test_container INTEGER
+        );
+        CREATE TABLE relationships (
+            from_symbol_id TEXT, to_symbol_id TEXT, kind TEXT, path TEXT,
+            start_line INTEGER, start_column INTEGER
+        );
+        CREATE TABLE pending_relationships (
+            from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT, path TEXT,
+            start_line INTEGER, start_column INTEGER
+        );",
+    )
+    .unwrap();
+}
+
+#[test]
+fn find_references_scoped_disambiguates_multi_file_symbols() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+
+    conn.execute_batch(
+        "INSERT INTO symbols VALUES
+            ('s1', 'f1', 'src/alpha.rs', 'rust', 'run', 'function', NULL, NULL, NULL, NULL, 1, 0, 1, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
+            ('s2', 'f2', 'src/beta.rs', 'rust', 'run', 'function', NULL, NULL, NULL, NULL, 1, 0, 1, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
+            ('c1', 'f3', 'src/caller.rs', 'rust', 'caller_alpha', 'function', NULL, NULL, NULL, NULL, 1, 0, 1, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0);
+        INSERT INTO relationships VALUES
+            ('c1', 's1', 'calls', 'src/caller.rs', 1, 0);",
+    )
+    .unwrap();
+
+    let refs = find_references_scoped(&conn, "run", "callers", 10, false, Some("src/alpha.rs")).unwrap();
+    assert_eq!(refs.len(), 1);
+    assert_eq!(refs[0].from_symbol_name, "caller_alpha");
+}
+

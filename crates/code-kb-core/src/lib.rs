@@ -30,11 +30,11 @@ pub use ops::{
 };
 pub use queries::{
     QueryError, compute_blast_radius, find_callee_signatures, find_literals, find_references,
-    find_references_ext, find_references_for_symbol, find_related_tests, find_structural_facts,
-    find_type_facts, fts_search_symbols_scoped, get_file, get_symbol_by_name,
-    get_symbol_by_name_exact, is_test_path, list_structural_fact_categories, load_file_symbols,
-    load_scoped_outline_symbols, normalize_kind, sanitize_fts5_query, search_symbols,
-    search_symbols_scoped,
+    find_references_ext, find_references_for_symbol, find_references_scoped, find_related_tests,
+    find_structural_facts, find_type_facts, fts_search_symbols_scoped, get_file,
+    get_symbol_by_name, get_symbol_by_name_exact, is_test_path, list_structural_fact_categories,
+    load_file_symbols, load_scoped_outline_symbols, normalize_kind, sanitize_fts5_query,
+    search_symbols, search_symbols_scoped,
 };
 pub use slicer::{SliceError, slice_symbol, slice_symbol_body};
 pub use sync::{
