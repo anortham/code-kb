@@ -111,12 +111,11 @@ fn test_blast_radius_multi_hop_and_likely_tests() {
     let formatted = format_blast_radius(&result);
     assert!(formatted.contains("## Blast Radius & Test Impact (Symbol: base_calc)"));
     assert!(formatted.contains("### Likely Tests to Run (1 found)"));
-    assert!(
-        formatted
-            .contains("- `test_base_calc` [tests/core_test.rs:1] (transitive caller [depth 1])")
-    );
-    assert!(formatted.contains("- [depth 1] function `service_calc` [src/service.rs:1]"));
-    assert!(formatted.contains("- [depth 2] function `handle_request` [src/api.rs:1]"));
+    assert!(formatted.contains(
+        "tests/core_test.rs:\n  - `test_base_calc` [line 1] (transitive caller [depth 1])"
+    ));
+    assert!(formatted.contains("src/service.rs:\n  - [depth 1] function `service_calc` [line 1]"));
+    assert!(formatted.contains("src/api.rs:\n  - [depth 2] function `handle_request` [line 1]"));
 }
 
 #[test]

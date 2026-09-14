@@ -57,6 +57,7 @@ pub struct EditResult {
     pub old_body_hash: String,
     pub new_body_hash: String,
     pub bytes_written: usize,
+    pub syntax_checked: bool,
 }
 
 /// Computes SHA256 of a string content.
@@ -85,17 +86,14 @@ fn persist_with_retry(
     expected_dest_bytes: Option<&[u8]>,
 ) -> Result<(), std::io::Error> {
     for attempt in 0..5 {
-        if attempt > 0 {
-            if let Some(expected) = expected_dest_bytes {
-                if let Ok(current) = fs::read(dest) {
-                    if current != expected {
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            "Destination file was concurrently modified during retry",
-                        ));
-                    }
-                }
-            }
+        if attempt > 0
+            && let Some(expected) = expected_dest_bytes
+            && let Ok(current) = fs::read(dest)
+            && current != expected
+        {
+            return Err(std::io::Error::other(
+                "Destination file was concurrently modified during retry",
+            ));
         }
         match temp_file.persist(dest) {
             Ok(_) => return Ok(()),
@@ -191,7 +189,7 @@ pub fn replace_symbol_body(
     // Pre-flight syntax validation before touching disk
     let new_file_str =
         std::str::from_utf8(&new_file_bytes).map_err(|e| EditError::InvalidUtf8(e.to_string()))?;
-    syntax::validate_syntax(&rel_path, new_file_str)?;
+    let syntax_checked = syntax::validate_syntax(&rel_path, new_file_str)?;
 
     // Backup original bytes for rollback if re-indexing fails
     let backup_bytes = existing_bytes.clone();
@@ -276,6 +274,7 @@ pub fn replace_symbol_body(
         old_body_hash: current_sha256,
         new_body_hash,
         bytes_written: new_file_bytes.len(),
+        syntax_checked,
     })
 }
 

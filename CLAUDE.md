@@ -61,7 +61,7 @@ MCP tool schema.**
 ### 4. Token-Dense Progressive Disclosure
 - Always return the most compact representation that answers the query.
 - Strip implementation bodies in `file_skeleton`.
-- Include only immediate caller/callee signatures, related types, and test
+- Include only immediate callee signatures, related types, and test
   locations in `get_context_slice`.
 
 ### 5. Windows Compatibility

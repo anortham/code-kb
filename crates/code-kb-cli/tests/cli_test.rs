@@ -47,6 +47,10 @@ fn setup_test_repo() -> tempfile::TempDir {
             kind TEXT, literal_text TEXT, carrier TEXT, containing_symbol_id TEXT,
             start_line INTEGER, start_column INTEGER, end_line INTEGER, end_column INTEGER,
             start_byte INTEGER, end_byte INTEGER
+        );
+        CREATE TABLE type_facts (
+            type_fact_id TEXT PRIMARY KEY, symbol_id TEXT NOT NULL, language TEXT,
+            resolved_type TEXT NOT NULL, generic_params_json TEXT
         );",
     )
     .unwrap();

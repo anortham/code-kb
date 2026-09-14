@@ -154,22 +154,28 @@ pub fn load_scoped_outline_symbols(
     };
 
     let sql = "
-        WITH ranked AS (
-            SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,
-                   visibility, parent_symbol_id, start_line, start_column, end_line, end_column,
-                   start_byte, end_byte, body_start_line, body_start_column, body_end_line,
-                   body_end_column, body_start_byte, body_end_byte, body_hash, semantic_group,
-                   is_test, test_container,
-                   ROW_NUMBER() OVER (PARTITION BY path ORDER BY start_line ASC) as rn
-            FROM symbols
+        WITH bounded_files AS (
+            SELECT path FROM files
             WHERE (:path IS NULL
                OR path = :path COLLATE NOCASE
                OR path = :path_bs COLLATE NOCASE
                OR path LIKE :path_prefix ESCAPE '\\'
                OR path LIKE :path_prefix_bs ESCAPE '\\')
-              AND (length(path) - length(replace(replace(path, '/', ''), '\\', '')) <= :max_slashes)
-              AND kind IN ('function', 'method', 'struct', 'enum', 'trait', 'class', 'interface', 'type')
-              AND parent_symbol_id IS NULL
+            ORDER BY path ASC
+            LIMIT 1000
+        ),
+        ranked AS (
+            SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,
+                   s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,
+                   s.start_byte, s.end_byte, s.body_start_line, s.body_start_column, s.body_end_line,
+                   s.body_end_column, s.body_start_byte, s.body_end_byte, s.body_hash, s.semantic_group,
+                   s.is_test, s.test_container,
+                   ROW_NUMBER() OVER (PARTITION BY s.path ORDER BY s.start_line ASC) as rn
+            FROM symbols s
+            JOIN bounded_files bf ON (s.path = bf.path COLLATE NOCASE OR replace(s.path, '\\', '/') = replace(bf.path, '\\', '/') COLLATE NOCASE)
+            WHERE (length(s.path) - length(replace(replace(s.path, '/', ''), '\\', '')) <= :max_slashes)
+              AND s.kind IN ('function', 'method', 'struct', 'enum', 'trait', 'class', 'interface', 'type')
+              AND s.parent_symbol_id IS NULL
         )
         SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,
                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,
@@ -912,6 +918,31 @@ pub fn find_references_for_symbol(
     find_references_internal(conn, symbol_name, direction, limit, Some(symbol_id), false)
 }
 
+fn has_pending_namespace_column(conn: &Connection) -> bool {
+    let has_ns: bool = conn
+        .query_row(
+            "SELECT 1 FROM pragma_table_info('pending_relationships') WHERE name = 'target_namespace_json'",
+            [],
+            |_| Ok(true),
+        )
+        .unwrap_or(false);
+    let has_display: bool = conn
+        .query_row(
+            "SELECT 1 FROM pragma_table_info('pending_relationships') WHERE name = 'target_display_name'",
+            [],
+            |_| Ok(true),
+        )
+        .unwrap_or(false);
+    let has_receiver: bool = conn
+        .query_row(
+            "SELECT 1 FROM pragma_table_info('pending_relationships') WHERE name = 'target_receiver'",
+            [],
+            |_| Ok(true),
+        )
+        .unwrap_or(false);
+    has_ns && has_display && has_receiver
+}
+
 fn find_references_internal(
     conn: &Connection,
     symbol_name: &str,
@@ -955,50 +986,152 @@ fn find_references_internal(
             results.push(r?);
         }
 
-        // Also query pending_relationships for callers if top-level symbol or symbol_id is none
+        // Also query pending_relationships for callers if results < limit
         if results.len() < limit {
-            let is_nested = if let Some(sid) = symbol_id {
-                conn.query_row(
-                    "SELECT 1 FROM symbols WHERE symbol_id = ?1 AND parent_symbol_id IS NOT NULL",
-                    params![sid],
-                    |_| Ok(true),
-                )
-                .unwrap_or(false)
+            let remaining = limit - results.len();
+            if has_pending_namespace_column(conn) {
+                if let Some(sid) = symbol_id {
+                    let mut pending_stmt = conn.prepare(
+                        "SELECT s_from.name AS from_name,
+                                p.from_symbol_id,
+                                p.target_terminal_name AS to_name,
+                                p.kind,
+                                p.path,
+                                p.start_line,
+                                p.start_column
+                         FROM pending_relationships p
+                         JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
+                         JOIN symbols s_target ON s_target.symbol_id = ?3
+                         LEFT JOIN symbols s_target_parent ON s_target.parent_symbol_id = s_target_parent.symbol_id
+                          WHERE p.target_terminal_name = ?1
+                            AND (
+                                (
+                                    s_target.parent_symbol_id IS NOT NULL
+                                    AND s_target_parent.name IS NOT NULL
+                                    AND (
+                                        EXISTS (SELECT 1 FROM json_each(p.target_namespace_json) WHERE value = s_target_parent.name)
+                                        OR (EXISTS (SELECT 1 FROM json_each(p.target_namespace_json) WHERE value = 'Self')
+                                            AND s_from.parent_symbol_id = s_target.parent_symbol_id)
+                                        OR (p.target_receiver IS NOT NULL AND p.target_receiver != '' AND s_target_parent.name = p.target_receiver)
+                                    )
+                                )
+                                OR (
+                                    (p.target_namespace_json IS NULL OR p.target_namespace_json = '[]')
+                                    AND (p.target_receiver IS NULL OR p.target_receiver = '')
+                                    AND (s_target.parent_symbol_id IS NULL OR s_from.parent_symbol_id = s_target.parent_symbol_id)
+                                )
+                                OR (
+                                    s_target.parent_symbol_id IS NULL
+                                    AND EXISTS (
+                                        SELECT 1 FROM json_each(p.target_namespace_json)
+                                        WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super')
+                                          AND s_target.path LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
+                                    )
+                                )
+                            )
+                          LIMIT ?2",
+                    )?;
+
+                    let p_rows = pending_stmt.query_map(
+                        params![symbol_name, remaining as i64, sid],
+                        |row| {
+                            Ok(ReferenceSite {
+                                from_symbol_name: row.get(0)?,
+                                from_symbol_id: row.get(1)?,
+                                to_symbol_name: row.get(2)?,
+                                kind: row.get(3)?,
+                                path: row.get::<_, String>(4)?.replace('\\', "/"),
+                                start_line: Some(row.get::<_, i64>(5)? as usize),
+                                start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
+                            })
+                        },
+                    )?;
+                    for r in p_rows {
+                        results.push(r?);
+                    }
+                } else {
+                    let mut pending_stmt = conn.prepare(
+                        "SELECT s_from.name AS from_name,
+                                p.from_symbol_id,
+                                p.target_terminal_name AS to_name,
+                                p.kind,
+                                p.path,
+                                p.start_line,
+                                p.start_column
+                         FROM pending_relationships p
+                         JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
+                         WHERE p.target_terminal_name = ?1
+                           AND (
+                               (p.target_namespace_json IS NULL OR p.target_namespace_json = '[]')
+                               OR EXISTS (
+                                   SELECT 1 FROM symbols s_any
+                                   JOIN symbols s_any_parent ON s_any.parent_symbol_id = s_any_parent.symbol_id
+                                   WHERE s_any.name = p.target_terminal_name
+                                     AND EXISTS (SELECT 1 FROM json_each(p.target_namespace_json) WHERE value = s_any_parent.name)
+                               )
+                           )
+                         LIMIT ?2",
+                    )?;
+
+                    let p_rows =
+                        pending_stmt.query_map(params![symbol_name, remaining as i64], |row| {
+                            Ok(ReferenceSite {
+                                from_symbol_name: row.get(0)?,
+                                from_symbol_id: row.get(1)?,
+                                to_symbol_name: row.get(2)?,
+                                kind: row.get(3)?,
+                                path: row.get::<_, String>(4)?.replace('\\', "/"),
+                                start_line: Some(row.get::<_, i64>(5)? as usize),
+                                start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
+                            })
+                        })?;
+                    for r in p_rows {
+                        results.push(r?);
+                    }
+                }
             } else {
-                false
-            };
+                let is_nested = if let Some(sid) = symbol_id {
+                    conn.query_row(
+                        "SELECT 1 FROM symbols WHERE symbol_id = ?1 AND parent_symbol_id IS NOT NULL",
+                        params![sid],
+                        |_| Ok(true),
+                    )
+                    .unwrap_or(false)
+                } else {
+                    false
+                };
 
-            if !is_nested {
-                let remaining = limit - results.len();
-                let mut pending_stmt = conn.prepare(
-                    "SELECT s_from.name AS from_name,
-                            p.from_symbol_id,
-                            p.target_terminal_name AS to_name,
-                            p.kind,
-                            p.path,
-                            p.start_line,
-                            p.start_column
-                     FROM pending_relationships p
-                     JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
-                     WHERE p.target_terminal_name = ?1
-                     LIMIT ?2",
-                )?;
+                if !is_nested {
+                    let mut pending_stmt = conn.prepare(
+                        "SELECT s_from.name AS from_name,
+                                p.from_symbol_id,
+                                p.target_terminal_name AS to_name,
+                                p.kind,
+                                p.path,
+                                p.start_line,
+                                p.start_column
+                         FROM pending_relationships p
+                         JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
+                         WHERE p.target_terminal_name = ?1
+                         LIMIT ?2",
+                    )?;
 
-                let p_rows =
-                    pending_stmt.query_map(params![symbol_name, remaining as i64], |row| {
-                        Ok(ReferenceSite {
-                            from_symbol_name: row.get(0)?,
-                            from_symbol_id: row.get(1)?,
-                            to_symbol_name: row.get(2)?,
-                            kind: row.get(3)?,
-                            path: row.get::<_, String>(4)?.replace('\\', "/"),
-                            start_line: Some(row.get::<_, i64>(5)? as usize),
-                            start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
-                        })
-                    })?;
+                    let p_rows =
+                        pending_stmt.query_map(params![symbol_name, remaining as i64], |row| {
+                            Ok(ReferenceSite {
+                                from_symbol_name: row.get(0)?,
+                                from_symbol_id: row.get(1)?,
+                                to_symbol_name: row.get(2)?,
+                                kind: row.get(3)?,
+                                path: row.get::<_, String>(4)?.replace('\\', "/"),
+                                start_line: Some(row.get::<_, i64>(5)? as usize),
+                                start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
+                            })
+                        })?;
 
-                for r in p_rows {
-                    results.push(r?);
+                    for r in p_rows {
+                        results.push(r?);
+                    }
                 }
             }
         }
@@ -1038,51 +1171,135 @@ fn find_references_internal(
         // Also query pending_relationships for callees
         if results.len() < limit {
             let remaining = limit - results.len();
-            let sql = if include_external {
-                "SELECT DISTINCT s_from.name AS from_name,
-                        p.from_symbol_id,
-                        p.target_terminal_name AS to_name,
-                        p.kind,
-                        p.path,
-                        p.start_line,
-                        p.start_column
-                 FROM pending_relationships p
-                 JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
-                 WHERE s_from.name = ?1 AND (?3 IS NULL OR p.from_symbol_id = ?3)
-                 LIMIT ?2"
+            let p_rows: Vec<ReferenceSite> = if has_pending_namespace_column(conn) {
+                let sql = if include_external {
+                    "SELECT DISTINCT s_from.name AS from_name,
+                            p.from_symbol_id,
+                            COALESCE(NULLIF(p.target_display_name, ''), p.target_terminal_name) AS to_name,
+                            p.kind,
+                            p.path,
+                            p.start_line,
+                            p.start_column
+                     FROM pending_relationships p
+                     JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
+                     WHERE s_from.name = ?1 AND (?3 IS NULL OR p.from_symbol_id = ?3)
+                     LIMIT ?2"
+                } else {
+                    "SELECT DISTINCT s_from.name AS from_name,
+                            p.from_symbol_id,
+                            p.target_terminal_name AS to_name,
+                            p.kind,
+                            p.path,
+                            p.start_line,
+                            p.start_column
+                     FROM pending_relationships p
+                     JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
+                     WHERE s_from.name = ?1 AND (?3 IS NULL OR p.from_symbol_id = ?3)
+                       AND EXISTS (
+                           SELECT 1 FROM symbols s_to
+                           LEFT JOIN symbols s_to_parent ON s_to.parent_symbol_id = s_to_parent.symbol_id
+                           WHERE s_to.name = p.target_terminal_name
+                             AND s_to.kind NOT IN ('import', 'variable', 'parameter', 'field', 'property', 'module', 'namespace')
+                             AND (
+                                 (
+                                     s_to.parent_symbol_id IS NOT NULL
+                                     AND s_to_parent.name IS NOT NULL
+                                     AND (
+                                         EXISTS (SELECT 1 FROM json_each(p.target_namespace_json) WHERE value = s_to_parent.name)
+                                         OR (EXISTS (SELECT 1 FROM json_each(p.target_namespace_json) WHERE value = 'Self')
+                                             AND s_from.parent_symbol_id = s_to.parent_symbol_id)
+                                         OR (p.target_receiver IS NOT NULL AND p.target_receiver != '' AND s_to_parent.name = p.target_receiver)
+                                     )
+                                 )
+                                 OR (
+                                     (p.target_namespace_json IS NULL OR p.target_namespace_json = '[]')
+                                     AND (p.target_receiver IS NULL OR p.target_receiver = '')
+                                     AND (s_to.parent_symbol_id IS NULL OR s_from.parent_symbol_id = s_to.parent_symbol_id)
+                                 )
+                                 OR (
+                                     s_to.parent_symbol_id IS NULL
+                                     AND EXISTS (
+                                         SELECT 1 FROM json_each(p.target_namespace_json)
+                                         WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super')
+                                           AND s_to.path LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
+                                     )
+                                 )
+                             )
+                       )
+                     LIMIT ?2"
+                };
+                let mut pending_stmt = conn.prepare(sql)?;
+                let rows = pending_stmt.query_map(
+                    params![symbol_name, remaining as i64, symbol_id],
+                    |row| {
+                        Ok(ReferenceSite {
+                            from_symbol_name: row.get(0)?,
+                            from_symbol_id: row.get(1)?,
+                            to_symbol_name: row.get(2)?,
+                            kind: row.get(3)?,
+                            path: row.get::<_, String>(4)?.replace('\\', "/"),
+                            start_line: Some(row.get::<_, i64>(5)? as usize),
+                            start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
+                        })
+                    },
+                )?;
+                let mut out = Vec::new();
+                for r in rows {
+                    out.push(r?);
+                }
+                out
             } else {
-                "SELECT DISTINCT s_from.name AS from_name,
-                        p.from_symbol_id,
-                        p.target_terminal_name AS to_name,
-                        p.kind,
-                        p.path,
-                        p.start_line,
-                        p.start_column
-                 FROM pending_relationships p
-                 JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
-                 WHERE s_from.name = ?1 AND (?3 IS NULL OR p.from_symbol_id = ?3)
-                   AND EXISTS (SELECT 1 FROM symbols s_to WHERE s_to.name = p.target_terminal_name)
-                 LIMIT ?2"
-            };
-            let mut pending_stmt = conn.prepare(sql)?;
+                let sql = if include_external {
+                    "SELECT DISTINCT s_from.name AS from_name,
+                            p.from_symbol_id,
+                            p.target_terminal_name AS to_name,
+                            p.kind,
+                            p.path,
+                            p.start_line,
+                            p.start_column
+                     FROM pending_relationships p
+                     JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
+                     WHERE s_from.name = ?1 AND (?3 IS NULL OR p.from_symbol_id = ?3)
+                     LIMIT ?2"
+                } else {
+                    "SELECT DISTINCT s_from.name AS from_name,
+                            p.from_symbol_id,
+                            p.target_terminal_name AS to_name,
+                            p.kind,
+                            p.path,
+                            p.start_line,
+                            p.start_column
+                     FROM pending_relationships p
+                     JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
+                     WHERE s_from.name = ?1 AND (?3 IS NULL OR p.from_symbol_id = ?3)
+                       AND EXISTS (SELECT 1 FROM symbols s_to WHERE s_to.name = p.target_terminal_name)
+                     LIMIT ?2"
+                };
+                let mut pending_stmt = conn.prepare(sql)?;
 
-            let p_rows = pending_stmt.query_map(
-                params![symbol_name, remaining as i64, symbol_id],
-                |row| {
-                    Ok(ReferenceSite {
-                        from_symbol_name: row.get(0)?,
-                        from_symbol_id: row.get(1)?,
-                        to_symbol_name: row.get(2)?,
-                        kind: row.get(3)?,
-                        path: row.get::<_, String>(4)?.replace('\\', "/"),
-                        start_line: Some(row.get::<_, i64>(5)? as usize),
-                        start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
-                    })
-                },
-            )?;
+                let rows = pending_stmt.query_map(
+                    params![symbol_name, remaining as i64, symbol_id],
+                    |row| {
+                        Ok(ReferenceSite {
+                            from_symbol_name: row.get(0)?,
+                            from_symbol_id: row.get(1)?,
+                            to_symbol_name: row.get(2)?,
+                            kind: row.get(3)?,
+                            path: row.get::<_, String>(4)?.replace('\\', "/"),
+                            start_line: Some(row.get::<_, i64>(5)? as usize),
+                            start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
+                        })
+                    },
+                )?;
+                let mut out = Vec::new();
+                for r in rows {
+                    out.push(r?);
+                }
+                out
+            };
 
             for r in p_rows {
-                results.push(r?);
+                results.push(r);
             }
         }
     }
@@ -1136,28 +1353,80 @@ pub fn find_callee_signatures(
 
     if signatures.len() < limit {
         let remaining = (limit - signatures.len()) * 2;
-        let mut p_stmt = conn.prepare(
-            "SELECT DISTINCT s_to.name, s_to.signature, s_to.path, s_to.start_line, s_to.kind
-             FROM pending_relationships p
-             JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
-             JOIN symbols s_to ON s_to.name = p.target_terminal_name
-             WHERE s_from.name = ?1 AND p.from_symbol_id = ?2
-               AND s_to.kind NOT IN ('import', 'variable', 'parameter', 'field', 'property', 'module', 'namespace')
-             LIMIT ?3",
-        )?;
+        let p_rows: Vec<(String, Option<String>, String, usize, String)> =
+            if has_pending_namespace_column(conn) {
+                let mut p_stmt = conn.prepare(
+                "SELECT DISTINCT s_to.name, s_to.signature, s_to.path, s_to.start_line, s_to.kind
+                 FROM pending_relationships p
+                 JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
+                 JOIN symbols s_to ON s_to.name = p.target_terminal_name
+                 LEFT JOIN symbols s_parent ON s_to.parent_symbol_id = s_parent.symbol_id
+                 WHERE s_from.name = ?1 AND p.from_symbol_id = ?2
+                   AND s_to.kind NOT IN ('import', 'variable', 'parameter', 'field', 'property', 'module', 'namespace')
+                   AND (
+                       (
+                           s_to.parent_symbol_id IS NOT NULL
+                           AND s_parent.name IS NOT NULL
+                           AND (
+                               EXISTS (SELECT 1 FROM json_each(p.target_namespace_json) WHERE value = s_parent.name)
+                               OR (EXISTS (SELECT 1 FROM json_each(p.target_namespace_json) WHERE value = 'Self')
+                                   AND s_from.parent_symbol_id = s_to.parent_symbol_id)
+                               OR (p.target_receiver IS NOT NULL AND p.target_receiver != '' AND s_parent.name = p.target_receiver)
+                           )
+                       )
+                       OR (
+                           (p.target_namespace_json IS NULL OR p.target_namespace_json = '[]')
+                           AND (p.target_receiver IS NULL OR p.target_receiver = '')
+                           AND (s_to.parent_symbol_id IS NULL OR s_from.parent_symbol_id = s_to.parent_symbol_id)
+                       )
+                       OR (
+                           s_to.parent_symbol_id IS NULL
+                           AND EXISTS (
+                               SELECT 1 FROM json_each(p.target_namespace_json)
+                               WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super')
+                                 AND s_to.path LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
+                           )
+                       )
+                   )
+                 LIMIT ?3",
+            )?;
 
-        let p_rows =
-            p_stmt.query_map(params![symbol_name, symbol_id, remaining as i64], |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, Option<String>>(1)?,
-                    row.get::<_, String>(2)?.replace('\\', "/"),
-                    row.get::<_, Option<i64>>(3)?.unwrap_or(1) as usize,
-                    row.get::<_, String>(4)?,
-                ))
-            })?;
+                let rows =
+                    p_stmt.query_map(params![symbol_name, symbol_id, remaining as i64], |row| {
+                        Ok((
+                            row.get::<_, String>(0)?,
+                            row.get::<_, Option<String>>(1)?,
+                            row.get::<_, String>(2)?.replace('\\', "/"),
+                            row.get::<_, Option<i64>>(3)?.unwrap_or(1) as usize,
+                            row.get::<_, String>(4)?,
+                        ))
+                    })?;
+                rows.flatten().collect()
+            } else {
+                let mut p_stmt = conn.prepare(
+                "SELECT DISTINCT s_to.name, s_to.signature, s_to.path, s_to.start_line, s_to.kind
+                 FROM pending_relationships p
+                 JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
+                 JOIN symbols s_to ON s_to.name = p.target_terminal_name
+                 WHERE s_from.name = ?1 AND p.from_symbol_id = ?2
+                   AND s_to.kind NOT IN ('import', 'variable', 'parameter', 'field', 'property', 'module', 'namespace')
+                 LIMIT ?3",
+            )?;
 
-        for r in p_rows.flatten() {
+                let rows =
+                    p_stmt.query_map(params![symbol_name, symbol_id, remaining as i64], |row| {
+                        Ok((
+                            row.get::<_, String>(0)?,
+                            row.get::<_, Option<String>>(1)?,
+                            row.get::<_, String>(2)?.replace('\\', "/"),
+                            row.get::<_, Option<i64>>(3)?.unwrap_or(1) as usize,
+                            row.get::<_, String>(4)?,
+                        ))
+                    })?;
+                rows.flatten().collect()
+            };
+
+        for r in p_rows {
             let (name, sig_opt, path, line, kind) = r;
             let sig = sig_opt.unwrap_or(name);
             let entry = format!("{sig} ({path}:{line})");
@@ -1173,29 +1442,81 @@ pub fn find_callee_signatures(
 
     if include_external && signatures.len() < limit {
         let remaining = (limit - signatures.len()) * 2;
-        let mut ext_stmt = conn.prepare(
-            "SELECT DISTINCT p.target_terminal_name, p.path, p.start_line
-             FROM pending_relationships p
-             JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
-             WHERE s_from.name = ?1 AND p.from_symbol_id = ?2
-               AND NOT EXISTS (
-                   SELECT 1 FROM symbols s_to
-                   WHERE s_to.name = p.target_terminal_name
-                     AND s_to.kind NOT IN ('import', 'variable', 'parameter', 'field', 'property', 'module', 'namespace')
-               )
-             LIMIT ?3",
-        )?;
+        let ext_rows: Vec<(String, String, usize)> = if has_pending_namespace_column(conn) {
+            let mut ext_stmt = conn.prepare(
+                "SELECT DISTINCT COALESCE(NULLIF(p.target_display_name, ''), p.target_terminal_name), p.path, p.start_line
+                 FROM pending_relationships p
+                 JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
+                 WHERE s_from.name = ?1 AND p.from_symbol_id = ?2
+                   AND NOT EXISTS (
+                       SELECT 1 FROM symbols s_to
+                       LEFT JOIN symbols s_parent ON s_to.parent_symbol_id = s_parent.symbol_id
+                       WHERE s_to.name = p.target_terminal_name
+                         AND s_to.kind NOT IN ('import', 'variable', 'parameter', 'field', 'property', 'module', 'namespace')
+                         AND (
+                             (
+                                 s_to.parent_symbol_id IS NOT NULL
+                                 AND s_parent.name IS NOT NULL
+                                 AND (
+                                     EXISTS (SELECT 1 FROM json_each(p.target_namespace_json) WHERE value = s_parent.name)
+                                     OR (EXISTS (SELECT 1 FROM json_each(p.target_namespace_json) WHERE value = 'Self')
+                                         AND s_from.parent_symbol_id = s_to.parent_symbol_id)
+                                     OR (p.target_receiver IS NOT NULL AND p.target_receiver != '' AND s_parent.name = p.target_receiver)
+                                 )
+                             )
+                             OR (
+                                 (p.target_namespace_json IS NULL OR p.target_namespace_json = '[]')
+                                 AND (p.target_receiver IS NULL OR p.target_receiver = '')
+                                 AND (s_to.parent_symbol_id IS NULL OR s_from.parent_symbol_id = s_to.parent_symbol_id)
+                             )
+                             OR (
+                                 s_to.parent_symbol_id IS NULL
+                                 AND EXISTS (
+                                     SELECT 1 FROM json_each(p.target_namespace_json)
+                                     WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super')
+                                       AND s_to.path LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
+                                 )
+                             )
+                         )
+                   )
+                 LIMIT ?3",
+            )?;
 
-        let ext_rows =
-            ext_stmt.query_map(params![symbol_name, symbol_id, remaining as i64], |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?.replace('\\', "/"),
-                    row.get::<_, Option<i64>>(2)?.unwrap_or(1) as usize,
-                ))
-            })?;
+            let rows =
+                ext_stmt.query_map(params![symbol_name, symbol_id, remaining as i64], |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?.replace('\\', "/"),
+                        row.get::<_, Option<i64>>(2)?.unwrap_or(1) as usize,
+                    ))
+                })?;
+            rows.flatten().collect()
+        } else {
+            let mut ext_stmt = conn.prepare(
+                "SELECT DISTINCT p.target_terminal_name, p.path, p.start_line
+                 FROM pending_relationships p
+                 JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
+                 WHERE s_from.name = ?1 AND p.from_symbol_id = ?2
+                   AND NOT EXISTS (
+                       SELECT 1 FROM symbols s_to
+                       WHERE s_to.name = p.target_terminal_name
+                         AND s_to.kind NOT IN ('import', 'variable', 'parameter', 'field', 'property', 'module', 'namespace')
+                   )
+                 LIMIT ?3",
+            )?;
 
-        for r in ext_rows.flatten() {
+            let rows =
+                ext_stmt.query_map(params![symbol_name, symbol_id, remaining as i64], |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?.replace('\\', "/"),
+                        row.get::<_, Option<i64>>(2)?.unwrap_or(1) as usize,
+                    ))
+                })?;
+            rows.flatten().collect()
+        };
+
+        for r in ext_rows {
             let (name, path, line) = r;
             let entry = format!("{name} ({path}:{line})");
             if !signatures.contains(&entry) {
@@ -1321,6 +1642,17 @@ pub fn list_structural_fact_categories(
 
 /// Find type facts for a symbol.
 pub fn find_type_facts(conn: &Connection, symbol_id: &str) -> Result<Vec<TypeFact>, QueryError> {
+    let has_table: bool = conn
+        .query_row(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='type_facts'",
+            [],
+            |_| Ok(true),
+        )
+        .unwrap_or(false);
+    if !has_table {
+        return Ok(Vec::new());
+    }
+
     let mut stmt = conn.prepare(
         "SELECT type_fact_id, symbol_id, language, resolved_type, generic_params_json
          FROM type_facts
@@ -1463,13 +1795,49 @@ pub fn compute_blast_radius(
         ));
     }
     if has_pending {
+        let (ns_join, ns_condition) = if has_pending_namespace_column(conn) {
+            (
+                "LEFT JOIN symbols s_target_parent ON s_target.parent_symbol_id = s_target_parent.symbol_id
+            LEFT JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id",
+                "AND (
+                    (
+                        s_target.parent_symbol_id IS NOT NULL
+                        AND s_target_parent.name IS NOT NULL
+                        AND (
+                            EXISTS (SELECT 1 FROM json_each(p.target_namespace_json) WHERE value = s_target_parent.name)
+                            OR (EXISTS (SELECT 1 FROM json_each(p.target_namespace_json) WHERE value = 'Self')
+                                AND s_from.parent_symbol_id = s_target.parent_symbol_id)
+                            OR (p.target_receiver IS NOT NULL AND p.target_receiver != '' AND s_target_parent.name = p.target_receiver)
+                        )
+                    )
+                    OR (
+                        (p.target_namespace_json IS NULL OR p.target_namespace_json = '[]')
+                        AND (p.target_receiver IS NULL OR p.target_receiver = '')
+                        AND (s_target.parent_symbol_id IS NULL OR s_from.parent_symbol_id = s_target.parent_symbol_id)
+                    )
+                    OR (
+                        s_target.parent_symbol_id IS NULL
+                        AND EXISTS (
+                            SELECT 1 FROM json_each(p.target_namespace_json)
+                            WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super')
+                              AND s_target.path LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
+                        )
+                    )
+                )",
+            )
+        } else {
+            ("", "")
+        };
+
         recursive_branches.push(format!(
             "SELECT p.from_symbol_id, iw.depth + 1
             FROM pending_relationships p
             JOIN symbols s_target ON p.target_terminal_name = s_target.name
+            {ns_join}
             JOIN impact_walk iw ON s_target.symbol_id = iw.symbol_id
             WHERE iw.depth < ?{max_depth_idx}
-              AND s_target.kind NOT IN ('import','variable','parameter','field','property','module','namespace')"
+              AND s_target.kind NOT IN ('import','variable','parameter','field','property','module','namespace')
+              {ns_condition}"
         ));
     }
 
@@ -1964,5 +2332,142 @@ mod tests {
         let syms_upper = load_file_symbols(&conn, "src/Payment.rs").unwrap();
         assert_eq!(syms_upper.len(), 1);
         assert_eq!(syms_upper[0].file_id, "f1");
+    }
+
+    #[test]
+    fn test_conservative_pending_resolution_ignores_unmatched_namespace() {
+        let dir = crate::safe_tempdir();
+        let db_path = dir.path().join("conservative_resolution.db");
+        let conn = open_read_write(&db_path).unwrap();
+
+        conn.execute_batch(
+            "CREATE TABLE symbols (
+                symbol_id TEXT PRIMARY KEY, file_id TEXT, path TEXT, language TEXT,
+                name TEXT, kind TEXT, signature TEXT, doc_comment TEXT,
+                visibility TEXT, parent_symbol_id TEXT, start_line INTEGER,
+                start_column INTEGER, end_line INTEGER, end_column INTEGER,
+                start_byte INTEGER, end_byte INTEGER, body_start_line INTEGER,
+                body_start_column INTEGER, body_end_line INTEGER, body_end_column INTEGER,
+                body_start_byte INTEGER, body_end_byte INTEGER, body_hash TEXT,
+                semantic_group TEXT, is_test INTEGER, test_container INTEGER
+            );
+            CREATE TABLE relationships (
+                from_symbol_id TEXT, to_symbol_id TEXT, kind TEXT, path TEXT,
+                start_line INTEGER, start_column INTEGER
+            );
+            CREATE TABLE pending_relationships (
+                from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT, path TEXT,
+                start_line INTEGER, start_column INTEGER,
+                target_receiver TEXT, target_namespace_json TEXT, target_display_name TEXT
+            );
+            -- Workspace struct Workspace and method Workspace::new
+            INSERT INTO symbols VALUES
+                ('s_ws', 'f1', 'src/workspace.rs', 'rust', 'Workspace', 'struct', 'pub struct Workspace', NULL, 'pub', NULL, 1, 0, 10, 0, 0, 100, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'struct', 0, 0),
+                ('s_ws_new', 'f1', 'src/workspace.rs', 'rust', 'new', 'method', 'pub fn new() -> Workspace', NULL, 'pub', 's_ws', 2, 4, 4, 5, 20, 50, 2, 4, 4, 5, 20, 50, 'h1', 'method', 0, 0),
+                ('s_caller', 'f2', 'src/caller.rs', 'rust', 'my_func', 'function', 'pub fn my_func()', NULL, 'pub', NULL, 1, 0, 10, 0, 0, 100, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'function', 0, 0);
+
+            -- my_func calls Vec::new() (external namespace 'Vec')
+            INSERT INTO pending_relationships (from_symbol_id, target_terminal_name, kind, path, start_line, start_column, target_receiver, target_namespace_json, target_display_name) VALUES
+                ('s_caller', 'new', 'calls', 'src/caller.rs', 3, 8, NULL, '[\"Vec\"]', 'Vec::new');",
+        )
+        .unwrap();
+
+        // When include_external is false, calling Vec::new() should NOT resolve to Workspace::new()
+        let sigs = find_callee_signatures(&conn, "my_func", "s_caller", 10, false).unwrap();
+        assert!(sigs.is_empty(), "Expected 0 signatures, got: {:?}", sigs);
+
+        let refs = find_references_for_symbol(&conn, "my_func", "callees", 10, "s_caller").unwrap();
+        assert!(refs.is_empty(), "Expected 0 references, got: {:?}", refs);
+
+        // Caller references for Workspace::new should NOT list my_func
+        let callers = find_references_for_symbol(&conn, "new", "callers", 10, "s_ws_new").unwrap();
+        assert!(
+            callers.is_empty(),
+            "Expected 0 callers for Workspace::new, got: {:?}",
+            callers
+        );
+
+        // Blast radius for Workspace::new should NOT impact my_func (which only called Vec::new)
+        let blast = compute_blast_radius(&conn, &["new"], &["src/workspace.rs"], 2, 20).unwrap();
+        assert!(
+            !blast.impacted_symbols.iter().any(|s| s.name == "my_func"),
+            "my_func should not be impacted before calling Workspace::new: {:?}",
+            blast.impacted_symbols
+        );
+
+        // Now add a call to Workspace::new()
+        conn.execute(
+            "INSERT INTO pending_relationships (from_symbol_id, target_terminal_name, kind, path, start_line, start_column, target_receiver, target_namespace_json, target_display_name) VALUES ('s_caller', 'new', 'calls', 'src/caller.rs', 5, 8, NULL, '[\"Workspace\"]', 'Workspace::new')",
+            [],
+        )
+        .unwrap();
+
+        let sigs2 = find_callee_signatures(&conn, "my_func", "s_caller", 10, false).unwrap();
+        assert_eq!(
+            sigs2.len(),
+            1,
+            "Expected 1 signature for Workspace::new, got: {:?}",
+            sigs2
+        );
+        assert!(sigs2[0].contains("pub fn new() -> Workspace"));
+
+        // Blast radius for Workspace::new should now include my_func
+        let blast2 = compute_blast_radius(&conn, &["new"], &["src/workspace.rs"], 2, 20).unwrap();
+        assert!(
+            blast2.impacted_symbols.iter().any(|s| s.name == "my_func"),
+            "my_func should be impacted after calling Workspace::new: {:?}",
+            blast2.impacted_symbols
+        );
+
+        // Add a bare call to new() from an unrelated caller s_other
+        conn.execute(
+            "INSERT INTO symbols VALUES
+                ('s_other', 'f3', 'src/other.rs', 'rust', 'other_func', 'function', 'pub fn other_func()', NULL, 'pub', NULL, 1, 0, 10, 0, 0, 100, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'function', 0, 0);",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO pending_relationships (from_symbol_id, target_terminal_name, kind, path, start_line, start_column, target_receiver, target_namespace_json, target_display_name) VALUES ('s_other', 'new', 'calls', 'src/other.rs', 2, 8, NULL, NULL, 'new')",
+            [],
+        )
+        .unwrap();
+
+        // Bare call from unrelated function should NOT resolve to Workspace::new
+        let sigs_other = find_callee_signatures(&conn, "other_func", "s_other", 10, false).unwrap();
+        assert!(
+            sigs_other.is_empty(),
+            "Bare call to new() from outside Workspace should not resolve to Workspace::new: {:?}",
+            sigs_other
+        );
+
+        // A sibling method inside Workspace calling bare new() SHOULD resolve to Workspace::new
+        conn.execute(
+            "INSERT INTO symbols VALUES
+                ('s_ws_helper', 'f1', 'src/workspace.rs', 'rust', 'helper', 'method', 'pub fn helper()', NULL, 'pub', 's_ws', 5, 4, 7, 5, 60, 90, 5, 4, 7, 5, 60, 90, 'h2', 'method', 0, 0);",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO pending_relationships (from_symbol_id, target_terminal_name, kind, path, start_line, start_column, target_receiver, target_namespace_json, target_display_name) VALUES ('s_ws_helper', 'new', 'calls', 'src/workspace.rs', 6, 8, NULL, NULL, 'new')",
+            [],
+        )
+        .unwrap();
+
+        let sigs_sibling =
+            find_callee_signatures(&conn, "helper", "s_ws_helper", 10, false).unwrap();
+        assert_eq!(
+            sigs_sibling.len(),
+            1,
+            "Sibling method calling bare new() should resolve to Workspace::new: {:?}",
+            sigs_sibling
+        );
+
+        // With include_external: true, external calls should be returned
+        let ext_sigs = find_callee_signatures(&conn, "my_func", "s_caller", 10, true).unwrap();
+        assert!(
+            ext_sigs.iter().any(|s| s.contains("Vec")),
+            "include_external: true should include external Vec::new: {:?}",
+            ext_sigs
+        );
     }
 }

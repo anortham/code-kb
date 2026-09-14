@@ -117,20 +117,18 @@ pub fn get_context_slice_op(
         &target_symbol.symbol_id,
         10,
         include_external,
-    )
-    .unwrap_or_default();
+    )?;
 
     // Find related types
     let mut related_types = Vec::new();
-    if let Ok(types) = queries::find_type_facts(conn, &target_symbol.symbol_id) {
-        for t in types {
-            if !related_types.contains(&t.resolved_type) {
-                related_types.push(t.resolved_type);
-            }
+    let types = queries::find_type_facts(conn, &target_symbol.symbol_id)?;
+    for t in types {
+        if !related_types.contains(&t.resolved_type) {
+            related_types.push(t.resolved_type);
         }
     }
 
-    let related_tests = queries::find_related_tests(conn, &target_symbol, 5).unwrap_or_default();
+    let related_tests = queries::find_related_tests(conn, &target_symbol, 5)?;
 
     Ok(ContextSlice {
         target_symbol,
@@ -173,7 +171,6 @@ pub fn codebase_outline_op(
 ) -> Result<String, OpError> {
     let rel_filter = path_filter.map(|p| workspace.relativize_filter(p));
     let path_filter = rel_filter.as_deref().filter(|path| !path.is_empty());
-    let symbols_by_file = queries::load_scoped_outline_symbols(conn, path_filter, depth, 5)?;
     let norm = path_filter
         .map(|p| p.replace('\\', "/").trim_matches('/').to_string())
         .filter(|p| !p.is_empty());
@@ -193,7 +190,8 @@ pub fn codebase_outline_op(
                 OR path = :path_bs COLLATE NOCASE
                 OR path LIKE :path_prefix ESCAPE '\\'
                 OR path LIKE :path_prefix_bs ESCAPE '\\')
-             ORDER BY path ASC",
+             ORDER BY path ASC
+             LIMIT 1001",
         )
         .map_err(QueryError::Sqlite)?;
 
@@ -206,26 +204,43 @@ pub fn codebase_outline_op(
         })
         .map_err(QueryError::Sqlite)?;
 
-    let mut root_node = OutlineNode::default();
-    let norm_filter = norm.as_deref().unwrap_or_default();
+    let mut file_paths = Vec::new();
     let mut files_found = 0;
+    let mut truncated = false;
 
     while let Some(row) = rows.next().map_err(QueryError::Sqlite)? {
         files_found += 1;
+        if files_found > 1000 {
+            truncated = true;
+            break;
+        }
         let file_path: String = row.get(0).map_err(QueryError::Sqlite)?;
-        add_path_to_outline(
-            &mut root_node,
-            &file_path,
-            &symbols_by_file,
-            depth,
-            norm_filter,
-        );
+        file_paths.push(file_path);
     }
 
     if let Some(filter) = path_filter
         && files_found == 0
     {
         return Err(OpError::FileNotFound(filter.to_string()));
+    }
+
+    let symbols_by_file = if file_paths.is_empty() {
+        std::collections::HashMap::new()
+    } else {
+        queries::load_scoped_outline_symbols(conn, path_filter, depth, 5)?
+    };
+
+    let mut root_node = OutlineNode::default();
+    let norm_filter = norm.as_deref().unwrap_or_default();
+
+    for file_path in &file_paths {
+        add_path_to_outline(
+            &mut root_node,
+            file_path,
+            &symbols_by_file,
+            depth,
+            norm_filter,
+        );
     }
 
     let display_root = if norm_filter.is_empty() {
@@ -237,6 +252,15 @@ pub fn codebase_outline_op(
     let mut out = String::new();
     out.push_str(&format!("{display_root}\n"));
     render_outline_tree(&mut out, &root_node, "", 0, depth);
+
+    if truncated {
+        let msg = if path_filter.is_some() {
+            "\n[Outline truncated: path matches over 1,000 files. Narrow your path filter or specify a deeper path to reduce scope.]\n"
+        } else {
+            "\n[Outline truncated: workspace contains over 1,000 files. Use a path filter (e.g. `code-kb outline <path>`) to narrow scope.]\n"
+        };
+        out.push_str(msg);
+    }
 
     Ok(out)
 }
@@ -396,5 +420,42 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn codebase_outline_truncates_over_1000_files() {
+        let temp = crate::safe_tempdir();
+        let workspace = Workspace::new(temp.path().to_path_buf());
+        let conn = Connection::open(temp.path().join("index.db")).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE files (
+                file_id TEXT, path TEXT, language TEXT, content_hash TEXT,
+                content_bytes INTEGER, line_count INTEGER, indexed_at TEXT
+            );
+            CREATE TABLE symbols (
+                symbol_id TEXT, file_id TEXT, path TEXT, language TEXT, name TEXT, kind TEXT,
+                signature TEXT, doc_comment TEXT, visibility TEXT, parent_symbol_id TEXT,
+                start_line INTEGER, start_column INTEGER, end_line INTEGER, end_column INTEGER,
+                start_byte INTEGER, end_byte INTEGER, body_start_line INTEGER,
+                body_start_column INTEGER, body_end_line INTEGER, body_end_column INTEGER,
+                body_start_byte INTEGER, body_end_byte INTEGER, body_hash TEXT,
+                semantic_group TEXT, is_test INTEGER, test_container INTEGER
+            );",
+        )
+        .unwrap();
+
+        for i in 1..=1005 {
+            conn.execute(
+                "INSERT INTO files VALUES (?1, ?2, 'rust', 'hash', 10, 1, 'now')",
+                rusqlite::params![format!("f{i}"), format!("src/file_{i}.rs")],
+            )
+            .unwrap();
+        }
+
+        let outline = codebase_outline_op(&workspace, &conn, 2, None).unwrap();
+        assert!(outline.contains("[Outline truncated: workspace contains over 1,000 files."));
+
+        let scoped_outline = codebase_outline_op(&workspace, &conn, 2, Some("src")).unwrap();
+        assert!(scoped_outline.contains("[Outline truncated: path matches over 1,000 files."));
     }
 }

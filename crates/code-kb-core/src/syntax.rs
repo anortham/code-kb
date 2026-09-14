@@ -67,10 +67,12 @@ fn find_first_error(node: tree_sitter::Node) -> Option<(usize, usize, String)> {
 }
 
 /// Pre-flight validates code syntax before it is committed to disk using language-specific Tree-Sitter grammars.
-pub fn validate_syntax(file_path: &str, content: &str) -> Result<(), SyntaxError> {
+/// Returns `Ok(true)` if syntax was validated successfully, `Ok(false)` if syntax validation was skipped
+/// (e.g. grammar not available for the file extension), or `Err(SyntaxError::ParseError)` if parsing failed.
+pub fn validate_syntax(file_path: &str, content: &str) -> Result<bool, SyntaxError> {
     let grammar = match detect_grammar(file_path) {
         Some(g) => g,
-        None => return Ok(()), // Unrecognized or non-code extensions pass through
+        None => return Ok(false), // Unrecognized or non-code extensions pass through without checking
     };
 
     let language = get_language(grammar);
@@ -99,7 +101,7 @@ pub fn validate_syntax(file_path: &str, content: &str) -> Result<(), SyntaxError
         ));
     }
 
-    Ok(())
+    Ok(true)
 }
 
 #[cfg(test)]
@@ -116,7 +118,7 @@ mod tests {
             x * 2
         }
         "#;
-        assert!(validate_syntax("test.rs", code).is_ok());
+        assert_eq!(validate_syntax("test.rs", code), Ok(true));
     }
 
     #[test]
@@ -127,8 +129,9 @@ mod tests {
             name
         }
         "##;
-        assert!(
-            validate_syntax("greet.rs", code).is_ok(),
+        assert_eq!(
+            validate_syntax("greet.rs", code),
+            Ok(true),
             "Valid Rust with lifetime and raw string should pass"
         );
     }
@@ -143,7 +146,7 @@ mod tests {
     #[test]
     fn test_valid_javascript() {
         let code = "function greet(name) { return `hello ${name}`; }";
-        assert!(validate_syntax("app.js", code).is_ok());
+        assert_eq!(validate_syntax("app.js", code), Ok(true));
     }
 
     #[test]
@@ -158,7 +161,7 @@ mod tests {
     #[test]
     fn test_valid_typescript() {
         let code = "interface User { id: number; name: string; }\nexport const get = (u: User): number => u.id;";
-        assert!(validate_syntax("user.ts", code).is_ok());
+        assert_eq!(validate_syntax("user.ts", code), Ok(true));
     }
 
     #[test]
@@ -170,7 +173,7 @@ mod tests {
     #[test]
     fn test_valid_python() {
         let code = "def greet(name: str) -> str:\n    return f'hello {name}'\n";
-        assert!(validate_syntax("script.py", code).is_ok());
+        assert_eq!(validate_syntax("script.py", code), Ok(true));
     }
 
     #[test]
@@ -185,7 +188,7 @@ mod tests {
     #[test]
     fn test_valid_go() {
         let code = "package main\n\nfunc main() {\n    println(\"hello\")\n}\n";
-        assert!(validate_syntax("main.go", code).is_ok());
+        assert_eq!(validate_syntax("main.go", code), Ok(true));
     }
 
     #[test]
@@ -197,21 +200,21 @@ mod tests {
     #[test]
     fn test_unrecognized_extension_passes() {
         let code = "any unparseable random content { [";
-        assert!(validate_syntax("notes.txt", code).is_ok());
+        assert_eq!(validate_syntax("notes.txt", code), Ok(false));
     }
 
     #[test]
     fn test_case_insensitive_extension_matching() {
         let rs_code = "pub fn add(a: i32, b: i32) -> i32 { a + b }";
-        assert!(validate_syntax("TEST.RS", rs_code).is_ok());
+        assert_eq!(validate_syntax("TEST.RS", rs_code), Ok(true));
 
         let invalid_rs = "pub fn add(a: i32, b: i32) -> i32 { a + }";
         assert!(validate_syntax("TEST.RS", invalid_rs).is_err());
 
         let ts_code = "const x: number = 42;";
-        assert!(validate_syntax("index.TS", ts_code).is_ok());
+        assert_eq!(validate_syntax("index.TS", ts_code), Ok(true));
 
         let py_code = "def foo():\n    return 42\n";
-        assert!(validate_syntax("SCRIPT.PY", py_code).is_ok());
+        assert_eq!(validate_syntax("SCRIPT.PY", py_code), Ok(true));
     }
 }

@@ -370,9 +370,13 @@ pub struct Workspace {
 fn trim_trailing_slash(p: &Path) -> PathBuf {
     let s = p.to_string_lossy();
     if s.len() > 1 && (s.ends_with('/') || s.ends_with('\\')) {
-        let trimmed = s.trim_end_matches(|c| c == '/' || c == '\\');
+        let trimmed = s.trim_end_matches(['/', '\\']);
         if trimmed.is_empty() {
-            return PathBuf::from(if cfg!(windows) && s.starts_with('\\') { "\\" } else { "/" });
+            return PathBuf::from(if cfg!(windows) && s.starts_with('\\') {
+                "\\"
+            } else {
+                "/"
+            });
         }
         if cfg!(windows)
             && trimmed.len() == 2
@@ -506,12 +510,7 @@ impl Workspace {
         let path = normalize_path(&path);
 
         let is_abs = path.is_absolute()
-            || (cfg!(windows)
-                && path
-                    .to_string_lossy()
-                    .chars()
-                    .nth(1)
-                    .map_or(false, |c| c == ':'));
+            || (cfg!(windows) && (path.to_string_lossy().chars().nth(1) == Some(':')));
 
         let joined = if is_abs {
             path
@@ -552,8 +551,7 @@ impl Workspace {
                 } else {
                     None
                 }
-            })
-        {
+            }) {
             Some(r) => {
                 let forward = to_forward_slash(r);
                 if forward.starts_with("../") || forward == ".." {
@@ -925,16 +923,34 @@ mod tests {
     fn test_trim_trailing_slash_edge_cases() {
         assert_eq!(trim_trailing_slash(Path::new("/")), PathBuf::from("/"));
         assert_eq!(trim_trailing_slash(Path::new("///")), PathBuf::from("/"));
-        assert_eq!(trim_trailing_slash(Path::new("/a/b/")), PathBuf::from("/a/b"));
-        assert_eq!(trim_trailing_slash(Path::new("foo/bar/")), PathBuf::from("foo/bar"));
+        assert_eq!(
+            trim_trailing_slash(Path::new("/a/b/")),
+            PathBuf::from("/a/b")
+        );
+        assert_eq!(
+            trim_trailing_slash(Path::new("foo/bar/")),
+            PathBuf::from("foo/bar")
+        );
 
         #[cfg(windows)]
         {
-            assert_eq!(trim_trailing_slash(Path::new("C:\\")), PathBuf::from("C:\\"));
+            assert_eq!(
+                trim_trailing_slash(Path::new("C:\\")),
+                PathBuf::from("C:\\")
+            );
             assert_eq!(trim_trailing_slash(Path::new("C:/")), PathBuf::from("C:\\"));
-            assert_eq!(trim_trailing_slash(Path::new("C://")), PathBuf::from("C:\\"));
-            assert_eq!(trim_trailing_slash(Path::new("C:\\\\")), PathBuf::from("C:\\"));
-            assert_eq!(trim_trailing_slash(Path::new("C:/foo/")), PathBuf::from("C:/foo"));
+            assert_eq!(
+                trim_trailing_slash(Path::new("C://")),
+                PathBuf::from("C:\\")
+            );
+            assert_eq!(
+                trim_trailing_slash(Path::new("C:\\\\")),
+                PathBuf::from("C:\\")
+            );
+            assert_eq!(
+                trim_trailing_slash(Path::new("C:/foo/")),
+                PathBuf::from("C:/foo")
+            );
         }
     }
 

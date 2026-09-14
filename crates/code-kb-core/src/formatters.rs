@@ -1,7 +1,10 @@
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
-use crate::models::{BlastRadiusResult, ContextSlice, ReferenceSite, Symbol, SymbolSearchResult};
+use crate::models::{
+    BlastRadiusResult, ContextSlice, ImpactedSymbol, ReferenceSite, Symbol, SymbolSearchResult,
+    TestTarget,
+};
 
 /// Format progressive disclosure file skeleton with implementation bodies stripped.
 pub fn format_file_skeleton(
@@ -474,9 +477,19 @@ pub fn format_structural_facts(
 
 /// Format result of atomic symbol body replacement.
 pub fn format_replace_symbol_result(res: &crate::edit::EditResult) -> String {
+    let syntax_line = if res.syntax_checked {
+        "Syntax: Verified"
+    } else {
+        "Syntax: Skipped (grammar not available for file extension)"
+    };
     format!(
-        "Successfully replaced body of `{}` in `{}`.\nOld Hash: {}\nNew Hash: {}\nBytes Written: {}",
-        res.symbol_name, res.file_path, res.old_body_hash, res.new_body_hash, res.bytes_written
+        "Successfully replaced body of `{}` in `{}`.\nOld Hash: {}\nNew Hash: {}\nBytes Written: {}\n{}",
+        res.symbol_name,
+        res.file_path,
+        res.old_body_hash,
+        res.new_body_hash,
+        res.bytes_written,
+        syntax_line
     )
 }
 
@@ -534,15 +547,46 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
 
     out.push_str(&format!("## Blast Radius & Test Impact ({seed_label})\n\n"));
 
+    const MAX_COMPACT_TESTS: usize = 20;
+    const MAX_COMPACT_IMPACTED: usize = 50;
+
     if !result.likely_tests.is_empty() {
-        out.push_str(&format!(
-            "### Likely Tests to Run ({} found)\n",
-            result.likely_tests.len()
-        ));
-        for t in &result.likely_tests {
+        let total = result.likely_tests.len();
+        if total > MAX_COMPACT_TESTS {
             out.push_str(&format!(
-                "- `{}` [{}:{}] ({})\n",
-                t.name, t.path, t.line, t.reason
+                "### Likely Tests to Run ({} found - showing top {})\n",
+                total, MAX_COMPACT_TESTS
+            ));
+        } else {
+            out.push_str(&format!("### Likely Tests to Run ({} found)\n", total));
+        }
+
+        let mut tests_by_file: std::collections::BTreeMap<&str, Vec<&TestTarget>> =
+            std::collections::BTreeMap::new();
+        let mut file_order = Vec::new();
+        for t in result.likely_tests.iter().take(MAX_COMPACT_TESTS) {
+            if !tests_by_file.contains_key(t.path.as_str()) {
+                file_order.push(t.path.as_str());
+            }
+            tests_by_file.entry(t.path.as_str()).or_default().push(t);
+        }
+
+        for path in file_order {
+            out.push_str(&format!("{path}:\n"));
+            if let Some(tests) = tests_by_file.get(path) {
+                for t in tests {
+                    out.push_str(&format!(
+                        "  - `{}` [line {}] ({})\n",
+                        t.name, t.line, t.reason
+                    ));
+                }
+            }
+        }
+
+        if total > MAX_COMPACT_TESTS {
+            out.push_str(&format!(
+                "... {} more likely tests; use --json for full list.\n",
+                total - MAX_COMPACT_TESTS
             ));
         }
         out.push('\n');
@@ -551,15 +595,70 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
     }
 
     if !result.impacted_symbols.is_empty() {
-        out.push_str(&format!(
-            "### Downstream Impact ({} symbols)\n",
-            result.impacted_symbols.len()
-        ));
+        let total = result.impacted_symbols.len();
+        let mut visible = Vec::new();
+        let mut low_signal_count = 0;
         for s in &result.impacted_symbols {
+            if matches!(s.kind.as_str(), "import" | "module" | "namespace") {
+                low_signal_count += 1;
+            } else {
+                visible.push(s);
+            }
+        }
+
+        out.push_str(&format!("### Downstream Impact ({} symbols)\n", total));
+
+        if visible.is_empty() && low_signal_count > 0 {
+            let row_word = if low_signal_count == 1 {
+                "row (import/module)"
+            } else {
+                "rows (imports/modules)"
+            };
             out.push_str(&format!(
-                "- [depth {}] {} `{}` [{}:{}]\n",
-                s.depth, s.kind, s.name, s.path, s.line
+                "All impacted symbols are imports/modules; {low_signal_count} low-signal {row_word} hidden; use --json for full list.\n"
             ));
+        } else {
+            let visible_total = visible.len();
+            let showing_count = visible_total.min(MAX_COMPACT_IMPACTED);
+
+            let mut syms_by_file: std::collections::BTreeMap<&str, Vec<&ImpactedSymbol>> =
+                std::collections::BTreeMap::new();
+            let mut file_order = Vec::new();
+            for s in visible.iter().take(showing_count) {
+                if !syms_by_file.contains_key(s.path.as_str()) {
+                    file_order.push(s.path.as_str());
+                }
+                syms_by_file.entry(s.path.as_str()).or_default().push(s);
+            }
+
+            for path in file_order {
+                out.push_str(&format!("{path}:\n"));
+                if let Some(syms) = syms_by_file.get(path) {
+                    for s in syms {
+                        out.push_str(&format!(
+                            "  - [depth {}] {} `{}` [line {}]\n",
+                            s.depth, s.kind, s.name, s.line
+                        ));
+                    }
+                }
+            }
+
+            if visible_total > MAX_COMPACT_IMPACTED {
+                out.push_str(&format!(
+                    "... {} more impacted symbols; use --json for full list.\n",
+                    visible_total - MAX_COMPACT_IMPACTED
+                ));
+            }
+            if low_signal_count > 0 {
+                let row_word = if low_signal_count == 1 {
+                    "row (import/module)"
+                } else {
+                    "rows (imports/modules)"
+                };
+                out.push_str(&format!(
+                    "... {low_signal_count} low-signal {row_word} hidden; use --json for full list.\n"
+                ));
+            }
         }
     } else {
         out.push_str("### Downstream Impact\nNo downstream callers found within depth.\n");
@@ -675,10 +774,97 @@ mod tests {
         let formatted = format_blast_radius(&res);
         assert!(formatted.contains("## Blast Radius & Test Impact (Symbol: do_work)"));
         assert!(formatted.contains("### Likely Tests to Run (1 found)"));
+        assert!(formatted.contains(
+            "tests/work_test.rs:\n  - `test_do_work` [line 15] (transitive caller [depth 1])"
+        ));
+        assert!(formatted.contains("src/caller.rs:\n  - [depth 1] function `caller_fn` [line 42]"));
+    }
+
+    #[test]
+    fn test_format_blast_radius_grouped_and_capped() {
+        let mut likely_tests = Vec::new();
+        for i in 1..=25 {
+            likely_tests.push(TestTarget {
+                name: format!("test_{i}"),
+                path: format!("tests/test_{}.rs", (i % 3) + 1),
+                line: i * 10,
+                reason: "direct caller".into(),
+            });
+        }
+
+        let impacted_symbols = vec![
+            ImpactedSymbol {
+                name: "use_foo".into(),
+                kind: "import".into(),
+                path: "src/service.rs".into(),
+                line: 1,
+                depth: 1,
+            },
+            ImpactedSymbol {
+                name: "service_fn".into(),
+                kind: "function".into(),
+                path: "src/service.rs".into(),
+                line: 20,
+                depth: 1,
+            },
+            ImpactedSymbol {
+                name: "api_handler".into(),
+                kind: "function".into(),
+                path: "src/api.rs".into(),
+                line: 45,
+                depth: 2,
+            },
+        ];
+
+        let res = BlastRadiusResult {
+            seed_type: "file".into(),
+            seeds: vec!["src/lib.rs".into()],
+            likely_tests,
+            impacted_symbols,
+        };
+
+        let formatted = format_blast_radius(&res);
+
+        // Header shows total count and capped display
+        assert!(formatted.contains("### Likely Tests to Run (25 found - showing top 20)"));
+        assert!(formatted.contains("... 5 more likely tests; use --json for full list."));
+
+        // Files are grouped (file header on its own line)
+        assert!(formatted.contains("tests/test_1.rs:\n"));
+        assert!(formatted.contains("  - `test_"));
+
+        // Low-signal import hidden from compact downstream list
+        assert!(!formatted.contains("use_foo"));
         assert!(
             formatted
-                .contains("- `test_do_work` [tests/work_test.rs:15] (transitive caller [depth 1])")
+                .contains("... 1 low-signal row (import/module) hidden; use --json for full list.")
         );
-        assert!(formatted.contains("- [depth 1] function `caller_fn` [src/caller.rs:42]"));
+        assert!(formatted.contains("src/service.rs:\n"));
+        assert!(formatted.contains("  - [depth 1] function `service_fn` [line 20]"));
+    }
+
+    #[test]
+    fn test_format_replace_symbol_result_shows_syntax_status() {
+        let res_checked = crate::edit::EditResult {
+            symbol_name: "my_fn".into(),
+            file_path: "src/lib.rs".into(),
+            old_body_hash: "aaa".into(),
+            new_body_hash: "bbb".into(),
+            bytes_written: 120,
+            syntax_checked: true,
+        };
+        let out_checked = format_replace_symbol_result(&res_checked);
+        assert!(out_checked.contains("Syntax: Verified"));
+
+        let res_skipped = crate::edit::EditResult {
+            symbol_name: "my_fn".into(),
+            file_path: "src/script.rb".into(),
+            old_body_hash: "aaa".into(),
+            new_body_hash: "bbb".into(),
+            bytes_written: 120,
+            syntax_checked: false,
+        };
+        let out_skipped = format_replace_symbol_result(&res_skipped);
+        assert!(out_skipped.contains("Syntax: Skipped (grammar not available for file extension)"));
     }
 }
