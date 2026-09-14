@@ -1,6 +1,7 @@
 use code_kb_core::db::{Connection, open_read_write};
 use code_kb_core::queries::*;
 use code_kb_core::sync::reconcile_offline_edits;
+#[allow(unused_imports)]
 use code_kb_core::workspace::{
     Workspace, normalize_path, parse_file_uri, paths_equal, strip_prefix_lossy,
 };
@@ -57,6 +58,7 @@ fn test_sync_reconcile_case_mismatch_and_verbatim() {
     .unwrap();
 
     // 1. Scenario A: Inverted drive letter casing
+    #[allow(unused_mut)]
     let mut ws_cased = Workspace::new(temp.path().to_path_buf());
     #[cfg(windows)]
     {
@@ -84,6 +86,7 @@ fn test_sync_reconcile_case_mismatch_and_verbatim() {
     );
 
     // 2. Scenario B: Verbatim prefix on workspace canonical root
+    #[allow(unused_mut)]
     let mut ws_verbatim = Workspace::new(temp.path().to_path_buf());
     #[cfg(windows)]
     {

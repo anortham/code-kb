@@ -611,6 +611,7 @@ fn test_adversarial_cli_json_strict_forward_slash_across_all_commands() {
 // ============================================================================
 #[test]
 fn test_adversarial_strip_prefix_lossy_and_unc_matrix() {
+    #[allow(unused_imports)]
     use code_kb_core::workspace::{paths_equal, strip_prefix_lossy};
 
     #[cfg(windows)]

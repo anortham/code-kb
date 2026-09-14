@@ -272,6 +272,7 @@ fn test_adversarial_mcp_initialize_roots_comprehensive_matrix() {
 // ============================================================================
 
 #[test]
+#[cfg(windows)]
 fn test_adversarial_mcp_dynamic_rebinding_drive_casing_and_interleaved_churn() {
     let (repo, _db_path, _code) = setup_fixture_repo();
     let root = repo.path();

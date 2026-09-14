@@ -4,6 +4,7 @@ use code_kb_core::sync::find_julie_extract_binary;
 use code_kb_core::workspace::Workspace;
 use code_kb_core::{safe_tempdir, scan_workspace, slicer};
 use std::fs;
+#[allow(unused_imports)]
 use std::time::Duration;
 
 #[cfg(windows)]

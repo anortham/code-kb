@@ -20,8 +20,14 @@ pub enum WorkspaceError {
 /// Lexically clean a path by collapsing `.` and `..` components.
 pub fn clean_path(path: &Path) -> PathBuf {
     use std::path::Component;
+    let s = path.to_string_lossy();
+    let norm = if cfg!(not(windows)) && s.contains('\\') {
+        std::borrow::Cow::Owned(PathBuf::from(s.replace('\\', "/")))
+    } else {
+        std::borrow::Cow::Borrowed(path)
+    };
     let mut stack = Vec::new();
-    for comp in path.components() {
+    for comp in norm.components() {
         match comp {
             Component::CurDir => {}
             Component::ParentDir => {
@@ -112,22 +118,13 @@ fn strip_localhost_prefix(s: &str) -> &str {
 /// to use a standard colon ':' delimiter (e.g. "C:/...").
 fn normalize_drive_pipe_str(s: &str) -> String {
     let clean = strip_localhost_prefix(s);
-    if let Some((drive, remainder)) = extract_drive_letter_and_remainder(clean) {
+    let target = clean.strip_prefix('/').unwrap_or(clean);
+    let target = strip_localhost_prefix(target);
+    if let Some((drive, remainder)) = extract_drive_letter_and_remainder(target) {
         if remainder.is_empty() || remainder.starts_with('?') || remainder.starts_with('#') {
             format!("{}:/{}", drive, remainder)
         } else {
             format!("{}:{}", drive, remainder)
-        }
-    } else if let Some(rest) = clean.strip_prefix('/') {
-        let rest_clean = strip_localhost_prefix(rest);
-        if let Some((drive, remainder)) = extract_drive_letter_and_remainder(rest_clean) {
-            if remainder.is_empty() || remainder.starts_with('?') || remainder.starts_with('#') {
-                format!("{}:/{}", drive, remainder)
-            } else {
-                format!("{}:{}", drive, remainder)
-            }
-        } else {
-            s.to_string()
         }
     } else {
         s.to_string()
@@ -193,9 +190,12 @@ pub fn parse_file_uri(cand: &str) -> Option<PathBuf> {
 /// Strip Windows verbatim prefix (\\?\, \\?\UNC\) using dunce.
 pub fn normalize_path(path: &Path) -> PathBuf {
     let s = path.to_string_lossy();
-    if s.starts_with(r"\\?\") {
-        let backslashed = s.replace('/', "\\");
-        return dunce::simplified(Path::new(&backslashed)).to_path_buf();
+    if let Some(rest) = s.strip_prefix(r"\\?\UNC\") {
+        let unc = format!(r"\\{rest}");
+        return dunce::simplified(Path::new(&unc)).to_path_buf();
+    }
+    if let Some(rest) = s.strip_prefix(r"\\?\") {
+        return dunce::simplified(Path::new(rest)).to_path_buf();
     }
     dunce::simplified(path).to_path_buf()
 }
@@ -208,11 +208,11 @@ pub fn to_forward_slash(path: &Path) -> String {
 
 /// Compare two path components for equality.
 /// On Windows, compares `Component::Normal` case-insensitively and drive letters in `Component::Prefix` case-insensitively.
+#[cfg(windows)]
 fn components_equal(c1: &std::path::Component, c2: &std::path::Component) -> bool {
     if c1 == c2 {
         return true;
     }
-    #[cfg(windows)]
     {
         use std::path::Component;
         match (c1, c2) {
@@ -245,10 +245,6 @@ fn components_equal(c1: &std::path::Component, c2: &std::path::Component) -> boo
             }
             _ => false,
         }
-    }
-    #[cfg(not(windows))]
-    {
-        false
     }
 }
 
@@ -283,6 +279,9 @@ pub fn paths_equal(p1: &Path, p2: &Path) -> bool {
     let p1_norm = normalize_path(p1);
     let p2_norm = normalize_path(p2);
     if p1_norm == p2_norm {
+        return true;
+    }
+    if to_forward_slash(&p1_norm) == to_forward_slash(&p2_norm) {
         return true;
     }
     #[cfg(windows)]
@@ -370,6 +369,19 @@ pub struct Workspace {
     pub repo_name: String,
 }
 
+fn trim_trailing_slash(p: &Path) -> PathBuf {
+    let s = p.to_string_lossy();
+    if s.len() > 1 && (s.ends_with('/') || s.ends_with('\\')) {
+        let is_root = (cfg!(windows) && s.len() <= 3 && s.chars().nth(1) == Some(':'))
+            || s == "/"
+            || s == "\\";
+        if !is_root {
+            return PathBuf::from(s.trim_end_matches(|c| c == '/' || c == '\\'));
+        }
+    }
+    p.to_path_buf()
+}
+
 impl Workspace {
     /// Discover and bind a workspace from an optional path, falling back to CWD and upward traversal.
     pub fn discover(start_path: Option<&Path>) -> Result<Self, WorkspaceError> {
@@ -390,6 +402,7 @@ impl Workspace {
         } else {
             normalize_path(&root)
         };
+        let root = trim_trailing_slash(&root);
         let canonical_root =
             normalize_path(&dunce::canonicalize(&root).unwrap_or_else(|_| root.clone()));
         let repo_name = canonical_root
@@ -412,6 +425,7 @@ impl Workspace {
         } else {
             start.to_path_buf()
         };
+        let parsed = trim_trailing_slash(&parsed);
         let curr = if parsed.is_file() {
             parsed.parent().unwrap_or(&parsed).to_path_buf()
         } else {
@@ -487,10 +501,23 @@ impl Workspace {
         };
         let path = normalize_path(&path);
 
-        let joined = if path.is_absolute() {
+        let is_abs = path.is_absolute()
+            || (cfg!(windows)
+                && path
+                    .to_string_lossy()
+                    .chars()
+                    .nth(1)
+                    .map_or(false, |c| c == ':'));
+
+        let joined = if is_abs {
             path
         } else {
-            self.canonical_root.join(path)
+            let rel_str = if cfg!(not(windows)) && path.to_string_lossy().contains('\\') {
+                path.to_string_lossy().replace('\\', "/")
+            } else {
+                path.to_string_lossy().to_string()
+            };
+            self.canonical_root.join(Path::new(&rel_str))
         };
 
         // Lexically clean the path to collapse `.` and `..` components

@@ -520,6 +520,7 @@ mod tests {
         )
         .unwrap();
 
+        #[allow(unused_mut)]
         let mut ws = Workspace::new(temp.path().to_path_buf());
         #[cfg(windows)]
         {

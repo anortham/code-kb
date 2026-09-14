@@ -187,16 +187,7 @@ pub fn add_path_to_outline(
             // Leaf file: only insert if it is within max_depth
             if depth <= max_depth {
                 let mut sym_tags = Vec::new();
-                let syms_opt = symbols_by_file.get(&normalized).or_else(|| {
-                    symbols_by_file.iter().find_map(|(k, v)| {
-                        if k.eq_ignore_ascii_case(&normalized) {
-                            Some(v)
-                        } else {
-                            None
-                        }
-                    })
-                });
-                if let Some(syms) = syms_opt {
+                if let Some(syms) = symbols_by_file.get(&normalized) {
                     for s in syms.iter().take(5) {
                         sym_tags.push(format!("{} {}", s.kind, s.name));
                     }

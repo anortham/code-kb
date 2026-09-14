@@ -1,3 +1,4 @@
+#[allow(unused_imports)]
 use code_kb_core::workspace::{
     Workspace, normalize_path, parse_file_uri, paths_equal, strip_prefix_lossy, to_forward_slash,
 };
