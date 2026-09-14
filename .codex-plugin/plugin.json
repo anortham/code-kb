@@ -1,6 +1,6 @@
 {
   "name": "code-kb",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Fast, token-dense code-intelligence engine and MCP server for AI coding agents",
   "author": {
     "name": "Alan Northam"
