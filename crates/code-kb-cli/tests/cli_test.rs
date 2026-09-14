@@ -329,6 +329,87 @@ fn test_cli_stats_and_telemetry() {
 }
 
 #[test]
+fn test_cli_stats_since_flag() {
+    let repo = setup_test_repo();
+    let root = repo.path();
+
+    let stats_output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .arg("stats")
+        .arg("--since")
+        .arg("30d")
+        .output()
+        .expect("Failed to execute stats --since 30d");
+
+    assert!(stats_output.status.success());
+    let stdout = String::from_utf8_lossy(&stats_output.stdout);
+    assert!(stdout.contains("Telemetry Summary"));
+}
+
+#[test]
+fn test_cli_stats_workspace_json() {
+    let repo = setup_test_repo();
+    let root = repo.path();
+
+    let json_output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .arg("stats")
+        .arg("--workspace")
+        .arg("--json")
+        .output()
+        .expect("Failed to execute stats --workspace --json");
+
+    assert!(json_output.status.success());
+    let json_val: serde_json::Value = serde_json::from_slice(&json_output.stdout).unwrap();
+    assert!(json_val.get("total_calls").is_some());
+    let scope = json_val.get("scope_description").and_then(|v| v.as_str()).unwrap_or("");
+    assert!(scope.contains("Workspace:"));
+}
+
+#[test]
+fn test_cli_bug_report() {
+    let repo = setup_test_repo();
+    let root = repo.path();
+
+    let report_output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .arg("bug-report")
+        .arg("--title")
+        .arg("test bug")
+        .output()
+        .expect("Failed to execute bug-report");
+
+    assert!(report_output.status.success());
+    let stdout = String::from_utf8_lossy(&report_output.stdout);
+    assert!(stdout.contains("Environment"));
+    assert!(stdout.contains("https://github.com/anortham/code-kb/issues/new"));
+    assert!(stdout.contains("test+bug") || stdout.contains("test%20bug"));
+}
+
+#[test]
+fn test_cli_bug_report_json() {
+    let repo = setup_test_repo();
+    let root = repo.path();
+
+    let json_output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .arg("bug-report")
+        .arg("--json")
+        .output()
+        .expect("Failed to execute bug-report --json");
+
+    assert!(json_output.status.success());
+    let json_val: serde_json::Value = serde_json::from_slice(&json_output.stdout).unwrap();
+    assert!(json_val.get("github_issue_url").is_some());
+    assert!(json_val.get("markdown_body").is_some());
+    assert!(json_val.get("os_info").is_some());
+}
+
+#[test]
 fn test_cli_facts() {
     let repo = setup_test_repo();
     let root = repo.path();

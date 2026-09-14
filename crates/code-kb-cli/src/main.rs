@@ -74,6 +74,8 @@ pub enum Command {
     Stats(StatsArgs),
     /// Alias for stats.
     Telemetry(StatsArgs),
+    /// Generate diagnostic bundle and pre-filled GitHub bug report URL.
+    BugReport(BugReportArgs),
     /// Start Model Context Protocol (MCP) server on stdio.
     Serve(ServeArgs),
     /// Output agent lifecycle hook payload (SessionStart, SubagentStart).
@@ -236,7 +238,26 @@ pub struct LogsArgs {
 
 #[derive(Debug, Args)]
 pub struct StatsArgs {
+    /// Time window filter (today, 7d, 30d, month, year, all).
+    #[arg(short = 's', long, default_value = "all")]
+    pub since: String,
+
+    /// Scope telemetry to current workspace (default: global aggregate).
+    #[arg(short = 'w', long)]
+    pub workspace: bool,
+
     /// Format output as raw JSON instead of human-readable table.
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct BugReportArgs {
+    /// Optional issue title.
+    #[arg(short = 't', long)]
+    pub title: Option<String>,
+
+    /// Format output as raw JSON diagnostic bundle.
     #[arg(long)]
     pub json: bool,
 }
@@ -301,12 +322,43 @@ fn main() -> anyhow::Result<()> {
 
     // Handle Stats / Telemetry command (does not require artifact.db)
     if let Command::Stats(args) | Command::Telemetry(args) = &cli.command {
-        let summary = code_kb_core::get_telemetry_summary(&workspace.root)
+        let conn = code_kb_core::open_global_telemetry_db()
+            .map_err(|e| anyhow::anyhow!("Failed to open telemetry database: {e}"))?;
+        let time_window = code_kb_core::TimeWindow::parse(&args.since).unwrap_or_default();
+        let workspace_root = if args.workspace {
+            Some(workspace.canonical_root.clone())
+        } else {
+            None
+        };
+        let filter = code_kb_core::TelemetryFilter {
+            time_window,
+            workspace_root,
+        };
+        let summary = code_kb_core::get_telemetry_summary(&conn, &filter)
             .map_err(|e| anyhow::anyhow!("Failed to query telemetry: {e}"))?;
         if cli.json || args.json {
             println!("{}", serde_json::to_string_pretty(&summary)?);
         } else {
             print!("{}", code_kb_core::format_telemetry_summary(&summary));
+        }
+        return Ok(());
+    }
+
+    // Handle BugReport command (does not require artifact.db)
+    if let Command::BugReport(args) = &cli.command {
+        let conn = code_kb_core::open_global_telemetry_db()
+            .map_err(|e| anyhow::anyhow!("Failed to open telemetry database: {e}"))?;
+        let bundle = code_kb_core::generate_bug_report(
+            &conn,
+            Some(&workspace.canonical_root),
+            args.title.as_deref(),
+        )
+        .map_err(|e| anyhow::anyhow!("Failed to generate bug report: {e}"))?;
+        if cli.json || args.json {
+            println!("{}", serde_json::to_string_pretty(&bundle)?);
+        } else {
+            println!("{}", bundle.markdown_body.trim_end());
+            println!("\nGitHub Issue URL:\n{}", bundle.github_issue_url);
         }
         return Ok(());
     }
@@ -589,7 +641,8 @@ fn main() -> anyhow::Result<()> {
         | Command::Logs(_)
         | Command::Stats(_)
         | Command::Telemetry(_)
-        | Command::Hook(_) => {
+        | Command::Hook(_)
+        | Command::BugReport(_) => {
             unreachable!()
         }
     }
