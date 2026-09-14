@@ -274,17 +274,17 @@ pub fn blast_radius_op(
         {
             let stdout = String::from_utf8_lossy(&output.stdout);
             for line in stdout.lines() {
-                let trimmed = line.trim();
-                if trimmed.len() > 3 {
-                    let path_part = trimmed[2..].trim();
+                if line.len() > 3 {
+                    let path_part = line.get(3..).unwrap_or("").trim();
                     let target = if let Some((_, to)) = path_part.split_once("->") {
                         to.trim()
                     } else {
                         path_part
                     };
                     let p = target.trim_matches('"');
-                    if !p.is_empty() && !crate::workspace::is_hard_excluded(p) {
-                        discovered.push(p.to_string());
+                    let p_fwd = p.replace('\\', "/");
+                    if !p_fwd.is_empty() && !crate::workspace::is_hard_excluded(&p_fwd) {
+                        discovered.push(p_fwd);
                     }
                 }
             }

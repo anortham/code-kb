@@ -72,7 +72,7 @@ pub fn start_watcher(
 
                 for path in &event.paths {
                     let norm_path = dunce::simplified(path);
-                    if let Ok(rel) = norm_path.strip_prefix(&ws_clone.canonical_root) {
+                    if let Some(rel) = crate::workspace::strip_prefix_lossy(norm_path, &ws_clone.canonical_root) {
                         let rel_str = to_forward_slash(rel);
                         if is_hard_excluded(&rel_str) {
                             continue;

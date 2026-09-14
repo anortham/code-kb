@@ -74,6 +74,75 @@ pub fn to_forward_slash(path: &Path) -> String {
     s.replace('\\', "/")
 }
 
+/// Compare two path components for equality.
+/// On Windows, compares `Component::Normal` case-insensitively and drive letters in `Component::Prefix` case-insensitively.
+fn components_equal(c1: &std::path::Component, c2: &std::path::Component) -> bool {
+    if c1 == c2 {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        use std::path::Component;
+        match (c1, c2) {
+            (Component::Normal(s1), Component::Normal(s2)) => {
+                s1.to_string_lossy().eq_ignore_ascii_case(&s2.to_string_lossy())
+            }
+            (Component::Prefix(p1), Component::Prefix(p2)) => {
+                use std::path::Prefix;
+                match (p1.kind(), p2.kind()) {
+                    (Prefix::Disk(d1), Prefix::Disk(d2))
+                    | (Prefix::VerbatimDisk(d1), Prefix::VerbatimDisk(d2))
+                    | (Prefix::Disk(d1), Prefix::VerbatimDisk(d2))
+                    | (Prefix::VerbatimDisk(d1), Prefix::Disk(d2)) => {
+                        d1.eq_ignore_ascii_case(&d2)
+                    }
+                    (Prefix::UNC(s1, sh1), Prefix::UNC(s2, sh2))
+                    | (Prefix::VerbatimUNC(s1, sh1), Prefix::VerbatimUNC(s2, sh2))
+                    | (Prefix::UNC(s1, sh1), Prefix::VerbatimUNC(s2, sh2))
+                    | (Prefix::VerbatimUNC(s1, sh1), Prefix::UNC(s2, sh2)) => {
+                        s1.to_string_lossy().eq_ignore_ascii_case(&s2.to_string_lossy())
+                            && sh1.to_string_lossy().eq_ignore_ascii_case(&sh2.to_string_lossy())
+                    }
+                    (Prefix::DeviceNS(d1), Prefix::DeviceNS(d2))
+                    | (Prefix::Verbatim(d1), Prefix::Verbatim(d2)) => {
+                        d1.to_string_lossy().eq_ignore_ascii_case(&d2.to_string_lossy())
+                    }
+                    _ => false,
+                }
+            }
+            _ => false,
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
+}
+
+/// Strips `base` from `path`. On Windows, if standard `strip_prefix` fails,
+/// performs case-insensitive component comparison to support Windows case-preserving filesystems.
+pub fn strip_prefix_lossy<'a>(path: &'a Path, base: &Path) -> Option<&'a Path> {
+    if let Ok(rel) = path.strip_prefix(base) {
+        return Some(rel);
+    }
+
+    #[cfg(windows)]
+    {
+        let mut path_comps = path.components();
+        for base_comp in base.components() {
+            let path_comp = path_comps.next()?;
+            if !components_equal(&base_comp, &path_comp) {
+                return None;
+            }
+        }
+        Some(path_comps.as_path())
+    }
+    #[cfg(not(windows))]
+    {
+        None
+    }
+}
+
 /// Check if a relative path contains directories or file patterns that must never be indexed or watched.
 pub fn is_hard_excluded(rel_path: &str) -> bool {
     let p = rel_path.replace('\\', "/");
@@ -167,10 +236,16 @@ impl Workspace {
 
     /// Find root by searching upwards for .git, .code-kb, or workspace markers.
     pub fn find_workspace_root(start: &Path) -> Result<PathBuf, WorkspaceError> {
-        let curr = if start.is_file() {
-            start.parent().unwrap_or(start).to_path_buf()
+        let raw = start.to_string_lossy();
+        let parsed = if raw.starts_with("file://") {
+            parse_file_uri(&raw).unwrap_or_else(|| start.to_path_buf())
         } else {
             start.to_path_buf()
+        };
+        let curr = if parsed.is_file() {
+            parsed.parent().unwrap_or(&parsed).to_path_buf()
+        } else {
+            parsed.clone()
         };
 
         // Pass 1: Look for .git or .code-kb all the way up
@@ -223,21 +298,29 @@ impl Workspace {
         }
 
         // Default to start directory if no markers found
-        let start_dir = if start.is_file() {
-            start.parent().unwrap_or(start).to_path_buf()
+        let start_dir = if parsed.is_file() {
+            parsed.parent().unwrap_or(&parsed).to_path_buf()
         } else {
-            start.to_path_buf()
+            parsed
         };
         let canon = dunce::canonicalize(&start_dir).unwrap_or(start_dir);
         Ok(normalize_path(&canon))
     }
 
-    /// Resolves an input path (relative or absolute) to a canonical absolute path and relative path.
+    /// Resolves an input path (relative, absolute, or file:// URI) to a canonical absolute path and relative path.
     pub fn resolve_path(&self, input: &Path) -> Result<(PathBuf, String), WorkspaceError> {
-        let joined = if input.is_absolute() {
-            input.to_path_buf()
+        let raw_str = input.to_string_lossy();
+        let path = if raw_str.starts_with("file://") {
+            parse_file_uri(&raw_str).unwrap_or_else(|| input.to_path_buf())
         } else {
-            self.canonical_root.join(input)
+            input.to_path_buf()
+        };
+        let path = normalize_path(&path);
+
+        let joined = if path.is_absolute() {
+            path
+        } else {
+            self.canonical_root.join(path)
         };
 
         // Lexically clean the path to collapse `.` and `..` components
@@ -257,9 +340,13 @@ impl Workspace {
             .map(|p| normalize_path(&p))
             .unwrap_or_else(|_| self.canonical_root.clone());
 
-        // Check if within canonical root
-        let rel = match effective_abs.strip_prefix(&norm_root) {
-            Ok(r) => {
+        // Check if within canonical root (trying multiple normalization variants with case-insensitivity on Windows)
+        let rel = match strip_prefix_lossy(&effective_abs, &norm_root)
+            .or_else(|| strip_prefix_lossy(&effective_abs, &self.canonical_root))
+            .or_else(|| strip_prefix_lossy(&abs_path, &norm_root))
+            .or_else(|| strip_prefix_lossy(&abs_path, &self.canonical_root))
+        {
+            Some(r) => {
                 let forward = to_forward_slash(r);
                 if forward.starts_with("../") || forward == ".." {
                     return Err(WorkspaceError::PathOutsideWorkspace(
@@ -269,26 +356,11 @@ impl Workspace {
                 }
                 forward
             }
-            Err(_) => {
-                // Fallback check against raw canonical_root
-                match effective_abs.strip_prefix(&self.canonical_root) {
-                    Ok(r) => {
-                        let forward = to_forward_slash(r);
-                        if forward.starts_with("../") || forward == ".." {
-                            return Err(WorkspaceError::PathOutsideWorkspace(
-                                effective_abs,
-                                self.canonical_root.clone(),
-                            ));
-                        }
-                        forward
-                    }
-                    Err(_) => {
-                        return Err(WorkspaceError::PathOutsideWorkspace(
-                            effective_abs,
-                            self.canonical_root.clone(),
-                        ));
-                    }
-                }
+            None => {
+                return Err(WorkspaceError::PathOutsideWorkspace(
+                    abs_path,
+                    self.canonical_root.clone(),
+                ));
             }
         };
 
@@ -322,14 +394,9 @@ impl Workspace {
             // If resolve_path failed (e.g. non-existent path), try prefix stripping on normalized strings
             let norm_simplified = normalize_path(simplified);
             let norm_root = normalize_path(&self.canonical_root);
-            if let Ok(rel) = norm_simplified.strip_prefix(&norm_root) {
-                let forward = to_forward_slash(rel);
-                if !forward.starts_with("../") && forward != ".." {
-                    return forward.trim_matches('/').to_string();
-                }
-            }
-            let norm_raw_root = normalize_path(&self.root);
-            if let Ok(rel) = norm_simplified.strip_prefix(&norm_raw_root) {
+            if let Some(rel) = strip_prefix_lossy(&norm_simplified, &norm_root)
+                .or_else(|| strip_prefix_lossy(&norm_simplified, &self.root))
+            {
                 let forward = to_forward_slash(rel);
                 if !forward.starts_with("../") && forward != ".." {
                     return forward.trim_matches('/').to_string();
@@ -337,8 +404,9 @@ impl Workspace {
             }
         }
 
-        // Relative path: normalize slashes and trim leading ./ or /
-        let forward = to_forward_slash(Path::new(&path_str));
+        // Relative path: pass through clean_path to collapse `.` and `..`, normalize slashes, and trim leading ./ or /
+        let cleaned = clean_path(Path::new(&path_str));
+        let forward = to_forward_slash(&cleaned);
         let trimmed = forward.trim_start_matches("./").trim_matches('/');
         if trimmed == "." {
             String::new()
@@ -406,6 +474,25 @@ mod tests {
         let (abs, rel) = ws.resolve_path(Path::new("src/lib.rs")).unwrap();
         assert_eq!(rel, "src/lib.rs");
         assert!(abs.to_string_lossy().contains("test-project"));
+
+        #[cfg(windows)]
+        {
+            // Lowercase drive letter
+            let (_abs2, rel2) = ws.resolve_path(Path::new("c:/source/test-project/src/lib.rs")).unwrap();
+            assert_eq!(rel2, "src/lib.rs");
+
+            // Case-insensitive directory on Windows
+            let (_abs3, rel3) = ws.resolve_path(Path::new("C:/SOURCE/test-project/src/lib.rs")).unwrap();
+            assert_eq!(rel3, "src/lib.rs");
+
+            // file:// URI
+            let (_abs4, rel4) = ws.resolve_path(Path::new("file:///C:/source/test-project/src/lib.rs")).unwrap();
+            assert_eq!(rel4, "src/lib.rs");
+
+            // file:// URI with lowercase drive letter
+            let (_abs5, rel5) = ws.resolve_path(Path::new("file:///c:/source/test-project/src/lib.rs")).unwrap();
+            assert_eq!(rel5, "src/lib.rs");
+        }
     }
 
     #[test]
@@ -450,8 +537,17 @@ mod tests {
             "src/models/mod.rs"
         );
 
+        // Relative path with ..
+        assert_eq!(
+            ws.relativize_filter("src/../src/models/mod.rs"),
+            "src/models/mod.rs"
+        );
+
         // Absolute path inside workspace
         let abs_file = temp.path().join("src").join("lib.rs");
+        std::fs::create_dir_all(abs_file.parent().unwrap()).unwrap();
+        std::fs::write(&abs_file, "").unwrap();
+
         assert_eq!(
             ws.relativize_filter(&abs_file.to_string_lossy()),
             "src/lib.rs"
@@ -460,5 +556,16 @@ mod tests {
         // File URI
         let uri = format!("file://{}", abs_file.to_string_lossy().replace('\\', "/"));
         assert_eq!(ws.relativize_filter(&uri), "src/lib.rs");
+
+        #[cfg(windows)]
+        {
+            // Case-insensitive absolute path for existing file resolves to canonical disk casing
+            let upper_abs = abs_file.to_string_lossy().to_uppercase();
+            assert_eq!(ws.relativize_filter(&upper_abs), "src/lib.rs");
+
+            // File URI with alternate case
+            let uri_cased = format!("file:///{}", abs_file.to_string_lossy().replace('\\', "/").to_lowercase());
+            assert_eq!(ws.relativize_filter(&uri_cased), "src/lib.rs");
+        }
     }
 }

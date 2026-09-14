@@ -48,7 +48,8 @@ pub use telemetry::{
 };
 pub use watcher::{WatcherError, WatcherHandle, start_watcher};
 pub use workspace::{
-    Workspace, WorkspaceError, is_hard_excluded, normalize_path, parse_file_uri, to_forward_slash,
+    Workspace, WorkspaceError, is_hard_excluded, normalize_path, parse_file_uri,
+    strip_prefix_lossy, to_forward_slash,
 };
 
 /// Creates a temporary directory in a safe location, prioritizing `CARGO_TARGET_TMPDIR`,

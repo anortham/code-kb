@@ -396,11 +396,16 @@ impl McpServer {
             .or_else(|| arguments.get("file"))
             .and_then(|v| v.as_str())
         {
-            let p = Path::new(candidate);
-            let abs_candidate = if p.is_absolute() {
-                code_kb_core::normalize_path(p)
+            let p = if candidate.starts_with("file://") {
+                code_kb_core::parse_file_uri(candidate)
+                    .unwrap_or_else(|| std::path::PathBuf::from(candidate))
             } else {
-                code_kb_core::normalize_path(&self.workspace.canonical_root.join(p))
+                std::path::PathBuf::from(candidate)
+            };
+            let abs_candidate = if p.is_absolute() {
+                code_kb_core::normalize_path(&p)
+            } else {
+                code_kb_core::normalize_path(&self.workspace.canonical_root.join(&p))
             };
 
             // Detect if this path belongs to another workspace or a nested git worktree
