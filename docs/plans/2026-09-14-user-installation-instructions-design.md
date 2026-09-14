@@ -176,10 +176,10 @@ Move build-from-source and contributor workflows down to a dedicated section:
 
 ## 4. Acceptance Criteria Checklist
 
-- [ ] `README.md` starts installation with zero-dependency precompiled releases (bundles `code-kb` + `julie-extract`) and Cargo.
-- [ ] Each supported harness has its own dedicated subsection (`### Claude Code`, `### Codex`, `### Antigravity CLI (AGY)`, `### Grok CLI`, `### Cursor`, `### OpenCode`, `### Claude Desktop`, `### GitHub Copilot CLI & Terminal Agents`).
-- [ ] Explicitly documents that manual `scan` is optional because initial indexing triggers automatically on the first tool call.
-- [ ] Includes an `### Uninstall` matrix.
-- [ ] Source compilation and developer prerequisites are moved to `## Development`.
-- [ ] Formatting is clean, concise, unslop-compliant, and free of AI conversational filler.
-- [ ] Links and code snippets are accurate and tested against repo paths and CLI flags.
+- [x] `README.md` starts installation with zero-dependency precompiled releases (bundles `code-kb` + `julie-extract`) and Cargo.
+- [x] Each supported harness has its own dedicated subsection (`### Claude Code`, `### Codex`, `### Antigravity CLI (AGY)`, `### Grok CLI`, `### Cursor`, `### OpenCode`, `### Claude Desktop`, `### GitHub Copilot CLI & Terminal Agents`).
+- [x] Explicitly documents that manual `scan` is optional because initial indexing triggers automatically on the first tool call.
+- [x] Includes an `### Uninstall` matrix.
+- [x] Source compilation and developer prerequisites are moved to `## Development`.
+- [x] Formatting is clean, concise, unslop-compliant, and free of AI conversational filler.
+- [x] Links and code snippets are accurate and tested against repo paths and CLI flags.
