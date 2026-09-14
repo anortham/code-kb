@@ -905,8 +905,8 @@ pub fn find_references_scoped(
             include_external,
         ),
         None => {
-            let suggestions =
-                search_symbols_scoped(conn, symbol_name, None, path_filter, false, 3).unwrap_or_default();
+            let suggestions = search_symbols_scoped(conn, symbol_name, None, path_filter, false, 3)
+                .unwrap_or_default();
             if suggestions.is_empty() {
                 Err(QueryError::SymbolNotFound(symbol_name.to_string()))
             } else {
@@ -1569,7 +1569,9 @@ pub fn find_structural_facts_scoped(
                 .to_string()
         })
         .filter(|p| !p.is_empty());
-    let path_like = norm_path.as_deref().map(|p| format!("%{}%", escape_like(p)));
+    let path_like = norm_path
+        .as_deref()
+        .map(|p| format!("%{}%", escape_like(p)));
     let cat_pattern = format!("%{}%", escape_like(category));
 
     let cat_lower = category.trim().to_ascii_lowercase();
@@ -1656,7 +1658,9 @@ pub fn find_literals_scoped(
                 .to_string()
         })
         .filter(|p| !p.is_empty());
-    let path_like = norm_path.as_deref().map(|p| format!("%{}%", escape_like(p)));
+    let path_like = norm_path
+        .as_deref()
+        .map(|p| format!("%{}%", escape_like(p)));
     let cat_pattern = format!("%{}%", escape_like(category));
 
     let cat_lower = category.trim().to_ascii_lowercase();
@@ -2672,15 +2676,19 @@ mod tests {
         assert_eq!(facts_custom[0].pattern_id, "my_custom_pattern");
 
         // 6. Path filter: exact file match
-        let facts_exact = find_structural_facts_scoped(&conn, "config", Some("Cargo.toml"), 10).unwrap();
+        let facts_exact =
+            find_structural_facts_scoped(&conn, "config", Some("Cargo.toml"), 10).unwrap();
         assert_eq!(facts_exact.len(), 1);
-        let facts_miss = find_structural_facts_scoped(&conn, "config", Some("src/routes/api.rs"), 10).unwrap();
+        let facts_miss =
+            find_structural_facts_scoped(&conn, "config", Some("src/routes/api.rs"), 10).unwrap();
         assert_eq!(facts_miss.len(), 0);
 
         // 7. Path filter: directory prefix
-        let facts_dir = find_structural_facts_scoped(&conn, "route", Some("src/routes"), 10).unwrap();
+        let facts_dir =
+            find_structural_facts_scoped(&conn, "route", Some("src/routes"), 10).unwrap();
         assert_eq!(facts_dir.len(), 1);
-        let facts_dir_miss = find_structural_facts_scoped(&conn, "route", Some("src/db"), 10).unwrap();
+        let facts_dir_miss =
+            find_structural_facts_scoped(&conn, "route", Some("src/db"), 10).unwrap();
         assert_eq!(facts_dir_miss.len(), 0);
 
         // 8. Delegating find_structural_facts and find_literals

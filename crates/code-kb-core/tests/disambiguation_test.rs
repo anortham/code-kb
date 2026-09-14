@@ -486,8 +486,8 @@ fn find_references_scoped_disambiguates_multi_file_symbols() {
     )
     .unwrap();
 
-    let refs = find_references_scoped(&conn, "run", "callers", 10, false, Some("src/alpha.rs")).unwrap();
+    let refs =
+        find_references_scoped(&conn, "run", "callers", 10, false, Some("src/alpha.rs")).unwrap();
     assert_eq!(refs.len(), 1);
     assert_eq!(refs[0].from_symbol_name, "caller_alpha");
 }
-

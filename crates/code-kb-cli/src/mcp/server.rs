@@ -1038,13 +1038,9 @@ impl McpServer {
                     Err(e) => return CallToolResult::error(e.to_string()),
                 };
 
-                let literals = code_kb_core::find_literals_scoped(
-                    &conn,
-                    category,
-                    path_filter,
-                    limit,
-                )
-                .unwrap_or_default();
+                let literals =
+                    code_kb_core::find_literals_scoped(&conn, category, path_filter, limit)
+                        .unwrap_or_default();
 
                 CallToolResult::text(format_structural_facts(&facts, &literals, category))
             }
