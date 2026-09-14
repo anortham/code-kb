@@ -31,94 +31,70 @@ Traditional AI coding agents burn massive amounts of context loading entire sour
 
 ---
 
-## Installation
+## Install
 
-### Prerequisites
-- [Rust](https://www.rust-lang.org/) (1.95+ / Edition 2024)
-- [`julie-extract`](https://github.com/anortham/julie-extractors) installed in your `PATH` (used by `code-kb scan` for initial extraction)
+### Step 1: Binary Setup (Zero-Dependency)
 
-### Install via Cargo
-```bash
-# Install directly from local repository
-cargo install --path crates/code-kb-cli --force
+- **GitHub Releases (Recommended):** Download the latest release archive for your platform from [GitHub Releases](https://github.com/anortham/code-kb/releases):
+  - Linux x86_64 (`.tar.gz`)
+  - macOS Apple Silicon (`.tar.gz`)
+  - macOS Intel (`.tar.gz`)
+  - Windows x86_64 (`.zip`)
+- Unpack and put the binaries in your `PATH` (e.g. `~/.local/bin`, `/usr/local/bin`, or `C:\tools`).
+- *Note on Bundled Distribution:* Both `code-kb` and `julie-extract` are pre-packaged side-by-side in the release archive. `code-kb` locates `julie-extract` right next to its own executable automatically.
+- **Cargo (Rust Users):**
+  ```bash
+  cargo binstall code-kb-cli
+  # or
+  cargo install code-kb-cli
+  ```
+- **Verification:**
+  ```bash
+  code-kb --version
+  ```
+
+### Step 2: Per-Harness Setup
+
+### Claude Code
+
+Plugin Marketplace (Recommended):
+```text
+/plugin marketplace add anortham/code-kb
+/plugin install code-kb@code-kb
 ```
 
-Verify the installation:
-```bash
-code-kb --version
-```
-
----
-
-## Quickstart: Indexing a Repository
-
-Before running the server, or on any project you want to explore, run `scan` from the repository root:
-
-```bash
-cd /path/to/my-project
-code-kb scan
-```
-
-This creates `.code-kb/artifact.db` containing AST facts, symbols, relationships, types, and full-text search indexes. 
-
-*(Note: If you run `code-kb serve` on a repository where `scan` hasn't been run yet, `code-kb` will automatically trigger an initial scan on the first tool call.)*
-
----
-
-## Configuring for AI Harnesses
-
-`code-kb` communicates over standard `stdio` JSON-RPC and integrates cleanly with all major AI coding harnesses.
-
-### 1. Claude Code (Anthropic CLI)
-
-Claude Code supports `code-kb` either as a plugin or via the `claude mcp` CLI.
-
-#### Option A: User-Level (Global for all projects — Recommended)
+CLI MCP fallback:
 ```bash
 claude mcp add --scope user code-kb -- code-kb serve
 ```
-*When launched in any repository, Claude Code spawns `code-kb`, sets CWD to that repo, and passes project roots during initialization.*
 
-#### Option B: Project-Level (This repository only)
+*Note:* Injects routing instructions on session start and subagent start via native hooks, and registers progressive disclosure skills.
+
+### Codex
+
+Plugin Marketplace:
 ```bash
-claude mcp add --scope project code-kb -- code-kb serve
-```
-*Writes the configuration directly to `.mcp.json` in the current project.*
-
-#### Option C: Claude Code Plugin
-`code-kb` includes a Claude Code plugin manifest (`.claude-plugin/plugin.json`). To install:
-```bash
-claude plugin install anortham/code-kb
+codex plugin marketplace add anortham/code-kb
+codex plugin add code-kb@code-kb
 ```
 
----
-
-### 2. Cursor IDE
-
-In your project root, create `.cursor/mcp.json` (or add to Cursor Settings > Features > MCP):
-
-```json
-{
-  "mcpServers": {
-    "code-kb": {
-      "command": "code-kb",
-      "args": ["serve", "--root", "${workspaceFolder}"]
-    }
-  }
-}
+Manual MCP config in `~/.codex/config.toml`:
+```toml
+[mcp_servers.code-kb]
+command = "code-kb"
+args = ["serve"]
 ```
 
----
+Run `codex`, open `/hooks`, and trust the lifecycle hooks.
 
-### 3. Antigravity (AGY)
+### Antigravity CLI (AGY)
 
-#### Option A: CLI Command (Recommended)
+CLI command:
 ```bash
 agy mcp add code-kb code-kb serve
 ```
 
-#### Option B: Global Config (`~/.gemini/config/mcp_config.json`)
-Add to `mcpServers` in your config (setting `"force_all_tools_eager": true` registers all tools directly as native agent tools without lazy schema lookups):
+Global config (`~/.gemini/config/mcp_config.json`) with `"force_all_tools_eager": true`:
 ```json
 {
   "mcpServers": {
@@ -132,26 +108,19 @@ Add to `mcpServers` in your config (setting `"force_all_tools_eager": true` regi
 }
 ```
 
-#### Skill Setup (Progressive Disclosure)
-To enable the `code-kb` progressive disclosure workflow in AGY:
+Progressive disclosure skill linking:
 ```bash
 ln -sf /path/to/code-kb/skills/code-kb ~/.gemini/config/skills/code-kb
 ```
 
----
+### Grok CLI
 
-### 4. Grok CLI (xAI)
-
-#### Option A: Plugin Install (Recommended — MCP + Skills + Hooks)
-Grok natively supports Claude-compatible plugin manifests:
+Plugin install:
 ```bash
 grok plugin install anortham/code-kb --trust
-# or from a local checkout:
-grok plugin install /path/to/code-kb --trust
 ```
 
-#### Option B: Project-Level (`.mcp.json`)
-Grok automatically detects `.mcp.json` in your repository root:
+Project-level `.mcp.json` fallback:
 ```json
 {
   "mcpServers": {
@@ -163,28 +132,77 @@ Grok automatically detects `.mcp.json` in your repository root:
 }
 ```
 
----
+### Cursor
 
-### 5. Claude Desktop
-
-Add to your `claude_desktop_config.json` (located at `%APPDATA%\Claude\claude_desktop_config.json` on Windows or `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
-
+In `.cursor/mcp.json` (or Cursor Settings > Features > MCP):
 ```json
 {
   "mcpServers": {
     "code-kb": {
       "command": "code-kb",
-      "args": ["serve", "--root", "C:/path/to/your/project"]
+      "args": ["serve"]
     }
   }
 }
 ```
 
+### OpenCode
+
+Add to `opencode.json`:
+```json
+{
+  "mcpServers": {
+    "code-kb": {
+      "command": "code-kb",
+      "args": ["serve"]
+    }
+  }
+}
+```
+
+### Claude Desktop
+
+Add to `claude_desktop_config.json` (`%APPDATA%\Claude\claude_desktop_config.json` on Windows, `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+```json
+{
+  "mcpServers": {
+    "code-kb": {
+      "command": "code-kb",
+      "args": ["serve"]
+    }
+  }
+}
+```
+
+### GitHub Copilot CLI & Terminal Agents
+
+For terminal harnesses inheriting CWD (Copilot CLI, Pi, Swival, Windsurf, Zed): configure the MCP server to run `code-kb serve`.
+
 ---
 
-### 6. Codex CLI, Pi & Terminal Agents
+### First Run & Automatic Indexing
 
-Terminal-based AI harnesses inherit your terminal's current working directory automatically. Simply configure the harness to execute `code-kb serve` on startup.
+You do not need to manually run `code-kb scan`.
+
+When an agent calls any `code-kb` tool in a repository for the first time, `code-kb` automatically creates `<workspace>/.code-kb/artifact.db` and runs an initial scan.
+
+Manual indexing via `code-kb scan` remains available for pre-indexing large repositories before agent sessions:
+
+```bash
+code-kb scan
+```
+
+---
+
+### Uninstall
+
+| Harness | Command / Action |
+|---|---|
+| Claude Code | `/plugin remove code-kb` (or `claude mcp remove code-kb`) |
+| Codex | `codex plugin remove code-kb` |
+| Antigravity (AGY) | `agy mcp remove code-kb` |
+| Grok CLI | `grok plugin uninstall code-kb` |
+| Cursor / OpenCode | Remove the `code-kb` entry from `.cursor/mcp.json` / `opencode.json` |
 
 ---
 
@@ -254,6 +272,34 @@ code-kb logs
 # Output agent lifecycle hook payload (SessionStart / SubagentStart)
 code-kb hook SessionStart
 code-kb hook SubagentStart
+```
+
+---
+
+## Development
+
+For contributors building `code-kb` from source:
+
+### Prerequisites
+- [Rust](https://www.rust-lang.org/) (1.95+ / Edition 2024)
+- Extractor binary: Run `./scripts/restore-julie-extract.sh` to download the pinned [`julie-extract`](https://github.com/anortham/julie-extractors) binary
+
+### Build and Install Locally
+```bash
+# Restore pinned julie-extract binary
+./scripts/restore-julie-extract.sh
+
+# Install code-kb binary from local checkout
+cargo install --path crates/code-kb-cli --force
+```
+
+### Running Tests & Verification
+```bash
+# Run test suite
+cargo test --workspace
+
+# Run release pre-flight verification
+./scripts/release-preflight.sh
 ```
 
 ---
