@@ -37,6 +37,11 @@ h1, h2, h3, p, dl, ol, pre { margin: 0; }
 a { color: inherit; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 0.15em; }
 a:hover { text-decoration-thickness: 2px; }
 
+::selection {
+  background: var(--marker);
+  color: var(--ink);
+}
+
 :focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
 
 code, pre {
@@ -94,14 +99,23 @@ h1 {
 .spec-line {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25rem 0;
+  align-items: center;
+  gap: 0.35rem 0.85rem;
   margin-top: 1.5rem;
   font-family: var(--mono);
   font-size: 0.9rem;
 }
 
-.spec-line span { padding-right: 1rem; }
-.spec-line span + span { border-left: 1px solid var(--rule); padding-left: 1rem; }
+.spec-line span {
+  display: inline-flex;
+  align-items: center;
+}
+
+.spec-line span:not(:last-child)::after {
+  content: '/';
+  margin-left: 0.85rem;
+  color: var(--rule);
+}
 
 .hero-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 2rem; }
 
@@ -168,7 +182,13 @@ h1 {
   tab-size: 4;
 }
 
-.demo-pane .h { font-weight: 600; background: var(--marker-band); }
+.demo-pane .h {
+  font-weight: 600;
+  background: var(--marker-band);
+  padding: 0.05em 0.35em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
 
 #pane-context, #pane-blast { padding-left: 1rem; }
 
@@ -385,8 +405,8 @@ footer p + p { margin-top: 0.4rem; }
 
 @media (max-width: 800px) {
   .site-nav { position: static; }
-  .spec-line { flex-direction: column; }
-  .spec-line span + span { border-left: 0; padding-left: 0; }
+  .spec-line { flex-direction: column; align-items: flex-start; gap: 0.25rem; }
+  .spec-line span:not(:last-child)::after { display: none; }
   .section { grid-template-columns: 1fr; gap: 0.75rem; padding: 2.5rem 0; }
   .margin-label { padding-top: 0; }
   .steps li { grid-template-columns: 2.5rem 1fr; }

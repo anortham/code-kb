@@ -5,10 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>code-kb — code intelligence for AI coding agents</title>
   <meta name="description" content="code-kb is an MCP server that answers a coding agent's questions with the smallest slice of code that answers them: skeletons instead of files, one function instead of one module. 80–98% fewer tokens, 0–5 ms queries, under 15 MB of memory.">
+  <meta name="theme-color" content="#f2f3ee">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%231b2320'/><text x='16' y='21' font-family='monospace' font-size='14' font-weight='bold' fill='%23f4e45a' text-anchor='middle'>kb</text></svg>">
+  <meta property="og:title" content="code-kb — code intelligence for AI coding agents">
+  <meta property="og:description" content="code-kb is an MCP server that answers a coding agent's questions with the smallest slice of code that answers them. 80–98% fewer prompt tokens, 0–5 ms queries, under 15 MB of memory.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://anortham.github.io/code-kb/">
+  <meta name="twitter:card" content="summary">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,400..900;1,62..125,400..900&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=0.8.0-2">
+  <link rel="stylesheet" href="style.css?v=0.8.0-3">
 </head>
 <body>
 
@@ -336,7 +343,7 @@ code-kb stats</pre>
       <p class="margin-label">Install</p>
       <div class="section-body">
         <h2>Connect it to your agent</h2>
-        <p>Download the release archive for your platform. It holds <code>code-kb</code> and the matching <code>julie-extract</code> side by side. Then register the server once.</p>
+        <p>Download the <a href="https://github.com/anortham/code-kb/releases/latest" target="_blank" rel="noopener">release archive for your platform</a>. It holds <code>code-kb</code> and the matching <code>julie-extract</code> side by side. Then register the server once.</p>
 
         <div class="tabs" role="tablist" aria-label="Agent">
           <button role="tab" aria-selected="true" data-tab="claude">Claude Code</button>
@@ -505,12 +512,15 @@ code-kb hook SubagentStart
       document.getElementById('demo-tokens').textContent = tokens[view];
     }
 
-    document.querySelectorAll('.demo-views [role=tab]').forEach(b => {
-      b.addEventListener('click', () => showView(b.dataset.view));
-    });
-
     const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    setTimeout(() => showView('skeleton'), reduceMotion ? 0 : 1400);
+    let autoTimer = setTimeout(() => showView('skeleton'), reduceMotion ? 0 : 1400);
+
+    document.querySelectorAll('.demo-views [role=tab]').forEach(b => {
+      b.addEventListener('click', () => {
+        clearTimeout(autoTimer);
+        showView(b.dataset.view);
+      });
+    });
 
     document.querySelectorAll('.tabs [role=tab]').forEach(b => {
       b.addEventListener('click', () => {
