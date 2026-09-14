@@ -82,8 +82,21 @@ fn is_transient_lock_error(err: &std::io::Error) -> bool {
 fn persist_with_retry(
     mut temp_file: tempfile::NamedTempFile,
     dest: &Path,
+    expected_dest_bytes: Option<&[u8]>,
 ) -> Result<(), std::io::Error> {
     for attempt in 0..5 {
+        if attempt > 0 {
+            if let Some(expected) = expected_dest_bytes {
+                if let Ok(current) = fs::read(dest) {
+                    if current != expected {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            "Destination file was concurrently modified during retry",
+                        ));
+                    }
+                }
+            }
+        }
         match temp_file.persist(dest) {
             Ok(_) => return Ok(()),
             Err(e) => {
@@ -210,8 +223,13 @@ pub fn replace_symbol_body(
         .as_file()
         .set_permissions(existing_permissions.clone());
 
-    persist_with_retry(temp_file, &abs_path)
-        .map_err(|e| EditError::Io(abs_path.display().to_string(), e))?;
+    persist_with_retry(temp_file, &abs_path, Some(&existing_bytes)).map_err(|e| {
+        if e.to_string().contains("concurrently modified") {
+            EditError::ConcurrentModification(rel_path.clone())
+        } else {
+            EditError::Io(abs_path.display().to_string(), e)
+        }
+    })?;
 
     // Tier 1: Immediately re-index the file so catalog is 100% fresh.
     // If indexing fails, roll back to original content safely and atomically.
@@ -235,7 +253,7 @@ pub fn replace_symbol_body(
             let _ = rollback_tmp
                 .as_file()
                 .set_permissions(existing_permissions.clone());
-            persist_with_retry(rollback_tmp, &abs_path)?;
+            persist_with_retry(rollback_tmp, &abs_path, Some(&new_file_bytes))?;
             Ok(())
         })();
 
@@ -292,7 +310,8 @@ mod tests {
         temp_file.write_all(b"updated").unwrap();
         temp_file.flush().unwrap();
 
-        persist_with_retry(temp_file, &target_file).expect("persist_with_retry must succeed");
+        persist_with_retry(temp_file, &target_file, Some(b"initial"))
+            .expect("persist_with_retry must succeed");
         assert_eq!(fs::read_to_string(&target_file).unwrap(), "updated");
     }
 }

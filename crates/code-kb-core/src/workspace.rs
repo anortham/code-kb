@@ -86,8 +86,8 @@ fn extract_drive_letter_and_remainder(s: &str) -> Option<(char, &str)> {
 
     // Three-byte percent-encoded delimiters: "%7C", "%7c", "%3A", "%3a"
     if bytes.len() >= 4 {
-        let delim = &s[1..4];
-        if (delim.eq_ignore_ascii_case("%7c") || delim.eq_ignore_ascii_case("%3a"))
+        let delim = &bytes[1..4];
+        if (delim.eq_ignore_ascii_case(b"%7c") || delim.eq_ignore_ascii_case(b"%3a"))
             && (bytes.len() == 4
                 || bytes[4] == b'/'
                 || bytes[4] == b'\\'
@@ -104,9 +104,10 @@ fn extract_drive_letter_and_remainder(s: &str) -> Option<(char, &str)> {
 /// Strip an optional "localhost/" or "localhost\" prefix (with or without a leading slash).
 fn strip_localhost_prefix(s: &str) -> &str {
     let without_slash = s.strip_prefix('/').unwrap_or(s);
-    if without_slash.len() >= 10
-        && without_slash[..9].eq_ignore_ascii_case("localhost")
-        && (without_slash.as_bytes()[9] == b'/' || without_slash.as_bytes()[9] == b'\\')
+    let bytes = without_slash.as_bytes();
+    if bytes.len() >= 10
+        && bytes[..9].eq_ignore_ascii_case(b"localhost")
+        && (bytes[9] == b'/' || bytes[9] == b'\\')
     {
         &without_slash[10..]
     } else {
@@ -172,12 +173,9 @@ pub fn parse_file_uri(cand: &str) -> Option<PathBuf> {
             } else {
                 Some(normalize_path(&PathBuf::from(format!("/{}", normalized))))
             }
-        } else if let Some(s) = cand.strip_prefix("file://") {
-            let decoded = percent_decode(s);
-            let normalized = normalize_drive_pipe_str(&decoded);
-            Some(normalize_path(Path::new(&normalized)))
         } else {
-            let decoded = percent_decode(cand);
+            let s = cand.strip_prefix("file://").unwrap_or(cand);
+            let decoded = percent_decode(s);
             let normalized = normalize_drive_pipe_str(&decoded);
             Some(normalize_path(Path::new(&normalized)))
         }
@@ -372,12 +370,18 @@ pub struct Workspace {
 fn trim_trailing_slash(p: &Path) -> PathBuf {
     let s = p.to_string_lossy();
     if s.len() > 1 && (s.ends_with('/') || s.ends_with('\\')) {
-        let is_root = (cfg!(windows) && s.len() <= 3 && s.chars().nth(1) == Some(':'))
-            || s == "/"
-            || s == "\\";
-        if !is_root {
-            return PathBuf::from(s.trim_end_matches(|c| c == '/' || c == '\\'));
+        let trimmed = s.trim_end_matches(|c| c == '/' || c == '\\');
+        if trimmed.is_empty() {
+            return PathBuf::from(if cfg!(windows) && s.starts_with('\\') { "\\" } else { "/" });
         }
+        if cfg!(windows)
+            && trimmed.len() == 2
+            && trimmed.as_bytes()[0].is_ascii_alphabetic()
+            && trimmed.as_bytes()[1] == b':'
+        {
+            return PathBuf::from(format!("{}\\", trimmed));
+        }
+        return PathBuf::from(trimmed);
     }
     p.to_path_buf()
 }
@@ -540,8 +544,15 @@ impl Workspace {
         // Check if within canonical root (trying multiple normalization variants with case-insensitivity on Windows)
         let rel = match strip_prefix_lossy(&effective_abs, &norm_root)
             .or_else(|| strip_prefix_lossy(&effective_abs, &self.canonical_root))
-            .or_else(|| strip_prefix_lossy(&abs_path, &norm_root))
-            .or_else(|| strip_prefix_lossy(&abs_path, &self.canonical_root))
+            .or_else(|| {
+                // Only fall back to uncanonicalized abs_path if the file does not exist yet (e.g. filters or uncreated files)
+                if !abs_path.exists() {
+                    strip_prefix_lossy(&abs_path, &norm_root)
+                        .or_else(|| strip_prefix_lossy(&abs_path, &self.canonical_root))
+                } else {
+                    None
+                }
+            })
         {
             Some(r) => {
                 let forward = to_forward_slash(r);
@@ -908,5 +919,59 @@ mod tests {
         let explicit = PathBuf::from(format!(r"\\?\{}\test.db", temp.path().display()));
         let located = ws.locate_db(Some(&explicit)).unwrap();
         assert!(!located.to_string_lossy().starts_with(r"\\?\"));
+    }
+
+    #[test]
+    fn test_trim_trailing_slash_edge_cases() {
+        assert_eq!(trim_trailing_slash(Path::new("/")), PathBuf::from("/"));
+        assert_eq!(trim_trailing_slash(Path::new("///")), PathBuf::from("/"));
+        assert_eq!(trim_trailing_slash(Path::new("/a/b/")), PathBuf::from("/a/b"));
+        assert_eq!(trim_trailing_slash(Path::new("foo/bar/")), PathBuf::from("foo/bar"));
+
+        #[cfg(windows)]
+        {
+            assert_eq!(trim_trailing_slash(Path::new("C:\\")), PathBuf::from("C:\\"));
+            assert_eq!(trim_trailing_slash(Path::new("C:/")), PathBuf::from("C:\\"));
+            assert_eq!(trim_trailing_slash(Path::new("C://")), PathBuf::from("C:\\"));
+            assert_eq!(trim_trailing_slash(Path::new("C:\\\\")), PathBuf::from("C:\\"));
+            assert_eq!(trim_trailing_slash(Path::new("C:/foo/")), PathBuf::from("C:/foo"));
+        }
+    }
+
+    #[test]
+    fn test_unicode_and_emoji_uri_safety() {
+        // Must not panic on non-ASCII character boundaries
+        let p1 = parse_file_uri("file:///a😀/x");
+        assert!(p1.is_some());
+
+        let p2 = parse_file_uri("file:///c😀/x");
+        assert!(p2.is_some());
+
+        let p3 = parse_file_uri("file:///localhost😀/x");
+        assert!(p3.is_some());
+
+        let p4 = parse_file_uri("file://C:/😀😀/main.rs");
+        assert!(p4.is_some());
+    }
+
+    #[test]
+    fn test_escaping_symlink_rejected() {
+        let ws_dir = crate::safe_tempdir();
+        let ext_dir = crate::safe_tempdir();
+
+        let ext_file = ext_dir.path().join("secret.txt");
+        std::fs::write(&ext_file, "secret").unwrap();
+
+        let symlink_path = ws_dir.path().join("link.txt");
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(&ext_file, &symlink_path).unwrap();
+            let ws = Workspace::new(ws_dir.path().to_path_buf());
+            let res = ws.resolve_path(&symlink_path);
+            assert!(
+                matches!(res, Err(WorkspaceError::PathOutsideWorkspace(..))),
+                "Expected PathOutsideWorkspace, got: {res:?}"
+            );
+        }
     }
 }

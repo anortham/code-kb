@@ -45,10 +45,17 @@ pub fn open_read_only(path: &Path) -> Result<Connection, DbError> {
 }
 
 /// Safely flushes all committed transactions from the WAL file into the main database file
-/// and truncates the WAL to zero bytes.
+/// and truncates the WAL to zero bytes. Returns an error if the database is busy and unable to truncate.
 pub fn checkpoint_truncate(conn: &Connection) -> Result<(), DbError> {
-    conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")
+    let busy: i32 = conn
+        .query_row("PRAGMA wal_checkpoint(TRUNCATE);", [], |r| r.get(0))
         .map_err(DbError::PragmaFailed)?;
+    if busy != 0 {
+        return Err(DbError::PragmaFailed(rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_BUSY),
+            Some("wal_checkpoint(TRUNCATE) failed: database busy".to_string()),
+        )));
+    }
     Ok(())
 }
 

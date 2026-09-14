@@ -94,7 +94,7 @@ pub fn load_scoped_files(
                   OR path = :path_bs COLLATE NOCASE
                   OR path LIKE :path_prefix ESCAPE '\\'
                   OR path LIKE :path_prefix_bs ESCAPE '\\')
-               ORDER BY path ASC";
+               ORDER BY (:path IS NOT NULL AND (path = :path OR path = :path_bs)) DESC, path ASC";
 
     let mut stmt = conn.prepare(sql)?;
     let files = stmt
@@ -208,11 +208,12 @@ pub fn get_file(conn: &Connection, path: &str) -> Result<Option<FileFact>, Query
     let normalized = path.replace('\\', "/");
     let backslash = path.replace('/', "\\");
 
-    // Check exact path match first
+    // Check exact path match first, prioritizing exact case before case-insensitive fallback
     let mut stmt = conn.prepare(
         "SELECT file_id, path, language, content_hash, content_bytes, line_count, indexed_at
          FROM files
          WHERE (path = ?1 COLLATE NOCASE OR path = ?2 COLLATE NOCASE)
+         ORDER BY (path = ?1 OR path = ?2) DESC
          LIMIT 1",
     )?;
 
@@ -234,6 +235,31 @@ pub fn get_file(conn: &Connection, path: &str) -> Result<Option<FileFact>, Query
 
 /// Load all symbols declared inside a specific file.
 pub fn load_file_symbols(conn: &Connection, file_path: &str) -> Result<Vec<Symbol>, QueryError> {
+    // Normalizing slashes for path matching
+    let normalized = file_path.replace('\\', "/");
+    let backslash = file_path.replace('/', "\\");
+
+    // Try exact case matching first to avoid conflating sibling files on case-sensitive filesystems
+    let mut stmt = conn.prepare(
+        "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,
+                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,
+                start_byte, end_byte, body_start_line, body_start_column, body_end_line,
+                body_end_column, body_start_byte, body_end_byte, body_hash, semantic_group,
+                is_test, test_container
+         FROM symbols
+         WHERE (path = ?1 OR path = ?2)
+         ORDER BY start_line ASC, start_column ASC",
+    )?;
+
+    let rows = stmt
+        .query_map(params![&normalized, &backslash], map_symbol)?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    if !rows.is_empty() {
+        return Ok(rows);
+    }
+
+    // Fall back to case-insensitive match (for Windows or case-variant requests)
     let mut stmt = conn.prepare(
         "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,
                 visibility, parent_symbol_id, start_line, start_column, end_line, end_column,
@@ -244,10 +270,6 @@ pub fn load_file_symbols(conn: &Connection, file_path: &str) -> Result<Vec<Symbo
          WHERE (path = ?1 COLLATE NOCASE OR path = ?2 COLLATE NOCASE)
          ORDER BY start_line ASC, start_column ASC",
     )?;
-
-    // Normalizing slashes for path matching
-    let normalized = file_path.replace('\\', "/");
-    let backslash = file_path.replace('/', "\\");
 
     let rows = stmt
         .query_map(params![normalized, backslash], map_symbol)?
@@ -712,6 +734,7 @@ fn get_symbol_by_name_internal(
          ORDER BY (s.kind != 'import') DESC,
                   (s.kind IN ('function', 'struct', 'class', 'trait', 'method', 'enum', 'interface', 'type')) DESC,
                   (s.name = :name) DESC,
+                  (:path IS NOT NULL AND (s.path = :path OR s.path = :path_bs)) DESC,
                   s.is_test ASC
          LIMIT 25";
 
@@ -1867,5 +1890,79 @@ mod tests {
             .unwrap()
             .expect("Symbol should be found with case-insensitive path filter");
         assert_eq!(sym.path, "src/Payment.rs");
+    }
+
+    #[test]
+    fn test_exact_case_prioritized_over_nocase() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE files (
+                file_id TEXT PRIMARY KEY,
+                path TEXT NOT NULL,
+                language TEXT,
+                content_hash TEXT,
+                content_bytes INTEGER,
+                line_count INTEGER,
+                indexed_at TEXT
+            );
+            CREATE TABLE symbols (
+                symbol_id TEXT PRIMARY KEY,
+                file_id TEXT,
+                path TEXT NOT NULL,
+                language TEXT,
+                name TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                signature TEXT,
+                doc_comment TEXT,
+                visibility TEXT,
+                parent_symbol_id TEXT,
+                start_line INTEGER,
+                start_column INTEGER,
+                end_line INTEGER,
+                end_column INTEGER,
+                start_byte INTEGER,
+                end_byte INTEGER,
+                body_start_line INTEGER,
+                body_start_column INTEGER,
+                body_end_line INTEGER,
+                body_end_column INTEGER,
+                body_start_byte INTEGER,
+                body_end_byte INTEGER,
+                body_hash TEXT,
+                semantic_group TEXT,
+                is_test INTEGER,
+                test_container INTEGER
+            );
+            INSERT INTO files VALUES ('f1', 'src/Payment.rs', 'rust', 'h1', 100, 10, '2026-09-14T00:00:00Z');
+            INSERT INTO files VALUES ('f2', 'src/payment.rs', 'rust', 'h2', 100, 10, '2026-09-14T00:00:00Z');
+            INSERT INTO symbols VALUES (
+                's1', 'f1', 'src/Payment.rs', 'rust', 'pay', 'function',
+                'pub fn pay()', NULL, 'pub', NULL, 1, 0, 5, 0, 0, 50,
+                2, 4, 4, 1, 10, 45, 'b1', 'function', 0, 0
+            );
+            INSERT INTO symbols VALUES (
+                's2', 'f2', 'src/payment.rs', 'rust', 'pay', 'function',
+                'pub fn pay()', NULL, 'pub', NULL, 1, 0, 5, 0, 0, 50,
+                2, 4, 4, 1, 10, 45, 'b2', 'function', 0, 0
+            );",
+        )
+        .unwrap();
+
+        // Exact match should return exact file, not conflate with sibling differing only by case
+        let f_lower = get_file(&conn, "src/payment.rs").unwrap().unwrap();
+        assert_eq!(f_lower.path, "src/payment.rs");
+        assert_eq!(f_lower.file_id, "f2");
+
+        let f_upper = get_file(&conn, "src/Payment.rs").unwrap().unwrap();
+        assert_eq!(f_upper.path, "src/Payment.rs");
+        assert_eq!(f_upper.file_id, "f1");
+
+        let syms_lower = load_file_symbols(&conn, "src/payment.rs").unwrap();
+        assert_eq!(syms_lower.len(), 1);
+        assert_eq!(syms_lower[0].file_id, "f2");
+
+        let syms_upper = load_file_symbols(&conn, "src/Payment.rs").unwrap();
+        assert_eq!(syms_upper.len(), 1);
+        assert_eq!(syms_upper[0].file_id, "f1");
     }
 }

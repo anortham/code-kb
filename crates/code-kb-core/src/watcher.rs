@@ -140,13 +140,10 @@ pub fn start_watcher(
                         }
                     };
                     if let Some(conn) = conn_ref {
-                        let escaped = rel
-                            .replace('\\', "\\\\")
-                            .replace('%', "\\%")
-                            .replace('_', "\\_");
+                        let escaped = crate::queries::escape_like(&rel);
                         let pattern = format!("{escaped}/%");
                         if let Ok(mut stmt) =
-                            conn.prepare("SELECT path FROM files WHERE path LIKE ?1 ESCAPE '\\'")
+                            conn.prepare("SELECT path FROM files WHERE path LIKE ?1 ESCAPE '\\' LIMIT 51")
                             && let Ok(rows) = stmt.query_map([&pattern], |r| r.get::<_, String>(0))
                         {
                             for child in rows.flatten() {

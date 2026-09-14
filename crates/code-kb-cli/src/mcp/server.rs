@@ -458,27 +458,31 @@ impl McpServer {
                             let parent_db = parent.join(".code-kb").join("artifact.db");
                             if parent_db.exists() {
                                 // Flush WAL checkpoint so committed transactions are flushed into parent_db before copying
-                                if let Ok(parent_conn) =
+                                let flushed = if let Ok(parent_conn) =
                                     code_kb_core::db::open_read_write(&parent_db)
                                 {
-                                    let _ = code_kb_core::db::checkpoint_truncate(&parent_conn);
-                                }
-                                if let Some(db_dir) = self.db_path.parent() {
-                                    let _ = std::fs::create_dir_all(db_dir);
-                                }
-                                if std::fs::copy(&parent_db, &self.db_path).is_ok() {
-                                    tracing::info!(
-                                        from = %parent_db.display(),
-                                        to = %self.db_path.display(),
-                                        "Worktree fast-path: copied parent database, reconciling"
-                                    );
-                                    let _ = ensure_fts_index_path(&self.db_path);
-                                    if let Ok(conn) = open_read_only(&self.db_path) {
-                                        let _ = reconcile_offline_edits(
-                                            &self.workspace,
-                                            &self.db_path,
-                                            &conn,
+                                    code_kb_core::db::checkpoint_truncate(&parent_conn).is_ok()
+                                } else {
+                                    false
+                                };
+                                if flushed {
+                                    if let Some(db_dir) = self.db_path.parent() {
+                                        let _ = std::fs::create_dir_all(db_dir);
+                                    }
+                                    if std::fs::copy(&parent_db, &self.db_path).is_ok() {
+                                        tracing::info!(
+                                            from = %parent_db.display(),
+                                            to = %self.db_path.display(),
+                                            "Worktree fast-path: copied parent database, reconciling"
                                         );
+                                        let _ = ensure_fts_index_path(&self.db_path);
+                                        if let Ok(conn) = open_read_only(&self.db_path) {
+                                            let _ = reconcile_offline_edits(
+                                                &self.workspace,
+                                                &self.db_path,
+                                                &conn,
+                                            );
+                                        }
                                         fast_path_taken = true;
                                     }
                                 }
