@@ -7,7 +7,7 @@ use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 
 use crate::queries::QueryError;
-use crate::workspace::{normalize_path, to_forward_slash};
+use crate::workspace::{normalize_path, paths_equal, to_forward_slash};
 
 #[derive(Debug, Clone)]
 pub struct ToolInvocation<'a> {
@@ -198,7 +198,6 @@ fn init_telemetry_db(conn: &Connection) -> Result<(), QueryError> {
              est_tokens_saved INTEGER NOT NULL DEFAULT 0,
              code_kb_version TEXT NOT NULL
          );
-         CREATE INDEX IF NOT EXISTS idx_tool_telemetry_ws_ts ON tool_telemetry(workspace_root, timestamp DESC);
          CREATE INDEX IF NOT EXISTS idx_tool_telemetry_tool ON tool_telemetry(tool, timestamp DESC);
          CREATE INDEX IF NOT EXISTS idx_tool_telemetry_ts ON tool_telemetry(timestamp DESC);
          DELETE FROM tool_telemetry WHERE timestamp < datetime('now', '-365 days');",
@@ -212,14 +211,29 @@ fn init_telemetry_db(conn: &Connection) -> Result<(), QueryError> {
         col_names.insert(col);
     }
     if !col_names.contains("workspace_root") {
-        let _ = conn.execute("ALTER TABLE tool_telemetry ADD COLUMN workspace_root TEXT NOT NULL DEFAULT ''", []);
+        conn.execute(
+            "ALTER TABLE tool_telemetry ADD COLUMN workspace_root TEXT NOT NULL DEFAULT ''",
+            [],
+        )?;
     }
     if !col_names.contains("workspace_name") {
-        let _ = conn.execute("ALTER TABLE tool_telemetry ADD COLUMN workspace_name TEXT NOT NULL DEFAULT ''", []);
+        conn.execute(
+            "ALTER TABLE tool_telemetry ADD COLUMN workspace_name TEXT NOT NULL DEFAULT ''",
+            [],
+        )?;
     }
     if !col_names.contains("est_tokens_saved") {
-        let _ = conn.execute("ALTER TABLE tool_telemetry ADD COLUMN est_tokens_saved INTEGER NOT NULL DEFAULT 0", []);
+        conn.execute(
+            "ALTER TABLE tool_telemetry ADD COLUMN est_tokens_saved INTEGER NOT NULL DEFAULT 0",
+            [],
+        )?;
     }
+
+    // Dependent indexes must be created AFTER columns are verified to exist
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tool_telemetry_ws_ts ON tool_telemetry(workspace_root, timestamp DESC)",
+        [],
+    )?;
 
     Ok(())
 }
@@ -443,6 +457,73 @@ pub fn get_telemetry_summary(
     })
 }
 
+fn is_same_file(p1: &Path, p2: &Path) -> bool {
+    if paths_equal(p1, p2) {
+        return true;
+    }
+    match (dunce::canonicalize(p1), dunce::canonicalize(p2)) {
+        (Ok(c1), Ok(c2)) => paths_equal(&c1, &c2),
+        _ => false,
+    }
+}
+
+fn sanitize_error_message(msg: &str) -> String {
+    let mut home_candidates = Vec::new();
+    if let Ok(home) = std::env::var("HOME") {
+        if !home.trim().is_empty() && home != "/" {
+            let simplified = dunce::simplified(Path::new(&home)).to_string_lossy().to_string();
+            if simplified != home {
+                home_candidates.push(simplified);
+            }
+            home_candidates.push(home);
+        }
+    }
+    if let Ok(profile) = std::env::var("USERPROFILE") {
+        if !profile.trim().is_empty() && profile != "/" {
+            let simplified = dunce::simplified(Path::new(&profile)).to_string_lossy().to_string();
+            if simplified != profile {
+                home_candidates.push(simplified);
+            }
+            home_candidates.push(profile);
+        }
+    }
+
+    sanitize_error_message_with_homes(msg, &home_candidates)
+}
+
+fn sanitize_error_message_with_homes(msg: &str, home_candidates: &[String]) -> String {
+    let mut sanitized = msg.to_string();
+
+    for home in home_candidates {
+        let norm_home = to_forward_slash(&normalize_path(Path::new(home)));
+        sanitized = sanitized.replace(home.as_str(), "~");
+        if norm_home != *home {
+            sanitized = sanitized.replace(&norm_home, "~");
+        }
+        let backslash_home = home.replace('/', "\\");
+        if backslash_home != *home {
+            sanitized = sanitized.replace(&backslash_home, "~");
+        }
+    }
+
+    // Replace newlines with spaces to avoid breaking markdown tables
+    sanitized = sanitized.replace("\r\n", " ").replace('\n', " ").replace('\r', " ");
+
+    // Escape markdown table pipe characters
+    sanitized = sanitized.replace('|', "\\|");
+
+    // Truncate message to 500 characters
+    if sanitized.chars().count() > 500 {
+        let mut truncated: String = sanitized.chars().take(500).collect();
+        if truncated.ends_with('\\') && !truncated.ends_with("\\\\") {
+            truncated.pop();
+        }
+        truncated
+    } else {
+        sanitized
+    }
+}
+
 pub fn generate_bug_report(
     conn: &Connection,
     workspace_root: Option<&Path>,
@@ -452,7 +533,18 @@ pub fn generate_bug_report(
     let arch_info = std::env::consts::ARCH.to_string();
     let code_kb_version = env!("CARGO_PKG_VERSION").to_string();
 
-    let julie_extract_version = if let Some(bin) = crate::sync::find_julie_extract_binary() {
+    let exe_name = if cfg!(windows) {
+        "julie-extract.exe"
+    } else {
+        "julie-extract"
+    };
+
+    let sibling_binary = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.join(exe_name)))
+        .filter(|p| p.is_file());
+
+    let julie_extract_version = if let Some(bin) = sibling_binary {
         if let Ok(output) = std::process::Command::new(&bin).arg("--version").output() {
             let ver = String::from_utf8_lossy(&output.stdout).trim().to_string();
             if !ver.is_empty() {
@@ -501,10 +593,11 @@ pub fn generate_bug_report(
     {
         let mut stmt = conn.prepare(error_sql)?;
         let row_mapper = |row: &rusqlite::Row| {
+            let raw_msg: String = row.get(2)?;
             Ok(TelemetryErrorRecord {
                 timestamp: row.get(0)?,
                 tool: row.get(1)?,
-                error_message: row.get(2)?,
+                error_message: sanitize_error_message(&raw_msg),
             })
         };
         if let Some(ref ws) = ws_param {
@@ -545,12 +638,14 @@ pub fn generate_bug_report(
     }
 
     // Generate GitHub issue URL
-    let title_str = issue_title.unwrap_or("Bug report");
+    let title_str = issue_title
+        .map(sanitize_error_message)
+        .unwrap_or_else(|| "Bug report".to_string());
     let mut issue_url = url::Url::parse("https://github.com/anortham/code-kb/issues/new")
         .map_err(|e| QueryError::Sqlite(rusqlite::Error::ToSqlConversionFailure(Box::new(e))))?;
     issue_url
         .query_pairs_mut()
-        .append_pair("title", title_str)
+        .append_pair("title", &title_str)
         .append_pair("body", &markdown);
 
     Ok(BugReportBundle {
@@ -576,6 +671,17 @@ pub fn migrate_legacy_workspace_telemetry(
         return Ok(0);
     }
 
+    // Skip migration if legacy database and destination database identify the same physical file
+    let global_db_path = get_global_telemetry_dir().join("telemetry.db");
+    if is_same_file(&legacy_db_path, &global_db_path) {
+        return Ok(0);
+    }
+    if let Ok(dest_db_str) = global_conn.query_row("PRAGMA database_list", [], |row| row.get::<_, String>(2)) {
+        if !dest_db_str.is_empty() && is_same_file(&legacy_db_path, Path::new(&dest_db_str)) {
+            return Ok(0);
+        }
+    }
+
     let norm_ws = to_forward_slash(&normalize_path(workspace_root));
     let ws_name = Path::new(&norm_ws)
         .file_name()
@@ -596,8 +702,6 @@ pub fn migrate_legacy_workspace_telemetry(
             check_stmt.exists([])?
         };
         if !has_table {
-            drop(legacy_conn);
-            let _ = std::fs::remove_file(&legacy_db_path);
             return Ok(0);
         }
 
@@ -629,14 +733,18 @@ pub fn migrate_legacy_workspace_telemetry(
         collected
     };
 
-    for (id, ts, tool, duration_ms, outcome, error_msg, result_count, bytes_returned, est_tokens, code_kb_version) in rows_to_insert {
-        let res = global_conn.execute(
+    let tx = global_conn.unchecked_transaction()?;
+    {
+        let mut stmt = tx.prepare(
             "INSERT OR IGNORE INTO tool_telemetry (
                 id, timestamp, workspace_root, workspace_name, tool,
                 duration_ms, outcome, error_message, result_count,
                 bytes_returned, est_tokens, est_tokens_saved, code_kb_version
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 0, ?12)",
-            params![
+        )?;
+
+        for (id, ts, tool, duration_ms, outcome, error_msg, result_count, bytes_returned, est_tokens, code_kb_version) in rows_to_insert {
+            let inserted = stmt.execute(params![
                 id,
                 ts,
                 norm_ws,
@@ -649,14 +757,13 @@ pub fn migrate_legacy_workspace_telemetry(
                 bytes_returned,
                 est_tokens,
                 code_kb_version,
-            ],
-        );
-        if let Ok(inserted) = res {
+            ])?;
             migrated_count += inserted;
         }
     }
+    tx.commit()?;
 
-    // Clean up legacy database and any temporary WAL/SHM files
+    // Clean up legacy database and any temporary WAL/SHM files only after commit succeeds
     let _ = std::fs::remove_file(&legacy_db_path);
     let _ = std::fs::remove_file(legacy_db_path.with_file_name("telemetry.db-wal"));
     let _ = std::fs::remove_file(legacy_db_path.with_file_name("telemetry.db-shm"));
@@ -1106,5 +1213,225 @@ mod tests {
         assert!(formatted.contains("Total Tool Calls: 3"));
         assert!(formatted.contains("| `file_skeleton` | 2 |"));
         assert!(formatted.contains("Syntax error in Rust function"));
+    }
+
+    #[test]
+    fn test_old_schema_upgrade() {
+        let temp = crate::safe_tempdir();
+        let db_path = temp.path().join("telemetry.db");
+        let conn = Connection::open(&db_path).unwrap();
+
+        // Create old schema v1 without workspace_root, workspace_name, or est_tokens_saved
+        conn.execute_batch(
+            "CREATE TABLE tool_telemetry (
+                id TEXT PRIMARY KEY,
+                timestamp TEXT NOT NULL,
+                tool TEXT NOT NULL,
+                duration_ms INTEGER NOT NULL,
+                outcome TEXT NOT NULL,
+                error_message TEXT,
+                result_count INTEGER NOT NULL DEFAULT 0,
+                bytes_returned INTEGER NOT NULL DEFAULT 0,
+                est_tokens INTEGER NOT NULL DEFAULT 0,
+                code_kb_version TEXT NOT NULL
+            );
+            INSERT INTO tool_telemetry VALUES (
+                'old1', '2026-09-01 12:00:00', 'find_symbol', 10, 'ok', NULL, 1, 50, 12, '0.6.0'
+            );",
+        )
+        .unwrap();
+
+        // Running init_telemetry_db must migrate columns before creating index
+        init_telemetry_db(&conn).expect("schema upgrade should succeed on legacy DB");
+
+        // Verify that workspace_root was added and idx_tool_telemetry_ws_ts was created
+        let summary = get_telemetry_summary(&conn, &TelemetryFilter::default()).unwrap();
+        assert_eq!(summary.total_calls, 1);
+        assert_eq!(summary.ok_calls, 1);
+
+        // Verify we can insert a new record with workspace_root and query via index
+        let inv = ToolInvocation {
+            tool: "file_skeleton",
+            duration_ms: 5,
+            outcome: "ok",
+            error_message: None,
+            result_count: 1,
+            bytes_returned: 100,
+            est_tokens: 25,
+            est_tokens_saved: 75,
+        };
+        record_tool_call_conn(&conn, Path::new("/workspace/project"), &inv);
+
+        let ws_filter = TelemetryFilter {
+            time_window: TimeWindow::AllTime,
+            workspace_root: Some(PathBuf::from("/workspace/project")),
+        };
+        let ws_summary = get_telemetry_summary(&conn, &ws_filter).unwrap();
+        assert_eq!(ws_summary.total_calls, 1);
+    }
+
+    #[test]
+    fn test_legacy_migration_same_path_no_delete() {
+        let ws_temp = crate::safe_tempdir();
+        let ws_root = ws_temp.path();
+        let legacy_dir = ws_root.join(".code-kb");
+        std::fs::create_dir_all(&legacy_dir).unwrap();
+        let legacy_db_path = legacy_dir.join("telemetry.db");
+
+        let legacy_conn = Connection::open(&legacy_db_path).unwrap();
+        init_telemetry_db(&legacy_conn).unwrap();
+        legacy_conn
+            .execute(
+                "INSERT INTO tool_telemetry VALUES (
+                    'same1', '2026-09-01 12:00:00', '/ws', 'repo', 'find_symbol',
+                    10, 'ok', NULL, 1, 50, 12, 0, '0.7.0'
+                )",
+                [],
+            )
+            .unwrap();
+
+        // Test 1: destination connection opened on the exact same database file
+        let migrated = migrate_legacy_workspace_telemetry(&legacy_conn, ws_root).unwrap();
+        assert_eq!(migrated, 0, "must skip migration when destination is the same database");
+        assert!(legacy_db_path.exists(), "must not unlink the database file");
+
+        // Test 2: global telemetry dir override points to the same directory
+        set_telemetry_dir_override(Some(legacy_dir.clone()));
+        let migrated_ovr = migrate_legacy_workspace_telemetry(&legacy_conn, ws_root).unwrap();
+        assert_eq!(migrated_ovr, 0, "must skip migration when global dir matches legacy dir");
+        assert!(legacy_db_path.exists(), "must not unlink when global dir matches legacy dir");
+        set_telemetry_dir_override(None);
+    }
+
+    #[test]
+    fn test_legacy_migration_rollback_on_failure() {
+        let ws_temp = crate::safe_tempdir();
+        let ws_root = ws_temp.path();
+        let legacy_dir = ws_root.join(".code-kb");
+        std::fs::create_dir_all(&legacy_dir).unwrap();
+        let legacy_db_path = legacy_dir.join("telemetry.db");
+
+        let legacy_conn = Connection::open(&legacy_db_path).unwrap();
+        legacy_conn
+            .execute_batch(
+                "CREATE TABLE tool_telemetry (
+                    id TEXT PRIMARY KEY,
+                    timestamp TEXT NOT NULL,
+                    tool TEXT NOT NULL,
+                    duration_ms INTEGER NOT NULL,
+                    outcome TEXT NOT NULL,
+                    error_message TEXT,
+                    result_count INTEGER NOT NULL DEFAULT 0,
+                    bytes_returned INTEGER NOT NULL DEFAULT 0,
+                    est_tokens INTEGER NOT NULL DEFAULT 0,
+                    code_kb_version TEXT NOT NULL
+                );
+                INSERT INTO tool_telemetry VALUES (
+                    'leg1', '2026-09-01 12:00:00', 'find_symbol', 10, 'ok', NULL, 1, 50, 12, '0.6.0'
+                );",
+            )
+            .unwrap();
+        drop(legacy_conn);
+
+        let global_temp = crate::safe_tempdir();
+        let global_conn = open_telemetry_db_at(global_temp.path()).unwrap();
+
+        // Install a trigger that forces insertion to fail
+        global_conn
+            .execute(
+                "CREATE TRIGGER fail_telemetry_insert BEFORE INSERT ON tool_telemetry
+                 BEGIN
+                     SELECT RAISE(ABORT, 'simulated disk write error');
+                 END;",
+                [],
+            )
+            .unwrap();
+
+        let res = migrate_legacy_workspace_telemetry(&global_conn, ws_root);
+        assert!(res.is_err(), "migration must return error when insert fails");
+        assert!(
+            legacy_db_path.exists(),
+            "legacy database must NOT be deleted after failed migration"
+        );
+
+        // Drop trigger and verify migration now succeeds
+        global_conn.execute("DROP TRIGGER fail_telemetry_insert", []).unwrap();
+        let res2 = migrate_legacy_workspace_telemetry(&global_conn, ws_root);
+        assert_eq!(res2.unwrap(), 1);
+        assert!(
+            !legacy_db_path.exists(),
+            "legacy database should be deleted only after successful commit"
+        );
+    }
+
+    #[test]
+    fn test_bug_report_sanitization_and_no_external_exec() {
+        let temp = crate::safe_tempdir();
+        let conn = open_telemetry_db_at(temp.path()).unwrap();
+
+        let current_home = std::env::var("HOME")
+            .or_else(|_| std::env::var("USERPROFILE"))
+            .unwrap_or_else(|_| "/default/home".to_string());
+
+        let sensitive_error = format!(
+            "{}/workspace/secret-repo/src/lib.rs: syntax error | unexpected token | extra line\nsecond line of error | {}",
+            current_home,
+            "x".repeat(600), // > 500 chars to test truncation
+        );
+
+        let inv = ToolInvocation {
+            tool: "replace_symbol_body",
+            duration_ms: 10,
+            outcome: "error",
+            error_message: Some(&sensitive_error),
+            result_count: 0,
+            bytes_returned: 0,
+            est_tokens: 0,
+            est_tokens_saved: 0,
+        };
+        // Create a fake malicious julie-extract binary in a .tools directory in workspace
+        let ws_temp = crate::safe_tempdir();
+        record_tool_call_conn(&conn, ws_temp.path(), &inv);
+        let malicious_tools_dir = ws_temp.path().join(".tools");
+        std::fs::create_dir_all(&malicious_tools_dir).unwrap();
+        let fake_bin = if cfg!(windows) {
+            malicious_tools_dir.join("julie-extract.exe")
+        } else {
+            malicious_tools_dir.join("julie-extract")
+        };
+        std::fs::write(&fake_bin, b"#!/bin/sh\necho malicious 9.9.9\nexit 0\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&fake_bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        let bundle = generate_bug_report(&conn, Some(ws_temp.path()), Some("Issue with | pipes")).unwrap();
+
+        // 1. Path sanitization verification
+        if !current_home.is_empty() && current_home != "/" {
+            assert!(!bundle.markdown_body.contains(&current_home), "Home directory must be sanitized to ~");
+            assert!(bundle.markdown_body.contains("~/workspace/secret-repo"), "Home directory should be replaced with ~");
+            assert!(!bundle.github_issue_url.contains(&current_home), "GitHub URL must not leak home directory");
+        }
+
+        // Direct test of custom home path sanitization
+        let custom_sanitized = sanitize_error_message_with_homes(
+            "/custom/secret/path/main.rs: err | note\nsecond line",
+            &["/custom/secret/path".to_string()],
+        );
+        assert_eq!(custom_sanitized, "~/main.rs: err \\| note second line");
+
+        // 2. Pipe and newline escaping
+        assert!(!bundle.markdown_body.contains(" | unexpected token"), "Pipe characters must be escaped");
+        assert!(bundle.markdown_body.contains(r" \| unexpected token"), "Pipe characters must be escaped as \\|");
+        assert!(!bundle.markdown_body.contains("extra line\nsecond line"), "Newlines must be sanitized");
+
+        // 3. Length truncation (max 500 chars)
+        assert!(bundle.recent_errors[0].error_message.chars().count() <= 500, "Error message must be truncated to 500 chars");
+
+        // 4. No external binary execution verification
+        assert_ne!(bundle.julie_extract_version, "malicious 9.9.9", "Must not execute .tools/julie-extract from workspace");
+        assert_eq!(bundle.julie_extract_version, crate::sync::PINNED_JULIE_VERSION, "Must report pinned version");
     }
 }
