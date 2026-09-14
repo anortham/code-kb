@@ -1,5 +1,5 @@
 use serde_json::{Value, json};
-use std::io::Write;
+use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command, Stdio};
 
 struct ChildGuard(Child);
@@ -176,7 +176,7 @@ fn test_mcp_stdio_handshake_and_tools() {
     let tools = resp2["result"]["tools"]
         .as_array()
         .expect("Expected tools array");
-    assert_eq!(tools.len(), 10);
+    assert_eq!(tools.len(), 11);
 
     let tool_names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
 
@@ -190,6 +190,7 @@ fn test_mcp_stdio_handshake_and_tools() {
     assert!(tool_names.contains(&"find_structural_facts"));
     assert!(tool_names.contains(&"blast_radius"));
     assert!(tool_names.contains(&"replace_symbol_body"));
+    assert!(tool_names.contains(&"telemetry_summary"));
 
     // Verify zero workspace pollution across all tools
     for tool in tools {
@@ -430,6 +431,32 @@ fn test_mcp_stdio_handshake_and_tools() {
         "Extended get_context_slice must contain external callee println"
     );
 
+    // 11. Test telemetry_summary via MCP with time_window: "month"
+    let telem_req = json!({
+        "jsonrpc": "2.0",
+        "id": 11,
+        "method": "tools/call",
+        "params": {
+            "name": "telemetry_summary",
+            "arguments": {
+                "time_window": "month"
+            }
+        }
+    });
+    let mut telem_line = serde_json::to_string(&telem_req).unwrap();
+    telem_line.push('\n');
+    stdin.write_all(telem_line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut response_line_telem = String::new();
+    reader.read_line(&mut response_line_telem).unwrap();
+    let resp_telem: Value =
+        serde_json::from_str(&response_line_telem).expect("Failed to parse JSON response");
+    assert_eq!(resp_telem["id"], 11);
+    assert_ne!(resp_telem["result"]["isError"], true);
+    let telem_text = resp_telem["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(telem_text.contains("Telemetry Summary"));
+
     let notification = json!({
         "jsonrpc": "2.0",
         "method": "notifications/roots/list_changed"
@@ -440,7 +467,7 @@ fn test_mcp_stdio_handshake_and_tools() {
 
     let ping_req = json!({
         "jsonrpc": "2.0",
-        "id": 11,
+        "id": 12,
         "method": "ping"
     });
     let mut ping_line = serde_json::to_string(&ping_req).unwrap();
@@ -448,11 +475,11 @@ fn test_mcp_stdio_handshake_and_tools() {
     stdin.write_all(ping_line.as_bytes()).unwrap();
     stdin.flush().unwrap();
 
-    let mut response_line11 = String::new();
-    reader.read_line(&mut response_line11).unwrap();
-    let resp11: Value =
-        serde_json::from_str(&response_line11).expect("Failed to parse JSON response");
-    assert_eq!(resp11["id"], 11);
+    let mut response_line12 = String::new();
+    reader.read_line(&mut response_line12).unwrap();
+    let resp12: Value =
+        serde_json::from_str(&response_line12).expect("Failed to parse JSON response");
+    assert_eq!(resp12["id"], 12);
 
     drop(stdin);
     let _ = child.wait();
@@ -1327,6 +1354,113 @@ fn test_mcp_rebinding_drive_casing_insensitivity() {
             .unwrap()
             .contains("pub struct Workspace"),
         "get_symbol_body should return symbol body"
+    );
+
+    drop(stdin);
+    let _ = child.wait();
+}
+
+#[test]
+fn test_mcp_telemetry_summary_unindexed_repo_no_autoscan() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let root = temp_dir.path();
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"unindexed\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    let src = root.join("src");
+    std::fs::create_dir_all(&src).unwrap();
+    std::fs::write(src.join("lib.rs"), "pub fn unindexed_func() {}\n").unwrap();
+
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_code-kb"));
+    cmd.arg("serve")
+        .arg("--root")
+        .arg(root)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit());
+
+    let mut child = ChildGuard(cmd.spawn().expect("Failed to spawn code-kb mcp"));
+    let mut stdin = child.stdin.take().expect("Failed to open stdin");
+    let mut reader = BufReader::new(child.stdout.take().expect("Failed to open stdout"));
+
+    // 1. Initialize
+    let init_req = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2024-11-05",
+            "clientInfo": { "name": "test-client", "version": "1.0" },
+            "capabilities": {}
+        }
+    });
+    let mut line = serde_json::to_string(&init_req).unwrap();
+    line.push('\n');
+    stdin.write_all(line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut response_line = String::new();
+    reader.read_line(&mut response_line).unwrap();
+
+    // 2. Call telemetry_summary
+    let call_req = json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+            "name": "telemetry_summary",
+            "arguments": {
+                "time_window": "all",
+                "workspace_only": true
+            }
+        }
+    });
+    let mut call_line = serde_json::to_string(&call_req).unwrap();
+    call_line.push('\n');
+    stdin.write_all(call_line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut call_resp_line = String::new();
+    reader.read_line(&mut call_resp_line).unwrap();
+    let resp: Value = serde_json::from_str(&call_resp_line).expect("Failed to parse JSON response");
+    assert_eq!(resp["id"], 2);
+    assert_ne!(resp["result"]["isError"], true);
+    let summary_text = resp["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(summary_text.contains("Telemetry Summary"));
+
+    // Verify artifact.db was NOT created by auto-scan
+    assert!(
+        !root.join(".code-kb").join("artifact.db").exists(),
+        "telemetry_summary must not trigger auto-scan on an unindexed repository"
+    );
+
+    // 3. Also call with unadvertised alias code_kb_stats
+    let call_alias = json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+            "name": "code_kb_stats",
+            "arguments": {}
+        }
+    });
+    let mut alias_line = serde_json::to_string(&call_alias).unwrap();
+    alias_line.push('\n');
+    stdin.write_all(alias_line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut alias_resp_line = String::new();
+    reader.read_line(&mut alias_resp_line).unwrap();
+    let resp_alias: Value =
+        serde_json::from_str(&alias_resp_line).expect("Failed to parse JSON response");
+    assert_eq!(resp_alias["id"], 3);
+    assert_ne!(resp_alias["result"]["isError"], true);
+
+    assert!(
+        !root.join(".code-kb").join("artifact.db").exists(),
+        "code_kb_stats alias must not trigger auto-scan on an unindexed repository"
     );
 
     drop(stdin);

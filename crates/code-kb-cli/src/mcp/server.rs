@@ -3,14 +3,16 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
 use code_kb_core::{
-    Connection, WatcherHandle, Workspace, WorkspaceError, blast_radius_op, codebase_outline_op,
-    ensure_fts_index_path, file_skeleton_op, format_blast_radius, format_context_slice,
-    format_fact_categories, format_find_symbol_results, format_references,
-    format_replace_symbol_result, format_search_results, format_structural_facts,
-    format_symbol_body, fts_search_symbols_scoped, get_context_slice_op, get_symbol_body_op,
-    list_structural_fact_categories, open_read_only, open_telemetry_db, reconcile_offline_edits,
-    record_tool_call, record_tool_call_conn, replace_symbol_body, scan_workspace,
-    search_symbols_scoped, start_watcher,
+    Connection, TelemetryFilter, TimeWindow, WatcherHandle, Workspace, WorkspaceError,
+    blast_radius_op, codebase_outline_op, ensure_fts_index_path, file_skeleton_op,
+    format_blast_radius, format_context_slice, format_fact_categories,
+    format_find_symbol_results, format_references, format_replace_symbol_result,
+    format_search_results, format_structural_facts, format_symbol_body,
+    format_telemetry_summary, fts_search_symbols_scoped, get_context_slice_op,
+    get_symbol_body_op, get_telemetry_summary, list_structural_fact_categories,
+    migrate_legacy_workspace_telemetry, open_global_telemetry_db, open_read_only,
+    reconcile_offline_edits, record_tool_call, record_tool_call_conn,
+    replace_symbol_body, scan_workspace, search_symbols_scoped, start_watcher,
 };
 
 use super::protocol::{CallToolResult, JsonRpcRequest, JsonRpcResponse, Tool};
@@ -51,7 +53,10 @@ impl McpServer {
             None
         };
 
-        let telemetry_conn = open_telemetry_db(&workspace.root).ok();
+        let telemetry_conn = open_global_telemetry_db().ok();
+        if let Some(ref conn) = telemetry_conn {
+            let _ = migrate_legacy_workspace_telemetry(conn, &workspace.root);
+        }
 
         Ok(Self {
             workspace,
@@ -105,7 +110,12 @@ impl McpServer {
             }
         }
 
-        self.telemetry_conn = open_telemetry_db(&ws.root).ok();
+        if self.telemetry_conn.is_none() {
+            self.telemetry_conn = open_global_telemetry_db().ok();
+        }
+        if let Some(ref conn) = self.telemetry_conn {
+            let _ = migrate_legacy_workspace_telemetry(conn, &ws.root);
+        }
         self.workspace = ws;
         self.db_path = db_path;
         Ok(())
@@ -339,6 +349,23 @@ impl McpServer {
                     "required": ["symbol_name", "file_path", "new_body"]
                 }),
             },
+            Tool {
+                name: "telemetry_summary".to_string(),
+                description: "Summarizes code-kb tool usage, token consumption, and tokens saved across sessions and workspaces. Useful for diagnosing usage patterns and evaluating agent performance.".to_string(),
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "time_window": {
+                            "type": "string",
+                            "description": "Optional time window for metrics: 'today', '7d', '30d', 'month', 'year', or 'all' (default: 'all')."
+                        },
+                        "workspace_only": {
+                            "type": "boolean",
+                            "description": "If true, scopes metrics to the currently bound workspace instead of all workspaces (default: false)."
+                        }
+                    }
+                }),
+            },
         ]
     }
 
@@ -347,13 +374,13 @@ impl McpServer {
         let res = self.handle_call_tool_inner(name, arguments);
         let duration_ms = start.elapsed().as_millis() as u64;
 
-        let (outcome, error_msg, bytes, est_tokens) = if res.is_error {
+        let (outcome, error_msg, bytes, est_tokens, est_tokens_saved) = if res.is_error {
             let err_text = res
                 .content
                 .first()
                 .map(|c| c.text.as_str())
                 .unwrap_or("error");
-            ("error", Some(err_text), err_text.len(), err_text.len() / 4)
+            ("error", Some(err_text), err_text.len(), err_text.len() / 4, 0)
         } else {
             let bytes: usize = res.content.iter().map(|c| c.text.len()).sum();
             let est_tokens = bytes / 4;
@@ -364,7 +391,15 @@ impl McpServer {
             } else {
                 "ok"
             };
-            (outcome, None, bytes, est_tokens)
+            let est_tokens_saved = match name {
+                "file_skeleton"
+                | "get_symbol_body"
+                | "get_context_slice"
+                | "find_symbol"
+                | "search_symbols" => est_tokens.saturating_mul(3),
+                _ => 0,
+            };
+            (outcome, None, bytes, est_tokens, est_tokens_saved)
         };
 
         let invocation = code_kb_core::ToolInvocation {
@@ -375,15 +410,73 @@ impl McpServer {
             result_count: res.content.len(),
             bytes_returned: bytes,
             est_tokens,
+            est_tokens_saved,
         };
 
         if let Some(ref conn) = self.telemetry_conn {
-            record_tool_call_conn(conn, &invocation);
+            record_tool_call_conn(conn, &self.workspace.root, &invocation);
         } else {
             record_tool_call(&self.workspace.root, &invocation);
         }
 
         res
+    }
+
+    fn handle_telemetry_summary(&mut self, arguments: &Value) -> CallToolResult {
+        let time_window = arguments
+            .get("time_window")
+            .or_else(|| arguments.get("since"))
+            .or_else(|| arguments.get("window"))
+            .and_then(|v| v.as_str())
+            .and_then(TimeWindow::parse)
+            .unwrap_or(TimeWindow::AllTime);
+
+        let workspace_only = arguments
+            .get("workspace_only")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        let filter = TelemetryFilter {
+            time_window,
+            workspace_root: if workspace_only {
+                Some(self.workspace.canonical_root.clone())
+            } else {
+                None
+            },
+        };
+
+        let as_json = arguments
+            .get("json")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        if self.telemetry_conn.is_none() {
+            self.telemetry_conn = open_global_telemetry_db().ok();
+        }
+
+        let conn = match self.telemetry_conn.as_ref() {
+            Some(c) => c,
+            None => {
+                return CallToolResult::error("Failed to open global telemetry database".to_string());
+            }
+        };
+
+        match get_telemetry_summary(conn, &filter) {
+            Ok(summary) => {
+                if as_json {
+                    match serde_json::to_string_pretty(&summary) {
+                        Ok(json_str) => CallToolResult::text(json_str),
+                        Err(e) => {
+                            CallToolResult::error(format!("Failed to serialize telemetry summary: {e}"))
+                        }
+                    }
+                } else {
+                    let text = format_telemetry_summary(&summary);
+                    CallToolResult::text(text)
+                }
+            }
+            Err(e) => CallToolResult::error(format!("Failed to query telemetry summary: {e}")),
+        }
     }
 
     fn handle_call_tool_inner(&mut self, name: &str, arguments: &Value) -> CallToolResult {
@@ -421,6 +514,18 @@ impl McpServer {
             } else if !self.db_path.exists() && abs_candidate.exists() {
                 let _ = self.bind_workspace(&abs_candidate);
             }
+        }
+
+        // Early routing for telemetry_summary and unadvertised alias code_kb_stats
+        // Must execute before auto-scan check so unindexed repositories succeed immediately without creating artifact.db
+        if name == "telemetry_summary" || name == "code_kb_stats" {
+            let result = self.handle_telemetry_summary(arguments);
+            if result.is_error {
+                tracing::warn!(tool = name, "MCP tool returned error");
+            } else {
+                tracing::info!(tool = name, "MCP tool executed successfully");
+            }
+            return result;
         }
 
         // Auto-scan if workspace is a known repository but database artifact does not exist yet
