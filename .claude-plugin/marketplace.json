@@ -11,7 +11,7 @@
       "name": "code-kb",
       "source": "./",
       "description": "Fast, token-dense code-intelligence engine and MCP server for AI coding agents",
-      "version": "0.6.1",
+      "version": "0.7.0",
       "category": "developer-tools"
     }
   ]

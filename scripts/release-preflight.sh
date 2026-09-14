@@ -36,6 +36,8 @@ echo -n "[2/7] Checking version consistency across manifests... "
 WS_VER=$(grep -m 1 '^version = ' Cargo.toml | awk -F'"' '{print $2}')
 CLI_CORE_VER=$(grep 'code-kb-core = { version = ' crates/code-kb-cli/Cargo.toml | awk -F'"' '{print $2}')
 PLUGIN_VER=$(grep '"version":' .claude-plugin/plugin.json | awk -F'"' '{print $4}')
+CODEX_PLUGIN_VER=$(grep '"version":' .codex-plugin/plugin.json | awk -F'"' '{print $4}')
+MARKETPLACE_VER=$(grep '"version":' .claude-plugin/marketplace.json | awk -F'"' '{print $4}')
 
 if [[ "${WS_VER}" != "${CLI_CORE_VER}" ]]; then
   echo "FAIL"
@@ -45,6 +47,16 @@ fi
 if [[ "${WS_VER}" != "${PLUGIN_VER}" ]]; then
   echo "FAIL"
   echo "error: Cargo.toml version (${WS_VER}) != .claude-plugin/plugin.json version (${PLUGIN_VER})" >&2
+  exit 1
+fi
+if [[ "${WS_VER}" != "${CODEX_PLUGIN_VER}" ]]; then
+  echo "FAIL"
+  echo "error: Cargo.toml version (${WS_VER}) != .codex-plugin/plugin.json version (${CODEX_PLUGIN_VER})" >&2
+  exit 1
+fi
+if [[ "${WS_VER}" != "${MARKETPLACE_VER}" ]]; then
+  echo "FAIL"
+  echo "error: Cargo.toml version (${WS_VER}) != .claude-plugin/marketplace.json version (${MARKETPLACE_VER})" >&2
   exit 1
 fi
 echo "OK (v${WS_VER})"
