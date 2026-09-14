@@ -88,7 +88,8 @@ MCP tool schema.**
   `npm test`), while `code-kb` predicts the minimal set of targeted test targets to run before/after edits.
 - Self-cleaning workspaces: Every repository and git worktree maintains its own isolated database at
   `<root>/.code-kb/artifact.db`. Deleting a repository directory or running `git worktree remove`
-  automatically cleans up the database with no orphaned external state.
+  automatically cleans up the AST index database with no orphaned external state. Durable tool
+  telemetry and token efficiency history are preserved centrally at `~/.code-kb/telemetry.db`.
 - Cross-platform agent hooks: `code-kb hook [SessionStart|SubagentStart]` outputs agent routing instructions
   directly from the native binary without external runtime dependencies (Node.js, bash, python).
 

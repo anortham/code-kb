@@ -1,6 +1,6 @@
 ---
 name: code-kb
-description: Use when exploring unfamiliar code, inspecting types or function signatures, finding symbols across the codebase, obtaining surgical context before modifying a function, or performing atomic AST-validated symbol edits.
+description: Use when exploring unfamiliar code, inspecting types or function signatures, finding symbols across the codebase, obtaining surgical context before modifying a function, performing atomic AST-validated symbol edits, or checking tool telemetry and token savings.
 ---
 
 # code-kb: Token-Dense Code Intelligence
@@ -40,6 +40,22 @@ When modifying an existing function or method:
 * Checks optimistic concurrency hash to avoid overwriting conflicting edits.
 * Re-indexes SQLite AST facts in a single atomic turn.
 
+## Telemetry & Diagnostics
+
+`code-kb` records lightweight invocation telemetry, token consumption, and token savings in `~/.code-kb/telemetry.db` across all sessions.
+
+### Answering Token Savings and Tool Usage Inquiries
+When a user asks questions such as *"how many tokens has code-kb saved me this month?"*, *"what is my token efficiency this week?"*, or *"how often do symbol edits succeed?"*:
+* Call `telemetry_summary(time_window="month")` (valid windows: `"today"`, `"7d"`, `"30d"`, `"month"`, `"year"`, `"all"`; default is `"all"`).
+* Pass `workspace_only=true` if the user wants metrics scoped strictly to the current workspace instead of global history across all projects.
+* Report back the summarized numbers: total tool calls, successful vs failed calls, estimated tokens consumed, estimated tokens saved compared to raw full-file reads, and the net efficiency multiplier.
+
+### Generating Bug Reports & Diagnosing Failures
+When diagnosing unexpected tool errors or when assisting a user with filing an issue:
+* Call `telemetry_summary()` to inspect recent error counts and failure rates across tools.
+* Run `code-kb bug-report` (or `code-kb bug-report --title "..."`) via the terminal to produce a self-contained diagnostic markdown bundle containing platform information (OS, arch, version, SQLite schema) and recent tool error logs, along with a pre-filled GitHub issue URL (`https://github.com/anortham/code-kb/issues/new?title=...&body=...`).
+* Use `code-kb bug-report --json` or `code-kb stats --json` when programmatic or machine-readable diagnostics are needed.
+
 ## Quick Reference
 
 | Task | Anti-Pattern | MCP Tool Call | CLI Equivalent |
@@ -54,6 +70,8 @@ When modifying an existing function or method:
 | Assess impact & find tests | Wide test suite runs | `blast_radius(symbol="...")` | `code-kb blast-radius [target]` |
 | Discover routes / models | Search string literals | `find_structural_facts(category="route")` | `code-kb facts [category]` |
 | Edit implementation | Multi-line search/replace | `replace_symbol_body(...)` | `code-kb edit <symbol> --file <f> --body <b>` |
+| Check token savings & usage | Guesswork, parsing logs | `telemetry_summary(time_window="month")` | `code-kb stats [--since <window>] [--workspace]` |
+| Generate diagnostic bug report | Manual system info triage | `telemetry_summary()` (for errors) | `code-kb bug-report [--title <title>]` |
 
 ## Parameter Flexibility & Aliases
 
@@ -69,9 +87,11 @@ To provide a zero-friction happy path, all MCP tools support common aliases and 
 * `blast_radius`: accepts `symbol`/`name`, `path`/`file`, `depth`/`max_depth`, `limit`. When target is omitted, automatically discovers uncommitted working-tree changes via git. Alias: `impact`.
 * `category` in `find_structural_facts`: optional (omitting lists all detected categories and counts).
 * `path` in `find_symbol` / `search_symbols`: optional filter by directory or file path prefix.
+* `telemetry_summary`: accepts `time_window` (aliases: `since`, `window`; defaults to `"all"`), `workspace_only` (defaults to `false`), `json` (defaults to `false`). Tool name alias: `code_kb_stats`.
 
 ## Core Invariants
 
 * **No Workspace Parameters:** Never supply or request `workspace`, `repo_path`, or `workspace_id`. The server binds to workspace root automatically.
 * **Disambiguation:** If a symbol name is overloaded (e.g. `new`), supply `file_path` or qualified name (e.g. `Server::new` or `Alpha::create`).
 * **Zero Heap Footprint:** All queries stream directly from SQLite; retained memory is strictly < 15 MB.
+* **Self-Cleaning Workspaces & Central Telemetry:** Each workspace or git worktree maintains its isolated database at `<root>/.code-kb/artifact.db`, cleaned automatically upon repo/worktree removal. Durable tool telemetry and token efficiency metrics persist centrally at `~/.code-kb/telemetry.db`.
