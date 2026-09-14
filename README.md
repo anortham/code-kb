@@ -53,15 +53,18 @@ Traditional AI coding agents burn massive amounts of context loading entire sour
   code-kb --version
   ```
 
-### Step 2: Per-Harness Setup
+### Step 2: Connect Your Agent
 
-### Claude Code
+#### Claude Code
 
 Plugin Marketplace (Recommended):
 ```text
 /plugin marketplace add anortham/code-kb
+```
+```text
 /plugin install code-kb@code-kb
 ```
+*(Send as two separate prompts in Claude Code)*
 
 CLI MCP fallback:
 ```bash
@@ -70,7 +73,7 @@ claude mcp add --scope user code-kb -- code-kb serve
 
 *Note:* Injects routing instructions on session start and subagent start via native hooks, and registers progressive disclosure skills.
 
-### Codex
+#### Codex
 
 Plugin Marketplace:
 ```bash
@@ -87,7 +90,7 @@ args = ["serve"]
 
 Run `codex`, open `/hooks`, and trust the lifecycle hooks.
 
-### Antigravity CLI (AGY)
+#### Antigravity CLI (AGY)
 
 CLI command:
 ```bash
@@ -113,7 +116,7 @@ Progressive disclosure skill linking:
 ln -sf /path/to/code-kb/skills/code-kb ~/.gemini/config/skills/code-kb
 ```
 
-### Grok CLI
+#### Grok CLI
 
 Plugin install:
 ```bash
@@ -132,7 +135,7 @@ Project-level `.mcp.json` fallback:
 }
 ```
 
-### Cursor
+#### Cursor
 
 In `.cursor/mcp.json` (or Cursor Settings > Features > MCP):
 ```json
@@ -146,7 +149,7 @@ In `.cursor/mcp.json` (or Cursor Settings > Features > MCP):
 }
 ```
 
-### OpenCode
+#### OpenCode
 
 Add to `opencode.json`:
 ```json
@@ -160,7 +163,7 @@ Add to `opencode.json`:
 }
 ```
 
-### Claude Desktop
+#### Claude Desktop
 
 Add to `claude_desktop_config.json` (`%APPDATA%\Claude\claude_desktop_config.json` on Windows, `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
 ```json
@@ -174,7 +177,7 @@ Add to `claude_desktop_config.json` (`%APPDATA%\Claude\claude_desktop_config.jso
 }
 ```
 
-### GitHub Copilot CLI & Terminal Agents
+#### GitHub Copilot CLI & Terminal Agents
 
 For terminal harnesses inheriting CWD (Copilot CLI, Pi, Swival, Windsurf, Zed): configure the MCP server to run `code-kb serve`.
 
