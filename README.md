@@ -221,7 +221,7 @@ code-kb scan
 | `get_symbol_context` | Surgical bundle: target body + callee signatures + parameter types + tests. | `symbol_name` (req), `file_path` (opt), `include_external` (opt, def: false) | `symbol`, `name`, `path` |
 | `find_references` | Traverses callers or callees of a symbol (filters external stdlib noise). | `symbol_name` (req), `file_path` (opt), `direction` ("callers" \| "callees", def: callers), `include_external` (opt, def: false) | `symbol`, `name`, `file`, `path` |
 | `blast_radius` | Multi-hop reverse reachability (CTEs) & targeted test prediction. | `symbol` (opt), `file` (opt), `depth` (opt, def: 2), `limit` (opt) | `name`, `path`, `impact` |
-| `find_structural_facts` | Queries framework facts (routes, SQL queries, config keys, tables). Lists all categories when omitted. | `category` (opt), `limit` (opt) | `cat`, `kind`, `type` |
+| `find_structural_facts` | Queries framework facts (routes, SQL queries, config keys, tables). Lists all categories when omitted. | `category` (opt), `path` (opt), `limit` (opt) | `cat`, `kind`, `type`, `file`, `file_path` |
 | `replace_symbol_body` | Atomically replaces a symbol's implementation; syntax validation covers Rust, JavaScript, TypeScript/TSX, Python, and Go. | `symbol_name` (req), `file_path` (req), `new_body` (req), `expected_body_hash` (opt) | `symbol`, `file`, `body`, `code` |
 
 ---
@@ -264,6 +264,7 @@ code-kb blast-radius
 
 # Query framework structural facts (or omit category to list all detected categories)
 code-kb facts
+code-kb facts config --path Cargo.toml
 code-kb facts route --limit 10
 
 # Atomically edit a symbol body with pre-flight tree-sitter syntax validation

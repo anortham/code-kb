@@ -135,8 +135,8 @@ Expected: PASS
 `serial-worker-commit`: commit owned files with message `fix(core): disambiguate blast radius symbol seed with seed path hint`.
 
 **Acceptance criteria:**
-- [ ] Calling `compute_blast_radius` with a bare symbol name that exists in multiple files succeeds when `seed_paths` specifies the target file.
-- [ ] Existing `blast_radius_test` tests all pass.
+- [x] Calling `compute_blast_radius` with a bare symbol name that exists in multiple files succeeds when `seed_paths` specifies the target file.
+- [x] Existing `blast_radius_test` tests all pass.
 
 ---
 
@@ -250,10 +250,10 @@ Expected: PASS (all tests passing, sync contract tests passing).
 `serial-worker-commit`: commit owned files with message `feat(core,cli,mcp): add optional file_path filter to find_references`.
 
 **Acceptance criteria:**
-- [ ] `find_references_scoped` disambiguates identically named symbols using file path filter.
-- [ ] CLI `code-kb refs <symbol> --file <path>` filters references to the specified file's symbol.
-- [ ] MCP `find_references` accepts `file_path` (and aliases `file`, `path`).
-- [ ] `AGENTS.md` and `CLAUDE.md` stay byte-for-byte in sync.
+- [x] `find_references_scoped` disambiguates identically named symbols using file path filter.
+- [x] CLI `code-kb refs <symbol> --file <path>` filters references to the specified file's symbol.
+- [x] MCP `find_references` accepts `file_path` (and aliases `file`, `path`).
+- [x] `AGENTS.md` and `CLAUDE.md` stay byte-for-byte in sync.
 
 ---
 
@@ -337,9 +337,9 @@ Expected: PASS
 `serial-worker-commit`: commit owned files with message `feat(core): disclose result caps and truncation in context slice and blast radius formatters`.
 
 **Acceptance criteria:**
-- [ ] Context slices hitting 10 callees or 5 tests display explicit cap warnings.
-- [ ] Blast radius runs hitting the 200-row CTE limit state the ceiling was reached.
-- [ ] All format tests pass without breaking existing compact formats.
+- [x] Context slices hitting 10 callees or 5 tests display explicit cap warnings.
+- [x] Blast radius runs hitting the 200-row CTE limit state the ceiling was reached.
+- [x] All format tests pass without breaking existing compact formats.
 
 ---
 
@@ -409,6 +409,6 @@ Expected: PASS
 `serial-worker-commit`: commit owned files with message `feat(core,cli,mcp): add path filter and category aliases to structural facts`.
 
 **Acceptance criteria:**
-- [ ] `find_structural_facts(category="config")` matches `toml.key_value.v1` and config facts.
-- [ ] Path scoping limits facts to the target directory or file.
-- [ ] CLI and MCP parameter contracts match exactly.
+- [x] `find_structural_facts(category="config")` matches `toml.key_value.v1` and config facts.
+- [x] Path scoping limits facts to the target directory or file.
+- [x] CLI and MCP parameter contracts match exactly.

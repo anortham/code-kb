@@ -86,8 +86,8 @@ Use the canonical names from the MCP schema in tool calls. The aliases below are
 * `direction` in `find_references`: defaults to `"callers"`.
 * `include_external` in `find_references` & `get_symbol_context`: defaults to `false` (filters noise across all ~40 languages).
 * `blast_radius`: accepts `symbol`/`name`, `path`/`file`, `depth`/`max_depth`, `limit`. When target is omitted, automatically discovers uncommitted working-tree changes via git. Alias: `impact`.
-* `category` in `find_structural_facts`: optional (omitting lists all detected categories and counts).
-* `path` in `lookup_symbol` / `search_symbols`: optional filter by directory or file path prefix.
+* `category` in `find_structural_facts`: optional (omitting lists all detected categories and counts). Normalized aliases: `config`, `route`/`routes`, `query`/`queries`/`sql`, `model`/`models`.
+* `path` in `lookup_symbol` / `search_symbols` / `find_structural_facts`: optional filter by directory or file path prefix.
 * `file_path` in `find_references`: optional file path to disambiguate symbols with identical names across files.
 * `telemetry_summary`: accepts `time_window` (aliases: `since`, `window`; defaults to `"all"`), `workspace_only` (defaults to `false`), `json` (defaults to `false`). Tool name alias: `code_kb_stats`.
 

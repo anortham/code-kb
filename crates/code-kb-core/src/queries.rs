@@ -1554,37 +1554,153 @@ pub fn find_callee_signatures(
     Ok(signatures)
 }
 
+/// Find structural facts by category (e.g. route, query, model, config), optionally scoped by path.
+pub fn find_structural_facts_scoped(
+    conn: &Connection,
+    category: &str,
+    path_filter: Option<&str>,
+    limit: usize,
+) -> Result<Vec<StructuralFact>, QueryError> {
+    let norm_path = path_filter
+        .map(|p| {
+            p.replace('\\', "/")
+                .trim_start_matches("./")
+                .trim_matches('/')
+                .to_string()
+        })
+        .filter(|p| !p.is_empty());
+    let path_like = norm_path.as_deref().map(|p| format!("%{}%", escape_like(p)));
+    let cat_pattern = format!("%{}%", escape_like(category));
+
+    let cat_lower = category.trim().to_ascii_lowercase();
+    let cat_clause = match cat_lower.as_str() {
+        "config" => {
+            "(sf.pattern_id LIKE '%.key_value.%' OR sf.pattern_id LIKE '%config%' OR sf.capture_name LIKE '%config%' OR sf.node_kind LIKE '%config%')"
+        }
+        "route" | "routes" => {
+            "(sf.pattern_id LIKE '%.route%' OR sf.pattern_id LIKE '%route%' OR sf.capture_name LIKE '%route%')"
+        }
+        "query" | "queries" | "sql" => {
+            "(sf.pattern_id LIKE '%.sql.%' OR sf.pattern_id LIKE '%query%')"
+        }
+        "model" | "models" => "sf.pattern_id LIKE '%.model%'",
+        _ => {
+            "(sf.pattern_id LIKE :cat ESCAPE '\\' OR sf.capture_name LIKE :cat ESCAPE '\\' OR sf.node_kind LIKE :cat ESCAPE '\\')"
+        }
+    };
+
+    let sql = format!(
+        "SELECT sf.structural_fact_id, sf.path, sf.language, sf.pattern_id,
+                sf.capture_name, sf.node_kind, s.name AS containing_symbol_name,
+                sf.start_line, sf.end_line, sf.confidence
+         FROM structural_facts sf
+         LEFT JOIN symbols s ON sf.containing_symbol_id = s.symbol_id
+         WHERE (:cat IS NOT NULL AND {cat_clause})
+           AND (:path IS NULL OR replace(sf.path, '\\', '/') = :path OR replace(sf.path, '\\', '/') LIKE :path_like ESCAPE '\\')
+         ORDER BY sf.path ASC, sf.start_line ASC
+         LIMIT :limit"
+    );
+
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(
+        rusqlite::named_params! {
+            ":cat": cat_pattern,
+            ":path": norm_path.as_deref(),
+            ":path_like": path_like.as_deref(),
+            ":limit": limit as i64,
+        },
+        |row| {
+            Ok(StructuralFact {
+                structural_fact_id: row.get(0)?,
+                path: row.get::<_, String>(1)?.replace('\\', "/"),
+                language: row.get(2)?,
+                pattern_id: row.get(3)?,
+                capture_name: row.get(4)?,
+                node_kind: row.get(5)?,
+                containing_symbol_name: row.get(6)?,
+                start_line: row.get::<_, i64>(7)? as usize,
+                end_line: row.get::<_, i64>(8)? as usize,
+                confidence: row.get(9)?,
+            })
+        },
+    )?;
+
+    let mut results = Vec::new();
+    for r in rows {
+        results.push(r?);
+    }
+    Ok(results)
+}
+
 /// Find structural facts by category (e.g. route, query, model, config).
 pub fn find_structural_facts(
     conn: &Connection,
     category: &str,
     limit: usize,
 ) -> Result<Vec<StructuralFact>, QueryError> {
-    let pattern = format!("%{}%", escape_like(category));
-    let mut stmt = conn.prepare(
-        "SELECT sf.structural_fact_id, sf.path, sf.language, sf.pattern_id,
-                sf.capture_name, sf.node_kind, s.name AS containing_symbol_name,
-                sf.start_line, sf.end_line, sf.confidence
-         FROM structural_facts sf
-         LEFT JOIN symbols s ON sf.containing_symbol_id = s.symbol_id
-         WHERE sf.pattern_id LIKE ?1 ESCAPE '\\' OR sf.capture_name LIKE ?1 ESCAPE '\\' OR sf.node_kind LIKE ?1 ESCAPE '\\'
-         LIMIT ?2",
-    )?;
+    find_structural_facts_scoped(conn, category, None, limit)
+}
 
-    let rows = stmt.query_map(params![pattern, limit as i64], |row| {
-        Ok(StructuralFact {
-            structural_fact_id: row.get(0)?,
-            path: row.get::<_, String>(1)?.replace('\\', "/"),
-            language: row.get(2)?,
-            pattern_id: row.get(3)?,
-            capture_name: row.get(4)?,
-            node_kind: row.get(5)?,
-            containing_symbol_name: row.get(6)?,
-            start_line: row.get::<_, i64>(7)? as usize,
-            end_line: row.get::<_, i64>(8)? as usize,
-            confidence: row.get(9)?,
+/// Find literals (endpoints, SQL queries, configs) matching category, optionally scoped by path.
+pub fn find_literals_scoped(
+    conn: &Connection,
+    category: &str,
+    path_filter: Option<&str>,
+    limit: usize,
+) -> Result<Vec<LiteralFact>, QueryError> {
+    let norm_path = path_filter
+        .map(|p| {
+            p.replace('\\', "/")
+                .trim_start_matches("./")
+                .trim_matches('/')
+                .to_string()
         })
-    })?;
+        .filter(|p| !p.is_empty());
+    let path_like = norm_path.as_deref().map(|p| format!("%{}%", escape_like(p)));
+    let cat_pattern = format!("%{}%", escape_like(category));
+
+    let cat_lower = category.trim().to_ascii_lowercase();
+    let cat_clause = match cat_lower.as_str() {
+        "config" => {
+            "(l.kind LIKE '%config%' OR l.kind LIKE '%toml%' OR l.kind LIKE '%json%' OR l.kind LIKE '%yaml%')"
+        }
+        "route" | "routes" => "l.kind LIKE '%route%'",
+        "query" | "queries" | "sql" => "(l.kind LIKE '%sql%' OR l.kind LIKE '%query%')",
+        "model" | "models" => "l.kind LIKE '%model%'",
+        _ => "(l.kind LIKE :cat ESCAPE '\\' OR l.literal_text LIKE :cat ESCAPE '\\')",
+    };
+
+    let sql = format!(
+        "SELECT l.literal_id, l.path, l.literal_text, l.kind, l.carrier,
+                l.start_line, s.name AS containing_symbol_name
+         FROM literals l
+         LEFT JOIN symbols s ON l.containing_symbol_id = s.symbol_id
+         WHERE (:cat IS NOT NULL AND {cat_clause})
+           AND (:path IS NULL OR replace(l.path, '\\', '/') = :path OR replace(l.path, '\\', '/') LIKE :path_like ESCAPE '\\')
+         ORDER BY l.path ASC, l.start_line ASC
+         LIMIT :limit"
+    );
+
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(
+        rusqlite::named_params! {
+            ":cat": cat_pattern,
+            ":path": norm_path.as_deref(),
+            ":path_like": path_like.as_deref(),
+            ":limit": limit as i64,
+        },
+        |row| {
+            Ok(LiteralFact {
+                literal_id: row.get(0)?,
+                path: row.get::<_, String>(1)?.replace('\\', "/"),
+                literal_text: row.get(2)?,
+                kind: row.get(3)?,
+                carrier: row.get(4)?,
+                start_line: row.get::<_, i64>(5)? as usize,
+                containing_symbol_name: row.get(6)?,
+            })
+        },
+    )?;
 
     let mut results = Vec::new();
     for r in rows {
@@ -1599,33 +1715,7 @@ pub fn find_literals(
     category: &str,
     limit: usize,
 ) -> Result<Vec<LiteralFact>, QueryError> {
-    let pattern = format!("%{}%", escape_like(category));
-    let mut stmt = conn.prepare(
-        "SELECT l.literal_id, l.path, l.literal_text, l.kind, l.carrier,
-                l.start_line, s.name AS containing_symbol_name
-         FROM literals l
-         LEFT JOIN symbols s ON l.containing_symbol_id = s.symbol_id
-         WHERE l.kind LIKE ?1 ESCAPE '\\' OR l.literal_text LIKE ?1 ESCAPE '\\'
-         LIMIT ?2",
-    )?;
-
-    let rows = stmt.query_map(params![pattern, limit as i64], |row| {
-        Ok(LiteralFact {
-            literal_id: row.get(0)?,
-            path: row.get::<_, String>(1)?.replace('\\', "/"),
-            literal_text: row.get(2)?,
-            kind: row.get(3)?,
-            carrier: row.get(4)?,
-            start_line: row.get::<_, i64>(5)? as usize,
-            containing_symbol_name: row.get(6)?,
-        })
-    })?;
-
-    let mut results = Vec::new();
-    for r in rows {
-        results.push(r?);
-    }
-    Ok(results)
+    find_literals_scoped(conn, category, None, limit)
 }
 
 /// List all available structural fact and literal categories with counts.
@@ -2496,5 +2586,107 @@ mod tests {
             "include_external: true should include external Vec::new: {:?}",
             ext_sigs
         );
+    }
+
+    #[test]
+    fn test_find_structural_facts_and_literals_scoped() {
+        let dir = crate::safe_tempdir();
+        let db_path = dir.path().join("facts_test.db");
+        let conn = open_read_write(&db_path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE symbols (
+                symbol_id TEXT PRIMARY KEY, file_id TEXT, path TEXT, language TEXT, name TEXT, kind TEXT,
+                signature TEXT, doc_comment TEXT, visibility TEXT, parent_symbol_id TEXT,
+                start_line INTEGER, start_column INTEGER, end_line INTEGER, end_column INTEGER,
+                start_byte INTEGER, end_byte INTEGER, body_start_line INTEGER,
+                body_start_column INTEGER, body_end_line INTEGER, body_end_column INTEGER,
+                body_start_byte INTEGER, body_end_byte INTEGER, body_hash TEXT,
+                semantic_group TEXT, is_test INTEGER, test_container INTEGER
+            );
+            CREATE TABLE structural_facts (
+                structural_fact_id TEXT PRIMARY KEY, file_id TEXT, path TEXT NOT NULL, language TEXT,
+                pattern_id TEXT, capture_name TEXT, node_kind TEXT, containing_symbol_id TEXT,
+                start_line INTEGER, end_line INTEGER, confidence REAL
+            );
+            CREATE TABLE literals (
+                literal_id TEXT PRIMARY KEY, file_id TEXT, path TEXT NOT NULL, language TEXT,
+                kind TEXT, literal_text TEXT, carrier TEXT, containing_symbol_id TEXT,
+                start_line INTEGER, start_column INTEGER, end_line INTEGER, end_column INTEGER,
+                start_byte INTEGER, end_byte INTEGER
+            );
+            INSERT INTO structural_facts VALUES
+                ('sf_toml', 'f1', 'Cargo.toml', 'toml', 'toml.key_value.v1', 'package.name', 'table', NULL, 1, 2, 1.0),
+                ('sf_route', 'f2', 'src/routes/api.rs', 'rust', 'http.route.v1', 'get_users', 'function', NULL, 10, 20, 1.0),
+                ('sf_sql', 'f3', 'src/db/queries.rs', 'rust', 'db.sql.select', 'select_users', 'function', NULL, 30, 40, 1.0),
+                ('sf_model', 'f4', 'src/models/user.rs', 'rust', 'orm.model.entity', 'User', 'struct', NULL, 50, 60, 1.0),
+                ('sf_custom', 'f5', 'src/custom.rs', 'rust', 'my_custom_pattern', 'custom_name', 'item', NULL, 70, 80, 1.0);
+            INSERT INTO literals VALUES
+                ('lit_toml', 'f1', 'Cargo.toml', 'toml', 'toml_key', '\"version\"', 'key', NULL, 3, 0, 3, 9, 20, 29),
+                ('lit_route', 'f2', 'src/routes/api.rs', 'rust', 'http_route', '\"/api/v1/users\"', 'string', NULL, 12, 0, 12, 15, 100, 115),
+                ('lit_sql', 'f3', 'src/db/queries.rs', 'rust', 'sql_query', '\"SELECT * FROM users\"', 'string', NULL, 32, 0, 32, 21, 200, 221),
+                ('lit_model', 'f4', 'src/models/user.rs', 'rust', 'model_table', '\"users_table\"', 'string', NULL, 52, 0, 52, 13, 300, 313);",
+        )
+        .unwrap();
+
+        // 1. "config" alias
+        let facts_config = find_structural_facts_scoped(&conn, "config", None, 10).unwrap();
+        assert_eq!(facts_config.len(), 1);
+        assert_eq!(facts_config[0].pattern_id, "toml.key_value.v1");
+        let lits_config = find_literals_scoped(&conn, "config", None, 10).unwrap();
+        assert_eq!(lits_config.len(), 1);
+        assert_eq!(lits_config[0].kind, "toml_key");
+
+        // 2. "route" and "routes" aliases
+        let facts_route = find_structural_facts_scoped(&conn, "route", None, 10).unwrap();
+        assert_eq!(facts_route.len(), 1);
+        assert_eq!(facts_route[0].pattern_id, "http.route.v1");
+        let facts_routes = find_structural_facts_scoped(&conn, "routes", None, 10).unwrap();
+        assert_eq!(facts_routes.len(), 1);
+        let lits_route = find_literals_scoped(&conn, "route", None, 10).unwrap();
+        assert_eq!(lits_route.len(), 1);
+        assert_eq!(lits_route[0].kind, "http_route");
+
+        // 3. "query", "queries", "sql" aliases
+        for q in &["query", "queries", "sql"] {
+            let facts = find_structural_facts_scoped(&conn, q, None, 10).unwrap();
+            assert_eq!(facts.len(), 1, "Failed for {}", q);
+            assert_eq!(facts[0].pattern_id, "db.sql.select");
+            let lits = find_literals_scoped(&conn, q, None, 10).unwrap();
+            assert_eq!(lits.len(), 1, "Failed for {}", q);
+            assert_eq!(lits[0].kind, "sql_query");
+        }
+
+        // 4. "model" and "models" aliases
+        for m in &["model", "models"] {
+            let facts = find_structural_facts_scoped(&conn, m, None, 10).unwrap();
+            assert_eq!(facts.len(), 1, "Failed for {}", m);
+            assert_eq!(facts[0].pattern_id, "orm.model.entity");
+            let lits = find_literals_scoped(&conn, m, None, 10).unwrap();
+            assert_eq!(lits.len(), 1, "Failed for {}", m);
+            assert_eq!(lits[0].kind, "model_table");
+        }
+
+        // 5. Custom / unknown category
+        let facts_custom = find_structural_facts_scoped(&conn, "custom_pattern", None, 10).unwrap();
+        assert_eq!(facts_custom.len(), 1);
+        assert_eq!(facts_custom[0].pattern_id, "my_custom_pattern");
+
+        // 6. Path filter: exact file match
+        let facts_exact = find_structural_facts_scoped(&conn, "config", Some("Cargo.toml"), 10).unwrap();
+        assert_eq!(facts_exact.len(), 1);
+        let facts_miss = find_structural_facts_scoped(&conn, "config", Some("src/routes/api.rs"), 10).unwrap();
+        assert_eq!(facts_miss.len(), 0);
+
+        // 7. Path filter: directory prefix
+        let facts_dir = find_structural_facts_scoped(&conn, "route", Some("src/routes"), 10).unwrap();
+        assert_eq!(facts_dir.len(), 1);
+        let facts_dir_miss = find_structural_facts_scoped(&conn, "route", Some("src/db"), 10).unwrap();
+        assert_eq!(facts_dir_miss.len(), 0);
+
+        // 8. Delegating find_structural_facts and find_literals
+        let f_del = find_structural_facts(&conn, "config", 10).unwrap();
+        assert_eq!(f_del.len(), 1);
+        let l_del = find_literals(&conn, "config", 10).unwrap();
+        assert_eq!(l_del.len(), 1);
     }
 }

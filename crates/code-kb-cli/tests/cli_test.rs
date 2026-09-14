@@ -651,6 +651,81 @@ fn test_cli_facts() {
 }
 
 #[test]
+fn test_cli_facts_with_config_alias_and_path_filter() {
+    let repo = setup_test_repo();
+    let root = repo.path();
+
+    let db_path = root.join(".code-kb/artifact.db");
+    let conn = code_kb_core::open_read_write(&db_path).unwrap();
+    conn.execute(
+        "INSERT INTO structural_facts VALUES ('sf1', 'f1', 'Cargo.toml', 'toml', 'toml.key_value.v1', 'package.name', 'table', NULL, 1, 2, 1.0)",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO structural_facts VALUES ('sf2', 'f1', 'src/workspace.rs', 'rust', 'toml.key_value.v1', 'dependencies', 'table', NULL, 1, 2, 1.0)",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO literals VALUES ('lit1', 'f1', 'Cargo.toml', 'toml', 'toml', '\"code-kb\"', 'carrier', NULL, 1, 0, 1, 9, 0, 9)",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO literals VALUES ('lit2', 'f1', 'src/workspace.rs', 'rust', 'toml', '\"serde\"', 'carrier', NULL, 1, 0, 1, 7, 0, 7)",
+        [],
+    )
+    .unwrap();
+    drop(conn);
+
+    let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .arg("facts")
+        .arg("config")
+        .output()
+        .expect("Failed to execute facts");
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Cargo.toml") && stdout.contains("src/workspace.rs"),
+        "stdout should contain both files: {}",
+        stdout
+    );
+
+    // Test with --path filter scoping to Cargo.toml
+    let output_filtered = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .arg("facts")
+        .arg("config")
+        .arg("--path")
+        .arg("Cargo.toml")
+        .output()
+        .expect("Failed to execute facts with path filter");
+    assert!(output_filtered.status.success());
+    let stdout_filt = String::from_utf8_lossy(&output_filtered.stdout);
+    assert!(stdout_filt.contains("Cargo.toml"));
+    assert!(!stdout_filt.contains("src/workspace.rs"));
+
+    // Test with --file alias scoping to src
+    let output_alias = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .arg("facts")
+        .arg("config")
+        .arg("--file")
+        .arg("src")
+        .output()
+        .expect("Failed to execute facts with file alias");
+    assert!(output_alias.status.success());
+    let stdout_alias = String::from_utf8_lossy(&output_alias.stdout);
+    assert!(!stdout_alias.contains("Cargo.toml"));
+    assert!(stdout_alias.contains("src/workspace.rs"));
+}
+
+#[test]
 fn test_cli_edit_atomic_replacement() {
     let _extract_bin = code_kb_core::find_julie_extract_binary()
         .expect("julie-extract binary must be present for tests");

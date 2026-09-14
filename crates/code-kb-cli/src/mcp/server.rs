@@ -294,6 +294,10 @@ impl McpServer {
                             "type": "string",
                             "description": "Optional fact category or pattern to search (e.g. route, query, model, config). If omitted, lists available categories with counts."
                         },
+                        "path": {
+                            "type": "string",
+                            "description": "Optional file path or directory to filter structural facts."
+                        },
                         "limit": {
                             "type": "integer",
                             "description": "Maximum results to return (default: 30)."
@@ -1011,18 +1015,36 @@ impl McpServer {
                     return CallToolResult::text(out);
                 }
 
+                let raw_path = arguments
+                    .get("path")
+                    .or_else(|| arguments.get("file"))
+                    .or_else(|| arguments.get("file_path"))
+                    .and_then(|v| v.as_str());
+                let rel_path = raw_path.map(|p| self.workspace.relativize_filter(p));
+                let path_filter = rel_path.as_deref();
+
                 let limit = arguments
                     .get("limit")
                     .and_then(|v| v.as_u64())
                     .unwrap_or(30) as usize;
 
-                let facts = match code_kb_core::find_structural_facts(&conn, category, limit) {
+                let facts = match code_kb_core::find_structural_facts_scoped(
+                    &conn,
+                    category,
+                    path_filter,
+                    limit,
+                ) {
                     Ok(f) => f,
                     Err(e) => return CallToolResult::error(e.to_string()),
                 };
 
-                let literals =
-                    code_kb_core::find_literals(&conn, category, limit).unwrap_or_default();
+                let literals = code_kb_core::find_literals_scoped(
+                    &conn,
+                    category,
+                    path_filter,
+                    limit,
+                )
+                .unwrap_or_default();
 
                 CallToolResult::text(format_structural_facts(&facts, &literals, category))
             }

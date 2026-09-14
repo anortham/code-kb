@@ -204,6 +204,9 @@ pub struct FactsArgs {
     /// Positional category if --category is not provided.
     #[arg(default_value = "")]
     pub positional_category: String,
+    /// Optional file path or directory to filter structural facts.
+    #[arg(short = 'p', long = "path", alias = "file")]
+    pub path: Option<String>,
     /// Maximum number of results.
     #[arg(long, default_value_t = 30)]
     pub limit: usize,
@@ -637,8 +640,19 @@ fn main() -> anyhow::Result<()> {
                     }
                 }
             } else {
-                let facts = code_kb_core::find_structural_facts(&conn, cat, args.limit)?;
-                let literals = code_kb_core::find_literals(&conn, cat, args.limit)?;
+                let rel_path = args.path.as_deref().map(|p| workspace.relativize_filter(p));
+                let facts = code_kb_core::find_structural_facts_scoped(
+                    &conn,
+                    cat,
+                    rel_path.as_deref(),
+                    args.limit,
+                )?;
+                let literals = code_kb_core::find_literals_scoped(
+                    &conn,
+                    cat,
+                    rel_path.as_deref(),
+                    args.limit,
+                )?;
                 if cli.json {
                     println!(
                         "{}",
