@@ -1030,6 +1030,12 @@ fn find_references_internal(
                                             AND s_from.parent_symbol_id = s_target.parent_symbol_id)
                                         OR (p.target_receiver IS NOT NULL AND p.target_receiver != '' AND s_target_parent.name = p.target_receiver)
                                     )
+                                    AND NOT EXISTS (
+                                        SELECT 1 FROM json_each(p.target_namespace_json)
+                                        WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super', 'self', 'Self', s_target_parent.name)
+                                          AND ('/' || replace(s_target.path, '\\', '/')) NOT LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
+                                          AND ('/' || replace(s_target.path, '\\', '/')) NOT LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '/%' ESCAPE '\\'
+                                    )
                                 )
                                 OR (
                                     (p.target_namespace_json IS NULL OR p.target_namespace_json = '[]')
@@ -1041,7 +1047,7 @@ fn find_references_internal(
                                     AND EXISTS (
                                         SELECT 1 FROM json_each(p.target_namespace_json)
                                         WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super')
-                                          AND s_target.path LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
+                                          AND ('/' || replace(s_target.path, '\\', '/')) LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
                                     )
                                 )
                             )
@@ -1226,6 +1232,12 @@ fn find_references_internal(
                                              AND s_from.parent_symbol_id = s_to.parent_symbol_id)
                                          OR (p.target_receiver IS NOT NULL AND p.target_receiver != '' AND s_to_parent.name = p.target_receiver)
                                      )
+                                     AND NOT EXISTS (
+                                         SELECT 1 FROM json_each(p.target_namespace_json)
+                                         WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super', 'self', 'Self', s_to_parent.name)
+                                           AND ('/' || replace(s_to.path, '\\', '/')) NOT LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
+                                           AND ('/' || replace(s_to.path, '\\', '/')) NOT LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '/%' ESCAPE '\\'
+                                     )
                                  )
                                  OR (
                                      (p.target_namespace_json IS NULL OR p.target_namespace_json = '[]')
@@ -1237,7 +1249,7 @@ fn find_references_internal(
                                      AND EXISTS (
                                          SELECT 1 FROM json_each(p.target_namespace_json)
                                          WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super')
-                                           AND s_to.path LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
+                                           AND ('/' || replace(s_to.path, '\\', '/')) LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
                                      )
                                  )
                              )
@@ -1333,7 +1345,7 @@ pub fn find_callee_signatures(
     include_external: bool,
 ) -> Result<Vec<String>, QueryError> {
     let mut stmt = conn.prepare(
-        "SELECT s_to.name, s_to.signature, s_to.path, s_to.start_line, s_to.kind
+        "SELECT DISTINCT s_to.name, s_to.signature, s_to.path, s_to.start_line, s_to.kind
          FROM relationships r
          JOIN symbols s_from ON r.from_symbol_id = s_from.symbol_id
          JOIN symbols s_to ON r.to_symbol_id = s_to.symbol_id
@@ -1479,6 +1491,12 @@ pub fn find_callee_signatures(
                                          AND s_from.parent_symbol_id = s_to.parent_symbol_id)
                                      OR (p.target_receiver IS NOT NULL AND p.target_receiver != '' AND s_parent.name = p.target_receiver)
                                  )
+                                 AND NOT EXISTS (
+                                     SELECT 1 FROM json_each(p.target_namespace_json)
+                                     WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super', 'self', 'Self', s_parent.name)
+                                       AND ('/' || replace(s_to.path, '\\', '/')) NOT LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
+                                       AND ('/' || replace(s_to.path, '\\', '/')) NOT LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '/%' ESCAPE '\\'
+                                 )
                              )
                              OR (
                                  (p.target_namespace_json IS NULL OR p.target_namespace_json = '[]')
@@ -1490,7 +1508,7 @@ pub fn find_callee_signatures(
                                  AND EXISTS (
                                      SELECT 1 FROM json_each(p.target_namespace_json)
                                      WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super')
-                                       AND s_to.path LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
+                                       AND ('/' || replace(s_to.path, '\\', '/')) LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
                                  )
                              )
                          )
@@ -1569,9 +1587,9 @@ pub fn find_structural_facts_scoped(
                 .to_string()
         })
         .filter(|p| !p.is_empty());
-    let path_like = norm_path
+    let dir_prefix = norm_path
         .as_deref()
-        .map(|p| format!("%{}%", escape_like(p)));
+        .map(|p| format!("{}/%", escape_like(p)));
     let cat_pattern = format!("%{}%", escape_like(category));
 
     let cat_lower = category.trim().to_ascii_lowercase();
@@ -1598,7 +1616,7 @@ pub fn find_structural_facts_scoped(
          FROM structural_facts sf
          LEFT JOIN symbols s ON sf.containing_symbol_id = s.symbol_id
          WHERE (:cat IS NOT NULL AND {cat_clause})
-           AND (:path IS NULL OR replace(sf.path, '\\', '/') = :path OR replace(sf.path, '\\', '/') LIKE :path_like ESCAPE '\\')
+           AND (:path IS NULL OR replace(sf.path, '\\', '/') = :path OR replace(sf.path, '\\', '/') LIKE :dir_prefix ESCAPE '\\')
          ORDER BY sf.path ASC, sf.start_line ASC
          LIMIT :limit"
     );
@@ -1608,7 +1626,7 @@ pub fn find_structural_facts_scoped(
         rusqlite::named_params! {
             ":cat": cat_pattern,
             ":path": norm_path.as_deref(),
-            ":path_like": path_like.as_deref(),
+            ":dir_prefix": dir_prefix.as_deref(),
             ":limit": limit as i64,
         },
         |row| {
@@ -1658,9 +1676,9 @@ pub fn find_literals_scoped(
                 .to_string()
         })
         .filter(|p| !p.is_empty());
-    let path_like = norm_path
+    let dir_prefix = norm_path
         .as_deref()
-        .map(|p| format!("%{}%", escape_like(p)));
+        .map(|p| format!("{}/%", escape_like(p)));
     let cat_pattern = format!("%{}%", escape_like(category));
 
     let cat_lower = category.trim().to_ascii_lowercase();
@@ -1680,7 +1698,7 @@ pub fn find_literals_scoped(
          FROM literals l
          LEFT JOIN symbols s ON l.containing_symbol_id = s.symbol_id
          WHERE (:cat IS NOT NULL AND {cat_clause})
-           AND (:path IS NULL OR replace(l.path, '\\', '/') = :path OR replace(l.path, '\\', '/') LIKE :path_like ESCAPE '\\')
+           AND (:path IS NULL OR replace(l.path, '\\', '/') = :path OR replace(l.path, '\\', '/') LIKE :dir_prefix ESCAPE '\\')
          ORDER BY l.path ASC, l.start_line ASC
          LIMIT :limit"
     );
@@ -1690,7 +1708,7 @@ pub fn find_literals_scoped(
         rusqlite::named_params! {
             ":cat": cat_pattern,
             ":path": norm_path.as_deref(),
-            ":path_like": path_like.as_deref(),
+            ":dir_prefix": dir_prefix.as_deref(),
             ":limit": limit as i64,
         },
         |row| {
@@ -1722,32 +1740,63 @@ pub fn find_literals(
     find_literals_scoped(conn, category, None, limit)
 }
 
-/// List all available structural fact and literal categories with counts.
-pub fn list_structural_fact_categories(
+/// List available structural fact and literal categories with counts, optionally scoped by path.
+pub fn list_structural_fact_categories_scoped(
     conn: &Connection,
+    path_filter: Option<&str>,
 ) -> Result<Vec<(String, usize)>, QueryError> {
+    let norm_path = path_filter
+        .map(|p| {
+            p.replace('\\', "/")
+                .trim_start_matches("./")
+                .trim_matches('/')
+                .to_string()
+        })
+        .filter(|p| !p.is_empty());
+    let dir_prefix = norm_path
+        .as_deref()
+        .map(|p| format!("{}/%", escape_like(p)));
+
     let mut categories = Vec::new();
 
-    let mut stmt = conn.prepare(
-        "SELECT pattern_id, COUNT(*) AS cnt FROM structural_facts GROUP BY pattern_id ORDER BY cnt DESC",
+    let sql = "SELECT pattern_id, COUNT(*) AS cnt FROM structural_facts
+               WHERE (:path IS NULL OR replace(path, '\\', '/') = :path OR replace(path, '\\', '/') LIKE :dir_prefix ESCAPE '\\')
+               GROUP BY pattern_id ORDER BY cnt DESC";
+    let mut stmt = conn.prepare(sql)?;
+    let rows = stmt.query_map(
+        rusqlite::named_params! {
+            ":path": norm_path.as_deref(),
+            ":dir_prefix": dir_prefix.as_deref(),
+        },
+        |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as usize)),
     )?;
-    let rows = stmt.query_map([], |row| {
-        Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as usize))
-    })?;
     for r in rows {
         categories.push(r?);
     }
 
-    let mut lit_stmt =
-        conn.prepare("SELECT kind, COUNT(*) AS cnt FROM literals GROUP BY kind ORDER BY cnt DESC")?;
-    let lit_rows = lit_stmt.query_map([], |row| {
-        Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as usize))
-    })?;
+    let lit_sql = "SELECT kind, COUNT(*) AS cnt FROM literals
+                   WHERE (:path IS NULL OR replace(path, '\\', '/') = :path OR replace(path, '\\', '/') LIKE :dir_prefix ESCAPE '\\')
+                   GROUP BY kind ORDER BY cnt DESC";
+    let mut lit_stmt = conn.prepare(lit_sql)?;
+    let lit_rows = lit_stmt.query_map(
+        rusqlite::named_params! {
+            ":path": norm_path.as_deref(),
+            ":dir_prefix": dir_prefix.as_deref(),
+        },
+        |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as usize)),
+    )?;
     for r in lit_rows {
         categories.push(r?);
     }
 
     Ok(categories)
+}
+
+/// List all available structural fact and literal categories with counts.
+pub fn list_structural_fact_categories(
+    conn: &Connection,
+) -> Result<Vec<(String, usize)>, QueryError> {
+    list_structural_fact_categories_scoped(conn, None)
 }
 
 /// Find type facts for a symbol.
@@ -1804,22 +1853,18 @@ pub fn is_test_path(path: &str) -> bool {
 
 /// Compute blast radius and likely tests for given seed symbols or seed file paths.
 /// Recursively walks reverse reachability (transitive callers) up to `max_depth` in SQLite.
-pub fn compute_blast_radius(
+pub fn compute_blast_radius_scoped(
     conn: &Connection,
     seed_symbols: &[&str],
+    symbol_path_filter: Option<&str>,
     seed_paths: &[&str],
     max_depth: usize,
     limit: usize,
 ) -> Result<BlastRadiusResult, QueryError> {
-    let path_hint = if seed_paths.len() == 1 {
-        Some(seed_paths[0])
-    } else {
-        None
-    };
     let resolved_seed_symbols = seed_symbols
         .iter()
         .map(|name| {
-            get_symbol_by_name(conn, name, path_hint)?
+            get_symbol_by_name(conn, name, symbol_path_filter)?
                 .ok_or_else(|| QueryError::SymbolNotFound((*name).to_string()))
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -1848,6 +1893,7 @@ pub fn compute_blast_radius(
             seeds: Vec::new(),
             likely_tests: Vec::new(),
             impacted_symbols: Vec::new(),
+            traversal_ceiling_reached: false,
         });
     };
 
@@ -1870,7 +1916,7 @@ pub fn compute_blast_radius(
         for (i, p) in seed_paths.iter().enumerate() {
             let idx = base_idx + i + 1;
             path_conds.push(format!(
-                "path = ?{idx} OR path LIKE '%' || ?{idx} || '%' ESCAPE '\\'"
+                "path = ?{idx} OR path LIKE ?{idx} || '/%' ESCAPE '\\'"
             ));
             let raw = p
                 .replace('\\', "/")
@@ -1886,6 +1932,8 @@ pub fn compute_blast_radius(
     let seed_condition = where_clauses.join(" OR ");
     let max_depth_idx = params_vec.len() + 1;
     params_vec.push(rusqlite::types::Value::Integer(max_depth as i64));
+
+    let mut traversal_ceiling_reached = false;
 
     let has_relationships: bool = conn
         .query_row(
@@ -1931,6 +1979,12 @@ pub fn compute_blast_radius(
                                 AND s_from.parent_symbol_id = s_target.parent_symbol_id)
                             OR (p.target_receiver IS NOT NULL AND p.target_receiver != '' AND s_target_parent.name = p.target_receiver)
                         )
+                        AND NOT EXISTS (
+                            SELECT 1 FROM json_each(p.target_namespace_json)
+                            WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super', 'self', 'Self', s_target_parent.name)
+                              AND ('/' || replace(s_target.path, '\\', '/')) NOT LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
+                              AND ('/' || replace(s_target.path, '\\', '/')) NOT LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '/%' ESCAPE '\\'
+                        )
                     )
                     OR (
                         (p.target_namespace_json IS NULL OR p.target_namespace_json = '[]')
@@ -1942,7 +1996,7 @@ pub fn compute_blast_radius(
                         AND EXISTS (
                             SELECT 1 FROM json_each(p.target_namespace_json)
                             WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super')
-                              AND s_target.path LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
+                              AND ('/' || replace(s_target.path, '\\', '/')) LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
                         )
                     )
                 )",
@@ -2005,7 +2059,9 @@ pub fn compute_blast_radius(
             ))
         })?;
 
+        let mut row_count = 0;
         for r in rows {
+            row_count += 1;
             let (_sym_id, name, kind, raw_path, line, is_test, test_container, depth) = r?;
             let path = raw_path.replace('\\', "/");
             let is_test_target = is_test || test_container || is_test_path(&path);
@@ -2030,6 +2086,7 @@ pub fn compute_blast_radius(
                 });
             }
         }
+        traversal_ceiling_reached = row_count >= 200;
     }
 
     // 2. Discover stem-matched test files in the workspace
@@ -2097,7 +2154,19 @@ pub fn compute_blast_radius(
         seeds,
         likely_tests,
         impacted_symbols,
+        traversal_ceiling_reached,
     })
+}
+
+/// Compute blast radius and likely tests for given seed symbols or seed file paths.
+pub fn compute_blast_radius(
+    conn: &Connection,
+    seed_symbols: &[&str],
+    seed_paths: &[&str],
+    max_depth: usize,
+    limit: usize,
+) -> Result<BlastRadiusResult, QueryError> {
+    compute_blast_radius_scoped(conn, seed_symbols, None, seed_paths, max_depth, limit)
 }
 
 #[cfg(test)]

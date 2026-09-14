@@ -1,8 +1,8 @@
 use rusqlite::Connection;
 
 use code_kb_core::{
-    Workspace, blast_radius_op, compute_blast_radius, find_references, find_references_ext,
-    format_blast_radius, open_read_write, safe_tempdir,
+    Workspace, blast_radius_op, compute_blast_radius, compute_blast_radius_scoped, find_references,
+    find_references_ext, format_blast_radius, open_read_write, safe_tempdir,
 };
 
 fn setup_test_db(conn: &Connection) {
@@ -210,13 +210,29 @@ fn blast_radius_disambiguates_symbol_seed_using_seed_path() {
         "INSERT INTO symbols VALUES
             ('s1', 'f1', 'src/alpha.rs', 'rust', 'handle', 'function', NULL, NULL, NULL, NULL, 1, 0, 1, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
             ('s2', 'f2', 'src/beta.rs', 'rust', 'handle', 'function', NULL, NULL, NULL, NULL, 1, 0, 1, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
-            ('c1', 'f3', 'src/caller_alpha.rs', 'rust', 'call_alpha', 'function', NULL, NULL, NULL, NULL, 1, 0, 1, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0);
+            ('c1', 'f3', 'src/caller_alpha.rs', 'rust', 'call_alpha', 'function', NULL, NULL, NULL, NULL, 1, 0, 1, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
+            ('u1', 'f1', 'src/alpha.rs', 'rust', 'unrelated', 'function', NULL, NULL, NULL, NULL, 5, 0, 5, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
+            ('c_u', 'f4', 'src/caller_u.rs', 'rust', 'call_u', 'function', NULL, NULL, NULL, NULL, 1, 0, 1, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0);
         INSERT INTO relationships VALUES
-            ('c1', 's1', 'calls', 'src/caller_alpha.rs', 1, 0);",
+            ('c1', 's1', 'calls', 'src/caller_alpha.rs', 1, 0),
+            ('c_u', 'u1', 'calls', 'src/caller_u.rs', 1, 0);",
     )
     .unwrap();
 
-    let res = compute_blast_radius(&conn, &["handle"], &["src/alpha.rs"], 1, 20).unwrap();
+    // 1. compute_blast_radius_scoped resolves 'handle' using path filter without seeding unrelated functions in src/alpha.rs
+    let res =
+        compute_blast_radius_scoped(&conn, &["handle"], Some("src/alpha.rs"), &[], 1, 20).unwrap();
     assert_eq!(res.impacted_symbols.len(), 1);
     assert_eq!(res.impacted_symbols[0].name, "call_alpha");
+
+    // 2. blast_radius_op similarly disambiguates symbol using file without pulling in other symbols in src/alpha.rs
+    let ws = Workspace::new(temp.path().to_path_buf());
+    let res_op = blast_radius_op(&ws, &conn, Some("handle"), Some("src/alpha.rs"), 1, 20).unwrap();
+    assert_eq!(res_op.impacted_symbols.len(), 1);
+    assert_eq!(res_op.impacted_symbols[0].name, "call_alpha");
+
+    // 3. Mixed request: symbol in alpha and file in beta resolves without forcing symbol into beta
+    let res_mixed =
+        compute_blast_radius_scoped(&conn, &["call_alpha"], None, &["src/beta.rs"], 1, 20).unwrap();
+    assert_eq!(res_mixed.seed_type, "mixed");
 }

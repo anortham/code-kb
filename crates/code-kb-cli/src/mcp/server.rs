@@ -9,9 +9,10 @@ use code_kb_core::{
     format_references, format_replace_symbol_result, format_search_results,
     format_structural_facts, format_symbol_body, format_telemetry_summary,
     fts_search_symbols_scoped, get_context_slice_op, get_symbol_body_op, get_telemetry_summary,
-    list_structural_fact_categories, migrate_legacy_workspace_telemetry, open_global_telemetry_db,
-    open_read_only, reconcile_offline_edits, record_tool_call, record_tool_call_conn,
-    replace_symbol_body, scan_workspace, search_symbols_scoped, start_watcher,
+    list_structural_fact_categories_scoped, migrate_legacy_workspace_telemetry,
+    open_global_telemetry_db, open_read_only, reconcile_offline_edits, record_tool_call,
+    record_tool_call_conn, replace_symbol_body, scan_workspace, search_symbols_scoped,
+    start_watcher,
 };
 
 use super::protocol::{CallToolResult, JsonRpcRequest, JsonRpcResponse, Tool};
@@ -990,6 +991,14 @@ impl McpServer {
                 CallToolResult::text(format_references(&symbol_name, &refs, direction, limit))
             }
             "find_structural_facts" => {
+                let raw_path = arguments
+                    .get("path")
+                    .or_else(|| arguments.get("file"))
+                    .or_else(|| arguments.get("file_path"))
+                    .and_then(|v| v.as_str());
+                let rel_path = raw_path.map(|p| self.workspace.relativize_filter(p));
+                let path_filter = rel_path.as_deref();
+
                 let category = arguments
                     .get("category")
                     .or_else(|| arguments.get("cat"))
@@ -1001,10 +1010,11 @@ impl McpServer {
                     .trim();
 
                 if category.is_empty() {
-                    let categories = match list_structural_fact_categories(&conn) {
-                        Ok(c) => c,
-                        Err(e) => return CallToolResult::error(e.to_string()),
-                    };
+                    let categories =
+                        match list_structural_fact_categories_scoped(&conn, path_filter) {
+                            Ok(c) => c,
+                            Err(e) => return CallToolResult::error(e.to_string()),
+                        };
 
                     let mut out = format_fact_categories(&categories);
                     if !categories.is_empty() {
@@ -1014,14 +1024,6 @@ impl McpServer {
                     }
                     return CallToolResult::text(out);
                 }
-
-                let raw_path = arguments
-                    .get("path")
-                    .or_else(|| arguments.get("file"))
-                    .or_else(|| arguments.get("file_path"))
-                    .and_then(|v| v.as_str());
-                let rel_path = raw_path.map(|p| self.workspace.relativize_filter(p));
-                let path_filter = rel_path.as_deref();
 
                 let limit = arguments
                     .get("limit")

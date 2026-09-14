@@ -6,7 +6,7 @@ use code_kb_core::{
     format_context_slice, format_fact_categories, format_find_symbol_results, format_references,
     format_replace_symbol_result, format_search_results, format_structural_facts,
     format_symbol_body, fts_search_symbols_scoped, get_context_slice_op, get_symbol_body_op,
-    list_structural_fact_categories, load_file_symbols, open_read_only, queries,
+    list_structural_fact_categories_scoped, load_file_symbols, open_read_only, queries,
     replace_symbol_body, scan_workspace, search_symbols_scoped,
 };
 
@@ -627,10 +627,12 @@ fn main() -> anyhow::Result<()> {
             }
         }
         Command::Facts(args) => {
+            let rel_path = args.path.as_deref().map(|p| workspace.relativize_filter(p));
             let raw_cat = args.category.unwrap_or(args.positional_category);
             let cat = raw_cat.trim();
             if cat.is_empty() {
-                let categories = list_structural_fact_categories(&conn)?;
+                let categories =
+                    list_structural_fact_categories_scoped(&conn, rel_path.as_deref())?;
                 if cli.json {
                     println!("{}", serde_json::to_string_pretty(&categories)?);
                 } else {
@@ -640,7 +642,6 @@ fn main() -> anyhow::Result<()> {
                     }
                 }
             } else {
-                let rel_path = args.path.as_deref().map(|p| workspace.relativize_filter(p));
                 let facts = code_kb_core::find_structural_facts_scoped(
                     &conn,
                     cat,

@@ -118,6 +118,8 @@ pub struct BlastRadiusResult {
     pub seeds: Vec<String>,
     pub likely_tests: Vec<TestTarget>,
     pub impacted_symbols: Vec<ImpactedSymbol>,
+    #[serde(default)]
+    pub traversal_ceiling_reached: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

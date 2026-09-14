@@ -1,6 +1,7 @@
 use code_kb_core::{
-    Workspace, find_julie_extract_binary, find_references_scoped, get_context_slice_op,
-    get_symbol_by_name, open_read_only, open_read_write, safe_tempdir, scan_workspace,
+    Workspace, find_callee_signatures, find_julie_extract_binary, find_references_scoped,
+    find_structural_facts_scoped, get_context_slice_op, get_symbol_by_name, open_read_only,
+    open_read_write, safe_tempdir, scan_workspace,
 };
 use std::fs;
 
@@ -464,7 +465,13 @@ fn setup_test_db(conn: &rusqlite::Connection) {
         );
         CREATE TABLE pending_relationships (
             from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT, path TEXT,
-            start_line INTEGER, start_column INTEGER
+            start_line INTEGER, start_column INTEGER,
+            target_receiver TEXT, target_namespace_json TEXT, target_display_name TEXT
+        );
+        CREATE TABLE structural_facts (
+            structural_fact_id TEXT PRIMARY KEY, file_id TEXT, path TEXT NOT NULL, language TEXT,
+            pattern_id TEXT, capture_name TEXT, node_kind TEXT, containing_symbol_id TEXT,
+            start_line INTEGER, end_line INTEGER, confidence REAL
         );",
     )
     .unwrap();
@@ -490,4 +497,102 @@ fn find_references_scoped_disambiguates_multi_file_symbols() {
         find_references_scoped(&conn, "run", "callers", 10, false, Some("src/alpha.rs")).unwrap();
     assert_eq!(refs.len(), 1);
     assert_eq!(refs[0].from_symbol_name, "caller_alpha");
+}
+
+#[test]
+fn test_pending_references_preserve_target_identity_with_shared_parent_name() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+
+    conn.execute_batch(
+        "INSERT INTO symbols VALUES
+            ('w_alpha', 'f1', 'src/alpha.rs', 'rust', 'Worker', 'struct', 'pub struct Worker', NULL, 'pub', NULL, 1, 0, 10, 0, 0, 100, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'struct', 0, 0),
+            ('r_alpha', 'f1', 'src/alpha.rs', 'rust', 'run', 'method', 'pub fn run(&self)', NULL, 'pub', 'w_alpha', 2, 4, 4, 5, 20, 50, 2, 4, 4, 5, 20, 50, 'h1', 'method', 0, 0),
+            ('w_beta', 'f2', 'src/beta.rs', 'rust', 'Worker', 'struct', 'pub struct Worker', NULL, 'pub', NULL, 1, 0, 10, 0, 0, 100, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'struct', 0, 0),
+            ('r_beta', 'f2', 'src/beta.rs', 'rust', 'run', 'method', 'pub fn run(&self)', NULL, 'pub', 'w_beta', 2, 4, 4, 5, 20, 50, 2, 4, 4, 5, 20, 50, 'h2', 'method', 0, 0),
+            ('c_gamma', 'f3', 'src/gamma.rs', 'rust', 'caller', 'function', 'pub fn caller()', NULL, 'pub', NULL, 1, 0, 10, 0, 0, 100, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'function', 0, 0);
+
+        -- Caller calls beta::Worker::run() explicitly
+        INSERT INTO pending_relationships (from_symbol_id, target_terminal_name, kind, path, start_line, start_column, target_receiver, target_namespace_json, target_display_name) VALUES
+            ('c_gamma', 'run', 'calls', 'src/gamma.rs', 5, 8, NULL, '[\"beta\", \"Worker\"]', 'beta::Worker::run');",
+    )
+    .unwrap();
+
+    // Query callers for Worker::run scoped to alpha.rs: must be empty because call was to beta::Worker::run
+    let refs_alpha =
+        find_references_scoped(&conn, "run", "callers", 10, false, Some("src/alpha.rs")).unwrap();
+    assert!(
+        refs_alpha.is_empty(),
+        "Expected 0 callers for alpha.rs, got: {:?}",
+        refs_alpha
+    );
+
+    // Query callers for Worker::run scoped to beta.rs: must find caller
+    let refs_beta =
+        find_references_scoped(&conn, "run", "callers", 10, false, Some("src/beta.rs")).unwrap();
+    assert_eq!(refs_beta.len(), 1);
+    assert_eq!(refs_beta[0].from_symbol_name, "caller");
+}
+
+#[test]
+fn test_structural_facts_scoped_boundary_matching() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+
+    conn.execute_batch(
+        "INSERT INTO structural_facts (structural_fact_id, file_id, path, language, pattern_id, capture_name, node_kind, containing_symbol_id, start_line, end_line, confidence) VALUES
+            ('sf1', 'f1', 'Cargo.toml', 'toml', 'toml.key_value.v1', 'name', 'table', NULL, 1, 1, 1.0),
+            ('sf2', 'f2', 'crates/a/Cargo.toml', 'toml', 'toml.key_value.v1', 'name', 'table', NULL, 1, 1, 1.0),
+            ('sf3', 'f3', 'src/api/users.rs', 'rust', 'route', 'get_users', 'function_item', NULL, 1, 1, 1.0),
+            ('sf4', 'f4', 'src/api_backup/users.rs', 'rust', 'route', 'get_users', 'function_item', NULL, 1, 1, 1.0);",
+    )
+    .unwrap();
+
+    // 'Cargo.toml' must not match 'crates/a/Cargo.toml'
+    let root_cargo = find_structural_facts_scoped(&conn, "config", Some("Cargo.toml"), 10).unwrap();
+    assert_eq!(root_cargo.len(), 1);
+    assert_eq!(root_cargo[0].path, "Cargo.toml");
+
+    // 'src/api' must match 'src/api/users.rs' but NOT 'src/api_backup/users.rs'
+    let api_routes = find_structural_facts_scoped(&conn, "route", Some("src/api"), 10).unwrap();
+    assert_eq!(api_routes.len(), 1);
+    assert_eq!(api_routes[0].path, "src/api/users.rs");
+}
+
+#[test]
+fn test_find_callee_signatures_deduplication_before_cap() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+
+    let mut sql = String::from(
+        "INSERT INTO symbols VALUES
+            ('s_caller', 'f1', 'src/lib.rs', 'rust', 'caller', 'function', 'pub fn caller()', NULL, 'pub', NULL, 1, 0, 10, 0, 0, 100, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'function', 0, 0),
+            ('s_h1', 'f1', 'src/lib.rs', 'rust', 'helper_one', 'function', 'pub fn helper_one()', NULL, 'pub', NULL, 11, 0, 20, 0, 101, 200, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'function', 0, 0),
+            ('s_h2', 'f1', 'src/lib.rs', 'rust', 'helper_two', 'function', 'pub fn helper_two()', NULL, 'pub', NULL, 21, 0, 30, 0, 201, 300, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'function', 0, 0);\n",
+    );
+    // 25 calls to helper_one
+    for i in 1..=25 {
+        sql.push_str(&format!(
+            "INSERT INTO relationships VALUES ('s_caller', 's_h1', 'calls', 'src/lib.rs', {i}, 0);\n"
+        ));
+    }
+    // 1 call to helper_two
+    sql.push_str(
+        "INSERT INTO relationships VALUES ('s_caller', 's_h2', 'calls', 'src/lib.rs', 26, 0);\n",
+    );
+    conn.execute_batch(&sql).unwrap();
+
+    let sigs = find_callee_signatures(&conn, "caller", "s_caller", 10, false).unwrap();
+    // Both helper_one and helper_two must be returned, not crowded out by the 25 calls to helper_one
+    assert_eq!(
+        sigs.len(),
+        2,
+        "Expected 2 distinct callee signatures, got: {:?}",
+        sigs
+    );
+    assert!(sigs.iter().any(|s| s.contains("helper_one")));
+    assert!(sigs.iter().any(|s| s.contains("helper_two")));
 }

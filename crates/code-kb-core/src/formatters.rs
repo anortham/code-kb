@@ -612,7 +612,7 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
             }
         }
 
-        if total >= 200 {
+        if result.traversal_ceiling_reached || total >= 200 {
             out.push_str("### Downstream Impact (200+ symbols - traversal ceiling reached; increase depth/limit or narrow target)\n");
         } else {
             out.push_str(&format!("### Downstream Impact ({} symbols)\n", total));
@@ -779,6 +779,7 @@ mod tests {
                 line: 42,
                 depth: 1,
             }],
+            traversal_ceiling_reached: false,
         };
 
         let formatted = format_blast_radius(&res);
@@ -831,6 +832,7 @@ mod tests {
             seeds: vec!["src/lib.rs".into()],
             likely_tests,
             impacted_symbols,
+            traversal_ceiling_reached: false,
         };
 
         let formatted = format_blast_radius(&res);
@@ -956,6 +958,7 @@ mod tests {
             seeds: vec!["root_fn".into()],
             likely_tests: Vec::new(),
             impacted_symbols,
+            traversal_ceiling_reached: true,
         };
 
         let formatted = format_blast_radius(&res);

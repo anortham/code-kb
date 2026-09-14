@@ -274,9 +274,6 @@ pub fn blast_radius_op(
     max_depth: usize,
     limit: usize,
 ) -> Result<BlastRadiusResult, OpError> {
-    let mut seed_symbols = Vec::new();
-    let mut seed_paths = Vec::new();
-
     let clean_symbol = symbol.and_then(|s| {
         let t = s.trim();
         if t.is_empty() { None } else { Some(t) }
@@ -291,49 +288,53 @@ pub fn blast_radius_op(
     });
 
     let mut discovered = Vec::new();
+    let (seed_symbols, symbol_path_filter, seed_paths) = match (clean_symbol, clean_file) {
+        (Some(s), Some(f)) => (vec![s], Some(f), vec![]),
+        (Some(s), None) => (vec![s], None, vec![]),
+        (None, Some(f)) => (vec![], None, vec![f]),
+        (None, None) => {
+            // Zero arguments: discover uncommitted working tree changes via git status
+            let git_status = std::process::Command::new("git")
+                .args(["status", "--porcelain"])
+                .current_dir(&workspace.root)
+                .output();
 
-    if let Some(s) = clean_symbol {
-        seed_symbols.push(s);
-    }
-    if let Some(ref f) = clean_file {
-        seed_paths.push(f.as_str());
-    }
-    if seed_symbols.is_empty() && seed_paths.is_empty() {
-        // Zero arguments: discover uncommitted working tree changes via git status
-        let git_status = std::process::Command::new("git")
-            .args(["status", "--porcelain"])
-            .current_dir(&workspace.root)
-            .output();
-
-        if let Ok(output) = git_status
-            && output.status.success()
-        {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            for line in stdout.lines() {
-                if line.len() > 3 {
-                    let path_part = line.get(3..).unwrap_or("").trim();
-                    let target = if let Some((_, to)) = path_part.split_once("->") {
-                        to.trim()
-                    } else {
-                        path_part
-                    };
-                    let p = target.trim_matches('"');
-                    let p_fwd = p.replace('\\', "/");
-                    if !p_fwd.is_empty() && !crate::workspace::is_hard_excluded(&p_fwd) {
-                        discovered.push(p_fwd);
+            if let Ok(output) = git_status
+                && output.status.success()
+            {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                for line in stdout.lines() {
+                    if line.len() > 3 {
+                        let path_part = line.get(3..).unwrap_or("").trim();
+                        let target = if let Some((_, to)) = path_part.split_once("->") {
+                            to.trim()
+                        } else {
+                            path_part
+                        };
+                        let p = target.trim_matches('"');
+                        let p_fwd = p.replace('\\', "/");
+                        if !p_fwd.is_empty() && !crate::workspace::is_hard_excluded(&p_fwd) {
+                            discovered.push(p_fwd);
+                        }
                     }
                 }
             }
+            (vec![], None, discovered)
         }
-        for d in &discovered {
-            seed_paths.push(d.as_str());
-        }
-    }
+    };
 
     let depth = if max_depth == 0 { 2 } else { max_depth.min(5) };
     let row_limit = if limit == 0 { 20 } else { limit };
 
-    let res = queries::compute_blast_radius(conn, &seed_symbols, &seed_paths, depth, row_limit)?;
+    let seed_paths_refs: Vec<&str> = seed_paths.iter().map(|s| s.as_str()).collect();
+    let res = queries::compute_blast_radius_scoped(
+        conn,
+        &seed_symbols,
+        symbol_path_filter.as_deref(),
+        &seed_paths_refs,
+        depth,
+        row_limit,
+    )?;
     Ok(res)
 }
 

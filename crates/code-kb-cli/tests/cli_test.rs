@@ -723,6 +723,19 @@ fn test_cli_facts_with_config_alias_and_path_filter() {
     let stdout_alias = String::from_utf8_lossy(&output_alias.stdout);
     assert!(!stdout_alias.contains("Cargo.toml"));
     assert!(stdout_alias.contains("src/workspace.rs"));
+
+    // Test category discovery with --path filter (Finding 6)
+    let output_cat_path = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .arg("facts")
+        .arg("--path")
+        .arg("Cargo.toml")
+        .output()
+        .expect("Failed to execute facts discovery with path filter");
+    assert!(output_cat_path.status.success());
+    let stdout_cat = String::from_utf8_lossy(&output_cat_path.stdout);
+    assert!(stdout_cat.contains("`toml.key_value.v1` (1 occurrences)"));
 }
 
 #[test]
