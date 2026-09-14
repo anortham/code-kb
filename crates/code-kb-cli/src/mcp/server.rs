@@ -394,8 +394,42 @@ impl McpServer {
             let est_tokens_saved = match name {
                 "file_skeleton"
                 | "get_symbol_body"
-                | "get_context_slice"
-                | "find_symbol"
+                | "get_context_slice" => {
+                    let file_size = arguments
+                        .get("file_path")
+                        .or_else(|| arguments.get("file"))
+                        .or_else(|| arguments.get("path"))
+                        .and_then(|v| v.as_str())
+                        .and_then(|p| {
+                            self.workspace
+                                .resolve_path(Path::new(p))
+                                .ok()
+                                .map(|(abs, _)| abs)
+                                .or_else(|| {
+                                    let p_buf = if p.starts_with("file://") {
+                                        code_kb_core::parse_file_uri(p)
+                                            .unwrap_or_else(|| PathBuf::from(p))
+                                    } else {
+                                        PathBuf::from(p)
+                                    };
+                                    if p_buf.is_absolute() {
+                                        Some(p_buf)
+                                    } else {
+                                        Some(self.workspace.canonical_root.join(p_buf))
+                                    }
+                                })
+                        })
+                        .and_then(|abs| std::fs::metadata(&abs).ok())
+                        .filter(|m| m.is_file())
+                        .map(|m| m.len() as usize);
+
+                    if let Some(size) = file_size {
+                        (size / 4).saturating_sub(est_tokens)
+                    } else {
+                        est_tokens.saturating_mul(3)
+                    }
+                }
+                "find_symbol"
                 | "search_symbols" => est_tokens.saturating_mul(3),
                 _ => 0,
             };
@@ -462,7 +496,19 @@ impl McpServer {
         };
 
         match get_telemetry_summary(conn, &filter) {
-            Ok(summary) => {
+            Ok(mut summary) => {
+                if !workspace_only {
+                    let ws_filter = TelemetryFilter {
+                        time_window,
+                        workspace_root: Some(self.workspace.canonical_root.clone()),
+                    };
+                    if let Ok(ws_summary) = get_telemetry_summary(conn, &ws_filter) {
+                        summary.recent_errors = ws_summary.recent_errors;
+                    } else {
+                        summary.recent_errors.clear();
+                    }
+                }
+
                 if as_json {
                     match serde_json::to_string_pretty(&summary) {
                         Ok(json_str) => CallToolResult::text(json_str),

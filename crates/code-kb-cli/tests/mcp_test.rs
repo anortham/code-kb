@@ -1466,3 +1466,263 @@ fn test_mcp_telemetry_summary_unindexed_repo_no_autoscan() {
     drop(stdin);
     let _ = child.wait();
 }
+
+#[test]
+fn test_mcp_telemetry_summary_scoped_errors_no_cross_workspace_leak() {
+    let telem_dir = code_kb_core::safe_tempdir();
+    let telem_db_path = telem_dir.path().join("telemetry.db");
+    let telem_conn = code_kb_core::Connection::open(&telem_db_path).unwrap();
+    telem_conn
+        .execute_batch(
+            "PRAGMA journal_mode = WAL;
+             CREATE TABLE IF NOT EXISTS tool_telemetry (
+                 id TEXT PRIMARY KEY,
+                 timestamp TEXT NOT NULL,
+                 workspace_root TEXT NOT NULL,
+                 workspace_name TEXT NOT NULL,
+                 tool TEXT NOT NULL,
+                 duration_ms INTEGER NOT NULL,
+                 outcome TEXT NOT NULL,
+                 error_message TEXT,
+                 result_count INTEGER NOT NULL DEFAULT 0,
+                 bytes_returned INTEGER NOT NULL DEFAULT 0,
+                 est_tokens INTEGER NOT NULL DEFAULT 0,
+                 est_tokens_saved INTEGER NOT NULL DEFAULT 0,
+                 code_kb_version TEXT NOT NULL
+             );",
+        )
+        .unwrap();
+
+    // 1. Record error from unrelated workspace B
+    let ws_b_dir = code_kb_core::safe_tempdir();
+    let ws_b_root = code_kb_core::to_forward_slash(&code_kb_core::normalize_path(ws_b_dir.path()));
+    let secret_error = "SECRET_PATH_EXPOSURE: failed to parse /secret/unrelated/project/token.key";
+    telem_conn
+        .execute(
+            "INSERT INTO tool_telemetry VALUES (
+                'err-b-1', datetime('now'), ?1, 'unrelated-repo', 'get_symbol_body',
+                10, 'error', ?2, 0, 100, 25, 0, '0.7.0'
+            )",
+            rusqlite::params![ws_b_root, secret_error],
+        )
+        .unwrap();
+
+    // 2. Set up workspace A
+    let ws_a_dir = code_kb_core::safe_tempdir();
+    let root = ws_a_dir.path().to_path_buf();
+    let ws_a_root = code_kb_core::to_forward_slash(&code_kb_core::normalize_path(&root));
+    let local_error = "Active repo local error: symbol MissingSymbol not found";
+    telem_conn
+        .execute(
+            "INSERT INTO tool_telemetry VALUES (
+                'err-a-1', datetime('now'), ?1, 'active-repo', 'get_symbol_body',
+                10, 'error', ?2, 0, 100, 25, 0, '0.7.0'
+            )",
+            rusqlite::params![ws_a_root, local_error],
+        )
+        .unwrap();
+    drop(telem_conn);
+
+    let db_dir = root.join(".code-kb");
+    std::fs::create_dir_all(&db_dir).unwrap();
+    let db_path = db_dir.join("artifact.db");
+
+    let src_dir = root.join("src");
+    std::fs::create_dir_all(&src_dir).unwrap();
+    let content = "// 40 bytes line of source code text!\n".repeat(10);
+    let file_bytes = content.len() as i64;
+    let hash = format!("blake3:{}", blake3::hash(content.as_bytes()).to_hex());
+    std::fs::write(src_dir.join("lib.rs"), &content).unwrap();
+
+    let conn = code_kb_core::open_read_write(&db_path).unwrap();
+    conn.execute_batch(
+        "CREATE TABLE files (
+            file_id TEXT PRIMARY KEY, path TEXT, language TEXT, content_hash TEXT,
+            content_bytes INTEGER, line_count INTEGER, indexed_at TEXT
+        );
+        CREATE TABLE symbols (
+            symbol_id TEXT PRIMARY KEY, file_id TEXT, path TEXT, language TEXT, name TEXT, kind TEXT,
+            signature TEXT, doc_comment TEXT, visibility TEXT, parent_symbol_id TEXT,
+            start_line INTEGER, start_column INTEGER, end_line INTEGER, end_column INTEGER,
+            start_byte INTEGER, end_byte INTEGER, body_start_line INTEGER,
+            body_start_column INTEGER, body_end_line INTEGER, body_end_column INTEGER,
+            body_start_byte INTEGER, body_end_byte INTEGER, body_hash TEXT,
+            semantic_group TEXT, is_test INTEGER, test_container INTEGER
+        );",
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO files VALUES ('f1', 'src/lib.rs', 'rust', ?1, ?2, 10, '2026-01-01')",
+        rusqlite::params![hash, file_bytes],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO symbols VALUES (
+            's1', 'f1', 'src/lib.rs', 'rust', 'sample_func', 'function',
+            'pub fn sample_func()', NULL, 'pub', NULL,
+            1, 0, 2, 1, 0, ?1, 1, 20, 2, 1, 20, ?1, 'b3:hash',
+            NULL, 0, 0
+        )",
+        rusqlite::params![file_bytes],
+    )
+    .unwrap();
+    drop(conn);
+
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_code-kb"));
+    cmd.arg("serve")
+        .arg("--root")
+        .arg(&root)
+        .env("CODE_KB_TELEMETRY_DIR", telem_dir.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit());
+
+    let mut child = ChildGuard(cmd.spawn().expect("Failed to spawn code-kb serve"));
+    let mut stdin = child.stdin.take().expect("Failed to open stdin");
+    let mut reader = BufReader::new(child.stdout.take().expect("Failed to open stdout"));
+
+    // Handshake
+    let init_req = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": { "name": "test-client", "version": "1.0" }
+        }
+    });
+    let mut line = serde_json::to_string(&init_req).unwrap();
+    line.push('\n');
+    stdin.write_all(line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut init_resp_line = String::new();
+    reader.read_line(&mut init_resp_line).unwrap();
+
+    // 3. Call telemetry_summary with workspace_only: false (text output)
+    let call_telem_text = json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+            "name": "telemetry_summary",
+            "arguments": {
+                "workspace_only": false
+            }
+        }
+    });
+    let mut telem_line = serde_json::to_string(&call_telem_text).unwrap();
+    telem_line.push('\n');
+    stdin.write_all(telem_line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut telem_resp_line = String::new();
+    reader.read_line(&mut telem_resp_line).unwrap();
+    let resp: Value = serde_json::from_str(&telem_resp_line).unwrap();
+    assert_eq!(resp["id"], 2);
+    let summary_text = resp["result"]["content"][0]["text"].as_str().unwrap();
+
+    // Verify global stats reflect total across both workspaces
+    assert!(summary_text.contains("Total Tool Calls: 2"));
+    // Verify active workspace error is included
+    assert!(summary_text.contains(local_error));
+    // Verify unrelated workspace secret error is NOT leaked
+    assert!(
+        !summary_text.contains(secret_error),
+        "Global telemetry summary must not leak error messages from other workspaces"
+    );
+
+    // 4. Call telemetry_summary with workspace_only: false and json: true
+    let call_telem_json = json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+            "name": "telemetry_summary",
+            "arguments": {
+                "workspace_only": false,
+                "json": true
+            }
+        }
+    });
+    let mut json_line = serde_json::to_string(&call_telem_json).unwrap();
+    json_line.push('\n');
+    stdin.write_all(json_line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut json_resp_line = String::new();
+    reader.read_line(&mut json_resp_line).unwrap();
+    let resp_json: Value = serde_json::from_str(&json_resp_line).unwrap();
+    assert_eq!(resp_json["id"], 3);
+    let summary_json_str = resp_json["result"]["content"][0]["text"].as_str().unwrap();
+    let summary_data: Value = serde_json::from_str(summary_json_str).unwrap();
+
+    // total_calls is 3: the 2 inserted errors + the previous telemetry_summary call
+    assert_eq!(summary_data["total_calls"], 3);
+    let recent_errors = summary_data["recent_errors"].as_array().unwrap();
+    assert_eq!(recent_errors.len(), 1);
+    assert_eq!(recent_errors[0]["error_message"], local_error);
+
+    // 5. Test grounded token savings calculation for file_skeleton
+    let skeleton_req = json!({
+        "jsonrpc": "2.0",
+        "id": 4,
+        "method": "tools/call",
+        "params": {
+            "name": "file_skeleton",
+            "arguments": {
+                "file_path": "src/lib.rs"
+            }
+        }
+    });
+    let mut skel_line = serde_json::to_string(&skeleton_req).unwrap();
+    skel_line.push('\n');
+    stdin.write_all(skel_line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut skel_resp_line = String::new();
+    reader.read_line(&mut skel_resp_line).unwrap();
+    let resp_skel: Value = serde_json::from_str(&skel_resp_line).unwrap();
+    assert_eq!(resp_skel["id"], 4);
+    assert_ne!(resp_skel["result"]["isError"], true);
+    let skel_text = resp_skel["result"]["content"][0]["text"].as_str().unwrap();
+    let skel_tokens = skel_text.len() / 4;
+    let expected_saved = ((file_bytes as usize) / 4).saturating_sub(skel_tokens);
+
+    // Query telemetry for workspace_only to inspect the recorded est_tokens_saved
+    let stats_req = json!({
+        "jsonrpc": "2.0",
+        "id": 5,
+        "method": "tools/call",
+        "params": {
+            "name": "telemetry_summary",
+            "arguments": {
+                "workspace_only": true,
+                "json": true
+            }
+        }
+    });
+    let mut stats_line = serde_json::to_string(&stats_req).unwrap();
+    stats_line.push('\n');
+    stdin.write_all(stats_line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut stats_resp_line = String::new();
+    reader.read_line(&mut stats_resp_line).unwrap();
+    let resp_stats: Value = serde_json::from_str(&stats_resp_line).unwrap();
+    let stats_json: Value =
+        serde_json::from_str(resp_stats["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+
+    let skel_stat = stats_json["tool_stats"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["tool"] == "file_skeleton")
+        .expect("file_skeleton stat should be present");
+    assert_eq!(skel_stat["tokens_saved"], expected_saved);
+
+    drop(stdin);
+    let _ = child.wait();
+}
+
