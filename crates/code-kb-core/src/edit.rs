@@ -66,6 +66,40 @@ pub fn hash_content(content: &str) -> String {
     hex::encode(hasher.finalize())
 }
 
+fn is_transient_lock_error(err: &std::io::Error) -> bool {
+    #[cfg(windows)]
+    {
+        if let Some(code) = err.raw_os_error() {
+            // ERROR_ACCESS_DENIED = 5, ERROR_SHARING_VIOLATION = 32, ERROR_LOCK_VIOLATION = 33
+            if code == 5 || code == 32 || code == 33 {
+                return true;
+            }
+        }
+    }
+    matches!(err.kind(), std::io::ErrorKind::PermissionDenied)
+}
+
+fn persist_with_retry(
+    mut temp_file: tempfile::NamedTempFile,
+    dest: &Path,
+) -> Result<(), std::io::Error> {
+    for attempt in 0..5 {
+        match temp_file.persist(dest) {
+            Ok(_) => return Ok(()),
+            Err(e) => {
+                let is_transient = is_transient_lock_error(&e.error);
+                temp_file = e.file;
+                if is_transient && attempt < 4 {
+                    std::thread::sleep(std::time::Duration::from_millis(10 * (1 << attempt)));
+                    continue;
+                }
+                return Err(e.error);
+            }
+        }
+    }
+    unreachable!()
+}
+
 /// Atomically replaces the implementation body of a symbol by name.
 pub fn replace_symbol_body(
     workspace: &Workspace,
@@ -126,12 +160,13 @@ pub fn replace_symbol_body(
 
     // Match file line endings (CRLF vs LF)
     let is_crlf = existing_bytes.windows(2).any(|w| w == b"\r\n");
-    let normalized_body = if is_crlf && !new_body.contains("\r\n") && new_body.contains('\n') {
-        new_body.replace('\n', "\r\n")
-    } else if !is_crlf && new_body.contains("\r\n") {
-        new_body.replace("\r\n", "\n")
+    let normalized_body = if is_crlf {
+        // Uniformly normalize all line endings to CRLF, including mixed inputs
+        let lf_only = new_body.replace("\r\n", "\n");
+        lf_only.replace('\n', "\r\n")
     } else {
-        new_body.to_string()
+        // Uniformly normalize all line endings to LF, including mixed inputs
+        new_body.replace("\r\n", "\n")
     };
 
     // Construct new file content with replaced byte span
@@ -175,9 +210,8 @@ pub fn replace_symbol_body(
         .as_file()
         .set_permissions(existing_permissions.clone());
 
-    temp_file
-        .persist(&abs_path)
-        .map_err(|e| EditError::Io(abs_path.display().to_string(), e.error))?;
+    persist_with_retry(temp_file, &abs_path)
+        .map_err(|e| EditError::Io(abs_path.display().to_string(), e))?;
 
     // Tier 1: Immediately re-index the file so catalog is 100% fresh.
     // If indexing fails, roll back to original content safely and atomically.
@@ -201,7 +235,7 @@ pub fn replace_symbol_body(
             let _ = rollback_tmp
                 .as_file()
                 .set_permissions(existing_permissions.clone());
-            rollback_tmp.persist(&abs_path).map_err(|e| e.error)?;
+            persist_with_retry(rollback_tmp, &abs_path)?;
             Ok(())
         })();
 
@@ -225,4 +259,40 @@ pub fn replace_symbol_body(
         new_body_hash,
         bytes_written: new_file_bytes.len(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_mixed_crlf_lf_normalization() {
+        let mixed_input = "line1\r\nline2\nline3\r\nline4\n";
+        // When file is CRLF:
+        let lf_only = mixed_input.replace("\r\n", "\n");
+        let crlf_normalized = lf_only.replace('\n', "\r\n");
+        assert_eq!(crlf_normalized, "line1\r\nline2\r\nline3\r\nline4\r\n");
+
+        // When file is LF:
+        let lf_normalized = mixed_input.replace("\r\n", "\n");
+        assert_eq!(lf_normalized, "line1\nline2\nline3\nline4\n");
+    }
+
+    #[test]
+    fn test_persist_with_retry_succeeds() {
+        let dir = crate::safe_tempdir();
+        let target_file = dir.path().join("test_persist.txt");
+        fs::write(&target_file, "initial").unwrap();
+
+        let mut temp_file = tempfile::Builder::new()
+            .prefix(".test-persist-")
+            .suffix(".tmp")
+            .tempfile_in(dir.path())
+            .unwrap();
+        temp_file.write_all(b"updated").unwrap();
+        temp_file.flush().unwrap();
+
+        persist_with_retry(temp_file, &target_file).expect("persist_with_retry must succeed");
+        assert_eq!(fs::read_to_string(&target_file).unwrap(), "updated");
+    }
 }

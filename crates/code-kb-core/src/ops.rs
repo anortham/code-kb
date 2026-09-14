@@ -174,15 +174,25 @@ pub fn codebase_outline_op(
     let rel_filter = path_filter.map(|p| workspace.relativize_filter(p));
     let path_filter = rel_filter.as_deref().filter(|path| !path.is_empty());
     let symbols_by_file = queries::load_scoped_outline_symbols(conn, path_filter, depth, 5)?;
-    let norm = path_filter.map(|p| p.replace('\\', "/").trim_matches('/').to_string());
+    let norm = path_filter
+        .map(|p| p.replace('\\', "/").trim_matches('/').to_string())
+        .filter(|p| !p.is_empty());
+    let norm_bs = norm.as_ref().map(|p| p.replace('/', "\\"));
     let prefix = norm
         .as_ref()
         .map(|path| format!("{}/%", queries::escape_like(path)));
+    let prefix_bs = norm_bs
+        .as_ref()
+        .map(|path| format!("{}\\\\%", queries::escape_like(path)));
 
     let mut stmt = conn
         .prepare(
             "SELECT path FROM files
-             WHERE (:path IS NULL OR path = :path OR path LIKE :path_prefix ESCAPE '\\')
+             WHERE (:path IS NULL
+                OR path = :path COLLATE NOCASE
+                OR path = :path_bs COLLATE NOCASE
+                OR path LIKE :path_prefix ESCAPE '\\'
+                OR path LIKE :path_prefix_bs ESCAPE '\\')
              ORDER BY path ASC",
         )
         .map_err(QueryError::Sqlite)?;
@@ -190,7 +200,9 @@ pub fn codebase_outline_op(
     let mut rows = stmt
         .query(rusqlite::named_params! {
             ":path": norm.as_deref(),
+            ":path_bs": norm_bs.as_deref(),
             ":path_prefix": prefix.as_deref(),
+            ":path_prefix_bs": prefix_bs.as_deref(),
         })
         .map_err(QueryError::Sqlite)?;
 

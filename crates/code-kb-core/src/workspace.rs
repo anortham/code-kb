@@ -37,34 +37,166 @@ pub fn clean_path(path: &Path) -> PathBuf {
     stack.into_iter().collect()
 }
 
-/// Parse an MCP file URI or plain path into a normalized PathBuf.
-/// Handles standard file URIs (`file:///path`), URI percent-encoding (e.g. `%20`), and plain paths.
-pub fn parse_file_uri(cand: &str) -> Option<PathBuf> {
-    if cand.starts_with("file://") {
-        if let Ok(url) = url::Url::parse(cand)
-            && let Ok(path) = url.to_file_path()
+fn percent_decode(input: &str) -> String {
+    let mut bytes = Vec::with_capacity(input.len());
+    let input_bytes = input.as_bytes();
+    let mut i = 0;
+    while i < input_bytes.len() {
+        if input_bytes[i] == b'%'
+            && i + 2 < input_bytes.len()
+            && let Ok(hex) = std::str::from_utf8(&input_bytes[i + 1..i + 3])
+            && let Ok(byte) = u8::from_str_radix(hex, 16)
         {
-            return Some(normalize_path(&path));
+            bytes.push(byte);
+            i += 3;
+            continue;
         }
-        // Fallback for non-standard file:// patterns
-        if let Some(s) = cand.strip_prefix("file:///") {
-            if cfg!(windows) {
-                Some(normalize_path(Path::new(s)))
-            } else {
-                Some(normalize_path(&PathBuf::from(format!("/{}", s))))
-            }
-        } else if let Some(s) = cand.strip_prefix("file://") {
-            Some(normalize_path(Path::new(s)))
+        bytes.push(input_bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&bytes).into_owned()
+}
+
+/// Extract drive letter and remainder if the string begins with a drive specification
+/// delimited by ':', '|', or percent-encoded "%7C" / "%3A".
+fn extract_drive_letter_and_remainder(s: &str) -> Option<(char, &str)> {
+    let bytes = s.as_bytes();
+    if bytes.is_empty() || !bytes[0].is_ascii_alphabetic() {
+        return None;
+    }
+    let drive = bytes[0] as char;
+
+    // Single-byte delimiters: ':' or '|'
+    if bytes.len() >= 2
+        && (bytes[1] == b':' || bytes[1] == b'|')
+        && (bytes.len() == 2
+            || bytes[2] == b'/'
+            || bytes[2] == b'\\'
+            || bytes[2] == b'?'
+            || bytes[2] == b'#')
+    {
+        return Some((drive, &s[2..]));
+    }
+
+    // Three-byte percent-encoded delimiters: "%7C", "%7c", "%3A", "%3a"
+    if bytes.len() >= 4 {
+        let delim = &s[1..4];
+        if (delim.eq_ignore_ascii_case("%7c") || delim.eq_ignore_ascii_case("%3a"))
+            && (bytes.len() == 4
+                || bytes[4] == b'/'
+                || bytes[4] == b'\\'
+                || bytes[4] == b'?'
+                || bytes[4] == b'#')
+        {
+            return Some((drive, &s[4..]));
+        }
+    }
+
+    None
+}
+
+/// Strip an optional "localhost/" or "localhost\" prefix (with or without a leading slash).
+fn strip_localhost_prefix(s: &str) -> &str {
+    let without_slash = s.strip_prefix('/').unwrap_or(s);
+    if without_slash.len() >= 10
+        && without_slash[..9].eq_ignore_ascii_case("localhost")
+        && (without_slash.as_bytes()[9] == b'/' || without_slash.as_bytes()[9] == b'\\')
+    {
+        &without_slash[10..]
+    } else {
+        s
+    }
+}
+
+/// Convert a path string starting with a pipe drive specification (e.g. "C|/..." or "/C|/...")
+/// to use a standard colon ':' delimiter (e.g. "C:/...").
+fn normalize_drive_pipe_str(s: &str) -> String {
+    let clean = strip_localhost_prefix(s);
+    if let Some((drive, remainder)) = extract_drive_letter_and_remainder(clean) {
+        if remainder.is_empty() || remainder.starts_with('?') || remainder.starts_with('#') {
+            format!("{}:/{}", drive, remainder)
         } else {
-            Some(normalize_path(Path::new(cand)))
+            format!("{}:{}", drive, remainder)
+        }
+    } else if let Some(rest) = clean.strip_prefix('/') {
+        let rest_clean = strip_localhost_prefix(rest);
+        if let Some((drive, remainder)) = extract_drive_letter_and_remainder(rest_clean) {
+            if remainder.is_empty() || remainder.starts_with('?') || remainder.starts_with('#') {
+                format!("{}:/{}", drive, remainder)
+            } else {
+                format!("{}:{}", drive, remainder)
+            }
+        } else {
+            s.to_string()
         }
     } else {
-        Some(normalize_path(Path::new(cand)))
+        s.to_string()
+    }
+}
+
+/// Parse an MCP file URI or plain path into a normalized PathBuf.
+/// Handles standard file URIs (`file:///path`), two-slash drive letter URIs (`file://C:/...`),
+/// pipe drive delimiters (`file:///C|/...`, `file://C|/...`), percent-encoding (`%20`, `%7C`), and plain paths.
+pub fn parse_file_uri(cand: &str) -> Option<PathBuf> {
+    if let Some(rest) = cand.strip_prefix("file://") {
+        let path_part = rest.strip_prefix('/').unwrap_or(rest);
+        let path_part = strip_localhost_prefix(path_part);
+        let normalized_cand = if let Some((drive, remainder)) =
+            extract_drive_letter_and_remainder(path_part)
+        {
+            if remainder.is_empty() || remainder.starts_with('?') || remainder.starts_with('#') {
+                format!("file:///{}:/{}", drive, remainder)
+            } else if remainder.starts_with('/') || remainder.starts_with('\\') {
+                format!("file:///{}:{}", drive, remainder)
+            } else {
+                format!("file:///{}:/{}", drive, remainder)
+            }
+        } else {
+            cand.to_string()
+        };
+
+        let file_path = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            url::Url::parse(&normalized_cand)
+                .ok()
+                .and_then(|url| url.to_file_path().ok())
+        }))
+        .ok()
+        .flatten();
+
+        if let Some(path) = file_path {
+            return Some(normalize_path(&path));
+        }
+        // Fallback for non-standard file:// patterns with percent decoding
+        if let Some(s) = cand.strip_prefix("file:///") {
+            let decoded = percent_decode(s);
+            let normalized = normalize_drive_pipe_str(&decoded);
+            if cfg!(windows) {
+                Some(normalize_path(Path::new(&normalized)))
+            } else {
+                Some(normalize_path(&PathBuf::from(format!("/{}", normalized))))
+            }
+        } else if let Some(s) = cand.strip_prefix("file://") {
+            let decoded = percent_decode(s);
+            let normalized = normalize_drive_pipe_str(&decoded);
+            Some(normalize_path(Path::new(&normalized)))
+        } else {
+            let decoded = percent_decode(cand);
+            let normalized = normalize_drive_pipe_str(&decoded);
+            Some(normalize_path(Path::new(&normalized)))
+        }
+    } else {
+        let normalized = normalize_drive_pipe_str(cand);
+        Some(normalize_path(Path::new(&normalized)))
     }
 }
 
 /// Strip Windows verbatim prefix (\\?\, \\?\UNC\) using dunce.
 pub fn normalize_path(path: &Path) -> PathBuf {
+    let s = path.to_string_lossy();
+    if s.starts_with(r"\\?\") {
+        let backslashed = s.replace('/', "\\");
+        return dunce::simplified(Path::new(&backslashed)).to_path_buf();
+    }
     dunce::simplified(path).to_path_buf()
 }
 
@@ -84,29 +216,30 @@ fn components_equal(c1: &std::path::Component, c2: &std::path::Component) -> boo
     {
         use std::path::Component;
         match (c1, c2) {
-            (Component::Normal(s1), Component::Normal(s2)) => {
-                s1.to_string_lossy().eq_ignore_ascii_case(&s2.to_string_lossy())
-            }
+            (Component::Normal(s1), Component::Normal(s2)) => s1
+                .to_string_lossy()
+                .eq_ignore_ascii_case(&s2.to_string_lossy()),
             (Component::Prefix(p1), Component::Prefix(p2)) => {
                 use std::path::Prefix;
                 match (p1.kind(), p2.kind()) {
                     (Prefix::Disk(d1), Prefix::Disk(d2))
                     | (Prefix::VerbatimDisk(d1), Prefix::VerbatimDisk(d2))
                     | (Prefix::Disk(d1), Prefix::VerbatimDisk(d2))
-                    | (Prefix::VerbatimDisk(d1), Prefix::Disk(d2)) => {
-                        d1.eq_ignore_ascii_case(&d2)
-                    }
+                    | (Prefix::VerbatimDisk(d1), Prefix::Disk(d2)) => d1.eq_ignore_ascii_case(&d2),
                     (Prefix::UNC(s1, sh1), Prefix::UNC(s2, sh2))
                     | (Prefix::VerbatimUNC(s1, sh1), Prefix::VerbatimUNC(s2, sh2))
                     | (Prefix::UNC(s1, sh1), Prefix::VerbatimUNC(s2, sh2))
                     | (Prefix::VerbatimUNC(s1, sh1), Prefix::UNC(s2, sh2)) => {
-                        s1.to_string_lossy().eq_ignore_ascii_case(&s2.to_string_lossy())
-                            && sh1.to_string_lossy().eq_ignore_ascii_case(&sh2.to_string_lossy())
+                        s1.to_string_lossy()
+                            .eq_ignore_ascii_case(&s2.to_string_lossy())
+                            && sh1
+                                .to_string_lossy()
+                                .eq_ignore_ascii_case(&sh2.to_string_lossy())
                     }
                     (Prefix::DeviceNS(d1), Prefix::DeviceNS(d2))
-                    | (Prefix::Verbatim(d1), Prefix::Verbatim(d2)) => {
-                        d1.to_string_lossy().eq_ignore_ascii_case(&d2.to_string_lossy())
-                    }
+                    | (Prefix::Verbatim(d1), Prefix::Verbatim(d2)) => d1
+                        .to_string_lossy()
+                        .eq_ignore_ascii_case(&d2.to_string_lossy()),
                     _ => false,
                 }
             }
@@ -140,6 +273,37 @@ pub fn strip_prefix_lossy<'a>(path: &'a Path, base: &Path) -> Option<&'a Path> {
     #[cfg(not(windows))]
     {
         None
+    }
+}
+
+/// Compare two paths for logical identity.
+/// On Windows, normalizes verbatim prefixes via dunce and compares disk prefixes and components case-insensitively.
+/// On non-Windows, compares paths directly.
+pub fn paths_equal(p1: &Path, p2: &Path) -> bool {
+    let p1_norm = normalize_path(p1);
+    let p2_norm = normalize_path(p2);
+    if p1_norm == p2_norm {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        let mut c1 = p1_norm.components();
+        let mut c2 = p2_norm.components();
+        loop {
+            match (c1.next(), c2.next()) {
+                (None, None) => return true,
+                (Some(comp1), Some(comp2)) => {
+                    if !components_equal(&comp1, &comp2) {
+                        return false;
+                    }
+                }
+                _ => return false,
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        false
     }
 }
 
@@ -220,6 +384,12 @@ impl Workspace {
 
     /// Create workspace binding directly for a known root directory.
     pub fn new(root: PathBuf) -> Self {
+        let root_str = root.to_string_lossy();
+        let root = if root_str.starts_with("file://") {
+            parse_file_uri(&root_str).unwrap_or_else(|| normalize_path(&root))
+        } else {
+            normalize_path(&root)
+        };
         let canonical_root =
             normalize_path(&dunce::canonicalize(&root).unwrap_or_else(|_| root.clone()));
         let repo_name = canonical_root
@@ -422,13 +592,17 @@ impl Workspace {
         let mut candidates = Vec::new();
 
         if let Some(p) = explicit_db {
-            candidates.push(p.to_path_buf());
+            candidates.push(normalize_path(p));
         }
 
         // In-tree options
-        candidates.push(self.canonical_root.join(".code-kb").join("artifact.db"));
-        candidates.push(self.canonical_root.join(".code-kb").join("store.db"));
-        candidates.push(self.canonical_root.join("artifact.db"));
+        candidates.push(normalize_path(
+            &self.canonical_root.join(".code-kb").join("artifact.db"),
+        ));
+        candidates.push(normalize_path(
+            &self.canonical_root.join(".code-kb").join("store.db"),
+        ));
+        candidates.push(normalize_path(&self.canonical_root.join("artifact.db")));
 
         candidates
     }
@@ -436,17 +610,19 @@ impl Workspace {
     /// Finds the first existing database file, or returns the default target location.
     pub fn locate_db(&self, explicit_db: Option<&Path>) -> Result<PathBuf, WorkspaceError> {
         if let Some(p) = explicit_db {
-            return Ok(p.to_path_buf());
+            return Ok(normalize_path(p));
         }
 
         let candidates = self.candidate_db_paths(None);
         for candidate in &candidates {
             if candidate.exists() && candidate.is_file() {
-                return Ok(candidate.clone());
+                return Ok(normalize_path(candidate));
             }
         }
 
-        Ok(self.canonical_root.join(".code-kb").join("artifact.db"))
+        Ok(normalize_path(
+            &self.canonical_root.join(".code-kb").join("artifact.db"),
+        ))
     }
 }
 
@@ -478,19 +654,27 @@ mod tests {
         #[cfg(windows)]
         {
             // Lowercase drive letter
-            let (_abs2, rel2) = ws.resolve_path(Path::new("c:/source/test-project/src/lib.rs")).unwrap();
+            let (_abs2, rel2) = ws
+                .resolve_path(Path::new("c:/source/test-project/src/lib.rs"))
+                .unwrap();
             assert_eq!(rel2, "src/lib.rs");
 
             // Case-insensitive directory on Windows
-            let (_abs3, rel3) = ws.resolve_path(Path::new("C:/SOURCE/test-project/src/lib.rs")).unwrap();
+            let (_abs3, rel3) = ws
+                .resolve_path(Path::new("C:/SOURCE/test-project/src/lib.rs"))
+                .unwrap();
             assert_eq!(rel3, "src/lib.rs");
 
             // file:// URI
-            let (_abs4, rel4) = ws.resolve_path(Path::new("file:///C:/source/test-project/src/lib.rs")).unwrap();
+            let (_abs4, rel4) = ws
+                .resolve_path(Path::new("file:///C:/source/test-project/src/lib.rs"))
+                .unwrap();
             assert_eq!(rel4, "src/lib.rs");
 
             // file:// URI with lowercase drive letter
-            let (_abs5, rel5) = ws.resolve_path(Path::new("file:///c:/source/test-project/src/lib.rs")).unwrap();
+            let (_abs5, rel5) = ws
+                .resolve_path(Path::new("file:///c:/source/test-project/src/lib.rs"))
+                .unwrap();
             assert_eq!(rel5, "src/lib.rs");
         }
     }
@@ -564,8 +748,138 @@ mod tests {
             assert_eq!(ws.relativize_filter(&upper_abs), "src/lib.rs");
 
             // File URI with alternate case
-            let uri_cased = format!("file:///{}", abs_file.to_string_lossy().replace('\\', "/").to_lowercase());
+            let uri_cased = format!(
+                "file:///{}",
+                abs_file.to_string_lossy().replace('\\', "/").to_lowercase()
+            );
             assert_eq!(ws.relativize_filter(&uri_cased), "src/lib.rs");
         }
+    }
+
+    #[test]
+    fn test_paths_equal() {
+        assert!(paths_equal(
+            Path::new("src/lib.rs"),
+            Path::new("src/lib.rs")
+        ));
+        assert!(!paths_equal(
+            Path::new("src/lib.rs"),
+            Path::new("src/main.rs")
+        ));
+
+        #[cfg(windows)]
+        {
+            // Case-insensitive drive letters and paths
+            assert!(paths_equal(
+                Path::new(r"C:\source\code-kb\src\lib.rs"),
+                Path::new(r"c:\source\code-kb\src\lib.rs")
+            ));
+            assert!(paths_equal(
+                Path::new(r"C:\source\code-kb\src\lib.rs"),
+                Path::new(r"c:\SOURCE\CODE-KB\SRC\LIB.RS")
+            ));
+            // Verbatim prefixes
+            assert!(paths_equal(
+                Path::new(r"\\?\C:\source\code-kb\src\lib.rs"),
+                Path::new(r"C:\source\code-kb\src\lib.rs")
+            ));
+            assert!(paths_equal(
+                Path::new(r"\\?\c:\source\code-kb\src\lib.rs"),
+                Path::new(r"C:\source\code-kb\src\lib.rs")
+            ));
+            // UNC paths
+            assert!(paths_equal(
+                Path::new(r"\\server\share\file"),
+                Path::new(r"\\SERVER\SHARE\file")
+            ));
+            assert!(paths_equal(
+                Path::new(r"\\server\share\file"),
+                Path::new(r"\\server\share\file")
+            ));
+            assert!(!paths_equal(
+                Path::new(r"\\server\share1\file"),
+                Path::new(r"\\server\share2\file")
+            ));
+        }
+    }
+
+    #[test]
+    fn test_strip_prefix_lossy() {
+        let base = Path::new("src");
+        assert_eq!(
+            strip_prefix_lossy(Path::new("src/lib.rs"), base),
+            Some(Path::new("lib.rs"))
+        );
+        assert_eq!(strip_prefix_lossy(Path::new("tests/foo.rs"), base), None);
+
+        #[cfg(windows)]
+        {
+            let base_win = Path::new(r"C:\source\code-kb");
+            // Standard path
+            assert_eq!(
+                strip_prefix_lossy(Path::new(r"C:\source\code-kb\src\lib.rs"), base_win),
+                Some(Path::new(r"src\lib.rs"))
+            );
+            // Disk prefix casing
+            assert_eq!(
+                strip_prefix_lossy(Path::new(r"c:\source\code-kb\src\lib.rs"), base_win),
+                Some(Path::new(r"src\lib.rs"))
+            );
+            assert_eq!(
+                strip_prefix_lossy(Path::new(r"c:\SOURCE\CODE-KB\src\lib.rs"), base_win),
+                Some(Path::new(r"src\lib.rs"))
+            );
+            // Verbatim prefixes
+            assert_eq!(
+                strip_prefix_lossy(Path::new(r"\\?\C:\source\code-kb\src\lib.rs"), base_win),
+                Some(Path::new(r"src\lib.rs"))
+            );
+            assert_eq!(
+                strip_prefix_lossy(Path::new(r"\\?\c:\source\code-kb\src\lib.rs"), base_win),
+                Some(Path::new(r"src\lib.rs"))
+            );
+            // Negative non-matching paths
+            assert_eq!(
+                strip_prefix_lossy(Path::new(r"C:\other\code-kb\src\lib.rs"), base_win),
+                None
+            );
+            assert_eq!(
+                strip_prefix_lossy(Path::new(r"D:\source\code-kb\src\lib.rs"), base_win),
+                None
+            );
+        }
+    }
+
+    #[test]
+    fn test_parse_file_uri_two_slash_and_percent() {
+        #[cfg(windows)]
+        {
+            let p1 = parse_file_uri("file://C:/my%20folder/lib.rs").unwrap();
+            assert_eq!(p1, normalize_path(Path::new("C:/my folder/lib.rs")));
+
+            let p2 = parse_file_uri("file://c:/my%20folder/lib.rs").unwrap();
+            assert_eq!(p2, normalize_path(Path::new("c:/my folder/lib.rs")));
+
+            let p3 = parse_file_uri("file:///C:/my%20folder/lib.rs").unwrap();
+            assert_eq!(p3, normalize_path(Path::new("C:/my folder/lib.rs")));
+        }
+        #[cfg(not(windows))]
+        {
+            let p1 = parse_file_uri("file:///my%20folder/lib.rs").unwrap();
+            assert_eq!(p1, normalize_path(Path::new("/my folder/lib.rs")));
+        }
+    }
+
+    #[test]
+    fn test_workspace_verbatim_root_and_db_cleanup() {
+        let temp = crate::safe_tempdir();
+        let verbatim_path = format!(r"\\?\{}", temp.path().display());
+        let ws = Workspace::new(PathBuf::from(&verbatim_path));
+        assert!(!ws.root.to_string_lossy().starts_with(r"\\?\"));
+        assert!(!ws.canonical_root.to_string_lossy().starts_with(r"\\?\"));
+
+        let explicit = PathBuf::from(format!(r"\\?\{}\test.db", temp.path().display()));
+        let located = ws.locate_db(Some(&explicit)).unwrap();
+        assert!(!located.to_string_lossy().starts_with(r"\\?\"));
     }
 }

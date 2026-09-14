@@ -87,7 +87,9 @@ impl McpServer {
             "Bound workspace dynamically"
         );
 
-        if self.workspace.canonical_root != ws.canonical_root || self._watcher.is_none() {
+        if !code_kb_core::workspace::paths_equal(&self.workspace.canonical_root, &ws.canonical_root)
+            || self._watcher.is_none()
+        {
             if db_path.exists() {
                 let _ = ensure_fts_index_path(&db_path);
                 let ws_clone = ws.clone();
@@ -410,7 +412,10 @@ impl McpServer {
 
             // Detect if this path belongs to another workspace or a nested git worktree
             if let Ok(target_root) = Workspace::find_workspace_root(&abs_candidate) {
-                if target_root != self.workspace.canonical_root {
+                if !code_kb_core::workspace::paths_equal(
+                    &target_root,
+                    &self.workspace.canonical_root,
+                ) {
                     let _ = self.bind_workspace(&target_root);
                 }
             } else if !self.db_path.exists() && abs_candidate.exists() {
@@ -452,6 +457,12 @@ impl McpServer {
                         if parent.join(".git").exists() {
                             let parent_db = parent.join(".code-kb").join("artifact.db");
                             if parent_db.exists() {
+                                // Flush WAL checkpoint so committed transactions are flushed into parent_db before copying
+                                if let Ok(parent_conn) =
+                                    code_kb_core::db::open_read_write(&parent_db)
+                                {
+                                    let _ = code_kb_core::db::checkpoint_truncate(&parent_conn);
+                                }
                                 if let Some(db_dir) = self.db_path.parent() {
                                     let _ = std::fs::create_dir_all(db_dir);
                                 }

@@ -293,7 +293,10 @@ pub fn reconcile_offline_edits(
     // In-memory table to track paths seen on disk without allocating repository-wide HashMaps in heap
     let temp_conn = Connection::open_in_memory().map_err(SyncError::Db)?;
     temp_conn
-        .execute("CREATE TABLE _seen (path TEXT PRIMARY KEY)", [])
+        .execute(
+            "CREATE TABLE _seen (path TEXT COLLATE NOCASE PRIMARY KEY)",
+            [],
+        )
         .map_err(SyncError::Db)?;
 
     let mut insert_seen_stmt = temp_conn
@@ -328,10 +331,13 @@ pub fn reconcile_offline_edits(
             Ok(e) => e,
             Err(e) => {
                 warn!("Reconciliation walker encountered error: {e}");
-                if let Some(path) = extract_error_path(&e)
-                    && let Ok(rel) = path.strip_prefix(&workspace.canonical_root)
-                {
-                    unreadable_prefixes.push(crate::workspace::to_forward_slash(rel));
+                if let Some(path) = extract_error_path(&e) {
+                    let norm_path = dunce::simplified(path);
+                    if let Some(rel) =
+                        crate::workspace::strip_prefix_lossy(norm_path, &workspace.canonical_root)
+                    {
+                        unreadable_prefixes.push(crate::workspace::to_forward_slash(rel));
+                    }
                 }
                 continue;
             }
@@ -339,7 +345,10 @@ pub fn reconcile_offline_edits(
 
         if entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
             let path = entry.path();
-            if let Ok(rel) = path.strip_prefix(&workspace.canonical_root) {
+            let norm_path = dunce::simplified(path);
+            if let Some(rel) =
+                crate::workspace::strip_prefix_lossy(norm_path, &workspace.canonical_root)
+            {
                 let rel_str = crate::workspace::to_forward_slash(rel);
                 if crate::workspace::is_hard_excluded(&rel_str) {
                     continue;
@@ -470,5 +479,67 @@ mod tests {
         let path = find_julie_extract_binary()
             .expect("julie-extract binary must be present for tests (see scripts/julie-pins.json)");
         assert!(path.exists(), "Discovered path must exist: {:?}", path);
+    }
+
+    #[test]
+    fn test_reconcile_offline_edits_drive_case_mismatch() {
+        let temp = crate::safe_tempdir();
+        let db_path = temp.path().join("test.db");
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE files (
+                file_id TEXT PRIMARY KEY,
+                path TEXT NOT NULL,
+                language TEXT,
+                content_hash TEXT,
+                content_bytes INTEGER,
+                line_count INTEGER,
+                indexed_at TEXT
+            );
+            CREATE TABLE symbols (
+                symbol_id TEXT PRIMARY KEY,
+                file_id TEXT,
+                path TEXT NOT NULL
+            );",
+        )
+        .unwrap();
+
+        // Create a real file on disk
+        let src_dir = temp.path().join("src");
+        std::fs::create_dir_all(&src_dir).unwrap();
+        let file_path = src_dir.join("main.rs");
+        let content = "fn main() {}\n";
+        std::fs::write(&file_path, content).unwrap();
+
+        let hash = sha2::Sha256::digest(content.as_bytes());
+        let hash_hex = hex::encode(hash);
+
+        conn.execute(
+            "INSERT INTO files VALUES ('f1', 'src/main.rs', 'rust', ?1, ?2, 1, '2026-09-14T00:00:00Z')",
+            rusqlite::params![hash_hex, content.len() as i64],
+        )
+        .unwrap();
+
+        let mut ws = Workspace::new(temp.path().to_path_buf());
+        #[cfg(windows)]
+        {
+            let root_str = ws.canonical_root.to_string_lossy().to_string();
+            if let Some(first_char) = root_str.chars().next() {
+                let flipped = if first_char.is_ascii_uppercase() {
+                    first_char.to_ascii_lowercase()
+                } else {
+                    first_char.to_ascii_uppercase()
+                };
+                let altered_root = format!("{}{}", flipped, &root_str[1..]);
+                ws.canonical_root = PathBuf::from(altered_root);
+            }
+        }
+
+        let report = reconcile_offline_edits(&ws, &db_path, &conn).unwrap();
+        assert!(
+            report.deleted.is_empty(),
+            "Files should not be marked deleted due to drive casing difference: {:?}",
+            report.deleted
+        );
     }
 }

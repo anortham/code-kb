@@ -154,13 +154,16 @@ pub fn add_path_to_outline(
     let normalized = file_path.replace('\\', "/");
     let rel_path_str = if norm_filter.is_empty() {
         normalized.as_str()
-    } else if normalized == norm_filter {
+    } else if normalized.eq_ignore_ascii_case(norm_filter) {
         Path::new(&normalized)
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or(&normalized)
-    } else if let Some(stripped) = normalized.strip_prefix(&format!("{norm_filter}/")) {
-        stripped
+    } else if normalized.len() > norm_filter.len()
+        && normalized.as_bytes()[norm_filter.len()] == b'/'
+        && normalized[..norm_filter.len()].eq_ignore_ascii_case(norm_filter)
+    {
+        &normalized[norm_filter.len() + 1..]
     } else {
         return;
     };
@@ -184,7 +187,16 @@ pub fn add_path_to_outline(
             // Leaf file: only insert if it is within max_depth
             if depth <= max_depth {
                 let mut sym_tags = Vec::new();
-                if let Some(syms) = symbols_by_file.get(&normalized) {
+                let syms_opt = symbols_by_file.get(&normalized).or_else(|| {
+                    symbols_by_file.iter().find_map(|(k, v)| {
+                        if k.eq_ignore_ascii_case(&normalized) {
+                            Some(v)
+                        } else {
+                            None
+                        }
+                    })
+                });
+                if let Some(syms) = syms_opt {
                     for s in syms.iter().take(5) {
                         sym_tags.push(format!("{} {}", s.kind, s.name));
                     }

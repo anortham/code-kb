@@ -38,16 +38,14 @@ fn setup_test_repo() -> tempfile::TempDir {
             path TEXT, start_line INTEGER, start_column INTEGER
         );
         CREATE TABLE structural_facts (
-            fact_id TEXT PRIMARY KEY, file_id TEXT, path TEXT, language TEXT,
-            pattern_id TEXT, kind TEXT, name TEXT, receiver TEXT, symbol_id TEXT,
-            scope_symbol_id TEXT, parent_fact_id TEXT, start_line INTEGER,
-            start_column INTEGER, end_line INTEGER, end_column INTEGER,
-            start_byte INTEGER, end_byte INTEGER, confidence REAL, payload TEXT
+            structural_fact_id TEXT PRIMARY KEY, file_id TEXT, path TEXT NOT NULL, language TEXT,
+            pattern_id TEXT, capture_name TEXT, node_kind TEXT, containing_symbol_id TEXT,
+            start_line INTEGER, end_line INTEGER, confidence REAL
         );
         CREATE TABLE literals (
-            literal_id TEXT PRIMARY KEY, file_id TEXT, path TEXT, language TEXT,
-            kind TEXT, value TEXT, scope_symbol_id TEXT, start_line INTEGER,
-            start_column INTEGER, end_line INTEGER, end_column INTEGER,
+            literal_id TEXT PRIMARY KEY, file_id TEXT, path TEXT NOT NULL, language TEXT,
+            kind TEXT, literal_text TEXT, carrier TEXT, containing_symbol_id TEXT,
+            start_line INTEGER, start_column INTEGER, end_line INTEGER, end_column INTEGER,
             start_byte INTEGER, end_byte INTEGER
         );",
     )
@@ -519,4 +517,156 @@ fn test_skills_md_sync_contract() {
         skill_root, skill_plugin,
         "skills/code-kb/SKILL.md and .claude-plugin/skills/code-kb/SKILL.md must be byte-for-byte identical"
     );
+}
+
+#[test]
+fn test_cli_windows_path_argument_variations() {
+    let repo = setup_test_repo();
+    let root = repo.path();
+
+    // 1. Backslash relative path in skeleton
+    let out1 = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .arg("skeleton")
+        .arg(r"src\workspace.rs")
+        .output()
+        .expect("Failed to execute skeleton with backslashes");
+    assert!(out1.status.success());
+    let stdout1 = String::from_utf8_lossy(&out1.stdout);
+    assert!(stdout1.contains("pub struct Workspace"));
+
+    // 2. Mixed slashes in skeleton
+    let out2 = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .arg("skeleton")
+        .arg(r".\src/workspace.rs")
+        .output()
+        .expect("Failed to execute skeleton with mixed slashes");
+    assert!(out2.status.success());
+    let stdout2 = String::from_utf8_lossy(&out2.stdout);
+    assert!(stdout2.contains("pub struct Workspace"));
+
+    // 3. Backslash path filter in symbol
+    let out3 = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .arg("symbol")
+        .arg("Workspace")
+        .arg("--path")
+        .arg(r"src\workspace.rs")
+        .output()
+        .expect("Failed to execute symbol with backslash --path filter");
+    assert!(out3.status.success());
+    let stdout3 = String::from_utf8_lossy(&out3.stdout);
+    assert!(stdout3.contains("pub struct Workspace"));
+
+    // 4. Inverted drive letter casing in --root
+    #[cfg(windows)]
+    {
+        let root_str = root.to_string_lossy().to_string();
+        let inverted_root = if root_str.len() >= 2 && root_str.as_bytes()[1] == b':' {
+            let first_char = root_str.chars().next().unwrap();
+            let toggled = if first_char.is_ascii_uppercase() {
+                first_char.to_ascii_lowercase()
+            } else {
+                first_char.to_ascii_uppercase()
+            };
+            format!("{}{}", toggled, &root_str[1..])
+        } else {
+            root_str.clone()
+        };
+        let out4 = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .arg("--root")
+            .arg(&inverted_root)
+            .arg("outline")
+            .output()
+            .expect("Failed to execute outline with inverted drive casing");
+        assert!(out4.status.success());
+        let stdout4 = String::from_utf8_lossy(&out4.stdout);
+        assert!(stdout4.contains("workspace.rs"));
+    }
+}
+
+#[test]
+fn test_cli_json_strict_forward_slash_invariants() {
+    let repo = setup_test_repo();
+    let root = repo.path();
+
+    // Populate a sample structural fact and literal so facts returns non-empty data with paths
+    {
+        let db_path = root.join(".code-kb").join("artifact.db");
+        let conn = code_kb_core::open_read_write(&db_path).unwrap();
+        conn.execute(
+            "INSERT INTO structural_facts VALUES ('sf1', 'f1', 'src/workspace.rs', 'rust', 'route', 'get_index', 'route', 's1', 1, 10, 1.0)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO literals VALUES ('lit1', 'f1', 'src/workspace.rs', 'rust', 'string', 'hello', 'identifier', 's1', 1, 0, 1, 5, 0, 5)",
+            [],
+        ).unwrap();
+    }
+
+    fn assert_all_paths_forward_slash(val: &serde_json::Value, found_paths: &mut usize) {
+        match val {
+            serde_json::Value::Object(map) => {
+                for (k, v) in map {
+                    let k_lower = k.to_ascii_lowercase();
+                    if (k_lower.contains("path") || k_lower.contains("file")) && v.is_string() {
+                        let s = v.as_str().unwrap();
+                        assert!(
+                            !s.contains('\\'),
+                            "Key '{k}' contains backslash in JSON output: '{s}'"
+                        );
+                        *found_paths += 1;
+                    }
+                    assert_all_paths_forward_slash(v, found_paths);
+                }
+            }
+            serde_json::Value::Array(arr) => {
+                for item in arr {
+                    assert_all_paths_forward_slash(item, found_paths);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let commands: Vec<Vec<&str>> = vec![
+        vec!["--json", "outline"],
+        vec!["--json", "skeleton", "src/workspace.rs"],
+        vec!["--json", "symbol", "Workspace"],
+        vec!["--json", "search", "discovery"],
+        vec!["--json", "body", "run_task"],
+        vec!["--json", "slice", "run_task"],
+        vec!["--json", "refs", "helper"],
+        vec!["--json", "blast-radius", "helper"],
+        vec!["--json", "facts"],
+        vec!["--json", "facts", "route"],
+    ];
+
+    for cmd_args in commands {
+        let out = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .arg("--root")
+            .arg(root)
+            .args(&cmd_args)
+            .output()
+            .unwrap_or_else(|e| panic!("Failed to execute command {:?}: {e}", cmd_args));
+        assert!(
+            out.status.success(),
+            "Command failed: {:?}\nstderr: {}",
+            cmd_args,
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let val: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap_or_else(|e| {
+            panic!(
+                "Failed to parse JSON for {:?}: {e}\nstdout: {}",
+                cmd_args,
+                String::from_utf8_lossy(&out.stdout)
+            )
+        });
+        let mut found = 0;
+        assert_all_paths_forward_slash(&val, &mut found);
+    }
 }

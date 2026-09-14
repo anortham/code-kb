@@ -19,7 +19,8 @@ enum SupportedGrammar {
 
 fn detect_grammar(file_path: &str) -> Option<SupportedGrammar> {
     let ext = Path::new(file_path).extension()?.to_str()?;
-    match ext {
+    let ext_lower = ext.to_ascii_lowercase();
+    match ext_lower.as_str() {
         "rs" => Some(SupportedGrammar::Rust),
         "js" | "mjs" | "cjs" | "jsx" => Some(SupportedGrammar::JavaScript),
         "ts" | "mts" | "cts" => Some(SupportedGrammar::TypeScript),
@@ -197,5 +198,20 @@ mod tests {
     fn test_unrecognized_extension_passes() {
         let code = "any unparseable random content { [";
         assert!(validate_syntax("notes.txt", code).is_ok());
+    }
+
+    #[test]
+    fn test_case_insensitive_extension_matching() {
+        let rs_code = "pub fn add(a: i32, b: i32) -> i32 { a + b }";
+        assert!(validate_syntax("TEST.RS", rs_code).is_ok());
+
+        let invalid_rs = "pub fn add(a: i32, b: i32) -> i32 { a + }";
+        assert!(validate_syntax("TEST.RS", invalid_rs).is_err());
+
+        let ts_code = "const x: number = 42;";
+        assert!(validate_syntax("index.TS", ts_code).is_ok());
+
+        let py_code = "def foo():\n    return 42\n";
+        assert!(validate_syntax("SCRIPT.PY", py_code).is_ok());
     }
 }

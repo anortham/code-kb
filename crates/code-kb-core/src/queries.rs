@@ -27,7 +27,7 @@ fn map_symbol(row: &Row) -> rusqlite::Result<Symbol> {
     Ok(Symbol {
         symbol_id: row.get("symbol_id")?,
         file_id: row.get("file_id")?,
-        path: row.get("path")?,
+        path: row.get::<_, String>("path")?.replace('\\', "/"),
         language: row.get("language")?,
         name: row.get("name")?,
         kind: row.get("kind")?,
@@ -78,12 +78,22 @@ pub fn load_scoped_files(
     conn: &Connection,
     path_filter: Option<&str>,
 ) -> Result<Vec<FileFact>, QueryError> {
-    let norm = path_filter.map(|p| p.replace('\\', "/").trim_matches('/').to_string());
+    let norm = path_filter
+        .map(|p| p.replace('\\', "/").trim_matches('/').to_string())
+        .filter(|p| !p.is_empty());
+    let norm_bs = norm.as_ref().map(|p| p.replace('/', "\\"));
     let prefix = norm.as_ref().map(|path| format!("{}/%", escape_like(path)));
+    let prefix_bs = norm_bs
+        .as_ref()
+        .map(|path| format!("{}\\\\%", escape_like(path)));
 
     let sql = "SELECT file_id, path, language, content_hash, content_bytes, line_count, indexed_at
                FROM files
-               WHERE (:path IS NULL OR path = :path OR path LIKE :path_prefix ESCAPE '\\')
+               WHERE (:path IS NULL
+                  OR path = :path COLLATE NOCASE
+                  OR path = :path_bs COLLATE NOCASE
+                  OR path LIKE :path_prefix ESCAPE '\\'
+                  OR path LIKE :path_prefix_bs ESCAPE '\\')
                ORDER BY path ASC";
 
     let mut stmt = conn.prepare(sql)?;
@@ -91,12 +101,14 @@ pub fn load_scoped_files(
         .query_map(
             rusqlite::named_params! {
                 ":path": norm.as_deref(),
+                ":path_bs": norm_bs.as_deref(),
                 ":path_prefix": prefix.as_deref(),
+                ":path_prefix_bs": prefix_bs.as_deref(),
             },
             |row| {
                 Ok(FileFact {
                     file_id: row.get(0)?,
-                    path: row.get(1)?,
+                    path: row.get::<_, String>(1)?.replace('\\', "/"),
                     language: row.get(2)?,
                     content_hash: row.get(3)?,
                     content_bytes: row.get(4)?,
@@ -118,8 +130,14 @@ pub fn load_scoped_outline_symbols(
     depth: usize,
     limit_per_file: usize,
 ) -> Result<HashMap<String, Vec<Symbol>>, QueryError> {
-    let norm = path_filter.map(|p| p.replace('\\', "/").trim_matches('/').to_string());
+    let norm = path_filter
+        .map(|p| p.replace('\\', "/").trim_matches('/').to_string())
+        .filter(|p| !p.is_empty());
+    let norm_bs = norm.as_ref().map(|p| p.replace('/', "\\"));
     let prefix = norm.as_ref().map(|path| format!("{}/%", escape_like(path)));
+    let prefix_bs = norm_bs
+        .as_ref()
+        .map(|path| format!("{}\\\\%", escape_like(path)));
 
     let max_slashes = match &norm {
         None => {
@@ -144,8 +162,12 @@ pub fn load_scoped_outline_symbols(
                    is_test, test_container,
                    ROW_NUMBER() OVER (PARTITION BY path ORDER BY start_line ASC) as rn
             FROM symbols
-            WHERE (:path IS NULL OR path = :path OR path LIKE :path_prefix ESCAPE '\\')
-              AND (length(path) - length(replace(path, '/', '')) <= :max_slashes)
+            WHERE (:path IS NULL
+               OR path = :path COLLATE NOCASE
+               OR path = :path_bs COLLATE NOCASE
+               OR path LIKE :path_prefix ESCAPE '\\'
+               OR path LIKE :path_prefix_bs ESCAPE '\\')
+              AND (length(path) - length(replace(replace(path, '/', ''), '\\', '')) <= :max_slashes)
               AND kind IN ('function', 'method', 'struct', 'enum', 'trait', 'class', 'interface', 'type')
               AND parent_symbol_id IS NULL
         )
@@ -162,7 +184,9 @@ pub fn load_scoped_outline_symbols(
     let mut stmt = conn.prepare(sql)?;
     let mut rows = stmt.query(rusqlite::named_params! {
         ":path": norm.as_deref(),
+        ":path_bs": norm_bs.as_deref(),
         ":path_prefix": prefix.as_deref(),
+        ":path_prefix_bs": prefix_bs.as_deref(),
         ":max_slashes": max_slashes,
         ":limit": limit_per_file as i64,
     })?;
@@ -188,7 +212,7 @@ pub fn get_file(conn: &Connection, path: &str) -> Result<Option<FileFact>, Query
     let mut stmt = conn.prepare(
         "SELECT file_id, path, language, content_hash, content_bytes, line_count, indexed_at
          FROM files
-         WHERE path = ?1 OR path = ?2
+         WHERE (path = ?1 COLLATE NOCASE OR path = ?2 COLLATE NOCASE)
          LIMIT 1",
     )?;
 
@@ -196,7 +220,7 @@ pub fn get_file(conn: &Connection, path: &str) -> Result<Option<FileFact>, Query
     if let Some(row) = rows.next()? {
         Ok(Some(FileFact {
             file_id: row.get(0)?,
-            path: row.get(1)?,
+            path: row.get::<_, String>(1)?.replace('\\', "/"),
             language: row.get(2)?,
             content_hash: row.get(3)?,
             content_bytes: row.get(4)?,
@@ -217,7 +241,7 @@ pub fn load_file_symbols(conn: &Connection, file_path: &str) -> Result<Vec<Symbo
                 body_end_column, body_start_byte, body_end_byte, body_hash, semantic_group,
                 is_test, test_container
          FROM symbols
-         WHERE path = ?1 OR path = ?2
+         WHERE (path = ?1 COLLATE NOCASE OR path = ?2 COLLATE NOCASE)
          ORDER BY start_line ASC, start_column ASC",
     )?;
 
@@ -684,7 +708,7 @@ fn get_symbol_by_name_internal(
          FROM symbols s
          LEFT JOIN symbols p ON s.parent_symbol_id = p.symbol_id
          WHERE (s.name = :name OR (s.name = :term AND (:parent IS NULL OR p.name = :parent)))
-           AND (:path IS NULL OR s.path = :path OR (:exact = 0 AND s.path LIKE '%/' || :path_like ESCAPE '\\'))
+           AND (:path IS NULL OR s.path = :path COLLATE NOCASE OR s.path = :path_bs COLLATE NOCASE OR (:exact = 0 AND (s.path LIKE '%/' || :path_like ESCAPE '\\' OR s.path LIKE '%\\\\' || :path_like_bs ESCAPE '\\')))
          ORDER BY (s.kind != 'import') DESC,
                   (s.kind IN ('function', 'struct', 'class', 'trait', 'method', 'enum', 'interface', 'type')) DESC,
                   (s.name = :name) DESC,
@@ -692,15 +716,19 @@ fn get_symbol_by_name_internal(
          LIMIT 25";
 
     let mut stmt = conn.prepare(sql)?;
-    let normalized_path = path_filter.map(|p| p.replace('\\', "/"));
+    let normalized_path = path_filter.map(|p| p.replace('\\', "/").trim_matches('/').to_string());
+    let backslash_path = normalized_path.as_deref().map(|p| p.replace('/', "\\"));
     let path_like = normalized_path.as_deref().map(escape_like);
+    let path_like_bs = backslash_path.as_deref().map(escape_like);
 
     let mut rows = stmt.query(rusqlite::named_params! {
         ":name": name,
         ":term": terminal_name,
         ":parent": parent_name,
         ":path": normalized_path.as_deref(),
+        ":path_bs": backslash_path.as_deref(),
         ":path_like": path_like.as_deref(),
+        ":path_like_bs": path_like_bs.as_deref(),
         ":exact": if exact_path { 1 } else { 0 },
     })?;
 
@@ -894,7 +922,7 @@ fn find_references_internal(
                 from_symbol_id: row.get(1)?,
                 to_symbol_name: row.get(2)?,
                 kind: row.get(3)?,
-                path: row.get(4)?,
+                path: row.get::<_, String>(4)?.replace('\\', "/"),
                 start_line: row.get::<_, Option<i64>>(5)?.map(|v| v as usize),
                 start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
             })
@@ -940,7 +968,7 @@ fn find_references_internal(
                             from_symbol_id: row.get(1)?,
                             to_symbol_name: row.get(2)?,
                             kind: row.get(3)?,
-                            path: row.get(4)?,
+                            path: row.get::<_, String>(4)?.replace('\\', "/"),
                             start_line: Some(row.get::<_, i64>(5)? as usize),
                             start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
                         })
@@ -974,7 +1002,7 @@ fn find_references_internal(
                 from_symbol_id: row.get(1)?,
                 to_symbol_name: row.get(2)?,
                 kind: row.get(3)?,
-                path: row.get(4)?,
+                path: row.get::<_, String>(4)?.replace('\\', "/"),
                 start_line: row.get::<_, Option<i64>>(5)?.map(|v| v as usize),
                 start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
             })
@@ -1023,7 +1051,7 @@ fn find_references_internal(
                         from_symbol_id: row.get(1)?,
                         to_symbol_name: row.get(2)?,
                         kind: row.get(3)?,
-                        path: row.get(4)?,
+                        path: row.get::<_, String>(4)?.replace('\\', "/"),
                         start_line: Some(row.get::<_, i64>(5)? as usize),
                         start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
                     })
@@ -1061,7 +1089,7 @@ pub fn find_callee_signatures(
         Ok((
             row.get::<_, String>(0)?,
             row.get::<_, Option<String>>(1)?,
-            row.get::<_, String>(2)?,
+            row.get::<_, String>(2)?.replace('\\', "/"),
             row.get::<_, Option<i64>>(3)?.unwrap_or(1) as usize,
             row.get::<_, String>(4)?,
         ))
@@ -1100,7 +1128,7 @@ pub fn find_callee_signatures(
                 Ok((
                     row.get::<_, String>(0)?,
                     row.get::<_, Option<String>>(1)?,
-                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(2)?.replace('\\', "/"),
                     row.get::<_, Option<i64>>(3)?.unwrap_or(1) as usize,
                     row.get::<_, String>(4)?,
                 ))
@@ -1139,7 +1167,7 @@ pub fn find_callee_signatures(
             ext_stmt.query_map(params![symbol_name, symbol_id, remaining as i64], |row| {
                 Ok((
                     row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(1)?.replace('\\', "/"),
                     row.get::<_, Option<i64>>(2)?.unwrap_or(1) as usize,
                 ))
             })?;
@@ -1186,7 +1214,7 @@ pub fn find_structural_facts(
     let rows = stmt.query_map(params![pattern, limit as i64], |row| {
         Ok(StructuralFact {
             structural_fact_id: row.get(0)?,
-            path: row.get(1)?,
+            path: row.get::<_, String>(1)?.replace('\\', "/"),
             language: row.get(2)?,
             pattern_id: row.get(3)?,
             capture_name: row.get(4)?,
@@ -1224,7 +1252,7 @@ pub fn find_literals(
     let rows = stmt.query_map(params![pattern, limit as i64], |row| {
         Ok(LiteralFact {
             literal_id: row.get(0)?,
-            path: row.get(1)?,
+            path: row.get::<_, String>(1)?.replace('\\', "/"),
             literal_text: row.get(2)?,
             kind: row.get(3)?,
             carrier: row.get(4)?,
@@ -1465,7 +1493,8 @@ pub fn compute_blast_radius(
         })?;
 
         for r in rows {
-            let (_sym_id, name, kind, path, line, is_test, test_container, depth) = r?;
+            let (_sym_id, name, kind, raw_path, line, is_test, test_container, depth) = r?;
+            let path = raw_path.replace('\\', "/");
             let is_test_target = is_test || test_container || is_test_path(&path);
 
             if is_test_target {
@@ -1529,6 +1558,7 @@ pub fn compute_blast_radius(
             let t_rows =
                 test_files_stmt.query_map([stem_pattern], |row| row.get::<_, String>(0))?;
             for p in t_rows.flatten() {
+                let p = p.replace('\\', "/");
                 let key = format!("{}:1", p);
                 if seen_test_keys.insert(key) {
                     likely_tests.push(TestTarget {
@@ -1757,5 +1787,85 @@ mod tests {
             fts_search_symbols_scoped(&conn, "stripe kafka redis", None, None, false, 10).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].symbol.name, "StripeClient");
+    }
+
+    #[test]
+    fn test_queries_nocase_and_path_normalization() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE files (
+                file_id TEXT PRIMARY KEY,
+                path TEXT NOT NULL,
+                language TEXT,
+                content_hash TEXT,
+                content_bytes INTEGER,
+                line_count INTEGER,
+                indexed_at INTEGER
+            );
+            CREATE TABLE symbols (
+                symbol_id TEXT PRIMARY KEY,
+                file_id TEXT,
+                path TEXT NOT NULL,
+                language TEXT,
+                name TEXT,
+                kind TEXT,
+                signature TEXT,
+                doc_comment TEXT,
+                visibility TEXT,
+                parent_symbol_id TEXT,
+                start_line INTEGER,
+                start_column INTEGER,
+                end_line INTEGER,
+                end_column INTEGER,
+                start_byte INTEGER,
+                end_byte INTEGER,
+                body_start_line INTEGER,
+                body_start_column INTEGER,
+                body_end_line INTEGER,
+                body_end_column INTEGER,
+                body_start_byte INTEGER,
+                body_end_byte INTEGER,
+                body_hash TEXT,
+                semantic_group TEXT,
+                is_test INTEGER,
+                test_container INTEGER
+            );
+            -- Insert with backslashes and mixed casing to verify defensive normalization and COLLATE NOCASE
+            INSERT INTO files VALUES ('f1', 'src\\Payment.rs', 'rust', 'hash1', 100, 10, '2026-09-14T00:00:00Z');
+            INSERT INTO symbols VALUES (
+                's1', 'f1', 'src\\Payment.rs', 'rust', 'ProcessPayment', 'function',
+                'pub fn ProcessPayment()', NULL, 'pub', NULL, 1, 0, 5, 0, 0, 50,
+                2, 4, 4, 1, 10, 45, 'bhash', 'function', 0, 0
+            );",
+        )
+        .unwrap();
+
+        // 1. get_file: query with uppercase, lowercase, and forward slashes
+        let file = get_file(&conn, "SRC/PAYMENT.RS")
+            .unwrap()
+            .expect("File should be found");
+        assert_eq!(
+            file.path, "src/Payment.rs",
+            "Path should be normalized to forward slashes"
+        );
+
+        let file2 = get_file(&conn, "src/payment.rs")
+            .unwrap()
+            .expect("File should be found");
+        assert_eq!(file2.path, "src/Payment.rs");
+
+        // 2. load_file_symbols: query with uppercase and forward slashes
+        let syms = load_file_symbols(&conn, "SRC/PAYMENT.RS").unwrap();
+        assert_eq!(syms.len(), 1);
+        assert_eq!(
+            syms[0].path, "src/Payment.rs",
+            "Symbol path should be normalized to forward slashes"
+        );
+
+        // 3. get_symbol_by_name with path filter
+        let sym = get_symbol_by_name(&conn, "ProcessPayment", Some("SRC/PAYMENT.RS"))
+            .unwrap()
+            .expect("Symbol should be found with case-insensitive path filter");
+        assert_eq!(sym.path, "src/Payment.rs");
     }
 }

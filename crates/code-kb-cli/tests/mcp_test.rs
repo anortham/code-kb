@@ -986,3 +986,349 @@ fn test_mcp_worktree_auto_copy_fast_path() {
     drop(stdin);
     let _ = child.wait();
 }
+
+fn setup_test_repo() -> tempfile::TempDir {
+    let temp_dir = code_kb_core::safe_tempdir();
+    let root = temp_dir.path().to_path_buf();
+    let db_dir = root.join(".code-kb");
+    std::fs::create_dir_all(&db_dir).unwrap();
+    let db_path = db_dir.join("artifact.db");
+
+    let src_dir = root.join("src");
+    std::fs::create_dir_all(&src_dir).unwrap();
+    let content = "pub struct Workspace {\n    pub root: String,\n}\n";
+    std::fs::write(src_dir.join("workspace.rs"), content).unwrap();
+    let bytes = content.len() as i64;
+    let hash = format!("blake3:{}", blake3::hash(content.as_bytes()).to_hex());
+
+    let conn = code_kb_core::open_read_write(&db_path).unwrap();
+    conn.execute_batch(
+        "CREATE TABLE files (
+            file_id TEXT PRIMARY KEY, path TEXT, language TEXT, content_hash TEXT,
+            content_bytes INTEGER, line_count INTEGER, indexed_at TEXT
+        );
+        CREATE TABLE symbols (
+            symbol_id TEXT PRIMARY KEY, file_id TEXT, path TEXT, language TEXT, name TEXT, kind TEXT,
+            signature TEXT, doc_comment TEXT, visibility TEXT, parent_symbol_id TEXT,
+            start_line INTEGER, start_column INTEGER, end_line INTEGER, end_column INTEGER,
+            start_byte INTEGER, end_byte INTEGER, body_start_line INTEGER,
+            body_start_column INTEGER, body_end_line INTEGER, body_end_column INTEGER,
+            body_start_byte INTEGER, body_end_byte INTEGER, body_hash TEXT,
+            semantic_group TEXT, is_test INTEGER, test_container INTEGER
+        );
+        CREATE TABLE relationships (
+            relationship_id TEXT PRIMARY KEY, from_symbol_id TEXT, to_symbol_id TEXT,
+            kind TEXT, path TEXT, start_line INTEGER, start_column INTEGER
+        );
+        CREATE TABLE pending_relationships (
+            from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT,
+            path TEXT, start_line INTEGER, start_column INTEGER
+        );
+        CREATE TABLE structural_facts (
+            structural_fact_id TEXT PRIMARY KEY, file_id TEXT, path TEXT NOT NULL, language TEXT,
+            pattern_id TEXT, capture_name TEXT, node_kind TEXT, containing_symbol_id TEXT,
+            start_line INTEGER, end_line INTEGER, confidence REAL
+        );
+        CREATE TABLE literals (
+            literal_id TEXT PRIMARY KEY, file_id TEXT, path TEXT NOT NULL, language TEXT,
+            kind TEXT, literal_text TEXT, carrier TEXT, containing_symbol_id TEXT,
+            start_line INTEGER, start_column INTEGER, end_line INTEGER, end_column INTEGER,
+            start_byte INTEGER, end_byte INTEGER
+        );",
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO files VALUES ('f1', 'src/workspace.rs', 'rust', ?1, ?2, 3, '2026-01-01')",
+        rusqlite::params![hash, bytes],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO symbols VALUES (
+            's1', 'f1', 'src/workspace.rs', 'rust', 'Workspace', 'struct',
+            'pub struct Workspace', 'Workspace representation for code-kb workspace discovery root', 'pub', NULL,
+            1, 0, 3, 1, 0, ?1, 1, 21, 3, 1, 21, ?1, 'b3:hash',
+            NULL, 0, 0
+        )",
+        rusqlite::params![bytes],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO pending_relationships VALUES ('s1', 'println', 'call', 'src/workspace.rs', 2, 4)",
+        [],
+    )
+    .unwrap();
+    code_kb_core::db::ensure_fts_index(&conn).unwrap();
+    drop(conn);
+
+    temp_dir
+}
+
+#[test]
+fn test_mcp_initialize_roots_file_uris() {
+    use std::io::BufRead;
+
+    let repo = setup_test_repo();
+    let root = repo.path();
+    let root_str = root.to_string_lossy().replace('\\', "/");
+    let three_slash_uri = format!("file:///{root_str}");
+    let two_slash_uri = format!("file://{root_str}");
+
+    // 1. Spawn without --root, initialize with params.roots containing file:///C:/...
+    {
+        let mut child = ChildGuard(
+            Command::new(env!("CARGO_BIN_EXE_code-kb"))
+                .arg("serve")
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .spawn()
+                .expect("Failed to spawn code-kb serve without --root"),
+        );
+        let mut stdin = child.stdin.take().expect("Failed to open stdin");
+        let stdout = child.stdout.take().expect("Failed to open stdout");
+        let mut reader = std::io::BufReader::new(stdout);
+
+        let init = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": { "name": "uri-test", "version": "1.0" },
+                "roots": [{ "uri": three_slash_uri }]
+            }
+        });
+        let mut line = serde_json::to_string(&init).unwrap();
+        line.push('\n');
+        stdin.write_all(line.as_bytes()).unwrap();
+        stdin.flush().unwrap();
+
+        let mut init_resp = String::new();
+        reader.read_line(&mut init_resp).unwrap();
+        let resp: Value = serde_json::from_str(&init_resp).unwrap();
+        assert_eq!(resp["id"], 1);
+
+        let call = json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "find_symbol",
+                "arguments": { "query": "Workspace" }
+            }
+        });
+        let mut call_line = serde_json::to_string(&call).unwrap();
+        call_line.push('\n');
+        stdin.write_all(call_line.as_bytes()).unwrap();
+        stdin.flush().unwrap();
+
+        let mut call_resp = String::new();
+        reader.read_line(&mut call_resp).unwrap();
+        let call_val: Value = serde_json::from_str(&call_resp).unwrap();
+        assert_eq!(call_val["id"], 2);
+        assert_ne!(call_val["result"]["isError"], true);
+        assert!(
+            call_val["result"]["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("Workspace")
+        );
+
+        drop(stdin);
+        let _ = child.wait();
+    }
+
+    // 2. Spawn without --root, initialize with params.roots containing two-slash file://C:/...
+    {
+        let mut child = ChildGuard(
+            Command::new(env!("CARGO_BIN_EXE_code-kb"))
+                .arg("serve")
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .spawn()
+                .expect("Failed to spawn code-kb serve without --root"),
+        );
+        let mut stdin = child.stdin.take().expect("Failed to open stdin");
+        let stdout = child.stdout.take().expect("Failed to open stdout");
+        let mut reader = std::io::BufReader::new(stdout);
+
+        let init = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": { "name": "uri-test", "version": "1.0" },
+                "roots": [{ "uri": two_slash_uri }]
+            }
+        });
+        let mut line = serde_json::to_string(&init).unwrap();
+        line.push('\n');
+        stdin.write_all(line.as_bytes()).unwrap();
+        stdin.flush().unwrap();
+
+        let mut init_resp = String::new();
+        reader.read_line(&mut init_resp).unwrap();
+        let resp: Value = serde_json::from_str(&init_resp).unwrap();
+        assert_eq!(resp["id"], 1);
+
+        let call = json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "find_symbol",
+                "arguments": { "query": "Workspace" }
+            }
+        });
+        let mut call_line = serde_json::to_string(&call).unwrap();
+        call_line.push('\n');
+        stdin.write_all(call_line.as_bytes()).unwrap();
+        stdin.flush().unwrap();
+
+        let mut call_resp = String::new();
+        reader.read_line(&mut call_resp).unwrap();
+        let call_val: Value = serde_json::from_str(&call_resp).unwrap();
+        assert_eq!(call_val["id"], 2);
+        assert_ne!(call_val["result"]["isError"], true);
+        assert!(
+            call_val["result"]["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("Workspace")
+        );
+
+        drop(stdin);
+        let _ = child.wait();
+    }
+}
+
+#[test]
+fn test_mcp_rebinding_drive_casing_insensitivity() {
+    use std::io::BufRead;
+
+    let repo = setup_test_repo();
+    let root = repo.path();
+
+    let mut child = ChildGuard(
+        Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .arg("serve")
+            .arg("--root")
+            .arg(root)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("Failed to spawn code-kb serve"),
+    );
+    let mut stdin = child.stdin.take().expect("Failed to open stdin");
+    let stdout = child.stdout.take().expect("Failed to open stdout");
+    let mut reader = std::io::BufReader::new(stdout);
+
+    // 1. Initialize
+    let init_req = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": { "name": "casing-test", "version": "1.0" }
+        }
+    });
+    let mut line = serde_json::to_string(&init_req).unwrap();
+    line.push('\n');
+    stdin.write_all(line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut init_resp = String::new();
+    reader.read_line(&mut init_resp).unwrap();
+    let resp: Value = serde_json::from_str(&init_resp).unwrap();
+    assert_eq!(resp["id"], 1);
+
+    // 2. Prepare inverted drive letter path
+    let abs_file = root
+        .join("src")
+        .join("workspace.rs")
+        .to_string_lossy()
+        .to_string();
+    let inverted_abs_file = if abs_file.len() >= 2 && abs_file.as_bytes()[1] == b':' {
+        let first_char = abs_file.chars().next().unwrap();
+        let toggled = if first_char.is_ascii_uppercase() {
+            first_char.to_ascii_lowercase()
+        } else {
+            first_char.to_ascii_uppercase()
+        };
+        format!("{}{}", toggled, &abs_file[1..])
+    } else {
+        abs_file.clone()
+    };
+
+    // 3. Call file_skeleton with inverted absolute path
+    let call1 = json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+            "name": "file_skeleton",
+            "arguments": { "file": inverted_abs_file }
+        }
+    });
+    let mut call1_line = serde_json::to_string(&call1).unwrap();
+    call1_line.push('\n');
+    stdin.write_all(call1_line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut resp_line1 = String::new();
+    reader.read_line(&mut resp_line1).unwrap();
+    let resp1: Value = serde_json::from_str(&resp_line1).unwrap();
+    assert_eq!(resp1["id"], 2);
+    assert_ne!(
+        resp1["result"]["isError"], true,
+        "file_skeleton should not error on inverted drive casing: {resp1:?}"
+    );
+    assert!(
+        resp1["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("pub struct Workspace"),
+        "file_skeleton should return symbol signatures"
+    );
+
+    // 4. Call get_symbol_body with inverted absolute path in file argument
+    let call2 = json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+            "name": "get_symbol_body",
+            "arguments": {
+                "symbol": "Workspace",
+                "file": inverted_abs_file
+            }
+        }
+    });
+    let mut call2_line = serde_json::to_string(&call2).unwrap();
+    call2_line.push('\n');
+    stdin.write_all(call2_line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut resp_line2 = String::new();
+    reader.read_line(&mut resp_line2).unwrap();
+    let resp2: Value = serde_json::from_str(&resp_line2).unwrap();
+    assert_eq!(resp2["id"], 3);
+    assert_ne!(
+        resp2["result"]["isError"], true,
+        "get_symbol_body should not error on inverted drive casing: {resp2:?}"
+    );
+    assert!(
+        resp2["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("pub struct Workspace"),
+        "get_symbol_body should return symbol body"
+    );
+
+    drop(stdin);
+    let _ = child.wait();
+}

@@ -23,6 +23,16 @@ pub fn open_read_only(path: &Path) -> Result<Connection, DbError> {
     let conn = Connection::open_with_flags(path, flags)
         .map_err(|e| DbError::OpenFailed(path.display().to_string(), e))?;
 
+    #[cfg(windows)]
+    conn.execute_batch(
+        "PRAGMA busy_timeout = 5000;
+         PRAGMA query_only = ON;
+         PRAGMA cache_size = -4000;
+         PRAGMA mmap_size = 0;",
+    )
+    .map_err(DbError::PragmaFailed)?;
+
+    #[cfg(not(windows))]
     conn.execute_batch(
         "PRAGMA busy_timeout = 5000;
          PRAGMA query_only = ON;
@@ -32,6 +42,14 @@ pub fn open_read_only(path: &Path) -> Result<Connection, DbError> {
     .map_err(DbError::PragmaFailed)?;
 
     Ok(conn)
+}
+
+/// Safely flushes all committed transactions from the WAL file into the main database file
+/// and truncates the WAL to zero bytes.
+pub fn checkpoint_truncate(conn: &Connection) -> Result<(), DbError> {
+    conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")
+        .map_err(DbError::PragmaFailed)?;
+    Ok(())
 }
 
 /// Opens a read-write SQLite connection (used when creating fresh or test databases).
@@ -224,5 +242,50 @@ mod tests {
             )
             .unwrap();
         assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn test_mmap_size_configuration() {
+        let dir = crate::safe_tempdir();
+        let db_path = dir.path().join("mmap_test.db");
+        let conn_rw = open_read_write(&db_path).unwrap();
+        conn_rw.execute("CREATE TABLE t (x INT);", []).unwrap();
+        drop(conn_rw);
+
+        let conn_ro = open_read_only(&db_path).unwrap();
+        let mmap_size: i64 = conn_ro
+            .query_row("PRAGMA mmap_size;", [], |r| r.get(0))
+            .unwrap();
+        #[cfg(windows)]
+        assert_eq!(
+            mmap_size, 0,
+            "mmap_size must be 0 on Windows to prevent file locks"
+        );
+        #[cfg(not(windows))]
+        assert_eq!(
+            mmap_size, 268435456,
+            "mmap_size should be 256MB on non-Windows"
+        );
+    }
+
+    #[test]
+    fn test_checkpoint_truncate() {
+        let dir = crate::safe_tempdir();
+        let db_path = dir.path().join("wal_checkpoint.db");
+        let conn_rw = open_read_write(&db_path).unwrap();
+        conn_rw
+            .execute("CREATE TABLE items (id INTEGER PRIMARY KEY, val TEXT);", [])
+            .unwrap();
+        conn_rw
+            .execute("INSERT INTO items (val) VALUES ('persisted_val');", [])
+            .unwrap();
+        checkpoint_truncate(&conn_rw).expect("checkpoint_truncate should succeed");
+        drop(conn_rw);
+
+        let conn_ro = open_read_only(&db_path).unwrap();
+        let val: String = conn_ro
+            .query_row("SELECT val FROM items WHERE id = 1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(val, "persisted_val");
     }
 }
