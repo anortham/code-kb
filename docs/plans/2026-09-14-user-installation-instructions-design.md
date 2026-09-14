@@ -20,7 +20,7 @@ For end users wanting to integrate `code-kb` into their AI coding agents (Claude
 
 ---
 
-## 2. Target Design & Section Structure
+## Task 1: Update README.md with user-focused installation instructions
 
 ### 2.1 `## Install`
 
