@@ -47,7 +47,7 @@
     </p>
     <div class="hero-actions">
       <a class="btn btn-primary" href="#install">Install code-kb</a>
-      <a class="btn btn-secondary" href="#tools">See the ten tools</a>
+      <a class="btn btn-secondary" href="#tools">See the eleven tools</a>
     </div>
     <p class="compat">
       Works with Claude Code, Grok CLI, Antigravity, Codex CLI, and Cursor. Ships binaries for Windows, Linux, and macOS.
@@ -157,7 +157,7 @@ get_symbol_context("search_symbols_scoped")</pre>
     <section id="what" class="section">
       <p class="margin-label">What it does</p>
       <div class="section-body">
-        <h2>Six things an agent can ask for</h2>
+        <h2>Seven capabilities for AI coding agents</h2>
         <dl class="features">
           <div>
             <dt>Skeletons</dt>
@@ -174,6 +174,10 @@ get_symbol_context("search_symbols_scoped")</pre>
           <div>
             <dt>Atomic edits</dt>
             <dd><code>replace_symbol_body</code> checks the new body with tree-sitter, verifies a hash of the old body, writes the file, and re-indexes it. One turn, no preview step.</dd>
+          </div>
+          <div>
+            <dt>Token telemetry</dt>
+            <dd><code>telemetry_summary</code> tracks tokens saved, call counts, and error rates across sessions in a central SQLite database. <code>code-kb stats</code> prints the report from the terminal.</dd>
           </div>
           <div>
             <dt>Windows first</dt>
@@ -310,7 +314,7 @@ code-kb stats</pre>
     <section id="tools" class="section">
       <p class="margin-label">Tools</p>
       <div class="section-body">
-        <h2>Ten tools, each with a matching command</h2>
+        <h2>Eleven tools, each with a matching command</h2>
         <p>Every MCP tool has a one-to-one CLI command, so you can check any answer from the terminal.</p>
         <div class="table-wrapper">
           <table class="tool-table">
@@ -333,6 +337,7 @@ code-kb stats</pre>
               <tr><td><code>blast_radius</code></td><td><code>code-kb blast-radius [target]</code></td><td>Multi-hop callers and tests to run</td><td>alias <code>impact</code>; reads git changes</td></tr>
               <tr><td><code>find_structural_facts</code></td><td><code>code-kb facts [category]</code></td><td>Routes, queries, models, config keys</td><td>no category lists all</td></tr>
               <tr><td><code>replace_symbol_body</code></td><td><code>code-kb edit &lt;symbol&gt;</code></td><td>Atomic, syntax-checked replacement</td><td><code>body</code>, <code>code</code>, <code>expected_hash</code></td></tr>
+              <tr><td><code>telemetry_summary</code></td><td><code>code-kb stats</code></td><td>Token savings, call counts, error rates</td><td><code>time_window</code>, <code>workspace_only</code></td></tr>
             </tbody>
           </table>
         </div>
