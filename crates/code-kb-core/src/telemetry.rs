@@ -469,23 +469,25 @@ fn is_same_file(p1: &Path, p2: &Path) -> bool {
 
 fn sanitize_error_message(msg: &str) -> String {
     let mut home_candidates = Vec::new();
-    if let Ok(home) = std::env::var("HOME") {
-        if !home.trim().is_empty() && home != "/" {
-            let simplified = dunce::simplified(Path::new(&home)).to_string_lossy().to_string();
-            if simplified != home {
-                home_candidates.push(simplified);
-            }
-            home_candidates.push(home);
+    if let Ok(home) = std::env::var("HOME")
+        && !home.trim().is_empty()
+        && home != "/"
+    {
+        let simplified = dunce::simplified(Path::new(&home)).to_string_lossy().to_string();
+        if simplified != home {
+            home_candidates.push(simplified);
         }
+        home_candidates.push(home);
     }
-    if let Ok(profile) = std::env::var("USERPROFILE") {
-        if !profile.trim().is_empty() && profile != "/" {
-            let simplified = dunce::simplified(Path::new(&profile)).to_string_lossy().to_string();
-            if simplified != profile {
-                home_candidates.push(simplified);
-            }
-            home_candidates.push(profile);
+    if let Ok(profile) = std::env::var("USERPROFILE")
+        && !profile.trim().is_empty()
+        && profile != "/"
+    {
+        let simplified = dunce::simplified(Path::new(&profile)).to_string_lossy().to_string();
+        if simplified != profile {
+            home_candidates.push(simplified);
         }
+        home_candidates.push(profile);
     }
 
     sanitize_error_message_with_homes(msg, &home_candidates)
@@ -507,7 +509,7 @@ fn sanitize_error_message_with_homes(msg: &str, home_candidates: &[String]) -> S
     }
 
     // Replace newlines with spaces to avoid breaking markdown tables
-    sanitized = sanitized.replace("\r\n", " ").replace('\n', " ").replace('\r', " ");
+    sanitized = sanitized.replace("\r\n", " ").replace(['\n', '\r'], " ");
 
     // Escape markdown table pipe characters
     sanitized = sanitized.replace('|', "\\|");
@@ -676,10 +678,11 @@ pub fn migrate_legacy_workspace_telemetry(
     if is_same_file(&legacy_db_path, &global_db_path) {
         return Ok(0);
     }
-    if let Ok(dest_db_str) = global_conn.query_row("PRAGMA database_list", [], |row| row.get::<_, String>(2)) {
-        if !dest_db_str.is_empty() && is_same_file(&legacy_db_path, Path::new(&dest_db_str)) {
-            return Ok(0);
-        }
+    if let Ok(dest_db_str) = global_conn.query_row("PRAGMA database_list", [], |row| row.get::<_, String>(2))
+        && !dest_db_str.is_empty()
+        && is_same_file(&legacy_db_path, Path::new(&dest_db_str))
+    {
+        return Ok(0);
     }
 
     let norm_ws = to_forward_slash(&normalize_path(workspace_root));
