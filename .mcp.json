@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "code-kb": {
-      "command": "./target/release/code-kb",
+      "command": "code-kb",
       "args": ["serve"]
     }
   }
