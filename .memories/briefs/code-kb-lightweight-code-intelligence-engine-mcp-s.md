@@ -3,7 +3,7 @@ id: code-kb-lightweight-code-intelligence-engine-mcp-s
 title: "code-kb: Answer Accuracy, Bounded Output & Benchmark Rigor"
 status: active
 created: 2026-09-12T22:44:18.259Z
-updated: 2026-09-14T13:19:07.793Z
+updated: 2026-09-14T21:47:16.977Z
 tags:
   - code-kb
   - mcp
@@ -14,45 +14,47 @@ tags:
 ---
 
 ## Goal
-Strengthen the accuracy of existing answers, implement bounded token-dense output, tighten tool contracts, and establish rigorous benchmarking for `code-kb` without taking on the architectural complexity (in-memory graphs, daemons, vector embeddings, multi-tier resolvers) that burdened Julie and Miller.
+Strengthen the accuracy of existing answers, implement bounded token-dense output, tighten tool contracts, ensure cross-tool target identity consistency, and make result limits transparent without taking on architectural complexity (in-memory graphs, daemons, vector embeddings, multi-tier resolvers).
 
 ## Why Now
-A comparative audit against Julie and Miller identified key areas where answers promise more certainty than the implementation delivers: unqualified pending-call joins return phantom dependencies (e.g. `Vec::new()` matching `McpServer::new`), unbounded impact formatting burns agent context, and context slice / syntax safety contracts contain silent fallbacks.
+A toolkit review (documented in `docs/toolkit-assessment.md`) validated the 11 MCP tools and identified key gaps in target identity consistency (e.g. `find_references` lacking a file selector, `blast_radius` treating `file` only additively rather than as a symbol path filter), invisible result caps (callee/test/CTE ceilings), and structural-fact ergonomics.
 
 ## Constraints
-- Pure SQLite queries: keep resolution logic in SQLite queries and CTEs; do not import Miller's multi-tiered resolver architecture or Julie's in-memory graph traversals.
-- Zero workspace parameters: maintain process-to-workspace 1:1 binding.
-- Memory target < 15MB: ensure SQLite and Rust heap remain lightweight.
-- Preserved JSON payloads: bounded output optimizations apply to compact text formats while machine-readable JSON remains complete.
+- Pure SQLite queries: keep resolution and traversal logic in SQLite queries and CTEs; do not import in-memory symbol graphs or runtime daemons.
+- Zero workspace parameters: maintain process-to-workspace 1:1 binding; never expose `workspace` or `repo_path` in MCP schemas.
+- Retained memory target < 15MB: ensure SQLite and Rust heap remain lightweight.
+- Exact 1:1 MCP to CLI parity: every MCP capability must be verifiable from the terminal.
+- Single-turn atomic edits: pre-flight validation and atomic updates remain single-turn without two-step handshakes.
 
-## 4-Phase Roadmap (All Completed)
-Following `docs/plans/015-accuracy-and-bounded-output-plan.md`:
-1. **Phase 1: Conservative Reference Resolution (COMPLETE)**
-   - Tightened `pending_relationships` joins in `queries.rs` using `target_namespace_json`, `target_receiver`, and local scope.
-   - Eliminated phantom caller/callee dependencies (e.g. `Vec::new` -> `McpServer::new`) across `find_callee_signatures`, `find_callee_references`, `find_caller_references`, and `impact_walk`.
-2. **Phase 2: Bounded Output & Formatting (COMPLETE)**
-   - Grouped `blast_radius` compact output by file.
-   - Capped likely-test targets (top 20) and impacted symbols (top 50) while preserving total count headers and `--json` reference.
-   - Suppressed low-signal `import`/`module` rows in compact downstream lists.
-3. **Phase 3: Contract Integrity & Safety Boundaries (COMPLETE)**
-   - Updated `validate_syntax` to return `Result<bool, SyntaxError>` and added `syntax_checked` to `EditResult`.
-   - Replaced `.unwrap_or_default()` in `get_context_slice_op` with `?` error propagation.
-   - Added table existence check in `find_type_facts` to gracefully handle partial/mock databases.
-   - Bounded tree generation in `codebase_outline_op` to 1,000 files with truncation notice.
-   - Synced Invariant 4 byte-for-byte between `AGENTS.md` and `CLAUDE.md`.
-4. **Phase 4: Benchmark Rigor & Measurement (COMPLETE)**
-   - Implemented exact peak RSS measurement via `os.wait4` (child process rusage).
-   - Replaced substring checks with rigorous Rank-1 and Top-5 search precision evaluations.
-   - Replaced character heuristic with accurate token estimation.
-   - Removed unverified competitor claims in favor of automated measurements.
+## Completed Work
+1. **Accuracy & Bounded Output (docs/plans/015-accuracy-and-bounded-output-plan.md)**
+   - Conservative reference resolution avoiding phantom joins.
+   - Bounded impact formatting grouped by file.
+   - Contract integrity and safety boundaries.
+   - Benchmark rigor with child process RSS measurement.
+2. **Toolkit Review Defect Fixes (docs/toolkit-assessment.md)**
+   - Prioritized primary definitions over fields for qualified symbol lookups in `queries.rs` (`get_symbol_by_name_internal`).
+   - Resolved seed symbols to exact `symbol_id`s in `compute_blast_radius`, enabling qualified seeds and rejecting unknown/ambiguous bare seeds.
+   - Propagated file freshness errors in `code-kb --json skeleton` instead of returning stale data.
+   - Aligned tool documentation and MCP schemas for `replace_symbol_body` and `blast_radius`.
 
-## Success Criteria (All Met)
-- `code-kb slice` and `code-kb refs` do not return false-positive workspace symbols for calls with external namespaces (verified live on `find_callee_signatures`).
-- Compact blast radius output groups symbols by file, caps at 20 tests / 50 symbols, and reduces output tokens without dropping full JSON data.
-- Benchmark script reports measured peak RSS (14.2–28.07 MB), warm query latencies (5.58 ms median), and verified search rankings (83.3% Top-1, 100% Top-5).
-- All 159 tests pass across workspace; `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` are 100% clean.
+## Active Roadmap & Follow-ups
+1. **Phase 5: Target Identity & Disambiguation Consistency**
+   - Disambiguate `blast_radius(symbol, file)`: when both `symbol` and `file` are provided, use `file` as the path filter for resolving `symbol`, enabling targeted blast radius on symbols that share names across files.
+   - Add optional `file_path` to `find_references`: allow callers to isolate callers/callees for a symbol defined in a specific file.
+2. **Phase 6: Result Completeness & Truncation Transparency**
+   - Disclose caps and truncation in compact and structured responses:
+     - Context slice: indicate when callee count exceeds 10 or test count exceeds 5.
+     - Blast radius: indicate when impacted symbols hit CTE limits (200 rows) or display caps.
+     - Search & lookup: include total match count or continuation indicator when truncating.
+3. **Phase 7: Structural-Fact Ergonomics**
+   - Add path filtering to `find_structural_facts`.
+   - Improve category discovery and matching (e.g. normalize framework tags or provide alias mapping for common terms like `config`, `routes`).
+4. **Phase 8: Workspace Hygiene & Commits**
+   - Commit toolkit review documentation (`docs/toolkit-assessment.md`) and verified regression fixes.
 
 ## References
+- docs/toolkit-assessment.md
 - docs/plans/015-accuracy-and-bounded-output-plan.md
-- docs/plans/012-review-findings-and-fix-plan.md
-- docs/plans/006-lessons-from-miller.md
+- docs/plans/013-post-v0.5.1-review-findings.md
+- AGENTS.md

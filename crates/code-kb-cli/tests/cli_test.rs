@@ -158,6 +158,36 @@ fn test_cli_skeleton() {
 }
 
 #[test]
+fn test_cli_json_skeleton_propagates_freshness_failure() {
+    let repo = setup_test_repo();
+    let root = repo.path();
+    std::fs::write(
+        root.join("src/workspace.rs"),
+        "pub fn changed_after_index() {}\n",
+    )
+    .unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .env("JULIE_EXTRACT_BIN", root)
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("skeleton")
+        .arg("src/workspace.rs")
+        .output()
+        .expect("Failed to execute JSON skeleton");
+
+    assert!(
+        !output.status.success(),
+        "JSON skeleton must fail when freshness cannot be restored"
+    );
+    assert!(
+        output.stdout.is_empty(),
+        "JSON skeleton must not return stale catalog data"
+    );
+}
+
+#[test]
 fn test_cli_symbol_and_search() {
     let repo = setup_test_repo();
     let root = repo.path();

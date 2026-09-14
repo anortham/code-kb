@@ -173,7 +173,7 @@ get_symbol_context("search_symbols_scoped")</pre>
           </div>
           <div>
             <dt>Atomic edits</dt>
-            <dd><code>replace_symbol_body</code> checks the new body with tree-sitter, verifies a hash of the old body, writes the file, and re-indexes it. One turn, no preview step.</dd>
+            <dd><code>replace_symbol_body</code> validates Rust, JavaScript, TypeScript/TSX, Python, and Go with tree-sitter; other languages report validation skipped. It then verifies a hash, writes the file, and re-indexes it in one turn.</dd>
           </div>
           <div>
             <dt>Token telemetry</dt>
@@ -237,7 +237,7 @@ get_symbol_context("search_symbols_scoped")</pre>
               </tr>
               <tr>
                 <td>Replace a function</td>
-                <td class="kept">Syntax checked by tree-sitter before the write</td>
+                <td class="kept">Syntax checked before the write for Rust, JS/TS/TSX, Python, and Go; skipped otherwise</td>
                 <td>Text or regex replacement</td>
               </tr>
               <tr>
@@ -295,11 +295,11 @@ search_symbols("auth token validation")</pre>
             <pre>blast_radius(symbol="compute_hash")</pre>
           </li>
           <li>
-            <div><h3>Edit</h3><p>Syntax check, hash check, atomic write, re-index. One turn.</p></div>
+            <div><h3>Edit</h3><p>Syntax validation for Rust, JS/TS/TSX, Python, and Go; other languages report it skipped. Hash check, atomic write, re-index.</p></div>
             <pre>replace_symbol_body(
-  symbol="calculate",
-  file="calc.rs",
-  body="{ a + b }"
+  symbol_name="calculate",
+  file_path="calc.rs",
+  new_body="{ a + b }"
 )</pre>
           </li>
           <li>
@@ -327,16 +327,16 @@ code-kb stats</pre>
               </tr>
             </thead>
             <tbody>
-              <tr><td><code>codebase_outline</code></td><td><code>code-kb outline [path]</code></td><td>Directory tree and main symbols</td><td><code>path</code>, <code>dir</code>, <code>depth</code></td></tr>
-              <tr><td><code>file_skeleton</code></td><td><code>code-kb skeleton &lt;file&gt;</code></td><td>File outline, bodies removed</td><td><code>file</code>, <code>path</code></td></tr>
-              <tr><td><code>lookup_symbol</code></td><td><code>code-kb lookup &lt;query&gt;</code></td><td>Exact or prefix symbol match</td><td><code>name</code>, <code>q</code>, <code>path</code></td></tr>
-              <tr><td><code>search_symbols</code></td><td><code>code-kb search &lt;query&gt;</code></td><td>Full-text search over docstrings and signatures</td><td><code>name</code>, <code>q</code>, <code>path</code></td></tr>
-              <tr><td><code>get_symbol_body</code></td><td><code>code-kb body &lt;symbol&gt;</code></td><td>Source of one symbol</td><td><code>symbol</code>, <code>name</code>, <code>file</code></td></tr>
-              <tr><td><code>get_symbol_context</code></td><td><code>code-kb context &lt;symbol&gt;</code></td><td>Body, callee signatures, types, tests</td><td><code>symbol</code>, <code>name</code>, <code>file</code></td></tr>
-              <tr><td><code>find_references</code></td><td><code>code-kb refs &lt;symbol&gt;</code></td><td>Callers or callees, stdlib filtered</td><td><code>direction</code>, default <code>callers</code></td></tr>
-              <tr><td><code>blast_radius</code></td><td><code>code-kb blast-radius [target]</code></td><td>Multi-hop callers and tests to run</td><td>alias <code>impact</code>; reads git changes</td></tr>
+              <tr><td><code>codebase_outline</code></td><td><code>code-kb outline [path]</code></td><td>Directory tree and main symbols</td><td><code>path</code>, <code>depth</code></td></tr>
+              <tr><td><code>file_skeleton</code></td><td><code>code-kb skeleton &lt;file&gt;</code></td><td>File outline, bodies removed</td><td><code>file_path</code></td></tr>
+              <tr><td><code>lookup_symbol</code></td><td><code>code-kb lookup &lt;query&gt;</code></td><td>Exact or prefix symbol match</td><td><code>query</code>, <code>path</code></td></tr>
+              <tr><td><code>search_symbols</code></td><td><code>code-kb search &lt;query&gt;</code></td><td>Full-text search over docstrings and signatures</td><td><code>query</code>, <code>path</code></td></tr>
+              <tr><td><code>get_symbol_body</code></td><td><code>code-kb body &lt;symbol&gt;</code></td><td>Source of one symbol</td><td><code>symbol_name</code>, <code>file_path</code></td></tr>
+              <tr><td><code>get_symbol_context</code></td><td><code>code-kb context &lt;symbol&gt;</code></td><td>Body, callee signatures, types, tests</td><td><code>symbol_name</code>, <code>file_path</code></td></tr>
+              <tr><td><code>find_references</code></td><td><code>code-kb refs &lt;symbol&gt;</code></td><td>Callers or callees, stdlib filtered</td><td><code>symbol_name</code>, <code>direction</code> (default <code>callers</code>)</td></tr>
+              <tr><td><code>blast_radius</code></td><td><code>code-kb blast-radius [target]</code></td><td>Multi-hop callers and tests to run</td><td><code>symbol</code>, <code>file</code>; omitted target reads git changes</td></tr>
               <tr><td><code>find_structural_facts</code></td><td><code>code-kb facts [category]</code></td><td>Routes, queries, models, config keys</td><td>no category lists all</td></tr>
-              <tr><td><code>replace_symbol_body</code></td><td><code>code-kb edit &lt;symbol&gt;</code></td><td>Atomic, syntax-checked replacement</td><td><code>body</code>, <code>code</code>, <code>expected_hash</code></td></tr>
+              <tr><td><code>replace_symbol_body</code></td><td><code>code-kb edit &lt;symbol&gt;</code></td><td>Atomic replacement; syntax validation for supported languages</td><td><code>symbol_name</code>, <code>file_path</code>, <code>new_body</code>, <code>expected_body_hash</code></td></tr>
               <tr><td><code>telemetry_summary</code></td><td><code>code-kb stats</code></td><td>Token savings, call counts, error rates</td><td><code>time_window</code>, <code>workspace_only</code></td></tr>
             </tbody>
           </table>

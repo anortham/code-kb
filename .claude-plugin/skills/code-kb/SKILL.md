@@ -11,7 +11,7 @@ description: Use when exploring unfamiliar code, inspecting types or function si
 
 ### 1. Orientation (~200 tokens)
 When entering a new repository, unfamiliar subsystem, or crate:
-* Call `codebase_outline(subpath, depth)` to inspect directories and primary exports.
+* Call `codebase_outline(path="...", depth=2)` to inspect directories and primary exports.
 * **Never** run wide directory recursion or `ls -R`.
 
 ### 2. Interface Discovery
@@ -30,13 +30,13 @@ Before modifying or understanding a specific function/method:
   4. Associated unit tests.
 * Call `get_symbol_body(symbol_name, file_path)` if only the exact implementation body is needed.
 * Call `find_references(symbol_name)` (or `direction="callees"`) to check callers/callees. Callee search excludes external stdlib/runtime tokens language-agnostically across all ~40 supported languages; pass `include_external=true` to view external runtime calls.
-* Call `blast_radius(symbol="...")` or `blast_radius(path="...")` or `blast_radius()` (auto-detects uncommitted git changes) to calculate multi-hop transitive callers and pinpoint targeted tests to run before/after editing. (Tool alias: `impact`).
+* Call `blast_radius(symbol="...")` or `blast_radius(file="...")` or `blast_radius()` (auto-detects uncommitted git changes) to calculate multi-hop transitive callers and pinpoint targeted tests to run before/after editing. (Tool alias: `impact`).
 * Call `find_structural_facts()` to list all detected framework categories, or `find_structural_facts(category="route")` to query specific routes, SQL queries, models, or config keys.
 
 ### 4. Atomic Symbol Edits
 When modifying an existing function or method:
 * Call `replace_symbol_body(symbol_name, file_path, new_body, expected_body_hash)`.
-* Performs pre-flight tree-sitter syntax validation before touching disk.
+* Performs pre-flight tree-sitter syntax validation for Rust, JavaScript, TypeScript/TSX, Python, and Go; reports validation skipped for other languages.
 * Checks optimistic concurrency hash to avoid overwriting conflicting edits.
 * Re-indexes SQLite AST facts in a single atomic turn.
 
@@ -75,12 +75,14 @@ When diagnosing unexpected tool errors or when assisting a user with filing an i
 
 ## Parameter Aliases & Safe Defaults
 
+Use the canonical names from the MCP schema in tool calls. The aliases below are backend tolerance for hand-written calls; strict MCP clients can reject alias-only requests.
+
 * `symbol_name`: accepts `symbol`, `name`.
 * `file_path`: accepts `file`, `path`.
 * `query`: accepts `name`, `q`.
 * `new_body`: accepts `body`, `code`, `content`.
 * `expected_body_hash`: accepts `body_hash`, `expected_hash`.
-* `subpath`: accepts `path`, `dir`.
+* `codebase_outline.path`: accepts `subpath`, `dir`.
 * `direction` in `find_references`: defaults to `"callers"`.
 * `include_external` in `find_references` & `get_symbol_context`: defaults to `false` (filters noise across all ~40 languages).
 * `blast_radius`: accepts `symbol`/`name`, `path`/`file`, `depth`/`max_depth`, `limit`. When target is omitted, automatically discovers uncommitted working-tree changes via git. Alias: `impact`.

@@ -476,7 +476,7 @@ fn main() -> anyhow::Result<()> {
         Command::Skeleton(args) => {
             if cli.json {
                 let (_, rel_path) = workspace.resolve_path(Path::new(&args.file))?;
-                let _ = ensure_fresh_file(&workspace, &db_path, &conn, &rel_path);
+                ensure_fresh_file(&workspace, &db_path, &conn, &rel_path)?;
                 let symbols = load_file_symbols(&conn, &rel_path)?;
                 println!("{}", serde_json::to_string_pretty(&symbols)?);
             } else {

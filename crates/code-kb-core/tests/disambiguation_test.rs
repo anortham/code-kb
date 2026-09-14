@@ -64,6 +64,32 @@ impl Beta {
 }
 
 #[test]
+fn qualified_method_lookup_prefers_definition_over_same_named_field() {
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+
+    let temp_dir = safe_tempdir();
+    let root = temp_dir.path().to_path_buf();
+    let src_dir = root.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
+    fs::write(
+        src_dir.join("response.rs"),
+        "pub struct Response { pub error: String }\nimpl Response { pub fn error() -> Self { Self { error: String::new() } } }\n",
+    )
+    .unwrap();
+
+    let workspace = Workspace::new(root.clone());
+    let db_path = root.join("test.db");
+    scan_workspace(&workspace, &db_path, true).expect("Scan failed");
+    let conn = open_read_only(&db_path).unwrap();
+
+    let symbol = get_symbol_by_name(&conn, "Response::error", Some("src/response.rs"))
+        .expect("qualified lookup must not be ambiguous")
+        .expect("Response::error must be found");
+    assert_eq!(symbol.kind, "method");
+}
+
+#[test]
 fn test_path_filter_boundary_matching() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");

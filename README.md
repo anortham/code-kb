@@ -17,7 +17,7 @@ Traditional AI coding agents burn massive amounts of context loading entire sour
 2. **File Skeletons (`file_skeleton`):** Inspect function signatures, types, traits, and docstrings with implementation bodies stripped.
 3. **Symbol Lookup & Discovery (`lookup_symbol` / `search_symbols`):** Instant exact/prefix identifier lookups and conceptual FTS5 search across all symbols.
 4. **Surgical Symbol Context (`get_symbol_context`):** In a single turn, fetch a target function's body along with its callee signatures, parameter types, and associated unit tests.
-5. **Atomic AST Edits (`replace_symbol_body`):** Replace symbol implementations atomically with tree-sitter pre-flight syntax checks and immediate database re-indexing.
+5. **Atomic AST Edits (`replace_symbol_body`):** Replace symbol implementations atomically with pre-flight syntax validation for Rust, JavaScript, TypeScript/TSX, Python, and Go; other languages report validation skipped, then re-index immediately.
 
 ---
 
@@ -222,7 +222,7 @@ code-kb scan
 | `find_references` | Traverses callers or callees of a symbol (filters external stdlib noise). | `symbol_name` (req), `direction` ("callers" \| "callees", def: callers), `include_external` (opt, def: false) | `symbol`, `name` |
 | `blast_radius` | Multi-hop reverse reachability (CTEs) & targeted test prediction. | `symbol` (opt), `file` (opt), `depth` (opt, def: 2), `limit` (opt) | `name`, `path`, `impact` |
 | `find_structural_facts` | Queries framework facts (routes, SQL queries, config keys, tables). Lists all categories when omitted. | `category` (opt), `limit` (opt) | `cat`, `kind`, `type` |
-| `replace_symbol_body` | Atomically replaces a symbol's implementation with pre-flight AST validation. | `symbol_name` (req), `file_path` (req), `new_body` (req), `expected_body_hash` (opt) | `symbol`, `file`, `body`, `code` |
+| `replace_symbol_body` | Atomically replaces a symbol's implementation; syntax validation covers Rust, JavaScript, TypeScript/TSX, Python, and Go. | `symbol_name` (req), `file_path` (req), `new_body` (req), `expected_body_hash` (opt) | `symbol`, `file`, `body`, `code` |
 
 ---
 

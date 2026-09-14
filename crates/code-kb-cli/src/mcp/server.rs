@@ -299,7 +299,7 @@ impl McpServer {
             },
             Tool {
                 name: "blast_radius".to_string(),
-                description: "Predicts which downstream symbols are affected and which tests to run before or after edits. With NO arguments, it automatically inspects uncommitted git working-tree changes to map edited lines to impacted symbols and likely tests. You can also pass symbol (or symbol_name) or file (or file_path).".to_string(),
+                description: "Predicts which downstream symbols are affected and which tests to run before or after edits. With NO arguments, it inspects uncommitted git changes and uses changed files to predict impact and likely tests. You can also pass symbol (or symbol_name) or file (or file_path).".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -324,7 +324,7 @@ impl McpServer {
             },
             Tool {
                 name: "replace_symbol_body".to_string(),
-                description: "Atomically replaces the implementation body of a function or method by symbol name. Performs pre-flight tree-sitter syntax validation and immediate SQLite re-indexing in a single turn.".to_string(),
+                description: "Atomically replaces a function or method body. Validates Rust, JavaScript, TypeScript/TSX, Python, and Go syntax; reports validation skipped for other languages, then re-indexes in one turn.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {

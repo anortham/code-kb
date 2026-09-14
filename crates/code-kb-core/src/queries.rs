@@ -795,8 +795,12 @@ fn get_symbol_by_name_internal(
         return Ok(Some(exact_name_matches.into_iter().next().unwrap()));
     }
 
-    // Prioritize primary definition kinds (function, struct, class, trait, method, enum, interface, type)
-    let def_matches: Vec<_> = exact_name_matches
+    let definition_candidates = if exact_name_matches.is_empty() {
+        &candidates
+    } else {
+        &exact_name_matches
+    };
+    let def_matches: Vec<_> = definition_candidates
         .iter()
         .filter(|s| {
             matches!(
@@ -1701,6 +1705,13 @@ pub fn compute_blast_radius(
     max_depth: usize,
     limit: usize,
 ) -> Result<BlastRadiusResult, QueryError> {
+    let resolved_seed_symbols = seed_symbols
+        .iter()
+        .map(|name| {
+            get_symbol_by_name(conn, name, None)?
+                .ok_or_else(|| QueryError::SymbolNotFound((*name).to_string()))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     let mut seeds = Vec::new();
     let seed_type = if !seed_symbols.is_empty() && !seed_paths.is_empty() {
         for s in seed_symbols {
@@ -1732,13 +1743,13 @@ pub fn compute_blast_radius(
     let mut where_clauses = Vec::new();
     let mut params_vec: Vec<rusqlite::types::Value> = Vec::new();
 
-    if !seed_symbols.is_empty() {
-        let placeholders: Vec<String> = (1..=seed_symbols.len())
+    if !resolved_seed_symbols.is_empty() {
+        let placeholders: Vec<String> = (1..=resolved_seed_symbols.len())
             .map(|i| format!("?{}", i))
             .collect();
-        where_clauses.push(format!("name IN ({})", placeholders.join(", ")));
-        for s in seed_symbols {
-            params_vec.push(rusqlite::types::Value::Text((*s).to_string()));
+        where_clauses.push(format!("symbol_id IN ({})", placeholders.join(", ")));
+        for symbol in &resolved_seed_symbols {
+            params_vec.push(rusqlite::types::Value::Text(symbol.symbol_id.clone()));
         }
     }
 
@@ -1920,11 +1931,10 @@ pub fn compute_blast_radius(
             file_stems.push(stem.to_string());
         }
     }
-    for sym in seed_symbols {
-        if let Ok(Some(s)) = get_symbol_by_name(conn, sym, None)
-            && let Some(stem) = std::path::Path::new(&s.path)
-                .file_stem()
-                .and_then(|s| s.to_str())
+    for symbol in &resolved_seed_symbols {
+        if let Some(stem) = std::path::Path::new(&symbol.path)
+            .file_stem()
+            .and_then(|s| s.to_str())
             && stem.len() >= 3
             && !file_stems.contains(&stem.to_string())
         {

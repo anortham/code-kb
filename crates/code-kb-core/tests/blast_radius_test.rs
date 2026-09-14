@@ -143,3 +143,59 @@ fn test_blast_radius_op_file_seed_and_stem_matching() {
     assert_eq!(result.likely_tests[0].path, "tests/test_auth.rs");
     assert_eq!(result.likely_tests[0].reason, "stem-matched test file");
 }
+
+#[test]
+fn qualified_blast_radius_seed_selects_only_its_parent_method() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+
+    conn.execute_batch(
+        "INSERT INTO symbols VALUES
+            ('alpha', 'f1', 'src/types.rs', 'rust', 'Alpha', 'struct', NULL, NULL, NULL, NULL, 1, 0, 1, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
+            ('beta', 'f1', 'src/types.rs', 'rust', 'Beta', 'struct', NULL, NULL, NULL, NULL, 2, 0, 2, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
+            ('alpha_process', 'f1', 'src/types.rs', 'rust', 'process', 'method', NULL, NULL, NULL, 'alpha', 3, 0, 3, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
+            ('beta_process', 'f1', 'src/types.rs', 'rust', 'process', 'method', NULL, NULL, NULL, 'beta', 4, 0, 4, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
+            ('alpha_caller', 'f1', 'src/types.rs', 'rust', 'calls_alpha', 'function', NULL, NULL, NULL, NULL, 5, 0, 5, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
+            ('beta_caller', 'f1', 'src/types.rs', 'rust', 'calls_beta', 'function', NULL, NULL, NULL, NULL, 6, 0, 6, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0);
+        INSERT INTO relationships VALUES
+            ('alpha_caller', 'alpha_process', 'calls', 'src/types.rs', 5, 0),
+            ('beta_caller', 'beta_process', 'calls', 'src/types.rs', 6, 0);",
+    )
+    .unwrap();
+
+    let result = compute_blast_radius(&conn, &["Alpha::process"], &[], 1, 20).unwrap();
+    assert_eq!(
+        result
+            .impacted_symbols
+            .iter()
+            .map(|symbol| symbol.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["calls_alpha"]
+    );
+}
+
+#[test]
+fn blast_radius_rejects_unknown_or_ambiguous_symbol_seeds() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+
+    conn.execute_batch(
+        "INSERT INTO symbols VALUES
+            ('alpha', 'f1', 'src/types.rs', 'rust', 'Alpha', 'struct', NULL, NULL, NULL, NULL, 1, 0, 1, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
+            ('beta', 'f1', 'src/types.rs', 'rust', 'Beta', 'struct', NULL, NULL, NULL, NULL, 2, 0, 2, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
+            ('alpha_process', 'f1', 'src/types.rs', 'rust', 'process', 'method', NULL, NULL, NULL, 'alpha', 3, 0, 3, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
+            ('beta_process', 'f1', 'src/types.rs', 'rust', 'process', 'method', NULL, NULL, NULL, 'beta', 4, 0, 4, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0);",
+    )
+    .unwrap();
+
+    assert!(matches!(
+        compute_blast_radius(&conn, &["process"], &[], 1, 20),
+        Err(code_kb_core::QueryError::AmbiguousSymbol(_, 2, _))
+    ));
+    assert!(matches!(
+        compute_blast_radius(&conn, &["missing"], &[], 1, 20),
+        Err(code_kb_core::QueryError::SymbolNotFound(name)) if name == "missing"
+    ));
+}
