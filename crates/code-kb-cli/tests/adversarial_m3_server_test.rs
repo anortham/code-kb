@@ -206,13 +206,13 @@ fn test_adversarial_mcp_initialize_roots_comprehensive_matrix() {
             "{name}: Expected code-kb serverInfo"
         );
 
-        // Verify find_symbol resolves symbol seamlessly without --root argument
+        // Verify lookup_symbol resolves symbol seamlessly without --root argument
         let call_find = json!({
             "jsonrpc": "2.0",
             "id": 2,
             "method": "tools/call",
             "params": {
-                "name": "find_symbol",
+                "name": "lookup_symbol",
                 "arguments": { "query": "compute_sum" }
             }
         });
@@ -224,11 +224,11 @@ fn test_adversarial_mcp_initialize_roots_comprehensive_matrix() {
         let mut call_resp = String::new();
         reader.read_line(&mut call_resp).unwrap();
         let call_val: Value = serde_json::from_str(&call_resp)
-            .unwrap_or_else(|e| panic!("Failed to parse find_symbol response for {name}: {e}"));
+            .unwrap_or_else(|e| panic!("Failed to parse lookup_symbol response for {name}: {e}"));
         assert_eq!(call_val["id"], 2);
         assert_ne!(
             call_val["result"]["isError"], true,
-            "{name}: find_symbol returned error: {call_val:?}"
+            "{name}: lookup_symbol returned error: {call_val:?}"
         );
         let text = call_val["result"]["content"][0]["text"].as_str().unwrap();
         assert!(
@@ -744,7 +744,7 @@ fn test_adversarial_mcp_core_invariant_1_exhaustive_blacklist() {
         "id": 3,
         "method": "tools/call",
         "params": {
-            "name": "find_symbol",
+            "name": "lookup_symbol",
             "arguments": {
                 "query": "compute_sum",
                 "workspace": root.to_string_lossy().to_string()

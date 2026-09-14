@@ -183,10 +183,10 @@ fn test_mcp_stdio_handshake_and_tools() {
 
     assert!(tool_names.contains(&"codebase_outline"));
     assert!(tool_names.contains(&"file_skeleton"));
-    assert!(tool_names.contains(&"find_symbol"));
+    assert!(tool_names.contains(&"lookup_symbol"));
     assert!(tool_names.contains(&"search_symbols"));
     assert!(tool_names.contains(&"get_symbol_body"));
-    assert!(tool_names.contains(&"get_context_slice"));
+    assert!(tool_names.contains(&"get_symbol_context"));
     assert!(tool_names.contains(&"find_references"));
     assert!(tool_names.contains(&"find_structural_facts"));
     assert!(tool_names.contains(&"blast_radius"));
@@ -207,13 +207,13 @@ fn test_mcp_stdio_handshake_and_tools() {
         );
     }
 
-    // 3. Send tools/call find_symbol
+    // 3. Send tools/call lookup_symbol
     let call_req = json!({
         "jsonrpc": "2.0",
         "id": 3,
         "method": "tools/call",
         "params": {
-            "name": "find_symbol",
+            "name": "lookup_symbol",
             "arguments": {
                 "query": "Workspace",
                 "kind": "struct"
@@ -370,13 +370,13 @@ fn test_mcp_stdio_handshake_and_tools() {
     let blast_text = resp8["result"]["content"][0]["text"].as_str().unwrap();
     assert!(blast_text.contains("Blast Radius"));
 
-    // 9. Test get_context_slice via MCP with include_external: false
+    // 9. Test get_symbol_context via MCP with include_external: false
     let slice_req = json!({
         "jsonrpc": "2.0",
         "id": 9,
         "method": "tools/call",
         "params": {
-            "name": "get_context_slice",
+            "name": "get_symbol_context",
             "arguments": {
                 "symbol_name": "Workspace",
                 "include_external": false
@@ -398,16 +398,16 @@ fn test_mcp_stdio_handshake_and_tools() {
     assert!(slice_text.contains("Workspace"));
     assert!(
         !slice_text.contains("println"),
-        "Default get_context_slice should not contain external callee println"
+        "Default get_symbol_context should not contain external callee println"
     );
 
-    // 10. Test get_context_slice via MCP with include_external: true
+    // 10. Test get_symbol_context via MCP with include_external: true
     let slice_req10 = json!({
         "jsonrpc": "2.0",
         "id": 10,
         "method": "tools/call",
         "params": {
-            "name": "get_context_slice",
+            "name": "get_symbol_context",
             "arguments": {
                 "symbol_name": "Workspace",
                 "include_external": true
@@ -799,7 +799,7 @@ fn test_mcp_worktree_rebind() {
         "id": 2,
         "method": "tools/call",
         "params": {
-            "name": "find_symbol",
+            "name": "lookup_symbol",
             "arguments": { "query": "main_fn" }
         }
     });
@@ -1145,7 +1145,7 @@ fn test_mcp_initialize_roots_file_uris() {
             "id": 2,
             "method": "tools/call",
             "params": {
-                "name": "find_symbol",
+                "name": "lookup_symbol",
                 "arguments": { "query": "Workspace" }
             }
         });
@@ -1211,7 +1211,7 @@ fn test_mcp_initialize_roots_file_uris() {
             "id": 2,
             "method": "tools/call",
             "params": {
-                "name": "find_symbol",
+                "name": "lookup_symbol",
                 "arguments": { "query": "Workspace" }
             }
         });
@@ -1846,4 +1846,3 @@ fn test_mcp_telemetry_summary_does_not_rebind_workspace() {
     drop(stdin);
     let _ = child.wait();
 }
-

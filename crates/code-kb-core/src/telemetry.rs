@@ -245,7 +245,11 @@ pub fn open_telemetry_db(_workspace_root: &Path) -> Result<Connection, QueryErro
 }
 
 /// Fast record of a tool invocation with normalized workspace path attribution.
-pub fn record_tool_call_conn(conn: &Connection, workspace_root: &Path, invocation: &ToolInvocation) {
+pub fn record_tool_call_conn(
+    conn: &Connection,
+    workspace_root: &Path,
+    invocation: &ToolInvocation,
+) {
     let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap_or_default();
@@ -295,14 +299,18 @@ pub fn get_telemetry_summary(
     conn: &Connection,
     filter: &TelemetryFilter,
 ) -> Result<TelemetrySummary, QueryError> {
-    let (where_clause, ws_param) = match (&filter.time_window.to_sqlite_condition(), &filter.workspace_root) {
+    let (where_clause, ws_param) = match (
+        &filter.time_window.to_sqlite_condition(),
+        &filter.workspace_root,
+    ) {
         (Some(time_cond), Some(ws)) => {
             let norm_ws = to_forward_slash(&normalize_path(ws));
-            (format!("WHERE {} AND workspace_root = ?1", time_cond), Some(norm_ws))
+            (
+                format!("WHERE {} AND workspace_root = ?1", time_cond),
+                Some(norm_ws),
+            )
         }
-        (Some(time_cond), None) => {
-            (format!("WHERE {}", time_cond), None)
-        }
+        (Some(time_cond), None) => (format!("WHERE {}", time_cond), None),
         (None, Some(ws)) => {
             let norm_ws = to_forward_slash(&normalize_path(ws));
             ("WHERE workspace_root = ?1".to_string(), Some(norm_ws))
@@ -409,7 +417,10 @@ pub fn get_telemetry_summary(
     let error_where_clause = if where_clause.is_empty() {
         "WHERE outcome = 'error' AND error_message IS NOT NULL".to_string()
     } else {
-        format!("{} AND outcome = 'error' AND error_message IS NOT NULL", where_clause)
+        format!(
+            "{} AND outcome = 'error' AND error_message IS NOT NULL",
+            where_clause
+        )
     };
 
     let errors_sql = format!(
@@ -476,7 +487,9 @@ fn sanitize_error_message(msg: &str) -> String {
         && !home.trim().is_empty()
         && home != "/"
     {
-        let simplified = dunce::simplified(Path::new(&home)).to_string_lossy().to_string();
+        let simplified = dunce::simplified(Path::new(&home))
+            .to_string_lossy()
+            .to_string();
         if simplified != home {
             home_candidates.push(simplified);
         }
@@ -486,7 +499,9 @@ fn sanitize_error_message(msg: &str) -> String {
         && !profile.trim().is_empty()
         && profile != "/"
     {
-        let simplified = dunce::simplified(Path::new(&profile)).to_string_lossy().to_string();
+        let simplified = dunce::simplified(Path::new(&profile))
+            .to_string_lossy()
+            .to_string();
         if simplified != profile {
             home_candidates.push(simplified);
         }
@@ -624,11 +639,15 @@ pub fn generate_bug_report(
     markdown.push_str(&format!("- **OS:** {}\n", os_info));
     markdown.push_str(&format!("- **Architecture:** {}\n", arch_info));
     markdown.push_str(&format!("- **code-kb Version:** {}\n", code_kb_version));
-    markdown.push_str(&format!("- **julie-extract Version:** {}\n", julie_extract_version));
+    markdown.push_str(&format!(
+        "- **julie-extract Version:** {}\n",
+        julie_extract_version
+    ));
     if let Some(ref ws) = active_workspace_name {
         markdown.push_str(&format!("- **Active Workspace:** {}\n", ws));
     }
-    markdown.push_str("\n### Description\n<!-- Please describe the bug or unexpected behavior -->\n\n");
+    markdown
+        .push_str("\n### Description\n<!-- Please describe the bug or unexpected behavior -->\n\n");
 
     if !recent_errors.is_empty() {
         markdown.push_str("### Recent Telemetry Errors\n");
@@ -681,7 +700,8 @@ pub fn migrate_legacy_workspace_telemetry(
     if is_same_file(&legacy_db_path, &global_db_path) {
         return Ok(0);
     }
-    if let Ok(dest_db_str) = global_conn.query_row("PRAGMA database_list", [], |row| row.get::<_, String>(2))
+    if let Ok(dest_db_str) =
+        global_conn.query_row("PRAGMA database_list", [], |row| row.get::<_, String>(2))
         && !dest_db_str.is_empty()
         && is_same_file(&legacy_db_path, Path::new(&dest_db_str))
     {
@@ -749,7 +769,19 @@ pub fn migrate_legacy_workspace_telemetry(
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 0, ?12)",
         )?;
 
-        for (id, ts, tool, duration_ms, outcome, error_msg, result_count, bytes_returned, est_tokens, code_kb_version) in rows_to_insert {
+        for (
+            id,
+            ts,
+            tool,
+            duration_ms,
+            outcome,
+            error_msg,
+            result_count,
+            bytes_returned,
+            est_tokens,
+            code_kb_version,
+        ) in rows_to_insert
+        {
             let inserted = stmt.execute(params![
                 id,
                 ts,
@@ -784,7 +816,10 @@ pub fn format_telemetry_summary(summary: &TelemetrySummary) -> String {
     out.push_str("=================================================================\n");
 
     if summary.total_calls == 0 {
-        out.push_str(&format!("Scope: {} | Window: {}\nNo tool calls recorded for this scope yet.\n", summary.scope_description, summary.time_window));
+        out.push_str(&format!(
+            "Scope: {} | Window: {}\nNo tool calls recorded for this scope yet.\n",
+            summary.scope_description, summary.time_window
+        ));
         return out;
     }
 
@@ -811,7 +846,12 @@ pub fn format_telemetry_summary(summary: &TelemetrySummary) -> String {
         };
         out.push_str(&format!(
             "| `{}` | {} | {} ms | ~{} | ~{} | {:.1}% |\n",
-            stat.tool, stat.count, stat.avg_duration_ms, stat.tokens_returned, stat.tokens_saved, rate
+            stat.tool,
+            stat.count,
+            stat.avg_duration_ms,
+            stat.tokens_returned,
+            stat.tokens_saved,
+            rate
         ));
     }
 
@@ -857,11 +897,7 @@ mod tests {
         );
 
         assert_eq!(
-            resolve_telemetry_dir(
-                None,
-                None,
-                Some(profile_dir.to_string_lossy().to_string()),
-            ),
+            resolve_telemetry_dir(None, None, Some(profile_dir.to_string_lossy().to_string()),),
             profile_dir.join(".code-kb")
         );
 
@@ -899,7 +935,8 @@ mod tests {
         let conn = open_telemetry_db_at(temp.path()).expect("open db");
 
         let ws_root = Path::new("/workspace/test");
-        let norm_ws = crate::workspace::to_forward_slash(&crate::workspace::normalize_path(ws_root));
+        let norm_ws =
+            crate::workspace::to_forward_slash(&crate::workspace::normalize_path(ws_root));
 
         conn.execute(
             "INSERT INTO tool_telemetry (id, timestamp, workspace_root, workspace_name, tool, duration_ms, outcome, est_tokens, est_tokens_saved, code_kb_version)
@@ -925,19 +962,54 @@ mod tests {
             params![norm_ws],
         ).unwrap();
 
-        let s_today = get_telemetry_summary(&conn, &TelemetryFilter { time_window: TimeWindow::Today, workspace_root: None }).unwrap();
+        let s_today = get_telemetry_summary(
+            &conn,
+            &TelemetryFilter {
+                time_window: TimeWindow::Today,
+                workspace_root: None,
+            },
+        )
+        .unwrap();
         assert_eq!(s_today.total_calls, 1);
 
-        let s_7d = get_telemetry_summary(&conn, &TelemetryFilter { time_window: TimeWindow::Last7Days, workspace_root: None }).unwrap();
+        let s_7d = get_telemetry_summary(
+            &conn,
+            &TelemetryFilter {
+                time_window: TimeWindow::Last7Days,
+                workspace_root: None,
+            },
+        )
+        .unwrap();
         assert_eq!(s_7d.total_calls, 2);
 
-        let s_30d = get_telemetry_summary(&conn, &TelemetryFilter { time_window: TimeWindow::Last30Days, workspace_root: None }).unwrap();
+        let s_30d = get_telemetry_summary(
+            &conn,
+            &TelemetryFilter {
+                time_window: TimeWindow::Last30Days,
+                workspace_root: None,
+            },
+        )
+        .unwrap();
         assert_eq!(s_30d.total_calls, 3);
 
-        let s_year = get_telemetry_summary(&conn, &TelemetryFilter { time_window: TimeWindow::LastYear, workspace_root: None }).unwrap();
+        let s_year = get_telemetry_summary(
+            &conn,
+            &TelemetryFilter {
+                time_window: TimeWindow::LastYear,
+                workspace_root: None,
+            },
+        )
+        .unwrap();
         assert_eq!(s_year.total_calls, 4);
 
-        let s_all = get_telemetry_summary(&conn, &TelemetryFilter { time_window: TimeWindow::AllTime, workspace_root: None }).unwrap();
+        let s_all = get_telemetry_summary(
+            &conn,
+            &TelemetryFilter {
+                time_window: TimeWindow::AllTime,
+                workspace_root: None,
+            },
+        )
+        .unwrap();
         assert_eq!(s_all.total_calls, 4);
     }
 
@@ -1051,13 +1123,21 @@ mod tests {
         assert_eq!(summary.total_tokens_returned, 450);
         assert_eq!(summary.est_tokens_saved, 1700);
 
-        let skel_stat = summary.tool_stats.iter().find(|s| s.tool == "file_skeleton").unwrap();
+        let skel_stat = summary
+            .tool_stats
+            .iter()
+            .find(|s| s.tool == "file_skeleton")
+            .unwrap();
         assert_eq!(skel_stat.count, 2);
         assert_eq!(skel_stat.tokens_returned, 400);
         assert_eq!(skel_stat.tokens_saved, 1200);
         assert_eq!(skel_stat.avg_duration_ms, 15);
 
-        let sym_stat = summary.tool_stats.iter().find(|s| s.tool == "get_symbol_body").unwrap();
+        let sym_stat = summary
+            .tool_stats
+            .iter()
+            .find(|s| s.tool == "get_symbol_body")
+            .unwrap();
         assert_eq!(sym_stat.count, 1);
         assert_eq!(sym_stat.tokens_returned, 50);
         assert_eq!(sym_stat.tokens_saved, 500);
@@ -1135,13 +1215,21 @@ mod tests {
         assert!(bundle.julie_extract_version.contains("2.42.1"));
         assert_eq!(bundle.active_workspace_name, Some("code-kb".to_string()));
         assert_eq!(bundle.recent_errors.len(), 1);
-        assert!(bundle.recent_errors[0].error_message.contains("Tree-sitter parse failure"));
+        assert!(
+            bundle.recent_errors[0]
+                .error_message
+                .contains("Tree-sitter parse failure")
+        );
 
         assert!(bundle.markdown_body.contains("code-kb"));
         assert!(bundle.markdown_body.contains(&bundle.os_info));
         assert!(bundle.markdown_body.contains("Tree-sitter parse failure"));
 
-        assert!(bundle.github_issue_url.starts_with("https://github.com/anortham/code-kb/issues/new?"));
+        assert!(
+            bundle
+                .github_issue_url
+                .starts_with("https://github.com/anortham/code-kb/issues/new?")
+        );
         assert!(bundle.github_issue_url.contains("title=Parser"));
 
         let parsed_url = url::Url::parse(&bundle.github_issue_url).unwrap();
@@ -1298,14 +1386,23 @@ mod tests {
 
         // Test 1: destination connection opened on the exact same database file
         let migrated = migrate_legacy_workspace_telemetry(&legacy_conn, ws_root).unwrap();
-        assert_eq!(migrated, 0, "must skip migration when destination is the same database");
+        assert_eq!(
+            migrated, 0,
+            "must skip migration when destination is the same database"
+        );
         assert!(legacy_db_path.exists(), "must not unlink the database file");
 
         // Test 2: global telemetry dir override points to the same directory
         set_telemetry_dir_override(Some(legacy_dir.clone()));
         let migrated_ovr = migrate_legacy_workspace_telemetry(&legacy_conn, ws_root).unwrap();
-        assert_eq!(migrated_ovr, 0, "must skip migration when global dir matches legacy dir");
-        assert!(legacy_db_path.exists(), "must not unlink when global dir matches legacy dir");
+        assert_eq!(
+            migrated_ovr, 0,
+            "must skip migration when global dir matches legacy dir"
+        );
+        assert!(
+            legacy_db_path.exists(),
+            "must not unlink when global dir matches legacy dir"
+        );
         set_telemetry_dir_override(None);
     }
 
@@ -1354,14 +1451,19 @@ mod tests {
             .unwrap();
 
         let res = migrate_legacy_workspace_telemetry(&global_conn, ws_root);
-        assert!(res.is_err(), "migration must return error when insert fails");
+        assert!(
+            res.is_err(),
+            "migration must return error when insert fails"
+        );
         assert!(
             legacy_db_path.exists(),
             "legacy database must NOT be deleted after failed migration"
         );
 
         // Drop trigger and verify migration now succeeds
-        global_conn.execute("DROP TRIGGER fail_telemetry_insert", []).unwrap();
+        global_conn
+            .execute("DROP TRIGGER fail_telemetry_insert", [])
+            .unwrap();
         let res2 = migrate_legacy_workspace_telemetry(&global_conn, ws_root);
         assert_eq!(res2.unwrap(), 1);
         assert!(
@@ -1412,13 +1514,23 @@ mod tests {
             std::fs::set_permissions(&fake_bin, std::fs::Permissions::from_mode(0o755)).unwrap();
         }
 
-        let bundle = generate_bug_report(&conn, Some(ws_temp.path()), Some("Issue with | pipes")).unwrap();
+        let bundle =
+            generate_bug_report(&conn, Some(ws_temp.path()), Some("Issue with | pipes")).unwrap();
 
         // 1. Path sanitization verification
         if !current_home.is_empty() && current_home != "/" {
-            assert!(!bundle.markdown_body.contains(&current_home), "Home directory must be sanitized to ~");
-            assert!(bundle.markdown_body.contains("~/workspace/secret-repo"), "Home directory should be replaced with ~");
-            assert!(!bundle.github_issue_url.contains(&current_home), "GitHub URL must not leak home directory");
+            assert!(
+                !bundle.markdown_body.contains(&current_home),
+                "Home directory must be sanitized to ~"
+            );
+            assert!(
+                bundle.markdown_body.contains("~/workspace/secret-repo"),
+                "Home directory should be replaced with ~"
+            );
+            assert!(
+                !bundle.github_issue_url.contains(&current_home),
+                "GitHub URL must not leak home directory"
+            );
         }
 
         // Direct test of custom home path sanitization
@@ -1429,15 +1541,34 @@ mod tests {
         assert_eq!(custom_sanitized, "~/main.rs: err \\| note second line");
 
         // 2. Pipe and newline escaping
-        assert!(!bundle.markdown_body.contains(" | unexpected token"), "Pipe characters must be escaped");
-        assert!(bundle.markdown_body.contains(r" \| unexpected token"), "Pipe characters must be escaped as \\|");
-        assert!(!bundle.markdown_body.contains("extra line\nsecond line"), "Newlines must be sanitized");
+        assert!(
+            !bundle.markdown_body.contains(" | unexpected token"),
+            "Pipe characters must be escaped"
+        );
+        assert!(
+            bundle.markdown_body.contains(r" \| unexpected token"),
+            "Pipe characters must be escaped as \\|"
+        );
+        assert!(
+            !bundle.markdown_body.contains("extra line\nsecond line"),
+            "Newlines must be sanitized"
+        );
 
         // 3. Length truncation (max 500 chars)
-        assert!(bundle.recent_errors[0].error_message.chars().count() <= 500, "Error message must be truncated to 500 chars");
+        assert!(
+            bundle.recent_errors[0].error_message.chars().count() <= 500,
+            "Error message must be truncated to 500 chars"
+        );
 
         // 4. No external binary execution verification
-        assert_ne!(bundle.julie_extract_version, "malicious 9.9.9", "Must not execute .tools/julie-extract from workspace");
-        assert_eq!(bundle.julie_extract_version, crate::sync::PINNED_JULIE_VERSION, "Must report pinned version");
+        assert_ne!(
+            bundle.julie_extract_version, "malicious 9.9.9",
+            "Must not execute .tools/julie-extract from workspace"
+        );
+        assert_eq!(
+            bundle.julie_extract_version,
+            crate::sync::PINNED_JULIE_VERSION,
+            "Must report pinned version"
+        );
     }
 }

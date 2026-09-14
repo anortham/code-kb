@@ -15,8 +15,8 @@ Traditional AI coding agents burn massive amounts of context loading entire sour
 `code-kb` solves this with a **progressive disclosure** architecture:
 1. **Repository Orientation (`codebase_outline`):** Understand directory structures and key exports in ~200 tokens.
 2. **File Skeletons (`file_skeleton`):** Inspect function signatures, types, traits, and docstrings with implementation bodies stripped.
-3. **Semantic Symbol Search (`find_symbol` / `search_symbols`):** Instant exact, fuzzy, and conceptual FTS5 search across all symbols.
-4. **Surgical Context Slices (`get_context_slice`):** In a single turn, fetch a target function's body along with its callee signatures, parameter types, and associated unit tests.
+3. **Symbol Lookup & Discovery (`lookup_symbol` / `search_symbols`):** Instant exact/prefix identifier lookups and conceptual FTS5 search across all symbols.
+4. **Surgical Symbol Context (`get_symbol_context`):** In a single turn, fetch a target function's body along with its callee signatures, parameter types, and associated unit tests.
 5. **Atomic AST Edits (`replace_symbol_body`):** Replace symbol implementations atomically with tree-sitter pre-flight syntax checks and immediate database re-indexing.
 
 ---
@@ -25,7 +25,7 @@ Traditional AI coding agents burn massive amounts of context loading entire sour
 
 - **Sub-15MB Retained Memory:** Written in Rust, zero heavy runtimes (no Node.js daemon, no web dashboard, no GPU models), retained process memory stays below 15 MB.
 - **Sub-5ms Query Latency:** Direct SQLite queries in WAL mode with zero in-memory heap bloat.
-- **Zero Workspace Parameters:** Pure semantic tool calling (`find_symbol(query="...")`). The agent is never burdened with `workspace_id`, `repo_path`, or path confusion.
+- **Zero Workspace Parameters:** Pure semantic tool calling (`lookup_symbol(query="...")`). The agent is never burdened with `workspace_id`, `repo_path`, or path confusion.
 - **CLI-First Parity:** Every MCP tool has an exact 1:1 CLI command for instantaneous terminal verification and dogfooding.
 - **Continuous 3-Tier Sync:** Tool-driven updates, JIT staleness guards before reads, and a debounced background watcher with a Git storm circuit breaker.
 
@@ -215,10 +215,10 @@ code-kb scan
 | :--- | :--- | :--- | :--- |
 | `codebase_outline` | High-level architectural orientation of directory layout & symbols. | `path` (opt), `depth` (opt, default 2) | `dir`, `subpath` |
 | `file_skeleton` | File outline with function & method bodies stripped (80–90% token savings). | `file_path` (req) | `file`, `path` |
-| `find_symbol` | Fast semantic symbol search (exact & substring) across repo or scoped path. | `query` (req), `path` (opt), `kind` (opt), `is_test` (opt), `limit` (opt) | `name`, `q` |
+| `lookup_symbol` | Fast identifier lookup (exact name or prefix) across repo or scoped path. | `query` (req), `path` (opt), `kind` (opt), `is_test` (opt), `limit` (opt) | `name`, `q` |
 | `search_symbols` | Conceptual BM25 full-text search over symbol signatures & docstrings. | `query` (req), `path` (opt), `kind` (opt), `limit` (opt) | `name`, `q` |
 | `get_symbol_body` | Slices the exact implementation body of a symbol from disk. | `symbol_name` (req), `file_path` (opt) | `symbol`, `name`, `path` |
-| `get_context_slice` | Surgical bundle: target body + callee signatures + parameter types + tests. | `symbol_name` (req), `file_path` (opt), `include_external` (opt, def: false) | `symbol`, `name`, `path` |
+| `get_symbol_context` | Surgical bundle: target body + callee signatures + parameter types + tests. | `symbol_name` (req), `file_path` (opt), `include_external` (opt, def: false) | `symbol`, `name`, `path` |
 | `find_references` | Traverses callers or callees of a symbol (filters external stdlib noise). | `symbol_name` (req), `direction` ("callers" \| "callees", def: callers), `include_external` (opt, def: false) | `symbol`, `name` |
 | `blast_radius` | Multi-hop reverse reachability (CTEs) & targeted test prediction. | `symbol` (opt), `file` (opt), `depth` (opt, def: 2), `limit` (opt) | `name`, `path`, `impact` |
 | `find_structural_facts` | Queries framework facts (routes, SQL queries, config keys, tables). Lists all categories when omitted. | `category` (opt), `limit` (opt) | `cat`, `kind`, `type` |
@@ -237,8 +237,8 @@ code-kb outline
 # Skeleton of a specific file (implementation bodies stripped)
 code-kb skeleton src/main.rs
 
-# Search symbols by name, kind, or scoped directory path
-code-kb symbol Workspace --kind struct --path crates/code-kb-core
+# Lookup symbols by exact name or prefix (alias: code-kb symbol)
+code-kb lookup Workspace --kind struct --path crates/code-kb-core
 
 # Conceptual BM25 full-text search across docstrings and signatures
 code-kb search "syntax validation concurrency"
@@ -246,8 +246,8 @@ code-kb search "syntax validation concurrency"
 # Retrieve exact implementation body of a symbol
 code-kb body Workspace
 
-# Get surgical context slice (body + callees + types + tests)
-code-kb slice ensure_fresh_file
+# Get surgical context bundle: body + callees + types + tests (alias: code-kb slice)
+code-kb context ensure_fresh_file
 
 # Find callers or callees of a function (language-agnostically filters stdlib noise)
 code-kb refs open_read_only --direction callers

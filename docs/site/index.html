@@ -16,7 +16,7 @@
   <nav class="site-nav">
     <div class="brand">
       <span>⚡ code-kb</span>
-      <span class="brand-badge">v0.7.0</span>
+      <span class="brand-badge">v0.8.0</span>
     </div>
     <div class="nav-links">
       <a href="#why">Why code-kb</a>
@@ -34,7 +34,7 @@
     <div class="eyebrow-container">
       <div class="eyebrow">
         <span class="pulse-dot"></span>
-        <span>v0.7.0 Released &bull; First-Class Windows, Linux &amp; macOS Support</span>
+        <span>v0.8.0 Released &bull; First-Class Windows, Linux &amp; macOS Support</span>
       </div>
     </div>
 
@@ -88,7 +88,7 @@
           <div class="terminal-dot dot-green"></div>
         </div>
         <div class="terminal-tabs">
-          <button class="terminal-tab-btn active" onclick="switchTerminalTab('slice')">get_context_slice</button>
+          <button class="terminal-tab-btn active" onclick="switchTerminalTab('slice')">get_symbol_context</button>
           <button class="terminal-tab-btn" onclick="switchTerminalTab('skeleton')">file_skeleton</button>
           <button class="terminal-tab-btn" onclick="switchTerminalTab('blast')">blast_radius</button>
         </div>
@@ -97,7 +97,7 @@
         </div>
       </div>
 
-      <pre class="terminal-body" id="terminal-content"><span class="terminal-prompt">$</span> <span class="terminal-cmd">code-kb slice search_symbols_scoped</span>
+      <pre class="terminal-body" id="terminal-content"><span class="terminal-prompt">$</span> <span class="terminal-cmd">code-kb context search_symbols_scoped</span>
 <span class="terminal-comment"># Raw file: 13,759 tokens (1,474 lines) &rarr; Slice: 674 tokens (-95.1% compression) in 2ms</span>
 
 <span class="badge-pill-success">TARGET SYMBOL</span> <span style="color:#60a5fa">search_symbols_scoped</span> (crates/code-kb-core/src/queries.rs:142)
@@ -169,10 +169,10 @@
             <span class="comparison-tag tag-green">code-kb Solution</span>
             <span class="comparison-metric metric-green">674 tokens &bull; 95.1% saved</span>
           </div>
-          <h3 class="comparison-title">get_context_slice / file_skeleton</h3>
+          <h3 class="comparison-title">get_symbol_context / file_skeleton</h3>
           <p class="comparison-body">Agent requests only what is needed: implementation body + immediate callee signatures + parameter types + tests in a single turn.</p>
           <div class="code-wrapper">
-            <pre><code>get_context_slice("search_symbols_scoped")
+            <pre><code>get_symbol_context("search_symbols_scoped")
 # Tokens used: 674 tokens (95.1% token reduction!)
 # Latency: 2 ms warm query from SQLite in WAL mode
 # Result: Razor-sharp context with zero hallucinations</code></pre>
@@ -202,7 +202,7 @@
           <div class="feature-icon-box">🔬</div>
           <h3 class="feature-title">Surgical Context Slices</h3>
           <p class="feature-desc">
-            <code>get_context_slice</code> returns target implementation body + immediate callee signatures + parameter types + associated unit tests in one turn. Eliminates 4–6 follow-up search turns.
+            <code>get_symbol_context</code> returns target implementation body + immediate callee signatures + parameter types + associated unit tests in one turn. Eliminates 4–6 follow-up search turns.
           </p>
         </div>
 
@@ -253,7 +253,7 @@
           <thead>
             <tr>
               <th>Dimension / Capability</th>
-              <th class="col-featured">code-kb (v0.7.0)</th>
+              <th class="col-featured">code-kb (v0.8.0)</th>
               <th>Bare Agent (grep / cat / read)</th>
             </tr>
           </thead>
@@ -275,7 +275,7 @@
             </tr>
             <tr>
               <td><strong>Editing Preparation &amp; Call Graph</strong></td>
-              <td class="col-featured"><span class="tag-success">🔬 <code>get_context_slice</code> (Single-turn bundle)</span></td>
+              <td class="col-featured"><span class="tag-success">🔬 <code>get_symbol_context</code> (Single-turn bundle)</span></td>
               <td><span class="tag-warning">4–6 separate file searches across turns</span></td>
             </tr>
             <tr>
@@ -350,9 +350,9 @@ search_symbols("auth token validation")</code></pre>
 
         <div class="workflow-card">
           <div class="workflow-phase">Phase 3: Surgical Context</div>
-          <h3 class="workflow-title">get_context_slice</h3>
+          <h3 class="workflow-title">get_symbol_context</h3>
           <p class="workflow-desc">Fetch target function body + callee signatures + parameter types + associated unit tests in one turn.</p>
-          <pre><code>get_context_slice("handle_request")</code></pre>
+          <pre><code>get_symbol_context("handle_request")</code></pre>
         </div>
 
         <div class="workflow-card">
@@ -414,8 +414,8 @@ search_symbols("auth token validation")</code></pre>
               <td>Aliases: <code>file</code>, <code>path</code></td>
             </tr>
             <tr>
-              <td><code>find_symbol</code></td>
-              <td><code>code-kb symbol &lt;query&gt;</code></td>
+              <td><code>lookup_symbol</code></td>
+              <td><code>code-kb lookup &lt;query&gt;</code></td>
               <td>Exact and prefix symbol lookup with optional path filter</td>
               <td>Aliases: <code>name</code>, <code>q</code>, <code>path</code></td>
             </tr>
@@ -432,8 +432,8 @@ search_symbols("auth token validation")</code></pre>
               <td>Aliases: <code>symbol</code>, <code>name</code>, <code>file</code></td>
             </tr>
             <tr>
-              <td><code>get_context_slice</code></td>
-              <td><code>code-kb slice &lt;symbol&gt;</code></td>
+              <td><code>get_symbol_context</code></td>
+              <td><code>code-kb context &lt;symbol&gt;</code></td>
               <td>Target body + callee signatures + parameter types + tests</td>
               <td>Aliases: <code>symbol</code>, <code>name</code>, <code>file</code></td>
             </tr>
@@ -650,7 +650,7 @@ code-kb hook SubagentStart
     const terminalSnippets = {
       slice: {
         metric: "⚡ 2 ms \u2022 -95.1% tokens",
-        html: `<span class="terminal-prompt">$</span> <span class="terminal-cmd">code-kb slice search_symbols_scoped</span>
+        html: `<span class="terminal-prompt">$</span> <span class="terminal-cmd">code-kb context search_symbols_scoped</span>
 <span class="terminal-comment"># Raw file: 13,759 tokens (1,474 lines) &rarr; Slice: 674 tokens (-95.1% compression) in 2ms</span>
 
 <span class="badge-pill-success">TARGET SYMBOL</span> <span style="color:#60a5fa">search_symbols_scoped</span> (crates/code-kb-core/src/queries.rs:142)
@@ -718,9 +718,9 @@ Total Tool Calls: 86 | Success Rate: 100.0% | Tokens Served: ~45,381
 | Tool                   | Calls | Median Latency | Tokens Served | Success Rate |
 |------------------------|------:|---------------:|--------------:|-------------:|
 | get_symbol_body        |    22 |           0 ms |       ~11,010 |       100.0% |
-| find_symbol            |    15 |           2 ms |        ~2,567 |       100.0% |
+| lookup_symbol          |    15 |           2 ms |        ~2,567 |       100.0% |
 | find_references        |     9 |           0 ms |          ~614 |       100.0% |
-| get_context_slice      |     9 |           2 ms |        ~9,734 |       100.0% |
+| get_symbol_context     |     9 |           2 ms |        ~9,734 |       100.0% |
 | search_symbols         |     9 |           3 ms |        ~6,970 |       100.0% |
 | file_skeleton          |     9 |           1 ms |        ~6,334 |       100.0% |
 | blast_radius           |     6 |           1 ms |        ~1,857 |       100.0% |

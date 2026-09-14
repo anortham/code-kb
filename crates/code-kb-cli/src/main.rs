@@ -48,14 +48,16 @@ pub enum Command {
     Outline(OutlineArgs),
     /// Render file skeleton containing symbol signatures with implementation bodies stripped.
     Skeleton(SkeletonArgs),
-    /// Search for symbols by exact name or prefix.
-    Symbol(SymbolArgs),
+    /// Search for symbols by exact identifier name or prefix.
+    #[command(alias = "symbol")]
+    Lookup(LookupArgs),
     /// Natural-language and full-text search over symbol names and docstrings using FTS5 (BM25).
     Search(SearchArgs),
     /// Retrieve exact implementation body of a symbol.
     Body(BodyArgs),
-    /// Generate surgical context bundle (target body + callees + types + tests).
-    Slice(SliceArgs),
+    /// Generate surgical symbol context bundle (target body + callees + types + tests).
+    #[command(alias = "slice")]
+    Context(ContextArgs),
     /// Find callers or callees of a symbol.
     Refs(RefsArgs),
     /// Predict downstream impact and which tests to run before/after edits.
@@ -118,6 +120,8 @@ pub struct SymbolArgs {
     pub limit: usize,
 }
 
+pub type LookupArgs = SymbolArgs;
+
 #[derive(Debug, Args)]
 pub struct SearchArgs {
     /// Natural language keywords or concept to search for.
@@ -156,6 +160,8 @@ pub struct SliceArgs {
     #[arg(long, default_value_t = false)]
     pub include_external: bool,
 }
+
+pub type ContextArgs = SliceArgs;
 
 #[derive(Debug, Args)]
 pub struct RefsArgs {
@@ -478,7 +484,7 @@ fn main() -> anyhow::Result<()> {
                 println!("{skeleton}");
             }
         }
-        Command::Symbol(args) => {
+        Command::Lookup(args) => {
             let rel_path = args.path.as_deref().map(|p| workspace.relativize_filter(p));
             let path_filter = rel_path.as_deref();
 
@@ -564,7 +570,7 @@ fn main() -> anyhow::Result<()> {
                 print!("{}", format_symbol_body(&symbol, &body));
             }
         }
-        Command::Slice(args) => {
+        Command::Context(args) => {
             let slice = get_context_slice_op(
                 &workspace,
                 &db_path,

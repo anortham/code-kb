@@ -162,6 +162,21 @@ fn test_cli_symbol_and_search() {
     let repo = setup_test_repo();
     let root = repo.path();
 
+    // Test primary subcommand "lookup"
+    let lookup_output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .arg("lookup")
+        .arg("Workspace")
+        .output()
+        .expect("Failed to execute lookup");
+
+    assert!(lookup_output.status.success());
+    let lookup_stdout = String::from_utf8_lossy(&lookup_output.stdout);
+    assert!(lookup_stdout.contains("pub struct Workspace"));
+    assert!(!lookup_stdout.contains("Found 0 symbols"));
+
+    // Test alias "symbol"
     let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
         .arg("--root")
         .arg(root)
@@ -179,10 +194,10 @@ fn test_cli_symbol_and_search() {
         .arg("--root")
         .arg(root)
         .arg("--json")
-        .arg("symbol")
+        .arg("lookup")
         .arg("Workspace")
         .output()
-        .expect("Failed to execute symbol --json");
+        .expect("Failed to execute lookup --json");
 
     assert!(json_output.status.success());
     let json_val: serde_json::Value = serde_json::from_slice(&json_output.stdout).unwrap();
@@ -221,6 +236,21 @@ fn test_cli_body_and_slice() {
     let stdout = String::from_utf8_lossy(&body_output.stdout);
     assert!(stdout.contains("helper();"));
 
+    // Test primary subcommand "context"
+    let context_output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .arg("context")
+        .arg("run_task")
+        .output()
+        .expect("Failed to execute context");
+
+    assert!(context_output.status.success());
+    let context_stdout = String::from_utf8_lossy(&context_output.stdout);
+    assert!(context_stdout.contains("Target: `run_task`"));
+    assert!(context_stdout.contains("helper"));
+
+    // Test alias "slice"
     let slice_output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
         .arg("--root")
         .arg(root)
@@ -384,7 +414,10 @@ fn test_cli_stats_workspace_json() {
     assert!(json_output.status.success());
     let json_val: serde_json::Value = serde_json::from_slice(&json_output.stdout).unwrap();
     assert!(json_val.get("total_calls").is_some());
-    let scope = json_val.get("scope_description").and_then(|v| v.as_str()).unwrap_or("");
+    let scope = json_val
+        .get("scope_description")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
     assert!(scope.contains("Workspace:"));
 }
 
@@ -480,7 +513,10 @@ fn test_cli_stats_migrates_legacy_telemetry() {
     assert_eq!(json_val["total_calls"], 1);
 
     // Legacy DB must have been migrated and removed
-    assert!(!legacy_db.exists(), "Legacy database should be unlinked after migration");
+    assert!(
+        !legacy_db.exists(),
+        "Legacy database should be unlinked after migration"
+    );
 }
 
 #[test]
@@ -527,7 +563,10 @@ fn test_cli_stats_scopes_errors_to_active_workspace() {
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(!stdout.contains("SECRET_LEAK_IN_OTHER_REPO"), "Global stats must not leak other workspace errors");
+    assert!(
+        !stdout.contains("SECRET_LEAK_IN_OTHER_REPO"),
+        "Global stats must not leak other workspace errors"
+    );
 }
 
 #[test]
@@ -843,9 +882,11 @@ fn test_cli_json_strict_forward_slash_invariants() {
         vec!["--json", "outline"],
         vec!["--json", "skeleton", "src/workspace.rs"],
         vec!["--json", "symbol", "Workspace"],
+        vec!["--json", "lookup", "Workspace"],
         vec!["--json", "search", "discovery"],
         vec!["--json", "body", "run_task"],
         vec!["--json", "slice", "run_task"],
+        vec!["--json", "context", "run_task"],
         vec!["--json", "refs", "helper"],
         vec!["--json", "blast-radius", "helper"],
         vec!["--json", "facts"],

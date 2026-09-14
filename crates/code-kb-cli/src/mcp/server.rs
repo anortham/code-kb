@@ -5,13 +5,12 @@ use std::path::{Path, PathBuf};
 use code_kb_core::{
     Connection, TelemetryFilter, TimeWindow, WatcherHandle, Workspace, WorkspaceError,
     blast_radius_op, codebase_outline_op, ensure_fts_index_path, file_skeleton_op,
-    format_blast_radius, format_context_slice, format_fact_categories,
-    format_find_symbol_results, format_references, format_replace_symbol_result,
-    format_search_results, format_structural_facts, format_symbol_body,
-    format_telemetry_summary, fts_search_symbols_scoped, get_context_slice_op,
-    get_symbol_body_op, get_telemetry_summary, list_structural_fact_categories,
-    migrate_legacy_workspace_telemetry, open_global_telemetry_db, open_read_only,
-    reconcile_offline_edits, record_tool_call, record_tool_call_conn,
+    format_blast_radius, format_context_slice, format_fact_categories, format_find_symbol_results,
+    format_references, format_replace_symbol_result, format_search_results,
+    format_structural_facts, format_symbol_body, format_telemetry_summary,
+    fts_search_symbols_scoped, get_context_slice_op, get_symbol_body_op, get_telemetry_summary,
+    list_structural_fact_categories, migrate_legacy_workspace_telemetry, open_global_telemetry_db,
+    open_read_only, reconcile_offline_edits, record_tool_call, record_tool_call_conn,
     replace_symbol_body, scan_workspace, search_symbols_scoped, start_watcher,
 };
 
@@ -155,14 +154,14 @@ impl McpServer {
                 }),
             },
             Tool {
-                name: "find_symbol".to_string(),
-                description: "Fast semantic lookup across symbols in the repository. Use this instead of text grep to locate functions, structs, traits, or methods by name or prefix.".to_string(),
+                name: "lookup_symbol".to_string(),
+                description: "Look up symbols by identifier. Use for exact names, qualified paths ('Type::method'), or identifier prefixes. Returns kind, path, and signature. Do NOT use for natural-language concepts or keywords; use search_symbols instead.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
                         "query": {
                             "type": "string",
-                            "description": "Symbol name or search pattern."
+                            "description": "Exact identifier name, qualified path ('Type::method'), or prefix. Not a sentence or concept."
                         },
                         "path": {
                             "type": "string",
@@ -186,7 +185,7 @@ impl McpServer {
             },
             Tool {
                 name: "search_symbols".to_string(),
-                description: "Conceptual and full-text search over symbol names, signatures, and docstrings using SQLite FTS5 BM25 ranking. Use when exact symbol names are unknown or searching for concepts (e.g. 'auth middleware', 'retry loop').".to_string(),
+                description: "Natural-language and keyword search over symbol names, signatures, and docstrings. Use when the exact identifier is unknown or searching for concepts (e.g. 'auth middleware', 'retry loop'). Do NOT use if you already know the exact symbol name; use lookup_symbol instead.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -216,7 +215,7 @@ impl McpServer {
             },
             Tool {
                 name: "get_symbol_body".to_string(),
-                description: "Retrieves the exact implementation body of a specific symbol. Use this after finding a symbol instead of reading the whole source file.".to_string(),
+                description: "Retrieves only the raw implementation body of a specific symbol. Use when you only need the implementation without dependency context. If preparing to edit a function, use get_symbol_context instead.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -233,8 +232,8 @@ impl McpServer {
                 }),
             },
             Tool {
-                name: "get_context_slice".to_string(),
-                description: "Surgical context bundle combining target body, callee signatures, parameter types, and related tests in one call. Use this before modifying a function to understand its immediate dependencies.".to_string(),
+                name: "get_symbol_context".to_string(),
+                description: "Surgical context bundle combining target body, callee signatures, parameter types, and related tests in one turn. Use this before modifying a function to understand its immediate dependencies.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -343,7 +342,7 @@ impl McpServer {
                         },
                         "expected_body_hash": {
                             "type": "string",
-                            "description": "Optional optimistic lock hash of current body (obtained from get_symbol_body or get_context_slice)."
+                            "description": "Optional optimistic lock hash of current body (obtained from get_symbol_body or get_symbol_context)."
                         }
                     },
                     "required": ["symbol_name", "file_path", "new_body"]
@@ -380,7 +379,13 @@ impl McpServer {
                 .first()
                 .map(|c| c.text.as_str())
                 .unwrap_or("error");
-            ("error", Some(err_text), err_text.len(), err_text.len() / 4, 0)
+            (
+                "error",
+                Some(err_text),
+                err_text.len(),
+                err_text.len() / 4,
+                0,
+            )
         } else {
             let bytes: usize = res.content.iter().map(|c| c.text.len()).sum();
             let est_tokens = bytes / 4;
@@ -392,9 +397,7 @@ impl McpServer {
                 "ok"
             };
             let est_tokens_saved = match name {
-                "file_skeleton"
-                | "get_symbol_body"
-                | "get_context_slice" => {
+                "file_skeleton" | "get_symbol_body" | "get_symbol_context" => {
                     let file_size = arguments
                         .get("file_path")
                         .or_else(|| arguments.get("file"))
@@ -429,8 +432,7 @@ impl McpServer {
                         est_tokens.saturating_mul(3)
                     }
                 }
-                "find_symbol"
-                | "search_symbols" => est_tokens.saturating_mul(3),
+                "lookup_symbol" | "search_symbols" => est_tokens.saturating_mul(3),
                 _ => 0,
             };
             (outcome, None, bytes, est_tokens, est_tokens_saved)
@@ -501,7 +503,9 @@ impl McpServer {
         let conn = match self.telemetry_conn.as_ref() {
             Some(c) => c,
             None => {
-                return CallToolResult::error("Failed to open global telemetry database".to_string());
+                return CallToolResult::error(
+                    "Failed to open global telemetry database".to_string(),
+                );
             }
         };
 
@@ -522,9 +526,9 @@ impl McpServer {
                 if as_json {
                     match serde_json::to_string_pretty(&summary) {
                         Ok(json_str) => CallToolResult::text(json_str),
-                        Err(e) => {
-                            CallToolResult::error(format!("Failed to serialize telemetry summary: {e}"))
-                        }
+                        Err(e) => CallToolResult::error(format!(
+                            "Failed to serialize telemetry summary: {e}"
+                        )),
                     }
                 } else {
                     let text = format_telemetry_summary(&summary);
@@ -533,6 +537,33 @@ impl McpServer {
             }
             Err(e) => CallToolResult::error(format!("Failed to query telemetry summary: {e}")),
         }
+    }
+
+    pub(crate) fn sanitize_symbol_name(raw: &str) -> String {
+        let mut s = raw.trim();
+        // Do not strip `()` if the string is literally `"()"` or ends with `"operator()"` (e.g., C++ operator())
+        if s.ends_with("()") && s != "()" && !s.ends_with("operator()") {
+            s = s[..s.len() - 2].trim();
+        }
+        let prefixes = [
+            "pub async fn ",
+            "pub fn ",
+            "async fn ",
+            "fn ",
+            "def ",
+            "func ",
+            "function ",
+        ];
+        for p in prefixes {
+            if let Some(rest) = s.strip_prefix(p) {
+                let trimmed = rest.trim();
+                if !trimmed.is_empty() {
+                    s = trimmed;
+                }
+                break;
+            }
+        }
+        s.to_string()
     }
 
     fn handle_call_tool_inner(&mut self, name: &str, arguments: &Value) -> CallToolResult {
@@ -721,8 +752,8 @@ impl McpServer {
                     Err(e) => CallToolResult::error(e.to_string()),
                 }
             }
-            "find_symbol" => {
-                let query = match arguments
+            "lookup_symbol" => {
+                let raw_query = match arguments
                     .get("query")
                     .or_else(|| arguments.get("name"))
                     .or_else(|| arguments.get("q"))
@@ -731,6 +762,8 @@ impl McpServer {
                     Some(q) => q,
                     None => return CallToolResult::error("Missing required parameter: query"),
                 };
+                let sanitized_query = Self::sanitize_symbol_name(raw_query);
+                let query = sanitized_query.as_str();
                 let raw_path_filter = arguments
                     .get("path")
                     .or_else(|| arguments.get("file_path"))
@@ -837,7 +870,7 @@ impl McpServer {
                 CallToolResult::text(format_search_results(query, &matches))
             }
             "get_symbol_body" => {
-                let symbol_name = match arguments
+                let raw_name = match arguments
                     .get("symbol_name")
                     .or_else(|| arguments.get("symbol"))
                     .or_else(|| arguments.get("name"))
@@ -848,6 +881,7 @@ impl McpServer {
                         return CallToolResult::error("Missing required parameter: symbol_name");
                     }
                 };
+                let symbol_name = Self::sanitize_symbol_name(raw_name);
                 let file_path = arguments
                     .get("file_path")
                     .or_else(|| arguments.get("file"))
@@ -858,15 +892,15 @@ impl McpServer {
                     &self.workspace,
                     &self.db_path,
                     &conn,
-                    symbol_name,
+                    &symbol_name,
                     file_path,
                 ) {
                     Ok((symbol, body)) => CallToolResult::text(format_symbol_body(&symbol, &body)),
                     Err(e) => CallToolResult::error(e.to_string()),
                 }
             }
-            "get_context_slice" => {
-                let symbol_name = match arguments
+            "get_symbol_context" => {
+                let raw_name = match arguments
                     .get("symbol_name")
                     .or_else(|| arguments.get("symbol"))
                     .or_else(|| arguments.get("name"))
@@ -877,6 +911,7 @@ impl McpServer {
                         return CallToolResult::error("Missing required parameter: symbol_name");
                     }
                 };
+                let symbol_name = Self::sanitize_symbol_name(raw_name);
                 let file_path = arguments
                     .get("file_path")
                     .or_else(|| arguments.get("file"))
@@ -891,7 +926,7 @@ impl McpServer {
                     &self.workspace,
                     &self.db_path,
                     &conn,
-                    symbol_name,
+                    &symbol_name,
                     file_path,
                     include_external,
                 ) {
@@ -900,7 +935,7 @@ impl McpServer {
                 }
             }
             "find_references" => {
-                let symbol_name = match arguments
+                let raw_name = match arguments
                     .get("symbol_name")
                     .or_else(|| arguments.get("symbol"))
                     .or_else(|| arguments.get("name"))
@@ -911,6 +946,7 @@ impl McpServer {
                         return CallToolResult::error("Missing required parameter: symbol_name");
                     }
                 };
+                let symbol_name = Self::sanitize_symbol_name(raw_name);
                 let direction = arguments
                     .get("direction")
                     .and_then(|v| v.as_str())
@@ -926,7 +962,7 @@ impl McpServer {
 
                 let refs = match code_kb_core::find_references_ext(
                     &conn,
-                    symbol_name,
+                    &symbol_name,
                     direction,
                     limit,
                     include_external,
@@ -935,7 +971,7 @@ impl McpServer {
                     Err(e) => return CallToolResult::error(e.to_string()),
                 };
 
-                CallToolResult::text(format_references(symbol_name, &refs, direction, limit))
+                CallToolResult::text(format_references(&symbol_name, &refs, direction, limit))
             }
             "find_structural_facts" => {
                 let category = arguments
@@ -979,12 +1015,14 @@ impl McpServer {
                 CallToolResult::text(format_structural_facts(&facts, &literals, category))
             }
             "blast_radius" | "impact" => {
-                let symbol = arguments
+                let raw_symbol = arguments
                     .get("symbol")
                     .or_else(|| arguments.get("symbol_name"))
                     .or_else(|| arguments.get("name"))
                     .or_else(|| arguments.get("target"))
                     .and_then(|v| v.as_str());
+                let sanitized_symbol = raw_symbol.map(Self::sanitize_symbol_name);
+                let symbol = sanitized_symbol.as_deref();
                 let file = arguments
                     .get("file")
                     .or_else(|| arguments.get("file_path"))
@@ -1006,7 +1044,7 @@ impl McpServer {
                 }
             }
             "replace_symbol_body" => {
-                let symbol_name = match arguments
+                let raw_name = match arguments
                     .get("symbol_name")
                     .or_else(|| arguments.get("symbol"))
                     .or_else(|| arguments.get("name"))
@@ -1017,6 +1055,7 @@ impl McpServer {
                         return CallToolResult::error("Missing required parameter: symbol_name");
                     }
                 };
+                let symbol_name = Self::sanitize_symbol_name(raw_name);
                 let file_path = match arguments
                     .get("file_path")
                     .or_else(|| arguments.get("file"))
@@ -1046,7 +1085,7 @@ impl McpServer {
                     &self.workspace,
                     &self.db_path,
                     &conn,
-                    symbol_name,
+                    &symbol_name,
                     file_path,
                     new_body,
                     expected_hash,
@@ -1160,7 +1199,7 @@ impl McpServer {
                         "name": "code-kb",
                         "version": env!("CARGO_PKG_VERSION")
                     },
-                    "instructions": "For progressive code exploration, start with codebase_outline (~200 tokens) for directory structure. Use file_skeleton to inspect interfaces without bodies. Use find_symbol for exact name lookups and search_symbols for natural-language concepts. Call get_context_slice or get_symbol_body for surgical context before editing. Trace callers/callees with find_references. Use blast_radius to assess downstream impact and predict which tests to run before/after edits. Use replace_symbol_body for atomic, syntax-validated edits with immediate re-indexing."
+                    "instructions": "For progressive code exploration, start with codebase_outline (~200 tokens) for directory structure. Use file_skeleton to inspect interfaces without bodies. Use lookup_symbol for exact name lookups and search_symbols for natural-language concepts. Use get_symbol_context for surgical context before editing; use get_symbol_body only when the isolated implementation is needed. Trace callers/callees with find_references. Use blast_radius to assess downstream impact and predict which tests to run before/after edits. Use replace_symbol_body for atomic, syntax-validated edits with immediate re-indexing."
                 });
                 Some(JsonRpcResponse::success(id, init_result))
             }
@@ -1188,5 +1227,73 @@ impl McpServer {
                 format!("Method not found: {}", request.method),
             )),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sanitize_symbol_name() {
+        // Strips trailing parens
+        assert_eq!(McpServer::sanitize_symbol_name("foo()"), "foo");
+        assert_eq!(
+            McpServer::sanitize_symbol_name("Type::method()"),
+            "Type::method"
+        );
+        assert_eq!(McpServer::sanitize_symbol_name("  bar()  "), "bar");
+
+        // Strips common function declaration prefixes
+        assert_eq!(McpServer::sanitize_symbol_name("fn foo"), "foo");
+        assert_eq!(
+            McpServer::sanitize_symbol_name("pub fn calculate"),
+            "calculate"
+        );
+        assert_eq!(
+            McpServer::sanitize_symbol_name("pub async fn fetch_data"),
+            "fetch_data"
+        );
+        assert_eq!(McpServer::sanitize_symbol_name("async fn run"), "run");
+        assert_eq!(McpServer::sanitize_symbol_name("def process"), "process");
+        assert_eq!(McpServer::sanitize_symbol_name("func compute"), "compute");
+        assert_eq!(
+            McpServer::sanitize_symbol_name("function handleRequest"),
+            "handleRequest"
+        );
+
+        // Strips both prefix and trailing parens
+        assert_eq!(
+            McpServer::sanitize_symbol_name("pub async fn execute()"),
+            "execute"
+        );
+        assert_eq!(McpServer::sanitize_symbol_name("def my_func()"), "my_func");
+
+        // Preserves operator() and variations
+        assert_eq!(McpServer::sanitize_symbol_name("operator()"), "operator()");
+        assert_eq!(
+            McpServer::sanitize_symbol_name("Class::operator()"),
+            "Class::operator()"
+        );
+        assert_eq!(
+            McpServer::sanitize_symbol_name("  operator()  "),
+            "operator()"
+        );
+
+        // Preserves standalone () and empty inputs
+        assert_eq!(McpServer::sanitize_symbol_name("()"), "()");
+        assert_eq!(McpServer::sanitize_symbol_name(""), "");
+        assert_eq!(McpServer::sanitize_symbol_name("   "), "");
+
+        // Preserves standalone prefixes when nothing follows
+        assert_eq!(McpServer::sanitize_symbol_name("fn"), "fn");
+        assert_eq!(McpServer::sanitize_symbol_name("fn "), "fn");
+
+        // Preserves symbols with no prefixes or parens
+        assert_eq!(McpServer::sanitize_symbol_name("Workspace"), "Workspace");
+        assert_eq!(
+            McpServer::sanitize_symbol_name("crate::module::symbol"),
+            "crate::module::symbol"
+        );
     }
 }

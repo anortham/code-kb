@@ -62,7 +62,7 @@ MCP tool schema.**
 - Always return the most compact representation that answers the query.
 - Strip implementation bodies in `file_skeleton`.
 - Include only immediate callee signatures, related types, and test
-  locations in `get_context_slice`.
+  locations in `get_symbol_context`.
 
 ### 5. Windows Compatibility
 - Windows is a first-class target. Every release ships a Windows binary.
@@ -77,8 +77,8 @@ MCP tool schema.**
   `symbol`/`name` for `symbol_name`, `body`/`code` for `new_body`, `q`/`name` for `query`).
 - Optional parameters provide safe defaults (`direction` in `find_references` defaults to
   `"callers"`, `category` in `find_structural_facts` lists all categories with counts when omitted).
-- Scoped search: `find_symbol` and `search_symbols` support an optional `path` filter.
-- Language-agnostic callee filtering: `find_references(direction="callees")` and `get_context_slice`
+- Scoped search: `lookup_symbol` and `search_symbols` support an optional `path` filter.
+- Language-agnostic callee filtering: `find_references(direction="callees")` and `get_symbol_context`
   filter unresolved AST tokens against workspace symbols, eliminating external stdlib/runtime noise
   across all ~40 supported languages by default (`include_external: true` / `--include-external` restores them).
 - Blast radius & test prediction: `blast_radius` (alias: `impact`, CLI: `code-kb blast-radius` / `impact`)
@@ -99,3 +99,9 @@ MCP tool schema.**
 - Single-download distribution: Release archives ship `code-kb` and matching `julie-extract` pre-packaged side-by-side. Users download one archive and receive both binaries ready to execute.
 - Runtime discovery: `code-kb` checks `JULIE_EXTRACT_BIN`, next to its own executable (`current_exe().parent()`), `.tools/julie-extract`, and `PATH`.
 - Release workflow: Documented step-by-step in `docs/RELEASING.md`; automated pre-flight check via `scripts/release-preflight.sh`.
+
+### 8. Dynamic MCP Discovery & Zero Ghost Compatibility
+- **An MCP server is an ephemeral, agent-facing discovery surface, not a frozen REST API.**
+- Agents discover tools dynamically via `tools/list` on session start and carry zero state across sessions. There is no concept of "backward compatibility" for tool names across sessions.
+- Do not freeze suboptimal tool names, preserve dead aliases, or compromise ergonomics for "backward compatibility" when improving tool schemas.
+- Optimize ruthlessly for agent cognitive clarity and minimal tool-selection ambiguity. When a tool name or boundary causes model friction, rename or sharpen it cleanly.
