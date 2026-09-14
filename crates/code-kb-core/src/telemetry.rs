@@ -47,10 +47,10 @@ impl TimeWindow {
 
     pub fn to_sqlite_condition(&self) -> Option<&'static str> {
         match self {
-            Self::Today => Some("timestamp >= datetime('now', 'start of day')"),
+            Self::Today => Some("timestamp >= datetime('now', 'localtime', 'start of day')"),
             Self::Last7Days => Some("timestamp >= datetime('now', '-7 days')"),
             Self::Last30Days => Some("timestamp >= datetime('now', '-30 days')"),
-            Self::ThisMonth => Some("timestamp >= datetime('now', 'start of month')"),
+            Self::ThisMonth => Some("timestamp >= datetime('now', 'localtime', 'start of month')"),
             Self::LastYear => Some("timestamp >= datetime('now', '-365 days')"),
             Self::AllTime => None,
         }
@@ -84,6 +84,7 @@ pub struct TelemetrySummary {
     pub error_calls: usize,
     pub total_tokens_returned: usize,
     pub est_tokens_saved: usize,
+    pub time_window: TimeWindow,
     pub scope_description: String,
     pub tool_stats: Vec<ToolStat>,
     pub recent_errors: Vec<TelemetryErrorRecord>,
@@ -424,10 +425,11 @@ pub fn get_telemetry_summary(
     {
         let mut stmt = conn.prepare(&errors_sql)?;
         let row_mapper = |row: &rusqlite::Row| {
+            let raw_msg: String = row.get(2)?;
             Ok(TelemetryErrorRecord {
                 timestamp: row.get(0)?,
                 tool: row.get(1)?,
-                error_message: row.get(2)?,
+                error_message: sanitize_error_message(&raw_msg),
             })
         };
 
@@ -451,6 +453,7 @@ pub fn get_telemetry_summary(
         error_calls,
         total_tokens_returned,
         est_tokens_saved,
+        time_window: filter.time_window,
         scope_description,
         tool_stats,
         recent_errors,
@@ -781,7 +784,7 @@ pub fn format_telemetry_summary(summary: &TelemetrySummary) -> String {
     out.push_str("=================================================================\n");
 
     if summary.total_calls == 0 {
-        out.push_str(&format!("Scope: {}\nNo tool calls recorded for this scope yet.\n", summary.scope_description));
+        out.push_str(&format!("Scope: {} | Window: {}\nNo tool calls recorded for this scope yet.\n", summary.scope_description, summary.time_window));
         return out;
     }
 
@@ -792,8 +795,8 @@ pub fn format_telemetry_summary(summary: &TelemetrySummary) -> String {
     };
 
     out.push_str(&format!(
-        "Scope: {} | Total Tool Calls: {} | Success Rate: {:.1}% | Tokens Served: ~{} | Tokens Saved: ~{}\n\n",
-        summary.scope_description, summary.total_calls, success_rate, summary.total_tokens_returned, summary.est_tokens_saved
+        "Scope: {} | Window: {} | Total Tool Calls: {} | Success Rate: {:.1}% | Tokens Served: ~{} | Tokens Saved: ~{}\n\n",
+        summary.scope_description, summary.time_window, summary.total_calls, success_rate, summary.total_tokens_returned, summary.est_tokens_saved
     ));
 
     out.push_str("### Tool Invocations & Performance\n");

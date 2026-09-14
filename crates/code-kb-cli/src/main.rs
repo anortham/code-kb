@@ -324,7 +324,13 @@ fn main() -> anyhow::Result<()> {
     if let Command::Stats(args) | Command::Telemetry(args) = &cli.command {
         let conn = code_kb_core::open_global_telemetry_db()
             .map_err(|e| anyhow::anyhow!("Failed to open telemetry database: {e}"))?;
-        let time_window = code_kb_core::TimeWindow::parse(&args.since).unwrap_or_default();
+        let _ = code_kb_core::migrate_legacy_workspace_telemetry(&conn, &workspace.root);
+        let time_window = code_kb_core::TimeWindow::parse(&args.since).ok_or_else(|| {
+            anyhow::anyhow!(
+                "Invalid time window '{}'. Supported values: today, 7d, 30d, month, year, all",
+                args.since
+            )
+        })?;
         let workspace_root = if args.workspace {
             Some(workspace.canonical_root.clone())
         } else {
@@ -334,8 +340,23 @@ fn main() -> anyhow::Result<()> {
             time_window,
             workspace_root,
         };
-        let summary = code_kb_core::get_telemetry_summary(&conn, &filter)
+        let mut summary = code_kb_core::get_telemetry_summary(&conn, &filter)
             .map_err(|e| anyhow::anyhow!("Failed to query telemetry: {e}"))?;
+
+        // When global stats are requested, scope recent_errors to the current workspace
+        // to prevent leaking private paths or error text from unrelated repositories
+        if !args.workspace {
+            let ws_filter = code_kb_core::TelemetryFilter {
+                time_window,
+                workspace_root: Some(workspace.canonical_root.clone()),
+            };
+            if let Ok(ws_summary) = code_kb_core::get_telemetry_summary(&conn, &ws_filter) {
+                summary.recent_errors = ws_summary.recent_errors;
+            } else {
+                summary.recent_errors.clear();
+            }
+        }
+
         if cli.json || args.json {
             println!("{}", serde_json::to_string_pretty(&summary)?);
         } else {
@@ -348,6 +369,7 @@ fn main() -> anyhow::Result<()> {
     if let Command::BugReport(args) = &cli.command {
         let conn = code_kb_core::open_global_telemetry_db()
             .map_err(|e| anyhow::anyhow!("Failed to open telemetry database: {e}"))?;
+        let _ = code_kb_core::migrate_legacy_workspace_telemetry(&conn, &workspace.root);
         let bundle = code_kb_core::generate_bug_report(
             &conn,
             Some(&workspace.canonical_root),

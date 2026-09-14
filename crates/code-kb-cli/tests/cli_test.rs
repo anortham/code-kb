@@ -305,6 +305,7 @@ fn test_cli_stats_and_telemetry() {
     let root = repo.path();
 
     let stats_output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
         .arg("--root")
         .arg(root)
         .arg("stats")
@@ -316,6 +317,7 @@ fn test_cli_stats_and_telemetry() {
     assert!(stdout.contains("Telemetry Summary"));
 
     let json_output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
         .arg("--root")
         .arg(root)
         .arg("--json")
@@ -334,6 +336,7 @@ fn test_cli_stats_since_flag() {
     let root = repo.path();
 
     let stats_output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
         .arg("--root")
         .arg(root)
         .arg("stats")
@@ -345,6 +348,22 @@ fn test_cli_stats_since_flag() {
     assert!(stats_output.status.success());
     let stdout = String::from_utf8_lossy(&stats_output.stdout);
     assert!(stdout.contains("Telemetry Summary"));
+    assert!(stdout.contains("Window: 30d"));
+
+    // Test invalid --since value fails
+    let invalid_output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+        .arg("--root")
+        .arg(root)
+        .arg("stats")
+        .arg("--since")
+        .arg("invalid_window_xyz")
+        .output()
+        .expect("Failed to execute stats with invalid window");
+
+    assert!(!invalid_output.status.success());
+    let stderr = String::from_utf8_lossy(&invalid_output.stderr);
+    assert!(stderr.contains("Invalid time window 'invalid_window_xyz'"));
 }
 
 #[test]
@@ -353,6 +372,7 @@ fn test_cli_stats_workspace_json() {
     let root = repo.path();
 
     let json_output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
         .arg("--root")
         .arg(root)
         .arg("stats")
@@ -374,6 +394,7 @@ fn test_cli_bug_report() {
     let root = repo.path();
 
     let report_output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
         .arg("--root")
         .arg(root)
         .arg("bug-report")
@@ -395,6 +416,7 @@ fn test_cli_bug_report_json() {
     let root = repo.path();
 
     let json_output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
         .arg("--root")
         .arg(root)
         .arg("bug-report")
@@ -407,6 +429,105 @@ fn test_cli_bug_report_json() {
     assert!(json_val.get("github_issue_url").is_some());
     assert!(json_val.get("markdown_body").is_some());
     assert!(json_val.get("os_info").is_some());
+}
+
+#[test]
+fn test_cli_stats_migrates_legacy_telemetry() {
+    let repo = setup_test_repo();
+    let root = repo.path();
+    let telem_dir = code_kb_core::safe_tempdir();
+
+    // Create legacy workspace telemetry DB
+    let legacy_dir = root.join(".code-kb");
+    std::fs::create_dir_all(&legacy_dir).unwrap();
+    let legacy_db = legacy_dir.join("telemetry.db");
+    let conn = rusqlite::Connection::open(&legacy_db).unwrap();
+    conn.execute_batch(
+        "CREATE TABLE tool_telemetry (
+            id TEXT PRIMARY KEY,
+            timestamp TEXT NOT NULL,
+            tool TEXT NOT NULL,
+            duration_ms INTEGER NOT NULL,
+            outcome TEXT NOT NULL,
+            error_message TEXT,
+            result_count INTEGER NOT NULL,
+            bytes_returned INTEGER NOT NULL,
+            est_tokens INTEGER NOT NULL,
+            code_kb_version TEXT NOT NULL
+        );
+        INSERT INTO tool_telemetry VALUES (
+            'legacy-cli-1', datetime('now'), 'find_symbol',
+            15, 'ok', NULL, 1, 100, 25, '0.6.0'
+        );",
+    )
+    .unwrap();
+    drop(conn);
+
+    assert!(legacy_db.exists());
+
+    let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .env("CODE_KB_TELEMETRY_DIR", telem_dir.path())
+        .arg("--root")
+        .arg(root)
+        .arg("stats")
+        .arg("--workspace")
+        .arg("--json")
+        .output()
+        .expect("Failed to execute stats");
+
+    assert!(output.status.success());
+    let json_val: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json_val["total_calls"], 1);
+
+    // Legacy DB must have been migrated and removed
+    assert!(!legacy_db.exists(), "Legacy database should be unlinked after migration");
+}
+
+#[test]
+fn test_cli_stats_scopes_errors_to_active_workspace() {
+    let telem_dir = code_kb_core::safe_tempdir();
+
+    // 1. Pre-seed global telemetry DB with error from unrelated workspace B
+    let global_db = telem_dir.path().join("telemetry.db");
+    let conn = rusqlite::Connection::open(&global_db).unwrap();
+    conn.execute_batch(
+        "CREATE TABLE tool_telemetry (
+            id TEXT PRIMARY KEY,
+            timestamp TEXT NOT NULL,
+            workspace_root TEXT,
+            workspace_name TEXT,
+            tool TEXT NOT NULL,
+            duration_ms INTEGER NOT NULL,
+            outcome TEXT NOT NULL,
+            error_message TEXT,
+            result_count INTEGER NOT NULL,
+            bytes_returned INTEGER NOT NULL,
+            est_tokens INTEGER NOT NULL,
+            est_tokens_saved INTEGER NOT NULL DEFAULT 0,
+            version TEXT NOT NULL
+        );
+        INSERT INTO tool_telemetry VALUES (
+            'err-unrelated', datetime('now'), '/other/private/workspace', 'private-repo',
+            'get_symbol_body', 10, 'error', 'SECRET_LEAK_IN_OTHER_REPO', 0, 0, 0, 0, '0.7.0'
+        );",
+    )
+    .unwrap();
+    drop(conn);
+
+    let repo = setup_test_repo();
+    let root = repo.path();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .env("CODE_KB_TELEMETRY_DIR", telem_dir.path())
+        .arg("--root")
+        .arg(root)
+        .arg("stats")
+        .output()
+        .expect("Failed to execute global stats");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!stdout.contains("SECRET_LEAK_IN_OTHER_REPO"), "Global stats must not leak other workspace errors");
 }
 
 #[test]

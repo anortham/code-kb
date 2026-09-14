@@ -104,6 +104,7 @@ fn test_mcp_stdio_handshake_and_tools() {
 
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
             .arg("serve")
             .arg("--root")
             .arg(&root)
@@ -546,6 +547,7 @@ fn test_mcp_invalid_path_does_not_poison_session() {
 
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
             .arg("serve")
             .arg("--root")
             .arg(&root)
@@ -758,6 +760,7 @@ fn test_mcp_worktree_rebind() {
     // Spawn server pointing to main_root
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .env("CODE_KB_TELEMETRY_DIR", main_root.join(".telemetry_test"))
             .arg("serve")
             .arg("--root")
             .arg(&main_root)
@@ -949,6 +952,7 @@ fn test_mcp_worktree_auto_copy_fast_path() {
     // Spawn server pointing to main_root
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .env("CODE_KB_TELEMETRY_DIR", main_root.join(".telemetry_test"))
             .arg("serve")
             .arg("--root")
             .arg(&main_root)
@@ -1104,6 +1108,7 @@ fn test_mcp_initialize_roots_file_uris() {
     {
         let mut child = ChildGuard(
             Command::new(env!("CARGO_BIN_EXE_code-kb"))
+                .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
                 .arg("serve")
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
@@ -1169,6 +1174,7 @@ fn test_mcp_initialize_roots_file_uris() {
     {
         let mut child = ChildGuard(
             Command::new(env!("CARGO_BIN_EXE_code-kb"))
+                .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
                 .arg("serve")
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
@@ -1240,6 +1246,7 @@ fn test_mcp_rebinding_drive_casing_insensitivity() {
 
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
             .arg("serve")
             .arg("--root")
             .arg(root)
@@ -1374,7 +1381,8 @@ fn test_mcp_telemetry_summary_unindexed_repo_no_autoscan() {
     std::fs::write(src.join("lib.rs"), "pub fn unindexed_func() {}\n").unwrap();
 
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_code-kb"));
-    cmd.arg("serve")
+    cmd.env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+        .arg("serve")
         .arg("--root")
         .arg(root)
         .stdin(Stdio::piped())
@@ -1721,6 +1729,119 @@ fn test_mcp_telemetry_summary_scoped_errors_no_cross_workspace_leak() {
         .find(|s| s["tool"] == "file_skeleton")
         .expect("file_skeleton stat should be present");
     assert_eq!(skel_stat["tokens_saved"], expected_saved);
+
+    drop(stdin);
+    let _ = child.wait();
+}
+
+#[test]
+fn test_mcp_telemetry_summary_does_not_rebind_workspace() {
+    use std::io::BufRead;
+
+    let repo1 = setup_test_repo();
+    let root1 = repo1.path();
+
+    let repo2 = setup_test_repo();
+    let root2 = repo2.path();
+
+    let telem_dir = code_kb_core::safe_tempdir();
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_code-kb"));
+    cmd.env("CODE_KB_TELEMETRY_DIR", telem_dir.path());
+    cmd.arg("serve")
+        .arg("--root")
+        .arg(root1)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit());
+
+    let mut child = ChildGuard(cmd.spawn().expect("Failed to spawn code-kb serve"));
+    let mut stdin = child.stdin.take().expect("Failed to open stdin");
+    let stdout = child.stdout.take().expect("Failed to open stdout");
+    let mut reader = std::io::BufReader::new(stdout);
+
+    // 1. Initialize
+    let init_req = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": { "name": "rebind-test", "version": "1.0" }
+        }
+    });
+    let mut init_line = serde_json::to_string(&init_req).unwrap();
+    init_line.push('\n');
+    stdin.write_all(init_line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut init_resp_line = String::new();
+    reader.read_line(&mut init_resp_line).unwrap();
+
+    // 2. Call telemetry_summary with unexpected path pointing to repo2
+    let stats_req = json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+            "name": "telemetry_summary",
+            "arguments": {
+                "workspace": root2.to_str().unwrap(),
+                "file_path": root2.join("src/lib.rs").to_str().unwrap()
+            }
+        }
+    });
+    let mut stats_line = serde_json::to_string(&stats_req).unwrap();
+    stats_line.push('\n');
+    stdin.write_all(stats_line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut stats_resp_line = String::new();
+    reader.read_line(&mut stats_resp_line).unwrap();
+    let stats_resp: Value = serde_json::from_str(&stats_resp_line).unwrap();
+    assert_ne!(stats_resp["result"]["isError"], true);
+
+    // 3. Call codebase_outline: should still be bound to root1, NOT root2
+    let outline_req = json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+            "name": "codebase_outline",
+            "arguments": {}
+        }
+    });
+    let mut outline_line = serde_json::to_string(&outline_req).unwrap();
+    outline_line.push('\n');
+    stdin.write_all(outline_line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut outline_resp_line = String::new();
+    reader.read_line(&mut outline_resp_line).unwrap();
+    let outline_resp: Value = serde_json::from_str(&outline_resp_line).unwrap();
+    assert_ne!(outline_resp["result"]["isError"], true);
+
+    // 4. Call telemetry_summary with invalid time_window: should return error
+    let invalid_req = json!({
+        "jsonrpc": "2.0",
+        "id": 4,
+        "method": "tools/call",
+        "params": {
+            "name": "telemetry_summary",
+            "arguments": {
+                "time_window": "invalid_window_123"
+            }
+        }
+    });
+    let mut inv_line = serde_json::to_string(&invalid_req).unwrap();
+    inv_line.push('\n');
+    stdin.write_all(inv_line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut inv_resp_line = String::new();
+    reader.read_line(&mut inv_resp_line).unwrap();
+    let inv_resp: Value = serde_json::from_str(&inv_resp_line).unwrap();
+    assert_eq!(inv_resp["result"]["isError"], true);
 
     drop(stdin);
     let _ = child.wait();

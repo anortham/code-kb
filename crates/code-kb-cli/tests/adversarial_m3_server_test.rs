@@ -39,6 +39,7 @@ fn setup_fixture_repo() -> (tempfile::TempDir, PathBuf, String) {
     fs::write(&file_path, code).unwrap();
 
     let scan_out = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
         .arg("--root")
         .arg(&root)
         .arg("scan")
@@ -157,9 +158,11 @@ fn test_adversarial_mcp_initialize_roots_comprehensive_matrix() {
     ];
 
     for (name, params_payload) in variations {
+        let telem_dir = code_kb_core::safe_tempdir();
         // Spawn server with ZERO --root arguments in arbitrary CWD
         let mut child = ChildGuard(
             Command::new(env!("CARGO_BIN_EXE_code-kb"))
+                .env("CODE_KB_TELEMETRY_DIR", telem_dir.path())
                 .arg("serve")
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
@@ -287,6 +290,7 @@ fn test_adversarial_mcp_dynamic_rebinding_drive_casing_and_interleaved_churn() {
 
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
             .arg("serve")
             .arg("--root")
             .arg(root)
@@ -611,6 +615,7 @@ fn test_adversarial_mcp_core_invariant_1_exhaustive_blacklist() {
 
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
             .arg("serve")
             .arg("--root")
             .arg(root)

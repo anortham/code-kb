@@ -457,13 +457,23 @@ impl McpServer {
     }
 
     fn handle_telemetry_summary(&mut self, arguments: &Value) -> CallToolResult {
-        let time_window = arguments
+        let window_arg = arguments
             .get("time_window")
             .or_else(|| arguments.get("since"))
             .or_else(|| arguments.get("window"))
-            .and_then(|v| v.as_str())
-            .and_then(TimeWindow::parse)
-            .unwrap_or(TimeWindow::AllTime);
+            .and_then(|v| v.as_str());
+
+        let time_window = match window_arg {
+            Some(s) => match TimeWindow::parse(s) {
+                Some(w) => w,
+                None => {
+                    return CallToolResult::error(format!(
+                        "Invalid time_window '{s}'. Supported values: today, 7d, 30d, month, year, all"
+                    ));
+                }
+            },
+            None => TimeWindow::AllTime,
+        };
 
         let workspace_only = arguments
             .get("workspace_only")
@@ -528,6 +538,20 @@ impl McpServer {
     fn handle_call_tool_inner(&mut self, name: &str, arguments: &Value) -> CallToolResult {
         tracing::info!(tool = name, args = %arguments, "MCP tool called");
 
+        // Early routing for telemetry_summary and unadvertised alias code_kb_stats
+        // Must execute before auto-scan check and workspace rebinding so telemetry queries:
+        // 1. Succeed immediately on unindexed repositories without creating artifact.db
+        // 2. Never rebind the session's active workspace if extra path/file parameters are supplied
+        if name == "telemetry_summary" || name == "code_kb_stats" {
+            let result = self.handle_telemetry_summary(arguments);
+            if result.is_error {
+                tracing::warn!(tool = name, "MCP tool returned error");
+            } else {
+                tracing::info!(tool = name, "MCP tool executed successfully");
+            }
+            return result;
+        }
+
         // Dynamically bind workspace if passed explicitly or if candidate path points to a different workspace
         if let Some(ws_str) = arguments.get("workspace").and_then(|v| v.as_str()) {
             let _ = self.bind_workspace(Path::new(ws_str));
@@ -560,18 +584,6 @@ impl McpServer {
             } else if !self.db_path.exists() && abs_candidate.exists() {
                 let _ = self.bind_workspace(&abs_candidate);
             }
-        }
-
-        // Early routing for telemetry_summary and unadvertised alias code_kb_stats
-        // Must execute before auto-scan check so unindexed repositories succeed immediately without creating artifact.db
-        if name == "telemetry_summary" || name == "code_kb_stats" {
-            let result = self.handle_telemetry_summary(arguments);
-            if result.is_error {
-                tracing::warn!(tool = name, "MCP tool returned error");
-            } else {
-                tracing::info!(tool = name, "MCP tool executed successfully");
-            }
-            return result;
         }
 
         // Auto-scan if workspace is a known repository but database artifact does not exist yet
