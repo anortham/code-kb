@@ -955,6 +955,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn test_escaping_symlink_rejected() {
         let ws_dir = crate::safe_tempdir();
         let ext_dir = crate::safe_tempdir();
@@ -963,15 +964,12 @@ mod tests {
         std::fs::write(&ext_file, "secret").unwrap();
 
         let symlink_path = ws_dir.path().join("link.txt");
-        #[cfg(unix)]
-        {
-            std::os::unix::fs::symlink(&ext_file, &symlink_path).unwrap();
-            let ws = Workspace::new(ws_dir.path().to_path_buf());
-            let res = ws.resolve_path(&symlink_path);
-            assert!(
-                matches!(res, Err(WorkspaceError::PathOutsideWorkspace(..))),
-                "Expected PathOutsideWorkspace, got: {res:?}"
-            );
-        }
+        std::os::unix::fs::symlink(&ext_file, &symlink_path).unwrap();
+        let ws = Workspace::new(ws_dir.path().to_path_buf());
+        let res = ws.resolve_path(&symlink_path);
+        assert!(
+            matches!(res, Err(WorkspaceError::PathOutsideWorkspace(..))),
+            "Expected PathOutsideWorkspace, got: {res:?}"
+        );
     }
 }
