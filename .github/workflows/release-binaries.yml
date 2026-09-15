@@ -170,6 +170,20 @@ jobs:
           find release-artifacts -type f -exec cp {} dist/ \;
           ls -la dist/
 
+      - name: Check for release notes
+        id: release_notes
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          NOTES_FILE="docs/release-notes/v${VERSION}.md"
+          if [[ -f "$NOTES_FILE" ]]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "path=$NOTES_FILE" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "path=" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -178,4 +192,5 @@ jobs:
           files: dist/*
           draft: false
           prerelease: false
-          generate_release_notes: true
+          body_path: ${{ steps.release_notes.outputs.path }}
+          generate_release_notes: ${{ steps.release_notes.outputs.found != 'true' }}

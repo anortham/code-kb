@@ -87,9 +87,17 @@ When bumping to version `X.Y.Z` (e.g. `0.5.0`):
 cargo check --workspace --all-targets
 ```
 
-### 3. Commit Version Bump
+### 3. Prepare Release Notes
+Draft comprehensive markdown release notes at `docs/release-notes/vX.Y.Z.md`:
+- **Highlights & Summary:** Key theme of the release.
+- **What's Changed / New Features:** Architectural, performance, and tooling capabilities.
+- **Ergonomics & Invariants:** Agent UX improvements (parameter aliases, zero-workspace adherence).
+- **Bug Fixes:** Defect resolutions and test isolation updates.
+- **Assets & Checksums:** Table of artifact archives and their SHA256 hashes.
+
+### 4. Commit Version Bump & Release Notes
 ```bash
-git add Cargo.toml Cargo.lock crates/code-kb-cli/Cargo.toml .claude-plugin/plugin.json .github/workflows/release-binaries.yml
+git add Cargo.toml Cargo.lock crates/code-kb-cli/Cargo.toml .claude-plugin/plugin.json .github/workflows/release-binaries.yml docs/release-notes/vX.Y.Z.md
 git commit -m "chore: release vX.Y.Z"
 ```
 
@@ -113,7 +121,13 @@ git push origin vX.Y.Z
 2. Downloads and verifies the pinned `julie-extract` binary matching `scripts/julie-pins.json`.
 3. Packages `code-kb`, `julie-extract`, `README.md`, `LICENSE-MIT`, and `LICENSE-APACHE`.
 4. Generates `.sha256` checksums for each archive.
-5. Softprops `action-gh-release` publishes the GitHub Release with downloadable assets and auto-generated release notes.
+5. Softprops `action-gh-release` publishes the GitHub Release with downloadable assets. If `docs/release-notes/vX.Y.Z.md` exists, it uses the file content as the release notes body via `body_path`; otherwise, it falls back to auto-generated commit logs.
+
+### Updating Release Notes on GitHub:
+To update or publish release notes for an existing release without triggering a new CI build:
+```bash
+gh release edit vX.Y.Z --notes-file docs/release-notes/vX.Y.Z.md
+```
 
 ---
 
