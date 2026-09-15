@@ -159,7 +159,7 @@ pub fn retarget_artifact_root(db_path: &Path, new_root: &Path) -> Result<(), rus
             )
             .unwrap_or(false);
         if has_metadata {
-            let root_str = crate::workspace::to_forward_slash(new_root);
+            let root_str = new_root.to_string_lossy();
             conn.execute(
                 "INSERT INTO artifact_metadata (key, value) VALUES ('root_path', ?1)
                  ON CONFLICT(key) DO UPDATE SET value = excluded.value",

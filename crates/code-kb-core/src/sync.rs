@@ -256,7 +256,6 @@ pub fn ensure_fresh_file(
     };
 
     if is_dirty {
-        let root_str = crate::workspace::to_forward_slash(&workspace.canonical_root);
         let stored_root: Option<String> = conn
             .query_row(
                 "SELECT value FROM artifact_metadata WHERE key = 'root_path'",
@@ -265,7 +264,7 @@ pub fn ensure_fresh_file(
             )
             .ok();
         if let Some(r) = stored_root
-            && r != root_str
+            && !crate::workspace::paths_equal(Path::new(&r), &workspace.canonical_root)
         {
             let _ = crate::db::retarget_artifact_root(db_path, &workspace.canonical_root);
         }
@@ -304,7 +303,6 @@ pub fn reconcile_offline_edits(
 ) -> Result<ReconcileReport, SyncError> {
     // Ensure artifact_metadata root_path matches workspace canonical root
     // (self-heals worktrees where artifact.db was copied from a parent repository)
-    let root_str = crate::workspace::to_forward_slash(&workspace.canonical_root);
     let stored_root: Option<String> = conn
         .query_row(
             "SELECT value FROM artifact_metadata WHERE key = 'root_path'",
@@ -313,7 +311,7 @@ pub fn reconcile_offline_edits(
         )
         .ok();
     if let Some(r) = stored_root
-        && r != root_str
+        && !crate::workspace::paths_equal(Path::new(&r), &workspace.canonical_root)
     {
         let _ = crate::db::retarget_artifact_root(db_path, &workspace.canonical_root);
     }
