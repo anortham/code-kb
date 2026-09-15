@@ -15,7 +15,7 @@ path = "src/main.rs"
 workspace = true
 
 [dependencies]
-code-kb-core = { version = "0.8.0", path = "../code-kb-core" }
+code-kb-core = { version = "0.9.0", path = "../code-kb-core" }
 clap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
