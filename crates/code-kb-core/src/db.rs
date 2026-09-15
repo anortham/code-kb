@@ -159,7 +159,29 @@ pub fn retarget_artifact_root(db_path: &Path, new_root: &Path) -> Result<(), rus
             )
             .unwrap_or(false);
         if has_metadata {
-            let root_str = new_root.to_string_lossy();
+            let existing_root: Option<String> = conn
+                .query_row(
+                    "SELECT value FROM artifact_metadata WHERE key = 'root_path'",
+                    [],
+                    |r| r.get(0),
+                )
+                .ok();
+
+            let root_str = if existing_root
+                .as_deref()
+                .is_some_and(|ex| ex.starts_with(r"\\?\") || ex.starts_with(r"\\.\"))
+                || (existing_root.is_none() && cfg!(windows))
+            {
+                std::fs::canonicalize(new_root)
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_else(|_| {
+                        let s = new_root.to_string_lossy();
+                        format!(r"\\?\{s}")
+                    })
+            } else {
+                new_root.to_string_lossy().to_string()
+            };
+
             conn.execute(
                 "INSERT INTO artifact_metadata (key, value) VALUES ('root_path', ?1)
                  ON CONFLICT(key) DO UPDATE SET value = excluded.value",
