@@ -4,14 +4,14 @@ use std::path::{Path, PathBuf};
 
 use code_kb_core::{
     Connection, TelemetryFilter, TimeWindow, WatcherHandle, Workspace, WorkspaceError,
-    blast_radius_op, codebase_outline_op, ensure_fts_index_path, ensure_index_matches_pin,
+    blast_radius_op, codebase_outline_op, ensure_fts_index_path, ensure_index_matches_extractor,
     file_skeleton_op, format_blast_radius, format_context_slice, format_fact_categories,
     format_find_symbol_results, format_references, format_replace_symbol_result,
     format_search_results, format_structural_facts, format_symbol_body, format_telemetry_summary,
     fts_search_symbols_scoped, get_context_slice_op, get_symbol_body_op, get_telemetry_summary,
-    list_structural_fact_categories_scoped, open_global_telemetry_db, open_read_only,
-    reconcile_offline_edits, record_tool_call, record_tool_call_conn, replace_symbol_body,
-    scan_workspace, search_symbols_scoped, start_watcher,
+    installed_extractor_version, list_structural_fact_categories_scoped, open_global_telemetry_db,
+    open_read_only, reconcile_offline_edits, record_tool_call, record_tool_call_conn,
+    replace_symbol_body, scan_workspace, search_symbols_scoped, start_watcher,
 };
 
 use super::protocol::{CallToolResult, JsonRpcRequest, JsonRpcResponse, Tool};
@@ -33,7 +33,9 @@ impl McpServer {
                 .join("artifact.db")
         });
 
-        if let Err(e) = ensure_index_matches_pin(&workspace, &db_path) {
+        if let Err(e) =
+            ensure_index_matches_extractor(&workspace, &db_path, &installed_extractor_version())
+        {
             tracing::warn!("Index version check failed: {e}");
         }
 
@@ -95,7 +97,9 @@ impl McpServer {
         if !code_kb_core::workspace::paths_equal(&self.workspace.canonical_root, &ws.canonical_root)
             || self._watcher.is_none()
         {
-            if let Err(e) = ensure_index_matches_pin(&ws, &db_path) {
+            if let Err(e) =
+                ensure_index_matches_extractor(&ws, &db_path, &installed_extractor_version())
+            {
                 tracing::warn!("Index version check failed: {e}");
             }
             if db_path.exists() {

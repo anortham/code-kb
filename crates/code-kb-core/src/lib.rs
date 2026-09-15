@@ -40,8 +40,8 @@ pub use queries::{
 pub use slicer::{SliceError, slice_symbol, slice_symbol_body};
 pub use sync::{
     PINNED_JULIE_VERSION, ReconcileReport, SyncError, delete_file, ensure_fresh_file,
-    ensure_index_matches_pin, find_julie_extract_binary, reconcile_offline_edits, scan_workspace,
-    update_file,
+    ensure_index_matches_extractor, find_julie_extract_binary, installed_extractor_version,
+    reconcile_offline_edits, scan_workspace, update_file,
 };
 pub use syntax::{SyntaxError, validate_syntax};
 pub use telemetry::{

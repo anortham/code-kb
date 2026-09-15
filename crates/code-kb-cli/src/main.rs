@@ -460,7 +460,11 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    code_kb_core::ensure_index_matches_pin(&workspace, &db_path)?;
+    code_kb_core::ensure_index_matches_extractor(
+        &workspace,
+        &db_path,
+        &code_kb_core::installed_extractor_version(),
+    )?;
 
     if !db_path.exists() {
         eprintln!(

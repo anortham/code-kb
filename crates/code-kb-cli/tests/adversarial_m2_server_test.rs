@@ -110,6 +110,7 @@ fn test_adversarial_worktree_fastpath_wal_flush_uncheckpointed_transactions() {
         let sid = format!("s{i}");
         let content = format!("pub fn {sym_name}() {{}}\n");
         let h = format!("blake3:{}", blake3::hash(content.as_bytes()).to_hex());
+        fs::write(main_root.join(&file_path), &content).unwrap();
 
         conn.execute(
             "INSERT INTO files VALUES (?1, ?2, 'rust', ?3, ?4, 1, '2026-01-01')",
@@ -147,6 +148,13 @@ fn test_adversarial_worktree_fastpath_wal_flush_uncheckpointed_transactions() {
 
     // Set up worktree pointing to main repo gitdir
     fs::create_dir_all(wt_root.join("src")).unwrap();
+    for i in 1..=200 {
+        fs::write(
+            wt_root.join(format!("src/module_{i}.rs")),
+            format!("pub fn wal_committed_fn_{i}() {{}}\n"),
+        )
+        .unwrap();
+    }
     let gitdir_path = main_root.join(".git").join("worktrees").join("feature-wal");
     fs::create_dir_all(&gitdir_path).unwrap();
     fs::write(

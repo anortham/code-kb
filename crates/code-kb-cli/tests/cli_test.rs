@@ -1101,3 +1101,104 @@ fn test_cli_argument_aliases() {
         "stderr was: {stderr}"
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn test_cli_scan_prefers_the_pinned_extractor_over_a_vendored_one_above_cwd() {
+    use std::os::unix::fs::PermissionsExt;
+    let real = code_kb_core::find_julie_extract_binary().expect("julie-extract must be present");
+    let temp_dir = code_kb_core::safe_tempdir();
+    let root = temp_dir.path();
+    std::fs::create_dir_all(root.join(".tools")).unwrap();
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("src/lib.rs"), "pub fn from_pinned() {}\n").unwrap();
+    let vendored = root.join(".tools/julie-extract");
+    std::fs::write(&vendored, "#!/bin/sh\necho 'julie-extract 0.0.1'\nexit 7\n").unwrap();
+    std::fs::set_permissions(&vendored, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let path = format!(
+        "{}:{}",
+        real.parent().unwrap().display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+
+    let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .env_remove("JULIE_EXTRACT_BIN")
+        .env("PATH", path)
+        .current_dir(root)
+        .arg("scan")
+        .output()
+        .expect("Failed to execute scan");
+
+    assert!(
+        output.status.success(),
+        "scan must use the pinned extractor, not the vendored 0.0.1: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let conn = code_kb_core::open_read_only(&root.join(".code-kb/artifact.db")).unwrap();
+    let version: String = conn
+        .query_row(
+            "SELECT value FROM artifact_metadata WHERE key = 'binary_version'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_ne!(version, "0.0.1");
+}
+
+#[cfg(unix)]
+fn scan_with_fake_extractor() -> (tempfile::TempDir, Vec<String>, u32) {
+    use std::os::unix::fs::PermissionsExt;
+    let temp_dir = code_kb_core::safe_tempdir();
+    let root = temp_dir.path();
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("src/lib.rs"), "pub fn f() {}\n").unwrap();
+    let args_log = root.join("extractor-args.txt");
+    let fake = root.join("fake-julie-extract");
+    std::fs::write(
+        &fake,
+        format!(
+            "#!/bin/sh\ncase \"$1\" in --version) echo 'julie-extract {}'; exit 0;; esac\nprintf '%s\\n' \"$@\" > \"$EXTRACTOR_ARGS_LOG\"\n",
+            code_kb_core::PINNED_JULIE_VERSION
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let child = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .env("JULIE_EXTRACT_BIN", &fake)
+        .env("EXTRACTOR_ARGS_LOG", &args_log)
+        .current_dir(root)
+        .arg("scan")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .expect("Failed to spawn scan");
+    let code_kb_pid = child.id();
+    let _ = child.wait_with_output();
+
+    let args = std::fs::read_to_string(&args_log).expect("fake extractor must have run");
+    let args = args.lines().map(str::to_string).collect();
+    (temp_dir, args, code_kb_pid)
+}
+
+#[cfg(unix)]
+#[test]
+fn test_cli_scan_passes_its_own_pid_to_the_extractor_watchdog() {
+    let (_repo, args, code_kb_pid) = scan_with_fake_extractor();
+    let idx = args
+        .iter()
+        .position(|a| a == "--parent-pid")
+        .expect("scan must pass --parent-pid");
+    assert_eq!(args[idx + 1], code_kb_pid.to_string());
+}
+
+#[cfg(unix)]
+#[test]
+fn test_cli_scan_requests_the_facts_extraction_level() {
+    let (_repo, args, _) = scan_with_fake_extractor();
+    let idx = args
+        .iter()
+        .position(|a| a == "--level")
+        .expect("scan must pass --level");
+    assert_eq!(args[idx + 1], "facts");
+}

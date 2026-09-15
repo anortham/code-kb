@@ -48,6 +48,7 @@ Traditional AI coding agents burn massive amounts of context loading entire sour
   # or
   cargo install code-kb-cli
   ```
+  Cargo installs `code-kb` only. Download the pinned `julie-extract` from the [julie-extractors releases](https://github.com/anortham/julie-extractors/releases) (version in `scripts/julie-pins.json`) and put it on your `PATH` or set `JULIE_EXTRACT_BIN`.
 - **Verification:**
   ```bash
   code-kb --version

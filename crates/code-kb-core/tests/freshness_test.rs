@@ -1,6 +1,7 @@
 use code_kb_core::{
-    Workspace, ensure_fresh_file, ensure_index_matches_pin, find_julie_extract_binary,
-    get_symbol_by_name, open_read_only, reconcile_offline_edits, safe_tempdir, scan_workspace,
+    Workspace, ensure_fresh_file, ensure_index_matches_extractor, find_julie_extract_binary,
+    get_symbol_by_name, installed_extractor_version, open_read_only, reconcile_offline_edits,
+    safe_tempdir, scan_workspace,
 };
 use std::fs;
 #[cfg(unix)]
@@ -422,7 +423,8 @@ fn test_index_from_other_extractor_version_is_rebuilt() {
     let ws = Workspace::new(root.clone());
     let db_path = root.join(".code-kb").join("artifact.db");
     scan_workspace(&ws, &db_path, true).expect("Scan failed");
-    assert!(!ensure_index_matches_pin(&ws, &db_path).unwrap());
+    let installed = installed_extractor_version();
+    assert!(!ensure_index_matches_extractor(&ws, &db_path, &installed).unwrap());
 
     {
         let conn = rusqlite::Connection::open(&db_path).unwrap();
@@ -432,8 +434,8 @@ fn test_index_from_other_extractor_version_is_rebuilt() {
         )
         .unwrap();
     }
-    assert!(ensure_index_matches_pin(&ws, &db_path).unwrap());
-    assert!(!ensure_index_matches_pin(&ws, &db_path).unwrap());
+    assert!(ensure_index_matches_extractor(&ws, &db_path, &installed).unwrap());
+    assert!(!ensure_index_matches_extractor(&ws, &db_path, &installed).unwrap());
 
     let conn = open_read_only(&db_path).unwrap();
     let version: String = conn
@@ -445,4 +447,100 @@ fn test_index_from_other_extractor_version_is_rebuilt() {
         .unwrap();
     assert_ne!(version, "0.0.1");
     assert!(get_symbol_by_name(&conn, "foo_fn", None).unwrap().is_some());
+}
+
+#[test]
+fn test_index_written_by_the_installed_extractor_is_kept_even_when_it_is_not_the_pinned_build() {
+    find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+    let temp_dir = safe_tempdir();
+    let root = temp_dir.path().to_path_buf();
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(
+        root.join("src").join("calc.rs"),
+        "pub fn foo_fn() -> i32 {\n    100\n}\n",
+    )
+    .unwrap();
+    let ws = Workspace::new(root.clone());
+    let db_path = root.join(".code-kb").join("artifact.db");
+    scan_workspace(&ws, &db_path, true).expect("Scan failed");
+    {
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        conn.execute(
+            "UPDATE artifact_metadata SET value = '0.0.1' WHERE key = 'binary_version'",
+            [],
+        )
+        .unwrap();
+    }
+
+    assert!(!ensure_index_matches_extractor(&ws, &db_path, "0.0.1").unwrap());
+
+    let conn = open_read_only(&db_path).unwrap();
+    let version: String = conn
+        .query_row(
+            "SELECT value FROM artifact_metadata WHERE key = 'binary_version'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(version, "0.0.1");
+}
+
+#[test]
+fn test_scan_replaces_an_empty_artifact_file() {
+    find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+    let temp_dir = safe_tempdir();
+    let root = temp_dir.path().to_path_buf();
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(
+        root.join("src").join("calc.rs"),
+        "pub fn foo_fn() -> i32 {\n    100\n}\n",
+    )
+    .unwrap();
+    let db_path = root.join(".code-kb").join("artifact.db");
+    fs::create_dir_all(db_path.parent().unwrap()).unwrap();
+    fs::write(&db_path, b"").unwrap();
+    let ws = Workspace::new(root.clone());
+
+    scan_workspace(&ws, &db_path, false).expect("scan must replace an empty artifact");
+
+    let conn = open_read_only(&db_path).unwrap();
+    assert!(get_symbol_by_name(&conn, "foo_fn", None).unwrap().is_some());
+}
+
+#[test]
+fn test_index_at_another_extraction_level_is_rebuilt() {
+    find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+    let temp_dir = safe_tempdir();
+    let root = temp_dir.path().to_path_buf();
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(
+        root.join("src").join("calc.rs"),
+        "pub fn foo_fn() -> i32 {\n    100\n}\n",
+    )
+    .unwrap();
+    let ws = Workspace::new(root.clone());
+    let db_path = root.join(".code-kb").join("artifact.db");
+    scan_workspace(&ws, &db_path, true).expect("Scan failed");
+    let installed = installed_extractor_version();
+    assert!(!ensure_index_matches_extractor(&ws, &db_path, &installed).unwrap());
+    {
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        conn.execute(
+            "UPDATE artifact_metadata SET value = 'full' WHERE key = 'index_level'",
+            [],
+        )
+        .unwrap();
+    }
+
+    assert!(ensure_index_matches_extractor(&ws, &db_path, &installed).unwrap());
+
+    let conn = open_read_only(&db_path).unwrap();
+    let level: String = conn
+        .query_row(
+            "SELECT value FROM artifact_metadata WHERE key = 'index_level'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(level, "facts");
 }

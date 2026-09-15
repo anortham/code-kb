@@ -10,7 +10,9 @@ use crate::workspace::Workspace;
 
 #[derive(Debug, Error)]
 pub enum SyncError {
-    #[error("Extractor binary not found. Set JULIE_EXTRACT_BIN or ensure julie-extract is in PATH")]
+    #[error(
+        "julie-extract not found. Put it on PATH or set JULIE_EXTRACT_BIN. Download: https://github.com/anortham/julie-extractors/releases"
+    )]
     BinaryNotFound,
     #[error("Extractor failed with status {0}: {1}")]
     ExtractionFailed(i32, String),
@@ -24,89 +26,102 @@ pub enum SyncError {
     Walk(#[from] ignore::Error),
 }
 
-pub const PINNED_JULIE_VERSION: &str = "2.42.3";
+pub const PINNED_JULIE_VERSION: &str = "2.43.0";
 
-static CACHED_JULIE_BIN: std::sync::OnceLock<Option<PathBuf>> = std::sync::OnceLock::new();
+/// Extraction level code-kb asks for on a new artifact: symbol core plus structural facts,
+/// without the identifier, literal, and source-region tables code-kb never reads.
+pub const EXTRACTION_LEVEL: &str = "facts";
 
-/// Discovers the location of the `julie-extract` binary and caches the result.
+static CACHED_JULIE_BIN: std::sync::OnceLock<Option<(PathBuf, String)>> =
+    std::sync::OnceLock::new();
+
+/// Discovers the `julie-extract` binary and caches the result.
+///
+/// The first candidate whose version matches the pin wins. When none matches, the first
+/// candidate found is used and a warning is logged.
 pub fn find_julie_extract_binary() -> Option<PathBuf> {
+    installed_extractor().map(|(bin, _)| bin)
+}
+
+/// Version reported by the `julie-extract` binary in use, or the pin when none was found.
+pub fn installed_extractor_version() -> String {
+    installed_extractor()
+        .map(|(_, version)| version)
+        .unwrap_or_else(|| PINNED_JULIE_VERSION.to_string())
+}
+
+fn installed_extractor() -> Option<(PathBuf, String)> {
     CACHED_JULIE_BIN
         .get_or_init(|| {
-            let bin = discover_julie_extract_binary()?;
-
-            // Validate version against pinned extractor release
-            if let Ok(output) = Command::new(&bin).arg("--version").output() {
-                let ver_str = String::from_utf8_lossy(&output.stdout);
-                if !ver_str.contains(PINNED_JULIE_VERSION) {
-                    tracing::warn!(
-                        found = %ver_str.trim(),
-                        pinned = %PINNED_JULIE_VERSION,
-                        binary = %bin.display(),
-                        "julie-extract version differs from pinned version; AST facts may drift"
-                    );
-                }
+            let candidates: Vec<(PathBuf, String)> = julie_extract_candidates()
+                .into_iter()
+                .filter_map(|bin| extractor_version(&bin).map(|version| (bin, version)))
+                .collect();
+            let pinned = candidates
+                .iter()
+                .find(|(_, version)| version == PINNED_JULIE_VERSION)
+                .cloned();
+            if pinned.is_some() {
+                return pinned;
             }
-
-            Some(bin)
+            let first = candidates.into_iter().next()?;
+            tracing::warn!(
+                found = %first.1,
+                pinned = %PINNED_JULIE_VERSION,
+                binary = %first.0.display(),
+                "julie-extract version differs from pinned version; AST facts may drift"
+            );
+            Some(first)
         })
         .clone()
 }
 
-fn discover_julie_extract_binary() -> Option<PathBuf> {
-    // 1. Check JULIE_EXTRACT_BIN env var
-    if let Ok(path_str) = std::env::var("JULIE_EXTRACT_BIN") {
-        let p = PathBuf::from(path_str);
-        if p.exists() {
-            return Some(crate::workspace::normalize_path(&p));
-        }
-    }
+fn extractor_version(bin: &Path) -> Option<String> {
+    let output = Command::new(bin).arg("--version").output().ok()?;
+    let text = String::from_utf8_lossy(&output.stdout);
+    text.split_whitespace().last().map(str::to_string)
+}
 
+fn julie_extract_candidates() -> Vec<PathBuf> {
     let exe_name = if cfg!(windows) {
         "julie-extract.exe"
     } else {
         "julie-extract"
     };
+    let mut candidates = Vec::new();
 
-    // 2. Check next to current running executable (bundled release distribution)
+    if let Ok(path_str) = std::env::var("JULIE_EXTRACT_BIN") {
+        candidates.push(PathBuf::from(path_str));
+    }
+
     if let Some(parent) = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|d| d.to_path_buf()))
     {
-        let sibling = parent.join(exe_name);
-        if sibling.exists() {
-            return Some(crate::workspace::normalize_path(&sibling));
-        }
-        let tools_sibling = parent.join(".tools").join(exe_name);
-        if tools_sibling.exists() {
-            return Some(crate::workspace::normalize_path(&tools_sibling));
-        }
+        candidates.push(parent.join(exe_name));
+        candidates.push(parent.join(".tools").join(exe_name));
     }
 
-    // 3. Check upward traversal for .tools/julie-extract from CWD
     if let Ok(cwd) = std::env::current_dir() {
         let mut probe = cwd;
         loop {
-            let candidate = probe.join(".tools").join(exe_name);
-            if candidate.exists() {
-                return Some(crate::workspace::normalize_path(&candidate));
-            }
-            if let Some(parent) = probe.parent() {
-                if parent == probe {
-                    break;
-                }
-                probe = parent.to_path_buf();
-            } else {
-                break;
+            candidates.push(probe.join(".tools").join(exe_name));
+            match probe.parent() {
+                Some(parent) if parent != probe => probe = parent.to_path_buf(),
+                _ => break,
             }
         }
     }
 
-    // 4. Check PATH using platform-agnostic which crate
     if let Ok(p) = which::which("julie-extract") {
-        return Some(crate::workspace::normalize_path(&p));
+        candidates.push(p);
     }
 
-    None
+    candidates
+        .into_iter()
+        .filter(|p| p.is_file())
+        .map(|p| crate::workspace::normalize_path(&p))
+        .collect()
 }
 
 /// Run julie-extract command with arguments.
@@ -166,22 +181,43 @@ pub fn delete_file(workspace: &Workspace, db_path: &Path, rel_path: &str) -> Res
 }
 
 /// Initial or full scan to build/refresh the database.
+///
+/// An artifact the extractor cannot read (empty, torn, or older schema) is removed and
+/// rebuilt from scratch.
 pub fn scan_workspace(workspace: &Workspace, db_path: &Path, force: bool) -> Result<(), SyncError> {
     let root_str = workspace.canonical_root.to_string_lossy();
     let db_str = db_path.to_string_lossy();
+    let own_pid = std::process::id().to_string();
 
-    // Ensure parent dir exists
     if let Some(parent) = db_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
 
-    let mut args = vec!["scan", "--root", &root_str, "--db", &db_str];
+    let scan_args = |new_artifact: bool| {
+        let mut args = vec!["scan", "--root", &*root_str, "--db", &*db_str];
+        if new_artifact {
+            args.extend(["--level", EXTRACTION_LEVEL]);
+        }
+        if cfg!(unix) {
+            args.extend(["--parent-pid", &*own_pid]);
+        }
+        if force {
+            args.push("--force");
+        }
+        args
+    };
 
-    if force {
-        args.push("--force");
+    match execute_julie_extract(&scan_args(!db_path.exists())) {
+        Ok(_) => {}
+        Err(SyncError::ExtractionFailed(_, stderr))
+            if stderr.contains("schema_incompatible") && db_path.exists() =>
+        {
+            warn!("Extractor cannot read the existing artifact; rebuilding from scratch");
+            remove_artifact_files(db_path)?;
+            execute_julie_extract(&scan_args(true))?;
+        }
+        Err(e) => return Err(e),
     }
-
-    execute_julie_extract(&args)?;
 
     // Ensure FTS5 index is built and triggers are established
     let _ = crate::db::ensure_fts_index_path(db_path);
@@ -189,33 +225,46 @@ pub fn scan_workspace(workspace: &Workspace, db_path: &Path, force: bool) -> Res
     Ok(())
 }
 
-/// Rebuilds the index when it was written by a `julie-extract` other than the pinned one.
-/// Returns `true` when a rebuild ran. The old artifact is removed first because the
+/// Rebuilds the index when it was written by a `julie-extract` other than the one in use or
+/// at another extraction level. Returns `true` when a rebuild ran. The old artifact is removed first because the
 /// extractor refuses to write into an artifact with an older schema.
-pub fn ensure_index_matches_pin(workspace: &Workspace, db_path: &Path) -> Result<bool, SyncError> {
+pub fn ensure_index_matches_extractor(
+    workspace: &Workspace,
+    db_path: &Path,
+    extractor_version: &str,
+) -> Result<bool, SyncError> {
     if !db_path.exists() {
         return Ok(false);
     }
-    let recorded: Option<String> = {
-        let conn = crate::db::open_read_only(db_path)?;
+    let metadata = |key: &str| -> Option<String> {
+        let conn = crate::db::open_read_only(db_path).ok()?;
         conn.query_row(
-            "SELECT value FROM artifact_metadata WHERE key = 'binary_version'",
-            [],
+            "SELECT value FROM artifact_metadata WHERE key = ?1",
+            [key],
             |r| r.get(0),
         )
         .ok()
     };
-    let Some(recorded) = recorded else {
+    let Some(recorded) = metadata("binary_version") else {
         return Ok(false);
     };
-    if recorded == PINNED_JULIE_VERSION {
+    let level = metadata("index_level").unwrap_or_else(|| "full".to_string());
+    if recorded == extractor_version && level == EXTRACTION_LEVEL {
         return Ok(false);
     }
     info!(
         recorded = %recorded,
-        pinned = %PINNED_JULIE_VERSION,
-        "Index was written by a different julie-extract version; rebuilding"
+        installed = %extractor_version,
+        level = %level,
+        wanted_level = %EXTRACTION_LEVEL,
+        "Index was written by a different julie-extract version or level; rebuilding"
     );
+    remove_artifact_files(db_path)?;
+    scan_workspace(workspace, db_path, true)?;
+    Ok(true)
+}
+
+fn remove_artifact_files(db_path: &Path) -> Result<(), SyncError> {
     for suffix in ["", "-wal", "-shm"] {
         let sidecar = PathBuf::from(format!("{}{suffix}", db_path.display()));
         match std::fs::remove_file(&sidecar) {
@@ -224,8 +273,7 @@ pub fn ensure_index_matches_pin(workspace: &Workspace, db_path: &Path) -> Result
             Err(e) => return Err(e.into()),
         }
     }
-    scan_workspace(workspace, db_path, true)?;
-    Ok(true)
+    Ok(())
 }
 
 /// Check if disk content matches the stored hash in the database.
