@@ -468,6 +468,9 @@ fn setup_test_db(conn: &rusqlite::Connection) {
             start_line INTEGER, start_column INTEGER,
             target_receiver TEXT, target_namespace_json TEXT, target_display_name TEXT
         );
+        CREATE TABLE type_facts (
+            type_fact_id TEXT, symbol_id TEXT, language TEXT, resolved_type TEXT, generic_params_json TEXT
+        );
         CREATE TABLE structural_facts (
             structural_fact_id TEXT PRIMARY KEY, file_id TEXT, path TEXT NOT NULL, language TEXT,
             pattern_id TEXT, capture_name TEXT, node_kind TEXT, containing_symbol_id TEXT,

@@ -917,6 +917,76 @@ pub fn find_references_for_symbol(
     find_references_internal(conn, symbol_name, direction, limit, Some(symbol_id), false)
 }
 
+/// SQL expression ranking a candidate path against the call site `p.path`:
+/// 2 for the same file, 1 for the same directory, 0 otherwise.
+fn call_site_proximity(candidate_path: &str) -> String {
+    let normalized = format!("replace({candidate_path}, '\\', '/')");
+    let call_site = "replace(p.path, '\\', '/')";
+    format!(
+        "CASE WHEN {normalized} = {call_site} THEN 2
+              WHEN rtrim({normalized}, replace({normalized}, '/', '')) = rtrim({call_site}, replace({call_site}, '/', '')) THEN 1
+              ELSE 0 END"
+    )
+}
+
+/// SQL predicate that decides whether a pending call edge `p` (with caller `s_from`) points at
+/// the candidate definition `target` (whose parent symbol is joined as `parent`).
+fn pending_target_predicate(target: &str, parent: &str) -> String {
+    let ns = "json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END)";
+    let target_path = format!("('/' || replace({target}.path, '\\', '/'))");
+    let like_value = "replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_')";
+    let closer_rank = call_site_proximity("closer.path");
+    let target_rank = call_site_proximity(&format!("{target}.path"));
+    format!(
+        "(
+            (
+                {target}.parent_symbol_id IS NOT NULL
+                AND {parent}.name IS NOT NULL
+                AND (
+                    EXISTS (SELECT 1 FROM {ns} WHERE value = {parent}.name)
+                    OR (EXISTS (SELECT 1 FROM {ns} WHERE value = 'Self')
+                        AND s_from.parent_symbol_id = {target}.parent_symbol_id)
+                    OR (p.target_receiver IS NOT NULL AND p.target_receiver != '' AND {parent}.name = p.target_receiver)
+                    OR EXISTS (
+                        SELECT 1 FROM symbols receiver
+                        JOIN type_facts receiver_type ON receiver_type.symbol_id = receiver.symbol_id
+                        WHERE receiver.name = p.target_receiver
+                          AND receiver.path = p.path
+                          AND receiver_type.resolved_type = {parent}.name
+                    )
+                )
+                AND NOT EXISTS (
+                    SELECT 1 FROM {ns}
+                    WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super', 'self', 'Self', {parent}.name)
+                      AND {target_path} NOT LIKE '%/' || {like_value} || '.%' ESCAPE '\\'
+                      AND {target_path} NOT LIKE '%/' || {like_value} || '/%' ESCAPE '\\'
+                )
+            )
+            OR (
+                (p.target_namespace_json IS NULL OR p.target_namespace_json = '[]')
+                AND (p.target_receiver IS NULL OR p.target_receiver = '')
+                AND ({target}.parent_symbol_id IS NULL OR s_from.parent_symbol_id = {target}.parent_symbol_id)
+                AND ({target}.parent_symbol_id IS NOT NULL OR NOT EXISTS (
+                    SELECT 1 FROM symbols closer
+                    WHERE closer.name = {target}.name
+                      AND closer.symbol_id != {target}.symbol_id
+                      AND closer.parent_symbol_id IS NULL
+                      AND closer.kind = {target}.kind
+                      AND {closer_rank} > {target_rank}
+                ))
+            )
+            OR (
+                {target}.parent_symbol_id IS NULL
+                AND EXISTS (
+                    SELECT 1 FROM {ns}
+                    WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super')
+                      AND {target_path} LIKE '%/' || {like_value} || '.%' ESCAPE '\\'
+                )
+            )
+        )"
+    )
+}
+
 fn has_table(conn: &Connection, name: &str) -> bool {
     conn.query_row(
         "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1",
@@ -1000,7 +1070,7 @@ fn find_references_internal(
             if has_pending_namespace_column(conn) {
                 if let Some(sid) = symbol_id {
                     let mut pending_stmt = conn.prepare(
-                        "SELECT s_from.name AS from_name,
+                        &format!("SELECT s_from.name AS from_name,
                                 p.from_symbol_id,
                                 p.target_terminal_name AS to_name,
                                 p.kind,
@@ -1012,38 +1082,8 @@ fn find_references_internal(
                          JOIN symbols s_target ON s_target.symbol_id = ?3
                          LEFT JOIN symbols s_target_parent ON s_target.parent_symbol_id = s_target_parent.symbol_id
                           WHERE p.target_terminal_name = ?1
-                            AND (
-                                (
-                                    s_target.parent_symbol_id IS NOT NULL
-                                    AND s_target_parent.name IS NOT NULL
-                                    AND (
-                                        EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END) WHERE value = s_target_parent.name)
-                                        OR (EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END) WHERE value = 'Self')
-                                            AND s_from.parent_symbol_id = s_target.parent_symbol_id)
-                                        OR (p.target_receiver IS NOT NULL AND p.target_receiver != '' AND s_target_parent.name = p.target_receiver)
-                                    )
-                                    AND NOT EXISTS (
-                                        SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END)
-                                        WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super', 'self', 'Self', s_target_parent.name)
-                                          AND ('/' || replace(s_target.path, '\\', '/')) NOT LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
-                                          AND ('/' || replace(s_target.path, '\\', '/')) NOT LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '/%' ESCAPE '\\'
-                                    )
-                                )
-                                OR (
-                                    (p.target_namespace_json IS NULL OR p.target_namespace_json = '[]')
-                                    AND (p.target_receiver IS NULL OR p.target_receiver = '')
-                                    AND (s_target.parent_symbol_id IS NULL OR s_from.parent_symbol_id = s_target.parent_symbol_id)
-                                )
-                                OR (
-                                    s_target.parent_symbol_id IS NULL
-                                    AND EXISTS (
-                                        SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END)
-                                        WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super')
-                                          AND ('/' || replace(s_target.path, '\\', '/')) LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
-                                    )
-                                )
-                            )
-                          LIMIT ?2",
+                            AND {pred}
+                          LIMIT ?2", pred = pending_target_predicate("s_target", "s_target_parent")),
                     )?;
 
                     let p_rows = pending_stmt.query_map(
@@ -1220,7 +1260,7 @@ fn find_references_internal(
             let remaining = limit - results.len();
             let p_rows: Vec<ReferenceSite> = if has_pending_namespace_column(conn) {
                 let sql = if include_external {
-                    "SELECT DISTINCT s_from.name AS from_name,
+                    String::from("SELECT DISTINCT s_from.name AS from_name,
                             p.from_symbol_id,
                             COALESCE(NULLIF(p.target_display_name, ''), p.target_terminal_name) AS to_name,
                             p.kind,
@@ -1230,9 +1270,9 @@ fn find_references_internal(
                      FROM pending_relationships p
                      JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
                      WHERE s_from.name = ?1 AND (?3 IS NULL OR p.from_symbol_id = ?3)
-                     LIMIT ?2"
+                     LIMIT ?2")
                 } else {
-                    "SELECT DISTINCT s_from.name AS from_name,
+                    format!("SELECT DISTINCT s_from.name AS from_name,
                             p.from_symbol_id,
                             p.target_terminal_name AS to_name,
                             p.kind,
@@ -1247,43 +1287,11 @@ fn find_references_internal(
                            LEFT JOIN symbols s_to_parent ON s_to.parent_symbol_id = s_to_parent.symbol_id
                            WHERE s_to.name = p.target_terminal_name
                              AND s_to.kind NOT IN ('import', 'variable', 'parameter', 'field', 'property', 'module', 'namespace')
-                             AND (
-                                 (
-                                  (
-                                      s_to.parent_symbol_id IS NOT NULL
-                                      AND s_to_parent.name IS NOT NULL
-                                      AND (
-                                          EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END) WHERE value = s_to_parent.name)
-                                          OR (EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END) WHERE value = 'Self')
-                                              AND s_from.parent_symbol_id = s_to.parent_symbol_id)
-                                          OR (p.target_receiver IS NOT NULL AND p.target_receiver != '' AND s_to_parent.name = p.target_receiver)
-                                      )
-                                      AND NOT EXISTS (
-                                          SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END)
-                                          WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super', 'self', 'Self', s_to_parent.name)
-                                            AND ('/' || replace(s_to.path, '\\', '/')) NOT LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
-                                            AND ('/' || replace(s_to.path, '\\', '/')) NOT LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '/%' ESCAPE '\\'
-                                      )
-                                  )
-                                  OR (
-                                      (p.target_namespace_json IS NULL OR p.target_namespace_json = '[]')
-                                      AND (p.target_receiver IS NULL OR p.target_receiver = '')
-                                      AND (s_to.parent_symbol_id IS NULL OR s_from.parent_symbol_id = s_to.parent_symbol_id)
-                                  )
-                                  OR (
-                                      s_to.parent_symbol_id IS NULL
-                                      AND EXISTS (
-                                          SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END)
-                                          WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super')
-                                            AND ('/' || replace(s_to.path, '\\', '/')) LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
-                                      )
-                                  )
-                                 )
-                             )
+                             AND {pred}
                        )
-                     LIMIT ?2"
+                     LIMIT ?2", pred = pending_target_predicate("s_to", "s_to_parent"))
                 };
-                let mut pending_stmt = conn.prepare(sql)?;
+                let mut pending_stmt = conn.prepare(&sql)?;
                 let rows = pending_stmt.query_map(
                     params![symbol_name, remaining as i64, symbol_id],
                     |row| {
@@ -1411,39 +1419,15 @@ pub fn find_callee_signatures(
         let p_rows: Vec<(String, Option<String>, String, usize, String)> =
             if has_pending_namespace_column(conn) {
                 let mut p_stmt = conn.prepare(
-                "SELECT DISTINCT s_to.name, s_to.signature, s_to.path, s_to.start_line, s_to.kind
+                &format!("SELECT DISTINCT s_to.name, s_to.signature, s_to.path, s_to.start_line, s_to.kind
                  FROM pending_relationships p
                  JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
                  JOIN symbols s_to ON s_to.name = p.target_terminal_name
                  LEFT JOIN symbols s_parent ON s_to.parent_symbol_id = s_parent.symbol_id
                  WHERE s_from.name = ?1 AND p.from_symbol_id = ?2
                    AND s_to.kind NOT IN ('import', 'variable', 'parameter', 'field', 'property', 'module', 'namespace')
-                    AND (
-                        (
-                            s_to.parent_symbol_id IS NOT NULL
-                            AND s_parent.name IS NOT NULL
-                            AND (
-                                EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END) WHERE value = s_parent.name)
-                                OR (EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END) WHERE value = 'Self')
-                                    AND s_from.parent_symbol_id = s_to.parent_symbol_id)
-                                OR (p.target_receiver IS NOT NULL AND p.target_receiver != '' AND s_parent.name = p.target_receiver)
-                            )
-                        )
-                        OR (
-                            (p.target_namespace_json IS NULL OR p.target_namespace_json = '[]')
-                            AND (p.target_receiver IS NULL OR p.target_receiver = '')
-                            AND (s_to.parent_symbol_id IS NULL OR s_from.parent_symbol_id = s_to.parent_symbol_id)
-                        )
-                        OR (
-                            s_to.parent_symbol_id IS NULL
-                            AND EXISTS (
-                                SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END)
-                                WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super')
-                                  AND ('/' || replace(s_to.path, '\\', '/')) LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
-                            )
-                        )
-                    )
-                 LIMIT ?3",
+                    AND {pred}
+                 LIMIT ?3", pred = pending_target_predicate("s_to", "s_parent")),
             )?;
 
                 let rows =
@@ -1499,7 +1483,7 @@ pub fn find_callee_signatures(
         let remaining = (limit - signatures.len()) * 2;
         let ext_rows: Vec<(String, String, usize)> = if has_pending_namespace_column(conn) {
             let mut ext_stmt = conn.prepare(
-                "SELECT DISTINCT COALESCE(NULLIF(p.target_display_name, ''), p.target_terminal_name), p.path, p.start_line
+                &format!("SELECT DISTINCT COALESCE(NULLIF(p.target_display_name, ''), p.target_terminal_name), p.path, p.start_line
                  FROM pending_relationships p
                  JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
                  WHERE s_from.name = ?1 AND p.from_symbol_id = ?2
@@ -1508,39 +1492,9 @@ pub fn find_callee_signatures(
                        LEFT JOIN symbols s_parent ON s_to.parent_symbol_id = s_parent.symbol_id
                        WHERE s_to.name = p.target_terminal_name
                          AND s_to.kind NOT IN ('import', 'variable', 'parameter', 'field', 'property', 'module', 'namespace')
-                         AND (
-                             (
-                                 s_to.parent_symbol_id IS NOT NULL
-                                 AND s_parent.name IS NOT NULL
-                                 AND (
-                                     EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END) WHERE value = s_parent.name)
-                                     OR (EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END) WHERE value = 'Self')
-                                         AND s_from.parent_symbol_id = s_to.parent_symbol_id)
-                                     OR (p.target_receiver IS NOT NULL AND p.target_receiver != '' AND s_parent.name = p.target_receiver)
-                                 )
-                                 AND NOT EXISTS (
-                                     SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END)
-                                     WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super', 'self', 'Self', s_parent.name)
-                                       AND ('/' || replace(s_to.path, '\\', '/')) NOT LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
-                                       AND ('/' || replace(s_to.path, '\\', '/')) NOT LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '/%' ESCAPE '\\'
-                                 )
-                             )
-                             OR (
-                                 (p.target_namespace_json IS NULL OR p.target_namespace_json = '[]')
-                                 AND (p.target_receiver IS NULL OR p.target_receiver = '')
-                                 AND (s_to.parent_symbol_id IS NULL OR s_from.parent_symbol_id = s_to.parent_symbol_id)
-                             )
-                             OR (
-                                 s_to.parent_symbol_id IS NULL
-                                 AND EXISTS (
-                                     SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END)
-                                     WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super')
-                                       AND ('/' || replace(s_to.path, '\\', '/')) LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
-                                 )
-                             )
-                         )
+                         AND {pred}
                    )
-                 LIMIT ?3",
+                 LIMIT ?3", pred = pending_target_predicate("s_to", "s_parent")),
             )?;
 
             let rows =
@@ -2009,40 +1963,10 @@ pub fn compute_blast_radius_scoped(
             (
                 "LEFT JOIN symbols s_target_parent ON s_target.parent_symbol_id = s_target_parent.symbol_id
             LEFT JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id",
-                "AND (
-                    (
-                        s_target.parent_symbol_id IS NOT NULL
-                        AND s_target_parent.name IS NOT NULL
-                        AND (
-                            EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END) WHERE value = s_target_parent.name)
-                            OR (EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END) WHERE value = 'Self')
-                                AND s_from.parent_symbol_id = s_target.parent_symbol_id)
-                            OR (p.target_receiver IS NOT NULL AND p.target_receiver != '' AND s_target_parent.name = p.target_receiver)
-                        )
-                        AND NOT EXISTS (
-                            SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END)
-                            WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super', 'self', 'Self', s_target_parent.name)
-                              AND ('/' || replace(s_target.path, '\\', '/')) NOT LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
-                              AND ('/' || replace(s_target.path, '\\', '/')) NOT LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '/%' ESCAPE '\\'
-                        )
-                    )
-                    OR (
-                        (p.target_namespace_json IS NULL OR p.target_namespace_json = '[]')
-                        AND (p.target_receiver IS NULL OR p.target_receiver = '')
-                        AND (s_target.parent_symbol_id IS NULL OR s_from.parent_symbol_id = s_target.parent_symbol_id)
-                    )
-                    OR (
-                        s_target.parent_symbol_id IS NULL
-                        AND EXISTS (
-                            SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END)
-                            WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super')
-                              AND ('/' || replace(s_target.path, '\\', '/')) LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
-                        )
-                    )
-                )",
+                format!("AND {pred}", pred = pending_target_predicate("s_target", "s_target_parent")),
             )
         } else {
-            ("", "")
+            ("", String::new())
         };
 
         recursive_branches.push(format!(
@@ -2589,6 +2513,9 @@ mod tests {
                 from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT, path TEXT,
                 start_line INTEGER, start_column INTEGER,
                 target_receiver TEXT, target_namespace_json TEXT, target_display_name TEXT
+            );
+            CREATE TABLE type_facts (
+                type_fact_id TEXT, symbol_id TEXT, language TEXT, resolved_type TEXT, generic_params_json TEXT
             );
             -- Workspace struct Workspace and method Workspace::new
             INSERT INTO symbols VALUES

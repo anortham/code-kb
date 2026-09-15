@@ -4,7 +4,7 @@ Review of code-kb main @ 843eac5 (clean) and julie-extractors main @ d055ec9f (c
 Evidence: code reading, live `code-kb` and `julie-extract` runs on `~/source/hermes-agent`
 (12,788 indexed files, 991k symbols) as the large test tree, fresh scans into the scratchpad,
 throwaway two-file repos for defect reproduction, SQLite `dbstat`, server logs.
-Status 2026-09-15: findings 1, 2, 3, and the first small item were applied on branch `fix/extractor-seam` (code-kb 1.0.2) and `feat/facts-level` (julie-extract 2.43.0). Findings 4, 5, and 6 are open.
+Status 2026-09-15: findings 1, 2, 3, and the first small item were applied on branch `fix/extractor-seam` (code-kb 1.0.2) and `feat/facts-level` (julie-extract 2.43.0). Finding 4 was applied 2026-09-15 (same-file, same-directory, and receiver-type ranking in one shared predicate; 11,879 of 39,405 ambiguous bare-call edges on hermes-agent narrow to one definition). Finding 5 has a removal plan in the julie repo (`docs/plans/2026-09-15-remove-store-and-jsonl.md`). Finding 6 is open.
 
 Side effect: the hermes-agent index at `~/source/hermes-agent/.code-kb/artifact.db` was
 rebuilt once during measurement. It now records `binary_version = 2.42.3` (it was 2.42.1).

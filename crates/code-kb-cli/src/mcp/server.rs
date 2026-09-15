@@ -260,7 +260,7 @@ impl McpServer {
             },
             Tool {
                 name: "find_references".to_string(),
-                description: "Discovers callers or callees of a symbol from AST call sites. Callers also include type usages (annotations, casts) and member accesses of the name. Matching is by symbol name, so same-named symbols across types can merge; pass file_path or a qualified name ('Type::method') for overloaded names and verify before refactoring.".to_string(),
+                description: "Discovers callers or callees of a symbol from AST call sites. Callers also include type usages (annotations, casts) and member accesses of the name. Matching is by symbol name, ranked by the call site (same file, same directory, receiver type); same-named symbols with no closer candidate can merge, so pass file_path or a qualified name ('Type::method') for overloaded names and verify before refactoring.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
