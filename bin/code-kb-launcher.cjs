@@ -275,15 +275,35 @@ function runBinary(binaryPath, args) {
   });
 }
 
+// Harnesses that clone plugins into a cache (Codex) or drop the environment of MCP servers
+// cannot see CODE_KB_BIN or a checkout build, so a binary or symlink at ~/.code-kb/bin/code-kb
+// overrides the download in every harness.
+function overrideBinary(binaryName, env = process.env) {
+  const candidate = path.join(path.dirname(defaultCacheRoot(env)), 'bin', binaryName);
+  return fs.existsSync(candidate) ? candidate : null;
+}
+
+// A plugin installed from a source checkout runs that checkout's release build, so
+// `cargo build --release` plus a session restart is the whole dev loop.
+function localReleaseBuild(pluginRoot, binaryName) {
+  const candidate = path.join(pluginRoot, 'target', 'release', binaryName);
+  return fs.existsSync(candidate) ? candidate : null;
+}
+
 async function main() {
   const args = process.argv.slice(2);
   if (process.env.CODE_KB_BIN) {
     return runBinary(process.env.CODE_KB_BIN, args);
   }
   const pluginRoot = path.resolve(__dirname, '..');
+  const platformInfo = detectPlatform();
+  const preferred = overrideBinary(platformInfo.binaryName) || localReleaseBuild(pluginRoot, platformInfo.binaryName);
+  if (preferred) {
+    return runBinary(preferred, args);
+  }
   const binaryPath = await ensureBinary({
     version: process.env.CODE_KB_VERSION || readPluginVersion(pluginRoot),
-    platformInfo: detectPlatform(),
+    platformInfo,
   });
   return runBinary(binaryPath, args);
 }
@@ -293,6 +313,8 @@ module.exports = {
   defaultCacheRoot,
   detectPlatform,
   ensureBinary,
+  localReleaseBuild,
+  overrideBinary,
   parseSha256Sidecar,
   readPluginVersion,
   releaseArchiveName,

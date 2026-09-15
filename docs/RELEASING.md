@@ -82,6 +82,9 @@ When bumping to version `X.Y.Z` (e.g. `0.5.0`):
   The plugin launcher (`bin/code-kb-launcher.cjs`) downloads the release archive for this
   version on first run. Push the tag and let the release finish soon after the bump lands on
   `main`, because a plugin installed from `main` in between cannot download its binaries.
+  A plugin installed from a source checkout with a `target/release/code-kb` build runs that
+  build instead and never downloads, and so does any plugin on a machine with a binary at
+  `~/.code-kb/bin/code-kb`.
   `tests/plugin/plugin-manifests.test.cjs` fails when the four manifests disagree.
 - **`.github/workflows/release-binaries.yml`**:
   Update default version input to `"X.Y.Z"`.

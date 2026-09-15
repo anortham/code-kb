@@ -167,3 +167,41 @@ test('the launcher passes its arguments through to the binary named by CODE_KB_B
   assert.equal(result.stdout.trim(), 'args: hook SessionStart');
   assert.equal(result.status, 7);
 });
+
+test('the launcher runs the release build of its own checkout before downloading anything', { skip: process.platform === 'win32' }, () => {
+  const checkout = tempDir('code-kb-checkout-');
+  fs.mkdirSync(path.join(checkout, 'bin'));
+  fs.mkdirSync(path.join(checkout, 'target', 'release'), { recursive: true });
+  fs.copyFileSync(launcherPath, path.join(checkout, 'bin', 'code-kb-launcher.cjs'));
+  fs.writeFileSync(path.join(checkout, 'target', 'release', 'code-kb'), '#!/bin/sh\necho "local: $*"\n', { mode: 0o755 });
+
+  const result = childProcess.spawnSync(process.execPath, [path.join(checkout, 'bin', 'code-kb-launcher.cjs'), '--version'], {
+    env: { ...process.env, CODE_KB_BIN: '', CODE_KB_HOME: tempDir('code-kb-home-') },
+    encoding: 'utf8',
+  });
+
+  assert.equal(result.stdout.trim(), 'local: --version');
+  assert.equal(result.status, 0);
+  assert.equal(launcher.localReleaseBuild(checkout, 'code-kb'), path.join(checkout, 'target', 'release', 'code-kb'));
+  assert.equal(launcher.localReleaseBuild(tempDir('code-kb-empty-'), 'code-kb'), null);
+});
+
+test('a binary at <CODE_KB_HOME>/bin/code-kb overrides the download and the checkout build', { skip: process.platform === 'win32' }, () => {
+  const checkout = tempDir('code-kb-checkout-');
+  fs.mkdirSync(path.join(checkout, 'bin'));
+  fs.mkdirSync(path.join(checkout, 'target', 'release'), { recursive: true });
+  fs.copyFileSync(launcherPath, path.join(checkout, 'bin', 'code-kb-launcher.cjs'));
+  fs.writeFileSync(path.join(checkout, 'target', 'release', 'code-kb'), '#!/bin/sh\necho "checkout: $*"\n', { mode: 0o755 });
+  const home = tempDir('code-kb-home-');
+  fs.mkdirSync(path.join(home, 'bin'));
+  fs.writeFileSync(path.join(home, 'bin', 'code-kb'), '#!/bin/sh\necho "override: $*"\n', { mode: 0o755 });
+
+  const result = childProcess.spawnSync(process.execPath, [path.join(checkout, 'bin', 'code-kb-launcher.cjs'), 'serve'], {
+    env: { ...process.env, CODE_KB_BIN: '', CODE_KB_HOME: home },
+    encoding: 'utf8',
+  });
+
+  assert.equal(result.stdout.trim(), 'override: serve');
+  assert.equal(launcher.overrideBinary('code-kb', { CODE_KB_HOME: home }), path.join(home, 'bin', 'code-kb'));
+  assert.equal(launcher.overrideBinary('code-kb', { CODE_KB_HOME: tempDir('code-kb-empty-home-') }), null);
+});

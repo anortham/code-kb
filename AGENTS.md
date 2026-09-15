@@ -31,15 +31,20 @@ MCP tool schema.**
   slash mismatches, and hallucinated paths. Previous projects (Miller, Goldfish)
   suffered severe usability penalties from this anti-pattern.
 - **How Workspace Binding Actually Works:**
-  1. *Per-project `.mcp.json`:* The host IDE sets CWD to the workspace root.
-  2. *MCP Protocol Handshake:* The server extracts roots from `initialize`
+  1. *Explicit `--root`:* `code-kb serve --root <path>` in the MCP config binds
+     that path. This is the documented path for GUI apps (Cursor, Windsurf, the
+     Antigravity IDE, Visual Studio, Claude Desktop), which start the server from
+     their own install directory. The config lives inside the project.
+  2. *Process CWD:* Terminal harnesses (Claude Code, Codex, AGY, Grok CLI) start
+     the server in the project directory, so `code-kb serve` alone binds it.
+  3. *MCP Protocol Handshake:* The server extracts roots from `initialize`
      (`params.roots`, `rootUri`, `rootPath`, `workspaceFolders`).
-  3. *Path Inspection:* If an absolute path is passed in `file_path` or `path`,
+  4. *Path Inspection:* If an absolute path is passed in `file_path` or `path`,
      `code-kb` silently binds to the enclosing repository root.
-  4. *Automatic Initial Scan:* If bound to a repository where `.code-kb/artifact.db`
+  5. *Automatic Initial Scan:* If bound to a repository where `.code-kb/artifact.db`
      does not exist yet, `code-kb` runs `scan_workspace` automatically on the
      first tool call rather than returning an error.
-  5. *Internal Compatibility:* If an unadvertised `workspace` argument is provided
+  6. *Internal Compatibility:* If an unadvertised `workspace` argument is provided
      internally, the backend accepts it silently, but **never** documents it in
      `input_schema` or prompts for it in error messages.
 - **Enforcement:** `crates/code-kb-cli/tests/mcp_test.rs` validates that no tool in
@@ -103,7 +108,7 @@ MCP tool schema.**
 - Index version guard: the index is rebuilt once when it was written by a different `julie-extract` than the one in use. The guard compares against the binary in use, never against the pin alone, so a non-pinned extractor never causes repeated rebuilds.
 - New artifacts are built at the extractor's `facts` level (symbol core, structural facts, literals, and type-usage and member-access identifiers; no call or variable-reference identifiers and no source regions). `find_references(direction="callers")` reads those identifiers. The version guard also rebuilds an index recorded at another level.
 - Scans pass `--parent-pid` (Unix) so an extractor scan aborts when the `code-kb` process that started it dies.
-- Plugin distribution: every harness plugin (`.claude-plugin/plugin.json`, `.codex-plugin/plugin.json` with `.mcp.json`, root `plugin.json` with `mcp.json`, `mcp_config.json`, and `hooks.json` for Antigravity) starts the server and hooks through `bin/code-kb-launcher.cjs`. The launcher is a dependency-free Node script: on first run it downloads the release archive for the plugin's version from GitHub Releases into `~/.code-kb/dist/<version>/<target>/`, verifies the `.sha256` sidecar, unpacks it, and then executes `code-kb` with the given arguments. No binaries are committed to git. `tests/plugin/*.test.cjs` (run with `node --test`) cover the launcher and keep every manifest on the launcher and on one version.
+- Plugin distribution: every harness plugin (`.claude-plugin/plugin.json`, `.codex-plugin/plugin.json` with `.mcp.json`, root `plugin.json` with `mcp.json`, `mcp_config.json`, and `hooks.json` for Antigravity) starts the server and hooks through `bin/code-kb-launcher.cjs`. The launcher is a dependency-free Node script: on first run it downloads the release archive for the plugin's version from GitHub Releases into `~/.code-kb/dist/<version>/<target>/`, verifies the `.sha256` sidecar, unpacks it, and then executes `code-kb` with the given arguments. `CODE_KB_BIN` names a binary to run instead; a binary or symlink at `~/.code-kb/bin/code-kb` overrides the download in every harness (Codex clones plugins into a cache and drops the environment of MCP servers, so only a file can reach it); and a plugin installed from a source checkout runs that checkout's `target/release/code-kb` when it exists. With one of these, `cargo build --release` plus a session restart is the whole dev loop. No binaries are committed to git. `tests/plugin/*.test.cjs` (run with `node --test`) cover the launcher and keep every manifest on the launcher and on one version.
 - Release workflow: Documented step-by-step in `docs/RELEASING.md`; automated pre-flight check via `scripts/release-preflight.sh`. The launcher fetches by the version in `.claude-plugin/plugin.json`, so a version bump on `main` must be followed by its tag and release before users install from `main`.
 
 ### 8. Dynamic MCP Discovery & Zero Ghost Compatibility

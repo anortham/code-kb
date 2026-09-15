@@ -18,7 +18,8 @@ This re-introduced the exact anti-pattern `code-kb` was created to solve:
 2. **Zero Prompting in Errors:** Error messages returned by `code-kb` must never instruct the LLM to pass a workspace parameter.
 3. **Automated Enforcement:** `crates/code-kb-cli/tests/mcp_test.rs` programmatically asserts that `inputSchema.properties.get("workspace")` is `None` across all registered tools. Builds will fail if this invariant is violated.
 4. **Silent Backend Resolution:**
-   - **Tier 1 (Project-local `.mcp.json`):** CWD is the workspace root; server binds automatically.
+   - **Tier 0 (Explicit `--root`):** GUI hosts (Cursor, the Antigravity IDE, Visual Studio, Claude Desktop) start the server from their own install directory. Their project-local MCP config passes `code-kb serve --root <absolute-path>`. The workspace lives in the config, never in a tool call.
+   - **Tier 1 (Project-local `.mcp.json`):** CWD is the workspace root; server binds automatically. This covers terminal harnesses (Claude Code, Codex, AGY, Grok CLI).
    - **Tier 2 (Protocol Handshake):** Server extracts `roots`, `rootUri`, `rootPath`, or `workspaceFolders` during `initialize`.
    - **Tier 3 (Path Inspection):** Server silently binds to a workspace if an absolute path is passed in `file_path` or `path`.
    - **Tier 4 (Automatic Scan):** If bound to a valid repository (containing `.git`, `Cargo.toml`, `package.json`, etc.) where `artifact.db` has not been generated yet, `code-kb` automatically triggers `scan_workspace` to build the database artifact on the first tool call without returning an error.

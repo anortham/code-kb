@@ -93,6 +93,16 @@ Launcher environment variables:
 | `CODE_KB_VERSION` | Release version to fetch instead of the plugin's own version. |
 | `CODE_KB_BIN` | Run this binary and skip the download entirely (local builds). |
 
+Two overrides need no environment variable, which matters in harnesses that do not pass the
+environment to MCP servers (Codex):
+
+- A binary or symlink at `~/.code-kb/bin/code-kb` (`code-kb.exe` on Windows) runs instead of any
+  download, in every harness. For development: `ln -s /path/to/code-kb/target/release/code-kb ~/.code-kb/bin/code-kb`.
+- A plugin installed from a source checkout runs that checkout's `target/release/code-kb` when it
+  exists.
+
+With either in place, `cargo build --release` plus a session restart is the whole development loop.
+
 ### Uninstall
 
 | Harness | Command / Action |
@@ -142,6 +152,32 @@ binary yourself.
 
 Every harness runs the same command: `code-kb serve`. Hooks run `code-kb hook <Event>`.
 
+#### How code-kb Finds Your Workspace
+
+Tools never take a workspace parameter. The server binds a workspace in three steps, and each
+later step replaces the earlier one:
+
+1. At start: `--root <path>` on the `serve` command, or, without it, the directory the process
+   starts in, searched upward for `.git` or a project marker.
+2. At handshake: the roots the host sends in the MCP `initialize` request, if any.
+3. At each tool call: an absolute path inside a repository in any `file_path` or `path` argument.
+
+Terminal harnesses (Claude Code, Codex, AGY, Grok CLI, Copilot CLI, Pi, Swival, Zed) start the
+server in the project directory, so `code-kb serve` alone is enough.
+
+GUI apps (Cursor, Windsurf, the Antigravity IDE, Visual Studio, VS Code, Claude Desktop) start
+the server from their own install directory, not from your project. For these apps, put the MCP
+config inside the project and pass `--root` with the absolute path of the project:
+
+```json
+"args": ["serve", "--root", "/absolute/path/to/project"]
+```
+
+Without `--root`, the first tool call in a GUI app fails with
+`Database artifact not found ... configure code-kb with '--root <repo-path>'`. That error is the
+signal to add the flag. A tool call with an absolute path inside a repository also binds the
+server, so a session can recover, but `--root` removes the guesswork.
+
 #### Claude Code (without the plugin)
 
 ```bash
@@ -163,13 +199,15 @@ args = ["serve"]
 agy mcp add code-kb code-kb serve
 ```
 
-Global config (`~/.gemini/config/mcp_config.json`) with `"eager": true`:
+Global config (`~/.gemini/config/mcp_config.json`) with `"eager": true`. The AGY CLI starts the
+server in the project directory. The Antigravity IDE starts it from its own install directory,
+so add `--root` when you use the IDE:
 ```json
 {
   "mcpServers": {
     "code-kb": {
       "command": "code-kb",
-      "args": ["serve"],
+      "args": ["serve", "--root", "/absolute/path/to/project"],
       "disabled": false,
       "eager": true,
       "force_all_tools_eager": true
@@ -214,13 +252,13 @@ Project-level `.mcp.json`:
 
 #### Cursor
 
-In `.cursor/mcp.json` (or Cursor Settings > Features > MCP):
+In `.cursor/mcp.json` at the repository root. Cursor is a GUI app, so pass `--root`:
 ```json
 {
   "mcpServers": {
     "code-kb": {
       "command": "code-kb",
-      "args": ["serve"]
+      "args": ["serve", "--root", "/absolute/path/to/project"]
     }
   }
 }
@@ -228,13 +266,13 @@ In `.cursor/mcp.json` (or Cursor Settings > Features > MCP):
 
 #### OpenCode
 
-Add to `opencode.json`:
+Add to `opencode.json` in the project:
 ```json
 {
   "mcpServers": {
     "code-kb": {
       "command": "code-kb",
-      "args": ["serve"]
+      "args": ["serve", "--root", "/absolute/path/to/project"]
     }
   }
 }
@@ -242,21 +280,29 @@ Add to `opencode.json`:
 
 #### Claude Desktop
 
+Claude Desktop has one global config and no project directory, so `--root` pins one project.
 Add to `claude_desktop_config.json` (`%APPDATA%\Claude\claude_desktop_config.json` on Windows, `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
 ```json
 {
   "mcpServers": {
     "code-kb": {
       "command": "code-kb",
-      "args": ["serve"]
+      "args": ["serve", "--root", "/absolute/path/to/project"]
     }
   }
 }
 ```
 
+#### Other GUI Apps (Windsurf, Visual Studio, VS Code)
+
+Use the app's project-level MCP config file and the same arguments:
+`["serve", "--root", "/absolute/path/to/project"]`. On Windows write the path with forward
+slashes, for example `C:/source/project`.
+
 #### GitHub Copilot CLI & Terminal Agents
 
-For terminal harnesses inheriting CWD (Copilot CLI, Pi, Swival, Windsurf, Zed): configure the MCP server to run `code-kb serve`.
+Terminal harnesses (Copilot CLI, Pi, Swival, Zed) start the server in the project directory:
+configure the MCP server to run `code-kb serve` with no `--root`.
 
 To remove a manual configuration, delete the `code-kb` entry from the harness config
 (`claude mcp remove code-kb`, `agy mcp remove code-kb`, or edit the file) and delete the

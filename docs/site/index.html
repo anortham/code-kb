@@ -407,13 +407,13 @@ grok plugin install /path/to/code-kb --trust</code></pre>
             <pre><code>agy mcp add code-kb code-kb serve</code></pre>
             <button class="copy-btn" type="button">Copy</button>
           </div>
-          <p class="panel-sub">Or in <code>~/.gemini/config/mcp_config.json</code> with eager tools:</p>
+          <p class="panel-sub">Or in <code>~/.gemini/config/mcp_config.json</code> with eager tools. The AGY CLI starts the server in the project directory; the Antigravity IDE does not, so add <code>--root</code> for the IDE:</p>
           <div class="code-wrapper">
             <pre><code>{
   "mcpServers": {
     "code-kb": {
       "command": "code-kb",
-      "args": ["serve"],
+      "args": ["serve", "--root", "/absolute/path/to/project"],
       "disabled": false,
       "eager": true,
       "force_all_tools_eager": true
@@ -460,13 +460,13 @@ grok plugin install /path/to/code-kb --trust</code></pre>
         </div>
 
         <div class="tab-panel" id="tab-cursor" hidden>
-          <p class="panel-sub">In <code>.cursor/mcp.json</code> at the repository root:</p>
+          <p class="panel-sub">In <code>.cursor/mcp.json</code> at the repository root. Cursor and other GUI apps start the server from their install directory, so <code>--root</code> names the project:</p>
           <div class="code-wrapper">
             <pre><code>{
   "mcpServers": {
     "code-kb": {
       "command": "code-kb",
-      "args": ["serve", "--root", "${workspaceFolder}"]
+      "args": ["serve", "--root", "/absolute/path/to/project"]
     }
   }
 }</code></pre>
