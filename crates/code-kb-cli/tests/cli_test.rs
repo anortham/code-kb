@@ -1202,3 +1202,40 @@ fn test_cli_scan_requests_the_facts_extraction_level() {
         .expect("scan must pass --level");
     assert_eq!(args[idx + 1], "facts");
 }
+
+#[test]
+fn test_cli_query_builds_and_refreshes_the_index_without_scan() {
+    let temp_dir = code_kb_core::safe_tempdir();
+    let root = temp_dir.path();
+    std::fs::create_dir_all(root.join(".git")).unwrap();
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(
+        root.join("src/lib.rs"),
+        "pub fn indexed_on_first_query() {}\n",
+    )
+    .unwrap();
+
+    let lookup = |name: &str| {
+        let out = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .current_dir(root)
+            .args(["lookup", name])
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "lookup {name} failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).to_string()
+    };
+
+    assert!(lookup("indexed_on_first_query").contains("indexed_on_first_query"));
+    assert!(root.join(".code-kb/artifact.db").exists());
+
+    std::fs::write(
+        root.join("src/later.rs"),
+        "pub fn added_while_no_server_ran() {}\n",
+    )
+    .unwrap();
+    assert!(lookup("added_while_no_server_ran").contains("added_while_no_server_ran"));
+}

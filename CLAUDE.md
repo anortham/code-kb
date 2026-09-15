@@ -42,8 +42,11 @@ MCP tool schema.**
   4. *Path Inspection:* If an absolute path is passed in `file_path` or `path`,
      `code-kb` silently binds to the enclosing repository root.
   5. *Automatic Initial Scan:* If bound to a repository where `.code-kb/artifact.db`
-     does not exist yet, `code-kb` runs `scan_workspace` automatically on the
-     first tool call rather than returning an error.
+     does not exist yet, `code-kb` creates the index on the first tool call or CLI
+     command rather than returning an error (`create_index`: a git worktree copies
+     and reconciles its parent repository's index, anything else runs a full scan).
+     Files changed while no server ran are reconciled at startup, and the first
+     tool call waits for that reconciliation; CLI commands reconcile before answering.
   6. *Internal Compatibility:* If an unadvertised `workspace` argument is provided
      internally, the backend accepts it silently, but **never** documents it in
      `input_schema` or prompts for it in error messages.

@@ -39,7 +39,7 @@ pub use queries::{
 };
 pub use slicer::{SliceError, slice_symbol, slice_symbol_body};
 pub use sync::{
-    PINNED_JULIE_VERSION, ReconcileReport, SyncError, delete_file, ensure_fresh_file,
+    PINNED_JULIE_VERSION, ReconcileReport, SyncError, create_index, delete_file, ensure_fresh_file,
     ensure_index_matches_extractor, find_julie_extract_binary, installed_extractor_version,
     reconcile_offline_edits, scan_workspace, update_file,
 };
@@ -52,7 +52,7 @@ pub use telemetry::{
 };
 pub use watcher::{WatcherError, WatcherHandle, start_watcher};
 pub use workspace::{
-    Workspace, WorkspaceError, is_hard_excluded, normalize_path, parse_file_uri,
+    Workspace, WorkspaceError, is_hard_excluded, is_project_root, normalize_path, parse_file_uri,
     strip_prefix_lossy, to_forward_slash,
 };
 

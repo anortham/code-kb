@@ -466,6 +466,13 @@ fn main() -> anyhow::Result<()> {
         &code_kb_core::installed_extractor_version(),
     )?;
 
+    if !db_path.exists() && code_kb_core::is_project_root(&workspace.canonical_root) {
+        eprintln!(
+            "Index not found; scanning '{}' first.",
+            workspace.canonical_root.display()
+        );
+        code_kb_core::create_index(&workspace, &db_path)?;
+    }
     if !db_path.exists() {
         eprintln!(
             "Error: Database artifact not found at '{}'. Run `code-kb scan` first.",
@@ -474,7 +481,9 @@ fn main() -> anyhow::Result<()> {
         std::process::exit(1);
     }
 
+    ensure_fts_index_path(&db_path)?;
     let conn = open_read_only(&db_path)?;
+    code_kb_core::reconcile_offline_edits(&workspace, &db_path, &conn)?;
 
     match cli.command {
         Command::Outline(args) => {

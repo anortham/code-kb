@@ -77,9 +77,11 @@ grok plugin install anortham/code-kb --trust
 
 ### First Run & Automatic Indexing
 
-You do not need to run `code-kb scan` by hand. When an agent calls any `code-kb` tool in a
-repository for the first time, `code-kb` creates `<workspace>/.code-kb/artifact.db` and runs
-the initial scan. Pre-index a large repository before a session with:
+You do not need to run `code-kb scan` by hand. The first `code-kb` tool call or CLI command in
+a repository creates `<workspace>/.code-kb/artifact.db` and runs the initial scan. A git
+worktree copies its parent repository's index instead of scanning again. Files that changed
+while no session ran, for example after a branch switch, are reconciled before the first
+answer. Pre-index a large repository before a session with:
 
 ```bash
 code-kb scan

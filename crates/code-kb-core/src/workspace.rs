@@ -397,6 +397,19 @@ fn trim_trailing_slash(p: &Path) -> PathBuf {
     p.to_path_buf()
 }
 
+/// True when `root` carries a repository or language project marker.
+pub fn is_project_root(root: &Path) -> bool {
+    [
+        ".git",
+        "Cargo.toml",
+        "package.json",
+        "go.mod",
+        "pyproject.toml",
+    ]
+    .iter()
+    .any(|marker| root.join(marker).exists())
+}
+
 impl Workspace {
     /// Discover and bind a workspace from an optional path, falling back to CWD and upward traversal.
     pub fn discover(start_path: Option<&Path>) -> Result<Self, WorkspaceError> {

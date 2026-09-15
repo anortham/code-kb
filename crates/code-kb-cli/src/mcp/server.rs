@@ -4,14 +4,15 @@ use std::path::{Path, PathBuf};
 
 use code_kb_core::{
     Connection, TelemetryFilter, TimeWindow, WatcherHandle, Workspace, WorkspaceError,
-    blast_radius_op, codebase_outline_op, ensure_fts_index_path, ensure_index_matches_extractor,
-    file_skeleton_op, format_blast_radius, format_context_slice, format_fact_categories,
-    format_find_symbol_results, format_references, format_replace_symbol_result,
-    format_search_results, format_structural_facts, format_symbol_body, format_telemetry_summary,
-    fts_search_symbols_scoped, get_context_slice_op, get_symbol_body_op, get_telemetry_summary,
-    installed_extractor_version, list_structural_fact_categories_scoped, open_global_telemetry_db,
-    open_read_only, reconcile_offline_edits, record_tool_call, record_tool_call_conn,
-    replace_symbol_body, scan_workspace, search_symbols_scoped, start_watcher,
+    blast_radius_op, codebase_outline_op, create_index, ensure_fts_index_path,
+    ensure_index_matches_extractor, file_skeleton_op, format_blast_radius, format_context_slice,
+    format_fact_categories, format_find_symbol_results, format_references,
+    format_replace_symbol_result, format_search_results, format_structural_facts,
+    format_symbol_body, format_telemetry_summary, fts_search_symbols_scoped, get_context_slice_op,
+    get_symbol_body_op, get_telemetry_summary, installed_extractor_version, is_project_root,
+    list_structural_fact_categories_scoped, open_global_telemetry_db, open_read_only,
+    reconcile_offline_edits, record_tool_call, record_tool_call_conn, replace_symbol_body,
+    search_symbols_scoped, start_watcher,
 };
 
 use super::protocol::{CallToolResult, JsonRpcRequest, JsonRpcResponse, Tool};
@@ -22,6 +23,9 @@ pub struct McpServer {
     pub explicit_db: Option<PathBuf>,
     pub _watcher: Option<WatcherHandle>,
     pub telemetry_conn: Option<Connection>,
+    /// Startup reconciliation of the index against files that changed while no server ran.
+    /// The first tool call waits for it so it never answers from a stale index.
+    reconcile: Option<std::thread::JoinHandle<()>>,
 }
 
 impl McpServer {
@@ -40,7 +44,7 @@ impl McpServer {
         }
 
         // Trigger cold-start reconciliation and ensure FTS index in background thread if database exists
-        if db_path.exists() {
+        let reconcile = db_path.exists().then(|| {
             let ws_clone = workspace.clone();
             let db_clone = db_path.clone();
             std::thread::spawn(move || {
@@ -48,8 +52,8 @@ impl McpServer {
                 if let Ok(conn) = open_read_only(&db_clone) {
                     let _ = reconcile_offline_edits(&ws_clone, &db_clone, &conn);
                 }
-            });
-        }
+            })
+        });
 
         // Tier 3: Start background file watcher with debounce and git storm circuit breaker
         let watcher = if db_path.exists() {
@@ -66,6 +70,7 @@ impl McpServer {
             explicit_db: explicit_db.map(|p| p.to_path_buf()),
             _watcher: watcher,
             telemetry_conn,
+            reconcile,
         })
     }
 
@@ -76,13 +81,7 @@ impl McpServer {
             .unwrap_or_else(|_| ws.canonical_root.join(".code-kb").join("artifact.db"));
 
         // Guard: only commit binding if target db exists OR target root has a repository marker
-        let root = &ws.canonical_root;
-        let is_valid = db_path.exists()
-            || root.join(".git").exists()
-            || root.join("Cargo.toml").exists()
-            || root.join("package.json").exists()
-            || root.join("go.mod").exists()
-            || root.join("pyproject.toml").exists();
+        let is_valid = db_path.exists() || is_project_root(&ws.canonical_root);
 
         if !is_valid {
             return Err(WorkspaceError::ArtifactNotFound(db_path));
@@ -106,11 +105,11 @@ impl McpServer {
                 let _ = ensure_fts_index_path(&db_path);
                 let ws_clone = ws.clone();
                 let db_clone = db_path.clone();
-                std::thread::spawn(move || {
+                self.reconcile = Some(std::thread::spawn(move || {
                     if let Ok(conn) = open_read_only(&db_clone) {
                         let _ = reconcile_offline_edits(&ws_clone, &db_clone, &conn);
                     }
-                });
+                }));
                 self._watcher = start_watcher(ws.clone(), db_path.clone()).ok();
             } else {
                 self._watcher = None;
@@ -631,90 +630,10 @@ impl McpServer {
         // Auto-scan if workspace is a known repository but database artifact does not exist yet
         if !self.db_path.exists() {
             let root = &self.workspace.canonical_root;
-            if root.join(".git").exists()
-                || root.join("Cargo.toml").exists()
-                || root.join("package.json").exists()
-                || root.join("go.mod").exists()
-                || root.join("pyproject.toml").exists()
-            {
+            if is_project_root(root) {
                 tracing::info!(ws = %root.display(), "Database not found; running automatic initial scan");
 
-                // Worktree fast-path: if this is a git worktree and parent repo has artifact.db,
-                // copy parent DB and reconcile instead of scanning from scratch.
-                let mut fast_path_taken = false;
-                let git_marker = root.join(".git");
-                if git_marker.is_file()
-                    && let Ok(git_content) = std::fs::read_to_string(&git_marker)
-                    && let Some(gitdir_line) =
-                        git_content.lines().find(|l| l.starts_with("gitdir:"))
-                {
-                    let gitdir_str = gitdir_line.trim_start_matches("gitdir:").trim();
-                    let gitdir_path = Path::new(gitdir_str);
-                    let mut parent_probe = if gitdir_path.is_absolute() {
-                        gitdir_path.to_path_buf()
-                    } else {
-                        root.join(gitdir_path)
-                    };
-                    while let Some(parent) = parent_probe.parent() {
-                        if parent == parent_probe {
-                            break;
-                        }
-                        if parent.join(".git").exists() {
-                            let parent_db = parent.join(".code-kb").join("artifact.db");
-                            if parent_db.exists() {
-                                // Flush WAL checkpoint so committed transactions are flushed into parent_db before copying
-                                let flushed = if let Ok(parent_conn) =
-                                    code_kb_core::db::open_read_write(&parent_db)
-                                {
-                                    code_kb_core::db::checkpoint_truncate(&parent_conn).is_ok()
-                                } else {
-                                    false
-                                };
-                                if flushed {
-                                    if let Some(db_dir) = self.db_path.parent() {
-                                        let _ = std::fs::create_dir_all(db_dir);
-                                    }
-                                    if std::fs::copy(&parent_db, &self.db_path).is_ok() {
-                                        tracing::info!(
-                                            from = %parent_db.display(),
-                                            to = %self.db_path.display(),
-                                            "Worktree fast-path: copied parent database, reconciling"
-                                        );
-                                        match code_kb_core::db::retarget_artifact_root(
-                                            &self.db_path,
-                                            &self.workspace.canonical_root,
-                                        ) {
-                                            Ok(()) => {
-                                                let _ = ensure_fts_index_path(&self.db_path);
-                                                if let Ok(conn) = open_read_only(&self.db_path) {
-                                                    let _ = reconcile_offline_edits(
-                                                        &self.workspace,
-                                                        &self.db_path,
-                                                        &conn,
-                                                    );
-                                                }
-                                                fast_path_taken = true;
-                                            }
-                                            Err(e) => {
-                                                tracing::warn!(
-                                                    error = %e,
-                                                    "Failed to retarget worktree database root; removing copied db and falling back to full scan"
-                                                );
-                                                let _ = std::fs::remove_file(&self.db_path);
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            break;
-                        }
-                        parent_probe = parent.to_path_buf();
-                    }
-                }
-
-                if !fast_path_taken
-                    && let Err(e) = scan_workspace(&self.workspace, &self.db_path, false)
-                {
+                if let Err(e) = create_index(&self.workspace, &self.db_path) {
                     tracing::error!("Initial scan failed: {e}");
                 }
 
@@ -732,6 +651,10 @@ impl McpServer {
             );
             tracing::warn!("{}", msg);
             return CallToolResult::error(msg);
+        }
+
+        if let Some(reconcile) = self.reconcile.take() {
+            let _ = reconcile.join();
         }
 
         let conn = match open_read_only(&self.db_path) {

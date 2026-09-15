@@ -385,6 +385,77 @@ fn extract_error_path(err: &ignore::Error) -> Option<&Path> {
 
 /// Cold-start background sweep: checks filesystem against SQLite `files` records.
 /// Streams disk checks and uses an in-memory SQLite index to eliminate repository-wide heap HashMaps.
+/// Creates a missing index. A git worktree copies its parent repository's index and
+/// reconciles it against the worktree files, which is much faster than a full scan;
+/// anything else runs a full scan.
+pub fn create_index(workspace: &Workspace, db_path: &Path) -> Result<(), SyncError> {
+    if let Some(parent_db) = parent_repository_db(&workspace.canonical_root)
+        && copy_parent_index(workspace, db_path, &parent_db)
+    {
+        return Ok(());
+    }
+    scan_workspace(workspace, db_path, false)
+}
+
+fn parent_repository_db(root: &Path) -> Option<PathBuf> {
+    let git_marker = root.join(".git");
+    if !git_marker.is_file() {
+        return None;
+    }
+    let git_content = std::fs::read_to_string(&git_marker).ok()?;
+    let gitdir = git_content
+        .lines()
+        .find_map(|l| l.strip_prefix("gitdir:"))?
+        .trim();
+    let gitdir = Path::new(gitdir);
+    let mut probe = if gitdir.is_absolute() {
+        gitdir.to_path_buf()
+    } else {
+        root.join(gitdir)
+    };
+    while let Some(parent) = probe.parent() {
+        if parent == probe {
+            break;
+        }
+        if parent.join(".git").exists() {
+            let db = parent.join(".code-kb").join("artifact.db");
+            return db.exists().then_some(db);
+        }
+        probe = parent.to_path_buf();
+    }
+    None
+}
+
+fn copy_parent_index(workspace: &Workspace, db_path: &Path, parent_db: &Path) -> bool {
+    let flushed = crate::db::open_read_write(parent_db)
+        .map(|conn| crate::db::checkpoint_truncate(&conn).is_ok())
+        .unwrap_or(false);
+    if !flushed {
+        return false;
+    }
+    if let Some(dir) = db_path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    if std::fs::copy(parent_db, db_path).is_err() {
+        return false;
+    }
+    info!(from = %parent_db.display(), to = %db_path.display(), "Worktree fast-path: copied parent database, reconciling");
+    let reconciled = crate::db::retarget_artifact_root(db_path, &workspace.canonical_root)
+        .and_then(|_| crate::db::ensure_fts_index_path(db_path))
+        .is_ok()
+        && crate::db::open_read_only(db_path)
+            .ok()
+            .and_then(|conn| reconcile_offline_edits(workspace, db_path, &conn).ok())
+            .is_some();
+    if !reconciled {
+        warn!(
+            "Failed to retarget worktree database root; removing copied db and falling back to full scan"
+        );
+        let _ = std::fs::remove_file(db_path);
+    }
+    reconciled
+}
+
 pub fn reconcile_offline_edits(
     workspace: &Workspace,
     db_path: &Path,

@@ -1986,3 +1986,55 @@ fn test_mcp_lookup_and_search_symbols_accept_symbol_name_and_symbol_aliases() {
     drop(stdin);
     let _ = child.wait();
 }
+
+#[test]
+fn test_first_tool_call_sees_files_changed_while_no_server_ran() {
+    let temp_dir = code_kb_core::safe_tempdir();
+    let root = temp_dir.path().to_path_buf();
+    std::fs::create_dir_all(root.join(".code-kb")).unwrap();
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("src/lib.rs"), "pub fn indexed_by_scan() {}\n").unwrap();
+    let workspace = code_kb_core::Workspace::new(root.clone());
+    let db_path = root.join(".code-kb/artifact.db");
+    code_kb_core::scan_workspace(&workspace, &db_path, false).unwrap();
+    std::fs::write(
+        root.join("src/offline.rs"),
+        "pub fn added_while_no_server_ran() {}\n",
+    )
+    .unwrap();
+
+    let mut child = ChildGuard(
+        Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+            .arg("serve")
+            .arg("--root")
+            .arg(&root)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("Failed to spawn code-kb serve"),
+    );
+    let mut stdin = child.stdin.take().unwrap();
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+    let mut rpc = |request: Value| -> Value {
+        let mut line = serde_json::to_string(&request).unwrap();
+        line.push('\n');
+        stdin.write_all(line.as_bytes()).unwrap();
+        stdin.flush().unwrap();
+        let mut response = String::new();
+        reader.read_line(&mut response).unwrap();
+        serde_json::from_str(&response).unwrap()
+    };
+
+    rpc(json!({
+        "jsonrpc": "2.0", "id": 1, "method": "initialize",
+        "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}
+    }));
+    let response = rpc(json!({
+        "jsonrpc": "2.0", "id": 2, "method": "tools/call",
+        "params": {"name": "lookup_symbol", "arguments": {"query": "added_while_no_server_ran"}}
+    }));
+
+    let text = response["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains("added_while_no_server_ran"), "{text}");
+}
