@@ -1035,10 +1035,10 @@ fn test_mcp_worktree_auto_copy_fast_path() {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(
-            retargeted_root,
-            code_kb_core::to_forward_slash(&wt_root),
-            "artifact_metadata root_path must be retargeted to worktree root"
+        assert!(
+            code_kb_core::workspace::paths_equal(std::path::Path::new(&retargeted_root), &wt_root),
+            "artifact_metadata root_path must be retargeted to worktree root: got {retargeted_root}, expected {}",
+            wt_root.display()
         );
     }
 
