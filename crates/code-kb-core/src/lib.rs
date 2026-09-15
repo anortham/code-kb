@@ -39,15 +39,16 @@ pub use queries::{
 };
 pub use slicer::{SliceError, slice_symbol, slice_symbol_body};
 pub use sync::{
-    ReconcileReport, SyncError, delete_file, ensure_fresh_file, find_julie_extract_binary,
-    reconcile_offline_edits, scan_workspace, update_file,
+    PINNED_JULIE_VERSION, ReconcileReport, SyncError, delete_file, ensure_fresh_file,
+    ensure_index_matches_pin, find_julie_extract_binary, reconcile_offline_edits, scan_workspace,
+    update_file,
 };
 pub use syntax::{SyntaxError, validate_syntax};
 pub use telemetry::{
     BugReportBundle, TelemetryErrorRecord, TelemetryFilter, TelemetrySummary, TimeWindow,
     ToolInvocation, ToolStat, format_telemetry_summary, generate_bug_report,
-    get_global_telemetry_dir, get_telemetry_summary, migrate_legacy_workspace_telemetry,
-    open_global_telemetry_db, open_telemetry_db, record_tool_call, record_tool_call_conn,
+    get_global_telemetry_dir, get_telemetry_summary, open_global_telemetry_db, open_telemetry_db,
+    record_tool_call, record_tool_call_conn,
 };
 pub use watcher::{WatcherError, WatcherHandle, start_watcher};
 pub use workspace::{

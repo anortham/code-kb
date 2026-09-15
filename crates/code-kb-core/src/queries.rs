@@ -502,7 +502,7 @@ pub fn fts_search_symbols_scoped(
             sql.push_str(" AND s.is_test = 0 AND s.test_container = 0");
         }
 
-        sql.push_str(" ORDER BY rank_score ASC LIMIT ");
+        sql.push_str(" ORDER BY (s.kind = 'import') ASC, (s.language IN ('markdown', 'yaml', 'toml', 'json', 'html', 'css', 'xml', 'ini', 'text')) ASC, rank_score ASC LIMIT ");
         sql.push_str(&limit.to_string());
 
         let mut stmt = conn.prepare(&sql)?;

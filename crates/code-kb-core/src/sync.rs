@@ -189,6 +189,45 @@ pub fn scan_workspace(workspace: &Workspace, db_path: &Path, force: bool) -> Res
     Ok(())
 }
 
+/// Rebuilds the index when it was written by a `julie-extract` other than the pinned one.
+/// Returns `true` when a rebuild ran. The old artifact is removed first because the
+/// extractor refuses to write into an artifact with an older schema.
+pub fn ensure_index_matches_pin(workspace: &Workspace, db_path: &Path) -> Result<bool, SyncError> {
+    if !db_path.exists() {
+        return Ok(false);
+    }
+    let recorded: Option<String> = {
+        let conn = crate::db::open_read_only(db_path)?;
+        conn.query_row(
+            "SELECT value FROM artifact_metadata WHERE key = 'binary_version'",
+            [],
+            |r| r.get(0),
+        )
+        .ok()
+    };
+    let Some(recorded) = recorded else {
+        return Ok(false);
+    };
+    if recorded == PINNED_JULIE_VERSION {
+        return Ok(false);
+    }
+    info!(
+        recorded = %recorded,
+        pinned = %PINNED_JULIE_VERSION,
+        "Index was written by a different julie-extract version; rebuilding"
+    );
+    for suffix in ["", "-wal", "-shm"] {
+        let sidecar = PathBuf::from(format!("{}{suffix}", db_path.display()));
+        match std::fs::remove_file(&sidecar) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.into()),
+        }
+    }
+    scan_workspace(workspace, db_path, true)?;
+    Ok(true)
+}
+
 /// Check if disk content matches the stored hash in the database.
 pub fn compute_content_hash_matches(disk_bytes: &[u8], stored_hash: &str) -> bool {
     if stored_hash.starts_with("blake3:") {

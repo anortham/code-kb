@@ -5,7 +5,7 @@ description: Use when exploring unfamiliar code, inspecting types or function si
 
 # code-kb: Token-Dense Code Intelligence
 
-`code-kb` provides progressive disclosure, semantic symbol navigation, and surgical context slicing. Always prefer `code-kb` MCP tools over raw filesystem grep or full-file reads to save 80–90% of token consumption.
+`code-kb` provides progressive disclosure, semantic symbol navigation, and surgical context slicing. Always prefer `code-kb` MCP tools over raw filesystem grep or full-file reads to save 80–90% of token consumption. For literal text (string literals, error messages, comments, config values) use `rg`; `code-kb` indexes symbol names, signatures, and docstrings, not file contents.
 
 ## 4-Phase Progressive Disclosure Workflow
 
@@ -16,7 +16,7 @@ When entering a new repository, unfamiliar subsystem, or crate:
 
 ### 2. Interface Discovery
 When inspecting how a module or component is shaped:
-* Call `file_skeleton(file_path)` to inspect structs, traits, methods, signatures, and docstrings with implementation bodies stripped.
+* Call `file_skeleton(file_path)` to inspect structs, traits, methods, signatures, and docstrings with implementation bodies stripped. A directory path returns its outline instead.
 * Call `lookup_symbol(query="...", path="optional/subpath")` for exact or prefix symbol name matching across the entire codebase or scoped to a directory/file.
 * Call `search_symbols(query="...", path="optional/subpath")` for natural-language / conceptual search (e.g. `"parse tokens"`, `"auth middleware"`) using SQLite FTS5 BM25 ranking.
 * **Never** read a 500-line source file just to look up a signature or type definition.
@@ -29,7 +29,7 @@ Before modifying or understanding a specific function/method:
   3. Parameter type definitions.
   4. Associated unit tests.
 * Call `get_symbol_body(symbol_name, file_path)` if only the exact implementation body is needed.
-* Call `find_references(symbol_name, file_path?)` (or `direction="callees"`) to check callers/callees. Callee search excludes external stdlib/runtime tokens language-agnostically across all ~40 supported languages; pass `include_external=true` to view external runtime calls.
+* Call `find_references(symbol_name, file_path?)` (or `direction="callees"`) to check callers/callees. Matching is by symbol name from AST call sites, so same-named symbols can merge; pass `file_path` or a qualified name and verify before refactors. Callee search excludes external stdlib/runtime tokens language-agnostically across all ~40 supported languages; pass `include_external=true` to view external runtime calls.
 * Call `blast_radius(symbol="...")` or `blast_radius(file="...")` or `blast_radius()` (auto-detects uncommitted git changes) to calculate multi-hop transitive callers and pinpoint targeted tests to run before/after editing. (Tool alias: `impact`).
 * Call `find_structural_facts()` to list all detected framework categories, or `find_structural_facts(category="route")` to query specific routes, SQL queries, models, or config keys.
 
@@ -72,6 +72,7 @@ When diagnosing unexpected tool errors or when assisting a user with filing an i
 | Edit implementation | Multi-line search/replace | `replace_symbol_body(...)` | `code-kb edit <symbol> --file <f> --body <b>` |
 | Check token savings & usage | Guesswork, parsing logs | `telemetry_summary(time_window="month")` | `code-kb stats [--since <window>] [--workspace]` |
 | Generate diagnostic bug report | Manual system info triage | `telemetry_summary()` (for errors) | `code-kb bug-report [--title <title>]` |
+| Find literal text, error strings, comments | `search_symbols` (indexes symbols only) | none | `rg "exact text"` |
 
 ## Parameter Aliases & Safe Defaults
 
@@ -79,7 +80,7 @@ Use the canonical names from the MCP schema in tool calls. The aliases below are
 
 * `symbol_name`: accepts `symbol`, `name`.
 * `file_path`: accepts `file`, `path`.
-* `query`: accepts `name`, `q`.
+* `query`: accepts `name`, `q`, `symbol_name`, `symbol`.
 * `new_body`: accepts `body`, `code`, `content`.
 * `expected_body_hash`: accepts `body_hash`, `expected_hash`.
 * `codebase_outline.path`: accepts `subpath`, `dir`.
@@ -89,7 +90,7 @@ Use the canonical names from the MCP schema in tool calls. The aliases below are
 * `category` in `find_structural_facts`: optional (omitting lists all detected categories and counts). Normalized aliases: `config`, `route`/`routes`, `query`/`queries`/`sql`, `model`/`models`.
 * `path` in `lookup_symbol` / `search_symbols` / `find_structural_facts`: optional filter by directory or file path prefix.
 * `file_path` in `find_references`: optional file path to disambiguate symbols with identical names across files.
-* `telemetry_summary`: accepts `time_window` (aliases: `since`, `window`; defaults to `"all"`), `workspace_only` (defaults to `false`), `json` (defaults to `false`). Tool name alias: `code_kb_stats`.
+* `telemetry_summary`: accepts `time_window` (aliases: `since`, `window`; defaults to `"all"`), `workspace_only` (defaults to `false`), `json` (defaults to `false`).
 
 ## Core Invariants
 

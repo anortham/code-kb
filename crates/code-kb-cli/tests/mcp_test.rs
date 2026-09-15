@@ -1137,6 +1137,7 @@ fn test_mcp_initialize_roots_file_uris() {
         let mut child = ChildGuard(
             Command::new(env!("CARGO_BIN_EXE_code-kb"))
                 .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+                .current_dir(root)
                 .arg("serve")
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
@@ -1203,6 +1204,7 @@ fn test_mcp_initialize_roots_file_uris() {
         let mut child = ChildGuard(
             Command::new(env!("CARGO_BIN_EXE_code-kb"))
                 .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+                .current_dir(root)
                 .arg("serve")
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
@@ -1470,33 +1472,6 @@ fn test_mcp_telemetry_summary_unindexed_repo_no_autoscan() {
     assert!(
         !root.join(".code-kb").join("artifact.db").exists(),
         "telemetry_summary must not trigger auto-scan on an unindexed repository"
-    );
-
-    // 3. Also call with unadvertised alias code_kb_stats
-    let call_alias = json!({
-        "jsonrpc": "2.0",
-        "id": 3,
-        "method": "tools/call",
-        "params": {
-            "name": "code_kb_stats",
-            "arguments": {}
-        }
-    });
-    let mut alias_line = serde_json::to_string(&call_alias).unwrap();
-    alias_line.push('\n');
-    stdin.write_all(alias_line.as_bytes()).unwrap();
-    stdin.flush().unwrap();
-
-    let mut alias_resp_line = String::new();
-    reader.read_line(&mut alias_resp_line).unwrap();
-    let resp_alias: Value =
-        serde_json::from_str(&alias_resp_line).expect("Failed to parse JSON response");
-    assert_eq!(resp_alias["id"], 3);
-    assert_ne!(resp_alias["result"]["isError"], true);
-
-    assert!(
-        !root.join(".code-kb").join("artifact.db").exists(),
-        "code_kb_stats alias must not trigger auto-scan on an unindexed repository"
     );
 
     drop(stdin);
@@ -1873,6 +1848,140 @@ fn test_mcp_telemetry_summary_does_not_rebind_workspace() {
     reader.read_line(&mut inv_resp_line).unwrap();
     let inv_resp: Value = serde_json::from_str(&inv_resp_line).unwrap();
     assert_eq!(inv_resp["result"]["isError"], true);
+
+    drop(stdin);
+    let _ = child.wait();
+}
+
+#[test]
+fn test_mcp_lookup_and_search_symbols_accept_symbol_name_and_symbol_aliases() {
+    let repo = setup_test_repo();
+    let root = repo.path();
+
+    let mut child = ChildGuard(
+        Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+            .current_dir(root)
+            .arg("serve")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("Failed to spawn code-kb serve"),
+    );
+
+    let mut stdin = child.stdin.take().unwrap();
+    let stdout = child.stdout.take().unwrap();
+    let mut reader = BufReader::new(stdout);
+
+    // 1. initialize
+    let init_req = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": { "name": "test-client", "version": "1.0" },
+            "rootUri": format!("file://{}", root.display())
+        }
+    });
+    let mut init_line = serde_json::to_string(&init_req).unwrap();
+    init_line.push('\n');
+    stdin.write_all(init_line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut init_resp_line = String::new();
+    reader.read_line(&mut init_resp_line).unwrap();
+    let init_resp: Value = serde_json::from_str(&init_resp_line).unwrap();
+    assert_eq!(init_resp["id"], 1);
+
+    // 2. lookup_symbol using symbol_name alias
+    let lookup_symbol_name = json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+            "name": "lookup_symbol",
+            "arguments": {
+                "symbol_name": "Workspace"
+            }
+        }
+    });
+    let mut line = serde_json::to_string(&lookup_symbol_name).unwrap();
+    line.push('\n');
+    stdin.write_all(line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut resp_line = String::new();
+    reader.read_line(&mut resp_line).unwrap();
+    let resp: Value = serde_json::from_str(&resp_line).unwrap();
+    assert_ne!(resp["result"]["isError"], true);
+
+    // 3. lookup_symbol using symbol alias
+    let lookup_symbol = json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+            "name": "lookup_symbol",
+            "arguments": {
+                "symbol": "Workspace"
+            }
+        }
+    });
+    let mut line = serde_json::to_string(&lookup_symbol).unwrap();
+    line.push('\n');
+    stdin.write_all(line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut resp_line = String::new();
+    reader.read_line(&mut resp_line).unwrap();
+    let resp: Value = serde_json::from_str(&resp_line).unwrap();
+    assert_ne!(resp["result"]["isError"], true);
+
+    // 4. search_symbols using symbol_name alias
+    let search_symbol_name = json!({
+        "jsonrpc": "2.0",
+        "id": 4,
+        "method": "tools/call",
+        "params": {
+            "name": "search_symbols",
+            "arguments": {
+                "symbol_name": "Workspace"
+            }
+        }
+    });
+    let mut line = serde_json::to_string(&search_symbol_name).unwrap();
+    line.push('\n');
+    stdin.write_all(line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut resp_line = String::new();
+    reader.read_line(&mut resp_line).unwrap();
+    let resp: Value = serde_json::from_str(&resp_line).unwrap();
+    assert_ne!(resp["result"]["isError"], true);
+
+    // 5. search_symbols using symbol alias
+    let search_symbol = json!({
+        "jsonrpc": "2.0",
+        "id": 5,
+        "method": "tools/call",
+        "params": {
+            "name": "search_symbols",
+            "arguments": {
+                "symbol": "Workspace"
+            }
+        }
+    });
+    let mut line = serde_json::to_string(&search_symbol).unwrap();
+    line.push('\n');
+    stdin.write_all(line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut resp_line = String::new();
+    reader.read_line(&mut resp_line).unwrap();
+    let resp: Value = serde_json::from_str(&resp_line).unwrap();
+    assert_ne!(resp["result"]["isError"], true);
 
     drop(stdin);
     let _ = child.wait();

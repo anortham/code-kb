@@ -4,15 +4,14 @@ use std::path::{Path, PathBuf};
 
 use code_kb_core::{
     Connection, TelemetryFilter, TimeWindow, WatcherHandle, Workspace, WorkspaceError,
-    blast_radius_op, codebase_outline_op, ensure_fts_index_path, file_skeleton_op,
-    format_blast_radius, format_context_slice, format_fact_categories, format_find_symbol_results,
-    format_references, format_replace_symbol_result, format_search_results,
-    format_structural_facts, format_symbol_body, format_telemetry_summary,
+    blast_radius_op, codebase_outline_op, ensure_fts_index_path, ensure_index_matches_pin,
+    file_skeleton_op, format_blast_radius, format_context_slice, format_fact_categories,
+    format_find_symbol_results, format_references, format_replace_symbol_result,
+    format_search_results, format_structural_facts, format_symbol_body, format_telemetry_summary,
     fts_search_symbols_scoped, get_context_slice_op, get_symbol_body_op, get_telemetry_summary,
-    list_structural_fact_categories_scoped, migrate_legacy_workspace_telemetry,
-    open_global_telemetry_db, open_read_only, reconcile_offline_edits, record_tool_call,
-    record_tool_call_conn, replace_symbol_body, scan_workspace, search_symbols_scoped,
-    start_watcher,
+    list_structural_fact_categories_scoped, open_global_telemetry_db, open_read_only,
+    reconcile_offline_edits, record_tool_call, record_tool_call_conn, replace_symbol_body,
+    scan_workspace, search_symbols_scoped, start_watcher,
 };
 
 use super::protocol::{CallToolResult, JsonRpcRequest, JsonRpcResponse, Tool};
@@ -34,6 +33,10 @@ impl McpServer {
                 .join("artifact.db")
         });
 
+        if let Err(e) = ensure_index_matches_pin(&workspace, &db_path) {
+            tracing::warn!("Index version check failed: {e}");
+        }
+
         // Trigger cold-start reconciliation and ensure FTS index in background thread if database exists
         if db_path.exists() {
             let ws_clone = workspace.clone();
@@ -54,9 +57,6 @@ impl McpServer {
         };
 
         let telemetry_conn = open_global_telemetry_db().ok();
-        if let Some(ref conn) = telemetry_conn {
-            let _ = migrate_legacy_workspace_telemetry(conn, &workspace.root);
-        }
 
         Ok(Self {
             workspace,
@@ -95,6 +95,9 @@ impl McpServer {
         if !code_kb_core::workspace::paths_equal(&self.workspace.canonical_root, &ws.canonical_root)
             || self._watcher.is_none()
         {
+            if let Err(e) = ensure_index_matches_pin(&ws, &db_path) {
+                tracing::warn!("Index version check failed: {e}");
+            }
             if db_path.exists() {
                 let _ = ensure_fts_index_path(&db_path);
                 let ws_clone = ws.clone();
@@ -112,9 +115,6 @@ impl McpServer {
 
         if self.telemetry_conn.is_none() {
             self.telemetry_conn = open_global_telemetry_db().ok();
-        }
-        if let Some(ref conn) = self.telemetry_conn {
-            let _ = migrate_legacy_workspace_telemetry(conn, &ws.root);
         }
         self.workspace = ws;
         self.db_path = db_path;
@@ -142,7 +142,7 @@ impl McpServer {
             },
             Tool {
                 name: "file_skeleton".to_string(),
-                description: "Returns all types, traits, functions, signatures, docstrings, and visibility for a file with implementation bodies stripped. Use this instead of reading the entire file when inspecting interfaces and types.".to_string(),
+                description: "Returns all types, traits, functions, signatures, docstrings, and visibility for a file with implementation bodies stripped. Use this instead of reading the entire file when inspecting interfaces and types. A directory path returns its outline.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -256,7 +256,7 @@ impl McpServer {
             },
             Tool {
                 name: "find_references".to_string(),
-                description: "Discovers callers or callees of a symbol using AST relationship facts. Use to trace call graphs and assess impact before refactoring.".to_string(),
+                description: "Discovers callers or callees of a symbol from AST call sites. Matching is by symbol name, so same-named symbols across types can merge; pass file_path or a qualified name ('Type::method') for overloaded names and verify before refactoring.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -578,11 +578,9 @@ impl McpServer {
     fn handle_call_tool_inner(&mut self, name: &str, arguments: &Value) -> CallToolResult {
         tracing::info!(tool = name, args = %arguments, "MCP tool called");
 
-        // Early routing for telemetry_summary and unadvertised alias code_kb_stats
-        // Must execute before auto-scan check and workspace rebinding so telemetry queries:
-        // 1. Succeed immediately on unindexed repositories without creating artifact.db
-        // 2. Never rebind the session's active workspace if extra path/file parameters are supplied
-        if name == "telemetry_summary" || name == "code_kb_stats" {
+        // telemetry_summary must run before auto-scan and rebinding: it must never create
+        // artifact.db on an unindexed repository or switch the active workspace.
+        if name == "telemetry_summary" {
             let result = self.handle_telemetry_summary(arguments);
             if result.is_error {
                 tracing::warn!(tool = name, "MCP tool returned error");
@@ -780,6 +778,8 @@ impl McpServer {
                     .get("query")
                     .or_else(|| arguments.get("name"))
                     .or_else(|| arguments.get("q"))
+                    .or_else(|| arguments.get("symbol_name"))
+                    .or_else(|| arguments.get("symbol"))
                     .and_then(|v| v.as_str())
                 {
                     Some(q) => q,
@@ -863,6 +863,8 @@ impl McpServer {
                     .get("query")
                     .or_else(|| arguments.get("name"))
                     .or_else(|| arguments.get("q"))
+                    .or_else(|| arguments.get("symbol_name"))
+                    .or_else(|| arguments.get("symbol"))
                     .and_then(|v| v.as_str())
                 {
                     Some(q) => q,

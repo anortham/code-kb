@@ -7,7 +7,7 @@ use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 
 use crate::queries::QueryError;
-use crate::workspace::{normalize_path, paths_equal, to_forward_slash};
+use crate::workspace::{normalize_path, to_forward_slash};
 
 #[derive(Debug, Clone)]
 pub struct ToolInvocation<'a> {
@@ -561,16 +561,6 @@ pub fn get_telemetry_summary(
     })
 }
 
-fn is_same_file(p1: &Path, p2: &Path) -> bool {
-    if paths_equal(p1, p2) {
-        return true;
-    }
-    match (dunce::canonicalize(p1), dunce::canonicalize(p2)) {
-        (Ok(c1), Ok(c2)) => paths_equal(&c1, &c2),
-        _ => false,
-    }
-}
-
 fn sanitize_error_message(msg: &str) -> String {
     let mut home_candidates = Vec::new();
     if let Ok(home) = std::env::var("HOME")
@@ -797,131 +787,6 @@ pub fn generate_bug_report(
     })
 }
 
-/// Migrates legacy telemetry from `<workspace_root>/.code-kb/telemetry.db` into the global telemetry database.
-/// Cleans up the legacy file upon successful migration.
-pub fn migrate_legacy_workspace_telemetry(
-    global_conn: &Connection,
-    workspace_root: &Path,
-) -> Result<usize, QueryError> {
-    let legacy_db_path = workspace_root.join(".code-kb").join("telemetry.db");
-    if !legacy_db_path.exists() {
-        return Ok(0);
-    }
-
-    // Skip migration if legacy database and destination database identify the same physical file
-    let global_db_path = get_global_telemetry_dir().join("telemetry.db");
-    if is_same_file(&legacy_db_path, &global_db_path) {
-        return Ok(0);
-    }
-    if let Ok(dest_db_str) =
-        global_conn.query_row("PRAGMA database_list", [], |row| row.get::<_, String>(2))
-        && !dest_db_str.is_empty()
-        && is_same_file(&legacy_db_path, Path::new(&dest_db_str))
-    {
-        return Ok(0);
-    }
-
-    let norm_ws = to_forward_slash(&normalize_path(workspace_root));
-    let ws_name = Path::new(&norm_ws)
-        .file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_else(|| "repo".to_string());
-
-    let mut migrated_count = 0;
-    let rows_to_insert = {
-        let legacy_conn = Connection::open_with_flags(
-            &legacy_db_path,
-            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
-        )?;
-
-        let has_table = {
-            let mut check_stmt = legacy_conn.prepare(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='tool_telemetry'",
-            )?;
-            check_stmt.exists([])?
-        };
-        if !has_table {
-            return Ok(0);
-        }
-
-        let mut stmt = legacy_conn.prepare(
-            "SELECT id, timestamp, tool, duration_ms, outcome, error_message,
-                    result_count, bytes_returned, est_tokens, code_kb_version
-             FROM tool_telemetry",
-        )?;
-
-        let rows = stmt.query_map([], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, i64>(3)?,
-                row.get::<_, String>(4)?,
-                row.get::<_, Option<String>>(5)?,
-                row.get::<_, i64>(6)?,
-                row.get::<_, i64>(7)?,
-                row.get::<_, i64>(8)?,
-                row.get::<_, String>(9)?,
-            ))
-        })?;
-
-        let mut collected = Vec::new();
-        for r in rows {
-            collected.push(r?);
-        }
-        collected
-    };
-
-    let tx = global_conn.unchecked_transaction()?;
-    {
-        let mut stmt = tx.prepare(
-            "INSERT OR IGNORE INTO tool_telemetry (
-                id, timestamp, workspace_root, workspace_name, tool,
-                duration_ms, outcome, error_message, result_count,
-                bytes_returned, est_tokens, est_tokens_saved, code_kb_version
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 0, ?12)",
-        )?;
-
-        for (
-            id,
-            ts,
-            tool,
-            duration_ms,
-            outcome,
-            error_msg,
-            result_count,
-            bytes_returned,
-            est_tokens,
-            code_kb_version,
-        ) in rows_to_insert
-        {
-            let inserted = stmt.execute(params![
-                id,
-                ts,
-                norm_ws,
-                ws_name,
-                tool,
-                duration_ms,
-                outcome,
-                error_msg,
-                result_count,
-                bytes_returned,
-                est_tokens,
-                code_kb_version,
-            ])?;
-            migrated_count += inserted;
-        }
-    }
-    tx.commit()?;
-
-    // Clean up legacy database and any temporary WAL/SHM files only after commit succeeds
-    let _ = std::fs::remove_file(&legacy_db_path);
-    let _ = std::fs::remove_file(legacy_db_path.with_file_name("telemetry.db-wal"));
-    let _ = std::fs::remove_file(legacy_db_path.with_file_name("telemetry.db-shm"));
-
-    Ok(migrated_count)
-}
-
 pub fn format_telemetry_summary(summary: &TelemetrySummary) -> String {
     let mut out = String::new();
     out.push_str("=================================================================\n");
@@ -943,12 +808,14 @@ pub fn format_telemetry_summary(summary: &TelemetrySummary) -> String {
     };
 
     out.push_str(&format!(
-        "Scope: {} | Window: {} | Total Tool Calls: {} | Success Rate: {:.1}% | Tokens Served: ~{} | Tokens Saved: ~{}\n\n",
+        "Scope: {} | Window: {} | Total Tool Calls: {} | Success Rate: {:.1}% | Tokens Served: ~{} | Est. Tokens Saved (read tools only): ~{}\n\n",
         summary.scope_description, summary.time_window, summary.total_calls, success_rate, summary.total_tokens_returned, summary.est_tokens_saved
     ));
 
     out.push_str("### Tool Invocations & Performance\n");
-    out.push_str("| Tool | Calls | Avg Latency | Tokens Served | Tokens Saved | Success Rate |\n");
+    out.push_str(
+        "| Tool | Calls | Avg Latency | Tokens Served | Est. Tokens Saved | Success Rate |\n",
+    );
     out.push_str("|---|---:|---:|---:|---:|---:|\n");
 
     for stat in &summary.tool_stats {
@@ -1296,52 +1163,6 @@ mod tests {
     }
 
     #[test]
-    fn test_legacy_migration() {
-        let ws_temp = crate::safe_tempdir();
-        let ws_root = ws_temp.path();
-        let legacy_dir = ws_root.join(".code-kb");
-        std::fs::create_dir_all(&legacy_dir).unwrap();
-        let legacy_db_path = legacy_dir.join("telemetry.db");
-
-        let legacy_conn = Connection::open(&legacy_db_path).unwrap();
-        legacy_conn.execute_batch(
-            "CREATE TABLE tool_telemetry (
-                id TEXT PRIMARY KEY,
-                timestamp TEXT NOT NULL,
-                tool TEXT NOT NULL,
-                duration_ms INTEGER NOT NULL,
-                outcome TEXT NOT NULL,
-                error_message TEXT,
-                result_count INTEGER NOT NULL DEFAULT 0,
-                bytes_returned INTEGER NOT NULL DEFAULT 0,
-                est_tokens INTEGER NOT NULL DEFAULT 0,
-                code_kb_version TEXT NOT NULL
-            );
-            INSERT INTO tool_telemetry VALUES ('leg1', '2026-09-01 12:00:00', 'find_symbol', 10, 'ok', NULL, 1, 50, 12, '0.6.0');
-            INSERT INTO tool_telemetry VALUES ('leg2', '2026-09-01 12:01:00', 'replace_symbol_body', 20, 'error', 'disk error', 0, 0, 0, '0.6.0');"
-        ).unwrap();
-        drop(legacy_conn);
-
-        assert!(legacy_db_path.exists());
-
-        let global_temp = crate::safe_tempdir();
-        let global_conn = open_telemetry_db_at(global_temp.path()).unwrap();
-
-        let migrated = migrate_legacy_workspace_telemetry(&global_conn, ws_root).unwrap();
-        assert_eq!(migrated, 2);
-
-        assert!(!legacy_db_path.exists());
-
-        let summary = get_telemetry_summary(&global_conn, &TelemetryFilter::default()).unwrap();
-        assert_eq!(summary.total_calls, 2);
-        assert_eq!(summary.ok_calls, 1);
-        assert_eq!(summary.error_calls, 1);
-
-        let migrated_second = migrate_legacy_workspace_telemetry(&global_conn, ws_root).unwrap();
-        assert_eq!(migrated_second, 0);
-    }
-
-    #[test]
     fn test_bug_report_bundle_generation() {
         let temp = crate::safe_tempdir();
         let conn = open_telemetry_db_at(temp.path()).unwrap();
@@ -1517,114 +1338,6 @@ mod tests {
         };
         let ws_summary = get_telemetry_summary(&conn, &ws_filter).unwrap();
         assert_eq!(ws_summary.total_calls, 1);
-    }
-
-    #[test]
-    fn test_legacy_migration_same_path_no_delete() {
-        let ws_temp = crate::safe_tempdir();
-        let ws_root = ws_temp.path();
-        let legacy_dir = ws_root.join(".code-kb");
-        std::fs::create_dir_all(&legacy_dir).unwrap();
-        let legacy_db_path = legacy_dir.join("telemetry.db");
-
-        let legacy_conn = Connection::open(&legacy_db_path).unwrap();
-        init_telemetry_db(&legacy_conn).unwrap();
-        legacy_conn
-            .execute(
-                "INSERT INTO tool_telemetry VALUES (
-                    'same1', '2026-09-01 12:00:00', '/ws', 'repo', 'find_symbol',
-                    10, 'ok', NULL, 1, 50, 12, 0, '0.7.0'
-                )",
-                [],
-            )
-            .unwrap();
-
-        // Test 1: destination connection opened on the exact same database file
-        let migrated = migrate_legacy_workspace_telemetry(&legacy_conn, ws_root).unwrap();
-        assert_eq!(
-            migrated, 0,
-            "must skip migration when destination is the same database"
-        );
-        assert!(legacy_db_path.exists(), "must not unlink the database file");
-
-        // Test 2: global telemetry dir override points to the same directory
-        set_telemetry_dir_override(Some(legacy_dir.clone()));
-        let migrated_ovr = migrate_legacy_workspace_telemetry(&legacy_conn, ws_root).unwrap();
-        assert_eq!(
-            migrated_ovr, 0,
-            "must skip migration when global dir matches legacy dir"
-        );
-        assert!(
-            legacy_db_path.exists(),
-            "must not unlink when global dir matches legacy dir"
-        );
-        set_telemetry_dir_override(None);
-    }
-
-    #[test]
-    fn test_legacy_migration_rollback_on_failure() {
-        let ws_temp = crate::safe_tempdir();
-        let ws_root = ws_temp.path();
-        let legacy_dir = ws_root.join(".code-kb");
-        std::fs::create_dir_all(&legacy_dir).unwrap();
-        let legacy_db_path = legacy_dir.join("telemetry.db");
-
-        let legacy_conn = Connection::open(&legacy_db_path).unwrap();
-        legacy_conn
-            .execute_batch(
-                "CREATE TABLE tool_telemetry (
-                    id TEXT PRIMARY KEY,
-                    timestamp TEXT NOT NULL,
-                    tool TEXT NOT NULL,
-                    duration_ms INTEGER NOT NULL,
-                    outcome TEXT NOT NULL,
-                    error_message TEXT,
-                    result_count INTEGER NOT NULL DEFAULT 0,
-                    bytes_returned INTEGER NOT NULL DEFAULT 0,
-                    est_tokens INTEGER NOT NULL DEFAULT 0,
-                    code_kb_version TEXT NOT NULL
-                );
-                INSERT INTO tool_telemetry VALUES (
-                    'leg1', '2026-09-01 12:00:00', 'find_symbol', 10, 'ok', NULL, 1, 50, 12, '0.6.0'
-                );",
-            )
-            .unwrap();
-        drop(legacy_conn);
-
-        let global_temp = crate::safe_tempdir();
-        let global_conn = open_telemetry_db_at(global_temp.path()).unwrap();
-
-        // Install a trigger that forces insertion to fail
-        global_conn
-            .execute(
-                "CREATE TRIGGER fail_telemetry_insert BEFORE INSERT ON tool_telemetry
-                 BEGIN
-                     SELECT RAISE(ABORT, 'simulated disk write error');
-                 END;",
-                [],
-            )
-            .unwrap();
-
-        let res = migrate_legacy_workspace_telemetry(&global_conn, ws_root);
-        assert!(
-            res.is_err(),
-            "migration must return error when insert fails"
-        );
-        assert!(
-            legacy_db_path.exists(),
-            "legacy database must NOT be deleted after failed migration"
-        );
-
-        // Drop trigger and verify migration now succeeds
-        global_conn
-            .execute("DROP TRIGGER fail_telemetry_insert", [])
-            .unwrap();
-        let res2 = migrate_legacy_workspace_telemetry(&global_conn, ws_root);
-        assert_eq!(res2.unwrap(), 1);
-        assert!(
-            !legacy_db_path.exists(),
-            "legacy database should be deleted only after successful commit"
-        );
     }
 
     #[test]

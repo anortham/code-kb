@@ -163,6 +163,7 @@ fn test_adversarial_mcp_initialize_roots_comprehensive_matrix() {
         let mut child = ChildGuard(
             Command::new(env!("CARGO_BIN_EXE_code-kb"))
                 .env("CODE_KB_TELEMETRY_DIR", telem_dir.path())
+                .current_dir(root)
                 .arg("serve")
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())

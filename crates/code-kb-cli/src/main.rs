@@ -344,7 +344,6 @@ fn main() -> anyhow::Result<()> {
     if let Command::Stats(args) | Command::Telemetry(args) = &cli.command {
         let conn = code_kb_core::open_global_telemetry_db()
             .map_err(|e| anyhow::anyhow!("Failed to open telemetry database: {e}"))?;
-        let _ = code_kb_core::migrate_legacy_workspace_telemetry(&conn, &workspace.root);
         let time_window = code_kb_core::TimeWindow::parse(&args.since).ok_or_else(|| {
             anyhow::anyhow!(
                 "Invalid time window '{}'. Supported values: today, 7d, 30d, month, year, all",
@@ -389,7 +388,6 @@ fn main() -> anyhow::Result<()> {
     if let Command::BugReport(args) = &cli.command {
         let conn = code_kb_core::open_global_telemetry_db()
             .map_err(|e| anyhow::anyhow!("Failed to open telemetry database: {e}"))?;
-        let _ = code_kb_core::migrate_legacy_workspace_telemetry(&conn, &workspace.root);
         let bundle = code_kb_core::generate_bug_report(
             &conn,
             Some(&workspace.canonical_root),
@@ -461,6 +459,8 @@ fn main() -> anyhow::Result<()> {
         println!("Database updated at '{}'.", db_path.display());
         return Ok(());
     }
+
+    code_kb_core::ensure_index_matches_pin(&workspace, &db_path)?;
 
     if !db_path.exists() {
         eprintln!(

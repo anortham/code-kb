@@ -151,7 +151,7 @@ pub fn file_skeleton_op(
         return Err(OpError::FileNotFound(rel_path));
     }
     if effective_abs.is_dir() {
-        return Err(OpError::IsADirectory(rel_path));
+        return codebase_outline_op(workspace, conn, 2, Some(&rel_path));
     }
     sync::ensure_fresh_file(workspace, db_path, conn, &rel_path)?;
 

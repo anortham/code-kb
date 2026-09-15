@@ -231,12 +231,12 @@ code-kb scan
 | Tool | Purpose | Key Parameters | Aliases |
 | :--- | :--- | :--- | :--- |
 | `codebase_outline` | High-level architectural orientation of directory layout & symbols. | `path` (opt), `depth` (opt, default 2) | `dir`, `subpath` |
-| `file_skeleton` | File outline with function & method bodies stripped (80–90% token savings). | `file_path` (req) | `file`, `path` |
+| `file_skeleton` | File outline with function & method bodies stripped (80–90% token savings); a directory returns its outline. | `file_path` (req) | `file`, `path` |
 | `lookup_symbol` | Fast identifier lookup (exact name or prefix) across repo or scoped path. | `query` (req), `path` (opt), `kind` (opt), `is_test` (opt), `limit` (opt) | `name`, `q` |
 | `search_symbols` | Conceptual BM25 full-text search over symbol signatures & docstrings. | `query` (req), `path` (opt), `kind` (opt), `limit` (opt) | `name`, `q` |
 | `get_symbol_body` | Slices the exact implementation body of a symbol from disk. | `symbol_name` (req), `file_path` (opt) | `symbol`, `name`, `path` |
 | `get_symbol_context` | Surgical bundle: target body + callee signatures + parameter types + tests. | `symbol_name` (req), `file_path` (opt), `include_external` (opt, def: false) | `symbol`, `name`, `path` |
-| `find_references` | Traverses callers or callees of a symbol (filters external stdlib noise). | `symbol_name` (req), `file_path` (opt), `direction` ("callers" \| "callees", def: callers), `include_external` (opt, def: false) | `symbol`, `name`, `file`, `path` |
+| `find_references` | Callers or callees of a symbol, matched by name from AST call sites (filters external stdlib noise; qualify overloaded names). | `symbol_name` (req), `file_path` (opt), `direction` ("callers" \| "callees", def: callers), `include_external` (opt, def: false) | `symbol`, `name`, `file`, `path` |
 | `blast_radius` | Multi-hop reverse reachability (CTEs) & targeted test prediction. | `symbol` (opt), `file` (opt), `depth` (opt, def: 2), `limit` (opt) | `name`, `path`, `impact` |
 | `find_structural_facts` | Queries framework facts (routes, SQL queries, config keys, tables). Lists all categories when omitted. | `category` (opt), `path` (opt), `limit` (opt) | `cat`, `kind`, `type`, `file`, `file_path` |
 | `replace_symbol_body` | Atomically replaces a symbol's implementation; syntax validation covers Rust, JavaScript, TypeScript/TSX, Python, and Go. | `symbol_name` (req), `file_path` (req), `new_body` (req), `expected_body_hash` (opt) | `symbol`, `file`, `body`, `code` |

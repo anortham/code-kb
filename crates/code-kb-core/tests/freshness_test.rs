@@ -1,6 +1,6 @@
 use code_kb_core::{
-    Workspace, ensure_fresh_file, find_julie_extract_binary, get_symbol_by_name, open_read_only,
-    reconcile_offline_edits, safe_tempdir, scan_workspace,
+    Workspace, ensure_fresh_file, ensure_index_matches_pin, find_julie_extract_binary,
+    get_symbol_by_name, open_read_only, reconcile_offline_edits, safe_tempdir, scan_workspace,
 };
 use std::fs;
 #[cfg(unix)]
@@ -406,4 +406,43 @@ fn test_reconcile_offline_edits_preserves_hidden_files() {
         sym_after.is_some(),
         "Symbol in hidden dir should still exist after reconciliation"
     );
+}
+
+#[test]
+fn test_index_from_other_extractor_version_is_rebuilt() {
+    find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+    let temp_dir = safe_tempdir();
+    let root = temp_dir.path().to_path_buf();
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(
+        root.join("src").join("calc.rs"),
+        "pub fn foo_fn() -> i32 {\n    100\n}\n",
+    )
+    .unwrap();
+    let ws = Workspace::new(root.clone());
+    let db_path = root.join(".code-kb").join("artifact.db");
+    scan_workspace(&ws, &db_path, true).expect("Scan failed");
+    assert!(!ensure_index_matches_pin(&ws, &db_path).unwrap());
+
+    {
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        conn.execute(
+            "UPDATE artifact_metadata SET value = '0.0.1' WHERE key = 'binary_version'",
+            [],
+        )
+        .unwrap();
+    }
+    assert!(ensure_index_matches_pin(&ws, &db_path).unwrap());
+    assert!(!ensure_index_matches_pin(&ws, &db_path).unwrap());
+
+    let conn = open_read_only(&db_path).unwrap();
+    let version: String = conn
+        .query_row(
+            "SELECT value FROM artifact_metadata WHERE key = 'binary_version'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_ne!(version, "0.0.1");
+    assert!(get_symbol_by_name(&conn, "foo_fn", None).unwrap().is_some());
 }

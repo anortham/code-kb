@@ -529,61 +529,6 @@ fn test_cli_bug_report_json() {
 }
 
 #[test]
-fn test_cli_stats_migrates_legacy_telemetry() {
-    let repo = setup_test_repo();
-    let root = repo.path();
-    let telem_dir = code_kb_core::safe_tempdir();
-
-    // Create legacy workspace telemetry DB
-    let legacy_dir = root.join(".code-kb");
-    std::fs::create_dir_all(&legacy_dir).unwrap();
-    let legacy_db = legacy_dir.join("telemetry.db");
-    let conn = rusqlite::Connection::open(&legacy_db).unwrap();
-    conn.execute_batch(
-        "CREATE TABLE tool_telemetry (
-            id TEXT PRIMARY KEY,
-            timestamp TEXT NOT NULL,
-            tool TEXT NOT NULL,
-            duration_ms INTEGER NOT NULL,
-            outcome TEXT NOT NULL,
-            error_message TEXT,
-            result_count INTEGER NOT NULL,
-            bytes_returned INTEGER NOT NULL,
-            est_tokens INTEGER NOT NULL,
-            code_kb_version TEXT NOT NULL
-        );
-        INSERT INTO tool_telemetry VALUES (
-            'legacy-cli-1', datetime('now'), 'find_symbol',
-            15, 'ok', NULL, 1, 100, 25, '0.6.0'
-        );",
-    )
-    .unwrap();
-    drop(conn);
-
-    assert!(legacy_db.exists());
-
-    let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
-        .env("CODE_KB_TELEMETRY_DIR", telem_dir.path())
-        .arg("--root")
-        .arg(root)
-        .arg("stats")
-        .arg("--workspace")
-        .arg("--json")
-        .output()
-        .expect("Failed to execute stats");
-
-    assert!(output.status.success());
-    let json_val: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(json_val["total_calls"], 1);
-
-    // Legacy DB must have been migrated and removed
-    assert!(
-        !legacy_db.exists(),
-        "Legacy database should be unlinked after migration"
-    );
-}
-
-#[test]
 fn test_cli_stats_scopes_errors_to_active_workspace() {
     let telem_dir = code_kb_core::safe_tempdir();
 

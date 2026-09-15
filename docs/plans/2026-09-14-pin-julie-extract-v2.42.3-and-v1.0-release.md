@@ -133,11 +133,11 @@ Workspace test suites.
 4. Verify AST facts extraction, SQLite schema v7 integrity, and query behavior against real repository indexes.
 
 **Acceptance criteria:**
-- [ ] All workspace tests pass on Linux (`cargo test --workspace`).
-- [ ] Clippy reports zero warnings (`cargo clippy --workspace --all-targets -- -D warnings`).
-- [ ] Code formatting is pristine (`cargo fmt --all -- --check`).
-- [ ] Windows test suite passes on the Prax Windows 11 VM (`win-test`).
-- [ ] AST extraction facts with `julie-extract` v2.42.3 are fully compatible with `code-kb`.
+- [x] All workspace tests pass on Linux (`cargo test --workspace`).
+- [x] Clippy reports zero warnings (`cargo clippy --workspace --all-targets -- -D warnings`).
+- [x] Code formatting is pristine (`cargo fmt --all -- --check`).
+- [x] Windows test suite passes on the Prax Windows 11 VM (`win-test`).
+- [x] AST extraction facts with `julie-extract` v2.42.3 are fully compatible with `code-kb`.
 
 ---
 
@@ -174,11 +174,11 @@ Workspace test suites.
 8. Synchronize `Cargo.lock` by running `cargo check --workspace --all-targets`.
 
 **Acceptance criteria:**
-- [ ] Root `Cargo.toml` version is `"1.0.0"`.
-- [ ] `crates/code-kb-cli/Cargo.toml` specifies `code-kb-core = { version = "1.0.0" }`.
-- [ ] All 3 plugin manifests reflect `"1.0.0"`.
-- [ ] Release workflow default input is `"1.0.0"`.
-- [ ] `Cargo.lock` is cleanly updated.
+- [x] Root `Cargo.toml` version is `"1.0.0"`.
+- [x] `crates/code-kb-cli/Cargo.toml` specifies `code-kb-core = { version = "1.0.0" }`.
+- [x] All 3 plugin manifests reflect `"1.0.0"`.
+- [x] Release workflow default input is `"1.0.0"`.
+- [x] `Cargo.lock` is cleanly updated.
 
 ---
 
@@ -209,6 +209,6 @@ Read-only validation.
 2. Confirm package readiness and prepare release documentation and merge steps.
 
 **Acceptance criteria:**
-- [ ] `./scripts/release-preflight.sh` exits with code 0 and reports all 7 checks OK.
-- [ ] Workspace packages cleanly for crates.io publication.
-- [ ] Release instructions and verification report prepared.
+- [x] `./scripts/release-preflight.sh` exits with code 0 and reports all 7 checks OK.
+- [x] Workspace packages cleanly for crates.io publication.
+- [x] Release instructions and verification report prepared.
