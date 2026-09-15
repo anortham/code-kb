@@ -1503,7 +1503,9 @@ fn test_mcp_telemetry_summary_scoped_errors_no_cross_workspace_leak() {
 
     // 1. Record error from unrelated workspace B
     let ws_b_dir = code_kb_core::safe_tempdir();
-    let ws_b_root = code_kb_core::to_forward_slash(&code_kb_core::normalize_path(ws_b_dir.path()));
+    let ws_b_root = code_kb_core::to_forward_slash(
+        &code_kb_core::Workspace::new(ws_b_dir.path().to_path_buf()).canonical_root,
+    );
     let secret_error = "SECRET_PATH_EXPOSURE: failed to parse /secret/unrelated/project/token.key";
     telem_conn
         .execute(
@@ -1518,7 +1520,8 @@ fn test_mcp_telemetry_summary_scoped_errors_no_cross_workspace_leak() {
     // 2. Set up workspace A
     let ws_a_dir = code_kb_core::safe_tempdir();
     let root = ws_a_dir.path().to_path_buf();
-    let ws_a_root = code_kb_core::to_forward_slash(&code_kb_core::normalize_path(&root));
+    let ws_a_root =
+        code_kb_core::to_forward_slash(&code_kb_core::Workspace::new(root.clone()).canonical_root);
     let local_error = "Active repo local error: symbol MissingSymbol not found";
     telem_conn
         .execute(

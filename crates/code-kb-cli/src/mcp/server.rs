@@ -459,9 +459,9 @@ impl McpServer {
         };
 
         if let Some(ref conn) = self.telemetry_conn {
-            record_tool_call_conn(conn, &self.workspace.root, &invocation);
+            record_tool_call_conn(conn, &self.workspace.canonical_root, &invocation);
         } else {
-            record_tool_call(&self.workspace.root, &invocation);
+            record_tool_call(&self.workspace.canonical_root, &invocation);
         }
 
         res

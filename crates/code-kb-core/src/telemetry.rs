@@ -244,6 +244,30 @@ pub fn open_telemetry_db(_workspace_root: &Path) -> Result<Connection, QueryErro
     open_global_telemetry_db()
 }
 
+/// Returns the normalized workspace root and an optional alternate representation
+/// (e.g. resolving canonical path, or mapping macOS `/private/var`, `/private/tmp`, `/private/etc` symmetry).
+pub(crate) fn workspace_root_match_candidates(ws: &Path) -> (String, Option<String>) {
+    let norm = to_forward_slash(&normalize_path(ws));
+    let canonical = dunce::canonicalize(ws)
+        .map(|p| to_forward_slash(&normalize_path(&p)))
+        .unwrap_or_else(|_| norm.clone());
+
+    if canonical != norm {
+        return (canonical, Some(norm));
+    }
+
+    // Handle macOS `/private/var`, `/private/tmp`, `/private/etc` symmetry
+    if let Some(rest) = norm.strip_prefix("/private/") {
+        if rest.starts_with("var/") || rest.starts_with("tmp/") || rest.starts_with("etc/") {
+            return (norm.clone(), Some(format!("/{}", rest)));
+        }
+    } else if norm.starts_with("/var/") || norm.starts_with("/tmp/") || norm.starts_with("/etc/") {
+        return (norm.clone(), Some(format!("/private{}", norm)));
+    }
+
+    (norm, None)
+}
+
 /// Fast record of a tool invocation with normalized workspace path attribution.
 pub fn record_tool_call_conn(
     conn: &Connection,
@@ -258,7 +282,9 @@ pub fn record_tool_call_conn(
     let id = blake3::hash(id_source.as_bytes()).to_hex().to_string();
     let version = env!("CARGO_PKG_VERSION");
 
-    let norm_ws = to_forward_slash(&normalize_path(workspace_root));
+    let canonical =
+        dunce::canonicalize(workspace_root).unwrap_or_else(|_| workspace_root.to_path_buf());
+    let norm_ws = to_forward_slash(&normalize_path(&canonical));
     let ws_name = Path::new(&norm_ws)
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
@@ -299,23 +325,43 @@ pub fn get_telemetry_summary(
     conn: &Connection,
     filter: &TelemetryFilter,
 ) -> Result<TelemetrySummary, QueryError> {
-    let (where_clause, ws_param) = match (
+    let (where_clause, ws_param, alt_ws_param) = match (
         &filter.time_window.to_sqlite_condition(),
         &filter.workspace_root,
     ) {
         (Some(time_cond), Some(ws)) => {
-            let norm_ws = to_forward_slash(&normalize_path(ws));
-            (
-                format!("WHERE {} AND workspace_root = ?1", time_cond),
-                Some(norm_ws),
-            )
+            let (canon, alt) = workspace_root_match_candidates(ws);
+            if alt.is_some() {
+                (
+                    format!(
+                        "WHERE {} AND (workspace_root = ?1 OR workspace_root = ?2)",
+                        time_cond
+                    ),
+                    Some(canon),
+                    alt,
+                )
+            } else {
+                (
+                    format!("WHERE {} AND workspace_root = ?1", time_cond),
+                    Some(canon),
+                    None,
+                )
+            }
         }
-        (Some(time_cond), None) => (format!("WHERE {}", time_cond), None),
+        (Some(time_cond), None) => (format!("WHERE {}", time_cond), None, None),
         (None, Some(ws)) => {
-            let norm_ws = to_forward_slash(&normalize_path(ws));
-            ("WHERE workspace_root = ?1".to_string(), Some(norm_ws))
+            let (canon, alt) = workspace_root_match_candidates(ws);
+            if alt.is_some() {
+                (
+                    "WHERE (workspace_root = ?1 OR workspace_root = ?2)".to_string(),
+                    Some(canon),
+                    alt,
+                )
+            } else {
+                ("WHERE workspace_root = ?1".to_string(), Some(canon), None)
+            }
         }
-        (None, None) => ("".to_string(), None),
+        (None, None) => ("".to_string(), None, None),
     };
 
     let scope_description = match &filter.workspace_root {
@@ -354,10 +400,10 @@ pub fn get_telemetry_summary(
                 tokens_saved.unwrap_or(0) as usize,
             ))
         };
-        if let Some(ref ws) = ws_param {
-            stmt.query_row(params![ws], row_mapper)?
-        } else {
-            stmt.query_row([], row_mapper)?
+        match (&ws_param, &alt_ws_param) {
+            (Some(ws), Some(alt)) => stmt.query_row(params![ws, alt], row_mapper)?,
+            (Some(ws), None) => stmt.query_row(params![ws], row_mapper)?,
+            _ => stmt.query_row([], row_mapper)?,
         }
     };
 
@@ -400,15 +446,24 @@ pub fn get_telemetry_summary(
             })
         };
 
-        if let Some(ref ws) = ws_param {
-            let rows = stmt.query_map(params![ws], row_mapper)?;
-            for stat in rows.flatten() {
-                tool_stats.push(stat);
+        match (&ws_param, &alt_ws_param) {
+            (Some(ws), Some(alt)) => {
+                let rows = stmt.query_map(params![ws, alt], row_mapper)?;
+                for stat in rows.flatten() {
+                    tool_stats.push(stat);
+                }
             }
-        } else {
-            let rows = stmt.query_map([], row_mapper)?;
-            for stat in rows.flatten() {
-                tool_stats.push(stat);
+            (Some(ws), None) => {
+                let rows = stmt.query_map(params![ws], row_mapper)?;
+                for stat in rows.flatten() {
+                    tool_stats.push(stat);
+                }
+            }
+            _ => {
+                let rows = stmt.query_map([], row_mapper)?;
+                for stat in rows.flatten() {
+                    tool_stats.push(stat);
+                }
             }
         }
     }
@@ -444,15 +499,24 @@ pub fn get_telemetry_summary(
             })
         };
 
-        if let Some(ref ws) = ws_param {
-            let rows = stmt.query_map(params![ws], row_mapper)?;
-            for err in rows.flatten() {
-                recent_errors.push(err);
+        match (&ws_param, &alt_ws_param) {
+            (Some(ws), Some(alt)) => {
+                let rows = stmt.query_map(params![ws, alt], row_mapper)?;
+                for err in rows.flatten() {
+                    recent_errors.push(err);
+                }
             }
-        } else {
-            let rows = stmt.query_map([], row_mapper)?;
-            for err in rows.flatten() {
-                recent_errors.push(err);
+            (Some(ws), None) => {
+                let rows = stmt.query_map(params![ws], row_mapper)?;
+                for err in rows.flatten() {
+                    recent_errors.push(err);
+                }
+            }
+            _ => {
+                let rows = stmt.query_map([], row_mapper)?;
+                for err in rows.flatten() {
+                    recent_errors.push(err);
+                }
             }
         }
     }
@@ -589,16 +653,29 @@ pub fn generate_bug_report(
 
     // Query recent errors
     let mut recent_errors = Vec::new();
-    let (error_sql, ws_param) = if let Some(ws) = workspace_root {
-        let norm = to_forward_slash(&normalize_path(ws));
-        (
-            "SELECT timestamp, tool, error_message
-             FROM tool_telemetry
-             WHERE outcome = 'error' AND error_message IS NOT NULL AND workspace_root = ?1
-             ORDER BY timestamp DESC
-             LIMIT 10",
-            Some(norm),
-        )
+    let (error_sql, ws_param, alt_ws_param) = if let Some(ws) = workspace_root {
+        let (canon, alt) = workspace_root_match_candidates(ws);
+        if alt.is_some() {
+            (
+                "SELECT timestamp, tool, error_message
+                 FROM tool_telemetry
+                 WHERE outcome = 'error' AND error_message IS NOT NULL AND (workspace_root = ?1 OR workspace_root = ?2)
+                 ORDER BY timestamp DESC
+                 LIMIT 10",
+                Some(canon),
+                alt,
+            )
+        } else {
+            (
+                "SELECT timestamp, tool, error_message
+                 FROM tool_telemetry
+                 WHERE outcome = 'error' AND error_message IS NOT NULL AND workspace_root = ?1
+                 ORDER BY timestamp DESC
+                 LIMIT 10",
+                Some(canon),
+                None,
+            )
+        }
     } else {
         (
             "SELECT timestamp, tool, error_message
@@ -606,6 +683,7 @@ pub fn generate_bug_report(
              WHERE outcome = 'error' AND error_message IS NOT NULL
              ORDER BY timestamp DESC
              LIMIT 10",
+            None,
             None,
         )
     };
@@ -620,15 +698,24 @@ pub fn generate_bug_report(
                 error_message: sanitize_error_message(&raw_msg),
             })
         };
-        if let Some(ref ws) = ws_param {
-            let rows = stmt.query_map(params![ws], row_mapper)?;
-            for err in rows.flatten() {
-                recent_errors.push(err);
+        match (&ws_param, &alt_ws_param) {
+            (Some(ws), Some(alt)) => {
+                let rows = stmt.query_map(params![ws, alt], row_mapper)?;
+                for err in rows.flatten() {
+                    recent_errors.push(err);
+                }
             }
-        } else {
-            let rows = stmt.query_map([], row_mapper)?;
-            for err in rows.flatten() {
-                recent_errors.push(err);
+            (Some(ws), None) => {
+                let rows = stmt.query_map(params![ws], row_mapper)?;
+                for err in rows.flatten() {
+                    recent_errors.push(err);
+                }
+            }
+            _ => {
+                let rows = stmt.query_map([], row_mapper)?;
+                for err in rows.flatten() {
+                    recent_errors.push(err);
+                }
             }
         }
     }
@@ -1569,6 +1656,78 @@ mod tests {
             bundle.julie_extract_version,
             crate::sync::PINNED_JULIE_VERSION,
             "Must report pinned version"
+        );
+    }
+
+    #[test]
+    fn test_telemetry_summary_symlink_and_macos_private_var_matching() {
+        let telem_dir = crate::safe_tempdir();
+        let conn = Connection::open(telem_dir.path().join("telemetry.db")).unwrap();
+        init_telemetry_db(&conn).unwrap();
+
+        // Insert a record using macOS /var/folders path
+        let raw_var_path = "/var/folders/zz/12345678/T/my_repo";
+        conn.execute(
+            "INSERT INTO tool_telemetry VALUES (
+                't-1', datetime('now'), ?1, 'my_repo', 'lookup_symbol',
+                12, 'error', 'Failed to find symbol Foo', 0, 100, 25, 0, '0.9.0'
+            )",
+            params![raw_var_path],
+        )
+        .unwrap();
+
+        // Query using canonical macOS /private/var/folders path
+        let filter = TelemetryFilter {
+            time_window: TimeWindow::AllTime,
+            workspace_root: Some(PathBuf::from("/private/var/folders/zz/12345678/T/my_repo")),
+        };
+        let summary = get_telemetry_summary(&conn, &filter).unwrap();
+        assert_eq!(
+            summary.total_calls, 1,
+            "Must match record across /private/var and /var"
+        );
+        assert_eq!(summary.recent_errors.len(), 1);
+        assert!(
+            summary.recent_errors[0]
+                .error_message
+                .contains("Failed to find symbol Foo")
+        );
+
+        // Reverse: insert with /private/var, query with /var
+        conn.execute(
+            "INSERT INTO tool_telemetry VALUES (
+                't-2', datetime('now'), ?1, 'other_repo', 'lookup_symbol',
+                12, 'error', 'Reverse matching error', 0, 100, 25, 0, '0.9.0'
+            )",
+            params!["/private/var/folders/zz/99999999/T/other_repo"],
+        )
+        .unwrap();
+
+        let filter_rev = TelemetryFilter {
+            time_window: TimeWindow::AllTime,
+            workspace_root: Some(PathBuf::from("/var/folders/zz/99999999/T/other_repo")),
+        };
+        let summary_rev = get_telemetry_summary(&conn, &filter_rev).unwrap();
+        assert_eq!(summary_rev.total_calls, 1);
+        assert_eq!(summary_rev.recent_errors.len(), 1);
+        assert!(
+            summary_rev.recent_errors[0]
+                .error_message
+                .contains("Reverse matching error")
+        );
+
+        // Bug report must also match
+        let bug_report = generate_bug_report(
+            &conn,
+            Some(Path::new("/private/var/folders/zz/12345678/T/my_repo")),
+            Some("test issue"),
+        )
+        .unwrap();
+        assert_eq!(bug_report.recent_errors.len(), 1);
+        assert!(
+            bug_report.recent_errors[0]
+                .error_message
+                .contains("Failed to find symbol Foo")
         );
     }
 }
