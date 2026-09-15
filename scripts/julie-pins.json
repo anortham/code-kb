@@ -5,19 +5,19 @@
   "assets": {
     "aarch64-apple-darwin": {
       "name": "julie-extract-v{VER}-aarch64-apple-darwin.tar.gz",
-      "sha256": ""
+      "sha256": "95ec52436b3e8cfa3cddf5eb068d39d72bdb9df419772ee6e4202318566fb19f"
     },
     "x86_64-apple-darwin": {
       "name": "julie-extract-v{VER}-x86_64-apple-darwin.tar.gz",
-      "sha256": ""
+      "sha256": "cab4fd589b7a06a1cda5a056502c224b1020a098a1509299881e788c6c51828f"
     },
     "x86_64-unknown-linux-gnu": {
       "name": "julie-extract-v{VER}-x86_64-unknown-linux-gnu.tar.gz",
-      "sha256": ""
+      "sha256": "4a877d872ab19b23862fc0456d31600d9f2c06d06d3f532eca4d3fc9c4b12f18"
     },
     "x86_64-pc-windows-msvc": {
       "name": "julie-extract-v{VER}-x86_64-pc-windows-msvc.zip",
-      "sha256": ""
+      "sha256": "f2d001c9f2d84a05d40c86b230a5338e8a5da677ca1d2c59dc384ed2986893d5"
     }
   }
 }
