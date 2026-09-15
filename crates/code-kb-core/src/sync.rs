@@ -18,6 +18,8 @@ pub enum SyncError {
     Io(#[from] std::io::Error),
     #[error("Database error during synchronization: {0}")]
     Db(#[from] rusqlite::Error),
+    #[error("Database error: {0}")]
+    DbInit(#[from] crate::db::DbError),
     #[error("workspace traversal failed: {0}")]
     Walk(#[from] ignore::Error),
 }
@@ -266,7 +268,7 @@ pub fn ensure_fresh_file(
         if let Some(r) = stored_root
             && !crate::workspace::paths_equal(Path::new(&r), &workspace.canonical_root)
         {
-            let _ = crate::db::retarget_artifact_root(db_path, &workspace.canonical_root);
+            crate::db::retarget_artifact_root(db_path, &workspace.canonical_root)?;
         }
 
         update_file(workspace, db_path, rel_path)?;
@@ -313,7 +315,7 @@ pub fn reconcile_offline_edits(
     if let Some(r) = stored_root
         && !crate::workspace::paths_equal(Path::new(&r), &workspace.canonical_root)
     {
-        let _ = crate::db::retarget_artifact_root(db_path, &workspace.canonical_root);
+        crate::db::retarget_artifact_root(db_path, &workspace.canonical_root)?;
     }
 
     let mut report = ReconcileReport::default();

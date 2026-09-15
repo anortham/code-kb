@@ -678,19 +678,29 @@ impl McpServer {
                                             to = %self.db_path.display(),
                                             "Worktree fast-path: copied parent database, reconciling"
                                         );
-                                        let _ = code_kb_core::db::retarget_artifact_root(
+                                        match code_kb_core::db::retarget_artifact_root(
                                             &self.db_path,
                                             &self.workspace.canonical_root,
-                                        );
-                                        let _ = ensure_fts_index_path(&self.db_path);
-                                        if let Ok(conn) = open_read_only(&self.db_path) {
-                                            let _ = reconcile_offline_edits(
-                                                &self.workspace,
-                                                &self.db_path,
-                                                &conn,
-                                            );
+                                        ) {
+                                            Ok(()) => {
+                                                let _ = ensure_fts_index_path(&self.db_path);
+                                                if let Ok(conn) = open_read_only(&self.db_path) {
+                                                    let _ = reconcile_offline_edits(
+                                                        &self.workspace,
+                                                        &self.db_path,
+                                                        &conn,
+                                                    );
+                                                }
+                                                fast_path_taken = true;
+                                            }
+                                            Err(e) => {
+                                                tracing::warn!(
+                                                    error = %e,
+                                                    "Failed to retarget worktree database root; removing copied db and falling back to full scan"
+                                                );
+                                                let _ = std::fs::remove_file(&self.db_path);
+                                            }
                                         }
-                                        fast_path_taken = true;
                                     }
                                 }
                             }
