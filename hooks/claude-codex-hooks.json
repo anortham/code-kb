@@ -6,8 +6,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "code-kb hook SessionStart",
-            "timeout": 5,
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/code-kb-launcher.cjs\" hook SessionStart",
+            "timeout": 60,
             "statusMessage": "Activating code-kb tools..."
           }
         ]
@@ -18,8 +18,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "code-kb hook SubagentStart",
-            "timeout": 5,
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/code-kb-launcher.cjs\" hook SubagentStart",
+            "timeout": 60,
             "statusMessage": "Activating code-kb tools for subagent..."
           }
         ]

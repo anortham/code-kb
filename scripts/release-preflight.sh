@@ -38,6 +38,7 @@ CLI_CORE_VER=$(grep 'code-kb-core = { version = ' crates/code-kb-cli/Cargo.toml 
 PLUGIN_VER=$(grep '"version":' .claude-plugin/plugin.json | awk -F'"' '{print $4}')
 CODEX_PLUGIN_VER=$(grep '"version":' .codex-plugin/plugin.json | awk -F'"' '{print $4}')
 MARKETPLACE_VER=$(grep '"version":' .claude-plugin/marketplace.json | awk -F'"' '{print $4}')
+ROOT_PLUGIN_VER=$(grep '"version":' plugin.json | awk -F'"' '{print $4}')
 
 if [[ "${WS_VER}" != "${CLI_CORE_VER}" ]]; then
   echo "FAIL"
@@ -57,6 +58,11 @@ fi
 if [[ "${WS_VER}" != "${MARKETPLACE_VER}" ]]; then
   echo "FAIL"
   echo "error: Cargo.toml version (${WS_VER}) != .claude-plugin/marketplace.json version (${MARKETPLACE_VER})" >&2
+  exit 1
+fi
+if [[ "${WS_VER}" != "${ROOT_PLUGIN_VER}" ]]; then
+  echo "FAIL"
+  echo "error: Cargo.toml version (${WS_VER}) != plugin.json version (${ROOT_PLUGIN_VER})" >&2
   exit 1
 fi
 echo "OK (v${WS_VER})"
@@ -80,6 +86,9 @@ echo "OK (clippy clean)"
 echo "[5/7] Running full test suite (cargo test --workspace)..."
 cargo test --workspace
 echo "OK (all tests passed)"
+echo "      Running plugin launcher and manifest tests..."
+node --test tests/plugin/*.test.cjs
+echo "OK (plugin tests passed)"
 
 # 6. Workspace package dry-run
 echo "[6/7] Verifying code-kb workspace packaging..."

@@ -31,6 +31,9 @@ jobs:
       - name: Sync Contract (SKILL.md)
         if: ${{ !cancelled() }}
         run: cmp skills/code-kb/SKILL.md .claude-plugin/skills/code-kb/SKILL.md
+      - name: Plugin launcher and manifests
+        if: ${{ !cancelled() }}
+        run: node --test tests/plugin/*.test.cjs
       - name: Restore julie-extract
         if: ${{ !cancelled() }}
         run: bash scripts/restore-julie-extract.sh

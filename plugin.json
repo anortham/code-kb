@@ -1,4 +1,5 @@
 {
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "code-kb",
   "version": "1.0.2",
   "description": "Fast, token-dense code-intelligence engine and MCP server for AI coding agents. Requires Node.js on PATH (the plugin launcher is a Node script).",
@@ -14,15 +15,5 @@
     "mcp",
     "symbols",
     "progressive-disclosure"
-  ],
-  "hooks": "./hooks/claude-codex-hooks.json",
-  "mcpServers": {
-    "code-kb": {
-      "command": "node",
-      "args": [
-        "${CLAUDE_PLUGIN_ROOT}/bin/code-kb-launcher.cjs",
-        "serve"
-      ]
-    }
-  }
+  ]
 }

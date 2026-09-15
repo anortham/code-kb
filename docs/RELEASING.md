@@ -75,10 +75,14 @@ When bumping to version `X.Y.Z` (e.g. `0.5.0`):
   [dependencies]
   code-kb-core = { version = "X.Y.Z", path = "../code-kb-core" }
   ```
-- **`.claude-plugin/plugin.json`**:
+- **`.claude-plugin/plugin.json`**, **`.codex-plugin/plugin.json`**, **`.claude-plugin/marketplace.json`**, and root **`plugin.json`**:
   ```json
   "version": "X.Y.Z",
   ```
+  The plugin launcher (`bin/code-kb-launcher.cjs`) downloads the release archive for this
+  version on first run. Push the tag and let the release finish soon after the bump lands on
+  `main`, because a plugin installed from `main` in between cannot download its binaries.
+  `tests/plugin/plugin-manifests.test.cjs` fails when the four manifests disagree.
 - **`.github/workflows/release-binaries.yml`**:
   Update default version input to `"X.Y.Z"`.
 
@@ -97,7 +101,7 @@ Draft comprehensive markdown release notes at `docs/release-notes/vX.Y.Z.md`:
 
 ### 4. Commit Version Bump & Release Notes
 ```bash
-git add Cargo.toml Cargo.lock crates/code-kb-cli/Cargo.toml .claude-plugin/plugin.json .github/workflows/release-binaries.yml docs/release-notes/vX.Y.Z.md
+git add Cargo.toml Cargo.lock crates/code-kb-cli/Cargo.toml .claude-plugin/plugin.json .codex-plugin/plugin.json .claude-plugin/marketplace.json plugin.json .github/workflows/release-binaries.yml docs/release-notes/vX.Y.Z.md
 git commit -m "chore: release vX.Y.Z"
 ```
 

@@ -1,0 +1,11 @@
+{
+  "code-kb": {
+    "PreInvocation": [
+      {
+        "command": "node ./bin/code-kb-launcher.cjs hook PreInvocation",
+        "timeout": 60,
+        "type": "command"
+      }
+    ]
+  }
+}

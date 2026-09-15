@@ -13,6 +13,10 @@ echo "==> Verifying core invariants: MCP schema contains zero workspace paramete
 cargo test -p code-kb-cli --test mcp_test
 
 echo ""
+echo "==> Running plugin launcher and manifest tests..."
+node --test tests/plugin/*.test.cjs
+
+echo ""
 echo "==> Checking AGENTS.md and CLAUDE.md sync..."
 cmp AGENTS.md CLAUDE.md
 echo "AGENTS.md and CLAUDE.md are byte-for-byte identical."

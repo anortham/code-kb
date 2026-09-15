@@ -1,7 +1,7 @@
 {
   "name": "code-kb",
   "version": "1.0.2",
-  "description": "Fast, token-dense code-intelligence engine and MCP server for AI coding agents",
+  "description": "Fast, token-dense code-intelligence engine and MCP server for AI coding agents. Requires Node.js on PATH (the plugin launcher is a Node script).",
   "author": {
     "name": "Alan Northam"
   },

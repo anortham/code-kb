@@ -5,8 +5,7 @@
       "args": [
         "./bin/code-kb-launcher.cjs",
         "serve"
-      ],
-      "cwd": "."
+      ]
     }
   }
 }

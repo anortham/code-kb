@@ -17,13 +17,13 @@ Traditional AI coding agents burn massive amounts of context loading entire sour
 2. **File Skeletons (`file_skeleton`):** Inspect function signatures, types, traits, and docstrings with implementation bodies stripped.
 3. **Symbol Lookup & Discovery (`lookup_symbol` / `search_symbols`):** Instant exact/prefix identifier lookups and conceptual FTS5 search across all symbols.
 4. **Surgical Symbol Context (`get_symbol_context`):** In a single turn, fetch a target function's body along with its callee signatures, parameter types, and associated unit tests.
-5. **Atomic AST Edits (`replace_symbol_body`):** Replace symbol implementations atomically with pre-flight syntax validation for Rust, JavaScript, TypeScript/TSX, Python, and Go; other languages report validation skipped, then re-index immediately.
+5. **Atomic AST Edits (`replace_symbol_body`):** Replace symbol implementations atomically with pre-flight syntax validation by `julie-extract` for every language it parses, then re-index immediately.
 
 ---
 
 ## Key Principles
 
-- **Sub-15MB Retained Memory:** Written in Rust, zero heavy runtimes (no Node.js daemon, no web dashboard, no GPU models), retained process memory stays below 15 MB.
+- **Sub-15MB Retained Memory:** Written in Rust, zero heavy runtimes (no web dashboard, no GPU models), retained process memory stays below 15 MB. The plugin launcher is a small Node script that starts the native binary and then only waits on it.
 - **Sub-5ms Query Latency:** Direct SQLite queries in WAL mode with zero in-memory heap bloat.
 - **Zero Workspace Parameters:** Pure semantic tool calling (`lookup_symbol(query="...")`). The agent is never burdened with `workspace_id`, `repo_path`, or path confusion.
 - **CLI-First Parity:** Every MCP tool has an exact 1:1 CLI command for instantaneous terminal verification and dogfooding.
@@ -33,67 +33,132 @@ Traditional AI coding agents burn massive amounts of context loading entire sour
 
 ## Install
 
-### Step 1: Binary Setup (Zero-Dependency)
+Install the plugin for your agent. The plugin ships a small Node.js launcher. On the first
+run it downloads the matching `code-kb` release archive for your platform, verifies its
+SHA-256, and unpacks `code-kb` and `julie-extract` into `~/.code-kb/dist/<version>/`. Later
+runs start instantly. Nothing else to download or put on `PATH`.
 
-- **GitHub Releases (Recommended):** Download the latest release archive for your platform from [GitHub Releases](https://github.com/anortham/code-kb/releases):
-  - Linux x86_64 (`.tar.gz`)
-  - macOS Apple Silicon (`.tar.gz`)
-  - macOS Intel (`.tar.gz`)
-  - Windows x86_64 (`.zip`)
-- Unpack and put the binaries in your `PATH` (e.g. `~/.local/bin`, `/usr/local/bin`, or `C:\tools`).
-- *Note on Bundled Distribution:* Both `code-kb` and `julie-extract` are pre-packaged side-by-side in the release archive. `code-kb` locates `julie-extract` right next to its own executable automatically.
-- **Cargo (Rust Users):**
-  ```bash
-  cargo binstall code-kb-cli
-  # or
-  cargo install code-kb-cli
-  ```
-  Cargo installs `code-kb` only. Download the pinned `julie-extract` from the [julie-extractors releases](https://github.com/anortham/julie-extractors/releases) (version in `scripts/julie-pins.json`) and put it on your `PATH` or set `JULIE_EXTRACT_BIN`.
-- **Verification:**
-  ```bash
-  code-kb --version
-  ```
+Requirements:
+- Node.js 18 or newer on `PATH` (the launcher is a Node script; the server itself is a native binary).
+- Windows 10 build 17063 or newer (the launcher unpacks with the built-in `tar.exe`).
 
-### Step 2: Connect Your Agent
+### Claude Code
 
-#### Claude Code
-
-Plugin Marketplace (Recommended):
 ```text
 /plugin marketplace add anortham/code-kb
 ```
 ```text
 /plugin install code-kb@code-kb
 ```
-*(Send as two separate prompts in Claude Code)*
+*(Send as two separate prompts.)* The plugin registers the MCP server, the progressive
+disclosure skill, and SessionStart and SubagentStart hooks that inject routing instructions.
 
-CLI MCP fallback:
-```bash
-claude mcp add --scope user code-kb -- code-kb serve
-```
+### Codex
 
-*Note:* Injects routing instructions on session start and subagent start via native hooks, and registers progressive disclosure skills.
-
-#### Codex
-
-Plugin Marketplace:
 ```bash
 codex plugin marketplace add anortham/code-kb
 codex plugin add code-kb@code-kb
 ```
+Run `codex`, open `/hooks`, and trust the two code-kb hooks.
 
-Manual MCP config in `~/.codex/config.toml`:
+### Antigravity CLI (AGY)
+
+```bash
+agy plugin install https://github.com/anortham/code-kb
+```
+The plugin registers the MCP server and a `PreInvocation` hook. Antigravity has no
+`SessionStart` hook, so routing directives arrive per turn through `injectSteps`.
+
+### Grok CLI
+
+```bash
+grok plugin install anortham/code-kb --trust
+```
+
+### First Run & Automatic Indexing
+
+You do not need to run `code-kb scan` by hand. When an agent calls any `code-kb` tool in a
+repository for the first time, `code-kb` creates `<workspace>/.code-kb/artifact.db` and runs
+the initial scan. Pre-index a large repository before a session with:
+
+```bash
+code-kb scan
+```
+
+Launcher environment variables:
+
+| Variable | Effect |
+|---|---|
+| `CODE_KB_HOME` | Directory that holds `dist/` (default `~/.code-kb`). |
+| `CODE_KB_VERSION` | Release version to fetch instead of the plugin's own version. |
+| `CODE_KB_BIN` | Run this binary and skip the download entirely (local builds). |
+
+### Uninstall
+
+| Harness | Command / Action |
+|---|---|
+| Claude Code | `/plugin remove code-kb` |
+| Codex | `codex plugin remove code-kb` |
+| Antigravity (AGY) | `agy plugin uninstall code-kb` |
+| Grok CLI | `grok plugin uninstall code-kb` |
+
+Delete `~/.code-kb/dist` to remove the downloaded binaries. Each workspace keeps its index
+in `<workspace>/.code-kb/`; delete that directory to remove the index.
+
+---
+
+## Manual Configuration
+
+Use this path for harnesses without a plugin manager, or when you would rather manage the
+binary yourself.
+
+### Step 1: Get the Binaries
+
+- **GitHub Releases:** download the archive for your platform from
+  [GitHub Releases](https://github.com/anortham/code-kb/releases):
+  - Linux x86_64 (`.tar.gz`)
+  - macOS Apple Silicon (`.tar.gz`)
+  - macOS Intel (`.tar.gz`)
+  - Windows x86_64 (`.zip`)
+
+  Unpack it and put both binaries on your `PATH` (for example `~/.local/bin`,
+  `/usr/local/bin`, or `C:\tools`). `code-kb` and `julie-extract` are packaged side by side,
+  and `code-kb` finds `julie-extract` next to its own executable.
+- **Cargo:**
+  ```bash
+  cargo binstall code-kb-cli
+  # or
+  cargo install code-kb-cli
+  ```
+  Cargo installs `code-kb` only. Download the pinned `julie-extract` from the
+  [julie-extractors releases](https://github.com/anortham/julie-extractors/releases) (version
+  in `scripts/julie-pins.json`) and put it on your `PATH` or set `JULIE_EXTRACT_BIN`.
+- **Verify:**
+  ```bash
+  code-kb --version
+  ```
+
+### Step 2: Register the MCP Server
+
+Every harness runs the same command: `code-kb serve`. Hooks run `code-kb hook <Event>`.
+
+#### Claude Code (without the plugin)
+
+```bash
+claude mcp add --scope user code-kb -- code-kb serve
+```
+
+#### Codex (without the plugin)
+
+In `~/.codex/config.toml`:
 ```toml
 [mcp_servers.code-kb]
 command = "code-kb"
 args = ["serve"]
 ```
 
-Run `codex`, open `/hooks`, and trust the lifecycle hooks.
+#### Antigravity CLI (without the plugin)
 
-#### Antigravity CLI (AGY)
-
-CLI command:
 ```bash
 agy mcp add code-kb code-kb serve
 ```
@@ -127,21 +192,15 @@ Lifecycle hook configuration (`~/.gemini/config/hooks.json`):
   }
 }
 ```
-*Note:* Antigravity does not support `SessionStart` hooks. It uses `PreInvocation` with `injectSteps` to deliver turn-level routing directives.
 
 Progressive disclosure skill linking:
 ```bash
 ln -sf /path/to/code-kb/skills/code-kb ~/.gemini/config/skills/code-kb
 ```
 
-#### Grok CLI
+#### Grok CLI (without the plugin)
 
-Plugin install:
-```bash
-grok plugin install anortham/code-kb --trust
-```
-
-Project-level `.mcp.json` fallback:
+Project-level `.mcp.json`:
 ```json
 {
   "mcpServers": {
@@ -199,31 +258,9 @@ Add to `claude_desktop_config.json` (`%APPDATA%\Claude\claude_desktop_config.jso
 
 For terminal harnesses inheriting CWD (Copilot CLI, Pi, Swival, Windsurf, Zed): configure the MCP server to run `code-kb serve`.
 
----
-
-### First Run & Automatic Indexing
-
-You do not need to manually run `code-kb scan`.
-
-When an agent calls any `code-kb` tool in a repository for the first time, `code-kb` automatically creates `<workspace>/.code-kb/artifact.db` and runs an initial scan.
-
-Manual indexing via `code-kb scan` remains available for pre-indexing large repositories before agent sessions:
-
-```bash
-code-kb scan
-```
-
----
-
-### Uninstall
-
-| Harness | Command / Action |
-|---|---|
-| Claude Code | `/plugin remove code-kb` (or `claude mcp remove code-kb`) |
-| Codex | `codex plugin remove code-kb` |
-| Antigravity (AGY) | `agy mcp remove code-kb` |
-| Grok CLI | `grok plugin uninstall code-kb` |
-| Cursor / OpenCode | Remove the `code-kb` entry from `.cursor/mcp.json` / `opencode.json` |
+To remove a manual configuration, delete the `code-kb` entry from the harness config
+(`claude mcp remove code-kb`, `agy mcp remove code-kb`, or edit the file) and delete the
+binaries from your `PATH`.
 
 ---
 
@@ -321,8 +358,16 @@ cargo install --path crates/code-kb-cli --force
 # Run test suite
 cargo test --workspace
 
+# Run the plugin launcher and manifest tests
+node --test tests/plugin/*.test.cjs
+
 # Run release pre-flight verification
 ./scripts/release-preflight.sh
+```
+
+To run a harness plugin against a local build, point the launcher at it:
+```bash
+CODE_KB_BIN=$PWD/target/release/code-kb claude --plugin-dir .
 ```
 
 ---

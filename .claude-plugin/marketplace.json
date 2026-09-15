@@ -4,14 +4,14 @@
     "name": "Alan Northam"
   },
   "metadata": {
-    "description": "Fast, token-dense code-intelligence engine and MCP server for AI coding agents"
+    "description": "Fast, token-dense code-intelligence engine and MCP server for AI coding agents. Requires Node.js on PATH (the plugin launcher is a Node script)."
   },
   "plugins": [
     {
       "name": "code-kb",
       "source": "./",
-      "description": "Fast, token-dense code-intelligence engine and MCP server for AI coding agents",
-      "version": "1.0.1",
+      "description": "Fast, token-dense code-intelligence engine and MCP server for AI coding agents. Requires Node.js on PATH (the plugin launcher is a Node script).",
+      "version": "1.0.2",
       "category": "developer-tools"
     }
   ]
