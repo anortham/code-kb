@@ -100,7 +100,7 @@ MCP tool schema.**
 - Single-download distribution: Release archives ship `code-kb` and matching `julie-extract` pre-packaged side-by-side. Users download one archive and receive both binaries ready to execute.
 - Runtime discovery: `code-kb` checks `JULIE_EXTRACT_BIN`, next to its own executable (`current_exe().parent()`), `.tools/julie-extract`, and `PATH`. The first candidate whose version matches the pin wins; otherwise the first candidate found is used with a warning.
 - Index version guard: the index is rebuilt once when it was written by a different `julie-extract` than the one in use. The guard compares against the binary in use, never against the pin alone, so a non-pinned extractor never causes repeated rebuilds.
-- New artifacts are built at the extractor's `facts` level (symbol core plus structural facts, no identifier, literal, or source-region tables). The version guard also rebuilds an index recorded at another level.
+- New artifacts are built at the extractor's `facts` level (symbol core, structural facts, literals, and type-usage and member-access identifiers; no call or variable-reference identifiers and no source regions). `find_references(direction="callers")` reads those identifiers. The version guard also rebuilds an index recorded at another level.
 - Scans pass `--parent-pid` (Unix) so an extractor scan aborts when the `code-kb` process that started it dies.
 - Release workflow: Documented step-by-step in `docs/RELEASING.md`; automated pre-flight check via `scripts/release-preflight.sh`.
 

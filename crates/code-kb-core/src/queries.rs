@@ -917,6 +917,15 @@ pub fn find_references_for_symbol(
     find_references_internal(conn, symbol_name, direction, limit, Some(symbol_id), false)
 }
 
+fn has_table(conn: &Connection, name: &str) -> bool {
+    conn.query_row(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1",
+        [name],
+        |_| Ok(true),
+    )
+    .unwrap_or(false)
+}
+
 fn has_pending_namespace_column(conn: &Connection) -> bool {
     let has_ns: bool = conn
         .query_row(
@@ -1138,6 +1147,39 @@ fn find_references_internal(
                         results.push(r?);
                     }
                 }
+            }
+        }
+
+        if results.len() < limit && has_table(conn, "identifiers") {
+            let remaining = limit - results.len();
+            let mut ident_stmt = conn.prepare(
+                "SELECT COALESCE(s.name, ''),
+                        COALESCE(i.containing_symbol_id, ''),
+                        i.name,
+                        i.kind,
+                        i.path,
+                        i.start_line,
+                        i.start_column
+                 FROM identifiers i
+                 LEFT JOIN symbols s ON i.containing_symbol_id = s.symbol_id
+                 WHERE i.name = ?1 AND i.kind IN ('type_usage', 'member_access')
+                   AND COALESCE(s.kind, '') != 'import'
+                 ORDER BY i.path, i.start_line
+                 LIMIT ?2",
+            )?;
+            let rows = ident_stmt.query_map(params![symbol_name, remaining as i64], |row| {
+                Ok(ReferenceSite {
+                    from_symbol_name: row.get(0)?,
+                    from_symbol_id: row.get(1)?,
+                    to_symbol_name: row.get(2)?,
+                    kind: row.get(3)?,
+                    path: row.get::<_, String>(4)?.replace('\\', "/"),
+                    start_line: row.get::<_, Option<i64>>(5)?.map(|v| v as usize),
+                    start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
+                })
+            })?;
+            for r in rows {
+                results.push(r?);
             }
         }
     } else {

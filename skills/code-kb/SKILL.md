@@ -29,7 +29,7 @@ Before modifying or understanding a specific function/method:
   3. Parameter type definitions.
   4. Associated unit tests.
 * Call `get_symbol_body(symbol_name, file_path)` if only the exact implementation body is needed.
-* Call `find_references(symbol_name, file_path?)` (or `direction="callees"`) to check callers/callees. Matching is by symbol name from AST call sites, so same-named symbols can merge; pass `file_path` or a qualified name and verify before refactors. Callee search excludes external stdlib/runtime tokens language-agnostically across all ~40 supported languages; pass `include_external=true` to view external runtime calls.
+* Call `find_references(symbol_name, file_path?)` (or `direction="callees"`) to check callers/callees. Callers include call sites, type usages, and member accesses of the name. Matching is by symbol name, so same-named symbols can merge; pass `file_path` or a qualified name and verify before refactors. Callee search excludes external stdlib/runtime tokens language-agnostically across all ~40 supported languages; pass `include_external=true` to view external runtime calls.
 * Call `blast_radius(symbol="...")` or `blast_radius(file="...")` or `blast_radius()` (auto-detects uncommitted git changes) to calculate multi-hop transitive callers and pinpoint targeted tests to run before/after editing. (Tool alias: `impact`).
 * Call `find_structural_facts()` to list all detected framework categories, or `find_structural_facts(category="route")` to query specific routes, SQL queries, models, or config keys.
 

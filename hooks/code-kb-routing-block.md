@@ -16,7 +16,7 @@
 4. **Natural Language / Concept Search:** `search_symbols(query="keyword concept", path="optional/subpath")` using FTS5 BM25.
 5. **Function Body & Implementation:** `get_symbol_body(symbol_name, file_path)` to read only the target symbol.
 6. **Editing Prep / Call Graph:** `get_symbol_context(symbol_name, file_path)` returns target body + immediate callee signatures + parameter types + tests in one call.
-7. **Callers / References:** `find_references(symbol_name, direction="callers")` (default direction: "callers"). Matching is by symbol name, so pass `file_path` or a qualified name for overloaded names such as `new`.
+7. **Callers / References:** `find_references(symbol_name, direction="callers")` (default direction: "callers"). Callers include call sites, type usages, and member accesses. Matching is by symbol name, so pass `file_path` or a qualified name for overloaded names such as `new`.
 8. **Framework Facts (Routes, Queries, Models):** `find_structural_facts(category)` (omit category to list all available categories).
 9. **Atomic Symbol Edits:** `replace_symbol_body(symbol_name, file_path, new_body, expected_body_hash)` verifies tree-sitter syntax, checks concurrency hash, edits file, and updates SQLite index in one turn.
 10. **Blast Radius & Test Impact:** `blast_radius(symbol="name")`, `blast_radius(path="file")`, or `blast_radius()` (auto-detects uncommitted git changes) to compute multi-hop callers and predict likely tests to run before/after edits (alias: `impact`).
