@@ -33,7 +33,7 @@ fn main() {
     let pinned_version = if pins_file.exists() {
         let content =
             std::fs::read_to_string(&pins_file).expect("Failed to read scripts/julie-pins.json");
-        parse_version(&content).unwrap_or_else(|| "2.42.1".to_string())
+        parse_version(&content).unwrap_or_else(|| "2.42.3".to_string())
     } else {
         println!(
             "cargo:warning=scripts/julie-pins.json not found; bypassing julie-extract build verification"
