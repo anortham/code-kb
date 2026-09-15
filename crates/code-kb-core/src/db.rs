@@ -143,6 +143,33 @@ pub fn ensure_fts_index_path(path: &Path) -> Result<(), DbError> {
     Ok(())
 }
 
+/// Retargets the `root_path` key in `artifact_metadata` to a new workspace canonical root.
+/// This is essential when cloning or copying an artifact database (e.g. into a git worktree),
+/// ensuring `julie-extract update`, `delete`, and `scan` recognize the new root without root mismatch errors.
+pub fn retarget_artifact_root(db_path: &Path, new_root: &Path) -> Result<(), rusqlite::Error> {
+    if !db_path.exists() {
+        return Ok(());
+    }
+    if let Ok(conn) = open_read_write(db_path) {
+        let has_metadata: bool = conn
+            .query_row(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='artifact_metadata'",
+                [],
+                |_| Ok(true),
+            )
+            .unwrap_or(false);
+        if has_metadata {
+            let root_str = crate::workspace::to_forward_slash(new_root);
+            conn.execute(
+                "INSERT INTO artifact_metadata (key, value) VALUES ('root_path', ?1)
+                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                rusqlite::params![root_str],
+            )?;
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

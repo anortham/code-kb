@@ -930,6 +930,17 @@ fn test_mcp_worktree_auto_copy_fast_path() {
         rusqlite::params![bytes],
     )
     .unwrap();
+    conn.execute_batch(
+        "CREATE TABLE artifact_metadata (
+            key TEXT PRIMARY KEY, value TEXT NOT NULL
+        );",
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO artifact_metadata VALUES ('root_path', ?1)",
+        rusqlite::params![code_kb_core::to_forward_slash(&main_root)],
+    )
+    .unwrap();
     code_kb_core::db::ensure_fts_index(&conn).unwrap();
     drop(conn);
 
@@ -1013,6 +1024,23 @@ fn test_mcp_worktree_auto_copy_fast_path() {
 
     // Verify worktree DB was copied
     assert!(wt_db.exists(), "Worktree DB should now exist on disk");
+
+    // Verify artifact_metadata root_path was retargeted to worktree
+    {
+        let wt_conn = code_kb_core::open_read_only(&wt_db).unwrap();
+        let retargeted_root: String = wt_conn
+            .query_row(
+                "SELECT value FROM artifact_metadata WHERE key = 'root_path'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            retargeted_root,
+            code_kb_core::to_forward_slash(&wt_root),
+            "artifact_metadata root_path must be retargeted to worktree root"
+        );
+    }
 
     drop(stdin);
     let _ = child.wait();

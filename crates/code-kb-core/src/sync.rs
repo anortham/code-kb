@@ -256,6 +256,20 @@ pub fn ensure_fresh_file(
     };
 
     if is_dirty {
+        let root_str = crate::workspace::to_forward_slash(&workspace.canonical_root);
+        let stored_root: Option<String> = conn
+            .query_row(
+                "SELECT value FROM artifact_metadata WHERE key = 'root_path'",
+                [],
+                |r| r.get(0),
+            )
+            .ok();
+        if let Some(r) = stored_root
+            && r != root_str
+        {
+            let _ = crate::db::retarget_artifact_root(db_path, &workspace.canonical_root);
+        }
+
         update_file(workspace, db_path, rel_path)?;
         return Ok(true);
     }
@@ -288,6 +302,22 @@ pub fn reconcile_offline_edits(
     db_path: &Path,
     conn: &Connection,
 ) -> Result<ReconcileReport, SyncError> {
+    // Ensure artifact_metadata root_path matches workspace canonical root
+    // (self-heals worktrees where artifact.db was copied from a parent repository)
+    let root_str = crate::workspace::to_forward_slash(&workspace.canonical_root);
+    let stored_root: Option<String> = conn
+        .query_row(
+            "SELECT value FROM artifact_metadata WHERE key = 'root_path'",
+            [],
+            |r| r.get(0),
+        )
+        .ok();
+    if let Some(r) = stored_root
+        && r != root_str
+    {
+        let _ = crate::db::retarget_artifact_root(db_path, &workspace.canonical_root);
+    }
+
     let mut report = ReconcileReport::default();
 
     // In-memory table to track paths seen on disk without allocating repository-wide HashMaps in heap

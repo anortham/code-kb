@@ -678,6 +678,10 @@ impl McpServer {
                                             to = %self.db_path.display(),
                                             "Worktree fast-path: copied parent database, reconciling"
                                         );
+                                        let _ = code_kb_core::db::retarget_artifact_root(
+                                            &self.db_path,
+                                            &self.workspace.canonical_root,
+                                        );
                                         let _ = ensure_fts_index_path(&self.db_path);
                                         if let Ok(conn) = open_read_only(&self.db_path) {
                                             let _ = reconcile_offline_edits(

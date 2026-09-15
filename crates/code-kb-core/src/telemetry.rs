@@ -1299,7 +1299,11 @@ mod tests {
         assert_eq!(bundle.code_kb_version, env!("CARGO_PKG_VERSION"));
         assert!(!bundle.os_info.is_empty());
         assert!(!bundle.arch_info.is_empty());
-        assert!(bundle.julie_extract_version.contains(crate::sync::PINNED_JULIE_VERSION));
+        assert!(
+            bundle
+                .julie_extract_version
+                .contains(crate::sync::PINNED_JULIE_VERSION)
+        );
         assert_eq!(bundle.active_workspace_name, Some("code-kb".to_string()));
         assert_eq!(bundle.recent_errors.len(), 1);
         assert!(
