@@ -53,7 +53,8 @@ MCP tool schema.**
   are executed as direct, indexed SQLite queries with `open_read_only`.
 
 ### 3. Single-Turn Atomic Edits
-- `replace_symbol_body` must perform pre-flight tree-sitter syntax validation,
+- `replace_symbol_body` must perform pre-flight syntax validation through
+  `julie-extract check` (code-kb bundles no tree-sitter grammars of its own),
   optional `body_hash` concurrency verification, atomic file replacement, and
   immediate SQLite re-indexing in a single turn.
 - Do not implement two-step preview-and-confirm handshakes that waste agent turns.
@@ -95,7 +96,7 @@ MCP tool schema.**
   natively for Claude Code/Cursor (`SessionStart`), Copilot, and Antigravity (`PreInvocation` injectSteps).
 
 ### 7. Pinned Extractor & Bundled Distribution
-- `code-kb` pins the exact extractor version in `scripts/julie-pins.json` (currently `2.43.0`).
+- `code-kb` pins the exact extractor version in `scripts/julie-pins.json` (currently `3.0.0`).
 - Build guard: `crates/code-kb-cli/build.rs` verifies that `julie-extract` is restored and matches the pinned version. A missing or mismatched extractor fails the build immediately (bypassable for offline packaging via `CODE_KB_ALLOW_MISSING_JULIE_EXTRACT=1`).
 - Single-download distribution: Release archives ship `code-kb` and matching `julie-extract` pre-packaged side-by-side. Users download one archive and receive both binaries ready to execute.
 - Runtime discovery: `code-kb` checks `JULIE_EXTRACT_BIN`, next to its own executable (`current_exe().parent()`), `.tools/julie-extract`, and `PATH`. The first candidate whose version matches the pin wins; otherwise the first candidate found is used with a warning.

@@ -285,7 +285,7 @@ code-kb facts
 code-kb facts config --path Cargo.toml
 code-kb facts route --limit 10
 
-# Atomically edit a symbol body with pre-flight tree-sitter syntax validation
+# Atomically edit a symbol body with pre-flight syntax validation by julie-extract
 code-kb edit my_func --file src/lib.rs --body "{\n    println!(\"hello\");\n}"
 
 # View active log file and recent diagnostic messages

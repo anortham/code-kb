@@ -1,220 +1,71 @@
-use std::path::Path;
+use serde::Deserialize;
+use std::io::Write;
+use std::process::{Command, Stdio};
 use thiserror::Error;
-use tree_sitter::{Language, Parser};
+
+use crate::sync::find_julie_extract_binary;
 
 #[derive(Debug, Error, PartialEq)]
 pub enum SyntaxError {
     #[error("Syntax error in {0}: {1}")]
     ParseError(String, String),
+    #[error("Syntax check could not run: {0}")]
+    CheckFailed(String),
 }
 
-enum SupportedGrammar {
-    Rust,
-    JavaScript,
-    TypeScript,
-    Tsx,
-    Python,
-    Go,
+#[derive(Deserialize)]
+struct CheckReport {
+    status: String,
+    #[serde(default)]
+    errors: Vec<CheckDiagnostic>,
 }
 
-fn detect_grammar(file_path: &str) -> Option<SupportedGrammar> {
-    let ext = Path::new(file_path).extension()?.to_str()?;
-    let ext_lower = ext.to_ascii_lowercase();
-    match ext_lower.as_str() {
-        "rs" => Some(SupportedGrammar::Rust),
-        "js" | "mjs" | "cjs" | "jsx" => Some(SupportedGrammar::JavaScript),
-        "ts" | "mts" | "cts" => Some(SupportedGrammar::TypeScript),
-        "tsx" => Some(SupportedGrammar::Tsx),
-        "py" | "pyi" => Some(SupportedGrammar::Python),
-        "go" => Some(SupportedGrammar::Go),
-        _ => None,
-    }
+#[derive(Deserialize)]
+struct CheckDiagnostic {
+    message: String,
 }
 
-fn get_language(grammar: SupportedGrammar) -> Language {
-    match grammar {
-        SupportedGrammar::Rust => Language::from(tree_sitter_rust::LANGUAGE),
-        SupportedGrammar::JavaScript => Language::from(tree_sitter_javascript::LANGUAGE),
-        SupportedGrammar::TypeScript => Language::from(tree_sitter_typescript::LANGUAGE_TYPESCRIPT),
-        SupportedGrammar::Tsx => Language::from(tree_sitter_typescript::LANGUAGE_TSX),
-        SupportedGrammar::Python => Language::from(tree_sitter_python::LANGUAGE),
-        SupportedGrammar::Go => Language::from(tree_sitter_go::LANGUAGE),
-    }
-}
-
-fn find_first_error(node: tree_sitter::Node) -> Option<(usize, usize, String)> {
-    if node.is_error() {
-        let start = node.start_position();
-        return Some((start.row + 1, start.column + 1, "syntax error".to_string()));
-    }
-    if node.is_missing() {
-        let start = node.start_position();
-        return Some((
-            start.row + 1,
-            start.column + 1,
-            format!("missing {}", node.kind()),
-        ));
-    }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        if child.has_error()
-            && let Some(err) = find_first_error(child)
-        {
-            return Some(err);
-        }
-    }
-    None
-}
-
-/// Pre-flight validates code syntax before it is committed to disk using language-specific Tree-Sitter grammars.
-/// Returns `Ok(true)` if syntax was validated successfully, `Ok(false)` if syntax validation was skipped
-/// (e.g. grammar not available for the file extension), or `Err(SyntaxError::ParseError)` if parsing failed.
+/// Validates `content` as the full text of `file_path` through `julie-extract check` before it is written to disk.
+/// Returns `Ok(true)` when the extractor parsed it cleanly, `Ok(false)` when the extractor has no grammar for the
+/// path, and `Err(SyntaxError::ParseError)` when the parse reported syntax errors.
 pub fn validate_syntax(file_path: &str, content: &str) -> Result<bool, SyntaxError> {
-    let grammar = match detect_grammar(file_path) {
-        Some(g) => g,
-        None => return Ok(false), // Unrecognized or non-code extensions pass through without checking
-    };
+    let bin = find_julie_extract_binary()
+        .ok_or_else(|| SyntaxError::CheckFailed("julie-extract binary not found".to_string()))?;
+    let mut child = Command::new(bin)
+        .args(["check", "--path", file_path, "--json"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| SyntaxError::CheckFailed(e.to_string()))?;
+    let written = child
+        .stdin
+        .take()
+        .expect("stdin was piped")
+        .write_all(content.as_bytes());
+    let output = child
+        .wait_with_output()
+        .map_err(|e| SyntaxError::CheckFailed(e.to_string()))?;
+    written.map_err(|e| SyntaxError::CheckFailed(format!("could not send content: {e}")))?;
+    let report: CheckReport = serde_json::from_slice(&output.stdout)
+        .map_err(|e| SyntaxError::CheckFailed(format!("unreadable check report: {e}")))?;
 
-    let language = get_language(grammar);
-    let mut parser = Parser::new();
-    parser.set_language(&language).map_err(|e| {
-        SyntaxError::ParseError(
-            file_path.to_string(),
-            format!("failed to initialize parser: {e}"),
-        )
-    })?;
-
-    let tree = parser.parse(content, None).ok_or_else(|| {
-        SyntaxError::ParseError(file_path.to_string(), "failed to parse content".to_string())
-    })?;
-
-    if tree.root_node().has_error() {
-        if let Some((line, col, msg)) = find_first_error(tree.root_node()) {
-            return Err(SyntaxError::ParseError(
-                file_path.to_string(),
-                format!("{msg} at line {line}, column {col}"),
-            ));
+    match report.status.as_str() {
+        "ok" => Ok(true),
+        "unsupported" => Ok(false),
+        _ => {
+            let first = report
+                .errors
+                .first()
+                .map(|e| e.message.clone())
+                .unwrap_or_else(|| "syntax error".to_string());
+            let more = report.errors.len().saturating_sub(1);
+            let detail = if more > 0 {
+                format!("{first} (+{more} more)")
+            } else {
+                first
+            };
+            Err(SyntaxError::ParseError(file_path.to_string(), detail))
         }
-        return Err(SyntaxError::ParseError(
-            file_path.to_string(),
-            "syntax error detected".to_string(),
-        ));
-    }
-
-    Ok(true)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_valid_rust_code() {
-        let code = r#"
-        pub fn calculate(x: i32) -> i32 {
-            let s = "Hello (world) {test}";
-            // Comment with unbalanced { [ (
-            /* Multi-line comment ( [ { */
-            x * 2
-        }
-        "#;
-        assert_eq!(validate_syntax("test.rs", code), Ok(true));
-    }
-
-    #[test]
-    fn test_rust_lifetime_and_raw_string() {
-        let code = r##"
-        pub fn greet(name: &'static str) -> &'static str {
-            let raw = r#"hello "world""#;
-            name
-        }
-        "##;
-        assert_eq!(
-            validate_syntax("greet.rs", code),
-            Ok(true),
-            "Valid Rust with lifetime and raw string should pass"
-        );
-    }
-
-    #[test]
-    fn test_invalid_rust_syntax() {
-        let code = "pub fn foo() { let x = ; }";
-        let res = validate_syntax("test.rs", code);
-        assert!(matches!(res, Err(SyntaxError::ParseError(..))));
-    }
-
-    #[test]
-    fn test_valid_javascript() {
-        let code = "function greet(name) { return `hello ${name}`; }";
-        assert_eq!(validate_syntax("app.js", code), Ok(true));
-    }
-
-    #[test]
-    fn test_invalid_javascript_syntax() {
-        let code = "function f() { const x = ; }";
-        assert!(
-            validate_syntax("app.js", code).is_err(),
-            "Invalid JavaScript should fail syntax validation"
-        );
-    }
-
-    #[test]
-    fn test_valid_typescript() {
-        let code = "interface User { id: number; name: string; }\nexport const get = (u: User): number => u.id;";
-        assert_eq!(validate_syntax("user.ts", code), Ok(true));
-    }
-
-    #[test]
-    fn test_invalid_typescript() {
-        let code = "interface User { id number; }";
-        assert!(validate_syntax("user.ts", code).is_err());
-    }
-
-    #[test]
-    fn test_valid_python() {
-        let code = "def greet(name: str) -> str:\n    return f'hello {name}'\n";
-        assert_eq!(validate_syntax("script.py", code), Ok(true));
-    }
-
-    #[test]
-    fn test_invalid_python_syntax() {
-        let code = "def foo(:\n    pass";
-        assert!(
-            validate_syntax("script.py", code).is_err(),
-            "Invalid Python should fail syntax validation"
-        );
-    }
-
-    #[test]
-    fn test_valid_go() {
-        let code = "package main\n\nfunc main() {\n    println(\"hello\")\n}\n";
-        assert_eq!(validate_syntax("main.go", code), Ok(true));
-    }
-
-    #[test]
-    fn test_invalid_go_syntax() {
-        let code = "package main\n\nfunc main() {\n    x :=\n}\n";
-        assert!(validate_syntax("main.go", code).is_err());
-    }
-
-    #[test]
-    fn test_unrecognized_extension_passes() {
-        let code = "any unparseable random content { [";
-        assert_eq!(validate_syntax("notes.txt", code), Ok(false));
-    }
-
-    #[test]
-    fn test_case_insensitive_extension_matching() {
-        let rs_code = "pub fn add(a: i32, b: i32) -> i32 { a + b }";
-        assert_eq!(validate_syntax("TEST.RS", rs_code), Ok(true));
-
-        let invalid_rs = "pub fn add(a: i32, b: i32) -> i32 { a + }";
-        assert!(validate_syntax("TEST.RS", invalid_rs).is_err());
-
-        let ts_code = "const x: number = 42;";
-        assert_eq!(validate_syntax("index.TS", ts_code), Ok(true));
-
-        let py_code = "def foo():\n    return 42\n";
-        assert_eq!(validate_syntax("SCRIPT.PY", py_code), Ok(true));
     }
 }

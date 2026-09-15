@@ -36,7 +36,7 @@ Before modifying or understanding a specific function/method:
 ### 4. Atomic Symbol Edits
 When modifying an existing function or method:
 * Call `replace_symbol_body(symbol_name, file_path, new_body, expected_body_hash)`.
-* Performs pre-flight tree-sitter syntax validation for Rust, JavaScript, TypeScript/TSX, Python, and Go; reports validation skipped for other languages.
+* Performs pre-flight syntax validation through `julie-extract check` for every language the extractor supports; reports validation skipped for paths with no grammar.
 * Checks optimistic concurrency hash to avoid overwriting conflicting edits.
 * Re-indexes SQLite AST facts in a single atomic turn.
 

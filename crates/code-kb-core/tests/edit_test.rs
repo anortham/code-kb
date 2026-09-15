@@ -430,3 +430,48 @@ fn test_replace_symbol_body_chained_edits_with_expected_hash() {
     let err_msg = res3.unwrap_err().to_string();
     assert!(err_msg.contains("Optimistic lock failed") || err_msg.contains("expected body hash"));
 }
+
+#[test]
+fn test_replace_symbol_body_rejects_syntax_error_in_a_language_without_a_bundled_grammar() {
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+
+    let temp_dir = safe_tempdir();
+    let root = temp_dir.path().to_path_buf();
+    fs::create_dir_all(root.join("lib")).unwrap();
+    let file_path = root.join("lib/calc.rb");
+    let initial_code = "def my_calc(a)\n  a * 2\nend\n";
+    fs::write(&file_path, initial_code).unwrap();
+
+    let ws = Workspace::new(root.clone());
+    let db_path = root.join("test.db");
+    scan_workspace(&ws, &db_path, true).expect("Scan failed");
+    let conn = open_read_only(&db_path).unwrap();
+
+    let res = replace_symbol_body(
+        &ws,
+        &db_path,
+        &conn,
+        "my_calc",
+        "lib/calc.rb",
+        "def my_calc(a)\n  a * (2\nend\n",
+        None,
+    );
+
+    let message = res.expect_err("broken Ruby must be rejected").to_string();
+    assert!(message.contains("syntax"), "{message}");
+    assert!(message.contains("at line "), "{message}");
+    assert_eq!(fs::read_to_string(&file_path).unwrap(), initial_code);
+}
+
+#[test]
+fn validate_syntax_skips_paths_the_extractor_has_no_grammar_for() {
+    assert_eq!(
+        code_kb_core::validate_syntax("notes.unknown", "anything (\n"),
+        Ok(false)
+    );
+    assert_eq!(
+        code_kb_core::validate_syntax("src/lib.rs", "pub fn f() {}\n"),
+        Ok(true)
+    );
+}

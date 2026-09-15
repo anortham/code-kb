@@ -26,7 +26,7 @@ pub enum SyncError {
     Walk(#[from] ignore::Error),
 }
 
-pub const PINNED_JULIE_VERSION: &str = "2.43.0";
+pub const PINNED_JULIE_VERSION: &str = "3.0.0";
 
 /// Extraction level code-kb asks for on a new artifact: symbol core plus structural facts,
 /// without the identifier, literal, and source-region tables code-kb never reads.
