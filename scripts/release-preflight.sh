@@ -95,8 +95,9 @@ if command -v win-test >/dev/null 2>&1; then
     echo "      Running quick Windows test on guest..."
     # If working directory is clean, run sync and test
     if [[ -z "$(git status --porcelain)" ]]; then
-      win-test sync code-kb
-      win-test run code-kb -- cargo test -p code-kb-core --test worktree_test
+      REPO_BASENAME="$(basename "${REPO_ROOT}")"
+      win-test sync "${REPO_ROOT}"
+      win-test run "${REPO_BASENAME}" -- cargo test -p code-kb-core --test worktree_test
       echo "OK (Windows guest verified)"
     else
       echo "SKIPPED Windows sync (working directory has uncommitted files)."
