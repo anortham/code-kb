@@ -94,7 +94,7 @@ MCP tool schema.**
   directly from the native binary without external runtime dependencies (Node.js, bash, python).
 
 ### 7. Pinned Extractor & Bundled Distribution
-- `code-kb` pins the exact extractor version in `scripts/julie-pins.json` (currently `2.42.1`).
+- `code-kb` pins the exact extractor version in `scripts/julie-pins.json` (currently `2.42.3`).
 - Build guard: `crates/code-kb-cli/build.rs` verifies that `julie-extract` is restored and matches the pinned version. A missing or mismatched extractor fails the build immediately (bypassable for offline packaging via `CODE_KB_ALLOW_MISSING_JULIE_EXTRACT=1`).
 - Single-download distribution: Release archives ship `code-kb` and matching `julie-extract` pre-packaged side-by-side. Users download one archive and receive both binaries ready to execute.
 - Runtime discovery: `code-kb` checks `JULIE_EXTRACT_BIN`, next to its own executable (`current_exe().parent()`), `.tools/julie-extract`, and `PATH`.

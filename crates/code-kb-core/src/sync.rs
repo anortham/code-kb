@@ -22,7 +22,7 @@ pub enum SyncError {
     Walk(#[from] ignore::Error),
 }
 
-pub const PINNED_JULIE_VERSION: &str = "2.42.1";
+pub const PINNED_JULIE_VERSION: &str = "2.42.3";
 
 static CACHED_JULIE_BIN: std::sync::OnceLock<Option<PathBuf>> = std::sync::OnceLock::new();
 
