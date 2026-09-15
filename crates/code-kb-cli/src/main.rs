@@ -107,7 +107,7 @@ pub struct SymbolArgs {
     /// Symbol name or prefix query.
     pub query: String,
     /// Optional file path or directory prefix to scope search.
-    #[arg(long)]
+    #[arg(long, alias = "file", alias = "file-path")]
     pub path: Option<String>,
     /// Filter by symbol kind (e.g. function, struct, trait, class, interface, enum).
     #[arg(long)]
@@ -124,15 +124,15 @@ pub type LookupArgs = SymbolArgs;
 
 #[derive(Debug, Args)]
 pub struct SearchArgs {
-    /// Natural language keywords or concept to search for.
+    /// Concept, keyword, or BM25 search query over docstrings and signatures.
     pub query: String,
     /// Optional file path or directory prefix to scope search.
-    #[arg(long)]
+    #[arg(long, alias = "file", alias = "file-path")]
     pub path: Option<String>,
     /// Filter by symbol kind (e.g. function, struct, trait, class, interface, enum).
     #[arg(long)]
     pub kind: Option<String>,
-    /// Include test functions and test containers.
+    /// Include test functions.
     #[arg(long, alias = "is-test")]
     pub include_tests: bool,
     /// Maximum number of results.
@@ -145,7 +145,7 @@ pub struct BodyArgs {
     /// Full or qualified symbol name.
     pub symbol: String,
     /// Optional file path for disambiguation.
-    #[arg(long)]
+    #[arg(short = 'f', long, alias = "path", alias = "file-path")]
     pub file: Option<String>,
 }
 
@@ -154,7 +154,7 @@ pub struct SliceArgs {
     /// Target symbol name.
     pub symbol: String,
     /// Optional file path for disambiguation.
-    #[arg(long)]
+    #[arg(short = 'f', long, alias = "path", alias = "file-path")]
     pub file: Option<String>,
     /// Include external stdlib/runtime calls in callee signatures (default: false).
     #[arg(long, default_value_t = false)]
@@ -168,7 +168,7 @@ pub struct RefsArgs {
     /// Target symbol name.
     pub symbol: String,
     /// Optional file path for disambiguation.
-    #[arg(short = 'f', long)]
+    #[arg(short = 'f', long, alias = "path", alias = "file-path")]
     pub file: Option<String>,
     /// Direction: "callers" or "callees" (default: "callers").
     #[arg(long, default_value = "callers", value_parser = ["callers", "callees"])]
@@ -186,7 +186,7 @@ pub struct BlastRadiusArgs {
     /// Optional symbol name to seed blast radius walk.
     pub symbol: Option<String>,
     /// Optional file path to seed blast radius walk.
-    #[arg(long, short = 'f')]
+    #[arg(long, short = 'f', alias = "path", alias = "file-path")]
     pub file: Option<String>,
     /// Maximum relationship hops (default: 2).
     #[arg(long, short = 'd', default_value_t = 2)]
@@ -205,7 +205,7 @@ pub struct FactsArgs {
     #[arg(default_value = "")]
     pub positional_category: String,
     /// Optional file path or directory to filter structural facts.
-    #[arg(short = 'p', long = "path", alias = "file")]
+    #[arg(short = 'p', long = "path", alias = "file", alias = "file-path")]
     pub path: Option<String>,
     /// Maximum number of results.
     #[arg(long, default_value_t = 30)]
@@ -217,13 +217,13 @@ pub struct EditArgs {
     /// Name of symbol to edit.
     pub symbol: String,
     /// Path to file containing symbol.
-    #[arg(long)]
+    #[arg(long, alias = "path", alias = "file-path")]
     pub file: String,
     /// New body content.
-    #[arg(long)]
+    #[arg(long, alias = "code", alias = "new-body")]
     pub body: String,
     /// Optional optimistic lock hash of existing body.
-    #[arg(long)]
+    #[arg(long, alias = "expected-body-hash", alias = "body-hash")]
     pub expected_hash: Option<String>,
 }
 
@@ -494,10 +494,18 @@ fn main() -> anyhow::Result<()> {
             let rel_path = args.path.as_deref().map(|p| workspace.relativize_filter(p));
             let path_filter = rel_path.as_deref();
 
-            let matches = if (args.query.contains("::") || args.query.contains('.'))
-                && let Ok(Some(sym)) = queries::get_symbol_by_name(&conn, &args.query, path_filter)
-            {
-                vec![sym]
+            let matches = if args.query.contains("::") || args.query.contains('.') {
+                match queries::get_symbol_by_name(&conn, &args.query, path_filter)? {
+                    Some(sym) => vec![sym],
+                    None => search_symbols_scoped(
+                        &conn,
+                        &args.query,
+                        args.kind.as_deref(),
+                        path_filter,
+                        args.include_tests,
+                        args.limit,
+                    )?,
+                }
             } else {
                 search_symbols_scoped(
                     &conn,

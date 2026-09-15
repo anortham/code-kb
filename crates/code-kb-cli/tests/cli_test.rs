@@ -1069,3 +1069,66 @@ fn test_cli_json_strict_forward_slash_invariants() {
         assert_all_paths_forward_slash(&val, &mut found);
     }
 }
+
+#[test]
+fn test_cli_argument_aliases() {
+    let temp_repo = setup_test_repo();
+    let root = temp_repo.path();
+
+    // 1. --file-path on refs
+    let out = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .args([
+            "--json",
+            "refs",
+            "helper",
+            "--file-path",
+            "src/workspace.rs",
+        ])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "refs --file-path failed");
+
+    // 2. --path on refs
+    let out = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .args(["--json", "refs", "helper", "--path", "src/workspace.rs"])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "refs --path failed");
+
+    // 3. --file-path on blast-radius
+    let out = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .args(["--json", "blast-radius", "--file-path", "src/workspace.rs"])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "blast-radius --file-path failed");
+
+    // 4. --expected-body-hash on edit
+    let out = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .args([
+            "edit",
+            "helper",
+            "--file",
+            "src/workspace.rs",
+            "--body",
+            "fn helper() { println!(\"edited\"); }",
+            "--expected-body-hash",
+            "invalid_hash_123",
+        ])
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    // Should fail with hash mismatch, NOT with clap argument error "unexpected argument '--expected-body-hash'"
+    assert!(!out.status.success());
+    assert!(
+        stderr.contains("Hash mismatch") || stderr.contains("expected"),
+        "stderr was: {stderr}"
+    );
+}

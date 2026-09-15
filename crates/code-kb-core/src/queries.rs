@@ -337,6 +337,7 @@ pub fn search_symbols_scoped(
             .trim_matches('/')
             .to_string()
     });
+    let escaped_path = normalized_path.as_deref().map(escape_like);
     let norm_kind = kind_filter.map(normalize_kind);
 
     let mut sql = String::from(
@@ -346,44 +347,37 @@ pub fn search_symbols_scoped(
                 body_end_column, body_start_byte, body_end_byte, body_hash, semantic_group,
                 is_test, test_container
          FROM symbols
-         WHERE (name = ?1 OR name LIKE ?2 ESCAPE '\\')",
+         WHERE (name = :query OR name LIKE :pattern ESCAPE '\\')
+           AND (:kind IS NULL OR kind = :kind)
+           AND (:path IS NULL OR replace(path, '\\', '/') = :path COLLATE NOCASE OR replace(path, '\\', '/') LIKE :path_like || '/%' ESCAPE '\\' OR replace(path, '\\', '/') LIKE '%/' || :path_like ESCAPE '\\')",
     );
 
     if !include_tests {
         sql.push_str(" AND is_test = 0 AND test_container = 0");
     }
 
-    if norm_kind.is_some() {
-        sql.push_str(" AND kind = ?3");
-    }
-
-    if normalized_path.is_some() {
-        sql.push_str(" AND (path = ?4 OR path LIKE '%' || ?4 || '%')");
-    }
-
     sql.push_str(
-        " ORDER BY (name = ?1) DESC, (kind IN ('function', 'struct', 'class', 'trait', 'method', 'enum', 'interface', 'type')) DESC, length(name) ASC, path ASC LIMIT ",
+        " ORDER BY (name = :query) DESC, (kind IN ('function', 'struct', 'class', 'trait', 'method', 'enum', 'interface', 'type')) DESC, length(name) ASC, path ASC LIMIT ",
     );
     sql.push_str(&limit.to_string());
 
     let mut stmt = conn.prepare(&sql)?;
 
-    let path_val = normalized_path.as_deref().unwrap_or("");
-    let kind_val = norm_kind.as_deref().unwrap_or("");
-    let rows = match (norm_kind.is_some(), normalized_path.is_some()) {
-        (true, true) => stmt
-            .query_map(params![query, pattern, kind_val, path_val], map_symbol)?
-            .collect::<Result<Vec<_>, _>>()?,
-        (true, false) => stmt
-            .query_map(params![query, pattern, kind_val], map_symbol)?
-            .collect::<Result<Vec<_>, _>>()?,
-        (false, true) => stmt
-            .query_map(params![query, pattern, "", path_val], map_symbol)?
-            .collect::<Result<Vec<_>, _>>()?,
-        (false, false) => stmt
-            .query_map(params![query, pattern], map_symbol)?
-            .collect::<Result<Vec<_>, _>>()?,
-    };
+    let path_val = normalized_path.as_deref();
+    let path_like = escaped_path.as_deref();
+    let kind_val = norm_kind.as_deref();
+    let rows = stmt
+        .query_map(
+            rusqlite::named_params! {
+                ":query": query,
+                ":pattern": pattern,
+                ":kind": kind_val,
+                ":path": path_val,
+                ":path_like": path_like,
+            },
+            map_symbol,
+        )?
+        .collect::<Result<Vec<_>, _>>()?;
 
     Ok(rows)
 }
@@ -438,46 +432,42 @@ pub fn fts_search_symbols_scoped(
 
     if !fts_exists {
         let pattern = format!("%{}%", escape_like(query));
+        let escaped_path = normalized_path.as_deref().map(escape_like);
         let mut sql = String::from(
             "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,
                     visibility, parent_symbol_id, start_line, start_column, end_line, end_column,
                     start_byte, end_byte, body_start_line, body_start_column, body_end_line,
                     body_end_column, body_start_byte, body_end_byte, body_hash, semantic_group,
                     is_test, test_container
-             FROM symbols
-             WHERE (name = ?1 OR name LIKE ?2 ESCAPE '\\')",
+              FROM symbols
+              WHERE (name = :query OR name LIKE :pattern ESCAPE '\\')
+                AND (:kind IS NULL OR kind = :kind)
+                AND (:path IS NULL OR replace(path, '\\', '/') = :path COLLATE NOCASE OR replace(path, '\\', '/') LIKE :path_like || '/%' ESCAPE '\\' OR replace(path, '\\', '/') LIKE '%/' || :path_like ESCAPE '\\')",
         );
         if !include_tests {
             sql.push_str(" AND is_test = 0 AND test_container = 0");
         }
-        if norm_kind.is_some() {
-            sql.push_str(" AND kind = ?3");
-        }
-        if normalized_path.is_some() {
-            sql.push_str(" AND (path = ?4 OR path LIKE '%' || ?4 || '%')");
-        }
         sql.push_str(
-            " ORDER BY (name = ?1) DESC, (kind IN ('function', 'struct', 'class', 'trait', 'method', 'enum', 'interface', 'type')) DESC, length(name) ASC, path ASC LIMIT ",
+            " ORDER BY (name = :query) DESC, (kind IN ('function', 'struct', 'class', 'trait', 'method', 'enum', 'interface', 'type')) DESC, length(name) ASC, path ASC LIMIT ",
         );
         sql.push_str(&limit.to_string());
 
         let mut stmt = conn.prepare(&sql)?;
-        let path_val = normalized_path.as_deref().unwrap_or("");
-        let kind_val = norm_kind.as_deref().unwrap_or("");
-        let rows = match (norm_kind.is_some(), normalized_path.is_some()) {
-            (true, true) => stmt
-                .query_map(params![query, pattern, kind_val, path_val], map_symbol)?
-                .collect::<Result<Vec<_>, _>>()?,
-            (true, false) => stmt
-                .query_map(params![query, pattern, kind_val], map_symbol)?
-                .collect::<Result<Vec<_>, _>>()?,
-            (false, true) => stmt
-                .query_map(params![query, pattern, "", path_val], map_symbol)?
-                .collect::<Result<Vec<_>, _>>()?,
-            (false, false) => stmt
-                .query_map(params![query, pattern], map_symbol)?
-                .collect::<Result<Vec<_>, _>>()?,
-        };
+        let path_val = normalized_path.as_deref();
+        let path_like = escaped_path.as_deref();
+        let kind_val = norm_kind.as_deref();
+        let rows = stmt
+            .query_map(
+                rusqlite::named_params! {
+                    ":query": query,
+                    ":pattern": pattern,
+                    ":kind": kind_val,
+                    ":path": path_val,
+                    ":path_like": path_like,
+                },
+                map_symbol,
+            )?
+            .collect::<Result<Vec<_>, _>>()?;
 
         return Ok(rows
             .into_iter()
@@ -489,32 +479,27 @@ pub fn fts_search_symbols_scoped(
             .collect());
     }
 
+    let escaped_path = normalized_path.as_deref().map(escape_like);
     let execute_search = |match_clause: &str| -> Result<Vec<SymbolSearchResult>, QueryError> {
         let mut sql = String::from(
             "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,
-                    s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,
-                    s.start_byte, s.end_byte, s.body_start_line, s.body_start_column, s.body_end_line,
-                    s.body_end_column, s.body_start_byte, s.body_end_byte, s.body_hash, s.semantic_group,
-                    s.is_test, s.test_container,
+                    s.visibility, s.parent_symbol_id, s.start_line, s.start_column, end_line, end_column,
+                    start_byte, end_byte, body_start_line, body_start_column, body_end_line,
+                    body_end_column, body_start_byte, body_end_byte, body_hash, semantic_group,
+                    is_test, test_container,
                     bm25(symbols_fts, 10.0, 5.0, 1.0) AS rank_score,
                     snippet(symbols_fts, 2, '[', ']', '...', 12) AS doc_snippet,
                     snippet(symbols_fts, 1, '[', ']', '...', 12) AS sig_snippet,
                     snippet(symbols_fts, 0, '[', ']', '...', 12) AS name_snippet
              FROM symbols_fts
              CROSS JOIN symbols s ON s.rowid = symbols_fts.rowid
-             WHERE symbols_fts MATCH ?1",
+             WHERE symbols_fts MATCH :match
+               AND (:kind IS NULL OR s.kind = :kind)
+               AND (:path IS NULL OR replace(s.path, '\\', '/') = :path COLLATE NOCASE OR replace(s.path, '\\', '/') LIKE :path_like || '/%' ESCAPE '\\' OR replace(s.path, '\\', '/') LIKE '%/' || :path_like ESCAPE '\\')",
         );
 
         if !include_tests {
             sql.push_str(" AND s.is_test = 0 AND s.test_container = 0");
-        }
-
-        if norm_kind.is_some() {
-            sql.push_str(" AND s.kind = ?2");
-        }
-
-        if normalized_path.is_some() {
-            sql.push_str(" AND (s.path = ?3 OR s.path LIKE '%' || ?3 || '%')");
         }
 
         sql.push_str(" ORDER BY rank_score ASC LIMIT ");
@@ -547,22 +532,20 @@ pub fn fts_search_symbols_scoped(
             })
         };
 
-        let path_val = normalized_path.as_deref().unwrap_or("");
-        let kind_val = norm_kind.as_deref().unwrap_or("");
-        let rows = match (norm_kind.is_some(), normalized_path.is_some()) {
-            (true, true) => stmt
-                .query_map(params![match_clause, kind_val, path_val], map_fn)?
-                .collect::<Result<Vec<_>, _>>()?,
-            (true, false) => stmt
-                .query_map(params![match_clause, kind_val], map_fn)?
-                .collect::<Result<Vec<_>, _>>()?,
-            (false, true) => stmt
-                .query_map(params![match_clause, "", path_val], map_fn)?
-                .collect::<Result<Vec<_>, _>>()?,
-            (false, false) => stmt
-                .query_map(params![match_clause], map_fn)?
-                .collect::<Result<Vec<_>, _>>()?,
-        };
+        let path_val = normalized_path.as_deref();
+        let path_like = escaped_path.as_deref();
+        let kind_val = norm_kind.as_deref();
+        let rows = stmt
+            .query_map(
+                rusqlite::named_params! {
+                    ":match": match_clause,
+                    ":kind": kind_val,
+                    ":path": path_val,
+                    ":path_like": path_like,
+                },
+                map_fn,
+            )?
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(rows)
     };
@@ -740,7 +723,7 @@ fn get_symbol_by_name_internal(
          ORDER BY (s.kind != 'import') DESC,
                   (s.kind IN ('function', 'struct', 'class', 'trait', 'method', 'enum', 'interface', 'type')) DESC,
                   (s.name = :name) DESC,
-                  (:path IS NOT NULL AND (s.path = :path OR s.path = :path_bs)) DESC,
+                  (:path IS NOT NULL AND (s.path = :path COLLATE NOCASE OR s.path = :path_bs COLLATE NOCASE)) DESC,
                   s.is_test ASC
          LIMIT 25";
 
@@ -1025,13 +1008,13 @@ fn find_references_internal(
                                     s_target.parent_symbol_id IS NOT NULL
                                     AND s_target_parent.name IS NOT NULL
                                     AND (
-                                        EXISTS (SELECT 1 FROM json_each(p.target_namespace_json) WHERE value = s_target_parent.name)
-                                        OR (EXISTS (SELECT 1 FROM json_each(p.target_namespace_json) WHERE value = 'Self')
+                                        EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END) WHERE value = s_target_parent.name)
+                                        OR (EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END) WHERE value = 'Self')
                                             AND s_from.parent_symbol_id = s_target.parent_symbol_id)
                                         OR (p.target_receiver IS NOT NULL AND p.target_receiver != '' AND s_target_parent.name = p.target_receiver)
                                     )
                                     AND NOT EXISTS (
-                                        SELECT 1 FROM json_each(p.target_namespace_json)
+                                        SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END)
                                         WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super', 'self', 'Self', s_target_parent.name)
                                           AND ('/' || replace(s_target.path, '\\', '/')) NOT LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
                                           AND ('/' || replace(s_target.path, '\\', '/')) NOT LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '/%' ESCAPE '\\'
@@ -1045,7 +1028,7 @@ fn find_references_internal(
                                 OR (
                                     s_target.parent_symbol_id IS NULL
                                     AND EXISTS (
-                                        SELECT 1 FROM json_each(p.target_namespace_json)
+                                        SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END)
                                         WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super')
                                           AND ('/' || replace(s_target.path, '\\', '/')) LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
                                     )
@@ -1089,7 +1072,7 @@ fn find_references_internal(
                                    SELECT 1 FROM symbols s_any
                                    JOIN symbols s_any_parent ON s_any.parent_symbol_id = s_any_parent.symbol_id
                                    WHERE s_any.name = p.target_terminal_name
-                                     AND EXISTS (SELECT 1 FROM json_each(p.target_namespace_json) WHERE value = s_any_parent.name)
+                                     AND EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END) WHERE value = s_any_parent.name)
                                )
                            )
                          LIMIT ?2",
@@ -1224,33 +1207,35 @@ fn find_references_internal(
                              AND s_to.kind NOT IN ('import', 'variable', 'parameter', 'field', 'property', 'module', 'namespace')
                              AND (
                                  (
-                                     s_to.parent_symbol_id IS NOT NULL
-                                     AND s_to_parent.name IS NOT NULL
-                                     AND (
-                                         EXISTS (SELECT 1 FROM json_each(p.target_namespace_json) WHERE value = s_to_parent.name)
-                                         OR (EXISTS (SELECT 1 FROM json_each(p.target_namespace_json) WHERE value = 'Self')
-                                             AND s_from.parent_symbol_id = s_to.parent_symbol_id)
-                                         OR (p.target_receiver IS NOT NULL AND p.target_receiver != '' AND s_to_parent.name = p.target_receiver)
-                                     )
-                                     AND NOT EXISTS (
-                                         SELECT 1 FROM json_each(p.target_namespace_json)
-                                         WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super', 'self', 'Self', s_to_parent.name)
-                                           AND ('/' || replace(s_to.path, '\\', '/')) NOT LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
-                                           AND ('/' || replace(s_to.path, '\\', '/')) NOT LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '/%' ESCAPE '\\'
-                                     )
-                                 )
-                                 OR (
-                                     (p.target_namespace_json IS NULL OR p.target_namespace_json = '[]')
-                                     AND (p.target_receiver IS NULL OR p.target_receiver = '')
-                                     AND (s_to.parent_symbol_id IS NULL OR s_from.parent_symbol_id = s_to.parent_symbol_id)
-                                 )
-                                 OR (
-                                     s_to.parent_symbol_id IS NULL
-                                     AND EXISTS (
-                                         SELECT 1 FROM json_each(p.target_namespace_json)
-                                         WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super')
-                                           AND ('/' || replace(s_to.path, '\\', '/')) LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
-                                     )
+                                  (
+                                      s_to.parent_symbol_id IS NOT NULL
+                                      AND s_to_parent.name IS NOT NULL
+                                      AND (
+                                          EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END) WHERE value = s_to_parent.name)
+                                          OR (EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END) WHERE value = 'Self')
+                                              AND s_from.parent_symbol_id = s_to.parent_symbol_id)
+                                          OR (p.target_receiver IS NOT NULL AND p.target_receiver != '' AND s_to_parent.name = p.target_receiver)
+                                      )
+                                      AND NOT EXISTS (
+                                          SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END)
+                                          WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super', 'self', 'Self', s_to_parent.name)
+                                            AND ('/' || replace(s_to.path, '\\', '/')) NOT LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
+                                            AND ('/' || replace(s_to.path, '\\', '/')) NOT LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '/%' ESCAPE '\\'
+                                      )
+                                  )
+                                  OR (
+                                      (p.target_namespace_json IS NULL OR p.target_namespace_json = '[]')
+                                      AND (p.target_receiver IS NULL OR p.target_receiver = '')
+                                      AND (s_to.parent_symbol_id IS NULL OR s_from.parent_symbol_id = s_to.parent_symbol_id)
+                                  )
+                                  OR (
+                                      s_to.parent_symbol_id IS NULL
+                                      AND EXISTS (
+                                          SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END)
+                                          WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super')
+                                            AND ('/' || replace(s_to.path, '\\', '/')) LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
+                                      )
+                                  )
                                  )
                              )
                        )
@@ -1391,31 +1376,31 @@ pub fn find_callee_signatures(
                  LEFT JOIN symbols s_parent ON s_to.parent_symbol_id = s_parent.symbol_id
                  WHERE s_from.name = ?1 AND p.from_symbol_id = ?2
                    AND s_to.kind NOT IN ('import', 'variable', 'parameter', 'field', 'property', 'module', 'namespace')
-                   AND (
-                       (
-                           s_to.parent_symbol_id IS NOT NULL
-                           AND s_parent.name IS NOT NULL
-                           AND (
-                               EXISTS (SELECT 1 FROM json_each(p.target_namespace_json) WHERE value = s_parent.name)
-                               OR (EXISTS (SELECT 1 FROM json_each(p.target_namespace_json) WHERE value = 'Self')
-                                   AND s_from.parent_symbol_id = s_to.parent_symbol_id)
-                               OR (p.target_receiver IS NOT NULL AND p.target_receiver != '' AND s_parent.name = p.target_receiver)
-                           )
-                       )
-                       OR (
-                           (p.target_namespace_json IS NULL OR p.target_namespace_json = '[]')
-                           AND (p.target_receiver IS NULL OR p.target_receiver = '')
-                           AND (s_to.parent_symbol_id IS NULL OR s_from.parent_symbol_id = s_to.parent_symbol_id)
-                       )
-                       OR (
-                           s_to.parent_symbol_id IS NULL
-                           AND EXISTS (
-                               SELECT 1 FROM json_each(p.target_namespace_json)
-                               WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super')
-                                 AND s_to.path LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
-                           )
-                       )
-                   )
+                    AND (
+                        (
+                            s_to.parent_symbol_id IS NOT NULL
+                            AND s_parent.name IS NOT NULL
+                            AND (
+                                EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END) WHERE value = s_parent.name)
+                                OR (EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END) WHERE value = 'Self')
+                                    AND s_from.parent_symbol_id = s_to.parent_symbol_id)
+                                OR (p.target_receiver IS NOT NULL AND p.target_receiver != '' AND s_parent.name = p.target_receiver)
+                            )
+                        )
+                        OR (
+                            (p.target_namespace_json IS NULL OR p.target_namespace_json = '[]')
+                            AND (p.target_receiver IS NULL OR p.target_receiver = '')
+                            AND (s_to.parent_symbol_id IS NULL OR s_from.parent_symbol_id = s_to.parent_symbol_id)
+                        )
+                        OR (
+                            s_to.parent_symbol_id IS NULL
+                            AND EXISTS (
+                                SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END)
+                                WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super')
+                                  AND ('/' || replace(s_to.path, '\\', '/')) LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
+                            )
+                        )
+                    )
                  LIMIT ?3",
             )?;
 
@@ -1486,13 +1471,13 @@ pub fn find_callee_signatures(
                                  s_to.parent_symbol_id IS NOT NULL
                                  AND s_parent.name IS NOT NULL
                                  AND (
-                                     EXISTS (SELECT 1 FROM json_each(p.target_namespace_json) WHERE value = s_parent.name)
-                                     OR (EXISTS (SELECT 1 FROM json_each(p.target_namespace_json) WHERE value = 'Self')
+                                     EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END) WHERE value = s_parent.name)
+                                     OR (EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END) WHERE value = 'Self')
                                          AND s_from.parent_symbol_id = s_to.parent_symbol_id)
                                      OR (p.target_receiver IS NOT NULL AND p.target_receiver != '' AND s_parent.name = p.target_receiver)
                                  )
                                  AND NOT EXISTS (
-                                     SELECT 1 FROM json_each(p.target_namespace_json)
+                                     SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END)
                                      WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super', 'self', 'Self', s_parent.name)
                                        AND ('/' || replace(s_to.path, '\\', '/')) NOT LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
                                        AND ('/' || replace(s_to.path, '\\', '/')) NOT LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '/%' ESCAPE '\\'
@@ -1506,7 +1491,7 @@ pub fn find_callee_signatures(
                              OR (
                                  s_to.parent_symbol_id IS NULL
                                  AND EXISTS (
-                                     SELECT 1 FROM json_each(p.target_namespace_json)
+                                     SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END)
                                      WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super')
                                        AND ('/' || replace(s_to.path, '\\', '/')) LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
                                  )
@@ -1616,7 +1601,7 @@ pub fn find_structural_facts_scoped(
          FROM structural_facts sf
          LEFT JOIN symbols s ON sf.containing_symbol_id = s.symbol_id
          WHERE (:cat IS NOT NULL AND {cat_clause})
-           AND (:path IS NULL OR replace(sf.path, '\\', '/') = :path OR replace(sf.path, '\\', '/') LIKE :dir_prefix ESCAPE '\\')
+           AND (:path IS NULL OR replace(sf.path, '\\', '/') = :path COLLATE NOCASE OR replace(sf.path, '\\', '/') LIKE :dir_prefix ESCAPE '\\')
          ORDER BY sf.path ASC, sf.start_line ASC
          LIMIT :limit"
     );
@@ -1698,7 +1683,7 @@ pub fn find_literals_scoped(
          FROM literals l
          LEFT JOIN symbols s ON l.containing_symbol_id = s.symbol_id
          WHERE (:cat IS NOT NULL AND {cat_clause})
-           AND (:path IS NULL OR replace(l.path, '\\', '/') = :path OR replace(l.path, '\\', '/') LIKE :dir_prefix ESCAPE '\\')
+           AND (:path IS NULL OR replace(l.path, '\\', '/') = :path COLLATE NOCASE OR replace(l.path, '\\', '/') LIKE :dir_prefix ESCAPE '\\')
          ORDER BY l.path ASC, l.start_line ASC
          LIMIT :limit"
     );
@@ -1760,7 +1745,7 @@ pub fn list_structural_fact_categories_scoped(
     let mut categories = Vec::new();
 
     let sql = "SELECT pattern_id, COUNT(*) AS cnt FROM structural_facts
-               WHERE (:path IS NULL OR replace(path, '\\', '/') = :path OR replace(path, '\\', '/') LIKE :dir_prefix ESCAPE '\\')
+               WHERE (:path IS NULL OR replace(path, '\\', '/') = :path COLLATE NOCASE OR replace(path, '\\', '/') LIKE :dir_prefix ESCAPE '\\')
                GROUP BY pattern_id ORDER BY cnt DESC";
     let mut stmt = conn.prepare(sql)?;
     let rows = stmt.query_map(
@@ -1775,7 +1760,7 @@ pub fn list_structural_fact_categories_scoped(
     }
 
     let lit_sql = "SELECT kind, COUNT(*) AS cnt FROM literals
-                   WHERE (:path IS NULL OR replace(path, '\\', '/') = :path OR replace(path, '\\', '/') LIKE :dir_prefix ESCAPE '\\')
+                   WHERE (:path IS NULL OR replace(path, '\\', '/') = :path COLLATE NOCASE OR replace(path, '\\', '/') LIKE :dir_prefix ESCAPE '\\')
                    GROUP BY kind ORDER BY cnt DESC";
     let mut lit_stmt = conn.prepare(lit_sql)?;
     let lit_rows = lit_stmt.query_map(
@@ -1861,6 +1846,7 @@ pub fn compute_blast_radius_scoped(
     max_depth: usize,
     limit: usize,
 ) -> Result<BlastRadiusResult, QueryError> {
+    let max_depth = max_depth.min(5);
     let resolved_seed_symbols = seed_symbols
         .iter()
         .map(|name| {
@@ -1911,20 +1897,21 @@ pub fn compute_blast_radius_scoped(
     }
 
     if !seed_paths.is_empty() {
-        let base_idx = params_vec.len();
         let mut path_conds = Vec::new();
-        for (i, p) in seed_paths.iter().enumerate() {
-            let idx = base_idx + i + 1;
-            path_conds.push(format!(
-                "path = ?{idx} OR path LIKE ?{idx} || '/%' ESCAPE '\\'"
-            ));
+        for p in seed_paths.iter() {
             let raw = p
                 .replace('\\', "/")
                 .trim_start_matches("./")
                 .trim_matches('/')
                 .to_string();
-            let norm = escape_like(&raw);
-            params_vec.push(rusqlite::types::Value::Text(norm));
+            let exact_idx = params_vec.len() + 1;
+            params_vec.push(rusqlite::types::Value::Text(raw.clone()));
+            let dir_pattern = format!("{}/%", escape_like(&raw));
+            let like_idx = params_vec.len() + 1;
+            params_vec.push(rusqlite::types::Value::Text(dir_pattern));
+            path_conds.push(format!(
+                "replace(path, '\\', '/') = ?{exact_idx} COLLATE NOCASE OR replace(path, '\\', '/') LIKE ?{like_idx} ESCAPE '\\'"
+            ));
         }
         where_clauses.push(format!("({})", path_conds.join(" OR ")));
     }
@@ -1956,16 +1943,27 @@ pub fn compute_blast_radius_scoped(
     let mut seen_test_keys = HashSet::new();
 
     let mut recursive_branches = Vec::new();
+
     if has_relationships {
         recursive_branches.push(format!(
             "SELECT r.from_symbol_id, iw.depth + 1
-            FROM relationships r
-            JOIN impact_walk iw ON r.to_symbol_id = iw.symbol_id
-            WHERE iw.depth < ?{max_depth_idx}"
+             FROM relationships r
+             JOIN impact_walk iw ON r.to_symbol_id = iw.symbol_id
+             JOIN symbols s_from ON r.from_symbol_id = s_from.symbol_id
+             WHERE iw.depth < ?{max_depth_idx}
+               AND s_from.kind NOT IN ('import','variable','parameter','field','property','module','namespace')"
         ));
     }
+
     if has_pending {
-        let (ns_join, ns_condition) = if has_pending_namespace_column(conn) {
+        let (parent_join, ns_condition) = if conn
+            .query_row(
+                "SELECT 1 FROM pragma_table_info('pending_relationships') WHERE name='target_namespace_json'",
+                [],
+                |_| Ok(true),
+            )
+            .unwrap_or(false)
+        {
             (
                 "LEFT JOIN symbols s_target_parent ON s_target.parent_symbol_id = s_target_parent.symbol_id
             LEFT JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id",
@@ -1974,13 +1972,13 @@ pub fn compute_blast_radius_scoped(
                         s_target.parent_symbol_id IS NOT NULL
                         AND s_target_parent.name IS NOT NULL
                         AND (
-                            EXISTS (SELECT 1 FROM json_each(p.target_namespace_json) WHERE value = s_target_parent.name)
-                            OR (EXISTS (SELECT 1 FROM json_each(p.target_namespace_json) WHERE value = 'Self')
+                            EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END) WHERE value = s_target_parent.name)
+                            OR (EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END) WHERE value = 'Self')
                                 AND s_from.parent_symbol_id = s_target.parent_symbol_id)
                             OR (p.target_receiver IS NOT NULL AND p.target_receiver != '' AND s_target_parent.name = p.target_receiver)
                         )
                         AND NOT EXISTS (
-                            SELECT 1 FROM json_each(p.target_namespace_json)
+                            SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END)
                             WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super', 'self', 'Self', s_target_parent.name)
                               AND ('/' || replace(s_target.path, '\\', '/')) NOT LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
                               AND ('/' || replace(s_target.path, '\\', '/')) NOT LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '/%' ESCAPE '\\'
@@ -1994,7 +1992,7 @@ pub fn compute_blast_radius_scoped(
                     OR (
                         s_target.parent_symbol_id IS NULL
                         AND EXISTS (
-                            SELECT 1 FROM json_each(p.target_namespace_json)
+                            SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END)
                             WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super')
                               AND ('/' || replace(s_target.path, '\\', '/')) LIKE '%/' || replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '.%' ESCAPE '\\'
                         )
@@ -2007,13 +2005,13 @@ pub fn compute_blast_radius_scoped(
 
         recursive_branches.push(format!(
             "SELECT p.from_symbol_id, iw.depth + 1
-            FROM pending_relationships p
-            JOIN symbols s_target ON p.target_terminal_name = s_target.name
-            {ns_join}
-            JOIN impact_walk iw ON s_target.symbol_id = iw.symbol_id
-            WHERE iw.depth < ?{max_depth_idx}
-              AND s_target.kind NOT IN ('import','variable','parameter','field','property','module','namespace')
-              {ns_condition}"
+             FROM pending_relationships p
+             JOIN symbols s_target ON p.target_terminal_name = s_target.name
+             JOIN impact_walk iw ON s_target.symbol_id = iw.symbol_id
+             {parent_join}
+             WHERE iw.depth < ?{max_depth_idx}
+               AND s_target.kind NOT IN ('import','variable','parameter','field','property','module','namespace')
+               {ns_condition}"
         ));
     }
 
@@ -2033,9 +2031,9 @@ pub fn compute_blast_radius_scoped(
             SELECT s.symbol_id, s.name, s.kind, s.path, s.start_line, s.is_test, s.test_container, MIN(iw.depth) as min_depth
             FROM impact_walk iw
             CROSS JOIN symbols s ON iw.symbol_id = s.symbol_id
-            WHERE iw.depth > 0
-              AND s.kind NOT IN ('import','variable','parameter','field','property','module','namespace')
+            WHERE s.kind NOT IN ('import','variable','parameter','field','property','module','namespace')
             GROUP BY s.symbol_id, s.name, s.kind, s.path, s.start_line, s.is_test, s.test_container
+            HAVING MIN(iw.depth) > 0
             ORDER BY min_depth ASC, s.path ASC, s.name ASC
             LIMIT 200"
         );

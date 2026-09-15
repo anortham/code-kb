@@ -236,3 +236,73 @@ fn blast_radius_disambiguates_symbol_seed_using_seed_path() {
         compute_blast_radius_scoped(&conn, &["call_alpha"], None, &["src/beta.rs"], 1, 20).unwrap();
     assert_eq!(res_mixed.seed_type, "mixed");
 }
+
+#[test]
+fn test_blast_radius_seed_path_with_underscores_and_case() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+
+    conn.execute_batch(
+        "INSERT INTO symbols VALUES
+            ('s_test', 'f1', 'tests/cli_test.rs', 'rust', 'run_cli_test', 'function', NULL, NULL, NULL, NULL, 1, 0, 1, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
+            ('s_caller', 'f2', 'src/runner.rs', 'rust', 'execute_tests', 'function', NULL, NULL, NULL, NULL, 1, 0, 1, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0);
+        INSERT INTO relationships VALUES
+            ('s_caller', 's_test', 'calls', 'src/runner.rs', 2, 0);",
+    )
+    .unwrap();
+
+    // File seed with underscores must match exact path (CRIT-01)
+    let res = compute_blast_radius_scoped(&conn, &[], None, &["tests/cli_test.rs"], 1, 20).unwrap();
+    assert_eq!(res.impacted_symbols.len(), 1);
+    assert_eq!(res.impacted_symbols[0].name, "execute_tests");
+
+    // Case variation must also match via COLLATE NOCASE (MED-05)
+    let res_case =
+        compute_blast_radius_scoped(&conn, &[], None, &["TESTS/CLI_TEST.RS"], 1, 20).unwrap();
+    assert_eq!(res_case.impacted_symbols.len(), 1);
+    assert_eq!(res_case.impacted_symbols[0].name, "execute_tests");
+}
+
+#[test]
+fn test_blast_radius_cycle_excludes_seed_symbol() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+
+    // Call graph: a -> b -> a (cycle)
+    // When a changes, b calls a (impacted at depth 1).
+    // a calls b (depth 2), but a is the seed itself and must NOT be returned as an impacted caller!
+    conn.execute_batch(
+        "INSERT INTO symbols VALUES
+            ('sym_a', 'f1', 'src/lib.rs', 'rust', 'func_a', 'function', NULL, NULL, NULL, NULL, 1, 0, 1, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
+            ('sym_b', 'f1', 'src/lib.rs', 'rust', 'func_b', 'function', NULL, NULL, NULL, NULL, 5, 0, 5, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0);
+        INSERT INTO relationships VALUES
+            ('sym_b', 'sym_a', 'calls', 'src/lib.rs', 6, 0),
+            ('sym_a', 'sym_b', 'calls', 'src/lib.rs', 2, 0);",
+    )
+    .unwrap();
+
+    let res = compute_blast_radius_scoped(&conn, &["func_a"], None, &[], 2, 20).unwrap();
+    // Only func_b should be reported as impacted; func_a must not be reported as impacted by itself
+    assert_eq!(res.impacted_symbols.len(), 1);
+    assert_eq!(res.impacted_symbols[0].name, "func_b");
+    assert_eq!(res.impacted_symbols[0].depth, 1);
+}
+
+#[test]
+fn test_blast_radius_max_depth_clamped() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+
+    conn.execute_batch(
+        "INSERT INTO symbols VALUES
+            ('sym_a', 'f1', 'src/lib.rs', 'rust', 'func_a', 'function', NULL, NULL, NULL, NULL, 1, 0, 1, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0);",
+    )
+    .unwrap();
+
+    // Large max_depth is clamped to 5 without error
+    let res = compute_blast_radius_scoped(&conn, &["func_a"], None, &[], 100, 20).unwrap();
+    assert_eq!(res.impacted_symbols.len(), 0);
+}

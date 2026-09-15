@@ -806,11 +806,22 @@ impl McpServer {
                     .and_then(|v| v.as_u64())
                     .unwrap_or(20) as usize;
 
-                let matches = if (query.contains("::") || query.contains('.'))
-                    && let Ok(Some(sym)) =
-                        code_kb_core::get_symbol_by_name(&conn, query, path_filter)
-                {
-                    vec![sym]
+                let matches = if query.contains("::") || query.contains('.') {
+                    match code_kb_core::get_symbol_by_name(&conn, query, path_filter) {
+                        Ok(Some(sym)) => vec![sym],
+                        Ok(None) => match search_symbols_scoped(
+                            &conn,
+                            query,
+                            kind,
+                            path_filter,
+                            include_tests,
+                            limit,
+                        ) {
+                            Ok(m) => m,
+                            Err(e) => return CallToolResult::error(e.to_string()),
+                        },
+                        Err(e) => return CallToolResult::error(e.to_string()),
+                    }
                 } else {
                     match search_symbols_scoped(
                         &conn,
