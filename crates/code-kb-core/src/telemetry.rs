@@ -124,6 +124,7 @@ static TELEMETRY_DIR_OVERRIDE: RwLock<Option<PathBuf>> = RwLock::new(None);
 
 pub fn resolve_telemetry_dir(
     env_dir: Option<String>,
+    cargo_target_tmp: Option<String>,
     home: Option<String>,
     userprofile: Option<String>,
 ) -> PathBuf {
@@ -131,6 +132,11 @@ pub fn resolve_telemetry_dir(
         && !dir.trim().is_empty()
     {
         return PathBuf::from(dir);
+    }
+    if let Some(target_tmp) = cargo_target_tmp
+        && !target_tmp.trim().is_empty()
+    {
+        return PathBuf::from(target_tmp).join("test-telemetry");
     }
     if let Some(home) = home
         && !home.trim().is_empty()
@@ -145,6 +151,19 @@ pub fn resolve_telemetry_dir(
     PathBuf::from(".code-kb")
 }
 
+pub fn is_telemetry_disabled_with(no_telem: Option<&str>, disable_telem: Option<&str>) -> bool {
+    no_telem
+        .or(disable_telem)
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+}
+
+pub fn is_telemetry_disabled() -> bool {
+    let no_telem = std::env::var("CODE_KB_NO_TELEMETRY").ok();
+    let disable_telem = std::env::var("CODE_KB_DISABLE_TELEMETRY").ok();
+    is_telemetry_disabled_with(no_telem.as_deref(), disable_telem.as_deref())
+}
+
 pub fn get_global_telemetry_dir() -> PathBuf {
     if let Ok(guard) = TELEMETRY_DIR_OVERRIDE.read()
         && let Some(ref path) = *guard
@@ -153,6 +172,7 @@ pub fn get_global_telemetry_dir() -> PathBuf {
     }
     resolve_telemetry_dir(
         std::env::var("CODE_KB_TELEMETRY_DIR").ok(),
+        std::env::var("CARGO_TARGET_TMPDIR").ok(),
         std::env::var("HOME").ok(),
         std::env::var("USERPROFILE").ok(),
     )
@@ -274,6 +294,9 @@ pub fn record_tool_call_conn(
     workspace_root: &Path,
     invocation: &ToolInvocation,
 ) {
+    if is_telemetry_disabled() {
+        return;
+    }
     let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap_or_default();
@@ -316,6 +339,9 @@ pub fn record_tool_call_conn(
 /// Record a tool call to the global telemetry database.
 /// Best-effort and non-panicking.
 pub fn record_tool_call(workspace_root: &Path, invocation: &ToolInvocation) {
+    if is_telemetry_disabled() {
+        return;
+    }
     if let Ok(conn) = open_global_telemetry_db() {
         record_tool_call_conn(&conn, workspace_root, invocation);
     }
@@ -962,20 +988,36 @@ mod tests {
     #[test]
     fn test_global_telemetry_dir_isolation() {
         let custom_dir = PathBuf::from("/custom/telemetry/path");
+        let target_tmp = PathBuf::from("/workspace/target/tmp");
         let home_dir = PathBuf::from("/home/user");
         let profile_dir = PathBuf::from("C:\\Users\\user");
 
+        // 1. Explicit CODE_KB_TELEMETRY_DIR takes highest precedence
         assert_eq!(
             resolve_telemetry_dir(
                 Some(custom_dir.to_string_lossy().to_string()),
+                Some(target_tmp.to_string_lossy().to_string()),
                 Some(home_dir.to_string_lossy().to_string()),
                 Some(profile_dir.to_string_lossy().to_string()),
             ),
             custom_dir
         );
 
+        // 2. CARGO_TARGET_TMPDIR isolates tests when explicit dir is absent
         assert_eq!(
             resolve_telemetry_dir(
+                None,
+                Some(target_tmp.to_string_lossy().to_string()),
+                Some(home_dir.to_string_lossy().to_string()),
+                Some(profile_dir.to_string_lossy().to_string()),
+            ),
+            target_tmp.join("test-telemetry")
+        );
+
+        // 3. HOME directory fallback
+        assert_eq!(
+            resolve_telemetry_dir(
+                None,
                 None,
                 Some(home_dir.to_string_lossy().to_string()),
                 Some(profile_dir.to_string_lossy().to_string()),
@@ -983,13 +1025,20 @@ mod tests {
             home_dir.join(".code-kb")
         );
 
+        // 4. USERPROFILE directory fallback
         assert_eq!(
-            resolve_telemetry_dir(None, None, Some(profile_dir.to_string_lossy().to_string()),),
+            resolve_telemetry_dir(
+                None,
+                None,
+                None,
+                Some(profile_dir.to_string_lossy().to_string()),
+            ),
             profile_dir.join(".code-kb")
         );
 
+        // 5. Default current working dir
         assert_eq!(
-            resolve_telemetry_dir(None, None, None),
+            resolve_telemetry_dir(None, None, None, None),
             PathBuf::from(".code-kb")
         );
 
@@ -1002,6 +1051,21 @@ mod tests {
         assert!(temp.path().join("telemetry.db").exists());
         drop(conn);
         set_telemetry_dir_override(None);
+    }
+
+    #[test]
+    fn test_telemetry_disabled_flags() {
+        assert!(is_telemetry_disabled_with(Some("1"), None));
+        assert!(is_telemetry_disabled_with(Some("true"), None));
+        assert!(is_telemetry_disabled_with(Some("TRUE"), None));
+        assert!(is_telemetry_disabled_with(None, Some("1")));
+        assert!(is_telemetry_disabled_with(None, Some("true")));
+        assert!(is_telemetry_disabled_with(None, Some("TRUE")));
+
+        assert!(!is_telemetry_disabled_with(Some("0"), None));
+        assert!(!is_telemetry_disabled_with(Some("false"), None));
+        assert!(!is_telemetry_disabled_with(None, Some("0")));
+        assert!(!is_telemetry_disabled_with(None, None));
     }
 
     #[test]

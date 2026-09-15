@@ -276,7 +276,7 @@ pub struct BugReportArgs {
 
 #[derive(Debug, Args)]
 pub struct HookArgs {
-    /// Hook event name (default: "SessionStart", or "SubagentStart").
+    /// Hook event name (default: "SessionStart", or "SubagentStart", "PreInvocation").
     #[arg(default_value = "SessionStart")]
     pub event: String,
 }
@@ -306,6 +306,14 @@ fn main() -> anyhow::Result<()> {
             } else {
                 serde_json::json!({})
             }
+        } else if event.eq_ignore_ascii_case("PreInvocation") {
+            serde_json::json!({
+                "injectSteps": [
+                    {
+                        "ephemeralMessage": trimmed
+                    }
+                ]
+            })
         } else {
             serde_json::json!({
                 "hookSpecificOutput": {

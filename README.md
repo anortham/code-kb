@@ -97,7 +97,7 @@ CLI command:
 agy mcp add code-kb code-kb serve
 ```
 
-Global config (`~/.gemini/config/mcp_config.json`) with `"force_all_tools_eager": true`:
+Global config (`~/.gemini/config/mcp_config.json`) with `"eager": true`:
 ```json
 {
   "mcpServers": {
@@ -105,11 +105,28 @@ Global config (`~/.gemini/config/mcp_config.json`) with `"force_all_tools_eager"
       "command": "code-kb",
       "args": ["serve"],
       "disabled": false,
+      "eager": true,
       "force_all_tools_eager": true
     }
   }
 }
 ```
+
+Lifecycle hook configuration (`~/.gemini/config/hooks.json`):
+```json
+{
+  "code-kb": {
+    "PreInvocation": [
+      {
+        "command": "code-kb hook PreInvocation",
+        "timeout": 10,
+        "type": "command"
+      }
+    ]
+  }
+}
+```
+*Note:* Antigravity does not support `SessionStart` hooks. It uses `PreInvocation` with `injectSteps` to deliver turn-level routing directives.
 
 Progressive disclosure skill linking:
 ```bash
@@ -273,9 +290,10 @@ code-kb edit my_func --file src/lib.rs --body "{\n    println!(\"hello\");\n}"
 # View active log file and recent diagnostic messages
 code-kb logs
 
-# Output agent lifecycle hook payload (SessionStart / SubagentStart)
+# Output agent lifecycle hook payload (SessionStart / SubagentStart / PreInvocation)
 code-kb hook SessionStart
 code-kb hook SubagentStart
+code-kb hook PreInvocation
 ```
 
 ---

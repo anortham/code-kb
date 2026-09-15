@@ -168,6 +168,7 @@ fn test_adversarial_worktree_fastpath_wal_flush_uncheckpointed_transactions() {
     // Spawn code-kb serve pointing to main_root
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .env("CODE_KB_TELEMETRY_DIR", main_root.join(".telemetry_test"))
             .arg("serve")
             .arg("--root")
             .arg(&main_root)
@@ -335,6 +336,7 @@ fn test_adversarial_worktree_fastpath_with_active_parent_reader() {
     // Spawn server
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .env("CODE_KB_TELEMETRY_DIR", main_root.join(".telemetry_test"))
             .arg("serve")
             .arg("--root")
             .arg(&main_root)
@@ -459,6 +461,7 @@ fn test_adversarial_worktree_relative_gitdir_resolution() {
 
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .env("CODE_KB_TELEMETRY_DIR", main_root.join(".telemetry_test"))
             .arg("serve")
             .arg("--root")
             .arg(&main_root)
@@ -755,6 +758,7 @@ fn test_adversarial_core_invariant_1_mcp_tool_schemas_strictly_zero_workspace_pa
 
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
             .arg("serve")
             .arg("--root")
             .arg(&root)
@@ -938,6 +942,7 @@ fn test_adversarial_worktree_parent_in_active_transaction_resilience() {
     // Spawn server - must not panic, deadlock, or crash when parent DB has an active write transaction
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .env("CODE_KB_TELEMETRY_DIR", main_root.join(".telemetry_test"))
             .arg("serve")
             .arg("--root")
             .arg(&main_root)

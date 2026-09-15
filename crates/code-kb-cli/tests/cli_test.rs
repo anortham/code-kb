@@ -892,6 +892,30 @@ fn test_cli_hook_copilot_env() {
 }
 
 #[test]
+fn test_cli_hook_pre_invocation() {
+    let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("hook")
+        .arg("PreInvocation")
+        .output()
+        .expect("Failed to execute hook PreInvocation");
+
+    assert!(output.status.success());
+    let val: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let steps = val
+        .get("injectSteps")
+        .expect("injectSteps key for Antigravity contract")
+        .as_array()
+        .expect("injectSteps array");
+    assert_eq!(steps.len(), 1);
+    let msg = steps[0]
+        .get("ephemeralMessage")
+        .expect("ephemeralMessage key")
+        .as_str()
+        .expect("string message");
+    assert!(msg.contains("Code Intelligence: Always use `code-kb` MCP tools"));
+}
+
+#[test]
 fn test_agents_and_claude_md_sync_contract() {
     let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let root = manifest_dir.parent().unwrap().parent().unwrap();

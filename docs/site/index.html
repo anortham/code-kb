@@ -407,7 +407,7 @@ grok plugin install /path/to/code-kb --trust</code></pre>
             <pre><code>agy mcp add code-kb code-kb serve</code></pre>
             <button class="copy-btn" type="button">Copy</button>
           </div>
-          <p class="panel-sub">Or in <code>~/.gemini/config/mcp_config.json</code>:</p>
+          <p class="panel-sub">Or in <code>~/.gemini/config/mcp_config.json</code> with eager tools:</p>
           <div class="code-wrapper">
             <pre><code>{
   "mcpServers": {
@@ -415,8 +415,24 @@ grok plugin install /path/to/code-kb --trust</code></pre>
       "command": "code-kb",
       "args": ["serve"],
       "disabled": false,
+      "eager": true,
       "force_all_tools_eager": true
     }
+  }
+}</code></pre>
+            <button class="copy-btn" type="button">Copy</button>
+          </div>
+          <p class="panel-sub">In <code>~/.gemini/config/hooks.json</code> (Antigravity uses <code>PreInvocation</code>):</p>
+          <div class="code-wrapper">
+            <pre><code>{
+  "code-kb": {
+    "PreInvocation": [
+      {
+        "command": "code-kb hook PreInvocation",
+        "timeout": 10,
+        "type": "command"
+      }
+    ]
   }
 }</code></pre>
             <button class="copy-btn" type="button">Copy</button>
@@ -459,10 +475,11 @@ grok plugin install /path/to/code-kb --trust</code></pre>
         </div>
 
         <div class="tab-panel" id="tab-hooks" hidden>
-          <p class="panel-sub"><code>code-kb hook</code> prints the routing instructions the agent reads at session start. No Node.js or shell needed.</p>
+          <p class="panel-sub"><code>code-kb hook</code> prints the routing instructions the agent reads at session start. No Node.js or shell needed. Supports <code>SessionStart</code>, <code>SubagentStart</code>, and <code>PreInvocation</code> (Antigravity).</p>
           <div class="code-wrapper">
             <pre><code>code-kb hook SessionStart
 code-kb hook SubagentStart
+code-kb hook PreInvocation
 
 # hooks/claude-codex-hooks.json wires both:
 {

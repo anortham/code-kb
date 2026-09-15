@@ -90,8 +90,9 @@ MCP tool schema.**
   `<root>/.code-kb/artifact.db`. Deleting a repository directory or running `git worktree remove`
   automatically cleans up the AST index database with no orphaned external state. Durable tool
   telemetry and token efficiency history are preserved centrally at `~/.code-kb/telemetry.db`.
-- Cross-platform agent hooks: `code-kb hook [SessionStart|SubagentStart]` outputs agent routing instructions
-  directly from the native binary without external runtime dependencies (Node.js, bash, python).
+- Cross-platform agent hooks: `code-kb hook [SessionStart|SubagentStart|PreInvocation]` outputs agent routing instructions
+  directly from the native binary without external runtime dependencies (Node.js, bash, python), formatting JSON
+  natively for Claude Code/Cursor (`SessionStart`), Copilot, and Antigravity (`PreInvocation` injectSteps).
 
 ### 7. Pinned Extractor & Bundled Distribution
 - `code-kb` pins the exact extractor version in `scripts/julie-pins.json` (currently `2.42.3`).
