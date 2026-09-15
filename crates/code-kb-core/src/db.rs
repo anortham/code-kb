@@ -372,7 +372,11 @@ mod tests {
                     |r| r.get(0),
                 )
                 .unwrap();
-            assert_eq!(val, fresh_root.to_string_lossy());
+            assert!(
+                crate::workspace::paths_equal(Path::new(&val), &fresh_root),
+                "Paths must be equal: got {val}, expected {}",
+                fresh_root.display()
+            );
         }
 
         // 3. Db with existing artifact_metadata -> updates root_path
@@ -398,7 +402,11 @@ mod tests {
                     |r| r.get(0),
                 )
                 .unwrap();
-            assert_eq!(val, new_root.to_string_lossy());
+            assert!(
+                crate::workspace::paths_equal(Path::new(&val), &new_root),
+                "Paths must be equal: got {val}, expected {}",
+                new_root.display()
+            );
         }
 
         // 4. Verbatim prefix preservation on Windows when existing root started with \\?\
