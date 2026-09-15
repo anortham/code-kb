@@ -11,6 +11,8 @@ pub enum DbError {
     PragmaFailed(rusqlite::Error),
     #[error("Database file does not exist: {0}")]
     NotFound(String),
+    #[error("Database error: {0}")]
+    Sqlite(#[from] rusqlite::Error),
 }
 
 /// Opens a read-only SQLite connection configured for low-overhead WAL reads.
@@ -146,49 +148,45 @@ pub fn ensure_fts_index_path(path: &Path) -> Result<(), DbError> {
 /// Retargets the `root_path` key in `artifact_metadata` to a new workspace canonical root.
 /// This is essential when cloning or copying an artifact database (e.g. into a git worktree),
 /// ensuring `julie-extract update`, `delete`, and `scan` recognize the new root without root mismatch errors.
-pub fn retarget_artifact_root(db_path: &Path, new_root: &Path) -> Result<(), rusqlite::Error> {
+pub fn retarget_artifact_root(db_path: &Path, new_root: &Path) -> Result<(), DbError> {
     if !db_path.exists() {
-        return Ok(());
+        return Err(DbError::NotFound(db_path.display().to_string()));
     }
-    if let Ok(conn) = open_read_write(db_path) {
-        let has_metadata: bool = conn
-            .query_row(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='artifact_metadata'",
-                [],
-                |_| Ok(true),
-            )
-            .unwrap_or(false);
-        if has_metadata {
-            let existing_root: Option<String> = conn
-                .query_row(
-                    "SELECT value FROM artifact_metadata WHERE key = 'root_path'",
-                    [],
-                    |r| r.get(0),
-                )
-                .ok();
+    let conn = open_read_write(db_path)?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS artifact_metadata (key TEXT PRIMARY KEY, value TEXT)",
+        [],
+    )?;
 
-            let root_str = if existing_root
-                .as_deref()
-                .is_some_and(|ex| ex.starts_with(r"\\?\") || ex.starts_with(r"\\.\"))
-                || (existing_root.is_none() && cfg!(windows))
-            {
-                std::fs::canonicalize(new_root)
-                    .map(|p| p.to_string_lossy().to_string())
-                    .unwrap_or_else(|_| {
-                        let s = new_root.to_string_lossy();
-                        format!(r"\\?\{s}")
-                    })
-            } else {
-                new_root.to_string_lossy().to_string()
-            };
+    let existing_root: Option<String> = conn
+        .query_row(
+            "SELECT value FROM artifact_metadata WHERE key = 'root_path'",
+            [],
+            |r| r.get(0),
+        )
+        .ok();
 
-            conn.execute(
-                "INSERT INTO artifact_metadata (key, value) VALUES ('root_path', ?1)
-                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-                rusqlite::params![root_str],
-            )?;
-        }
-    }
+    let root_str = if existing_root
+        .as_deref()
+        .is_some_and(|ex| ex.starts_with(r"\\?\") || ex.starts_with(r"\\.\"))
+        || (existing_root.is_none() && cfg!(windows))
+    {
+        std::fs::canonicalize(new_root)
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|_| {
+                let s = new_root.to_string_lossy();
+                format!(r"\\?\{s}")
+            })
+    } else {
+        new_root.to_string_lossy().to_string()
+    };
+
+    conn.execute(
+        "INSERT INTO artifact_metadata (key, value) VALUES ('root_path', ?1)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        rusqlite::params![root_str],
+    )?;
+
     Ok(())
 }
 
@@ -343,5 +341,92 @@ mod tests {
             .query_row("SELECT val FROM items WHERE id = 1", [], |r| r.get(0))
             .unwrap();
         assert_eq!(val, "persisted_val");
+    }
+
+    #[test]
+    fn test_retarget_artifact_root() {
+        let dir = crate::safe_tempdir();
+        let db_path = dir.path().join("retarget.db");
+
+        // 1. Missing db file -> NotFound error
+        let missing_path = dir.path().join("missing.db");
+        assert!(matches!(
+            retarget_artifact_root(&missing_path, dir.path()),
+            Err(DbError::NotFound(_))
+        ));
+
+        // 2. Db without existing artifact_metadata table -> creates table and sets root_path
+        {
+            let conn = open_read_write(&db_path).unwrap();
+            conn.execute("CREATE TABLE other (x INT);", []).unwrap();
+        }
+        let fresh_root = dir.path().join("fresh_root");
+        std::fs::create_dir_all(&fresh_root).unwrap();
+        retarget_artifact_root(&db_path, &fresh_root).expect("Must create table and succeed");
+        {
+            let conn = open_read_only(&db_path).unwrap();
+            let val: String = conn
+                .query_row(
+                    "SELECT value FROM artifact_metadata WHERE key = 'root_path'",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(val, fresh_root.to_string_lossy());
+        }
+
+        // 3. Db with existing artifact_metadata -> updates root_path
+        {
+            let conn = open_read_write(&db_path).unwrap();
+            conn.execute(
+                "UPDATE artifact_metadata SET value = '/old/root' WHERE key = 'root_path';",
+                [],
+            )
+            .unwrap();
+        }
+
+        let new_root = dir.path().join("new_root");
+        std::fs::create_dir_all(&new_root).unwrap();
+        retarget_artifact_root(&db_path, &new_root).expect("retargeting must succeed");
+
+        {
+            let conn = open_read_only(&db_path).unwrap();
+            let val: String = conn
+                .query_row(
+                    "SELECT value FROM artifact_metadata WHERE key = 'root_path'",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(val, new_root.to_string_lossy());
+        }
+
+        // 4. Verbatim prefix preservation on Windows when existing root started with \\?\
+        #[cfg(windows)]
+        {
+            {
+                let conn = open_read_write(&db_path).unwrap();
+                conn.execute(
+                    "UPDATE artifact_metadata SET value = '\\\\?\\C:\\old\\root' WHERE key = 'root_path';",
+                    [],
+                )
+                .unwrap();
+            }
+
+            retarget_artifact_root(&db_path, &new_root).expect("retargeting verbatim must succeed");
+
+            let conn = open_read_only(&db_path).unwrap();
+            let val: String = conn
+                .query_row(
+                    "SELECT value FROM artifact_metadata WHERE key = 'root_path'",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert!(
+                val.starts_with(r"\\?\"),
+                "Must preserve \\\\?\\ prefix when existing root had it: got {val}"
+            );
+        }
     }
 }
