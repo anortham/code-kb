@@ -282,6 +282,13 @@ pub fn paths_equal(p1: &Path, p2: &Path) -> bool {
     if to_forward_slash(&p1_norm) == to_forward_slash(&p2_norm) {
         return true;
     }
+    if let (Ok(c1), Ok(c2)) = (dunce::canonicalize(p1), dunce::canonicalize(p2)) {
+        let c1_norm = normalize_path(&c1);
+        let c2_norm = normalize_path(&c2);
+        if c1_norm == c2_norm || to_forward_slash(&c1_norm) == to_forward_slash(&c2_norm) {
+            return true;
+        }
+    }
     #[cfg(windows)]
     {
         let mut c1 = p1_norm.components();

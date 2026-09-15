@@ -29,6 +29,7 @@ fn test_git_worktree_lifecycle_and_index_isolation() {
     };
 
     run_git(&["init"], &root);
+    run_git(&["config", "core.autocrlf", "false"], &root);
     run_git(&["config", "user.name", "Test Agent"], &root);
     run_git(&["config", "user.email", "agent@example.com"], &root);
 
@@ -234,8 +235,12 @@ fn test_worktree_copy_index_update_and_query_workflow() {
 
     // 1. Initialize git repository
     run_git(&["init", "-b", "main"], &root);
+    run_git(&["config", "core.autocrlf", "false"], &root);
     run_git(&["config", "user.name", "Test User"], &root);
     run_git(&["config", "user.email", "test@example.com"], &root);
+
+    // .gitattributes to ensure git checkouts preserve exact bytes across platforms
+    fs::write(root.join(".gitattributes"), "* -text\n").unwrap();
 
     // .gitignore
     fs::write(
