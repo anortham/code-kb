@@ -22,6 +22,7 @@ a live defect, reproduced deterministically.
 |---|---|---|---|
 | `julie-extract scan` (level full, the default) | 85 s | 5.3 GB | 3.9 GB |
 | `julie-extract scan --level symbols` | 42 s | 2.0 GB | 1.3 GB |
+| `julie-extract scan --level facts` (2.43.0, what code-kb 1.0.2 requests) | 46 s | 2.1 GB | 1.4 GB |
 | `julie-extract update --file <one .py>` | 0.21 s | 407 MB | |
 | `code-kb outline` warm | 0.01 s | 51 MB | |
 | `code-kb lookup` warm | 0.13 s | 277 MB | |
