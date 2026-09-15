@@ -5,7 +5,7 @@ use code_kb_core::workspace::Workspace;
 use code_kb_core::{safe_tempdir, scan_workspace, slicer};
 use std::fs;
 #[allow(unused_imports)]
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 #[cfg(windows)]
 use std::os::windows::fs::OpenOptionsExt;
@@ -245,12 +245,15 @@ fn test_adversarial_rollback_fails_cleanly_when_dest_locked() {
 
     let conn_ro = open_read_only(&db_path).unwrap();
 
-    // Background thread locks calc.rs with share_mode(1) shortly after edit starts,
-    // so rollback cannot persist backup bytes even with retries.
     let target = file_path.clone();
+    let initial_bytes = fs::read(&file_path).unwrap();
     let lock_thread = std::thread::spawn(move || {
-        // Sleep 5ms so initial write finishes and sync begins
-        std::thread::sleep(Duration::from_millis(5));
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while fs::read(&target).ok().as_deref() == Some(initial_bytes.as_slice())
+            && Instant::now() < deadline
+        {
+            std::thread::sleep(Duration::from_millis(1));
+        }
         let locked_file = fs::OpenOptions::new()
             .read(true)
             .share_mode(1)
