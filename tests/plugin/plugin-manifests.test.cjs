@@ -37,6 +37,7 @@ test('the Codex plugin starts the server through the launcher', () => {
 
 test('the Antigravity plugin starts the server and hook through the launcher', () => {
   assert.equal(read('plugin.json').name, 'code-kb');
+  assert.equal(read('plugin.json').$schema, undefined, 'a $schema on the root manifest makes Codex skip the .codex-plugin hooks');
   assert.deepEqual(read('mcp_config.json').mcpServers['code-kb'], {
     command: 'node',
     args: ['./bin/code-kb-launcher.cjs', 'serve'],

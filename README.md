@@ -61,6 +61,15 @@ codex plugin add code-kb@code-kb
 ```
 Run `codex`, open `/hooks`, and trust the two code-kb hooks.
 
+To update, refresh the marketplace snapshot first. `codex plugin remove` followed by
+`codex plugin add` reinstalls the version already in the snapshot:
+
+```bash
+codex plugin marketplace upgrade
+codex plugin remove code-kb@code-kb
+codex plugin add code-kb@code-kb
+```
+
 ### Antigravity CLI (AGY)
 
 ```bash
@@ -110,7 +119,7 @@ With either in place, `cargo build --release` plus a session restart is the whol
 | Harness | Command / Action |
 |---|---|
 | Claude Code | `/plugin remove code-kb` |
-| Codex | `codex plugin remove code-kb` |
+| Codex | `codex plugin remove code-kb@code-kb` |
 | Antigravity (AGY) | `agy plugin uninstall code-kb` |
 | Grok CLI | `grok plugin uninstall code-kb` |
 
