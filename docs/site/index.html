@@ -173,7 +173,7 @@ get_symbol_context("search_symbols_scoped")</pre>
           </div>
           <div>
             <dt>Atomic edits</dt>
-            <dd><code>replace_symbol_body</code> validates Rust, JavaScript, TypeScript/TSX, Python, and Go with tree-sitter; other languages report validation skipped. It then verifies a hash, writes the file, and re-indexes it in one turn.</dd>
+            <dd><code>replace_symbol_body</code> validates the edited file through <code>julie-extract check</code> for every language the extractor parses, about 40; other paths report validation skipped. It then verifies a hash, writes the file, and re-indexes it in one turn.</dd>
           </div>
           <div>
             <dt>Token telemetry</dt>
@@ -237,7 +237,7 @@ get_symbol_context("search_symbols_scoped")</pre>
               </tr>
               <tr>
                 <td>Replace a function</td>
-                <td class="kept">Syntax checked before the write for Rust, JS/TS/TSX, Python, and Go; skipped otherwise</td>
+                <td class="kept">Syntax checked before the write by <code>julie-extract</code> for about 40 languages; skipped otherwise</td>
                 <td>Text or regex replacement</td>
               </tr>
               <tr>
@@ -295,7 +295,7 @@ search_symbols("auth token validation")</pre>
             <pre>blast_radius(symbol="compute_hash")</pre>
           </li>
           <li>
-            <div><h3>Edit</h3><p>Syntax validation for Rust, JS/TS/TSX, Python, and Go; other languages report it skipped. Hash check, atomic write, re-index.</p></div>
+            <div><h3>Edit</h3><p>Syntax validation by <code>julie-extract</code> for about 40 languages; other paths report it skipped. Hash check, atomic write, re-index.</p></div>
             <pre>replace_symbol_body(
   symbol_name="calculate",
   file_path="calc.rs",
@@ -348,7 +348,7 @@ code-kb stats</pre>
       <p class="margin-label">Install</p>
       <div class="section-body">
         <h2>Connect it to your agent</h2>
-        <p>Download the <a href="https://github.com/anortham/code-kb/releases/latest" target="_blank" rel="noopener">release archive for your platform</a>. It holds <code>code-kb</code> and the matching <code>julie-extract</code> side by side. Then register the server once.</p>
+        <p>Install the plugin for your agent. It needs Node.js 18 or newer; on first run it downloads the release archive for your platform, which holds <code>code-kb</code> and the matching <code>julie-extract</code> side by side. Or download the <a href="https://github.com/anortham/code-kb/releases/latest" target="_blank" rel="noopener">archive</a> yourself, put both binaries on <code>PATH</code>, and register the server by hand. GUI apps such as Cursor start the server from their own install directory, so their config passes <code>--root</code> with the project path; terminal agents need no flag. The <a href="https://github.com/anortham/code-kb#install" target="_blank" rel="noopener">README</a> has every harness.</p>
 
         <div class="tabs" role="tablist" aria-label="Agent">
           <button role="tab" aria-selected="true" data-tab="claude">Claude Code</button>
@@ -360,7 +360,13 @@ code-kb stats</pre>
         </div>
 
         <div class="tab-panel" id="tab-claude">
-          <p class="panel-sub">For every project on this machine:</p>
+          <p class="panel-sub">As a plugin, which also installs the skill and hooks (two separate prompts):</p>
+          <div class="code-wrapper">
+            <pre><code>/plugin marketplace add anortham/code-kb
+/plugin install code-kb@code-kb</code></pre>
+            <button class="copy-btn" type="button">Copy</button>
+          </div>
+          <p class="panel-sub">Or by hand, for every project on this machine:</p>
           <div class="code-wrapper">
             <pre><code>claude mcp add --scope user code-kb -- code-kb serve</code></pre>
             <button class="copy-btn" type="button">Copy</button>
@@ -402,7 +408,12 @@ grok plugin install /path/to/code-kb --trust</code></pre>
         </div>
 
         <div class="tab-panel" id="tab-agy" hidden>
-          <p class="panel-sub">From the command line:</p>
+          <p class="panel-sub">As a plugin, which also installs the skill and hook:</p>
+          <div class="code-wrapper">
+            <pre><code>agy plugin install https://github.com/anortham/code-kb</code></pre>
+            <button class="copy-btn" type="button">Copy</button>
+          </div>
+          <p class="panel-sub">Or by hand, from the command line:</p>
           <div class="code-wrapper">
             <pre><code>agy mcp add code-kb code-kb serve</code></pre>
             <button class="copy-btn" type="button">Copy</button>
@@ -445,16 +456,17 @@ grok plugin install /path/to/code-kb --trust</code></pre>
         </div>
 
         <div class="tab-panel" id="tab-codex" hidden>
-          <p class="panel-sub">In <code>~/.codex/config.json</code>:</p>
+          <p class="panel-sub">As a plugin, which also installs the skill and hooks:</p>
           <div class="code-wrapper">
-            <pre><code>{
-  "mcpServers": {
-    "code-kb": {
-      "command": "code-kb",
-      "args": ["serve"]
-    }
-  }
-}</code></pre>
+            <pre><code>codex plugin marketplace add anortham/code-kb
+codex plugin add code-kb@code-kb</code></pre>
+            <button class="copy-btn" type="button">Copy</button>
+          </div>
+          <p class="panel-sub">Or by hand, in <code>~/.codex/config.toml</code>:</p>
+          <div class="code-wrapper">
+            <pre><code>[mcp_servers.code-kb]
+command = "code-kb"
+args = ["serve"]</code></pre>
             <button class="copy-btn" type="button">Copy</button>
           </div>
         </div>

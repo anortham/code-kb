@@ -325,7 +325,8 @@ binaries from your `PATH`.
 | `find_references` | Callers or callees of a symbol, matched by name from AST call sites and ranked by same file, same directory, then receiver type; callers also include type usages and member accesses (filters external stdlib noise; qualify overloaded names). | `symbol_name` (req), `file_path` (opt), `direction` ("callers" \| "callees", def: callers), `include_external` (opt, def: false) | `symbol`, `name`, `file`, `path` |
 | `blast_radius` | Multi-hop reverse reachability (CTEs) & targeted test prediction. | `symbol` (opt), `file` (opt), `depth` (opt, def: 2), `limit` (opt) | `name`, `path`, `impact` |
 | `find_structural_facts` | Queries framework facts (routes, SQL queries, config keys, tables). Lists all categories when omitted. | `category` (opt), `path` (opt), `limit` (opt) | `cat`, `kind`, `type`, `file`, `file_path` |
-| `replace_symbol_body` | Atomically replaces a symbol's implementation; syntax validation covers Rust, JavaScript, TypeScript/TSX, Python, and Go. | `symbol_name` (req), `file_path` (req), `new_body` (req), `expected_body_hash` (opt) | `symbol`, `file`, `body`, `code` |
+| `replace_symbol_body` | Atomically replaces a symbol's implementation; `julie-extract check` validates the syntax for every language it parses (about 40), other paths report validation skipped. | `symbol_name` (req), `file_path` (req), `new_body` (req), `expected_body_hash` (opt) | `symbol`, `file`, `body`, `code` |
+| `telemetry_summary` | Token savings, call counts, and error rates from `~/.code-kb/telemetry.db`, across all workspaces or scoped to the current one. | `time_window` (opt, def: all), `workspace_only` (opt, def: false), `json` (opt) | `since`, `window` |
 
 ---
 
@@ -376,6 +377,13 @@ code-kb edit my_func --file src/lib.rs --body "{\n    println!(\"hello\");\n}"
 # View active log file and recent diagnostic messages
 code-kb logs
 
+# Token savings, call counts, and error rates (alias: code-kb telemetry)
+code-kb stats --since month
+code-kb stats --workspace
+
+# Self-contained diagnostic bundle with a pre-filled GitHub issue link
+code-kb bug-report --title "lookup returns nothing"
+
 # Output agent lifecycle hook payload (SessionStart / SubagentStart / PreInvocation)
 code-kb hook SessionStart
 code-kb hook SubagentStart
@@ -413,9 +421,11 @@ node --test tests/plugin/*.test.cjs
 ./scripts/release-preflight.sh
 ```
 
-To run a harness plugin against a local build, point the launcher at it:
+To run the Claude Code plugin from this checkout, build and load it. The launcher runs
+`target/release/code-kb` when it exists, so no download happens:
 ```bash
-CODE_KB_BIN=$PWD/target/release/code-kb claude --plugin-dir .
+cargo build --release
+claude --plugin-dir .
 ```
 
 ---

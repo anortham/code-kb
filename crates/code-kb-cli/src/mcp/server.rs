@@ -336,7 +336,7 @@ impl McpServer {
             },
             Tool {
                 name: "replace_symbol_body".to_string(),
-                description: "Atomically replaces a function or method body. Validates Rust, JavaScript, TypeScript/TSX, Python, and Go syntax; reports validation skipped for other languages, then re-indexes in one turn.".to_string(),
+                description: "Atomically replaces a function or method body. Validates the edited file's syntax through julie-extract for every language it parses (about 40) and reports validation skipped for other paths; checks the optional body hash, writes atomically, and re-indexes in one turn.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {

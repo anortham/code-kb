@@ -46,6 +46,7 @@ Run the automated pre-flight script, or execute each check manually:
 3. **Full Local Test Suite:**
    ```bash
    cargo test --workspace --locked
+   node --test tests/plugin/*.test.cjs
    ```
 4. **Local Windows NTFS Test Suite (via `win-test`):**
    ```bash
@@ -88,6 +89,8 @@ When bumping to version `X.Y.Z` (e.g. `0.5.0`):
   `tests/plugin/plugin-manifests.test.cjs` fails when the four manifests disagree.
 - **`.github/workflows/release-binaries.yml`**:
   Update default version input to `"X.Y.Z"`.
+- **`docs/site/index.html`**: the version badge in the nav (`<span class="version">vX.Y.Z</span>`)
+  and the cache-busting query on the stylesheet link (`style.css?v=X.Y.Z`).
 
 ### 2. Synchronize Lockfile
 ```bash
@@ -167,20 +170,32 @@ tar -tzf code-kb-vX.Y.Z-x86_64-unknown-linux-gnu.tar.gz
 
 ---
 
-## 6. Crates.io Publication (Optional / Staged)
+## 6. Crates.io Publication
 
-When ready to publish to crates.io:
+Publish after the GitHub Release exists, because `cargo binstall code-kb-cli` reads the
+crate's `[package.metadata.binstall]` block and then downloads that release's archive.
+
+Prerequisites (once per machine): a crates.io account that owns both crates, a token with
+publish scope, and `cargo login`. The crate manifests point `readme` at the repository
+README, so the crates.io pages show it.
 
 ```bash
-# 1. Publish core library first
-cargo publish -p code-kb-core
+# 1. Publish the core library first; cargo waits until the index serves it
+cargo publish -p code-kb-core --locked
 
-# 2. Wait 60-120 seconds for crates.io index propagation
-sleep 60
-
-# 3. Publish CLI binary
-cargo publish -p code-kb-cli
+# 2. Publish the CLI, which depends on the core version just published
+cargo publish -p code-kb-cli --locked
 ```
+
+Verify both install paths from the public registry into a scratch root:
+
+```bash
+cargo install code-kb-cli --locked --root /tmp/code-kb-check && /tmp/code-kb-check/bin/code-kb --version
+cargo binstall code-kb-cli --no-confirm --root /tmp/code-kb-binstall && /tmp/code-kb-binstall/bin/code-kb --version
+```
+
+A published version cannot be edited or deleted, only yanked. Fix manifests before
+publishing, not after.
 
 ---
 
