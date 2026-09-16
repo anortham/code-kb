@@ -28,3 +28,11 @@ tracing-appender = { workspace = true }
 tempfile = { workspace = true }
 rusqlite = { workspace = true }
 blake3 = { workspace = true }
+
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/code-kb-v{ version }-{ target }{ archive-suffix }"
+bin-dir = "{ bin }{ binary-ext }"
+pkg-fmt = "tgz"
+
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-fmt = "zip"
