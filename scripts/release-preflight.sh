@@ -23,12 +23,14 @@ if ! cmp -s AGENTS.md CLAUDE.md; then
   cmp AGENTS.md CLAUDE.md || true
   exit 1
 fi
-if ! cmp -s skills/code-kb/SKILL.md .claude-plugin/skills/code-kb/SKILL.md; then
-  echo "FAIL"
-  echo "error: skills/code-kb/SKILL.md and .claude-plugin/skills/code-kb/SKILL.md differ." >&2
-  cmp skills/code-kb/SKILL.md .claude-plugin/skills/code-kb/SKILL.md || true
-  exit 1
-fi
+for skill in skills/*/SKILL.md; do
+  if ! cmp -s "$skill" ".claude-plugin/$skill"; then
+    echo "FAIL"
+    echo "error: $skill and .claude-plugin/$skill differ." >&2
+    cmp "$skill" ".claude-plugin/$skill" || true
+    exit 1
+  fi
+done
 echo "OK (byte-for-byte identical)"
 
 # 2. Version consistency check

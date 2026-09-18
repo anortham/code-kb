@@ -876,13 +876,27 @@ fn test_agents_and_claude_md_sync_contract() {
 fn test_skills_md_sync_contract() {
     let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let root = manifest_dir.parent().unwrap().parent().unwrap();
-    let skill_root = std::fs::read_to_string(root.join("skills/code-kb/SKILL.md")).unwrap();
-    let skill_plugin =
-        std::fs::read_to_string(root.join(".claude-plugin/skills/code-kb/SKILL.md")).unwrap();
-    assert_eq!(
-        skill_root, skill_plugin,
-        "skills/code-kb/SKILL.md and .claude-plugin/skills/code-kb/SKILL.md must be byte-for-byte identical"
+    let skills: Vec<_> = std::fs::read_dir(root.join("skills"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert!(
+        skills.len() >= 2,
+        "expected the code-kb and telemetry skills"
     );
+    for skill in skills {
+        let relative = std::path::Path::new("skills").join(&skill).join("SKILL.md");
+        let skill_root = std::fs::read_to_string(root.join(&relative)).unwrap();
+        let skill_plugin =
+            std::fs::read_to_string(root.join(".claude-plugin").join(&relative)).unwrap();
+        assert_eq!(
+            skill_root,
+            skill_plugin,
+            "{} and .claude-plugin/{} must be byte-for-byte identical",
+            relative.display(),
+            relative.display()
+        );
+    }
 }
 
 #[test]

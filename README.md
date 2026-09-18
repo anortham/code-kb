@@ -51,7 +51,8 @@ Requirements:
 /plugin install code-kb@code-kb
 ```
 *(Send as two separate prompts.)* The plugin registers the MCP server, the progressive
-disclosure skill, and SessionStart and SubagentStart hooks that inject routing instructions.
+disclosure skill, a `/code-kb:telemetry` command for usage and token-savings reports, and
+SessionStart and SubagentStart hooks that inject routing instructions.
 
 ### Codex
 
