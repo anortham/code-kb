@@ -395,13 +395,18 @@ pub fn create_index(workspace: &Workspace, db_path: &Path) -> Result<(), SyncErr
     scan_workspace(workspace, db_path, false)
 }
 
-/// Creates the index directory and a `.gitignore` that hides it from git, so no
-/// project `.gitignore` edit is ever needed.
+/// Creates the index directory. A `.code-kb` directory also gets a `.gitignore` that
+/// hides it from git, so no project `.gitignore` edit is ever needed. Any other
+/// directory is left alone: a `*` ignore file there would hide the user's own files
+/// from the extractor and from git.
 fn ensure_index_dir(db_path: &Path) -> std::io::Result<()> {
     let Some(dir) = db_path.parent() else {
         return Ok(());
     };
     std::fs::create_dir_all(dir)?;
+    if dir.file_name().is_none_or(|name| name != ".code-kb") {
+        return Ok(());
+    }
     let gitignore = dir.join(".gitignore");
     if !gitignore.exists() {
         std::fs::write(gitignore, "*\n")?;
@@ -688,6 +693,14 @@ mod tests {
         std::fs::write(&gitignore, "custom\n").unwrap();
         ensure_index_dir(&db_path).unwrap();
         assert_eq!(std::fs::read_to_string(&gitignore).unwrap(), "custom\n");
+    }
+
+    #[test]
+    fn ensure_index_dir_leaves_non_code_kb_directories_alone() {
+        let temp = crate::safe_tempdir();
+        let db_path = temp.path().join("test.db");
+        ensure_index_dir(&db_path).unwrap();
+        assert!(!temp.path().join(".gitignore").exists());
     }
 
     #[test]
