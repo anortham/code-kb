@@ -95,9 +95,36 @@ pub fn local_variable_predicate(alias: &str) -> String {
     )
 }
 
+/// Identifies the rule the FTS content was built under. A stored marker that differs from this
+/// value means the index predates the rule and must be repopulated once.
+const FTS_RULE: &str = "exclude-locals-v1";
+
+fn stored_fts_rule(conn: &Connection) -> Option<String> {
+    conn.query_row(
+        "SELECT value FROM artifact_metadata WHERE key = 'fts_rule'",
+        [],
+        |r| r.get(0),
+    )
+    .ok()
+}
+
+fn fts_content_is_missing(conn: &Connection) -> bool {
+    let has_symbols = conn
+        .query_row("SELECT 1 FROM symbols LIMIT 1", [], |_| Ok(true))
+        .unwrap_or(false);
+    if !has_symbols {
+        return false;
+    }
+    !conn
+        .query_row("SELECT 1 FROM symbols_fts_docsize LIMIT 1", [], |_| {
+            Ok(true)
+        })
+        .unwrap_or(false)
+}
+
 /// Ensures the `symbols_fts` FTS5 virtual table and synchronization triggers exist in the SQLite
-/// database, and that it holds every symbol except locals and parameters. An index whose row
-/// count does not match that rule is repopulated once.
+/// database, and that it holds every symbol except locals and parameters. An index built under an
+/// earlier rule, or one left without content, is repopulated once.
 pub fn ensure_fts_index(conn: &Connection) -> Result<(), rusqlite::Error> {
     let symbols_table_exists: bool = conn
         .query_row(
@@ -108,6 +135,10 @@ pub fn ensure_fts_index(conn: &Connection) -> Result<(), rusqlite::Error> {
         .unwrap_or(false);
 
     if !symbols_table_exists {
+        return Ok(());
+    }
+
+    if stored_fts_rule(conn).as_deref() == Some(FTS_RULE) && !fts_content_is_missing(conn) {
         return Ok(());
     }
 
@@ -151,31 +182,28 @@ pub fn ensure_fts_index(conn: &Connection) -> Result<(), rusqlite::Error> {
         END;"
     ))?;
 
-    let indexable_count: i64 = conn
-        .query_row(
-            &format!("SELECT count(*) FROM symbols s WHERE NOT {is_local}"),
-            [],
-            |r| r.get(0),
-        )
-        .unwrap_or(0);
-    let indexed_count: i64 = conn
-        .query_row("SELECT count(*) FROM symbols_fts_docsize", [], |r| r.get(0))
-        .unwrap_or(0);
+    conn.execute(
+        "INSERT INTO symbols_fts(symbols_fts) VALUES('delete-all')",
+        [],
+    )?;
+    conn.execute(
+        &format!(
+            "INSERT INTO symbols_fts(rowid, name, signature, doc_comment)
+             SELECT s.rowid, s.name, s.signature, s.doc_comment
+             FROM symbols s WHERE NOT {is_local}"
+        ),
+        [],
+    )?;
 
-    if indexed_count != indexable_count {
-        conn.execute(
-            "INSERT INTO symbols_fts(symbols_fts) VALUES('delete-all')",
-            [],
-        )?;
-        conn.execute(
-            &format!(
-                "INSERT INTO symbols_fts(rowid, name, signature, doc_comment)
-                 SELECT s.rowid, s.name, s.signature, s.doc_comment
-                 FROM symbols s WHERE NOT {is_local}"
-            ),
-            [],
-        )?;
-    }
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS artifact_metadata (key TEXT PRIMARY KEY, value TEXT)",
+        [],
+    )?;
+    conn.execute(
+        "INSERT INTO artifact_metadata (key, value) VALUES ('fts_rule', ?1)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        [FTS_RULE],
+    )?;
 
     Ok(())
 }
@@ -289,7 +317,6 @@ mod tests {
         let db_path = dir.path().join("fts_lifecycle.db");
         let conn = open_read_write(&db_path).unwrap();
 
-        // Create mock symbols table
         conn.execute_batch(
             "CREATE TABLE symbols (
                 symbol_id TEXT PRIMARY KEY,
@@ -304,7 +331,6 @@ mod tests {
         )
         .unwrap();
 
-        // Ensure FTS index initializes and rebuilds existing rows
         ensure_fts_index(&conn).unwrap();
 
         let count: i64 = conn
@@ -316,7 +342,6 @@ mod tests {
             .unwrap();
         assert_eq!(count, 1);
 
-        // Test trigger on insert
         conn.execute(
             "INSERT INTO symbols VALUES ('3', 'RefundHandler', 'function', NULL, 'pub fn handle_refund()', 'Processes transaction refunds');",
             [],
@@ -332,7 +357,6 @@ mod tests {
             .unwrap();
         assert_eq!(count, 1);
 
-        // Test trigger on delete
         conn.execute("DELETE FROM symbols WHERE symbol_id = '3';", [])
             .unwrap();
         let count: i64 = conn
@@ -343,6 +367,95 @@ mod tests {
             )
             .unwrap();
         assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn ensure_fts_index_records_its_rule_and_keeps_drifted_rows() {
+        let dir = crate::safe_tempdir();
+        let db_path = dir.path().join("fts_rule.db");
+        let conn = open_read_write(&db_path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE symbols (
+                symbol_id TEXT PRIMARY KEY,
+                name TEXT,
+                kind TEXT,
+                parent_symbol_id TEXT,
+                signature TEXT,
+                doc_comment TEXT
+            );
+            INSERT INTO symbols VALUES ('1', 'open_conn', 'function', NULL, 'fn open_conn()', '');",
+        )
+        .unwrap();
+
+        ensure_fts_index(&conn).unwrap();
+
+        let rule: String = conn
+            .query_row(
+                "SELECT value FROM artifact_metadata WHERE key = 'fts_rule'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(rule, FTS_RULE);
+
+        conn.execute(
+            "INSERT INTO symbols VALUES ('2', 'drifted', 'variable', '3', 'let drifted = 1', '')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO symbols VALUES ('3', 'later', 'function', NULL, 'fn later()', '')",
+            [],
+        )
+        .unwrap();
+
+        ensure_fts_index(&conn).unwrap();
+
+        let count: i64 = conn
+            .query_row(
+                "SELECT count(*) FROM symbols_fts WHERE symbols_fts MATCH 'drifted'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn ensure_fts_index_repopulates_an_emptied_index() {
+        let dir = crate::safe_tempdir();
+        let db_path = dir.path().join("fts_empty.db");
+        let conn = open_read_write(&db_path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE symbols (
+                symbol_id TEXT PRIMARY KEY,
+                name TEXT,
+                kind TEXT,
+                parent_symbol_id TEXT,
+                signature TEXT,
+                doc_comment TEXT
+            );
+            INSERT INTO symbols VALUES ('1', 'RefundHandler', 'function', NULL, 'fn handle_refund()', '');",
+        )
+        .unwrap();
+
+        ensure_fts_index(&conn).unwrap();
+        conn.execute(
+            "INSERT INTO symbols_fts(symbols_fts) VALUES('delete-all')",
+            [],
+        )
+        .unwrap();
+
+        ensure_fts_index(&conn).unwrap();
+
+        let count: i64 = conn
+            .query_row(
+                "SELECT count(*) FROM symbols_fts WHERE symbols_fts MATCH 'refund'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
     }
 
     #[test]

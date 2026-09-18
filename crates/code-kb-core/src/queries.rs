@@ -315,7 +315,9 @@ pub fn search_symbols(
     search_symbols_scoped(conn, query, kind_filter, None, include_tests, limit)
 }
 
-/// Search symbols with optional path scoping filter.
+/// Search symbols with optional path scoping filter. Locals and parameters are left out unless
+/// the caller passes `kind = "variable"` or names one explicitly as a qualified name such as
+/// `open_conn::conn`.
 pub fn search_symbols_scoped(
     conn: &Connection,
     query: &str,
@@ -435,9 +437,11 @@ pub fn fts_search_symbols_scoped(
         )
         .unwrap_or(false);
 
-    if !fts_exists || norm_kind.as_deref() == Some("variable") {
+    let escaped_path = normalized_path.as_deref().map(escape_like);
+    let searching_variables = norm_kind.as_deref() == Some("variable");
+
+    let name_search = |local_clause: &str| -> Result<Vec<SymbolSearchResult>, QueryError> {
         let pattern = format!("%{}%", escape_like(query));
-        let escaped_path = normalized_path.as_deref().map(escape_like);
         let mut sql = String::from(
             "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,
                     visibility, parent_symbol_id, start_line, start_column, end_line, end_column,
@@ -449,9 +453,7 @@ pub fn fts_search_symbols_scoped(
                 AND (:kind IS NULL OR kind = :kind)
                 AND (:path IS NULL OR replace(path, '\\', '/') = :path COLLATE NOCASE OR replace(path, '\\', '/') LIKE :path_like || '/%' ESCAPE '\\' OR replace(path, '\\', '/') LIKE '%/' || :path_like ESCAPE '\\')",
         );
-        if norm_kind.as_deref() != Some("variable") {
-            sql.push_str(&format!(" AND NOT {}", local_variable_predicate("s")));
-        }
+        sql.push_str(local_clause);
         if !include_tests {
             sql.push_str(" AND is_test = 0 AND test_container = 0");
         }
@@ -477,17 +479,25 @@ pub fn fts_search_symbols_scoped(
             )?
             .collect::<Result<Vec<_>, _>>()?;
 
-        return Ok(rows
+        Ok(rows
             .into_iter()
             .map(|s| SymbolSearchResult {
                 symbol: s,
                 score: 0.0,
                 snippet: None,
             })
-            .collect());
+            .collect())
+    };
+
+    if !fts_exists {
+        let local_clause = if searching_variables {
+            String::new()
+        } else {
+            format!(" AND NOT {}", local_variable_predicate("s"))
+        };
+        return name_search(&local_clause);
     }
 
-    let escaped_path = normalized_path.as_deref().map(escape_like);
     let execute_search = |match_clause: &str| -> Result<Vec<SymbolSearchResult>, QueryError> {
         let mut sql = String::from(
             "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,
@@ -506,7 +516,9 @@ pub fn fts_search_symbols_scoped(
                AND (:path IS NULL OR replace(s.path, '\\', '/') = :path COLLATE NOCASE OR replace(s.path, '\\', '/') LIKE :path_like || '/%' ESCAPE '\\' OR replace(s.path, '\\', '/') LIKE '%/' || :path_like ESCAPE '\\')",
         );
 
-        sql.push_str(&format!(" AND NOT {}", local_variable_predicate("s")));
+        if !searching_variables {
+            sql.push_str(&format!(" AND NOT {}", local_variable_predicate("s")));
+        }
 
         if !include_tests {
             sql.push_str(" AND s.is_test = 0 AND s.test_container = 0");
@@ -563,6 +575,18 @@ pub fn fts_search_symbols_scoped(
     let mut results = execute_search(&and_q)?;
     if results.is_empty() && and_q != or_q {
         results = execute_search(&or_q)?;
+    }
+
+    if searching_variables {
+        let locals = name_search(&format!(" AND {}", local_variable_predicate("s")))?;
+        let already_found: HashSet<String> =
+            results.iter().map(|r| r.symbol.symbol_id.clone()).collect();
+        results.extend(
+            locals
+                .into_iter()
+                .filter(|r| !already_found.contains(&r.symbol.symbol_id)),
+        );
+        results.truncate(limit);
     }
 
     Ok(results)
@@ -2902,6 +2926,42 @@ mod tests {
 
         assert!(!ids.contains(&"local".to_string()));
         assert!(ids.contains(&"func".to_string()));
+    }
+
+    #[test]
+    fn variable_kind_search_keeps_full_text_matching() {
+        let conn = local_variable_fixture();
+        ensure_fts_index(&conn).unwrap();
+
+        let ids: Vec<String> = fts_search_symbols_scoped(
+            &conn,
+            "sqlite connection",
+            Some("variable"),
+            None,
+            false,
+            10,
+        )
+        .unwrap()
+        .into_iter()
+        .map(|r| r.symbol.symbol_id)
+        .collect();
+
+        assert!(ids.contains(&"global".to_string()));
+        assert!(ids.contains(&"field".to_string()));
+    }
+
+    #[test]
+    fn qualified_lookup_returns_the_named_local_variable() {
+        let conn = local_variable_fixture();
+
+        let ids: Vec<String> =
+            search_symbols_scoped(&conn, "open_conn::conn", None, None, false, 10)
+                .unwrap()
+                .into_iter()
+                .map(|s| s.symbol_id)
+                .collect();
+
+        assert_eq!(ids, vec!["local".to_string()]);
     }
 
     #[test]
