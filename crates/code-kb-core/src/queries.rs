@@ -568,21 +568,27 @@ pub fn find_related_tests(
         return Ok(Vec::new());
     }
 
+    const COLUMNS: &str = "s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,
+            s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,
+            s.start_byte, s.end_byte, s.body_start_line, s.body_start_column, s.body_end_line,
+            s.body_end_column, s.body_start_byte, s.body_end_byte, s.body_hash, s.semantic_group,
+            s.is_test, s.test_container";
+    const IS_TEST: &str = "(s.is_test = 1 OR s.test_container = 1)";
+    let not_documentation = not_documentation(conn, "s");
+
     let mut tests = Vec::new();
     let mut seen_ids = std::collections::HashSet::new();
 
     // 1. Direct callers / references that are marked as test or located in test files
-    let callers_sql = "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,
-            s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,
-            s.start_byte, s.end_byte, s.body_start_line, s.body_start_column, s.body_end_line,
-            s.body_end_column, s.body_start_byte, s.body_end_byte, s.body_hash, s.semantic_group,
-            s.is_test, s.test_container
+    let callers_sql = format!(
+        "SELECT {COLUMNS}
      FROM symbols s
      JOIN relationships r ON r.from_symbol_id = s.symbol_id
-     WHERE r.to_symbol_id = ?1 AND (s.is_test = 1 OR s.test_container = 1)
-     LIMIT ?2";
+     WHERE r.to_symbol_id = ?1 AND {IS_TEST} AND {not_documentation}
+     LIMIT ?2"
+    );
 
-    if let Ok(mut stmt) = conn.prepare(callers_sql)
+    if let Ok(mut stmt) = conn.prepare(&callers_sql)
         && let Ok(rows) = stmt.query_map(params![target_symbol.symbol_id, limit as i64], map_symbol)
     {
         for row in rows.flatten() {
@@ -595,20 +601,54 @@ pub fn find_related_tests(
         }
     }
 
-    // 2. Name-matching tests in SQLite
+    // 2. Cross-file callers, which julie leaves unresolved in pending_relationships
     let remaining = limit - tests.len();
-    let name_sql = "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,
-            s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,
-            s.start_byte, s.end_byte, s.body_start_line, s.body_start_column, s.body_end_line,
-            s.body_end_column, s.body_start_byte, s.body_end_byte, s.body_hash, s.semantic_group,
-            s.is_test, s.test_container
+    if remaining > 0 && has_pending_namespace_column(conn) {
+        let pending_sql = format!(
+            "SELECT {COLUMNS}
+     FROM pending_relationships p
+     JOIN symbols s ON p.from_symbol_id = s.symbol_id
+     JOIN symbols s_from ON s_from.symbol_id = s.symbol_id
+     JOIN symbols s_target ON s_target.symbol_id = ?1
+     LEFT JOIN symbols s_target_parent ON s_target.parent_symbol_id = s_target_parent.symbol_id
+     WHERE p.target_terminal_name = s_target.name
+       AND {IS_TEST}
+       AND {not_documentation}
+       AND {pred}
+     LIMIT ?2",
+            pred = pending_target_predicate("s_target", "s_target_parent")
+        );
+
+        if let Ok(mut stmt) = conn.prepare(&pending_sql)
+            && let Ok(rows) = stmt.query_map(
+                params![target_symbol.symbol_id, remaining as i64],
+                map_symbol,
+            )
+        {
+            for row in rows.flatten() {
+                if seen_ids.insert(row.symbol_id.clone()) {
+                    tests.push(row);
+                    if tests.len() >= limit {
+                        return Ok(tests);
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Name-matching tests in SQLite
+    let remaining = limit - tests.len();
+    let name_sql = format!(
+        "SELECT {COLUMNS}
      FROM symbols s
-     WHERE (s.is_test = 1 OR s.test_container = 1)
+     WHERE {IS_TEST}
+       AND {not_documentation}
        AND (s.name LIKE '%' || ?1 || '%' OR s.signature LIKE '%' || ?1 || '%')
      ORDER BY (s.name LIKE '%' || ?1 || '%') DESC
-     LIMIT ?2";
+     LIMIT ?2"
+    );
 
-    if let Ok(mut stmt) = conn.prepare(name_sql)
+    if let Ok(mut stmt) = conn.prepare(&name_sql)
         && let Ok(rows) = stmt.query_map(
             params![target_symbol.name, (remaining * 2) as i64],
             map_symbol,
@@ -624,7 +664,7 @@ pub fn find_related_tests(
         }
     }
 
-    // 3. FTS5 search restricted to tests
+    // 4. FTS5 search restricted to tests
     let remaining = limit - tests.len();
     let fts_exists: bool = conn
         .query_row(
@@ -635,19 +675,17 @@ pub fn find_related_tests(
         .unwrap_or(false);
 
     if remaining > 0 && fts_exists {
-        let fts_sql = "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,
-                s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,
-                s.start_byte, s.end_byte, s.body_start_line, s.body_start_column, s.body_end_line,
-                s.body_end_column, s.body_start_byte, s.body_end_byte, s.body_hash, s.semantic_group,
-                s.is_test, s.test_container
+        let fts_sql = format!(
+            "SELECT {COLUMNS}
          FROM symbols_fts
          CROSS JOIN symbols s ON s.rowid = symbols_fts.rowid
-         WHERE symbols_fts MATCH ?1 AND (s.is_test = 1 OR s.test_container = 1)
-         LIMIT ?2";
+         WHERE symbols_fts MATCH ?1 AND {IS_TEST} AND {not_documentation}
+         LIMIT ?2"
+        );
 
         let (and_q, _or_q) = sanitize_fts5_query(&target_symbol.name);
         if !and_q.is_empty()
-            && let Ok(mut stmt) = conn.prepare(fts_sql)
+            && let Ok(mut stmt) = conn.prepare(&fts_sql)
             && let Ok(rows) = stmt.query_map(params![and_q, (remaining * 2) as i64], map_symbol)
         {
             for row in rows.flatten() {
@@ -985,6 +1023,22 @@ fn pending_target_predicate(target: &str, parent: &str) -> String {
             )
         )"
     )
+}
+
+/// SQL predicate excluding rows julie marked as documentation, or `1` when the column is absent.
+fn not_documentation(conn: &Connection, alias: &str) -> String {
+    let has_content_type: bool = conn
+        .query_row(
+            "SELECT 1 FROM pragma_table_info('symbols') WHERE name = 'content_type'",
+            [],
+            |_| Ok(true),
+        )
+        .unwrap_or(false);
+    if has_content_type {
+        format!("({alias}.content_type IS NULL OR {alias}.content_type != 'documentation')")
+    } else {
+        "1".to_string()
+    }
 }
 
 fn has_table(conn: &Connection, name: &str) -> bool {
@@ -1983,6 +2037,7 @@ pub fn compute_blast_radius_scoped(
 
     if !recursive_branches.is_empty() {
         let recursive_sql = recursive_branches.join("\n UNION \n");
+        let not_documentation = not_documentation(conn, "s");
         let sql = format!(
             "WITH RECURSIVE impact_walk(symbol_id, depth) AS (
                 SELECT symbol_id, 0
@@ -1998,6 +2053,7 @@ pub fn compute_blast_radius_scoped(
             FROM impact_walk iw
             CROSS JOIN symbols s ON iw.symbol_id = s.symbol_id
             WHERE s.kind NOT IN ('import','variable','parameter','field','property','module','namespace')
+              AND {not_documentation}
             GROUP BY s.symbol_id, s.name, s.kind, s.path, s.start_line, s.is_test, s.test_container
             HAVING MIN(iw.depth) > 0
             ORDER BY min_depth ASC, s.path ASC, s.name ASC

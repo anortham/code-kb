@@ -599,3 +599,104 @@ fn test_find_callee_signatures_deduplication_before_cap() {
     assert!(sigs.iter().any(|s| s.contains("helper_one")));
     assert!(sigs.iter().any(|s| s.contains("helper_two")));
 }
+
+#[test]
+fn context_slice_finds_a_test_in_another_file_with_an_unrelated_name() {
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+
+    let temp_dir = safe_tempdir();
+    let root = temp_dir.path().to_path_buf();
+    let src_dir = root.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
+    fs::write(
+        src_dir.join("ledger.rs"),
+        "pub fn compute_total(base: i32) -> i32 {\n    base * 2\n}\n",
+    )
+    .unwrap();
+
+    let tests_dir = root.join("tests");
+    fs::create_dir_all(&tests_dir).unwrap();
+    fs::write(
+        tests_dir.join("ledger_test.rs"),
+        "#[test]\nfn doubling_holds_for_positive_input() {\n    let doubled = compute_total(5);\n    assert_eq!(doubled, 10);\n}\n",
+    )
+    .unwrap();
+
+    let ws = Workspace::new(root.clone());
+    let db_path = root.join("test.db");
+    scan_workspace(&ws, &db_path, true).expect("Scan failed");
+    let conn = open_read_only(&db_path).unwrap();
+
+    let slice = get_context_slice_op(
+        &ws,
+        &db_path,
+        &conn,
+        "compute_total",
+        Some("src/ledger.rs"),
+        false,
+    )
+    .expect("get_context_slice_op failed");
+
+    assert!(
+        slice
+            .related_tests
+            .iter()
+            .any(|t| t.name == "doubling_holds_for_positive_input"),
+        "cross-file caller test must appear, got: {:?}",
+        slice
+            .related_tests
+            .iter()
+            .map(|t| &t.name)
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn context_slice_omits_markdown_code_blocks_from_related_tests() {
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+
+    let temp_dir = safe_tempdir();
+    let root = temp_dir.path().to_path_buf();
+    let src_dir = root.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
+    fs::write(
+        src_dir.join("ledger.rs"),
+        "pub fn compute_total(base: i32) -> i32 {\n    base * 2\n}\n",
+    )
+    .unwrap();
+
+    let docs_dir = root.join("docs");
+    fs::create_dir_all(&docs_dir).unwrap();
+    fs::write(
+        docs_dir.join("guide.md"),
+        "# Guide\n\n```rust\nlet total = compute_total(5);\nassert_eq!(total, 10);\n```\n",
+    )
+    .unwrap();
+
+    let ws = Workspace::new(root.clone());
+    let db_path = root.join("test.db");
+    scan_workspace(&ws, &db_path, true).expect("Scan failed");
+    let conn = open_read_only(&db_path).unwrap();
+
+    let slice = get_context_slice_op(
+        &ws,
+        &db_path,
+        &conn,
+        "compute_total",
+        Some("src/ledger.rs"),
+        false,
+    )
+    .expect("get_context_slice_op failed");
+
+    assert!(
+        slice.related_tests.iter().all(|t| !t.path.ends_with(".md")),
+        "markdown code blocks must not be related tests, got: {:?}",
+        slice
+            .related_tests
+            .iter()
+            .map(|t| format!("{} [{}]", t.name, t.path))
+            .collect::<Vec<_>>()
+    );
+}
