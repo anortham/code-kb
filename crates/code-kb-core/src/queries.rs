@@ -1072,6 +1072,17 @@ fn pending_target_predicate(target: &str, parent: &str) -> String {
                 AND NOT EXISTS (
                     SELECT 1 FROM {ns}
                     WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super', 'self', 'Self', {parent}.name)
+                      AND NOT EXISTS (
+                          WITH RECURSIVE ancestor(symbol_id, depth) AS (
+                              SELECT {target}.parent_symbol_id, 0
+                              UNION ALL
+                              SELECT s.parent_symbol_id, ancestor.depth + 1
+                              FROM symbols s JOIN ancestor ON s.symbol_id = ancestor.symbol_id
+                              WHERE s.parent_symbol_id IS NOT NULL AND ancestor.depth < 32
+                          )
+                          SELECT 1 FROM ancestor JOIN symbols a ON a.symbol_id = ancestor.symbol_id
+                          WHERE a.name = value
+                      )
                       AND {target_path} NOT LIKE '%/' || {like_value} || '.%' ESCAPE '\\'
                       AND {target_path} NOT LIKE '%/' || {like_value} || '/%' ESCAPE '\\'
                 )
@@ -1335,20 +1346,28 @@ fn find_references_internal(
                  LEFT JOIN symbols s ON i.containing_symbol_id = s.symbol_id
                  WHERE i.name = ?1 AND i.kind IN ('type_usage', 'member_access')
                    AND COALESCE(s.kind, '') != 'import'
+                   AND (?3 IS NULL OR NOT EXISTS (
+                       SELECT 1 FROM symbols owner
+                       JOIN symbols member ON member.parent_symbol_id = owner.symbol_id
+                       WHERE owner.name = CASE WHEN json_valid(i.metadata_json) THEN json_extract(i.metadata_json, '$.receiver') END
+                         AND member.name = i.name
+                         AND owner.symbol_id IS NOT (SELECT parent_symbol_id FROM symbols WHERE symbol_id = ?3)
+                   ))
                  ORDER BY i.path, i.start_line
                  LIMIT ?2",
             )?;
-            let rows = ident_stmt.query_map(params![symbol_name, remaining as i64], |row| {
-                Ok(ReferenceSite {
-                    from_symbol_name: row.get(0)?,
-                    from_symbol_id: row.get(1)?,
-                    to_symbol_name: row.get(2)?,
-                    kind: row.get(3)?,
-                    path: row.get::<_, String>(4)?.replace('\\', "/"),
-                    start_line: row.get::<_, Option<i64>>(5)?.map(|v| v as usize),
-                    start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
-                })
-            })?;
+            let rows =
+                ident_stmt.query_map(params![symbol_name, remaining as i64, symbol_id], |row| {
+                    Ok(ReferenceSite {
+                        from_symbol_name: row.get(0)?,
+                        from_symbol_id: row.get(1)?,
+                        to_symbol_name: row.get(2)?,
+                        kind: row.get(3)?,
+                        path: row.get::<_, String>(4)?.replace('\\', "/"),
+                        start_line: row.get::<_, Option<i64>>(5)?.map(|v| v as usize),
+                        start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
+                    })
+                })?;
             for r in rows {
                 results.push(r?);
             }
