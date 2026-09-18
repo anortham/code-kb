@@ -1,7 +1,7 @@
 use code_kb_core::{
     Workspace, ensure_fresh_file, ensure_index_matches_extractor, find_julie_extract_binary,
-    get_symbol_by_name, installed_extractor_version, open_read_only, reconcile_offline_edits,
-    safe_tempdir, scan_workspace,
+    get_symbol_by_name, installed_extractor_version, open_read_only, open_read_write,
+    reconcile_offline_edits, safe_tempdir, scan_workspace,
 };
 use std::fs;
 #[cfg(unix)]
@@ -470,6 +470,11 @@ fn test_index_written_by_the_installed_extractor_is_kept_even_when_it_is_not_the
             [],
         )
         .unwrap();
+        conn.execute(
+            "UPDATE extraction_revisions SET binary_version = '0.0.1'",
+            [],
+        )
+        .unwrap();
     }
 
     assert!(!ensure_index_matches_extractor(&ws, &db_path, "0.0.1").unwrap());
@@ -543,4 +548,41 @@ fn test_index_at_another_extraction_level_is_rebuilt() {
         )
         .unwrap();
     assert_eq!(level, "facts");
+}
+
+#[test]
+fn test_ensure_index_matches_extractor_rebuilds_when_a_file_revision_differs() {
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+    let temp_dir = safe_tempdir();
+    let root = temp_dir.path().to_path_buf();
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(root.join("src/lib.rs"), "pub fn stable() {}\n").unwrap();
+    let ws = Workspace::new(root.clone());
+    let db_path = root.join(".code-kb/artifact.db");
+    scan_workspace(&ws, &db_path, true).expect("Scan failed");
+    let installed = installed_extractor_version();
+
+    assert!(!ensure_index_matches_extractor(&ws, &db_path, &installed).unwrap());
+
+    {
+        let conn = open_read_write(&db_path).unwrap();
+        conn.execute(
+            "UPDATE extraction_revisions SET binary_version = '0.0.1'",
+            [],
+        )
+        .unwrap();
+    }
+
+    assert!(ensure_index_matches_extractor(&ws, &db_path, &installed).unwrap());
+
+    let conn = open_read_only(&db_path).unwrap();
+    let stale: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM files f JOIN extraction_revisions r ON r.revision_id = f.last_revision_id WHERE r.binary_version != ?1",
+            [&installed],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(stale, 0);
 }

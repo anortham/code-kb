@@ -26,7 +26,7 @@ pub enum SyncError {
     Walk(#[from] ignore::Error),
 }
 
-pub const PINNED_JULIE_VERSION: &str = "3.0.0";
+pub const PINNED_JULIE_VERSION: &str = "3.1.0";
 
 /// Extraction level code-kb asks for on a new artifact: symbol core plus structural facts,
 /// without the identifier, literal, and source-region tables code-kb never reads.
@@ -247,7 +247,10 @@ pub fn ensure_index_matches_extractor(
         return Ok(false);
     };
     let level = metadata("index_level").unwrap_or_else(|| "full".to_string());
-    if recorded == extractor_version && level == EXTRACTION_LEVEL {
+    if recorded == extractor_version
+        && level == EXTRACTION_LEVEL
+        && !has_file_written_by_another_extractor(db_path, extractor_version)
+    {
         return Ok(false);
     }
     info!(
@@ -255,11 +258,29 @@ pub fn ensure_index_matches_extractor(
         installed = %extractor_version,
         level = %level,
         wanted_level = %EXTRACTION_LEVEL,
-        "Index was written by a different julie-extract version or level; rebuilding"
+        "Index holds rows from a different julie-extract version or level; rebuilding"
     );
     remove_artifact_files(db_path)?;
     scan_workspace(workspace, db_path, true)?;
     Ok(true)
+}
+
+/// A `julie-extract update` run by a newer binary stamps its version into `artifact_metadata`
+/// but leaves every unchanged file's rows as the older binary wrote them, so the guard also
+/// checks the revision that last wrote each file.
+fn has_file_written_by_another_extractor(db_path: &Path, extractor_version: &str) -> bool {
+    let Ok(conn) = crate::db::open_read_only(db_path) else {
+        return false;
+    };
+    conn.query_row(
+        "SELECT 1 FROM files f
+         JOIN extraction_revisions r ON r.revision_id = f.last_revision_id
+         WHERE r.binary_version != ?1
+         LIMIT 1",
+        [extractor_version],
+        |_| Ok(true),
+    )
+    .unwrap_or(false)
 }
 
 fn remove_artifact_files(db_path: &Path) -> Result<(), SyncError> {
@@ -674,6 +695,12 @@ pub fn reconcile_offline_edits(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn pinned_version_matches_the_pins_file() {
+        let pins = include_str!("../../../scripts/julie-pins.json");
+        assert!(pins.contains(&format!("\"version\": \"{}\"", super::PINNED_JULIE_VERSION)));
+    }
+
     use super::*;
 
     #[test]
