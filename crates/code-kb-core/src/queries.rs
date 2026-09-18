@@ -240,6 +240,47 @@ pub fn get_file(conn: &Connection, path: &str) -> Result<Option<FileFact>, Query
     }
 }
 
+/// Count parse diagnostics recorded for a file, returning 0 when the index has none.
+pub fn count_parse_diagnostics(conn: &Connection, path: &str) -> usize {
+    conn.query_row(
+        "SELECT COUNT(*) FROM parse_diagnostics
+         WHERE path = ?1 COLLATE NOCASE OR path = ?2 COLLATE NOCASE",
+        params![path.replace('\\', "/"), path.replace('/', "\\")],
+        |row| row.get::<_, i64>(0),
+    )
+    .map(|count| count as usize)
+    .unwrap_or(0)
+}
+
+/// Count files julie could not parse under a path, returning 0 when the index has none.
+pub fn count_unsupported_files(conn: &Connection, path_filter: Option<&str>) -> usize {
+    let norm = path_filter
+        .map(|p| p.replace('\\', "/").trim_matches('/').to_string())
+        .filter(|p| !p.is_empty());
+    let norm_bs = norm.as_ref().map(|p| p.replace('/', "\\"));
+    let prefix = norm.as_ref().map(|p| format!("{}/%", escape_like(p)));
+    let prefix_bs = norm_bs.as_ref().map(|p| format!("{}\\\\%", escape_like(p)));
+
+    conn.query_row(
+        "SELECT COUNT(*) FROM files
+         WHERE status = 'unsupported'
+           AND (:path IS NULL
+             OR path = :path COLLATE NOCASE
+             OR path = :path_bs COLLATE NOCASE
+             OR path LIKE :path_prefix ESCAPE '\\'
+             OR path LIKE :path_prefix_bs ESCAPE '\\')",
+        rusqlite::named_params! {
+            ":path": norm.as_deref(),
+            ":path_bs": norm_bs.as_deref(),
+            ":path_prefix": prefix.as_deref(),
+            ":path_prefix_bs": prefix_bs.as_deref(),
+        },
+        |row| row.get::<_, i64>(0),
+    )
+    .map(|count| count as usize)
+    .unwrap_or(0)
+}
+
 /// Load all symbols declared inside a specific file.
 pub fn load_file_symbols(conn: &Connection, file_path: &str) -> Result<Vec<Symbol>, QueryError> {
     // Normalizing slashes for path matching
@@ -2237,6 +2278,28 @@ pub fn compute_blast_radius(
 mod tests {
     use super::*;
     use crate::db::{ensure_fts_index, open_read_write};
+
+    #[test]
+    fn count_parse_diagnostics_counts_rows_for_one_file() {
+        let dir = crate::safe_tempdir();
+        let conn = open_read_write(&dir.path().join("parse_diagnostics.db")).unwrap();
+
+        assert_eq!(count_parse_diagnostics(&conn, "src/lib.rs"), 0);
+
+        conn.execute_batch(
+            "CREATE TABLE parse_diagnostics (
+                diagnostic_id TEXT, file_id TEXT, path TEXT, language TEXT, kind TEXT
+            );
+            INSERT INTO parse_diagnostics VALUES ('d1', 'f1', 'src/lib.rs', 'rust', 'error');
+            INSERT INTO parse_diagnostics VALUES ('d2', 'f1', 'src/lib.rs', 'rust', 'error');
+            INSERT INTO parse_diagnostics VALUES ('d3', 'f2', 'src/other.rs', 'rust', 'error');",
+        )
+        .unwrap();
+
+        assert_eq!(count_parse_diagnostics(&conn, "src/lib.rs"), 2);
+        assert_eq!(count_parse_diagnostics(&conn, "src\\lib.rs"), 2);
+        assert_eq!(count_parse_diagnostics(&conn, "src/clean.rs"), 0);
+    }
 
     #[test]
     fn test_sanitize_fts5_query() {

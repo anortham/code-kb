@@ -11,6 +11,7 @@ pub fn format_file_skeleton(
     file_path: &str,
     symbols: &[Symbol],
     line_count: Option<usize>,
+    parse_errors: usize,
 ) -> String {
     let mut out = String::new();
     let lines_str = match line_count {
@@ -18,6 +19,13 @@ pub fn format_file_skeleton(
         None => String::new(),
     };
     out.push_str(&format!("// File: {file_path}{lines_str}\n\n"));
+
+    if parse_errors > 0 {
+        let noun = if parse_errors == 1 { "error" } else { "errors" };
+        out.push_str(&format!(
+            "// {parse_errors} parse {noun}: symbols may be incomplete\n\n"
+        ));
+    }
 
     if symbols.is_empty() {
         out.push_str("// No exported symbols indexed.\n");
@@ -721,6 +729,18 @@ mod tests {
     }
 
     #[test]
+    fn file_skeleton_reports_parse_errors() {
+        let two = format_file_skeleton("src/lib.rs", &[], Some(35), 2);
+        assert!(two.contains("// 2 parse errors: symbols may be incomplete"));
+
+        let one = format_file_skeleton("src/lib.rs", &[], Some(35), 1);
+        assert!(one.contains("// 1 parse error: symbols may be incomplete"));
+
+        let none = format_file_skeleton("src/lib.rs", &[], Some(35), 0);
+        assert!(!none.contains("parse error"));
+    }
+
+    #[test]
     fn test_format_file_skeleton() {
         let syms = vec![Symbol {
             symbol_id: "s1".into(),
@@ -751,7 +771,7 @@ mod tests {
             test_container: false,
         }];
 
-        let skeleton = format_file_skeleton("src/lib.rs", &syms, Some(35));
+        let skeleton = format_file_skeleton("src/lib.rs", &syms, Some(35), 0);
         assert!(skeleton.contains("/// Performs core work."));
         assert!(skeleton.contains("19 lines hidden: L11-L29"));
     }

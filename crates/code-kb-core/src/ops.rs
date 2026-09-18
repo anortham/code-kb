@@ -158,8 +158,14 @@ pub fn file_skeleton_op(
     let symbols = queries::load_file_symbols(conn, &rel_path)?;
     let file_meta = queries::get_file(conn, &rel_path)?;
     let line_count = file_meta.and_then(|m| m.line_count.map(|l| l as usize));
+    let parse_errors = queries::count_parse_diagnostics(conn, &rel_path);
 
-    Ok(format_file_skeleton(&rel_path, &symbols, line_count))
+    Ok(format_file_skeleton(
+        &rel_path,
+        &symbols,
+        line_count,
+        parse_errors,
+    ))
 }
 
 /// Generate a memory-bounded codebase outline pushed down into SQLite.
@@ -260,6 +266,14 @@ pub fn codebase_outline_op(
             "\n[Outline truncated: workspace contains over 1,000 files. Use a path filter (e.g. `code-kb outline <path>`) to narrow scope.]\n"
         };
         out.push_str(msg);
+    }
+
+    let unsupported = queries::count_unsupported_files(conn, norm.as_deref());
+    if unsupported > 0 {
+        let noun = if unsupported == 1 { "file" } else { "files" };
+        out.push_str(&format!(
+            "\n[{unsupported} unsupported {noun}: no extractor for the language]\n"
+        ));
     }
 
     Ok(out)
@@ -421,6 +435,42 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn codebase_outline_counts_unsupported_files() {
+        let temp = crate::safe_tempdir();
+        let workspace = Workspace::new(temp.path().to_path_buf());
+        let conn = Connection::open(temp.path().join("index.db")).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE files (
+                file_id TEXT, path TEXT, language TEXT, content_hash TEXT,
+                content_bytes INTEGER, line_count INTEGER, indexed_at TEXT, status TEXT
+            );
+            CREATE TABLE symbols (
+                symbol_id TEXT, file_id TEXT, path TEXT, language TEXT, name TEXT, kind TEXT,
+                signature TEXT, doc_comment TEXT, visibility TEXT, parent_symbol_id TEXT,
+                start_line INTEGER, start_column INTEGER, end_line INTEGER, end_column INTEGER,
+                start_byte INTEGER, end_byte INTEGER, body_start_line INTEGER,
+                body_start_column INTEGER, body_end_line INTEGER, body_end_column INTEGER,
+                body_start_byte INTEGER, body_end_byte INTEGER, body_hash TEXT,
+                semantic_group TEXT, is_test INTEGER, test_container INTEGER
+            );
+            INSERT INTO files VALUES ('f1', 'src/lib.rs', 'rust', 'h', 0, 1, 'now', 'indexed');
+            INSERT INTO files VALUES ('f2', 'src/blob.bin', 'unknown', 'h', 0, 1, 'now', 'unsupported');
+            INSERT INTO files VALUES ('f3', 'docs/blob.bin', 'unknown', 'h', 0, 1, 'now', 'unsupported');
+            INSERT INTO symbols VALUES (
+                's', 'f1', 'src/lib.rs', 'rust', 'root', 'function', 'pub fn root()', NULL,
+                'pub', NULL, 1, 0, 1, 16, 0, 16, 1, 0, 1, 16, 0, 16, NULL, NULL, 0, 0
+            );",
+        )
+        .unwrap();
+
+        let all = codebase_outline_op(&workspace, &conn, 2, None).unwrap();
+        assert!(all.contains("2 unsupported files"));
+
+        let scoped = codebase_outline_op(&workspace, &conn, 2, Some("src")).unwrap();
+        assert!(scoped.contains("1 unsupported file:"));
     }
 
     #[test]
