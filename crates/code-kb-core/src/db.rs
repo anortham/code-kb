@@ -125,6 +125,8 @@ fn fts_content_is_missing(conn: &Connection) -> bool {
 /// Ensures the `symbols_fts` FTS5 virtual table and synchronization triggers exist in the SQLite
 /// database, and that it holds every symbol except locals and parameters. An index built under an
 /// earlier rule, or one left without content, is repopulated once.
+/// julie may write a local before its enclosing function, so the insert trigger also drops any
+/// same-file variable that became local when its parent arrived.
 pub fn ensure_fts_index(conn: &Connection) -> Result<(), rusqlite::Error> {
     let symbols_table_exists: bool = conn
         .query_row(
@@ -144,6 +146,7 @@ pub fn ensure_fts_index(conn: &Connection) -> Result<(), rusqlite::Error> {
 
     let is_local = local_variable_predicate("s");
     let new_is_local = local_variable_predicate("new");
+    let child_is_local = local_variable_predicate("c");
     let already_indexed = "EXISTS (SELECT 1 FROM symbols_fts_docsize d WHERE d.id = old.rowid)";
 
     conn.execute_batch(&format!(
@@ -164,6 +167,14 @@ pub fn ensure_fts_index(conn: &Connection) -> Result<(), rusqlite::Error> {
             INSERT INTO symbols_fts(rowid, name, signature, doc_comment)
             SELECT new.rowid, new.name, new.signature, new.doc_comment
             WHERE NOT {new_is_local};
+            INSERT INTO symbols_fts(symbols_fts, rowid, name, signature, doc_comment)
+            SELECT 'delete', c.rowid, c.name, c.signature, c.doc_comment
+            FROM symbols c
+            WHERE new.kind IN ('function', 'method', 'constructor')
+              AND c.path = new.path
+              AND c.kind = 'variable'
+              AND {child_is_local}
+              AND EXISTS (SELECT 1 FROM symbols_fts_docsize d WHERE d.id = c.rowid);
         END;
 
         CREATE TRIGGER symbols_ad AFTER DELETE ON symbols BEGIN
@@ -320,14 +331,15 @@ mod tests {
         conn.execute_batch(
             "CREATE TABLE symbols (
                 symbol_id TEXT PRIMARY KEY,
+                path TEXT,
                 name TEXT,
                 kind TEXT,
                 parent_symbol_id TEXT,
                 signature TEXT,
                 doc_comment TEXT
             );
-            INSERT INTO symbols VALUES ('1', 'PaymentGateway', 'trait', NULL, 'pub trait PaymentGateway', 'Core payment provider interface');
-            INSERT INTO symbols VALUES ('2', 'StripeClient', 'struct', NULL, 'pub struct StripeClient', 'Handles HTTP requests to stripe API');",
+            INSERT INTO symbols VALUES ('1', 'src/pay.rs', 'PaymentGateway', 'trait', NULL, 'pub trait PaymentGateway', 'Core payment provider interface');
+            INSERT INTO symbols VALUES ('2', 'src/pay.rs', 'StripeClient', 'struct', NULL, 'pub struct StripeClient', 'Handles HTTP requests to stripe API');",
         )
         .unwrap();
 
@@ -343,7 +355,7 @@ mod tests {
         assert_eq!(count, 1);
 
         conn.execute(
-            "INSERT INTO symbols VALUES ('3', 'RefundHandler', 'function', NULL, 'pub fn handle_refund()', 'Processes transaction refunds');",
+            "INSERT INTO symbols VALUES ('3', 'src/pay.rs', 'RefundHandler', 'function', NULL, 'pub fn handle_refund()', 'Processes transaction refunds');",
             [],
         )
         .unwrap();
@@ -370,20 +382,21 @@ mod tests {
     }
 
     #[test]
-    fn ensure_fts_index_records_its_rule_and_keeps_drifted_rows() {
+    fn ensure_fts_index_drops_a_local_indexed_before_its_parent() {
         let dir = crate::safe_tempdir();
         let db_path = dir.path().join("fts_rule.db");
         let conn = open_read_write(&db_path).unwrap();
         conn.execute_batch(
             "CREATE TABLE symbols (
                 symbol_id TEXT PRIMARY KEY,
+                path TEXT,
                 name TEXT,
                 kind TEXT,
                 parent_symbol_id TEXT,
                 signature TEXT,
                 doc_comment TEXT
             );
-            INSERT INTO symbols VALUES ('1', 'open_conn', 'function', NULL, 'fn open_conn()', '');",
+            INSERT INTO symbols VALUES ('1', 'src/db.rs', 'open_conn', 'function', NULL, 'fn open_conn()', '');",
         )
         .unwrap();
 
@@ -399,17 +412,15 @@ mod tests {
         assert_eq!(rule, FTS_RULE);
 
         conn.execute(
-            "INSERT INTO symbols VALUES ('2', 'drifted', 'variable', '3', 'let drifted = 1', '')",
+            "INSERT INTO symbols VALUES ('2', 'src/db.rs', 'drifted', 'variable', '3', 'let drifted = 1', '')",
             [],
         )
         .unwrap();
         conn.execute(
-            "INSERT INTO symbols VALUES ('3', 'later', 'function', NULL, 'fn later()', '')",
+            "INSERT INTO symbols VALUES ('3', 'src/db.rs', 'later', 'function', NULL, 'fn later()', '')",
             [],
         )
         .unwrap();
-
-        ensure_fts_index(&conn).unwrap();
 
         let count: i64 = conn
             .query_row(
@@ -418,7 +429,7 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(count, 1);
+        assert_eq!(count, 0);
     }
 
     #[test]
@@ -429,13 +440,14 @@ mod tests {
         conn.execute_batch(
             "CREATE TABLE symbols (
                 symbol_id TEXT PRIMARY KEY,
+                path TEXT,
                 name TEXT,
                 kind TEXT,
                 parent_symbol_id TEXT,
                 signature TEXT,
                 doc_comment TEXT
             );
-            INSERT INTO symbols VALUES ('1', 'RefundHandler', 'function', NULL, 'fn handle_refund()', '');",
+            INSERT INTO symbols VALUES ('1', 'src/pay.rs', 'RefundHandler', 'function', NULL, 'fn handle_refund()', '');",
         )
         .unwrap();
 

@@ -358,7 +358,8 @@ pub fn search_symbols(
 
 /// Search symbols with optional path scoping filter. Locals and parameters are left out unless
 /// the caller passes `kind = "variable"` or names one explicitly as a qualified name such as
-/// `open_conn::conn`.
+/// `open_conn::conn`. With `kind = "variable"` they match by name only, because they are not in
+/// the full-text index.
 pub fn search_symbols_scoped(
     conn: &Connection,
     query: &str,
@@ -682,7 +683,7 @@ pub fn find_related_tests(
     let remaining = limit - tests.len();
     if remaining > 0 && has_pending_namespace_column(conn) {
         let pending_sql = format!(
-            "SELECT {COLUMNS}
+            "SELECT DISTINCT {COLUMNS}
      FROM pending_relationships p
      JOIN symbols s ON p.from_symbol_id = s.symbol_id
      JOIN symbols s_from ON s_from.symbol_id = s.symbol_id
@@ -2223,9 +2224,16 @@ pub fn compute_blast_radius_scoped(
         .unwrap_or(false);
 
     if has_files {
-        let mut test_files_stmt = conn.prepare(
-            "SELECT DISTINCT path FROM files WHERE (path LIKE '%test%' OR path LIKE '%spec%') AND path LIKE ?1 ESCAPE '\\' LIMIT 10",
-        )?;
+        let doc_file = format!(
+            "EXISTS (SELECT 1 FROM symbols d WHERE d.path = files.path AND NOT {})",
+            not_documentation(conn, "d")
+        );
+        let mut test_files_stmt = conn.prepare(&format!(
+            "SELECT DISTINCT path FROM files
+             WHERE (path LIKE '%test%' OR path LIKE '%spec%') AND path LIKE ?1 ESCAPE '\\'
+               AND NOT {doc_file}
+             LIMIT 10"
+        ))?;
         for stem in file_stems {
             let stem_pattern = format!("%{}%", escape_like(&stem));
             let t_rows =
@@ -2494,6 +2502,55 @@ mod tests {
             fts_search_symbols_scoped(&conn, "stripe kafka redis", None, None, false, 10).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].symbol.name, "StripeClient");
+    }
+
+    #[test]
+    fn find_related_tests_returns_each_test_once_under_the_limit() {
+        let dir = crate::safe_tempdir();
+        let conn = open_read_write(&dir.path().join("related_tests_limit.db")).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE symbols (
+                symbol_id TEXT PRIMARY KEY, file_id TEXT, path TEXT, language TEXT,
+                name TEXT, kind TEXT, signature TEXT, doc_comment TEXT,
+                visibility TEXT, parent_symbol_id TEXT, start_line INTEGER,
+                start_column INTEGER, end_line INTEGER, end_column INTEGER,
+                start_byte INTEGER, end_byte INTEGER, body_start_line INTEGER,
+                body_start_column INTEGER, body_end_line INTEGER, body_end_column INTEGER,
+                body_start_byte INTEGER, body_end_byte INTEGER, body_hash TEXT,
+                semantic_group TEXT, is_test INTEGER, test_container INTEGER
+            );
+            CREATE TABLE relationships (
+                from_symbol_id TEXT, to_symbol_id TEXT, kind TEXT, path TEXT,
+                start_line INTEGER, start_column INTEGER
+            );
+            CREATE TABLE pending_relationships (
+                from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT, path TEXT,
+                start_line INTEGER, start_column INTEGER,
+                target_receiver TEXT, target_namespace_json TEXT, target_display_name TEXT
+            );
+            CREATE TABLE type_facts (
+                type_fact_id TEXT, symbol_id TEXT, language TEXT, resolved_type TEXT, generic_params_json TEXT
+            );
+            INSERT INTO symbols VALUES
+                ('s_target', 'f1', 'src/lib.rs', 'rust', 'compute', 'function', 'pub fn compute()', NULL, 'pub', NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
+                ('t_a', 'f2', 'tests/a.rs', 'rust', 'first_case', 'function', 'fn first_case()', NULL, NULL, NULL, 1, 0, 20, 1, 0, 300, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1, 0),
+                ('t_b', 'f3', 'tests/b.rs', 'rust', 'second_case', 'function', 'fn second_case()', NULL, NULL, NULL, 1, 0, 10, 1, 0, 100, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1, 0);
+            INSERT INTO pending_relationships (from_symbol_id, target_terminal_name, kind, path, start_line, start_column, target_receiver, target_namespace_json, target_display_name) VALUES
+                ('t_a', 'compute', 'calls', 'tests/a.rs', 3, 4, NULL, NULL, 'compute'),
+                ('t_a', 'compute', 'calls', 'tests/a.rs', 5, 4, NULL, NULL, 'compute'),
+                ('t_a', 'compute', 'calls', 'tests/a.rs', 7, 4, NULL, NULL, 'compute'),
+                ('t_a', 'compute', 'calls', 'tests/a.rs', 9, 4, NULL, NULL, 'compute'),
+                ('t_a', 'compute', 'calls', 'tests/a.rs', 11, 4, NULL, NULL, 'compute'),
+                ('t_b', 'compute', 'calls', 'tests/b.rs', 3, 4, NULL, NULL, 'compute');",
+        )
+        .unwrap();
+        let target = get_symbol_by_name(&conn, "compute", None).unwrap().unwrap();
+
+        let tests = find_related_tests(&conn, &target, 5).unwrap();
+
+        let mut names: Vec<&str> = tests.iter().map(|t| t.name.as_str()).collect();
+        names.sort();
+        assert_eq!(names, vec!["first_case", "second_case"]);
     }
 
     #[test]

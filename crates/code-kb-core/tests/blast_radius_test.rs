@@ -306,3 +306,49 @@ fn test_blast_radius_max_depth_clamped() {
     let res = compute_blast_radius_scoped(&conn, &["func_a"], None, &[], 100, 20).unwrap();
     assert_eq!(res.impacted_symbols.len(), 0);
 }
+
+#[test]
+fn stem_matched_test_files_skip_documentation() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    conn.execute_batch(
+        "CREATE TABLE files (
+            file_id TEXT PRIMARY KEY, path TEXT, language TEXT, content_hash TEXT,
+            content_bytes INTEGER, line_count INTEGER, indexed_at TEXT
+        );
+        CREATE TABLE symbols (
+            symbol_id TEXT PRIMARY KEY, file_id TEXT, path TEXT, language TEXT, name TEXT, kind TEXT,
+            signature TEXT, doc_comment TEXT, visibility TEXT, parent_symbol_id TEXT,
+            start_line INTEGER, start_column INTEGER, end_line INTEGER, end_column INTEGER,
+            start_byte INTEGER, end_byte INTEGER, body_start_line INTEGER,
+            body_start_column INTEGER, body_end_line INTEGER, body_end_column INTEGER,
+            body_start_byte INTEGER, body_end_byte INTEGER, body_hash TEXT,
+            semantic_group TEXT, is_test INTEGER, test_container INTEGER, content_type TEXT
+        );
+        CREATE TABLE relationships (
+            from_symbol_id TEXT, to_symbol_id TEXT, kind TEXT, path TEXT,
+            start_line INTEGER, start_column INTEGER
+        );
+        CREATE TABLE pending_relationships (
+            from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT, path TEXT,
+            start_line INTEGER, start_column INTEGER
+        );
+        INSERT INTO files VALUES
+            ('f1', 'src/ledger.rs', 'rust', 'h1', 100, 10, 'now'),
+            ('f2', 'tests/ledger_test.rs', 'rust', 'h2', 100, 10, 'now'),
+            ('f3', 'docs/tests/ledger.md', 'markdown', 'h3', 100, 10, 'now');
+        INSERT INTO symbols VALUES
+            ('s_ledger', 'f1', 'src/ledger.rs', 'rust', 'post_entry', 'function', 'pub fn post_entry()', NULL, 'pub', NULL, 1, 0, 5, 0, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, NULL),
+            ('s_doc', 'f3', 'docs/tests/ledger.md', 'markdown', 'Ledger tests', 'module', 'Ledger tests', NULL, NULL, NULL, 1, 0, 5, 0, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 'documentation');",
+    )
+    .unwrap();
+
+    let result = compute_blast_radius(&conn, &["post_entry"], &[], 1, 20).unwrap();
+
+    let paths: Vec<&str> = result
+        .likely_tests
+        .iter()
+        .map(|t| t.path.as_str())
+        .collect();
+    assert_eq!(paths, vec!["tests/ledger_test.rs"]);
+}
