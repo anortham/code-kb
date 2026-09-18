@@ -657,7 +657,6 @@ pub fn find_related_tests(
     let mut tests = Vec::new();
     let mut seen_ids = std::collections::HashSet::new();
 
-    // 1. Direct callers / references that are marked as test or located in test files
     let callers_sql = format!(
         "SELECT {COLUMNS}
      FROM symbols s
@@ -679,7 +678,7 @@ pub fn find_related_tests(
         }
     }
 
-    // 2. Cross-file callers, which julie leaves unresolved in pending_relationships
+    // julie resolves call edges inside one file only; every cross-file caller is a pending edge
     let remaining = limit - tests.len();
     if remaining > 0 && has_pending_namespace_column(conn) {
         let pending_sql = format!(
@@ -714,7 +713,6 @@ pub fn find_related_tests(
         }
     }
 
-    // 3. Name-matching tests in SQLite
     let remaining = limit - tests.len();
     let name_sql = format!(
         "SELECT {COLUMNS}
@@ -742,7 +740,6 @@ pub fn find_related_tests(
         }
     }
 
-    // 4. FTS5 search restricted to tests
     let remaining = limit - tests.len();
     let fts_exists: bool = conn
         .query_row(
@@ -1728,7 +1725,9 @@ pub fn find_structural_facts_scoped(
                 sf.capture_name, sf.node_kind, s.name AS containing_symbol_name,
                 sf.start_line, sf.end_line, sf.confidence,
                 COALESCE(
-                    json_extract(sf.metadata_json, '$.key_path'),
+                    CASE WHEN json_extract(sf.metadata_json, '$.key_path') LIKE '$.%'
+                         THEN substr(json_extract(sf.metadata_json, '$.key_path'), 3)
+                         ELSE json_extract(sf.metadata_json, '$.key_path') END,
                     json_extract(sf.metadata_json, '$.key'),
                     json_extract(sf.metadata_json, '$.normalized_route_template')
                 ) AS display_key
@@ -2853,7 +2852,7 @@ mod tests {
             );
             INSERT INTO structural_facts VALUES
                 ('sf_toml', 'f1', 'Cargo.toml', 'toml', 'toml.key_value.v1', 'key_value', 'table', NULL, 1, 2, 1.0, '{\"key\":\"command\",\"key_path\":\"mcp_servers.code-kb.command\"}'),
-                ('sf_yaml', 'f6', '.github/workflows/ci.yml', 'yaml', 'yaml.key_value.v1', 'key_value', 'block_mapping_pair', NULL, 3, 3, 1.0, '{\"key\":\"name\"}'),
+                ('sf_yaml', 'f6', '.github/workflows/ci.yml', 'yaml', 'yaml.key_value.v1', 'key_value', 'block_mapping_pair', NULL, 3, 3, 1.0, '{\"key\":\"name\",\"key_path\":\"$.on.name\"}'),
                 ('sf_route', 'f2', 'src/routes/api.rs', 'rust', 'http.route.v1', 'get_users', 'function', NULL, 10, 20, 1.0, '{\"verb\":\"GET\",\"normalized_route_template\":\"/api/v1/users/:id\"}'),
                 ('sf_sql', 'f3', 'src/db/queries.rs', 'rust', 'db.sql.select', 'select_users', 'function', NULL, 30, 40, 1.0, NULL),
                 ('sf_model', 'f4', 'src/models/user.rs', 'rust', 'orm.model.entity', 'User', 'struct', NULL, 50, 60, 1.0, NULL),
@@ -2870,7 +2869,7 @@ mod tests {
         let facts_config = find_structural_facts_scoped(&conn, "config", None, 10).unwrap();
         assert_eq!(facts_config.len(), 2);
         assert_eq!(facts_config[0].pattern_id, "yaml.key_value.v1");
-        assert_eq!(facts_config[0].key.as_deref(), Some("name"));
+        assert_eq!(facts_config[0].key.as_deref(), Some("on.name"));
         assert_eq!(facts_config[1].pattern_id, "toml.key_value.v1");
         assert_eq!(
             facts_config[1].key.as_deref(),
