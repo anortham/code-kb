@@ -77,9 +77,27 @@ pub fn open_read_write(path: &Path) -> Result<Connection, DbError> {
     Ok(conn)
 }
 
-/// Ensures the `symbols_fts` FTS5 virtual table and synchronization triggers exist in the SQLite database.
-/// If `symbols` has rows but `symbols_fts` has not indexed them (e.g. freshly created FTS table),
-/// an index rebuild is executed.
+/// SQL predicate that is true for a symbols row that is a local variable or a parameter:
+/// a `variable` declared inside a function, method, or constructor, directly or through
+/// enclosing variables such as closures.
+pub fn local_variable_predicate(alias: &str) -> String {
+    format!(
+        "({alias}.kind = 'variable' AND EXISTS (
+            WITH RECURSIVE ancestor(symbol_id, kind, parent_symbol_id) AS (
+                SELECT p.symbol_id, p.kind, p.parent_symbol_id FROM symbols p
+                WHERE p.symbol_id = {alias}.parent_symbol_id
+                UNION
+                SELECT p.symbol_id, p.kind, p.parent_symbol_id FROM symbols p
+                JOIN ancestor a ON p.symbol_id = a.parent_symbol_id
+                WHERE a.kind = 'variable'
+            )
+            SELECT 1 FROM ancestor WHERE kind IN ('function', 'method', 'constructor')))"
+    )
+}
+
+/// Ensures the `symbols_fts` FTS5 virtual table and synchronization triggers exist in the SQLite
+/// database, and that it holds every symbol except locals and parameters. An index whose row
+/// count does not match that rule is repopulated once.
 pub fn ensure_fts_index(conn: &Connection) -> Result<(), rusqlite::Error> {
     let symbols_table_exists: bool = conn
         .query_row(
@@ -93,7 +111,11 @@ pub fn ensure_fts_index(conn: &Connection) -> Result<(), rusqlite::Error> {
         return Ok(());
     }
 
-    conn.execute_batch(
+    let is_local = local_variable_predicate("s");
+    let new_is_local = local_variable_predicate("new");
+    let already_indexed = "EXISTS (SELECT 1 FROM symbols_fts_docsize d WHERE d.id = old.rowid)";
+
+    conn.execute_batch(&format!(
         "CREATE VIRTUAL TABLE IF NOT EXISTS symbols_fts USING fts5(
             name,
             signature,
@@ -103,33 +125,56 @@ pub fn ensure_fts_index(conn: &Connection) -> Result<(), rusqlite::Error> {
             tokenize='porter unicode61'
         );
 
-        CREATE TRIGGER IF NOT EXISTS symbols_ai AFTER INSERT ON symbols BEGIN
+        DROP TRIGGER IF EXISTS symbols_ai;
+        DROP TRIGGER IF EXISTS symbols_ad;
+        DROP TRIGGER IF EXISTS symbols_au;
+
+        CREATE TRIGGER symbols_ai AFTER INSERT ON symbols BEGIN
             INSERT INTO symbols_fts(rowid, name, signature, doc_comment)
-            VALUES (new.rowid, new.name, new.signature, new.doc_comment);
+            SELECT new.rowid, new.name, new.signature, new.doc_comment
+            WHERE NOT {new_is_local};
         END;
 
-        CREATE TRIGGER IF NOT EXISTS symbols_ad AFTER DELETE ON symbols BEGIN
+        CREATE TRIGGER symbols_ad AFTER DELETE ON symbols BEGIN
             INSERT INTO symbols_fts(symbols_fts, rowid, name, signature, doc_comment)
-            VALUES ('delete', old.rowid, old.name, old.signature, old.doc_comment);
+            SELECT 'delete', old.rowid, old.name, old.signature, old.doc_comment
+            WHERE {already_indexed};
         END;
 
-        CREATE TRIGGER IF NOT EXISTS symbols_au AFTER UPDATE ON symbols BEGIN
+        CREATE TRIGGER symbols_au AFTER UPDATE ON symbols BEGIN
             INSERT INTO symbols_fts(symbols_fts, rowid, name, signature, doc_comment)
-            VALUES ('delete', old.rowid, old.name, old.signature, old.doc_comment);
+            SELECT 'delete', old.rowid, old.name, old.signature, old.doc_comment
+            WHERE {already_indexed};
             INSERT INTO symbols_fts(rowid, name, signature, doc_comment)
-            VALUES (new.rowid, new.name, new.signature, new.doc_comment);
-        END;",
-    )?;
+            SELECT new.rowid, new.name, new.signature, new.doc_comment
+            WHERE NOT {new_is_local};
+        END;"
+    ))?;
 
-    let symbol_count: i64 = conn
-        .query_row("SELECT count(*) FROM symbols", [], |r| r.get(0))
+    let indexable_count: i64 = conn
+        .query_row(
+            &format!("SELECT count(*) FROM symbols s WHERE NOT {is_local}"),
+            [],
+            |r| r.get(0),
+        )
         .unwrap_or(0);
-    let docsize_count: i64 = conn
+    let indexed_count: i64 = conn
         .query_row("SELECT count(*) FROM symbols_fts_docsize", [], |r| r.get(0))
         .unwrap_or(0);
 
-    if symbol_count > 0 && docsize_count == 0 {
-        conn.execute("INSERT INTO symbols_fts(symbols_fts) VALUES('rebuild')", [])?;
+    if indexed_count != indexable_count {
+        conn.execute(
+            "INSERT INTO symbols_fts(symbols_fts) VALUES('delete-all')",
+            [],
+        )?;
+        conn.execute(
+            &format!(
+                "INSERT INTO symbols_fts(rowid, name, signature, doc_comment)
+                 SELECT s.rowid, s.name, s.signature, s.doc_comment
+                 FROM symbols s WHERE NOT {is_local}"
+            ),
+            [],
+        )?;
     }
 
     Ok(())
@@ -249,11 +294,13 @@ mod tests {
             "CREATE TABLE symbols (
                 symbol_id TEXT PRIMARY KEY,
                 name TEXT,
+                kind TEXT,
+                parent_symbol_id TEXT,
                 signature TEXT,
                 doc_comment TEXT
             );
-            INSERT INTO symbols VALUES ('1', 'PaymentGateway', 'pub trait PaymentGateway', 'Core payment provider interface');
-            INSERT INTO symbols VALUES ('2', 'StripeClient', 'pub struct StripeClient', 'Handles HTTP requests to stripe API');",
+            INSERT INTO symbols VALUES ('1', 'PaymentGateway', 'trait', NULL, 'pub trait PaymentGateway', 'Core payment provider interface');
+            INSERT INTO symbols VALUES ('2', 'StripeClient', 'struct', NULL, 'pub struct StripeClient', 'Handles HTTP requests to stripe API');",
         )
         .unwrap();
 
@@ -271,7 +318,7 @@ mod tests {
 
         // Test trigger on insert
         conn.execute(
-            "INSERT INTO symbols VALUES ('3', 'RefundHandler', 'pub fn handle_refund()', 'Processes transaction refunds');",
+            "INSERT INTO symbols VALUES ('3', 'RefundHandler', 'function', NULL, 'pub fn handle_refund()', 'Processes transaction refunds');",
             [],
         )
         .unwrap();

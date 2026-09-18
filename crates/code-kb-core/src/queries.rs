@@ -2,6 +2,7 @@ use rusqlite::{Connection, Row, params};
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 
+use crate::db::local_variable_predicate;
 use crate::models::{
     BlastRadiusResult, FileFact, ImpactedSymbol, LiteralFact, ReferenceSite, StructuralFact,
     Symbol, SymbolSearchResult, TestTarget, TypeFact,
@@ -346,11 +347,15 @@ pub fn search_symbols_scoped(
                 start_byte, end_byte, body_start_line, body_start_column, body_end_line,
                 body_end_column, body_start_byte, body_end_byte, body_hash, semantic_group,
                 is_test, test_container
-         FROM symbols
+         FROM symbols s
          WHERE (name = :query OR name LIKE :pattern ESCAPE '\\')
            AND (:kind IS NULL OR kind = :kind)
            AND (:path IS NULL OR replace(path, '\\', '/') = :path COLLATE NOCASE OR replace(path, '\\', '/') LIKE :path_like || '/%' ESCAPE '\\' OR replace(path, '\\', '/') LIKE '%/' || :path_like ESCAPE '\\')",
     );
+
+    if norm_kind.as_deref() != Some("variable") {
+        sql.push_str(&format!(" AND NOT {}", local_variable_predicate("s")));
+    }
 
     if !include_tests {
         sql.push_str(" AND is_test = 0 AND test_container = 0");
@@ -430,7 +435,7 @@ pub fn fts_search_symbols_scoped(
         )
         .unwrap_or(false);
 
-    if !fts_exists {
+    if !fts_exists || norm_kind.as_deref() == Some("variable") {
         let pattern = format!("%{}%", escape_like(query));
         let escaped_path = normalized_path.as_deref().map(escape_like);
         let mut sql = String::from(
@@ -439,11 +444,14 @@ pub fn fts_search_symbols_scoped(
                     start_byte, end_byte, body_start_line, body_start_column, body_end_line,
                     body_end_column, body_start_byte, body_end_byte, body_hash, semantic_group,
                     is_test, test_container
-              FROM symbols
+              FROM symbols s
               WHERE (name = :query OR name LIKE :pattern ESCAPE '\\')
                 AND (:kind IS NULL OR kind = :kind)
                 AND (:path IS NULL OR replace(path, '\\', '/') = :path COLLATE NOCASE OR replace(path, '\\', '/') LIKE :path_like || '/%' ESCAPE '\\' OR replace(path, '\\', '/') LIKE '%/' || :path_like ESCAPE '\\')",
         );
+        if norm_kind.as_deref() != Some("variable") {
+            sql.push_str(&format!(" AND NOT {}", local_variable_predicate("s")));
+        }
         if !include_tests {
             sql.push_str(" AND is_test = 0 AND test_container = 0");
         }
@@ -497,6 +505,8 @@ pub fn fts_search_symbols_scoped(
                AND (:kind IS NULL OR s.kind = :kind)
                AND (:path IS NULL OR replace(s.path, '\\', '/') = :path COLLATE NOCASE OR replace(s.path, '\\', '/') LIKE :path_like || '/%' ESCAPE '\\' OR replace(s.path, '\\', '/') LIKE '%/' || :path_like ESCAPE '\\')",
         );
+
+        sql.push_str(&format!(" AND NOT {}", local_variable_predicate("s")));
 
         if !include_tests {
             sql.push_str(" AND s.is_test = 0 AND s.test_container = 0");
@@ -2788,5 +2798,132 @@ mod tests {
         assert_eq!(f_del.len(), 1);
         let l_del = find_literals(&conn, "config", 10).unwrap();
         assert_eq!(l_del.len(), 1);
+    }
+
+    fn local_variable_fixture() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE symbols (
+                symbol_id TEXT PRIMARY KEY, file_id TEXT, path TEXT, language TEXT, name TEXT,
+                kind TEXT, signature TEXT, doc_comment TEXT, visibility TEXT,
+                parent_symbol_id TEXT, start_line INTEGER, start_column INTEGER,
+                end_line INTEGER, end_column INTEGER, start_byte INTEGER, end_byte INTEGER,
+                body_start_line INTEGER, body_start_column INTEGER, body_end_line INTEGER,
+                body_end_column INTEGER, body_start_byte INTEGER, body_end_byte INTEGER,
+                body_hash TEXT, semantic_group TEXT, is_test INTEGER, test_container INTEGER
+            );
+            INSERT INTO symbols (symbol_id, file_id, path, language, name, kind, signature,
+                                 parent_symbol_id, start_line, start_column, end_line, end_column,
+                                 start_byte, end_byte, is_test, test_container)
+            VALUES
+                ('func', 'f1', 'src/db.rs', 'rust', 'open_conn', 'function',
+                 'fn open_conn() -> sqlite Connection', NULL, 1, 0, 9, 1, 0, 100, 0, 0),
+                ('local', 'f1', 'src/db.rs', 'rust', 'conn', 'variable',
+                 'let conn: sqlite Connection', 'func', 2, 4, 2, 30, 10, 40, 0, 0),
+                ('pool', 'f1', 'src/db.rs', 'rust', 'Pool', 'struct',
+                 'struct Pool sqlite', NULL, 12, 0, 16, 1, 120, 200, 0, 0),
+                ('field', 'f1', 'src/db.rs', 'rust', 'conn', 'variable',
+                 'conn: sqlite Connection', 'pool', 13, 4, 13, 28, 130, 160, 0, 0),
+                ('global', 'f1', 'src/db.rs', 'rust', 'conn', 'variable',
+                 'static conn: sqlite Connection', NULL, 20, 0, 20, 30, 210, 240, 0, 0),
+                ('closure', 'f1', 'src/db.rs', 'rust', 'with_conn', 'variable',
+                 'let with_conn = |c: sqlite Connection|', 'func', 4, 4, 6, 5, 50, 90, 0, 0),
+                ('nested', 'f1', 'src/db.rs', 'rust', 'conn', 'variable',
+                 'let conn = c sqlite', 'closure', 5, 8, 5, 24, 60, 80, 0, 0);",
+        )
+        .unwrap();
+        conn
+    }
+
+    fn matched_symbol_ids(conn: &Connection, query: &str) -> Vec<String> {
+        let mut stmt = conn
+            .prepare(
+                "SELECT s.symbol_id FROM symbols_fts f
+                 JOIN symbols s ON s.rowid = f.rowid
+                 WHERE f.symbols_fts MATCH ?1 ORDER BY s.symbol_id",
+            )
+            .unwrap();
+        let mut ids = stmt
+            .query_map(params![query], |row| row.get::<_, String>(0))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        ids.sort();
+        ids
+    }
+
+    #[test]
+    fn fts_index_excludes_locals_and_rebuilds_a_stale_index() {
+        let conn = local_variable_fixture();
+        conn.execute_batch(
+            "CREATE VIRTUAL TABLE symbols_fts USING fts5(
+                name, signature, doc_comment,
+                content='symbols', content_rowid='rowid', tokenize='porter unicode61'
+            );
+            INSERT INTO symbols_fts(rowid, name, signature, doc_comment)
+            SELECT rowid, name, signature, doc_comment FROM symbols;",
+        )
+        .unwrap();
+
+        ensure_fts_index(&conn).unwrap();
+
+        assert_eq!(
+            matched_symbol_ids(&conn, "sqlite"),
+            vec!["field", "func", "global", "pool"]
+        );
+    }
+
+    #[test]
+    fn lookup_excludes_locals_and_parameters() {
+        let conn = local_variable_fixture();
+
+        let ids: Vec<String> = search_symbols_scoped(&conn, "conn", None, None, false, 10)
+            .unwrap()
+            .into_iter()
+            .map(|s| s.symbol_id)
+            .collect();
+
+        assert!(!ids.contains(&"local".to_string()));
+        assert!(!ids.contains(&"nested".to_string()));
+        assert!(ids.contains(&"field".to_string()));
+        assert!(ids.contains(&"global".to_string()));
+    }
+
+    #[test]
+    fn search_excludes_locals_and_parameters() {
+        let conn = local_variable_fixture();
+        ensure_fts_index(&conn).unwrap();
+
+        let ids: Vec<String> = fts_search_symbols_scoped(&conn, "sqlite", None, None, false, 10)
+            .unwrap()
+            .into_iter()
+            .map(|r| r.symbol.symbol_id)
+            .collect();
+
+        assert!(!ids.contains(&"local".to_string()));
+        assert!(ids.contains(&"func".to_string()));
+    }
+
+    #[test]
+    fn variable_kind_filter_returns_locals_and_parameters() {
+        let conn = local_variable_fixture();
+        ensure_fts_index(&conn).unwrap();
+
+        let lookup_ids: Vec<String> =
+            search_symbols_scoped(&conn, "conn", Some("variable"), None, false, 10)
+                .unwrap()
+                .into_iter()
+                .map(|s| s.symbol_id)
+                .collect();
+        assert!(lookup_ids.contains(&"local".to_string()));
+        assert!(lookup_ids.contains(&"nested".to_string()));
+
+        let search_ids: Vec<String> =
+            fts_search_symbols_scoped(&conn, "conn", Some("variable"), None, false, 10)
+                .unwrap()
+                .into_iter()
+                .map(|r| r.symbol.symbol_id)
+                .collect();
+        assert!(search_ids.contains(&"local".to_string()));
     }
 }
