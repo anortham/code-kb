@@ -460,10 +460,15 @@ pub fn format_structural_facts(
         facts.len()
     );
     for f in facts {
-        let parent = f.containing_symbol_name.as_deref().unwrap_or("top-level");
+        let label = f.key.as_deref().unwrap_or(&f.capture_name);
+        let parent = f
+            .containing_symbol_name
+            .as_deref()
+            .map(|p| format!(", in: {p}"))
+            .unwrap_or_default();
         out.push_str(&format!(
-            "- {} [{}:{}] (pattern: {}, in: {})\n",
-            f.capture_name, f.path, f.start_line, f.pattern_id, parent
+            "- {label} [{}:{}] (pattern: {}{parent})\n",
+            f.path, f.start_line, f.pattern_id
         ));
     }
     if !literals.is_empty() {

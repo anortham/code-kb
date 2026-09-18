@@ -1086,7 +1086,7 @@ fn setup_test_repo() -> tempfile::TempDir {
         CREATE TABLE structural_facts (
             structural_fact_id TEXT PRIMARY KEY, file_id TEXT, path TEXT NOT NULL, language TEXT,
             pattern_id TEXT, capture_name TEXT, node_kind TEXT, containing_symbol_id TEXT,
-            start_line INTEGER, end_line INTEGER, confidence REAL
+            start_line INTEGER, end_line INTEGER, confidence REAL, metadata_json TEXT
         );
         CREATE TABLE literals (
             literal_id TEXT PRIMARY KEY, file_id TEXT, path TEXT NOT NULL, language TEXT,

@@ -70,6 +70,7 @@ pub struct StructuralFact {
     pub pattern_id: String,
     pub capture_name: String,
     pub node_kind: String,
+    pub key: Option<String>,
     pub containing_symbol_name: Option<String>,
     pub start_line: usize,
     pub end_line: usize,

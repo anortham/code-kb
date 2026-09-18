@@ -524,7 +524,10 @@ pub fn fts_search_symbols_scoped(
             sql.push_str(" AND s.is_test = 0 AND s.test_container = 0");
         }
 
-        sql.push_str(" ORDER BY (s.kind = 'import') ASC, (s.language IN ('markdown', 'yaml', 'toml', 'json', 'html', 'css', 'xml', 'ini', 'text')) ASC, rank_score ASC LIMIT ");
+        sql.push_str(&format!(
+            " ORDER BY (s.kind = 'import') ASC, (s.language IN ('markdown', 'yaml', 'toml', 'json', 'html', 'css', 'xml', 'ini', 'text')) ASC, {not_doc} DESC, rank_score ASC LIMIT ",
+            not_doc = not_documentation(conn, "s")
+        ));
         sql.push_str(&limit.to_string());
 
         let mut stmt = conn.prepare(&sql)?;
@@ -1071,7 +1074,7 @@ fn not_documentation(conn: &Connection, alias: &str) -> String {
     if has_content_type {
         format!("({alias}.content_type IS NULL OR {alias}.content_type != 'documentation')")
     } else {
-        "1".to_string()
+        "1 = 1".to_string()
     }
 }
 
@@ -1681,7 +1684,13 @@ pub fn find_structural_facts_scoped(
     let sql = format!(
         "SELECT sf.structural_fact_id, sf.path, sf.language, sf.pattern_id,
                 sf.capture_name, sf.node_kind, s.name AS containing_symbol_name,
-                sf.start_line, sf.end_line, sf.confidence
+                sf.start_line, sf.end_line, sf.confidence,
+                COALESCE(
+                    json_extract(sf.metadata_json, '$.key_path'),
+                    json_extract(sf.metadata_json, '$.key'),
+                    json_extract(sf.metadata_json, '$.normalized_route_template'),
+                    sf.capture_name
+                ) AS display_key
          FROM structural_facts sf
          LEFT JOIN symbols s ON sf.containing_symbol_id = s.symbol_id
          WHERE (:cat IS NOT NULL AND {cat_clause})
@@ -1706,6 +1715,7 @@ pub fn find_structural_facts_scoped(
                 pattern_id: row.get(3)?,
                 capture_name: row.get(4)?,
                 node_kind: row.get(5)?,
+                key: row.get(10)?,
                 containing_symbol_name: row.get(6)?,
                 start_line: row.get::<_, i64>(7)? as usize,
                 end_line: row.get::<_, i64>(8)? as usize,
@@ -2425,6 +2435,40 @@ mod tests {
     }
 
     #[test]
+    fn documentation_rows_rank_after_code_in_search() {
+        let dir = crate::safe_tempdir();
+        let conn = open_read_write(&dir.path().join("doc_rank.db")).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE symbols (
+                symbol_id TEXT PRIMARY KEY, file_id TEXT, path TEXT, language TEXT, name TEXT,
+                kind TEXT, signature TEXT, doc_comment TEXT, visibility TEXT, parent_symbol_id TEXT,
+                start_line INTEGER, start_column INTEGER, end_line INTEGER, end_column INTEGER,
+                start_byte INTEGER, end_byte INTEGER, body_start_line INTEGER,
+                body_start_column INTEGER, body_end_line INTEGER, body_end_column INTEGER,
+                body_start_byte INTEGER, body_end_byte INTEGER, body_hash TEXT,
+                semantic_group TEXT, is_test INTEGER, test_container INTEGER, content_type TEXT
+            );
+            INSERT INTO symbols VALUES
+                ('s_doc', 'f1', 'docs/plans/018.adoc', 'asciidoc', 'Reconcile offline edits',
+                 'heading', 'Reconcile offline edits', NULL, NULL, NULL,
+                 3, 0, 3, 1, 10, 40, 3, 0, 3, 1, 10, 40, 'hash_doc', NULL, 0, 0, 'documentation'),
+                ('s_code', 'f2', 'src/sync.rs', 'rust', 'reconcile_offline_edits', 'function',
+                 'fn reconcile_offline_edits()', 'Reconcile offline edits at startup', 'pub', NULL,
+                 10, 0, 20, 1, 100, 250, 12, 4, 19, 1, 120, 240, 'hash_code', NULL, 0, 0, 'code');",
+        )
+        .unwrap();
+        ensure_fts_index(&conn).unwrap();
+
+        let results =
+            fts_search_symbols_scoped(&conn, "reconcile offline edits", None, None, false, 10)
+                .unwrap();
+
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].symbol.name, "reconcile_offline_edits");
+        assert_eq!(results[1].symbol.name, "Reconcile offline edits");
+    }
+
+    #[test]
     fn test_queries_nocase_and_path_normalization() {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(
@@ -2736,7 +2780,7 @@ mod tests {
             CREATE TABLE structural_facts (
                 structural_fact_id TEXT PRIMARY KEY, file_id TEXT, path TEXT NOT NULL, language TEXT,
                 pattern_id TEXT, capture_name TEXT, node_kind TEXT, containing_symbol_id TEXT,
-                start_line INTEGER, end_line INTEGER, confidence REAL
+                start_line INTEGER, end_line INTEGER, confidence REAL, metadata_json TEXT
             );
             CREATE TABLE literals (
                 literal_id TEXT PRIMARY KEY, file_id TEXT, path TEXT NOT NULL, language TEXT,
@@ -2745,11 +2789,12 @@ mod tests {
                 start_byte INTEGER, end_byte INTEGER
             );
             INSERT INTO structural_facts VALUES
-                ('sf_toml', 'f1', 'Cargo.toml', 'toml', 'toml.key_value.v1', 'package.name', 'table', NULL, 1, 2, 1.0),
-                ('sf_route', 'f2', 'src/routes/api.rs', 'rust', 'http.route.v1', 'get_users', 'function', NULL, 10, 20, 1.0),
-                ('sf_sql', 'f3', 'src/db/queries.rs', 'rust', 'db.sql.select', 'select_users', 'function', NULL, 30, 40, 1.0),
-                ('sf_model', 'f4', 'src/models/user.rs', 'rust', 'orm.model.entity', 'User', 'struct', NULL, 50, 60, 1.0),
-                ('sf_custom', 'f5', 'src/custom.rs', 'rust', 'my_custom_pattern', 'custom_name', 'item', NULL, 70, 80, 1.0);
+                ('sf_toml', 'f1', 'Cargo.toml', 'toml', 'toml.key_value.v1', 'key_value', 'table', NULL, 1, 2, 1.0, '{\"key\":\"command\",\"key_path\":\"mcp_servers.code-kb.command\"}'),
+                ('sf_yaml', 'f6', '.github/workflows/ci.yml', 'yaml', 'yaml.key_value.v1', 'key_value', 'block_mapping_pair', NULL, 3, 3, 1.0, '{\"key\":\"name\"}'),
+                ('sf_route', 'f2', 'src/routes/api.rs', 'rust', 'http.route.v1', 'get_users', 'function', NULL, 10, 20, 1.0, '{\"verb\":\"GET\",\"normalized_route_template\":\"/api/v1/users/:id\"}'),
+                ('sf_sql', 'f3', 'src/db/queries.rs', 'rust', 'db.sql.select', 'select_users', 'function', NULL, 30, 40, 1.0, NULL),
+                ('sf_model', 'f4', 'src/models/user.rs', 'rust', 'orm.model.entity', 'User', 'struct', NULL, 50, 60, 1.0, NULL),
+                ('sf_custom', 'f5', 'src/custom.rs', 'rust', 'my_custom_pattern', 'custom_name', 'item', NULL, 70, 80, 1.0, NULL);
             INSERT INTO literals VALUES
                 ('lit_toml', 'f1', 'Cargo.toml', 'toml', 'toml_key', '\"version\"', 'key', NULL, 3, 0, 3, 9, 20, 29),
                 ('lit_route', 'f2', 'src/routes/api.rs', 'rust', 'http_route', '\"/api/v1/users\"', 'string', NULL, 12, 0, 12, 15, 100, 115),
@@ -2760,8 +2805,14 @@ mod tests {
 
         // 1. "config" alias
         let facts_config = find_structural_facts_scoped(&conn, "config", None, 10).unwrap();
-        assert_eq!(facts_config.len(), 1);
-        assert_eq!(facts_config[0].pattern_id, "toml.key_value.v1");
+        assert_eq!(facts_config.len(), 2);
+        assert_eq!(facts_config[0].pattern_id, "yaml.key_value.v1");
+        assert_eq!(facts_config[0].key.as_deref(), Some("name"));
+        assert_eq!(facts_config[1].pattern_id, "toml.key_value.v1");
+        assert_eq!(
+            facts_config[1].key.as_deref(),
+            Some("mcp_servers.code-kb.command")
+        );
         let lits_config = find_literals_scoped(&conn, "config", None, 10).unwrap();
         assert_eq!(lits_config.len(), 1);
         assert_eq!(lits_config[0].kind, "toml_key");
@@ -2770,6 +2821,7 @@ mod tests {
         let facts_route = find_structural_facts_scoped(&conn, "route", None, 10).unwrap();
         assert_eq!(facts_route.len(), 1);
         assert_eq!(facts_route[0].pattern_id, "http.route.v1");
+        assert_eq!(facts_route[0].key.as_deref(), Some("/api/v1/users/:id"));
         let facts_routes = find_structural_facts_scoped(&conn, "routes", None, 10).unwrap();
         assert_eq!(facts_routes.len(), 1);
         let lits_route = find_literals_scoped(&conn, "route", None, 10).unwrap();
@@ -2800,6 +2852,7 @@ mod tests {
         let facts_custom = find_structural_facts_scoped(&conn, "custom_pattern", None, 10).unwrap();
         assert_eq!(facts_custom.len(), 1);
         assert_eq!(facts_custom[0].pattern_id, "my_custom_pattern");
+        assert_eq!(facts_custom[0].key.as_deref(), Some("custom_name"));
 
         // 6. Path filter: exact file match
         let facts_exact =
@@ -2819,7 +2872,7 @@ mod tests {
 
         // 8. Delegating find_structural_facts and find_literals
         let f_del = find_structural_facts(&conn, "config", 10).unwrap();
-        assert_eq!(f_del.len(), 1);
+        assert_eq!(f_del.len(), 2);
         let l_del = find_literals(&conn, "config", 10).unwrap();
         assert_eq!(l_del.len(), 1);
     }

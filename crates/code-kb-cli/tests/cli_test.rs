@@ -40,7 +40,7 @@ fn setup_test_repo() -> tempfile::TempDir {
         CREATE TABLE structural_facts (
             structural_fact_id TEXT PRIMARY KEY, file_id TEXT, path TEXT NOT NULL, language TEXT,
             pattern_id TEXT, capture_name TEXT, node_kind TEXT, containing_symbol_id TEXT,
-            start_line INTEGER, end_line INTEGER, confidence REAL
+            start_line INTEGER, end_line INTEGER, confidence REAL, metadata_json TEXT
         );
         CREATE TABLE literals (
             literal_id TEXT PRIMARY KEY, file_id TEXT, path TEXT NOT NULL, language TEXT,
@@ -603,12 +603,12 @@ fn test_cli_facts_with_config_alias_and_path_filter() {
     let db_path = root.join(".code-kb/artifact.db");
     let conn = code_kb_core::open_read_write(&db_path).unwrap();
     conn.execute(
-        "INSERT INTO structural_facts VALUES ('sf1', 'f1', 'Cargo.toml', 'toml', 'toml.key_value.v1', 'package.name', 'table', NULL, 1, 2, 1.0)",
+        "INSERT INTO structural_facts VALUES ('sf1', 'f1', 'Cargo.toml', 'toml', 'toml.key_value.v1', 'package.name', 'table', NULL, 1, 2, 1.0, NULL)",
         [],
     )
     .unwrap();
     conn.execute(
-        "INSERT INTO structural_facts VALUES ('sf2', 'f1', 'src/workspace.rs', 'rust', 'toml.key_value.v1', 'dependencies', 'table', NULL, 1, 2, 1.0)",
+        "INSERT INTO structural_facts VALUES ('sf2', 'f1', 'src/workspace.rs', 'rust', 'toml.key_value.v1', 'dependencies', 'table', NULL, 1, 2, 1.0, NULL)",
         [],
     )
     .unwrap();
@@ -979,7 +979,7 @@ fn test_cli_json_strict_forward_slash_invariants() {
         let db_path = root.join(".code-kb").join("artifact.db");
         let conn = code_kb_core::open_read_write(&db_path).unwrap();
         conn.execute(
-            "INSERT INTO structural_facts VALUES ('sf1', 'f1', 'src/workspace.rs', 'rust', 'route', 'get_index', 'route', 's1', 1, 10, 1.0)",
+            "INSERT INTO structural_facts VALUES ('sf1', 'f1', 'src/workspace.rs', 'rust', 'route', 'get_index', 'route', 's1', 1, 10, 1.0, NULL)",
             [],
         ).unwrap();
         conn.execute(
