@@ -189,9 +189,7 @@ pub fn scan_workspace(workspace: &Workspace, db_path: &Path, force: bool) -> Res
     let db_str = db_path.to_string_lossy();
     let own_pid = std::process::id().to_string();
 
-    if let Some(parent) = db_path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
+    ensure_index_dir(db_path)?;
 
     let scan_args = |new_artifact: bool| {
         let mut args = vec!["scan", "--root", &*root_str, "--db", &*db_str];
@@ -397,6 +395,20 @@ pub fn create_index(workspace: &Workspace, db_path: &Path) -> Result<(), SyncErr
     scan_workspace(workspace, db_path, false)
 }
 
+/// Creates the index directory and a `.gitignore` that hides it from git, so no
+/// project `.gitignore` edit is ever needed.
+fn ensure_index_dir(db_path: &Path) -> std::io::Result<()> {
+    let Some(dir) = db_path.parent() else {
+        return Ok(());
+    };
+    std::fs::create_dir_all(dir)?;
+    let gitignore = dir.join(".gitignore");
+    if !gitignore.exists() {
+        std::fs::write(gitignore, "*\n")?;
+    }
+    Ok(())
+}
+
 fn parent_repository_db(root: &Path) -> Option<PathBuf> {
     let git_marker = root.join(".git");
     if !git_marker.is_file() {
@@ -433,10 +445,7 @@ fn copy_parent_index(workspace: &Workspace, db_path: &Path, parent_db: &Path) ->
     if !flushed {
         return false;
     }
-    if let Some(dir) = db_path.parent() {
-        let _ = std::fs::create_dir_all(dir);
-    }
-    if std::fs::copy(parent_db, db_path).is_err() {
+    if ensure_index_dir(db_path).is_err() || std::fs::copy(parent_db, db_path).is_err() {
         return false;
     }
     info!(from = %parent_db.display(), to = %db_path.display(), "Worktree fast-path: copied parent database, reconciling");
@@ -667,6 +676,18 @@ mod tests {
         let path = find_julie_extract_binary()
             .expect("julie-extract binary must be present for tests (see scripts/julie-pins.json)");
         assert!(path.exists(), "Discovered path must exist: {:?}", path);
+    }
+
+    #[test]
+    fn ensure_index_dir_writes_self_ignoring_gitignore() {
+        let temp = crate::safe_tempdir();
+        let db_path = temp.path().join(".code-kb").join("artifact.db");
+        ensure_index_dir(&db_path).unwrap();
+        let gitignore = db_path.parent().unwrap().join(".gitignore");
+        assert_eq!(std::fs::read_to_string(&gitignore).unwrap(), "*\n");
+        std::fs::write(&gitignore, "custom\n").unwrap();
+        ensure_index_dir(&db_path).unwrap();
+        assert_eq!(std::fs::read_to_string(&gitignore).unwrap(), "custom\n");
     }
 
     #[test]
