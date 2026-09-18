@@ -1062,7 +1062,8 @@ fn pending_target_predicate(target: &str, parent: &str) -> String {
     )
 }
 
-/// SQL predicate excluding rows julie marked as documentation, or `1` when the column is absent.
+/// SQL predicate excluding rows julie marked as documentation, or the always-true `1 = 1` when
+/// the column is absent, because a bare `1` in ORDER BY means the first result column in SQLite.
 fn not_documentation(conn: &Connection, alias: &str) -> String {
     let has_content_type: bool = conn
         .query_row(
@@ -1688,8 +1689,7 @@ pub fn find_structural_facts_scoped(
                 COALESCE(
                     json_extract(sf.metadata_json, '$.key_path'),
                     json_extract(sf.metadata_json, '$.key'),
-                    json_extract(sf.metadata_json, '$.normalized_route_template'),
-                    sf.capture_name
+                    json_extract(sf.metadata_json, '$.normalized_route_template')
                 ) AS display_key
          FROM structural_facts sf
          LEFT JOIN symbols s ON sf.containing_symbol_id = s.symbol_id
@@ -2852,7 +2852,7 @@ mod tests {
         let facts_custom = find_structural_facts_scoped(&conn, "custom_pattern", None, 10).unwrap();
         assert_eq!(facts_custom.len(), 1);
         assert_eq!(facts_custom[0].pattern_id, "my_custom_pattern");
-        assert_eq!(facts_custom[0].key.as_deref(), Some("custom_name"));
+        assert_eq!(facts_custom[0].key, None);
 
         // 6. Path filter: exact file match
         let facts_exact =

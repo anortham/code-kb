@@ -320,7 +320,8 @@ fn test_forward_slash_invariants_across_internal_models() {
             containing_symbol_id TEXT,
             start_line INTEGER,
             end_line INTEGER,
-            confidence REAL
+            confidence REAL,
+            metadata_json TEXT
         );
         CREATE TABLE literals (
             literal_id TEXT PRIMARY KEY,
@@ -354,7 +355,7 @@ fn test_forward_slash_invariants_across_internal_models() {
         INSERT INTO relationships VALUES ('r1', 's2', 's1', 'constructs', 'src\\models\\user.rs', 7, 4);
         INSERT INTO structural_facts VALUES (
             'fact1', 'f1', 'src\\models\\user.rs', 'rust', 'route', 'route',
-            'endpoint', 's2', 6, 6, 1.0
+            'endpoint', 's2', 6, 6, 1.0, NULL
         );
         INSERT INTO literals VALUES (
             'lit1', 'f1', 'src\\models\\user.rs', 'rust', 'string',

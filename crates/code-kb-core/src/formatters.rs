@@ -687,6 +687,39 @@ mod tests {
     use super::*;
     use crate::models::{ImpactedSymbol, TestTarget};
 
+    fn structural_fact(key: Option<&str>) -> crate::models::StructuralFact {
+        crate::models::StructuralFact {
+            structural_fact_id: "sf1".into(),
+            path: ".codex/config.toml".into(),
+            language: "toml".into(),
+            pattern_id: "toml.key_value.v1".into(),
+            capture_name: "key_value".into(),
+            node_kind: "table".into(),
+            key: key.map(str::to_string),
+            containing_symbol_name: None,
+            start_line: 2,
+            end_line: 2,
+            confidence: 1.0,
+        }
+    }
+
+    #[test]
+    fn format_structural_facts_prints_key_and_falls_back_to_capture_name() {
+        let with_key = format_structural_facts(
+            &[structural_fact(Some("mcp_servers.code-kb.command"))],
+            &[],
+            "config",
+        );
+        assert!(with_key.contains(
+            "- mcp_servers.code-kb.command [.codex/config.toml:2] (pattern: toml.key_value.v1)"
+        ));
+
+        let without_key = format_structural_facts(&[structural_fact(None)], &[], "config");
+        assert!(
+            without_key.contains("- key_value [.codex/config.toml:2] (pattern: toml.key_value.v1)")
+        );
+    }
+
     #[test]
     fn test_format_file_skeleton() {
         let syms = vec![Symbol {
