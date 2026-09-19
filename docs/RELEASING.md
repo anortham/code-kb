@@ -111,6 +111,19 @@ git add Cargo.toml Cargo.lock crates/code-kb-cli/Cargo.toml .claude-plugin/plugi
 git commit -m "chore: release vX.Y.Z"
 ```
 
+### 5. Push and Wait for Green CI
+The tag must point at a commit that GitHub CI has already passed on all three
+operating systems. Local runs do not replace this: the Windows job has caught
+failures the Linux suite cannot see.
+
+```bash
+git push origin main
+gh run watch --exit-status   # the CI run for the release commit
+./scripts/release-preflight.sh   # step 8 fails unless CI passed on HEAD
+```
+
+Do not tag, and do not publish crates, while CI is red or still running.
+
 ---
 
 ## 4. Triggering the GitHub Release
@@ -118,11 +131,10 @@ git commit -m "chore: release vX.Y.Z"
 Pushing a signed or annotated git tag `vX.Y.Z` automatically triggers `.github/workflows/release-binaries.yml`:
 
 ```bash
-# 1. Create annotated tag
+# 1. Create annotated tag (only after step 3.5: CI is green on this commit)
 git tag -a vX.Y.Z -m "Release vX.Y.Z"
 
-# 2. Push commit and tag to GitHub
-git push origin main
+# 2. Push the tag to GitHub
 git push origin vX.Y.Z
 ```
 
