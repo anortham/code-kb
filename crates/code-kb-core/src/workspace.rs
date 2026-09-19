@@ -460,10 +460,11 @@ impl Workspace {
             parsed.clone()
         };
 
-        // Pass 1: Look for .git or .code-kb all the way up
+        // Pass 1: Look for .git or an existing index all the way up. A bare `.code-kb`
+        // directory is not a marker: `~/.code-kb` holds telemetry and plugin downloads.
         let mut probe = curr.clone();
         loop {
-            if probe.join(".code-kb").exists() || probe.join(".git").exists() {
+            if probe.join(".code-kb").join("artifact.db").exists() || probe.join(".git").exists() {
                 let canon = dunce::canonicalize(&probe).unwrap_or(probe);
                 return Ok(normalize_path(&canon));
             }
@@ -692,6 +693,35 @@ mod tests {
         let p = PathBuf::from(r"\\?\C:\source\code-kb\src\main.rs");
         let norm = normalize_path(&p);
         assert!(!norm.to_string_lossy().starts_with(r"\\?\"));
+    }
+
+    #[test]
+    fn test_find_workspace_root_ignores_ancestor_code_kb_without_index() {
+        let temp = crate::safe_tempdir();
+        let home = temp.path();
+        std::fs::create_dir_all(home.join(".code-kb")).unwrap();
+        std::fs::write(home.join(".code-kb").join("telemetry.db"), b"").unwrap();
+        let project = home.join("project");
+        std::fs::create_dir_all(&project).unwrap();
+        std::fs::write(project.join("Cargo.toml"), "[package]\n").unwrap();
+
+        let root = Workspace::find_workspace_root(&project).unwrap();
+
+        assert!(paths_equal(&root, &project), "{}", root.display());
+    }
+
+    #[test]
+    fn test_find_workspace_root_uses_ancestor_index() {
+        let temp = crate::safe_tempdir();
+        let repo = temp.path().join("repo");
+        std::fs::create_dir_all(repo.join(".code-kb")).unwrap();
+        std::fs::write(repo.join(".code-kb").join("artifact.db"), b"").unwrap();
+        let nested = repo.join("src").join("deep");
+        std::fs::create_dir_all(&nested).unwrap();
+
+        let root = Workspace::find_workspace_root(&nested).unwrap();
+
+        assert!(paths_equal(&root, &repo), "{}", root.display());
     }
 
     #[test]
