@@ -1398,7 +1398,7 @@ fn test_mcp_rebinding_drive_casing_insensitivity() {
 }
 
 #[test]
-fn test_mcp_telemetry_summary_unindexed_repo_no_autoscan() {
+fn test_mcp_server_start_creates_missing_index() {
     let temp_dir = tempfile::tempdir().unwrap();
     let root = temp_dir.path();
     std::fs::write(
@@ -1442,17 +1442,23 @@ fn test_mcp_telemetry_summary_unindexed_repo_no_autoscan() {
     let mut response_line = String::new();
     reader.read_line(&mut response_line).unwrap();
 
-    // 2. Call telemetry_summary
+    let db = root.join(".code-kb").join("artifact.db");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while !db.exists() && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    assert!(
+        db.exists(),
+        "server start must create the index without a tool call"
+    );
+
     let call_req = json!({
         "jsonrpc": "2.0",
         "id": 2,
         "method": "tools/call",
         "params": {
-            "name": "telemetry_summary",
-            "arguments": {
-                "time_window": "all",
-                "workspace_only": true
-            }
+            "name": "lookup_symbol",
+            "arguments": { "query": "unindexed_func" }
         }
     });
     let mut call_line = serde_json::to_string(&call_req).unwrap();
@@ -1465,14 +1471,8 @@ fn test_mcp_telemetry_summary_unindexed_repo_no_autoscan() {
     let resp: Value = serde_json::from_str(&call_resp_line).expect("Failed to parse JSON response");
     assert_eq!(resp["id"], 2);
     assert_ne!(resp["result"]["isError"], true);
-    let summary_text = resp["result"]["content"][0]["text"].as_str().unwrap();
-    assert!(summary_text.contains("Telemetry Summary"));
-
-    // Verify artifact.db was NOT created by auto-scan
-    assert!(
-        !root.join(".code-kb").join("artifact.db").exists(),
-        "telemetry_summary must not trigger auto-scan on an unindexed repository"
-    );
+    let text = resp["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains("unindexed_func"), "{text}");
 
     drop(stdin);
     let _ = child.wait();

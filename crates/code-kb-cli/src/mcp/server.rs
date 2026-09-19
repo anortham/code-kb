@@ -23,9 +23,32 @@ pub struct McpServer {
     pub explicit_db: Option<PathBuf>,
     pub _watcher: Option<WatcherHandle>,
     pub telemetry_conn: Option<Connection>,
-    /// Startup reconciliation of the index against files that changed while no server ran.
-    /// The first tool call waits for it so it never answers from a stale index.
-    reconcile: Option<std::thread::JoinHandle<()>>,
+    /// Startup index preparation: a full scan when the index is missing, otherwise a
+    /// reconciliation against files that changed while no server ran. The first tool
+    /// call waits for it so it never answers from a missing or stale index.
+    reconcile: Option<std::thread::JoinHandle<Result<(), String>>>,
+}
+
+fn spawn_index_prepare(
+    workspace: &Workspace,
+    db_path: &Path,
+) -> Option<std::thread::JoinHandle<Result<(), String>>> {
+    if !db_path.exists() && !is_project_root(&workspace.canonical_root) {
+        return None;
+    }
+    let ws = workspace.clone();
+    let db = db_path.to_path_buf();
+    Some(std::thread::spawn(move || {
+        if !db.exists() {
+            tracing::info!(ws = %ws.canonical_root.display(), "Database not found; running automatic initial scan");
+            create_index(&ws, &db).map_err(|e| e.to_string())?;
+        }
+        let _ = ensure_fts_index_path(&db);
+        if let Ok(conn) = open_read_only(&db) {
+            let _ = reconcile_offline_edits(&ws, &db, &conn);
+        }
+        Ok(())
+    }))
 }
 
 impl McpServer {
@@ -43,17 +66,7 @@ impl McpServer {
             tracing::warn!("Index version check failed: {e}");
         }
 
-        // Trigger cold-start reconciliation and ensure FTS index in background thread if database exists
-        let reconcile = db_path.exists().then(|| {
-            let ws_clone = workspace.clone();
-            let db_clone = db_path.clone();
-            std::thread::spawn(move || {
-                let _ = ensure_fts_index_path(&db_clone);
-                if let Ok(conn) = open_read_only(&db_clone) {
-                    let _ = reconcile_offline_edits(&ws_clone, &db_clone, &conn);
-                }
-            })
-        });
+        let reconcile = spawn_index_prepare(&workspace, &db_path);
 
         // Tier 3: Start background file watcher with debounce and git storm circuit breaker
         let watcher = if db_path.exists() {
@@ -101,19 +114,12 @@ impl McpServer {
             {
                 tracing::warn!("Index version check failed: {e}");
             }
-            if db_path.exists() {
-                let _ = ensure_fts_index_path(&db_path);
-                let ws_clone = ws.clone();
-                let db_clone = db_path.clone();
-                self.reconcile = Some(std::thread::spawn(move || {
-                    if let Ok(conn) = open_read_only(&db_clone) {
-                        let _ = reconcile_offline_edits(&ws_clone, &db_clone, &conn);
-                    }
-                }));
-                self._watcher = start_watcher(ws.clone(), db_path.clone()).ok();
+            self.reconcile = spawn_index_prepare(&ws, &db_path);
+            self._watcher = if db_path.exists() {
+                start_watcher(ws.clone(), db_path.clone()).ok()
             } else {
-                self._watcher = None;
-            }
+                None
+            };
         }
 
         if self.telemetry_conn.is_none() {
@@ -627,34 +633,28 @@ impl McpServer {
             }
         }
 
-        // Auto-scan if workspace is a known repository but database artifact does not exist yet
-        if !self.db_path.exists() {
-            let root = &self.workspace.canonical_root;
-            if is_project_root(root) {
-                tracing::info!(ws = %root.display(), "Database not found; running automatic initial scan");
+        let prepare_error = self
+            .reconcile
+            .take()
+            .and_then(|handle| handle.join().unwrap_or(Ok(())).err());
 
-                if let Err(e) = create_index(&self.workspace, &self.db_path) {
-                    tracing::error!("Initial scan failed: {e}");
-                }
-
-                if self.db_path.exists() && self._watcher.is_none() {
-                    self._watcher =
-                        start_watcher(self.workspace.clone(), self.db_path.clone()).ok();
-                }
-            }
+        if self.db_path.exists() && self._watcher.is_none() {
+            self._watcher = start_watcher(self.workspace.clone(), self.db_path.clone()).ok();
         }
 
         if !self.db_path.exists() {
-            let msg = format!(
-                "Database artifact not found at '{}'. Please configure code-kb with '--root <repo-path>' in your MCP config or invoke a tool with a path inside a project repository.",
-                self.db_path.display()
-            );
-            tracing::warn!("{}", msg);
+            let msg = match prepare_error {
+                Some(e) => format!(
+                    "Initial scan of '{}' failed: {e}",
+                    self.workspace.canonical_root.display()
+                ),
+                None => format!(
+                    "Database artifact not found at '{}'. Please configure code-kb with '--root <repo-path>' in your MCP config or invoke a tool with a path inside a project repository.",
+                    self.db_path.display()
+                ),
+            };
+            tracing::error!("{}", msg);
             return CallToolResult::error(msg);
-        }
-
-        if let Some(reconcile) = self.reconcile.take() {
-            let _ = reconcile.join();
         }
 
         let conn = match open_read_only(&self.db_path) {
