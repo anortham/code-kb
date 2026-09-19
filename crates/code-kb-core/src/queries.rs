@@ -1351,7 +1351,9 @@ fn find_references_internal(
                        JOIN symbols member ON member.parent_symbol_id = owner.symbol_id
                        WHERE owner.name = CASE WHEN json_valid(i.metadata_json) THEN json_extract(i.metadata_json, '$.receiver') END
                          AND member.name = i.name
-                         AND owner.symbol_id IS NOT (SELECT parent_symbol_id FROM symbols WHERE symbol_id = ?3)
+                         AND owner.name IS NOT (SELECT parent.name FROM symbols target
+                                                JOIN symbols parent ON parent.symbol_id = target.parent_symbol_id
+                                                WHERE target.symbol_id = ?3)
                    ))
                  ORDER BY i.path, i.start_line
                  LIMIT ?2",

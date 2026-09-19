@@ -271,3 +271,35 @@ fn same_named_constant_and_method_in_sibling_nested_classes_keep_separate_caller
     );
     assert_eq!(constant_refs[0].start_line, Some(11));
 }
+
+#[test]
+fn same_named_containers_with_same_named_members_keep_the_shared_caller() {
+    let (_repo, db_path) = scanned_repo(&[
+        (
+            "src/A.cs",
+            "namespace A\n{\n    public static class Settings\n    {\n        public static readonly int Value = 1;\n    }\n}\n",
+        ),
+        (
+            "src/B.cs",
+            "namespace B\n{\n    public static class Settings\n    {\n        public static readonly int Value = 2;\n    }\n}\n",
+        ),
+        (
+            "src/Reader.cs",
+            "public class Reader\n{\n    public int Read()\n    {\n        return Settings.Value;\n    }\n}\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    for declaring_file in ["src/A.cs", "src/B.cs"] {
+        let refs =
+            find_references_scoped(&conn, "Value", "callers", 20, false, Some(declaring_file))
+                .unwrap();
+        assert_eq!(
+            caller_names(&refs),
+            vec!["Read"],
+            "{declaring_file}: got {refs:?}"
+        );
+        assert_eq!(refs[0].kind, "member_access");
+        assert_eq!(refs[0].start_line, Some(5));
+    }
+}
