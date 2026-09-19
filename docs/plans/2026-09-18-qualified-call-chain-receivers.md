@@ -301,8 +301,8 @@ Commit mode: `serial-worker-commit` for Tasks 1, 6, 7, 8; `parallel-lead-commit`
 **What to build:** After the user approves and performs (or authorizes) the julie 3.1.1 tag, push, and release, fetch the four archive checksums, update the pin file, restore the extractor, run `cargo build --release`, `cargo test --workspace`, `node --test tests/plugin/*.test.cjs`, and `scripts/release-preflight.sh`. Write the release note. Commit. Tag, push, and publish only with explicit user approval.
 
 **Acceptance criteria:**
-- [ ] `cargo build --release` passes the build guard with the 3.1.1 extractor restored.
-- [ ] `cargo test --workspace` and `node --test tests/plugin/*.test.cjs` pass.
-- [ ] `scripts/release-preflight.sh` passes.
-- [ ] `CLAUDE.md` and `AGENTS.md` are byte-identical.
-- [ ] Worker-scope verification passes and the change is committed on the code-kb task branch.
+- [x] `cargo build --release` passes the build guard with the 3.1.1 extractor restored.
+- [x] `cargo test --workspace` and `node --test tests/plugin/*.test.cjs` pass.
+- [x] `scripts/release-preflight.sh` passes.
+- [x] `CLAUDE.md` and `AGENTS.md` are byte-identical.
+- [x] Worker-scope verification passes and the change is committed on the code-kb task branch.
