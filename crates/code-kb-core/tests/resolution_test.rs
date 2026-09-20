@@ -109,3 +109,157 @@ fn callers_use_the_receiver_variable_type_to_pick_the_method() {
     assert_eq!(b_go.len(), 1, "{b_go:?}");
     assert_eq!(b_go[0].from_symbol_name, "use_both");
 }
+
+const CROSS_LANGUAGE_ANSWER_QUALITY: &[(&str, &str)] = &[
+    (
+        "services/auth_service.py",
+        "def verify_credentials(user, password):\n    return user == password\n\ndef unrelated_audit():\n    return True\n",
+    ),
+    (
+        "services/login_service.py",
+        "from .auth_service import verify_credentials\n\ndef do_login(u, p):\n    return verify_credentials(u, p)\n",
+    ),
+    (
+        "tests/test_auth.py",
+        "from services.auth_service import verify_credentials\n\ndef test_verify_credentials():\n    assert verify_credentials('admin', 'admin')\n",
+    ),
+    (
+        "tests/test_unrelated.py",
+        "from services.auth_service import unrelated_audit\n\ndef test_unrelated_audit():\n    assert unrelated_audit()\n",
+    ),
+    (
+        "src/user_store.rs",
+        "pub struct UserStore;\nimpl UserStore {\n    pub fn save(&self) -> bool { true }\n}\npub struct OrderStore;\nimpl OrderStore {\n    pub fn save(&self) -> bool { true }\n}\npub fn register_user(store: &UserStore) -> bool {\n    UserStore::save(store)\n}\npub fn place_order(store: &OrderStore) -> bool {\n    OrderStore::save(store)\n}\npub fn helper_no_calls() -> usize {\n    42\n}\n",
+    ),
+    (
+        "ts/auth.ts",
+        "export function authenticateUser(token: string): boolean {\n    return token.length > 0;\n}\n",
+    ),
+    (
+        "ts/client.ts",
+        "import { authenticateUser } from './auth';\nexport function handleLogin(token: string): boolean {\n    return authenticateUser(token);\n}\nexport function handlePing(): string {\n    return 'pong';\n}\n",
+    ),
+];
+
+#[test]
+fn test_cross_language_callers_and_absent_matches() {
+    let (_repo, db) = scanned_repo(CROSS_LANGUAGE_ANSWER_QUALITY);
+    let conn = open_read_only(&db).unwrap();
+
+    // 1. Rust method resolution with distinct receiver types
+    let user_save =
+        find_references_scoped(&conn, "UserStore::save", "callers", 20, false, None).unwrap();
+    let user_callers = caller_names(&user_save);
+    assert!(
+        user_callers.contains(&"register_user".to_string()),
+        "expected register_user in callers: {user_callers:?}"
+    );
+    assert!(
+        !user_callers.contains(&"place_order".to_string()),
+        "place_order must NOT be in UserStore::save callers (absent match)"
+    );
+    assert!(
+        !user_callers.contains(&"helper_no_calls".to_string()),
+        "helper_no_calls must NOT be in UserStore::save callers (absent match)"
+    );
+
+    let order_save =
+        find_references_scoped(&conn, "OrderStore::save", "callers", 20, false, None).unwrap();
+    let order_callers = caller_names(&order_save);
+    assert!(
+        order_callers.contains(&"place_order".to_string()),
+        "expected place_order in callers: {order_callers:?}"
+    );
+    assert!(
+        !order_callers.contains(&"register_user".to_string()),
+        "register_user must NOT be in OrderStore::save callers (absent match)"
+    );
+    assert!(
+        !order_callers.contains(&"helper_no_calls".to_string()),
+        "helper_no_calls must NOT be in OrderStore::save callers (absent match)"
+    );
+
+    // 2. TypeScript function callers and negative controls
+    let ts_refs = find_references_scoped(
+        &conn,
+        "authenticateUser",
+        "callers",
+        20,
+        false,
+        Some("ts/auth.ts"),
+    )
+    .unwrap();
+    let ts_callers = caller_names(&ts_refs);
+    assert!(
+        ts_callers.contains(&"handleLogin".to_string()),
+        "expected handleLogin in callers: {ts_callers:?}"
+    );
+    assert!(
+        !ts_callers.contains(&"handlePing".to_string()),
+        "handlePing must NOT be in authenticateUser callers (absent match)"
+    );
+
+    // 3. Python function callers and negative controls
+    let py_refs = find_references_scoped(
+        &conn,
+        "verify_credentials",
+        "callers",
+        20,
+        false,
+        Some("services/auth_service.py"),
+    )
+    .unwrap();
+    let py_callers = caller_names(&py_refs);
+    assert!(
+        py_callers.contains(&"do_login".to_string()),
+        "expected do_login in callers: {py_callers:?}"
+    );
+    assert!(
+        !py_callers.contains(&"unrelated_audit".to_string()),
+        "unrelated_audit must NOT be in verify_credentials callers (absent match)"
+    );
+}
+
+#[test]
+fn test_blast_radius_predicted_tests_inclusion_and_absent_exclusion() {
+    let (_repo, db) = scanned_repo(CROSS_LANGUAGE_ANSWER_QUALITY);
+    let conn = open_read_only(&db).unwrap();
+
+    let radius = compute_blast_radius_scoped(
+        &conn,
+        &["verify_credentials"],
+        Some("services/auth_service.py"),
+        &[],
+        3,
+        50,
+    )
+    .unwrap();
+
+    let impacted_names: Vec<&str> = radius
+        .impacted_symbols
+        .iter()
+        .map(|s| s.name.as_str())
+        .collect();
+    assert!(
+        impacted_names.contains(&"do_login"),
+        "do_login should be impacted by verify_credentials: {impacted_names:?}"
+    );
+    assert!(
+        !impacted_names.contains(&"unrelated_audit"),
+        "unrelated_audit must NOT be impacted (absent match)"
+    );
+
+    let test_names: Vec<&str> = radius
+        .likely_tests
+        .iter()
+        .map(|t| t.name.as_str())
+        .collect();
+    assert!(
+        test_names.contains(&"test_verify_credentials"),
+        "expected test_verify_credentials in likely_tests: {test_names:?}"
+    );
+    assert!(
+        !test_names.contains(&"test_unrelated_audit"),
+        "test_unrelated_audit must NOT be in likely_tests for verify_credentials (absent match)"
+    );
+}
