@@ -96,5 +96,5 @@ Use the canonical names from the MCP schema in tool calls. The aliases below are
 
 * **No Workspace Parameters:** Never supply or request `workspace`, `repo_path`, or `workspace_id`. The server binds to workspace root automatically.
 * **Disambiguation:** If a symbol name is overloaded (e.g. `new`), supply `file_path` or qualified name (e.g. `Server::new` or `Alpha::create`).
-* **Zero Heap Footprint:** All queries stream directly from SQLite; retained memory is strictly < 15 MB.
+* **Zero Heap Footprint:** All queries stream directly from SQLite; retained memory is about 25 MB.
 * **Self-Cleaning Workspaces & Central Telemetry:** Each workspace or git worktree maintains its isolated database at `<root>/.code-kb/artifact.db`, cleaned automatically upon repo/worktree removal. Durable tool telemetry and token efficiency metrics persist centrally at `~/.code-kb/telemetry.db`.

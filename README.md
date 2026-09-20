@@ -23,7 +23,7 @@ Traditional AI coding agents burn massive amounts of context loading entire sour
 
 ## Key Principles
 
-- **Sub-15MB Retained Memory:** Written in Rust, zero heavy runtimes (no web dashboard, no GPU models), retained process memory stays below 15 MB. The plugin launcher is a small Node script that starts the native binary and then only waits on it.
+- **Small Retained Memory:** Written in Rust, zero heavy runtimes (no web dashboard, no GPU models), retained process memory is about 25 MB. The plugin launcher is a small Node script that starts the native binary and then only waits on it.
 - **Sub-5ms Query Latency:** Direct SQLite queries in WAL mode with zero in-memory heap bloat.
 - **Zero Workspace Parameters:** Pure semantic tool calling (`lookup_symbol(query="...")`). The agent is never burdened with `workspace_id`, `repo_path`, or path confusion.
 - **CLI-First Parity:** Every MCP tool has an exact 1:1 CLI command for instantaneous terminal verification and dogfooding.

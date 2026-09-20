@@ -1,7 +1,7 @@
 <!-- code-kb routing directive -->
 ## Code Intelligence: Always use `code-kb` MCP tools
 
-`code-kb` is active in this workspace. It provides instant AST-indexed symbol queries, skeletons, and surgical context slices backed by SQLite in WAL mode (<15 MB RAM).
+`code-kb` is active in this workspace. It provides instant AST-indexed symbol queries, skeletons, and surgical context slices backed by SQLite in WAL mode.
 
 **CRITICAL ROUTING RULES (Saves 80-90% context tokens):**
 - **DO NOT** run `grep`, `rg`, `find`, `cat`, or `view_file` to search symbols or discover interfaces.

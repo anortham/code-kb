@@ -338,6 +338,15 @@ pub fn format_context_slice(slice: &ContextSlice) -> String {
 }
 
 /// Format references list for callers/callees with optional limit footer.
+fn cap_notice(shown: usize, limit: usize) -> String {
+    let advice = if limit >= crate::queries::MAX_RESULT_LIMIT {
+        "narrow the query to see more"
+    } else {
+        "increase limit to see more"
+    };
+    format!("\n[Showing {shown} results (limit reached); {advice}.]\n")
+}
+
 pub fn format_references(
     target_name: &str,
     refs: &[ReferenceSite],
@@ -377,10 +386,7 @@ pub fn format_references(
     }
 
     if refs.len() >= limit {
-        out.push_str(&format!(
-            "\n[Showing {} references (limit reached). Increase limit to see more.]\n",
-            refs.len()
-        ));
+        out.push_str(&cap_notice(refs.len(), limit));
     }
 
     out
@@ -413,10 +419,7 @@ pub fn format_find_symbol_results(
             }
         }
         if exact_matches.len() >= limit {
-            out.push_str(&format!(
-                "\n[Showing {} results; increase limit to see more.]\n",
-                exact_matches.len()
-            ));
+            out.push_str(&cap_notice(exact_matches.len(), limit));
         }
         out
     } else if !fts_matches.is_empty() {
@@ -444,10 +447,7 @@ pub fn format_find_symbol_results(
             }
         }
         if fts_matches.len() >= limit {
-            out.push_str(&format!(
-                "\n[Showing {} results; increase limit to see more.]\n",
-                fts_matches.len()
-            ));
+            out.push_str(&cap_notice(fts_matches.len(), limit));
         }
         out
     } else {
@@ -556,10 +556,7 @@ pub fn format_search_results(query: &str, results: &[SymbolSearchResult], limit:
     }
 
     if results.len() >= limit {
-        out.push_str(&format!(
-            "\n[Showing {} results; increase limit to see more.]\n",
-            results.len()
-        ));
+        out.push_str(&cap_notice(results.len(), limit));
     }
 
     out
@@ -848,8 +845,23 @@ mod tests {
         }];
 
         let formatted = format_search_results("tokens", &results, 1);
+        assert!(
+            formatted.contains("[Showing 1 results (limit reached); increase limit to see more.]")
+        );
 
-        assert!(formatted.contains("[Showing 1 results; increase limit to see more.]"));
+        let at_ceiling =
+            format_search_results("tokens", &results, crate::queries::MAX_RESULT_LIMIT);
+        assert!(!at_ceiling.contains("limit reached"));
+
+        let full: Vec<SymbolSearchResult> = (0..crate::queries::MAX_RESULT_LIMIT)
+            .map(|_| SymbolSearchResult {
+                symbol: sample_symbol("parse_tokens"),
+                score: 0.0,
+                snippet: None,
+            })
+            .collect();
+        let capped = format_search_results("tokens", &full, crate::queries::MAX_RESULT_LIMIT);
+        assert!(capped.contains("(limit reached); narrow the query to see more.]"));
     }
 
     #[test]

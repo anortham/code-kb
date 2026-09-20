@@ -18,7 +18,7 @@ This guide details the end-to-end release process for `code-kb`. Any agent or ma
 - **Pre-flight Invariants:**
   - `AGENTS.md` and `CLAUDE.md` must stay byte-for-byte identical (`cmp AGENTS.md CLAUDE.md`).
   - No `workspace` parameter exposed in any MCP tool schema (`mcp_test.rs`).
-  - Retained memory < 15 MB.
+  - Retained memory about 25 MB, measured on a live `serve` process.
   - Windows NTFS compatibility validated via `win-test` or CI.
 
 ---
@@ -223,6 +223,14 @@ publishing, not after.
   # Re-tag and push after pushing the fix
   git tag -a vX.Y.Z -m "Release vX.Y.Z"
   git push origin vX.Y.Z
+  ```
+- **Release Gate Failure:** The `Verify release commit` job fails when CI has not
+  completed successfully for the tagged commit, or when the tag version differs from
+  `Cargo.toml` or a plugin manifest. A version mismatch needs a fix on `main` and a
+  re-tag (above). A CI timing failure needs no re-tag: wait for CI, then re-run the
+  workflow on the existing tag:
+  ```bash
+  gh workflow run release-binaries.yml -f version=X.Y.Z --ref vX.Y.Z
   ```
 - **Manual Workflow Dispatch:** The workflow can also be triggered manually from GitHub Actions UI or CLI without tagging:
   ```bash

@@ -178,3 +178,23 @@ the audit's v1.1.3 build is isolated under ignored `target/health-review`.
 Windows and macOS execution was not repeated locally during this review. The release
 gate now requires the existing cross-platform CI result before publication. Memory
 measurements above are Linux-only and limited to the stated workload.
+
+## Independent validation, 2026-09-20
+
+A second agent re-checked this review at commit `6e00891` and made the small changes listed below.
+
+- Every check in "Verification and source state" was re-run after the changes: 247 Rust tests across 19 targets, 16 plugin tests, Clippy, formatting, and the AGENTS/CLAUDE sync check. All pass.
+- The telemetry numbers were re-derived from `~/.code-kb/telemetry.db`: 1,818 calls, 35 errors, 8 workspaces, 12 versions, every historical `result_count` equal to 1, 2 calls at v1.1.1, none at v1.1.3, and 77 calls with 9 errors in the julie-extractors workspace. The table's p99 values depend on the rank method; with small samples the two common methods differ (blast radius p99 is 107 ms by nearest rank below, 1,026 ms by nearest rank above).
+- Every internal caller of the bounded query functions passes a limit of 50 or less, so the 0–200 ceiling breaks no existing path.
+- CI runs on pushes to `main` and on pull requests, so the release gate's exact-commit lookup finds a run for a tagged `main` commit.
+- The pin, the restored `.tools/julie-extract`, and the `julie-extract` on PATH are all 3.1.1.
+- Memory was measured again on this repository's own index (21 MB artifact database, 1 MB telemetry database) with the rebuilt v1.1.3 binary, one lookup plus six warm lookups, three runs: PSS 22.2–22.9 MiB, anonymous 17.0–17.7 MiB, RSS 24.6–25.2 MiB. On a real index the anonymous figure alone exceeds 15 MB, so restating the budget as heap-only memory would not restore the published claim.
+
+Changes made during validation:
+
+- Cap notices in lookup, search, and references share one helper. When the limit is already 200, the notice says to narrow the query instead of telling the agent to raise a limit it cannot raise.
+- `docs/RELEASING.md` gained a recovery step for a release-gate failure: re-run the workflow on the existing tag after CI passes.
+- The "under 15 MB" claim was replaced with the measured figure, about 25 MB, in README, AGENTS/CLAUDE, RELEASING, the site, the skill, and the routing block. The user chose a measured figure over a budget.
+- `target/release/code-kb` was rebuilt, so the installed symlink now runs v1.1.3. The isolated `target/health-review` build (264 MB) is still present and can be deleted.
+
+Not re-verified: Windows and macOS execution, the disposable fixture scan counts, and the launcher process-tree measurement.

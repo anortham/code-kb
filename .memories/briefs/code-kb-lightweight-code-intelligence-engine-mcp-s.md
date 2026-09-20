@@ -21,7 +21,7 @@ Keep code-kb's existing tools accurate, compact, and inexpensive. Preserve SQLit
 
 - No repository graphs, embeddings, extra daemons, or workspace parameters in MCP schemas.
 - Keep single-turn validated edits and Windows support.
-- Keep the <15 MB retained-memory target honest: measured whole-process memory currently exceeds it; do not silently redefine it as anonymous memory.
+- The published memory figure is the measured value, about 25 MB RSS on a live server (decided 2026-09-20). There is no hard budget; measure before and after changes that could raise it.
 
 ## Status as of 2026-09-20
 

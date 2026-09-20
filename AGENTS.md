@@ -13,7 +13,7 @@ update the other in the same commit.
 symbol search, and surgical context slicing with minimal token consumption.
 
 - Backed by AST facts extracted by `julie-extractors` (SQLite schema v7).
-- SQLite in WAL mode is the query engine; `code-kb` keeps retained memory < 15 MB.
+- SQLite in WAL mode is the query engine; `code-kb` holds no repository data in RAM.
 - All MCP tools have an exact 1:1 CLI command for direct terminal verification.
 - Non-goals: Do not add web dashboards, GPU embedding runtimes, daemon watchers
   outside the 1:1 MCP session, or workspace registries.
@@ -57,7 +57,7 @@ MCP tool schema.**
 
 ### 2. Zero In-Memory Heap Objects for Repositories
 - Do not hydrate repository symbol graphs or file lists into RAM.
-- Retained memory must stay < 15 MB.
+- Retained memory is about 25 MB today. Measure a live `serve` process before and after any change that could raise it.
 - All symbol searches, skeleton rendering, context slices, and reference lookups
   are executed as direct, indexed SQLite queries with `open_read_only`.
 
