@@ -89,14 +89,15 @@ case "${OS}" in
     ;;
   Linux)
     case "${ARCH}" in
-      x86_64) TRIPLE="x86_64-unknown-linux-gnu" ;;
+      x86_64)        TRIPLE="x86_64-unknown-linux-gnu" ;;
+      arm64|aarch64) TRIPLE="aarch64-unknown-linux-gnu" ;;
     esac
     ;;
 esac
 
 if [[ -z "${TRIPLE}" ]]; then
   echo "error: unsupported platform '${OS}/${ARCH}' for prebuilt julie-extract v${VERSION}" >&2
-  echo "Supported: Linux x86_64, macOS Apple Silicon, macOS Intel, Windows x86_64." >&2
+  echo "Supported: Linux x86_64 and ARM64, macOS Apple Silicon and Intel, Windows x86_64 and ARM64." >&2
   exit 1
 fi
 

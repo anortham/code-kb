@@ -9,11 +9,13 @@ This guide details the end-to-end release process for `code-kb`. Any agent or ma
 - **Semantic Versioning:** Releases follow `MAJOR.MINOR.PATCH` (e.g. `0.5.0`).
 - **Bundled Distribution (Invariant 7):** Every GitHub Release archive bundles matching `code-kb` and pinned `julie-extract` binaries side-by-side. Users download a single `.tar.gz` or `.zip` archive with zero additional installation steps.
 - **Dual Distribution:**
-  1. **GitHub Releases:** Precompiled binary archives for 4 targets:
+  1. **GitHub Releases:** Precompiled binary archives for 6 targets:
      - Linux x86_64 (`x86_64-unknown-linux-gnu`, `.tar.gz`)
+     - Linux ARM64 (`aarch64-unknown-linux-gnu`, `.tar.gz`)
      - macOS Apple Silicon (`aarch64-apple-darwin`, `.tar.gz`)
      - macOS Intel (`x86_64-apple-darwin`, `.tar.gz`)
      - Windows x86_64 (`x86_64-pc-windows-msvc`, `.zip`)
+     - Windows ARM64 (`aarch64-pc-windows-msvc`, `.zip`)
   2. **Crates.io:** Library crate `code-kb-core` followed by CLI crate `code-kb-cli`.
 - **Pre-flight Invariants:**
   - `AGENTS.md` and `CLAUDE.md` must stay byte-for-byte identical (`cmp AGENTS.md CLAUDE.md`).
@@ -140,7 +142,7 @@ git push origin vX.Y.Z
 
 ### What GitHub Actions Does:
 1. Confirms the tag or dispatch version matches Cargo and every plugin manifest, and CI passed for the exact commit.
-2. Matrix builds binaries on `ubuntu-latest`, `macos-latest`, `macos-13`, and `windows-latest`.
+2. Matrix builds binaries on `ubuntu-latest`, `ubuntu-24.04-arm`, `macos-latest`, `macos-15-intel`, `windows-latest`, and `windows-11-arm`.
 3. Downloads and verifies the pinned `julie-extract` binary matching `scripts/julie-pins.json`.
 4. Packages `code-kb`, `julie-extract`, `README.md`, `LICENSE-MIT`, and `LICENSE-APACHE`.
 5. Generates `.sha256` checksums for each archive.

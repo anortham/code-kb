@@ -25,7 +25,9 @@ function detectPlatform(platform = os.platform(), arch = os.arch()) {
     'darwin:arm64': { target: 'aarch64-apple-darwin', archiveExtension: '.tar.gz', binaryName: 'code-kb' },
     'darwin:x64': { target: 'x86_64-apple-darwin', archiveExtension: '.tar.gz', binaryName: 'code-kb' },
     'linux:x64': { target: 'x86_64-unknown-linux-gnu', archiveExtension: '.tar.gz', binaryName: 'code-kb' },
+    'linux:arm64': { target: 'aarch64-unknown-linux-gnu', archiveExtension: '.tar.gz', binaryName: 'code-kb' },
     'win32:x64': { target: 'x86_64-pc-windows-msvc', archiveExtension: '.zip', binaryName: 'code-kb.exe' },
+    'win32:arm64': { target: 'aarch64-pc-windows-msvc', archiveExtension: '.zip', binaryName: 'code-kb.exe' },
   };
   const found = targets[`${platform}:${arch}`];
   if (!found) {

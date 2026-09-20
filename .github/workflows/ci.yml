@@ -54,11 +54,17 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             exe_suffix: ""
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            exe_suffix: ""
           - os: macos-latest
             target: aarch64-apple-darwin
             exe_suffix: ""
           - os: windows-latest
             target: x86_64-pc-windows-msvc
+            exe_suffix: ".exe"
+          - os: windows-11-arm
+            target: aarch64-pc-windows-msvc
             exe_suffix: ".exe"
     steps:
       - uses: actions/checkout@v4
@@ -66,7 +72,7 @@ jobs:
       - name: Restore julie-extract
         shell: bash
         run: |
-          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
             pwsh scripts/restore-julie-extract.ps1
           else
             bash scripts/restore-julie-extract.sh

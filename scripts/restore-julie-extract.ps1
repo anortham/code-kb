@@ -21,7 +21,11 @@ if (-not (Test-Path $PinsPath)) {
 
 $Pins = Get-Content $PinsPath -Raw | ConvertFrom-Json
 $Version = $Pins.version
-$Triple = "x86_64-pc-windows-msvc"
+$Triple = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq "Arm64") {
+    "aarch64-pc-windows-msvc"
+} else {
+    "x86_64-pc-windows-msvc"
+}
 
 if ($FromSource -or $env:JULIE_EXTRACTORS_SOURCE) {
     $SourceRoot = if ($FromSource) { $FromSource } else { $env:JULIE_EXTRACTORS_SOURCE }

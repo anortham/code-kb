@@ -138,10 +138,9 @@ binary yourself.
 
 - **GitHub Releases:** download the archive for your platform from
   [GitHub Releases](https://github.com/anortham/code-kb/releases):
-  - Linux x86_64 (`.tar.gz`)
-  - macOS Apple Silicon (`.tar.gz`)
-  - macOS Intel (`.tar.gz`)
-  - Windows x86_64 (`.zip`)
+  - Linux x86_64 and ARM64 (`.tar.gz`)
+  - macOS Apple Silicon and Intel (`.tar.gz`)
+  - Windows x86_64 and ARM64 (`.zip`)
 
   Unpack it and put both binaries on your `PATH` (for example `~/.local/bin`,
   `/usr/local/bin`, or `C:\tools`). `code-kb` and `julie-extract` are packaged side by side,

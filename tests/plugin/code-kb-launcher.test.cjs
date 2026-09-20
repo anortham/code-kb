@@ -54,7 +54,7 @@ function serveRelease(archive, sidecarText) {
   }).then((served) => ({ ...served, requests }));
 }
 
-test('detectPlatform maps the four release targets', () => {
+test('detectPlatform maps the six release targets', () => {
   assert.deepEqual(launcher.detectPlatform('darwin', 'arm64'), {
     target: 'aarch64-apple-darwin', archiveExtension: '.tar.gz', binaryName: 'code-kb',
   });
@@ -64,10 +64,16 @@ test('detectPlatform maps the four release targets', () => {
   assert.deepEqual(launcher.detectPlatform('linux', 'x64'), {
     target: 'x86_64-unknown-linux-gnu', archiveExtension: '.tar.gz', binaryName: 'code-kb',
   });
+  assert.deepEqual(launcher.detectPlatform('linux', 'arm64'), {
+    target: 'aarch64-unknown-linux-gnu', archiveExtension: '.tar.gz', binaryName: 'code-kb',
+  });
   assert.deepEqual(launcher.detectPlatform('win32', 'x64'), {
     target: 'x86_64-pc-windows-msvc', archiveExtension: '.zip', binaryName: 'code-kb.exe',
   });
-  assert.throws(() => launcher.detectPlatform('linux', 'arm64'), /Unsupported code-kb platform: linux arm64/);
+  assert.deepEqual(launcher.detectPlatform('win32', 'arm64'), {
+    target: 'aarch64-pc-windows-msvc', archiveExtension: '.zip', binaryName: 'code-kb.exe',
+  });
+  assert.throws(() => launcher.detectPlatform('linux', 'ia32'), /Unsupported code-kb platform: linux ia32/);
 });
 
 test('release asset names and URLs follow the Release Binaries workflow', () => {
