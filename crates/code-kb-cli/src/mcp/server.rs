@@ -54,15 +54,20 @@ fn spawn_index_prepare(
 fn result_limit(arguments: &Value, default: usize) -> Result<usize, CallToolResult> {
     match arguments.get("limit") {
         None => Ok(default),
-        Some(value) => match value.as_u64() {
-            Some(limit) if limit <= code_kb_core::queries::MAX_RESULT_LIMIT as u64 => {
-                Ok(limit as usize)
+        Some(value) => {
+            let parsed = value
+                .as_u64()
+                .or_else(|| value.as_str().and_then(|s| s.parse::<u64>().ok()));
+            match parsed {
+                Some(limit) if limit <= code_kb_core::queries::MAX_RESULT_LIMIT as u64 => {
+                    Ok(limit as usize)
+                }
+                _ => Err(CallToolResult::error(format!(
+                    "Invalid limit: expected an integer between 0 and {}",
+                    code_kb_core::queries::MAX_RESULT_LIMIT
+                ))),
             }
-            _ => Err(CallToolResult::error(format!(
-                "Invalid limit: expected an integer between 0 and {}",
-                code_kb_core::queries::MAX_RESULT_LIMIT
-            ))),
-        },
+        }
     }
 }
 
@@ -1028,32 +1033,32 @@ impl McpServer {
                             "\nCall find_structural_facts(category=\"<name>\") to query matches.",
                         );
                     }
-                    return CallToolResult::text(out).with_logical_result_count(categories.len());
+                    CallToolResult::text(out).with_logical_result_count(categories.len())
+                } else {
+                    let facts = match code_kb_core::find_structural_facts_scoped(
+                        &conn,
+                        category,
+                        path_filter,
+                        limit,
+                    ) {
+                        Ok(f) => f,
+                        Err(e) => return CallToolResult::error(e.to_string()),
+                    };
+
+                    let literal_limit = limit.saturating_sub(facts.len());
+                    let literals = match code_kb_core::find_literals_scoped(
+                        &conn,
+                        category,
+                        path_filter,
+                        literal_limit,
+                    ) {
+                        Ok(literals) => literals,
+                        Err(error) => return CallToolResult::error(error.to_string()),
+                    };
+
+                    CallToolResult::text(format_structural_facts(&facts, &literals, category))
+                        .with_logical_result_count(facts.len() + literals.len())
                 }
-
-                let facts = match code_kb_core::find_structural_facts_scoped(
-                    &conn,
-                    category,
-                    path_filter,
-                    limit,
-                ) {
-                    Ok(f) => f,
-                    Err(e) => return CallToolResult::error(e.to_string()),
-                };
-
-                let literal_limit = limit.saturating_sub(facts.len());
-                let literals = match code_kb_core::find_literals_scoped(
-                    &conn,
-                    category,
-                    path_filter,
-                    literal_limit,
-                ) {
-                    Ok(literals) => literals,
-                    Err(error) => return CallToolResult::error(error.to_string()),
-                };
-
-                CallToolResult::text(format_structural_facts(&facts, &literals, category))
-                    .with_logical_result_count(facts.len() + literals.len())
             }
             "blast_radius" | "impact" => {
                 let raw_symbol = arguments

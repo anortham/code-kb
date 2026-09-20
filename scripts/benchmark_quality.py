@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import re
 import selectors
@@ -17,6 +18,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -139,6 +141,8 @@ class PersistentMcpClient:
 
     def __init__(self, binary: str, cwd: str):
         self.cwd = cwd
+        self.temp_telemetry_dir = tempfile.mkdtemp(prefix="code_kb_telemetry_bench_")
+        env = {**os.environ, "CODE_KB_TELEMETRY_DIR": self.temp_telemetry_dir}
         self.proc = subprocess.Popen(
             [binary, "serve"],
             stdin=subprocess.PIPE,
@@ -146,6 +150,7 @@ class PersistentMcpClient:
             stderr=subprocess.PIPE,
             text=True,
             cwd=cwd,
+            env=env,
         )
         self.next_id = 1
 
@@ -224,7 +229,8 @@ class PersistentMcpClient:
 
     def close(self) -> None:
         try:
-            self.proc.stdin.close()
+            if self.proc.stdin:
+                self.proc.stdin.close()
             self.proc.terminate()
             self.proc.wait(timeout=2)
         except Exception:
@@ -232,6 +238,9 @@ class PersistentMcpClient:
                 self.proc.kill()
             except Exception:
                 pass
+        finally:
+            if hasattr(self, "temp_telemetry_dir") and os.path.exists(self.temp_telemetry_dir):
+                shutil.rmtree(self.temp_telemetry_dir, ignore_errors=True)
 
 
 def measure_persistent_mcp(binary: str, cwd: str, iterations: int = 5) -> dict[str, Any]:
@@ -267,8 +276,9 @@ def measure_persistent_mcp(binary: str, cwd: str, iterations: int = 5) -> dict[s
                     sample_tokens = estimate_tokens(text)
 
             latencies.sort()
-            p50_idx = max(0, int(len(latencies) * 0.5) - 1)
-            p95_idx = max(0, int(len(latencies) * 0.95) - 1)
+            n = len(latencies)
+            p50_idx = max(0, min(n - 1, math.ceil(n * 0.50) - 1))
+            p95_idx = max(0, min(n - 1, math.ceil(n * 0.95) - 1))
 
             tool_results.append({
                 "tool": name,
@@ -285,20 +295,34 @@ def measure_persistent_mcp(binary: str, cwd: str, iterations: int = 5) -> dict[s
         post_query_mem = client.get_live_memory()
 
         # Changed-file reconciliation benchmark
-        probe_path = os.path.join(cwd, "crates/code-kb-core/src/reconcile_benchmark_probe.rs")
+        probe_id = uuid.uuid4().hex[:8]
+        probe_symbol = f"probe_benchmark_sym_{probe_id}"
+        probe_path = os.path.join(cwd, f"reconcile_benchmark_probe_{probe_id}.rs")
         reconcile_ms = None
         reconcile_found = False
         try:
             with open(probe_path, "w", encoding="utf-8") as f:
-                f.write("pub fn probe_benchmark_symbol_unique_12345() -> usize { 42 }\n")
+                f.write(f"pub fn {probe_symbol}() -> usize {{ 42 }}\n")
 
-            resp, reconcile_ms = client.call_tool("lookup_symbol", {"query": "probe_benchmark_symbol_unique_12345"})
-            if "result" in resp and "content" in resp["result"]:
-                text = "".join(c.get("text", "") for c in resp["result"]["content"])
-                reconcile_found = "probe_benchmark_symbol_unique_12345" in text
+            start_reconcile = time.perf_counter()
+            deadline = start_reconcile + 2.0
+            while time.perf_counter() < deadline:
+                resp, _ = client.call_tool("lookup_symbol", {"query": probe_symbol})
+                if "result" in resp and "content" in resp["result"]:
+                    text = "".join(c.get("text", "") for c in resp["result"]["content"])
+                    if probe_symbol in text and "No symbols found" not in text:
+                        reconcile_found = True
+                        reconcile_ms = (time.perf_counter() - start_reconcile) * 1000.0
+                        break
+                time.sleep(0.05)
+        except OSError:
+            pass
         finally:
             if os.path.exists(probe_path):
-                os.remove(probe_path)
+                try:
+                    os.remove(probe_path)
+                except OSError:
+                    pass
             # Reconcile removal
             client.call_tool("lookup_symbol", {"query": "search_symbols_scoped"})
 
@@ -354,7 +378,6 @@ impl Worker{i} {{
 """)
 
         # Measure scan duration and artifact size
-        scan_start = time.perf_counter()
         rc, _, stderr, scan_ms, scan_rss = run_cmd_single([binary, "scan"], cwd=temp_dir)
         if rc != 0:
             raise RuntimeError(f"Scan failed on large corpus: {stderr}")
@@ -440,131 +463,138 @@ def main():
     print("Each invocation is a fresh CLI process; repeats benefit from filesystem cache. Peak RSS is for an exited process, not retained MCP or process-tree memory.")
     print()
 
+    temp_telemetry_dir = tempfile.mkdtemp(prefix="code_kb_telemetry_bench_")
+    os.environ["CODE_KB_TELEMETRY_DIR"] = temp_telemetry_dir
+    import atexit
+    atexit.register(shutil.rmtree, temp_telemetry_dir, ignore_errors=True)
+
     # 1. Binary Footprint
     bin_size_mb = os.path.getsize(binary) / (1024 * 1024)
     print(f"Binary Size: {bin_size_mb:.2f} MB\n")
 
-    # 2. Token Efficiency Benchmarks (File Skeleton vs Full File)
-    target_files = [
-        ("crates/code-kb-core/src/queries.rs", "queries.rs"),
-        ("crates/code-kb-cli/src/mcp/server.rs", "server.rs"),
-        ("crates/code-kb-core/src/workspace.rs", "workspace.rs"),
-        ("crates/code-kb-core/src/ops.rs", "ops.rs"),
-    ]
-
     skeleton_results = []
-    for rel_path, label in target_files:
-        full_path = os.path.join(args.cwd, rel_path)
-        with open(full_path, "r", encoding="utf-8") as f:
-            raw_content = f.read()
-        raw_tokens = estimate_tokens(raw_content)
-        raw_lines = len(raw_content.splitlines())
-
-        res = measure_memory_and_latency(binary, ["skeleton", rel_path], args.cwd, args.iterations)
-        skel_tokens = res["tokens"]
-        reduction_pct = ((raw_tokens - skel_tokens) / raw_tokens) * 100.0
-
-        skeleton_results.append({
-            "file": label,
-            "raw_lines": raw_lines,
-            "raw_tokens": raw_tokens,
-            "skeleton_tokens": skel_tokens,
-            "reduction_pct": reduction_pct,
-            "cold_ms": res["cold_ms"],
-            "median_ms": res["median_ms"],
-            "peak_rss_mb": res["peak_rss_mb"],
-        })
-
-    # 3. Surgical Context Slice vs Full File Read
-    slice_tests = [
-        ("search_symbols_scoped", "crates/code-kb-core/src/queries.rs"),
-        ("file_skeleton_op", "crates/code-kb-core/src/ops.rs"),
-        ("format_file_skeleton", "crates/code-kb-core/src/formatters.rs"),
-    ]
     slice_results = []
-    for symbol, file_path in slice_tests:
-        full_path = os.path.join(args.cwd, file_path)
-        with open(full_path, "r", encoding="utf-8") as f:
-            raw_file_tokens = estimate_tokens(f.read())
-        res = measure_memory_and_latency(binary, ["slice", symbol], args.cwd, args.iterations)
-        slice_tokens = res["tokens"]
-        saving_pct = ((raw_file_tokens - slice_tokens) / raw_file_tokens) * 100.0
-
-        slice_results.append({
-            "symbol": symbol,
-            "file": file_path,
-            "raw_file_tokens": raw_file_tokens,
-            "slice_tokens": slice_tokens,
-            "saving_pct": saving_pct,
-            "cold_ms": res["cold_ms"],
-            "median_ms": res["median_ms"],
-            "peak_rss_mb": res["peak_rss_mb"],
-        })
-
-    # 4. Search Quality & Precision Check (Rank-1 / Top-5 Evaluation)
-    search_specs = [
-        {
-            "name": "Exact Symbol Lookup",
-            "args": ["--json", "symbol", "search_symbols_scoped"],
-            "target": "search_symbols_scoped",
-            "eval_fn": lambda items, tgt: next((idx + 1 for idx, it in enumerate(items) if it.get("name") == tgt), None),
-        },
-        {
-            "name": "Prefix Symbol Lookup",
-            "args": ["--json", "symbol", "load_scoped"],
-            "target": "load_scoped_files",
-            "eval_fn": lambda items, tgt: next((idx + 1 for idx, it in enumerate(items) if it.get("name") == tgt), None),
-        },
-        {
-            "name": "Conceptual FTS5 Search",
-            "args": ["--json", "search", "syntax validation"],
-            "target": "validate_syntax",
-            "eval_fn": lambda items, tgt: next((idx + 1 for idx, it in enumerate(items) if it.get("symbol", {}).get("name") == tgt), None),
-        },
-        {
-            "name": "Unscoped Symbol Search",
-            "args": ["--json", "symbol", "QueryError"],
-            "target": "QueryError",
-            "eval_fn": lambda items, tgt: next((idx + 1 for idx, it in enumerate(items) if it.get("name") == tgt), None),
-        },
-        {
-            "name": "Scoped Search (--path)",
-            "args": ["--json", "symbol", "QueryError", "--path", "crates/code-kb-core"],
-            "target": "QueryError",
-            "eval_fn": lambda items, tgt: next((idx + 1 for idx, it in enumerate(items) if it.get("name") == tgt and "crates/code-kb-core" in it.get("path", "")), None),
-        },
-        {
-            "name": "Blast Radius Test Prediction",
-            "args": ["--json", "blast-radius", "find_callee_signatures"],
-            "target": "test_conservative_pending_resolution_ignores_unmatched_namespace",
-            "eval_fn": lambda obj, tgt: next((idx + 1 for idx, t in enumerate(obj.get("likely_tests", [])) if t.get("name") == tgt), None) if isinstance(obj, dict) else None,
-        },
-    ]
-
     query_benchmarks = []
-    for spec in search_specs:
-        res = measure_memory_and_latency(binary, spec["args"], args.cwd, args.iterations)
-        try:
-            parsed = json.loads(res["output"])
-            rank = spec["eval_fn"](parsed, spec["target"])
-        except Exception:
-            rank = None
 
-        rank_1 = (rank == 1)
-        top_5 = (rank is not None and rank <= 5)
+    if not args.skip_cli:
+            # 2. Token Efficiency Benchmarks (File Skeleton vs Full File)
+            target_files = [
+                ("crates/code-kb-core/src/queries.rs", "queries.rs"),
+                ("crates/code-kb-cli/src/mcp/server.rs", "server.rs"),
+                ("crates/code-kb-core/src/workspace.rs", "workspace.rs"),
+                ("crates/code-kb-core/src/ops.rs", "ops.rs"),
+            ]
 
-        query_benchmarks.append({
-            "name": spec["name"],
-            "args": [a for a in spec["args"] if a != "--json"],
-            "target": spec["target"],
-            "rank": rank,
-            "rank_1": rank_1,
-            "top_5": top_5,
-            "tokens": res["tokens"],
-            "cold_ms": res["cold_ms"],
-            "median_ms": res["median_ms"],
-            "peak_rss_mb": res["peak_rss_mb"],
-        })
+            for rel_path, label in target_files:
+                full_path = os.path.join(args.cwd, rel_path)
+                with open(full_path, "r", encoding="utf-8") as f:
+                    raw_content = f.read()
+                raw_tokens = estimate_tokens(raw_content)
+                raw_lines = len(raw_content.splitlines())
+
+                res = measure_memory_and_latency(binary, ["skeleton", rel_path], args.cwd, args.iterations)
+                skel_tokens = res["tokens"]
+                reduction_pct = ((raw_tokens - skel_tokens) / raw_tokens) * 100.0
+
+                skeleton_results.append({
+                    "file": label,
+                    "raw_lines": raw_lines,
+                    "raw_tokens": raw_tokens,
+                    "skeleton_tokens": skel_tokens,
+                    "reduction_pct": reduction_pct,
+                    "cold_ms": res["cold_ms"],
+                    "median_ms": res["median_ms"],
+                    "peak_rss_mb": res["peak_rss_mb"],
+                })
+
+            # 3. Surgical Context Slice vs Full File Read
+            slice_tests = [
+                ("search_symbols_scoped", "crates/code-kb-core/src/queries.rs"),
+                ("file_skeleton_op", "crates/code-kb-core/src/ops.rs"),
+                ("format_file_skeleton", "crates/code-kb-core/src/formatters.rs"),
+            ]
+            for symbol, file_path in slice_tests:
+                full_path = os.path.join(args.cwd, file_path)
+                with open(full_path, "r", encoding="utf-8") as f:
+                    raw_file_tokens = estimate_tokens(f.read())
+                res = measure_memory_and_latency(binary, ["slice", symbol], args.cwd, args.iterations)
+                slice_tokens = res["tokens"]
+                saving_pct = ((raw_file_tokens - slice_tokens) / raw_file_tokens) * 100.0
+
+                slice_results.append({
+                    "symbol": symbol,
+                    "file": file_path,
+                    "raw_file_tokens": raw_file_tokens,
+                    "slice_tokens": slice_tokens,
+                    "saving_pct": saving_pct,
+                    "cold_ms": res["cold_ms"],
+                    "median_ms": res["median_ms"],
+                    "peak_rss_mb": res["peak_rss_mb"],
+                })
+
+            # 4. Search Quality & Precision Check (Rank-1 / Top-5 Evaluation)
+            search_specs = [
+                {
+                    "name": "Exact Symbol Lookup",
+                    "args": ["--json", "symbol", "search_symbols_scoped"],
+                    "target": "search_symbols_scoped",
+                    "eval_fn": lambda items, tgt: next((idx + 1 for idx, it in enumerate(items) if it.get("name") == tgt), None),
+                },
+                {
+                    "name": "Prefix Symbol Lookup",
+                    "args": ["--json", "symbol", "load_scoped"],
+                    "target": "load_scoped_files",
+                    "eval_fn": lambda items, tgt: next((idx + 1 for idx, it in enumerate(items) if it.get("name") == tgt), None),
+                },
+                {
+                    "name": "Conceptual FTS5 Search",
+                    "args": ["--json", "search", "syntax validation"],
+                    "target": "validate_syntax",
+                    "eval_fn": lambda items, tgt: next((idx + 1 for idx, it in enumerate(items) if it.get("symbol", {}).get("name") == tgt), None),
+                },
+                {
+                    "name": "Unscoped Symbol Search",
+                    "args": ["--json", "symbol", "QueryError"],
+                    "target": "QueryError",
+                    "eval_fn": lambda items, tgt: next((idx + 1 for idx, it in enumerate(items) if it.get("name") == tgt), None),
+                },
+                {
+                    "name": "Scoped Search (--path)",
+                    "args": ["--json", "symbol", "QueryError", "--path", "crates/code-kb-core"],
+                    "target": "QueryError",
+                    "eval_fn": lambda items, tgt: next((idx + 1 for idx, it in enumerate(items) if it.get("name") == tgt and "crates/code-kb-core" in it.get("path", "")), None),
+                },
+                {
+                    "name": "Blast Radius Test Prediction",
+                    "args": ["--json", "blast-radius", "find_callee_signatures"],
+                    "target": "test_conservative_pending_resolution_ignores_unmatched_namespace",
+                    "eval_fn": lambda obj, tgt: next((idx + 1 for idx, t in enumerate(obj.get("likely_tests", [])) if t.get("name") == tgt), None) if isinstance(obj, dict) else None,
+                },
+            ]
+
+            for spec in search_specs:
+                res = measure_memory_and_latency(binary, spec["args"], args.cwd, args.iterations)
+                try:
+                    parsed = json.loads(res["output"])
+                    rank = spec["eval_fn"](parsed, spec["target"])
+                except Exception:
+                    rank = None
+
+                rank_1 = (rank == 1)
+                top_5 = (rank is not None and rank <= 5)
+
+                query_benchmarks.append({
+                    "name": spec["name"],
+                    "args": [a for a in spec["args"] if a != "--json"],
+                    "target": spec["target"],
+                    "rank": rank,
+                    "rank_1": rank_1,
+                    "top_5": top_5,
+                    "tokens": res["tokens"],
+                    "cold_ms": res["cold_ms"],
+                    "median_ms": res["median_ms"],
+                    "peak_rss_mb": res["peak_rss_mb"],
+                })
 
     report: dict[str, Any] = {
         "binary_size_mb": bin_size_mb,
@@ -656,10 +686,10 @@ def main():
         print()
         report["large_corpus"] = lc_res
 
-    report_path = Path(args.cwd) / args.json_output
-    with open(report_path, "w", encoding="utf-8") as f:
-        json.dump(report, f, indent=2)
-    print(f"Report written to {report_path}")
+        report_path = Path(args.cwd) / args.json_output
+        with open(report_path, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2)
+        print(f"Report written to {report_path}")
 
 
 if __name__ == "__main__":

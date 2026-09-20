@@ -337,7 +337,6 @@ pub fn format_context_slice(slice: &ContextSlice) -> String {
     out
 }
 
-/// Format references list for callers/callees with optional limit footer.
 fn cap_notice(shown: usize, limit: usize) -> String {
     let advice = if limit >= crate::queries::MAX_RESULT_LIMIT {
         "narrow the query to see more"
@@ -347,6 +346,7 @@ fn cap_notice(shown: usize, limit: usize) -> String {
     format!("\n[Showing {shown} results (limit reached); {advice}.]\n")
 }
 
+/// Format references list for callers/callees with optional limit footer.
 pub fn format_references(
     target_name: &str,
     refs: &[ReferenceSite],
