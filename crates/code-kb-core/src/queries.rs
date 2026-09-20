@@ -460,16 +460,7 @@ pub fn search_symbols_scoped(
 /// English stop words are dropped unless the whole query is stop words, and tokens under three
 /// characters get no prefix wildcard.
 pub fn sanitize_fts5_query(query: &str) -> (String, String) {
-    const STOP_WORDS: &[&str] = &[
-        "a", "an", "the", "for", "to", "of", "in", "on", "and", "or", "with", "from", "by",
-        "before", "after", "that", "this", "is", "are", "be", "it", "as", "at",
-    ];
-    let is_stop = |s: &str| STOP_WORDS.contains(&s.to_ascii_lowercase().as_str());
-
-    let raw_words: Vec<&str> = query
-        .split(|c: char| !c.is_alphanumeric() && c != '_')
-        .filter(|s| !s.is_empty())
-        .collect();
+    let raw_words = query_words(query);
     let split: Vec<(Vec<&str>, Option<&str>)> = raw_words
         .iter()
         .map(|raw| {
@@ -480,14 +471,14 @@ pub fn sanitize_fts5_query(query: &str) -> (String, String) {
         .collect();
     let any_content = split
         .iter()
-        .any(|(parts, _)| parts.iter().any(|p| !is_stop(p)));
+        .any(|(parts, _)| parts.iter().any(|p| !is_stop_word(p)));
 
     let mut and_groups: Vec<String> = Vec::new();
     let mut or_terms: Vec<String> = Vec::new();
     for (parts, whole) in split {
         let parts: Vec<String> = parts
             .into_iter()
-            .filter(|p| !any_content || !is_stop(p))
+            .filter(|p| !any_content || !is_stop_word(p))
             .map(fts5_term)
             .collect();
         let whole = whole.map(fts5_term);
@@ -516,6 +507,38 @@ pub fn sanitize_fts5_query(query: &str) -> (String, String) {
         }
     }
     (and_query, or_terms.join(" OR "))
+}
+
+const STOP_WORDS: &[&str] = &[
+    "a", "an", "the", "for", "to", "of", "in", "on", "and", "or", "with", "from", "by", "before",
+    "after", "that", "this", "is", "are", "be", "it", "as", "at",
+];
+
+fn is_stop_word(word: &str) -> bool {
+    STOP_WORDS.contains(&word.to_ascii_lowercase().as_str())
+}
+
+/// Splits a query at every character that is not alphanumeric or `_`.
+fn query_words(query: &str) -> Vec<&str> {
+    query
+        .split(|c: char| !c.is_alphanumeric() && c != '_')
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
+/// Lowercase query words of three or more characters for the trigram name index. Stop words
+/// are dropped unless the whole query is stop words. Empty when no word qualifies.
+fn trigram_name_terms(query: &str) -> Vec<String> {
+    let words: Vec<&str> = query_words(query)
+        .into_iter()
+        .filter(|w| w.chars().count() >= 3)
+        .collect();
+    let any_content = words.iter().any(|w| !is_stop_word(w));
+    words
+        .into_iter()
+        .filter(|w| !any_content || !is_stop_word(w))
+        .map(str::to_lowercase)
+        .collect()
 }
 
 /// Quotes one token for FTS5 with a prefix wildcard, except for tokens under three characters.
@@ -566,6 +589,235 @@ fn split_identifier(word: &str) -> Vec<&str> {
         .collect()
 }
 
+/// One admitted search row with the recall branches that reached it.
+/// `result.score` is the word-branch BM25 for word rows and `0.0` otherwise.
+pub(crate) struct Candidate {
+    pub result: SymbolSearchResult,
+    pub bm25: Option<f64>,
+    pub exact_name: bool,
+    pub word_match: bool,
+    pub name_match: bool,
+    #[allow(dead_code)]
+    pub name_terms: Vec<String>,
+    pub documentation: bool,
+}
+
+fn candidate_columns(conn: &Connection) -> String {
+    format!(
+        "s.rowid AS row_id, s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind,
+                s.signature, s.doc_comment, s.visibility, s.parent_symbol_id, s.start_line,
+                s.start_column, s.end_line, s.end_column, s.start_byte, s.end_byte,
+                s.body_start_line, s.body_start_column, s.body_end_line, s.body_end_column,
+                s.body_start_byte, s.body_end_byte, s.body_hash, s.semantic_group, s.is_test,
+                s.test_container,
+                (s.language IN ({doc_langs}) OR NOT ({not_doc})) AS documentation",
+        doc_langs = documentation_language_list(),
+        not_doc = not_documentation(conn, "s")
+    )
+}
+
+fn candidate_filters(searching_variables: bool, include_tests: bool) -> String {
+    let mut sql = String::from(
+        " AND (:kind IS NULL OR s.kind = :kind)
+          AND (:path IS NULL OR replace(s.path, '\\', '/') = :path COLLATE NOCASE OR replace(s.path, '\\', '/') LIKE :path_like || '/%' ESCAPE '\\' OR replace(s.path, '\\', '/') LIKE '%/' || :path_like ESCAPE '\\')",
+    );
+    if !searching_variables {
+        sql.push_str(&format!(" AND NOT {}", local_variable_predicate("s")));
+    }
+    if !include_tests {
+        sql.push_str(" AND s.is_test = 0 AND s.test_container = 0");
+    }
+    sql
+}
+
+/// Runs the word, trigram-name, and exact-name branches with the same filters and merges
+/// them by `rowid`. Word BM25 exists only for word rows and never orders across branches.
+pub(crate) fn collect_search_candidates(
+    conn: &Connection,
+    query: &str,
+    kind_filter: Option<&str>,
+    path_filter: Option<&str>,
+    include_tests: bool,
+    limit: usize,
+) -> Result<Vec<Candidate>, QueryError> {
+    let (and_q, or_q) = sanitize_fts5_query(query);
+    let terms = trigram_name_terms(query);
+    let normalized_path = path_filter.map(|p| {
+        p.replace('\\', "/")
+            .trim_start_matches("./")
+            .trim_matches('/')
+            .to_string()
+    });
+    let escaped_path = normalized_path.as_deref().map(escape_like);
+    let norm_kind = kind_filter.map(normalize_kind);
+    let searching_variables = norm_kind.as_deref() == Some("variable");
+    let path_val = normalized_path.as_deref();
+    let path_like = escaped_path.as_deref();
+    let kind_val = norm_kind.as_deref();
+    let columns = candidate_columns(conn);
+    let filters = candidate_filters(searching_variables, include_tests);
+    let word_cap = (limit * 4).clamp(40, 160);
+    let name_cap = (limit * 2).clamp(20, 40);
+
+    let new_candidate = |row: &Row| -> rusqlite::Result<(i64, Candidate)> {
+        let symbol = map_symbol(row)?;
+        let lower_name = symbol.name.to_lowercase();
+        let name_terms = terms
+            .iter()
+            .filter(|t| lower_name.contains(t.as_str()))
+            .cloned()
+            .collect();
+        let candidate = Candidate {
+            result: SymbolSearchResult {
+                symbol,
+                score: 0.0,
+                snippet: None,
+            },
+            bm25: None,
+            exact_name: false,
+            word_match: false,
+            name_match: false,
+            name_terms,
+            documentation: row.get::<_, Option<i64>>("documentation")? == Some(1),
+        };
+        Ok((row.get("row_id")?, candidate))
+    };
+
+    let mut candidates: Vec<Candidate> = Vec::new();
+    let mut by_rowid: HashMap<i64, usize> = HashMap::new();
+    let mut admit = |rowid: i64, incoming: Candidate| match by_rowid.get(&rowid).copied() {
+        Some(i) => {
+            let existing = &mut candidates[i];
+            existing.exact_name |= incoming.exact_name;
+            existing.word_match |= incoming.word_match;
+            existing.name_match |= incoming.name_match;
+            if incoming.bm25.is_some() {
+                existing.bm25 = incoming.bm25;
+                existing.result = incoming.result;
+            }
+        }
+        None => {
+            by_rowid.insert(rowid, candidates.len());
+            candidates.push(incoming);
+        }
+    };
+
+    let exact_sql = format!(
+        "SELECT {columns} FROM symbols s WHERE s.name = :query COLLATE NOCASE {filters}
+         ORDER BY s.path ASC, s.start_line ASC LIMIT {MAX_RESULT_LIMIT}"
+    );
+    let exact_rows = conn
+        .prepare(&exact_sql)?
+        .query_map(
+            rusqlite::named_params! {
+                ":query": query.trim(),
+                ":kind": kind_val,
+                ":path": path_val,
+                ":path_like": path_like,
+            },
+            new_candidate,
+        )?
+        .collect::<Result<Vec<_>, _>>()?;
+    for (rowid, mut candidate) in exact_rows {
+        candidate.exact_name = true;
+        admit(rowid, candidate);
+    }
+
+    let word_sql = format!(
+        "SELECT {columns},
+                bm25(symbols_fts, 10.0, 5.0, 1.0) AS rank_score,
+                snippet(symbols_fts, 2, '[', ']', '...', 12) AS doc_snippet,
+                snippet(symbols_fts, 1, '[', ']', '...', 12) AS sig_snippet,
+                snippet(symbols_fts, 0, '[', ']', '...', 12) AS name_snippet
+         FROM symbols_fts
+         CROSS JOIN symbols s ON s.rowid = symbols_fts.rowid
+         WHERE symbols_fts MATCH :match {filters}
+         ORDER BY (s.kind = 'import') ASC, (s.language IN ({doc_langs})) ASC, {not_doc} DESC, (s.name = :query COLLATE NOCASE) DESC, rank_score ASC LIMIT {word_cap}",
+        doc_langs = documentation_language_list(),
+        not_doc = not_documentation(conn, "s")
+    );
+    let word_rows = |match_clause: &str| -> Result<Vec<(i64, Candidate)>, QueryError> {
+        let map_fn = |row: &Row| -> rusqlite::Result<(i64, Candidate)> {
+            let (rowid, mut candidate) = new_candidate(row)?;
+            let score: f64 = row.get("rank_score")?;
+            let doc_snip: Option<String> = row.get("doc_snippet").ok();
+            let sig_snip: Option<String> = row.get("sig_snippet").ok();
+            let name_snip: Option<String> = row.get("name_snippet").ok();
+            let highlighted = |s: &Option<String>| s.as_ref().is_some_and(|s| s.contains('['));
+            candidate.result.snippet = if highlighted(&doc_snip) {
+                doc_snip
+            } else if highlighted(&sig_snip) {
+                sig_snip
+            } else if highlighted(&name_snip) {
+                name_snip
+            } else {
+                doc_snip.or(sig_snip).or(name_snip)
+            };
+            candidate.result.score = score;
+            candidate.bm25 = Some(score);
+            candidate.word_match = true;
+            Ok((rowid, candidate))
+        };
+        Ok(conn
+            .prepare(&word_sql)?
+            .query_map(
+                rusqlite::named_params! {
+                    ":match": match_clause,
+                    ":query": query.trim(),
+                    ":kind": kind_val,
+                    ":path": path_val,
+                    ":path_like": path_like,
+                },
+                map_fn,
+            )?
+            .collect::<Result<Vec<_>, _>>()?)
+    };
+    if !and_q.is_empty() {
+        let mut rows = word_rows(&and_q)?;
+        let only_documentation = rows
+            .iter()
+            .all(|(_, c)| is_documentation_language(&c.result.symbol.language));
+        if only_documentation && and_q != or_q {
+            rows = word_rows(&or_q)?;
+        }
+        for (rowid, candidate) in rows {
+            admit(rowid, candidate);
+        }
+    }
+
+    if !terms.is_empty() && has_table(conn, "symbol_names_tri") {
+        let match_clause = terms
+            .iter()
+            .map(|t| format!("\"{t}\""))
+            .collect::<Vec<_>>()
+            .join(" OR ");
+        let name_sql = format!(
+            "SELECT {columns} FROM symbol_names_tri
+             CROSS JOIN symbols s ON s.rowid = symbol_names_tri.rowid
+             WHERE symbol_names_tri MATCH :match {filters}
+             ORDER BY bm25(symbol_names_tri) ASC, length(s.name) ASC, s.path ASC LIMIT {name_cap}"
+        );
+        let name_rows = conn
+            .prepare(&name_sql)?
+            .query_map(
+                rusqlite::named_params! {
+                    ":match": match_clause,
+                    ":kind": kind_val,
+                    ":path": path_val,
+                    ":path_like": path_like,
+                },
+                new_candidate,
+            )?
+            .collect::<Result<Vec<_>, _>>()?;
+        for (rowid, mut candidate) in name_rows {
+            candidate.name_match = true;
+            admit(rowid, candidate);
+        }
+    }
+
+    Ok(candidates)
+}
+
 /// Conceptual full-text search with optional path scoping filter.
 pub fn fts_search_symbols_scoped(
     conn: &Connection,
@@ -579,7 +831,7 @@ pub fn fts_search_symbols_scoped(
     if limit == 0 {
         return Ok(Vec::new());
     }
-    let (and_q, or_q) = sanitize_fts5_query(query);
+    let (and_q, _) = sanitize_fts5_query(query);
     if and_q.is_empty() {
         return Ok(Vec::new());
     }
@@ -591,15 +843,6 @@ pub fn fts_search_symbols_scoped(
             .to_string()
     });
     let norm_kind = kind_filter.map(normalize_kind);
-
-    let fts_exists: bool = conn
-        .query_row(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='symbols_fts'",
-            [],
-            |_| Ok(true),
-        )
-        .unwrap_or(false);
-
     let escaped_path = normalized_path.as_deref().map(escape_like);
     let searching_variables = norm_kind.as_deref() == Some("variable");
 
@@ -652,7 +895,7 @@ pub fn fts_search_symbols_scoped(
             .collect())
     };
 
-    if !fts_exists {
+    if !has_table(conn, "symbols_fts") {
         let local_clause = if searching_variables {
             String::new()
         } else {
@@ -661,92 +904,26 @@ pub fn fts_search_symbols_scoped(
         return name_search(&local_clause);
     }
 
-    let execute_search = |match_clause: &str| -> Result<Vec<SymbolSearchResult>, QueryError> {
-        let mut sql = String::from(
-            "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,
-                    s.visibility, s.parent_symbol_id, s.start_line, s.start_column, end_line, end_column,
-                    start_byte, end_byte, body_start_line, body_start_column, body_end_line,
-                    body_end_column, body_start_byte, body_end_byte, body_hash, semantic_group,
-                    is_test, test_container,
-                    bm25(symbols_fts, 10.0, 5.0, 1.0) AS rank_score,
-                    snippet(symbols_fts, 2, '[', ']', '...', 12) AS doc_snippet,
-                    snippet(symbols_fts, 1, '[', ']', '...', 12) AS sig_snippet,
-                    snippet(symbols_fts, 0, '[', ']', '...', 12) AS name_snippet
-             FROM symbols_fts
-             CROSS JOIN symbols s ON s.rowid = symbols_fts.rowid
-             WHERE symbols_fts MATCH :match
-               AND (:kind IS NULL OR s.kind = :kind)
-               AND (:path IS NULL OR replace(s.path, '\\', '/') = :path COLLATE NOCASE OR replace(s.path, '\\', '/') LIKE :path_like || '/%' ESCAPE '\\' OR replace(s.path, '\\', '/') LIKE '%/' || :path_like ESCAPE '\\')",
-        );
-
-        if !searching_variables {
-            sql.push_str(&format!(" AND NOT {}", local_variable_predicate("s")));
-        }
-
-        if !include_tests {
-            sql.push_str(" AND s.is_test = 0 AND s.test_container = 0");
-        }
-
-        sql.push_str(&format!(
-            " ORDER BY (s.kind = 'import') ASC, (s.language IN ({doc_langs})) ASC, {not_doc} DESC, (s.name = :query COLLATE NOCASE) DESC, rank_score ASC LIMIT ",
-            doc_langs = documentation_language_list(),
-            not_doc = not_documentation(conn, "s")
-        ));
-        sql.push_str(&limit.to_string());
-
-        let mut stmt = conn.prepare(&sql)?;
-
-        let map_fn = |row: &Row| -> rusqlite::Result<SymbolSearchResult> {
-            let symbol = map_symbol(row)?;
-            let score: f64 = row.get("rank_score")?;
-            let doc_snip: Option<String> = row.get("doc_snippet").ok();
-            let sig_snip: Option<String> = row.get("sig_snippet").ok();
-            let name_snip: Option<String> = row.get("name_snippet").ok();
-
-            // Pick the snippet containing match highlight brackets
-            let snippet = if doc_snip.as_ref().map(|s| s.contains('[')).unwrap_or(false) {
-                doc_snip
-            } else if sig_snip.as_ref().map(|s| s.contains('[')).unwrap_or(false) {
-                sig_snip
-            } else if name_snip.as_ref().map(|s| s.contains('[')).unwrap_or(false) {
-                name_snip
-            } else {
-                doc_snip.or(sig_snip).or(name_snip)
-            };
-
-            Ok(SymbolSearchResult {
-                symbol,
-                score,
-                snippet,
-            })
+    let mut candidates =
+        collect_search_candidates(conn, query, kind_filter, path_filter, include_tests, limit)?;
+    candidates.sort_by_key(|c| {
+        let tier = match (c.result.symbol.kind.as_str(), c.documentation) {
+            ("import", _) => 2,
+            (_, true) => 1,
+            _ => 0,
         };
-
-        let path_val = normalized_path.as_deref();
-        let path_like = escaped_path.as_deref();
-        let kind_val = norm_kind.as_deref();
-        let rows = stmt
-            .query_map(
-                rusqlite::named_params! {
-                    ":match": match_clause,
-                    ":query": query.trim(),
-                    ":kind": kind_val,
-                    ":path": path_val,
-                    ":path_like": path_like,
-                },
-                map_fn,
-            )?
-            .collect::<Result<Vec<_>, _>>()?;
-
-        Ok(rows)
-    };
-
-    let mut results = execute_search(&and_q)?;
-    let only_documentation = results
-        .iter()
-        .all(|r| is_documentation_language(&r.symbol.language));
-    if only_documentation && and_q != or_q {
-        results = execute_search(&or_q)?;
-    }
+        let branch = match (c.exact_name, c.word_match) {
+            (true, _) => 0,
+            (false, true) => 1,
+            (false, false) => 2,
+        };
+        (tier, branch)
+    });
+    let mut results: Vec<SymbolSearchResult> = candidates
+        .into_iter()
+        .map(|c| c.result)
+        .take(limit)
+        .collect();
 
     if searching_variables {
         let locals = name_search(&format!(" AND {}", local_variable_predicate("s")))?;
@@ -2713,6 +2890,144 @@ mod tests {
             search_names(&conn, "search_symbols_scoped")[0],
             "search_symbols_scoped"
         );
+    }
+
+    fn sidecar_fixture() -> Connection {
+        search_fixture(
+            &[
+                code_row("c1", "src/sidecar.rs", "rust", "parseSha256Sidecar", ""),
+                code_row(
+                    "c2",
+                    "src/sidecar.rs",
+                    "rust",
+                    "parse_sidecar_file",
+                    "parse the sha256 sidecar file",
+                ),
+            ]
+            .join(","),
+        )
+    }
+
+    fn candidate<'a>(candidates: &'a [Candidate], name: &str) -> &'a Candidate {
+        candidates
+            .iter()
+            .find(|c| c.result.symbol.name == name)
+            .unwrap_or_else(|| panic!("{name} is not a candidate"))
+    }
+
+    #[test]
+    fn name_substring_admits_a_symbol_the_word_branch_cannot_reach() {
+        let conn = sidecar_fixture();
+
+        for query in ["sha256", "parse the sha256 sidecar file"] {
+            let candidates =
+                collect_search_candidates(&conn, query, None, None, false, 10).unwrap();
+
+            let target = candidate(&candidates, "parseSha256Sidecar");
+            assert!(target.name_match, "{query}");
+            assert!(!target.word_match, "{query}");
+            assert!(!target.exact_name, "{query}");
+            assert!(target.name_terms.contains(&"sha256".to_string()), "{query}");
+        }
+    }
+
+    #[test]
+    fn name_branch_admits_the_target_when_word_matches_exceed_the_cap() {
+        let mut rows: Vec<String> = (1..=170)
+            .map(|i| {
+                code_row(
+                    &format!("h{i:03}"),
+                    "src/sidecar.rs",
+                    "rust",
+                    &format!("sidecar_helper_{i:03}"),
+                    "parse sidecar file",
+                )
+            })
+            .collect();
+        rows.push(code_row(
+            "c1",
+            "src/sidecar.rs",
+            "rust",
+            "parseSha256Sidecar",
+            "",
+        ));
+        let conn = search_fixture(&rows.join(","));
+
+        let candidates = collect_search_candidates(
+            &conn,
+            "parse the sha256 sidecar file",
+            None,
+            None,
+            false,
+            40,
+        )
+        .unwrap();
+
+        assert!(candidate(&candidates, "parseSha256Sidecar").name_match);
+        assert_eq!(candidates.iter().filter(|c| c.word_match).count(), 160);
+    }
+
+    #[test]
+    fn exact_name_is_admitted_regardless_of_case() {
+        let conn = search_fixture(&code_row("c1", "src/q.rs", "rust", "xyzzy_q", ""));
+
+        let candidates =
+            collect_search_candidates(&conn, "XYZZY_Q", None, None, false, 10).unwrap();
+
+        assert!(candidate(&candidates, "xyzzy_q").exact_name);
+    }
+
+    #[test]
+    fn a_row_matched_by_every_branch_is_one_candidate_with_all_flags() {
+        let conn = search_fixture(
+            &[
+                code_row("c1", "src/a.rs", "rust", "sidecar", ""),
+                code_row("c2", "src/b.rs", "rust", "sidecar_helper", ""),
+            ]
+            .join(","),
+        );
+
+        let candidates =
+            collect_search_candidates(&conn, "sidecar", None, None, false, 10).unwrap();
+
+        assert_eq!(candidates.len(), 2);
+        let target = candidate(&candidates, "sidecar");
+        assert!(target.exact_name && target.word_match && target.name_match);
+        assert!(target.bm25.is_some());
+        let helper = candidate(&candidates, "sidecar_helper");
+        assert!(!helper.exact_name && helper.word_match && helper.name_match);
+    }
+
+    #[test]
+    fn an_index_without_the_trigram_table_returns_word_rows_only() {
+        let conn = sidecar_fixture();
+        conn.execute_batch("DROP TABLE symbol_names_tri").unwrap();
+
+        let candidates = collect_search_candidates(&conn, "sha256", None, None, false, 10).unwrap();
+
+        let names: Vec<&str> = candidates
+            .iter()
+            .map(|c| c.result.symbol.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["parse_sidecar_file"]);
+        assert!(candidates.iter().all(|c| c.word_match && !c.name_match));
+        assert_eq!(search_names(&conn, "sha256"), vec!["parse_sidecar_file"]);
+    }
+
+    #[test]
+    fn words_under_three_characters_skip_the_name_branch() {
+        let conn = search_fixture(
+            &[
+                code_row("c1", "src/a.rs", "rust", "ab", ""),
+                code_row("c2", "src/b.rs", "rust", "cab", ""),
+            ]
+            .join(","),
+        );
+
+        let candidates = collect_search_candidates(&conn, "ab", None, None, false, 10).unwrap();
+
+        assert!(candidates.iter().all(|c| !c.name_match));
+        assert!(candidate(&candidates, "ab").exact_name);
     }
 
     #[test]
