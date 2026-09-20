@@ -11,6 +11,8 @@ pub enum DbError {
     PragmaFailed(rusqlite::Error),
     #[error("Database file does not exist: {0}")]
     NotFound(String),
+    #[error("FTS index migration failed: {0}")]
+    FtsMigration(rusqlite::Error),
     #[error("Database error: {0}")]
     Sqlite(#[from] rusqlite::Error),
 }
@@ -134,11 +136,20 @@ fn fts_content_is_missing(conn: &Connection, table: &str) -> bool {
         .unwrap_or(false)
 }
 
+fn fts_index_is_ready(conn: &Connection) -> bool {
+    stored_fts_rule(conn).as_deref() == Some(FTS_RULE)
+        && !fts_content_is_missing(conn, "symbols_fts")
+        && !fts_content_is_missing(conn, "symbol_names_tri")
+}
+
 /// Ensures the `symbols_fts` (words) and `symbol_names_tri` (name trigrams) FTS5 virtual tables
 /// and their synchronization triggers exist in the SQLite database, and that both hold every
 /// symbol except locals and parameters. An index built under an earlier rule, or one left
 /// without content or without one of the tables, is repopulated once inside a single
 /// transaction; the rule marker is written last so an interrupted migration reruns.
+/// The migration takes the write lock up front, so a second process waits for the busy
+/// timeout instead of failing at once, and re-checks readiness under the lock so it never
+/// repeats a migration another process just finished.
 /// julie may write a local before its enclosing function, so the insert trigger also drops any
 /// same-file variable that became local when its parent arrived.
 pub fn ensure_fts_index(conn: &Connection) -> Result<(), rusqlite::Error> {
@@ -154,10 +165,12 @@ pub fn ensure_fts_index(conn: &Connection) -> Result<(), rusqlite::Error> {
         return Ok(());
     }
 
-    if stored_fts_rule(conn).as_deref() == Some(FTS_RULE)
-        && !fts_content_is_missing(conn, "symbols_fts")
-        && !fts_content_is_missing(conn, "symbol_names_tri")
-    {
+    if fts_index_is_ready(conn) {
+        return Ok(());
+    }
+
+    let tx = rusqlite::Transaction::new_unchecked(conn, rusqlite::TransactionBehavior::Immediate)?;
+    if fts_index_is_ready(&tx) {
         return Ok(());
     }
 
@@ -168,7 +181,6 @@ pub fn ensure_fts_index(conn: &Connection) -> Result<(), rusqlite::Error> {
     let name_already_indexed =
         "EXISTS (SELECT 1 FROM symbol_names_tri_docsize d WHERE d.id = old.rowid)";
 
-    let tx = conn.unchecked_transaction()?;
     tx.execute_batch(&format!(
         "CREATE VIRTUAL TABLE IF NOT EXISTS symbols_fts USING fts5(
             name,
@@ -261,13 +273,16 @@ pub fn ensure_fts_index(conn: &Connection) -> Result<(), rusqlite::Error> {
     Ok(())
 }
 
-/// Ensures the FTS5 index on `symbols` exists at the specified database file path.
+/// Ensures the FTS5 index on `symbols` exists at the specified database file path. The
+/// connection waits up to 60 s for another process's migration; a large index takes seconds.
 pub fn ensure_fts_index_path(path: &Path) -> Result<(), DbError> {
     if !path.exists() {
         return Err(DbError::NotFound(path.display().to_string()));
     }
     let conn = open_read_write(path)?;
-    ensure_fts_index(&conn).map_err(DbError::PragmaFailed)?;
+    conn.busy_timeout(std::time::Duration::from_secs(60))
+        .map_err(DbError::PragmaFailed)?;
+    ensure_fts_index(&conn).map_err(DbError::FtsMigration)?;
     Ok(())
 }
 
@@ -581,9 +596,7 @@ mod tests {
         assert_eq!(stored_fts_rule(&conn).as_deref(), Some(FTS_RULE));
     }
 
-    #[test]
-    fn upgrade_from_exclude_locals_v1_adds_the_trigram_table() {
-        let (_dir, conn) = symbols_db("upgrade.db");
+    fn exclude_locals_v1_layout(conn: &Connection) {
         conn.execute_batch(
             "CREATE VIRTUAL TABLE symbols_fts USING fts5(
                 name, signature, doc_comment,
@@ -595,12 +608,44 @@ mod tests {
             INSERT INTO artifact_metadata VALUES ('fts_rule', 'exclude-locals-v1');",
         )
         .unwrap();
+    }
+
+    #[test]
+    fn upgrade_from_exclude_locals_v1_adds_the_trigram_table() {
+        let (_dir, conn) = symbols_db("upgrade.db");
+        exclude_locals_v1_layout(&conn);
 
         ensure_fts_index(&conn).unwrap();
 
         assert_eq!(trigram_names(&conn, "sha256"), vec!["parseSha256Sidecar"]);
         assert_eq!(word_names(&conn, "sidecar"), vec!["parseSha256Sidecar"]);
         assert_eq!(stored_fts_rule(&conn).as_deref(), Some(FTS_RULE));
+    }
+
+    #[test]
+    fn migration_waits_for_another_writer_and_does_not_repeat_its_work() {
+        let (dir, a) = symbols_db("contended.db");
+        exclude_locals_v1_layout(&a);
+        let b = open_read_write(&dir.path().join("contended.db")).unwrap();
+        b.busy_timeout(std::time::Duration::from_secs(5)).unwrap();
+        let (locked_tx, locked_rx) = std::sync::mpsc::channel();
+
+        let writer = std::thread::spawn(move || {
+            a.execute_batch("BEGIN IMMEDIATE").unwrap();
+            locked_tx.send(()).unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            a.execute_batch("COMMIT").unwrap();
+            ensure_fts_index(&a).unwrap();
+            schema_version(&a)
+        });
+        locked_rx.recv().unwrap();
+
+        ensure_fts_index(&b).unwrap();
+
+        assert_eq!(schema_version(&b), writer.join().unwrap());
+        assert_eq!(trigram_names(&b, "sha256"), vec!["parseSha256Sidecar"]);
+        assert_eq!(word_names(&b, "sidecar"), vec!["parseSha256Sidecar"]);
+        assert_eq!(stored_fts_rule(&b).as_deref(), Some(FTS_RULE));
     }
 
     #[test]
