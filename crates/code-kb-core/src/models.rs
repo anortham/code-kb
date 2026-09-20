@@ -106,11 +106,34 @@ pub struct ContextSlice {
     pub related_tests: Vec<Symbol>,
 }
 
+/// One `search` hit. `score` is the rerank score; `explain` is present only when the
+/// caller asked for the breakdown.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SymbolSearchResult {
     pub symbol: Symbol,
     pub score: f64,
     pub snippet: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub explain: Option<SearchExplain>,
+}
+
+/// Rerank breakdown for one `search` hit: which recall branches admitted the row, the
+/// coverage fractions, the fixed priors as score points, and the timer over the whole
+/// candidate set.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SearchExplain {
+    pub bm25: Option<f64>,
+    pub branches: Vec<String>,
+    pub name_tier: String,
+    pub name_coverage: f64,
+    pub signature_coverage: f64,
+    pub doc_coverage: f64,
+    pub kind_prior: f64,
+    pub path_role: f64,
+    pub documentation: f64,
+    pub test_intent: f64,
+    pub candidates: usize,
+    pub rerank_us: u128,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

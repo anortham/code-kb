@@ -225,7 +225,6 @@ fn case_style_of_the_query_does_not_matter() {
 }
 
 #[test]
-#[ignore = "red until plan 020 task 5 lands the rerank"]
 fn substring_of_a_name_finds_the_symbol() {
     let (_dir, db) = scanned_repo(MULTI_LANGUAGE_CORPUS);
     assert_top(&db, "sha256", "function", "parseSha256Sidecar");
@@ -238,7 +237,6 @@ fn substring_of_a_name_finds_the_symbol() {
 }
 
 #[test]
-#[ignore = "red until plan 020 task 5 lands the rerank"]
 fn acronyms_and_digit_runs_match_split_or_joined() {
     let (_dir, db) = scanned_repo(MULTI_LANGUAGE_CORPUS);
     assert_top(&db, "http response", "function", "parseHTTPResponse");
@@ -281,7 +279,6 @@ fn concept_queries_prefer_the_function_over_a_short_enum_variant() {
 }
 
 #[test]
-#[ignore = "red until plan 020 task 5 lands the rerank"]
 fn kind_rule_prefers_functions_but_exact_names_still_win() {
     let (_dir, db) = scanned_repo(MULTI_LANGUAGE_CORPUS);
     assert_top(&db, "scan", "function", "Scan");
@@ -290,7 +287,6 @@ fn kind_rule_prefers_functions_but_exact_names_still_win() {
 }
 
 #[test]
-#[ignore = "red until plan 020 task 5 lands the rerank"]
 fn path_rule_demotes_scripts_unless_the_query_names_them() {
     let (_dir, db) = scanned_repo(MULTI_LANGUAGE_CORPUS);
     assert_top(
@@ -314,7 +310,6 @@ fn minority_language_symbol_wins_its_concept_query() {
 }
 
 #[test]
-#[ignore = "red until plan 020 task 5 lands the rerank"]
 fn trigram_only_target_survives_admission_past_the_word_branch_cap() {
     let source = admission_corpus();
     let (_dir, db) = scanned_repo(&[("src/sidecar.rs", source.as_str())]);

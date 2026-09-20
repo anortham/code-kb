@@ -2,9 +2,10 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
 use crate::models::{
-    BlastRadiusResult, ContextSlice, ImpactedSymbol, ReferenceSite, Symbol, SymbolSearchResult,
-    TestTarget,
+    BlastRadiusResult, ContextSlice, ImpactedSymbol, ReferenceSite, SearchExplain, Symbol,
+    SymbolSearchResult, TestTarget,
 };
+use crate::queries::{W_DOC, W_SIGNATURE, name_tier_score};
 
 /// Format progressive disclosure file skeleton with implementation bodies stripped.
 pub fn format_file_skeleton(
@@ -532,9 +533,16 @@ pub fn format_search_results(query: &str, results: &[SymbolSearchResult], limit:
     }
 
     let mut out = format!(
-        "Found {} symbols matching concept \"{query}\":\n\n",
+        "Found {} symbols matching concept \"{query}\":\n",
         results.len()
     );
+    if let Some(explain) = results.first().and_then(|r| r.explain.as_ref()) {
+        out.push_str(&format!(
+            "rerank: {} candidates in {} µs\n",
+            explain.candidates, explain.rerank_us
+        ));
+    }
+    out.push('\n');
     for r in results {
         let s = &r.symbol;
         let sig = s.signature.as_deref().unwrap_or(&s.name);
@@ -553,6 +561,9 @@ pub fn format_search_results(query: &str, results: &[SymbolSearchResult], limit:
                 out.push_str(&format!("  Doc: {first_line}\n"));
             }
         }
+        if let Some(explain) = &r.explain {
+            out.push_str(&format!("  explain: {}\n", explain_line(r.score, explain)));
+        }
     }
 
     if results.len() >= limit {
@@ -560,6 +571,29 @@ pub fn format_search_results(query: &str, results: &[SymbolSearchResult], limit:
     }
 
     out
+}
+
+fn explain_line(score: f64, e: &SearchExplain) -> String {
+    let mut line = format!(
+        "score {score:.1} = name {} {:.1} + sig {:.2}*{W_SIGNATURE} + doc {:.2}*{W_DOC} + kind {:.1} + path {:.1}",
+        e.name_tier,
+        name_tier_score(&e.name_tier, e.name_coverage),
+        e.signature_coverage,
+        e.doc_coverage,
+        e.kind_prior,
+        e.path_role,
+    );
+    if e.documentation != 0.0 {
+        line.push_str(&format!(" + documentation {:.1}", e.documentation));
+    }
+    if e.test_intent != 0.0 {
+        line.push_str(&format!(" + test {:.1}", e.test_intent));
+    }
+    line.push_str(&format!(" [{}]", e.branches.join(",")));
+    if let Some(bm25) = e.bm25 {
+        line.push_str(&format!(" bm25 {bm25:.2}"));
+    }
+    line
 }
 
 /// Format blast radius and likely test targets into token-dense markdown.
@@ -826,14 +860,53 @@ mod tests {
             },
             score: -1.85,
             snippet: Some("Parses [tokens] from stream.".into()),
+            explain: None,
         }];
 
         let formatted = format_search_results("tokens", &results, 20);
-        assert!(formatted.contains("Found 1 symbols matching concept \"tokens\":"));
+        assert!(formatted.contains("Found 1 symbols matching concept \"tokens\":\n\n- "));
         assert!(
             formatted.contains("- function `parse_tokens` [src/parser.rs:15-25] (score: -1.85)")
         );
         assert!(formatted.contains("Match: Parses [tokens] from stream."));
+        assert!(!formatted.contains("explain"));
+        assert!(!formatted.contains("rerank"));
+    }
+
+    #[test]
+    fn test_format_search_results_prints_the_explain_breakdown_when_present() {
+        let mut result = SymbolSearchResult {
+            symbol: sample_symbol("parseSha256Sidecar"),
+            score: 71.6,
+            snippet: Some("parse[Sha256]Sidecar".into()),
+            explain: Some(SearchExplain {
+                bm25: Some(-3.21),
+                branches: vec!["word".into(), "name".into()],
+                name_tier: "all".into(),
+                name_coverage: 1.0,
+                signature_coverage: 0.25,
+                doc_coverage: 0.0,
+                kind_prior: 4.0,
+                path_role: -10.0,
+                documentation: 0.0,
+                test_intent: 5.0,
+                candidates: 37,
+                rerank_us: 180,
+            }),
+        };
+
+        let formatted = format_search_results("sha256", std::slice::from_ref(&result), 20);
+        assert!(formatted.contains(
+            "Found 1 symbols matching concept \"sha256\":\nrerank: 37 candidates in 180 µs\n\n- "
+        ));
+        assert!(formatted.contains(&format!(
+            "  explain: score 71.6 = name all 60.0 + sig 0.25*{W_SIGNATURE} + doc 0.00*{W_DOC} + kind 4.0 + path -10.0 + test 5.0 [word,name] bm25 -3.21\n"
+        )));
+
+        result.explain = None;
+        let silent = format_search_results("sha256", std::slice::from_ref(&result), 20);
+        assert!(!silent.contains("explain"));
+        assert!(!silent.contains("rerank"));
     }
 
     #[test]
@@ -842,6 +915,7 @@ mod tests {
             symbol: sample_symbol("parse_tokens"),
             score: 0.0,
             snippet: None,
+            explain: None,
         }];
 
         let formatted = format_search_results("tokens", &results, 1);
@@ -858,6 +932,7 @@ mod tests {
                 symbol: sample_symbol("parse_tokens"),
                 score: 0.0,
                 snippet: None,
+                explain: None,
             })
             .collect();
         let capped = format_search_results("tokens", &full, crate::queries::MAX_RESULT_LIMIT);

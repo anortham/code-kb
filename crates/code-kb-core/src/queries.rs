@@ -1,11 +1,12 @@
 use rusqlite::{Connection, Row, ToSql, params};
+use rust_stemmers::{Algorithm, Stemmer};
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 
 use crate::db::local_variable_predicate;
 use crate::models::{
-    BlastRadiusResult, FileFact, ImpactedSymbol, LiteralFact, ReferenceSite, StructuralFact,
-    Symbol, SymbolSearchResult, TestTarget, TypeFact,
+    BlastRadiusResult, FileFact, ImpactedSymbol, LiteralFact, ReferenceSite, SearchExplain,
+    StructuralFact, Symbol, SymbolSearchResult, TestTarget, TypeFact,
 };
 
 #[derive(Debug, Error)]
@@ -590,14 +591,14 @@ fn split_identifier(word: &str) -> Vec<&str> {
 }
 
 /// One admitted search row with the recall branches that reached it.
-/// `result.score` is the word-branch BM25 for word rows and `0.0` otherwise.
+/// `result.score` is the word-branch BM25 for word rows and `0.0` otherwise until the
+/// rerank replaces it.
 pub(crate) struct Candidate {
     pub result: SymbolSearchResult,
     pub bm25: Option<f64>,
     pub exact_name: bool,
     pub word_match: bool,
     pub name_match: bool,
-    #[allow(dead_code)]
     pub name_terms: Vec<String>,
     pub documentation: bool,
 }
@@ -674,6 +675,7 @@ pub(crate) fn collect_search_candidates(
                 symbol,
                 score: 0.0,
                 snippet: None,
+                explain: None,
             },
             bm25: None,
             exact_name: false,
@@ -843,6 +845,28 @@ pub fn fts_search_symbols_scoped(
     include_tests: bool,
     limit: usize,
 ) -> Result<Vec<SymbolSearchResult>, QueryError> {
+    fts_search_symbols_explained(
+        conn,
+        query,
+        kind_filter,
+        path_filter,
+        include_tests,
+        limit,
+        false,
+    )
+}
+
+/// Conceptual full-text search that also attaches the rerank breakdown to every row when
+/// `explain` is true. Without it, `explain` stays `None` on every row.
+pub fn fts_search_symbols_explained(
+    conn: &Connection,
+    query: &str,
+    kind_filter: Option<&str>,
+    path_filter: Option<&str>,
+    include_tests: bool,
+    limit: usize,
+    explain: bool,
+) -> Result<Vec<SymbolSearchResult>, QueryError> {
     validate_result_limit(limit)?;
     if limit == 0 {
         return Ok(Vec::new());
@@ -907,6 +931,7 @@ pub fn fts_search_symbols_scoped(
                 symbol: s,
                 score: 0.0,
                 snippet: None,
+                explain: None,
             })
             .collect())
     };
@@ -920,25 +945,23 @@ pub fn fts_search_symbols_scoped(
         return name_search(&local_clause);
     }
 
-    let mut candidates =
+    let candidates =
         collect_search_candidates(conn, query, kind_filter, path_filter, include_tests, limit)?;
-    candidates.sort_by_key(|c| {
-        let tier = match (c.result.symbol.kind.as_str(), c.documentation) {
-            ("import", _) => 2,
-            (_, true) => 1,
-            _ => 0,
-        };
-        let branch = match (c.exact_name, c.word_match) {
-            (true, _) => 0,
-            (false, true) => 1,
-            (false, false) => 2,
-        };
-        (tier, branch)
-    });
-    let mut results: Vec<SymbolSearchResult> = candidates
+    let candidate_count = candidates.len();
+    let started = std::time::Instant::now();
+    let ranked = rerank(candidates, query, include_tests);
+    let rerank_us = started.elapsed().as_micros();
+    let mut results: Vec<SymbolSearchResult> = ranked
         .into_iter()
-        .map(|c| c.result)
         .take(limit)
+        .map(|(mut result, mut breakdown)| {
+            if explain {
+                breakdown.candidates = candidate_count;
+                breakdown.rerank_us = rerank_us;
+                result.explain = Some(breakdown);
+            }
+            result
+        })
         .collect();
 
     if searching_variables {
@@ -954,6 +977,277 @@ pub fn fts_search_symbols_scoped(
     }
 
     Ok(results)
+}
+
+const W_NAME_WHOLE: f64 = 100.0;
+const W_NAME_ALL_WORDS: f64 = 60.0;
+const W_NAME_PARTIAL: f64 = 30.0;
+pub(crate) const W_SIGNATURE: f64 = 4.0;
+pub(crate) const W_DOC: f64 = 10.0;
+const W_KIND_DEFINITION: f64 = 4.0;
+const W_KIND_MEMBER: f64 = 0.0;
+const W_KIND_IMPORT: f64 = -50.0;
+const W_PATH_ROLE: f64 = -10.0;
+const W_DOCUMENTATION_ROW: f64 = -200.0;
+const W_TEST_INTENT: f64 = 5.0;
+const DOC_COVERAGE_BYTES: usize = 400;
+
+const DEFINITION_KINDS: &[&str] = &[
+    "function",
+    "method",
+    "class",
+    "struct",
+    "trait",
+    "interface",
+    "enum",
+    "type",
+];
+const MEMBER_KINDS: &[&str] = &["enum_member", "field", "property", "constant", "variable"];
+const DEMOTED_PATH_SEGMENTS: &[&str] = &["scripts", "examples", "benchmarks", "fixtures", "vendor"];
+const TEST_INTENT_WORDS: &[&str] = &["test", "tests", "spec", "specs"];
+
+struct QueryWord {
+    word: String,
+    stem: String,
+}
+
+/// Lowercase query words for the rerank: every `query_words` token is split like an
+/// identifier, and stop words are dropped only when a content word remains.
+fn rerank_words(query: &str) -> Vec<String> {
+    let words: Vec<String> = query_words(query)
+        .into_iter()
+        .flat_map(split_identifier)
+        .map(str::to_lowercase)
+        .collect();
+    let any_content = words.iter().any(|w| !is_stop_word(w));
+    words
+        .into_iter()
+        .filter(|w| !any_content || !is_stop_word(w))
+        .collect()
+}
+
+fn collapse(text: &str) -> String {
+    text.chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+fn head_bytes(text: &str, bytes: usize) -> &str {
+    let mut end = bytes.min(text.len());
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    &text[..end]
+}
+
+fn token_run_equals(tokens: &[String], word: &str) -> bool {
+    (0..tokens.len()).any(|start| {
+        let mut joined = String::new();
+        for token in &tokens[start..] {
+            joined.push_str(token);
+            if joined.len() >= word.len() {
+                return joined == word;
+            }
+        }
+        false
+    })
+}
+
+fn name_coverage(name: &str, words: &[QueryWord], stemmer: &Stemmer) -> f64 {
+    let tokens: Vec<String> = split_identifier(name)
+        .into_iter()
+        .map(str::to_lowercase)
+        .collect();
+    let stems: Vec<String> = tokens
+        .iter()
+        .map(|t| stemmer.stem(t).into_owned())
+        .collect();
+    let collapsed = collapse(name);
+    let covered = words
+        .iter()
+        .filter(|w| {
+            token_run_equals(&tokens, &w.word)
+                || (w.word.chars().count() >= 3 && collapsed.contains(&w.word))
+                || stems.contains(&w.stem)
+        })
+        .count();
+    covered as f64 / words.len() as f64
+}
+
+fn text_coverage(text: &str, words: &[QueryWord]) -> f64 {
+    let lower = text.to_lowercase();
+    let covered = words
+        .iter()
+        .filter(|w| lower.contains(&w.word) || lower.contains(&w.stem))
+        .count();
+    covered as f64 / words.len() as f64
+}
+
+/// Score points a name tier is worth at the given coverage fraction.
+pub(crate) fn name_tier_score(tier: &str, coverage: f64) -> f64 {
+    match tier {
+        "whole" => W_NAME_WHOLE,
+        "all" => W_NAME_ALL_WORDS,
+        "partial" => W_NAME_PARTIAL * coverage,
+        _ => 0.0,
+    }
+}
+
+fn kind_prior(kind: &str) -> f64 {
+    let kind = normalize_kind(kind);
+    match kind.as_str() {
+        "import" => W_KIND_IMPORT,
+        k if DEFINITION_KINDS.contains(&k) => W_KIND_DEFINITION,
+        k if MEMBER_KINDS.contains(&k) => W_KIND_MEMBER,
+        _ => 0.0,
+    }
+}
+
+fn path_role(path: &str, words: &[QueryWord], stemmer: &Stemmer) -> f64 {
+    let Some(segment) = path.split('/').find(|seg| {
+        DEMOTED_PATH_SEGMENTS
+            .iter()
+            .any(|d| d.eq_ignore_ascii_case(seg))
+    }) else {
+        return 0.0;
+    };
+    let segment = segment.to_lowercase();
+    let segment_stem = stemmer.stem(&segment);
+    let named = words.iter().any(|w| {
+        w.word == segment || w.word == segment_stem || w.stem == segment || w.stem == segment_stem
+    });
+    if named { 0.0 } else { W_PATH_ROLE }
+}
+
+fn bracket_first_term(name: &str, terms: &[String]) -> String {
+    let lower = name.to_lowercase();
+    if lower.len() == name.len() {
+        for term in terms {
+            if let Some(start) = lower.find(term.as_str()) {
+                let end = start + term.len();
+                if name.is_char_boundary(start) && name.is_char_boundary(end) {
+                    return format!("{}[{}]{}", &name[..start], &name[start..end], &name[end..]);
+                }
+            }
+        }
+    }
+    name.to_string()
+}
+
+fn branch_snippet(candidate: &Candidate) -> Option<String> {
+    let name = &candidate.result.symbol.name;
+    if candidate.word_match {
+        candidate.result.snippet.clone()
+    } else if candidate.exact_name {
+        Some(name.clone())
+    } else {
+        Some(bracket_first_term(name, &candidate.name_terms))
+    }
+}
+
+/// Scores every admitted candidate with the weight table above and returns them best
+/// first. Ties fall to word BM25 (rows without one last), then name length, path, name.
+fn rerank(
+    candidates: Vec<Candidate>,
+    query: &str,
+    include_tests: bool,
+) -> Vec<(SymbolSearchResult, SearchExplain)> {
+    let stemmer = Stemmer::create(Algorithm::English);
+    let words: Vec<QueryWord> = rerank_words(query)
+        .into_iter()
+        .map(|word| QueryWord {
+            stem: stemmer.stem(&word).into_owned(),
+            word,
+        })
+        .collect();
+    let collapsed_query = collapse(query);
+    let test_intent = include_tests
+        && words
+            .iter()
+            .any(|w| TEST_INTENT_WORDS.contains(&w.word.as_str()));
+
+    let mut scored: Vec<(SymbolSearchResult, SearchExplain)> = candidates
+        .into_iter()
+        .map(|candidate| {
+            let symbol = &candidate.result.symbol;
+            let coverage = if words.is_empty() {
+                0.0
+            } else {
+                name_coverage(&symbol.name, &words, &stemmer)
+            };
+            let tier = if !collapsed_query.is_empty() && collapse(&symbol.name) == collapsed_query {
+                "whole"
+            } else if coverage >= 1.0 {
+                "all"
+            } else if coverage > 0.0 {
+                "partial"
+            } else {
+                "none"
+            };
+            let signature_coverage = match (&symbol.signature, words.is_empty()) {
+                (Some(signature), false) => text_coverage(signature, &words),
+                _ => 0.0,
+            };
+            let doc_coverage = match (&symbol.doc_comment, words.is_empty()) {
+                (Some(doc), false) => text_coverage(head_bytes(doc, DOC_COVERAGE_BYTES), &words),
+                _ => 0.0,
+            };
+            let explain = SearchExplain {
+                bm25: candidate.bm25,
+                branches: [
+                    (candidate.exact_name, "exact"),
+                    (candidate.word_match, "word"),
+                    (candidate.name_match, "name"),
+                ]
+                .into_iter()
+                .filter(|(hit, _)| *hit)
+                .map(|(_, branch)| branch.to_string())
+                .collect(),
+                name_tier: tier.to_string(),
+                name_coverage: coverage,
+                signature_coverage,
+                doc_coverage,
+                kind_prior: kind_prior(&symbol.kind),
+                path_role: path_role(&symbol.path, &words, &stemmer),
+                documentation: if candidate.documentation {
+                    W_DOCUMENTATION_ROW
+                } else {
+                    0.0
+                },
+                test_intent: if test_intent && (symbol.is_test || symbol.test_container) {
+                    W_TEST_INTENT
+                } else {
+                    0.0
+                },
+                candidates: 0,
+                rerank_us: 0,
+            };
+            let score = name_tier_score(tier, coverage)
+                + signature_coverage * W_SIGNATURE
+                + doc_coverage * W_DOC
+                + explain.kind_prior
+                + explain.path_role
+                + explain.documentation
+                + explain.test_intent;
+            let snippet = branch_snippet(&candidate);
+            let mut result = candidate.result;
+            result.score = score;
+            result.snippet = snippet;
+            (result, explain)
+        })
+        .collect();
+
+    scored.sort_by(|(a, ea), (b, eb)| {
+        b.score
+            .total_cmp(&a.score)
+            .then_with(|| ea.bm25.is_none().cmp(&eb.bm25.is_none()))
+            .then_with(|| ea.bm25.unwrap_or(0.0).total_cmp(&eb.bm25.unwrap_or(0.0)))
+            .then_with(|| a.symbol.name.len().cmp(&b.symbol.name.len()))
+            .then_with(|| a.symbol.path.cmp(&b.symbol.path))
+            .then_with(|| a.symbol.name.cmp(&b.symbol.name))
+    });
+    scored
 }
 
 /// Find tests related to a target symbol by caller relationships, naming pattern, or FTS matching.
@@ -3065,6 +3359,362 @@ mod tests {
 
         assert!(candidates.iter().all(|c| !c.name_match));
         assert!(candidate(&candidates, "ab").exact_name);
+    }
+
+    fn plain_candidate(name: &str, kind: &str, path: &str) -> Candidate {
+        Candidate {
+            result: SymbolSearchResult {
+                symbol: Symbol {
+                    symbol_id: format!("{path}:{name}"),
+                    file_id: "f".into(),
+                    path: path.into(),
+                    language: "rust".into(),
+                    name: name.into(),
+                    kind: kind.into(),
+                    signature: None,
+                    doc_comment: None,
+                    visibility: None,
+                    parent_symbol_id: None,
+                    start_line: 1,
+                    start_column: 0,
+                    end_line: 1,
+                    end_column: 0,
+                    start_byte: 0,
+                    end_byte: 0,
+                    body_start_line: None,
+                    body_start_column: None,
+                    body_end_line: None,
+                    body_end_column: None,
+                    body_start_byte: None,
+                    body_end_byte: None,
+                    body_hash: None,
+                    semantic_group: None,
+                    is_test: false,
+                    test_container: false,
+                },
+                score: 0.0,
+                snippet: None,
+                explain: None,
+            },
+            bm25: None,
+            exact_name: false,
+            word_match: false,
+            name_match: false,
+            name_terms: Vec::new(),
+            documentation: false,
+        }
+    }
+
+    fn function(name: &str) -> Candidate {
+        plain_candidate(name, "function", "src/lib.rs")
+    }
+
+    fn ranked(candidates: Vec<Candidate>, query: &str) -> Vec<(SymbolSearchResult, SearchExplain)> {
+        rerank(candidates, query, false)
+    }
+
+    fn ranked_names(candidates: Vec<Candidate>, query: &str) -> Vec<String> {
+        ranked(candidates, query)
+            .into_iter()
+            .map(|(r, _)| r.symbol.name)
+            .collect()
+    }
+
+    #[test]
+    fn rerank_words_split_identifiers_and_drop_stop_words_only_beside_content_words() {
+        assert_eq!(
+            rerank_words("parse the sha256 sidecar file"),
+            vec!["parse", "sha", "256", "sidecar", "file"]
+        );
+        assert_eq!(
+            rerank_words("parse_sha256_sidecar"),
+            vec!["parse", "sha", "256", "sidecar"]
+        );
+        assert_eq!(
+            rerank_words("ParseHTTPResponse"),
+            vec!["parse", "http", "response"]
+        );
+        assert_eq!(rerank_words("is_ok"), vec!["ok"]);
+        assert_eq!(rerank_words("the before"), vec!["the", "before"]);
+    }
+
+    #[test]
+    fn name_tiers_are_whole_then_all_words_then_partial_then_none() {
+        let rows = ranked(
+            vec![
+                function("validate_everything"),
+                function("validate_syntax_now"),
+                function("validate_syntax"),
+                function("unrelated"),
+            ],
+            "validate syntax",
+        );
+        let tiers: Vec<(&str, &str, f64)> = rows
+            .iter()
+            .map(|(r, e)| {
+                (
+                    r.symbol.name.as_str(),
+                    e.name_tier.as_str(),
+                    e.name_coverage,
+                )
+            })
+            .collect();
+
+        assert_eq!(
+            tiers,
+            vec![
+                ("validate_syntax", "whole", 1.0),
+                ("validate_syntax_now", "all", 1.0),
+                ("validate_everything", "partial", 0.5),
+                ("unrelated", "none", 0.0),
+            ]
+        );
+        assert_eq!(rows[0].0.score, W_NAME_WHOLE + W_KIND_DEFINITION);
+        assert_eq!(rows[1].0.score, W_NAME_ALL_WORDS + W_KIND_DEFINITION);
+        assert_eq!(rows[2].0.score, W_NAME_PARTIAL * 0.5 + W_KIND_DEFINITION);
+    }
+
+    #[test]
+    fn name_coverage_accepts_token_runs_substrings_and_stems() {
+        let coverage =
+            |name: &str, query: &str| ranked(vec![function(name)], query)[0].1.name_coverage;
+
+        assert_eq!(coverage("parseSha256Sidecar", "sha 256"), 1.0);
+        assert_eq!(coverage("parseSha256Sidecar", "sha256"), 1.0);
+        assert_eq!(coverage("parseSha256Sidecar", "esha"), 1.0);
+        assert_eq!(coverage("validate_syntax", "validation"), 1.0);
+        assert_eq!(coverage("is_ok", "ok"), 1.0);
+        assert_eq!(coverage("isReady", "is"), 1.0);
+        assert_eq!(coverage("größe_berechnen", "größe"), 1.0);
+        assert_eq!(coverage("parseSha256Sidecar", "sidecar checksum"), 0.5);
+    }
+
+    #[test]
+    fn signature_and_doc_coverage_use_the_first_400_doc_bytes() {
+        let mut row = function("load");
+        row.result.symbol.signature = Some("fn load(config: &Config) -> Loaded".into());
+        row.result.symbol.doc_comment = Some(format!("{}settings", "é".repeat(200)));
+        let (result, explain) = ranked(vec![row], "config settings").remove(0);
+
+        assert_eq!(explain.signature_coverage, 0.5);
+        assert_eq!(explain.doc_coverage, 0.0);
+        assert_eq!(result.score, 0.5 * W_SIGNATURE + W_KIND_DEFINITION);
+    }
+
+    #[test]
+    fn doc_coverage_matches_stems_inside_the_capped_doc() {
+        let mut row = function("check");
+        row.result.symbol.doc_comment = Some("Validates the input.".into());
+        let explain = ranked(vec![row], "validation").remove(0).1;
+
+        assert_eq!(explain.doc_coverage, 1.0);
+    }
+
+    #[test]
+    fn kind_prior_orders_definitions_over_members_over_imports() {
+        let rows = ranked(
+            vec![
+                plain_candidate("Scan", "import", "src/a.rs"),
+                plain_candidate("Scan", "enum_member", "src/b.rs"),
+                plain_candidate("Scan", "function", "src/c.rs"),
+            ],
+            "scan",
+        );
+        let order: Vec<(&str, f64)> = rows
+            .iter()
+            .map(|(r, e)| (r.symbol.path.as_str(), e.kind_prior))
+            .collect();
+
+        assert_eq!(
+            order,
+            vec![
+                ("src/c.rs", W_KIND_DEFINITION),
+                ("src/b.rs", W_KIND_MEMBER),
+                ("src/a.rs", W_KIND_IMPORT),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_partial_name_match_on_a_member_beats_the_kind_prior_of_a_function() {
+        let names = ranked_names(
+            vec![
+                function("RenderMode"),
+                plain_candidate("MaxRetryCount", "constant", "pkg/scan.go"),
+            ],
+            "retry download limit timeout",
+        );
+
+        assert_eq!(names[0], "MaxRetryCount");
+    }
+
+    #[test]
+    fn path_role_demotes_role_directories_unless_the_query_names_them() {
+        let rows = |query: &str| {
+            ranked(
+                vec![
+                    plain_candidate("verifyChecksum", "function", "scripts/launcher.ts"),
+                    plain_candidate("verify_checksum", "function", "src/archive.rs"),
+                ],
+                query,
+            )
+        };
+
+        let plain = rows("verify checksum");
+        assert_eq!(plain[0].0.symbol.path, "src/archive.rs");
+        assert_eq!(plain[1].1.path_role, W_PATH_ROLE);
+
+        let named = rows("launcher script verify checksum");
+        assert!(named.iter().all(|(_, e)| e.path_role == 0.0));
+
+        let only_launcher = rows("launcher verify checksum");
+        assert_eq!(only_launcher[0].0.symbol.path, "src/archive.rs");
+        assert_eq!(only_launcher[1].1.path_role, W_PATH_ROLE);
+    }
+
+    #[test]
+    fn documentation_rows_sort_after_every_code_row() {
+        let mut heading = plain_candidate("Verify checksum", "heading", "README.md");
+        heading.documentation = true;
+        heading.result.symbol.language = "markdown".into();
+        heading.result.symbol.signature = Some("Verify checksum".into());
+        heading.result.symbol.doc_comment = Some("Verify the checksum of the archive.".into());
+        let rows = ranked(
+            vec![
+                heading,
+                plain_candidate("unrelated", "variable", "src/a.rs"),
+            ],
+            "verify checksum",
+        );
+
+        assert_eq!(rows[0].0.symbol.name, "unrelated");
+        assert_eq!(rows[1].1.documentation, W_DOCUMENTATION_ROW);
+        assert_eq!(rows[1].1.name_tier, "whole");
+        assert!(rows[1].0.score < 0.0);
+    }
+
+    #[test]
+    fn test_intent_boosts_test_rows_only_when_tests_are_included_and_named() {
+        let rows = |query: &str, include_tests: bool| {
+            let mut test_row = plain_candidate("payment_flow", "function", "tests/payment.rs");
+            test_row.result.symbol.is_test = true;
+            let plain_row = plain_candidate("payment_flow", "function", "src/payment.rs");
+            rerank(vec![plain_row, test_row], query, include_tests)
+        };
+
+        let boosted = rows("payment flow tests", true);
+        assert_eq!(boosted[0].0.symbol.path, "tests/payment.rs");
+        assert_eq!(boosted[0].1.test_intent, W_TEST_INTENT);
+        assert_eq!(boosted[1].1.test_intent, 0.0);
+
+        assert!(
+            rows("payment flow tests", false)
+                .iter()
+                .all(|(_, e)| e.test_intent == 0.0)
+        );
+        assert!(
+            rows("payment flow", true)
+                .iter()
+                .all(|(_, e)| e.test_intent == 0.0)
+        );
+    }
+
+    #[test]
+    fn ties_break_by_bm25_then_name_length_then_path() {
+        let mut word_row = plain_candidate("payment", "function", "src/z.rs");
+        word_row.word_match = true;
+        word_row.bm25 = Some(-4.0);
+        let mut weaker_word_row = plain_candidate("payment", "function", "src/a.rs");
+        weaker_word_row.word_match = true;
+        weaker_word_row.bm25 = Some(-2.0);
+        let mut name_only = plain_candidate("payment", "function", "src/b.rs");
+        name_only.name_match = true;
+        let rows = ranked(
+            vec![
+                plain_candidate("payment", "function", "src/y.rs"),
+                name_only,
+                weaker_word_row,
+                word_row,
+            ],
+            "payment",
+        );
+        let paths: Vec<&str> = rows.iter().map(|(r, _)| r.symbol.path.as_str()).collect();
+
+        assert_eq!(paths, vec!["src/z.rs", "src/a.rs", "src/b.rs", "src/y.rs"]);
+
+        let by_length = ranked_names(
+            vec![
+                function("payment_gateway_client"),
+                function("payment_gateway"),
+            ],
+            "gateway",
+        );
+        assert_eq!(by_length, vec!["payment_gateway", "payment_gateway_client"]);
+    }
+
+    #[test]
+    fn snippets_follow_the_admitting_branch() {
+        let mut word_row = function("parse_sidecar_file");
+        word_row.word_match = true;
+        word_row.result.snippet = Some("parse the [sha256] sidecar file".into());
+        let mut name_row = function("parseSha256Sidecar");
+        name_row.name_match = true;
+        name_row.name_terms = vec!["sha256".into(), "sidecar".into()];
+        let mut exact_row = function("sha256");
+        exact_row.exact_name = true;
+        let rows = ranked(vec![word_row, name_row, exact_row], "sha256");
+        let snippets: Vec<(&str, &str)> = rows
+            .iter()
+            .map(|(r, _)| (r.symbol.name.as_str(), r.snippet.as_deref().unwrap()))
+            .collect();
+
+        assert_eq!(
+            snippets,
+            vec![
+                ("sha256", "sha256"),
+                ("parseSha256Sidecar", "parse[Sha256]Sidecar"),
+                ("parse_sidecar_file", "parse the [sha256] sidecar file"),
+            ]
+        );
+        assert_eq!(rows[1].1.branches, vec!["name"]);
+        assert_eq!(rows[0].1.branches, vec!["exact"]);
+    }
+
+    #[test]
+    fn explain_is_attached_only_when_requested() {
+        let conn = sidecar_fixture();
+        let query = "parse the sha256 sidecar file";
+
+        let silent = fts_search_symbols_scoped(&conn, query, None, None, false, 10).unwrap();
+        assert!(silent.iter().all(|r| r.explain.is_none()));
+        assert!(silent[0].score > 0.0);
+        assert_eq!(
+            serde_json::to_value(&silent[0]).unwrap().get("explain"),
+            None
+        );
+
+        let explained =
+            fts_search_symbols_explained(&conn, query, None, None, false, 10, true).unwrap();
+        let by_name = |name: &str| {
+            explained
+                .iter()
+                .find(|r| r.symbol.name == name)
+                .and_then(|r| r.explain.as_ref())
+                .unwrap()
+        };
+        let name_only = by_name("parseSha256Sidecar");
+        assert_eq!(name_only.candidates, 2);
+        assert_eq!(name_only.branches, vec!["name"]);
+        assert_eq!(name_only.bm25, None);
+        let word_row = by_name("parse_sidecar_file");
+        assert!(word_row.bm25.unwrap() < 0.0);
+        assert_eq!(word_row.candidates, 2);
+        assert!(
+            serde_json::to_value(&explained[0])
+                .unwrap()
+                .get("explain")
+                .is_some()
+        );
     }
 
     #[test]

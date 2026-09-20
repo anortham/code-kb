@@ -38,6 +38,7 @@ url = "2.5"
 which = "7.0"
 blake3 = "1.5"
 tempfile = "3.17"
+rust-stemmers = "1.2"
 
 [profile.release]
 lto = true

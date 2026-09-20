@@ -217,7 +217,7 @@ impl McpServer {
             },
             Tool {
                 name: "search_symbols".to_string(),
-                description: "Natural-language and keyword search over symbol names, signatures, and docstrings. Use when the exact identifier is unknown or searching for concepts (e.g. 'auth middleware', 'retry loop'). Do NOT use if you already know the exact symbol name; use lookup_symbol instead.".to_string(),
+                description: "Natural-language and keyword search over symbol names, signatures, and docstrings; substrings inside identifiers are found ('sha256' finds 'parseSha256Sidecar'). Use when the exact identifier is unknown or searching for concepts (e.g. 'auth middleware', 'retry loop'). Do NOT use if you already know the exact symbol name; use lookup_symbol instead.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {

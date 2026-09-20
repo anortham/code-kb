@@ -22,7 +22,7 @@ pub use formatters::{
 };
 pub use models::{
     BlastRadiusResult, ContextSlice, FileFact, ImpactedSymbol, LiteralFact, ReferenceSite,
-    StructuralFact, Symbol, SymbolSearchResult, TestTarget, TypeFact,
+    SearchExplain, StructuralFact, Symbol, SymbolSearchResult, TestTarget, TypeFact,
 };
 pub use ops::{
     OpError, blast_radius_op, codebase_outline_op, file_skeleton_op, get_context_slice_op,
@@ -32,10 +32,11 @@ pub use queries::{
     QueryError, compute_blast_radius, compute_blast_radius_scoped, find_callee_signatures,
     find_literals, find_literals_scoped, find_references, find_references_ext,
     find_references_for_symbol, find_references_scoped, find_related_tests, find_structural_facts,
-    find_structural_facts_scoped, find_type_facts, fts_search_symbols_scoped, get_file,
-    get_symbol_by_name, get_symbol_by_name_exact, is_test_path, list_structural_fact_categories,
-    list_structural_fact_categories_scoped, load_file_symbols, load_scoped_outline_symbols,
-    normalize_kind, sanitize_fts5_query, search_symbols, search_symbols_scoped,
+    find_structural_facts_scoped, find_type_facts, fts_search_symbols_explained,
+    fts_search_symbols_scoped, get_file, get_symbol_by_name, get_symbol_by_name_exact,
+    is_test_path, list_structural_fact_categories, list_structural_fact_categories_scoped,
+    load_file_symbols, load_scoped_outline_symbols, normalize_kind, sanitize_fts5_query,
+    search_symbols, search_symbols_scoped,
 };
 pub use slicer::{SliceError, slice_symbol, slice_symbol_body};
 pub use sync::{

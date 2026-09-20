@@ -5,9 +5,10 @@ use code_kb_core::{
     Workspace, codebase_outline_op, ensure_fresh_file, ensure_fts_index_path, file_skeleton_op,
     format_context_slice, format_fact_categories, format_find_symbol_results, format_references,
     format_replace_symbol_result, format_search_results, format_structural_facts,
-    format_symbol_body, fts_search_symbols_scoped, get_context_slice_op, get_symbol_body_op,
-    list_structural_fact_categories_scoped, load_file_symbols, open_read_only, queries,
-    replace_symbol_body, scan_workspace, search_symbols_scoped,
+    format_symbol_body, fts_search_symbols_explained, fts_search_symbols_scoped,
+    get_context_slice_op, get_symbol_body_op, list_structural_fact_categories_scoped,
+    load_file_symbols, open_read_only, queries, replace_symbol_body, scan_workspace,
+    search_symbols_scoped,
 };
 
 mod logging;
@@ -59,7 +60,7 @@ pub enum Command {
     /// Search for symbols by exact identifier name or prefix.
     #[command(alias = "symbol")]
     Lookup(LookupArgs),
-    /// Natural-language and full-text search over symbol names and docstrings using FTS5 (BM25).
+    /// Natural-language and identifier search over symbol names, signatures, and docstrings; substrings inside identifiers are found (`sha256` finds `parseSha256Sidecar`).
     Search(SearchArgs),
     /// Retrieve exact implementation body of a symbol.
     Body(BodyArgs),
@@ -132,7 +133,7 @@ pub type LookupArgs = SymbolArgs;
 
 #[derive(Debug, Args)]
 pub struct SearchArgs {
-    /// Concept, keyword, or BM25 search query over docstrings and signatures.
+    /// Concept, keyword, or identifier query. Matches whole names, name words, name substrings (`sha256` finds `parseSha256Sidecar`), signatures, and docstrings; results carry the rerank score.
     pub query: String,
     /// Optional file path or directory prefix to scope search.
     #[arg(long, alias = "file", alias = "file-path")]
@@ -146,6 +147,9 @@ pub struct SearchArgs {
     /// Maximum number of results (0-200).
     #[arg(long, default_value_t = 20, value_parser = parse_result_limit)]
     pub limit: usize,
+    /// Print the rerank breakdown under each result (JSON: an `explain` object per result).
+    #[arg(long)]
+    pub explain: bool,
 }
 
 #[derive(Debug, Args)]
@@ -588,13 +592,14 @@ fn main() -> anyhow::Result<()> {
             let rel_path = args.path.as_deref().map(|p| workspace.relativize_filter(p));
             let path_filter = rel_path.as_deref();
             ensure_fts_index_path(&db_path)?;
-            let matches = fts_search_symbols_scoped(
+            let matches = fts_search_symbols_explained(
                 &conn,
                 &args.query,
                 args.kind.as_deref(),
                 path_filter,
                 args.include_tests,
                 args.limit,
+                args.explain,
             )?;
 
             if cli.json {

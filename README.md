@@ -15,7 +15,7 @@ Traditional AI coding agents burn massive amounts of context loading entire sour
 `code-kb` solves this with a **progressive disclosure** architecture:
 1. **Repository Orientation (`codebase_outline`):** Understand directory structures and key exports in ~200 tokens.
 2. **File Skeletons (`file_skeleton`):** Inspect function signatures, types, traits, and docstrings with implementation bodies stripped.
-3. **Symbol Lookup & Discovery (`lookup_symbol` / `search_symbols`):** Instant exact/prefix identifier lookups and conceptual FTS5 search across all symbols.
+3. **Symbol Lookup & Discovery (`lookup_symbol` / `search_symbols`):** Instant exact/prefix identifier lookups and conceptual search over names, signatures, and docstrings; substrings inside identifiers are found (`sha256` finds `parseSha256Sidecar`).
 4. **Surgical Symbol Context (`get_symbol_context`):** In a single turn, fetch a target function's body along with its callee signatures, parameter types, and associated unit tests.
 5. **Atomic AST Edits (`replace_symbol_body`):** Replace symbol implementations atomically with pre-flight syntax validation by `julie-extract` for every language it parses, then re-index immediately.
 
@@ -328,7 +328,7 @@ binaries from your `PATH`.
 | `codebase_outline` | High-level architectural orientation of directory layout & symbols. | `path` (opt), `depth` (opt, default 2) | `dir`, `subpath` |
 | `file_skeleton` | File outline with function & method bodies stripped (80–90% token savings); a directory returns its outline. | `file_path` (req) | `file`, `path` |
 | `lookup_symbol` | Fast identifier lookup (exact name or prefix) across repo or scoped path. | `query` (req), `path` (opt), `kind` (opt), `is_test` (opt), `limit` (opt) | `name`, `q` |
-| `search_symbols` | Conceptual BM25 full-text search over symbol signatures & docstrings. | `query` (req), `path` (opt), `kind` (opt), `limit` (opt) | `name`, `q` |
+| `search_symbols` | Conceptual search over symbol names, signatures & docstrings; substrings inside identifiers are found (`sha256` finds `parseSha256Sidecar`). Results are reranked by name coverage, signature and docstring coverage, kind, and path role; `score` is that rerank score. | `query` (req), `path` (opt), `kind` (opt), `limit` (opt) | `name`, `q` |
 | `get_symbol_body` | Slices the exact implementation body of a symbol from disk. | `symbol_name` (req), `file_path` (opt) | `symbol`, `name`, `path` |
 | `get_symbol_context` | Surgical bundle: target body + callee signatures + parameter types + tests. | `symbol_name` (req), `file_path` (opt), `include_external` (opt, def: false) | `symbol`, `name`, `path` |
 | `find_references` | Callers or callees of a symbol, matched by name from AST call sites and ranked by same file, same directory, then receiver type; callers also include type usages and member accesses (filters external stdlib noise; qualify overloaded names). | `symbol_name` (req), `file_path` (opt), `direction` ("callers" \| "callees", def: callers), `include_external` (opt, def: false) | `symbol`, `name`, `file`, `path` |
@@ -353,8 +353,11 @@ code-kb skeleton src/main.rs
 # Lookup symbols by exact name or prefix (alias: code-kb symbol)
 code-kb lookup Workspace --kind struct --path crates/code-kb-core
 
-# Conceptual BM25 full-text search across docstrings and signatures
+# Conceptual search over names, signatures, and docstrings (sha256 finds parseSha256Sidecar)
 code-kb search "syntax validation concurrency"
+
+# Same search with the rerank breakdown under each result (JSON: an `explain` object per result)
+code-kb search "sha256 sidecar" --explain
 
 # Retrieve exact implementation body of a symbol
 code-kb body Workspace

@@ -249,6 +249,120 @@ fn test_cli_symbol_and_search() {
     assert!(!search_stdout.contains("Found 0 symbols"));
 }
 
+fn mcp_search_names(root: &std::path::Path, query: &str) -> Vec<String> {
+    use std::io::{BufRead, Write};
+    let mut child = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+        .arg("serve")
+        .arg("--root")
+        .arg(root)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn code-kb serve");
+    let mut stdin = child.stdin.take().unwrap();
+    let mut reader = std::io::BufReader::new(child.stdout.take().unwrap());
+    let requests = [
+        serde_json::json!({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+            "params": {"protocolVersion": "2024-11-05", "capabilities": {},
+                       "clientInfo": {"name": "parity", "version": "1.0"}}}),
+        serde_json::json!({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+            "params": {"name": "search_symbols", "arguments": {"query": query}}}),
+    ];
+    let mut text = String::new();
+    for request in requests {
+        stdin.write_all(format!("{request}\n").as_bytes()).unwrap();
+        stdin.flush().unwrap();
+        let mut line = String::new();
+        reader.read_line(&mut line).unwrap();
+        let response: serde_json::Value = serde_json::from_str(&line).unwrap();
+        if response["id"] == 2 {
+            text = response["result"]["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .to_string();
+        }
+    }
+    drop(stdin);
+    let _ = child.wait();
+    text.lines()
+        .filter(|line| line.starts_with("- "))
+        .map(|line| line.split('`').nth(1).unwrap().to_string())
+        .collect()
+}
+
+#[test]
+fn test_cli_search_order_matches_mcp_search_symbols() {
+    let repo = setup_test_repo();
+    let root = repo.path();
+    let query = "workspace task helper";
+
+    let cli_output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("search")
+        .arg(query)
+        .output()
+        .expect("Failed to execute search --json");
+    assert!(cli_output.status.success());
+    let cli_rows: serde_json::Value = serde_json::from_slice(&cli_output.stdout).unwrap();
+    let cli_names: Vec<String> = cli_rows
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["symbol"]["name"].as_str().unwrap().to_string())
+        .collect();
+
+    assert_eq!(cli_names.len(), 3);
+    assert_eq!(cli_names, mcp_search_names(root, query));
+    assert!(
+        cli_rows
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|r| r.get("explain").is_none())
+    );
+}
+
+#[test]
+fn test_cli_search_explain_flag() {
+    let repo = setup_test_repo();
+    let root = repo.path();
+
+    let text = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .arg("search")
+        .arg("discovery")
+        .arg("--explain")
+        .output()
+        .expect("Failed to execute search --explain");
+    assert!(text.status.success());
+    let stdout = String::from_utf8_lossy(&text.stdout);
+    assert!(stdout.contains("rerank: 1 candidates in "));
+    assert!(stdout.contains("  explain: score "));
+    assert!(stdout.contains("[word] bm25 "));
+
+    let json = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("search")
+        .arg("discovery")
+        .arg("--explain")
+        .output()
+        .expect("Failed to execute search --explain --json");
+    assert!(json.status.success());
+    let rows: serde_json::Value = serde_json::from_slice(&json.stdout).unwrap();
+    let explain = &rows[0]["explain"];
+    assert_eq!(explain["branches"], serde_json::json!(["word"]));
+    assert_eq!(explain["candidates"], 1);
+    assert!(explain["bm25"].as_f64().unwrap() < 0.0);
+    assert_eq!(explain["doc_coverage"], 1.0);
+    assert!(rows[0]["score"].as_f64().unwrap() > 0.0);
+}
+
 #[test]
 fn test_cli_body_and_slice() {
     let repo = setup_test_repo();

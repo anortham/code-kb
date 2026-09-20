@@ -91,6 +91,7 @@ MCP tool schema.**
 - Optional parameters provide safe defaults (`direction` in `find_references` defaults to
   `"callers"`, `category` in `find_structural_facts` lists all categories with counts when omitted).
 - Scoped search: `lookup_symbol`, `search_symbols`, `find_references`, and `find_structural_facts` support an optional `path`/`file_path` filter.
+- Search ranking: `search_symbols` admits rows from three branches (exact name, FTS5 word match, trigram name substring, so `sha256` finds `parseSha256Sidecar`), then a deterministic Rust rerank scores name coverage, signature and docstring coverage, kind, and path role from one const weight table in `queries.rs`; `score` is that rerank score. `code-kb search --explain` prints the breakdown and the rerank timer; the MCP tool takes no `explain` parameter, and `--verbose` stays debug logging.
 - Language-agnostic callee filtering: `find_references(direction="callees")` and `get_symbol_context`
   filter unresolved AST tokens against workspace symbols, eliminating external stdlib/runtime noise
   across all ~40 supported languages by default (`include_external: true` / `--include-external` restores them).

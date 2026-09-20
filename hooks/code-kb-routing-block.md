@@ -13,7 +13,7 @@
 1. **Repo / Subsystem Orientation:** `codebase_outline(subpath, depth)` instead of `ls -R` or `find .`.
 2. **Module Interface:** `file_skeleton(file_path)` instead of reading the file. Bodies are stripped; signatures and types remain.
 3. **Symbol Definition:** `lookup_symbol(query="symbol_name", path="optional/subpath")` for exact/prefix lookup.
-4. **Natural Language / Concept Search:** `search_symbols(query="keyword concept", path="optional/subpath")` using FTS5 BM25.
+4. **Natural Language / Concept Search:** `search_symbols(query="keyword concept", path="optional/subpath")` over names, signatures, and docstrings; substrings inside identifiers are found (`sha256` finds `parseSha256Sidecar`).
 5. **Function Body & Implementation:** `get_symbol_body(symbol_name, file_path)` to read only the target symbol.
 6. **Editing Prep / Call Graph:** `get_symbol_context(symbol_name, file_path)` returns target body + immediate callee signatures + parameter types + tests in one call.
 7. **Callers / References:** `find_references(symbol_name, direction="callers")` (default direction: "callers"). Callers include call sites, type usages, and member accesses. Matching is by symbol name, ranked by same file, same directory, then receiver type; pass `file_path` or a qualified name for overloaded names such as `new`.

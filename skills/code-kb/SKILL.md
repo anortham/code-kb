@@ -18,7 +18,7 @@ When entering a new repository, unfamiliar subsystem, or crate:
 When inspecting how a module or component is shaped:
 * Call `file_skeleton(file_path)` to inspect structs, traits, methods, signatures, and docstrings with implementation bodies stripped. A directory path returns its outline instead.
 * Call `lookup_symbol(query="...", path="optional/subpath")` for exact or prefix symbol name matching across the entire codebase or scoped to a directory/file.
-* Call `search_symbols(query="...", path="optional/subpath")` for natural-language / conceptual search (e.g. `"parse tokens"`, `"auth middleware"`) using SQLite FTS5 BM25 ranking.
+* Call `search_symbols(query="...", path="optional/subpath")` for natural-language / conceptual search (e.g. `"parse tokens"`, `"auth middleware"`) over names, signatures, and docstrings; substrings inside identifiers are found (`sha256` finds `parseSha256Sidecar`).
 * **Never** read a 500-line source file just to look up a signature or type definition.
 
 ### 3. Surgical Context
