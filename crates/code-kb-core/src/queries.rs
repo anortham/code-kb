@@ -568,30 +568,114 @@ fn name_prefix_query(name: &str) -> String {
 /// Splits one identifier into words at `_`, digit runs, and case boundaries.
 /// `parseHTTPResponse2` -> `["parse", "HTTP", "Response", "2"]`.
 fn split_identifier(word: &str) -> Vec<&str> {
-    let chars: Vec<(usize, char)> = word.char_indices().collect();
     let mut out = Vec::new();
+    split_identifier_into(word, &mut out);
+    out
+}
+
+/// `split_identifier` that appends to a caller-owned vector, so tokenizing a whole doc
+/// comment costs one allocation instead of one per word.
+fn split_identifier_into<'a>(word: &'a str, out: &mut Vec<&'a str>) {
+    let mut chars = word.char_indices().peekable();
+    let Some((_, first)) = chars.next() else {
+        return;
+    };
+    let mut prev = char_class(first);
     let mut start = 0;
-    for i in 1..chars.len() {
-        let (idx, c) = chars[i];
-        let prev = chars[i - 1].1;
-        let next_lower = chars
-            .get(i + 1)
-            .map(|(_, n)| n.is_lowercase())
-            .unwrap_or(false);
-        let boundary = c == '_'
-            || prev == '_'
-            || (c.is_uppercase() && (prev.is_lowercase() || prev.is_ascii_digit()))
-            || (c.is_uppercase() && prev.is_uppercase() && next_lower)
-            || (c.is_ascii_digit() != prev.is_ascii_digit());
-        if boundary {
-            out.push(&word[start..idx]);
+    while let Some((idx, c)) = chars.next() {
+        let cur = char_class(c);
+        let next = chars.peek().map_or(OTHER, |(_, n)| char_class(*n));
+        if identifier_boundary(prev, cur, next) {
+            push_piece(out, &word[start..idx]);
             start = idx;
         }
+        prev = cur;
     }
-    out.push(&word[start..]);
-    out.into_iter()
-        .filter(|p| !p.is_empty() && *p != "_")
-        .collect()
+    push_piece(out, &word[start..]);
+}
+
+const OTHER: u8 = 0;
+const UNDERSCORE: u8 = 1;
+const UPPER: u8 = 2;
+const LOWER: u8 = 3;
+const DIGIT: u8 = 4;
+
+fn char_class(c: char) -> u8 {
+    if c == '_' {
+        UNDERSCORE
+    } else if c.is_uppercase() {
+        UPPER
+    } else if c.is_lowercase() {
+        LOWER
+    } else if c.is_ascii_digit() {
+        DIGIT
+    } else {
+        OTHER
+    }
+}
+
+fn byte_class(b: u8) -> u8 {
+    match b {
+        b'_' => UNDERSCORE,
+        b'A'..=b'Z' => UPPER,
+        b'a'..=b'z' => LOWER,
+        b'0'..=b'9' => DIGIT,
+        _ => OTHER,
+    }
+}
+
+/// The identifier split rule over character classes: `_` on either side, lower/digit to
+/// upper, the last upper of an acronym before a lower (`HTTPResponse`), and digit runs.
+fn identifier_boundary(prev: u8, cur: u8, next: u8) -> bool {
+    cur == UNDERSCORE
+        || prev == UNDERSCORE
+        || (cur == UPPER && (prev == LOWER || prev == DIGIT))
+        || (cur == UPPER && prev == UPPER && next == LOWER)
+        || ((cur == DIGIT) != (prev == DIGIT))
+}
+
+fn push_piece<'a>(out: &mut Vec<&'a str>, piece: &'a str) {
+    if !piece.is_empty() && piece != "_" {
+        out.push(piece);
+    }
+}
+
+/// Tokens of a signature or doc comment: the text split at non-word characters, each word
+/// split like an identifier. ASCII text is walked byte by byte in one pass; other text takes
+/// the char path with the same boundary rule.
+fn text_tokens_into<'a>(text: &'a str, out: &mut Vec<&'a str>) {
+    if !text.is_ascii() {
+        for word in text.split(|c: char| !c.is_alphanumeric() && c != '_') {
+            split_identifier_into(word, out);
+        }
+        return;
+    }
+    let bytes = text.as_bytes();
+    let mut start: Option<usize> = None;
+    let mut prev = OTHER;
+    for (i, &b) in bytes.iter().enumerate() {
+        let cur = byte_class(b);
+        if cur == OTHER {
+            if let Some(s) = start.take() {
+                push_piece(out, &text[s..i]);
+            }
+            continue;
+        }
+        match start {
+            None => start = Some(i),
+            Some(s) => {
+                let next = bytes.get(i + 1).map_or(OTHER, |n| byte_class(*n));
+                if identifier_boundary(prev, cur, next) {
+                    push_piece(out, &text[s..i]);
+                    start = Some(i);
+                }
+            }
+        }
+        prev = cur;
+    }
+    if let Some(s) = start {
+        push_piece(out, &text[s..]);
+    }
 }
 
 /// One admitted search row with the recall branches that reached it.
@@ -1086,11 +1170,45 @@ fn name_hits(name: &str, words: &[QueryWord], stemmer: &Stemmer) -> Vec<bool> {
         .collect()
 }
 
-fn text_hits(text: Option<&str>, words: &[QueryWord]) -> Vec<bool> {
-    let lower = text.unwrap_or("").to_lowercase();
+/// True when `token` lowercased starts with `prefix` (or equals it when `exact`).
+/// `prefix` is already lowercase.
+fn lowercase_prefix_match(token: &str, prefix: &str, exact: bool) -> bool {
+    if token.is_ascii() && prefix.is_ascii() {
+        let Some(head) = token.as_bytes().get(..prefix.len()) else {
+            return false;
+        };
+        return head.eq_ignore_ascii_case(prefix.as_bytes())
+            && (!exact || token.len() == prefix.len());
+    }
+    let mut lower = token.chars().flat_map(char::to_lowercase);
+    for expected in prefix.chars() {
+        if lower.next() != Some(expected) {
+            return false;
+        }
+    }
+    !exact || lower.next().is_none()
+}
+
+/// Token-level coverage of a signature or doc: a word is covered when some token equals it,
+/// or starts with its stem or with the word itself (three or more characters), so `stemming`
+/// covers `stemmer` and `stems` but not `system`.
+fn text_hits<'a>(
+    text: Option<&'a str>,
+    words: &[QueryWord],
+    tokens: &mut Vec<&'a str>,
+) -> Vec<bool> {
+    tokens.clear();
+    text_tokens_into(text.unwrap_or(""), tokens);
     words
         .iter()
-        .map(|w| lower.contains(&w.word) || lower.contains(&w.stem))
+        .map(|w| {
+            let stem_prefix = w.stem.chars().count() >= 3;
+            let exact_word = w.word.chars().count() < 3;
+            tokens.iter().any(|t| {
+                lowercase_prefix_match(t, &w.word, exact_word)
+                    || (stem_prefix && lowercase_prefix_match(t, &w.stem, false))
+            })
+        })
         .collect()
 }
 
@@ -1214,19 +1332,21 @@ fn rerank(
             .iter()
             .any(|w| TEST_INTENT_WORDS.contains(&w.word.as_str()));
 
+    let mut tokens: Vec<&str> = Vec::new();
     let hits: Vec<Hits> = candidates
         .iter()
         .map(|candidate| {
             let symbol = &candidate.result.symbol;
             Hits {
                 name: name_hits(&symbol.name, &words, &stemmer),
-                signature: text_hits(symbol.signature.as_deref(), &words),
+                signature: text_hits(symbol.signature.as_deref(), &words, &mut tokens),
                 doc: text_hits(
                     symbol
                         .doc_comment
                         .as_deref()
                         .map(|doc| head_bytes(doc, DOC_COVERAGE_BYTES)),
                     &words,
+                    &mut tokens,
                 ),
             }
         })
@@ -3659,6 +3779,61 @@ mod tests {
             result.score,
             explain.signature_coverage * W_SIGNATURE + W_KIND_DEFINITION
         );
+    }
+
+    #[test]
+    fn text_coverage_matches_whole_tokens_by_word_or_stem_prefix() {
+        let doc_covered = |doc: &str, query: &str| {
+            let mut row = function("row");
+            row.result.symbol.doc_comment = Some(doc.into());
+            ranked(vec![row], query).remove(0).1.doc_coverage
+        };
+        let sig_covered = |signature: &str, query: &str| {
+            let mut row = function("row");
+            row.result.symbol.signature = Some(signature.into());
+            ranked(vec![row], query).remove(0).1.signature_coverage
+        };
+
+        assert_eq!(doc_covered("The system runs.", "stemming"), 0.0);
+        assert_eq!(doc_covered("The stemmer runs.", "stemming"), 1.0);
+        assert_eq!(doc_covered("Compares stems.", "stemming"), 1.0);
+        assert_eq!(doc_covered("An important port.", "porter"), 0.0);
+        assert_eq!(
+            sig_covered("fn sha256sum(data: &[u8]) -> String", "sha256"),
+            1.0
+        );
+        assert_eq!(sig_covered("fn is_ok()", "ok"), 1.0);
+        assert_eq!(sig_covered("fn okay()", "ok"), 0.0);
+        assert_eq!(sig_covered("fn parseSha256Sidecar(text)", "sidecar"), 1.0);
+    }
+
+    #[test]
+    fn text_tokens_split_like_query_words_then_identifiers() {
+        fn two_pass(text: &str) -> Vec<&str> {
+            query_words(text)
+                .into_iter()
+                .flat_map(split_identifier)
+                .collect()
+        }
+        fn one_pass(text: &str) -> Vec<&str> {
+            let mut out = Vec::new();
+            text_tokens_into(text, &mut out);
+            out
+        }
+        let ascii = "fn parseHTTPResponse2(raw: &str, _id: u8) -> Vec<&str> // sha256_sum";
+        let unicode = "Berechnet die Größe: größe_berechnen(pfad) -> ÜberGroß2x";
+
+        assert_eq!(one_pass(ascii), two_pass(ascii));
+        assert_eq!(
+            one_pass(ascii),
+            vec![
+                "fn", "parse", "HTTP", "Response", "2", "raw", "str", "id", "u", "8", "Vec", "str",
+                "sha", "256", "sum",
+            ]
+        );
+        assert_eq!(one_pass(unicode), two_pass(unicode));
+        assert!(one_pass("").is_empty());
+        assert!(one_pass("_ __ ...").is_empty());
     }
 
     #[test]
