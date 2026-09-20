@@ -15,7 +15,7 @@ pub struct ToolInvocation<'a> {
     pub duration_ms: u64,
     pub outcome: &'a str, // "ok", "empty", "error"
     pub error_message: Option<&'a str>,
-    pub result_count: usize,
+    pub logical_result_count: Option<usize>,
     pub bytes_returned: usize,
     pub est_tokens: usize,
     pub est_tokens_saved: usize,
@@ -95,6 +95,7 @@ pub struct ToolStat {
     pub tool: String,
     pub count: usize,
     pub ok_count: usize,
+    pub empty_count: usize,
     pub error_count: usize,
     pub avg_duration_ms: u64,
     pub tokens_returned: usize,
@@ -214,6 +215,7 @@ fn init_telemetry_db(conn: &Connection) -> Result<(), QueryError> {
              outcome TEXT NOT NULL,
              error_message TEXT,
              result_count INTEGER NOT NULL DEFAULT 0,
+             result_count_known INTEGER NOT NULL DEFAULT 0,
              bytes_returned INTEGER NOT NULL DEFAULT 0,
              est_tokens INTEGER NOT NULL DEFAULT 0,
              est_tokens_saved INTEGER NOT NULL DEFAULT 0,
@@ -246,6 +248,12 @@ fn init_telemetry_db(conn: &Connection) -> Result<(), QueryError> {
     if !col_names.contains("est_tokens_saved") {
         conn.execute(
             "ALTER TABLE tool_telemetry ADD COLUMN est_tokens_saved INTEGER NOT NULL DEFAULT 0",
+            [],
+        )?;
+    }
+    if !col_names.contains("result_count_known") {
+        conn.execute(
+            "ALTER TABLE tool_telemetry ADD COLUMN result_count_known INTEGER NOT NULL DEFAULT 0",
             [],
         )?;
     }
@@ -316,9 +324,9 @@ pub fn record_tool_call_conn(
     let _ = conn.execute(
         "INSERT INTO tool_telemetry (
             id, timestamp, workspace_root, workspace_name, tool,
-            duration_ms, outcome, error_message, result_count,
+            duration_ms, outcome, error_message, result_count, result_count_known,
             bytes_returned, est_tokens, est_tokens_saved, code_kb_version
-        ) VALUES (?1, datetime('now'), ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+        ) VALUES (?1, datetime('now'), ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         params![
             id,
             norm_ws,
@@ -327,7 +335,8 @@ pub fn record_tool_call_conn(
             invocation.duration_ms as i64,
             invocation.outcome,
             invocation.error_message,
-            invocation.result_count as i64,
+            invocation.logical_result_count.unwrap_or_default() as i64,
+            invocation.logical_result_count.is_some() as i64,
             invocation.bytes_returned as i64,
             invocation.est_tokens as i64,
             invocation.est_tokens_saved as i64,
@@ -438,6 +447,7 @@ pub fn get_telemetry_summary(
         "SELECT tool,
                 COUNT(*),
                 SUM(CASE WHEN outcome = 'ok' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN outcome = 'empty' THEN 1 ELSE 0 END),
                 SUM(CASE WHEN outcome = 'error' THEN 1 ELSE 0 END),
                 ROUND(AVG(duration_ms)),
                 SUM(est_tokens),
@@ -456,15 +466,17 @@ pub fn get_telemetry_summary(
             let tool: String = row.get(0)?;
             let count: i64 = row.get(1)?;
             let ok_count: Option<i64> = row.get(2)?;
-            let error_count: Option<i64> = row.get(3)?;
-            let avg_duration: Option<f64> = row.get(4)?;
-            let tokens: Option<i64> = row.get(5)?;
-            let tokens_saved: Option<i64> = row.get(6)?;
+            let empty_count: Option<i64> = row.get(3)?;
+            let error_count: Option<i64> = row.get(4)?;
+            let avg_duration: Option<f64> = row.get(5)?;
+            let tokens: Option<i64> = row.get(6)?;
+            let tokens_saved: Option<i64> = row.get(7)?;
 
             Ok(ToolStat {
                 tool,
                 count: count as usize,
                 ok_count: ok_count.unwrap_or(0) as usize,
+                empty_count: empty_count.unwrap_or(0) as usize,
                 error_count: error_count.unwrap_or(0) as usize,
                 avg_duration_ms: avg_duration.unwrap_or(0.0).round() as u64,
                 tokens_returned: tokens.unwrap_or(0) as usize,
@@ -802,32 +814,33 @@ pub fn format_telemetry_summary(summary: &TelemetrySummary) -> String {
     }
 
     let success_rate = if summary.total_calls > 0 {
-        (summary.ok_calls as f64 / summary.total_calls as f64) * 100.0
+        ((summary.ok_calls + summary.empty_calls) as f64 / summary.total_calls as f64) * 100.0
     } else {
         0.0
     };
 
     out.push_str(&format!(
-        "Scope: {} | Window: {} | Total Tool Calls: {} | Success Rate: {:.1}% | Tokens Served: ~{} | Est. Tokens Saved (read tools only): ~{}\n\n",
-        summary.scope_description, summary.time_window, summary.total_calls, success_rate, summary.total_tokens_returned, summary.est_tokens_saved
+        "Scope: {} | Window: {} | Total Tool Calls: {} | Success Rate: {:.1}% | Empty Results: {} | Tokens Served: ~{} | Est. Tokens Saved (read tools only): ~{}\n\n",
+        summary.scope_description, summary.time_window, summary.total_calls, success_rate, summary.empty_calls, summary.total_tokens_returned, summary.est_tokens_saved
     ));
 
     out.push_str("### Tool Invocations & Performance\n");
     out.push_str(
-        "| Tool | Calls | Avg Latency | Tokens Served | Est. Tokens Saved | Success Rate |\n",
+        "| Tool | Calls | Empty | Avg Latency | Tokens Served | Est. Tokens Saved | Success Rate |\n",
     );
-    out.push_str("|---|---:|---:|---:|---:|---:|\n");
+    out.push_str("|---|---:|---:|---:|---:|---:|---:|\n");
 
     for stat in &summary.tool_stats {
         let rate = if stat.count > 0 {
-            (stat.ok_count as f64 / stat.count as f64) * 100.0
+            ((stat.ok_count + stat.empty_count) as f64 / stat.count as f64) * 100.0
         } else {
             0.0
         };
         out.push_str(&format!(
-            "| `{}` | {} | {} ms | ~{} | ~{} | {:.1}% |\n",
+            "| `{}` | {} | {} | {} ms | ~{} | ~{} | {:.1}% |\n",
             stat.tool,
             stat.count,
+            stat.empty_count,
             stat.avg_duration_ms,
             stat.tokens_returned,
             stat.tokens_saved,
@@ -1044,7 +1057,7 @@ mod tests {
             duration_ms: 15,
             outcome: "ok",
             error_message: None,
-            result_count: 1,
+            logical_result_count: Some(1),
             bytes_returned: 100,
             est_tokens: 25,
             est_tokens_saved: 100,
@@ -1057,7 +1070,7 @@ mod tests {
             duration_ms: 8,
             outcome: "ok",
             error_message: None,
-            result_count: 1,
+            logical_result_count: Some(1),
             bytes_returned: 200,
             est_tokens: 50,
             est_tokens_saved: 200,
@@ -1104,7 +1117,7 @@ mod tests {
             duration_ms: 10,
             outcome: "ok",
             error_message: None,
-            result_count: 5,
+            logical_result_count: Some(5),
             bytes_returned: 1000,
             est_tokens: 250,
             est_tokens_saved: 750,
@@ -1114,7 +1127,7 @@ mod tests {
             duration_ms: 20,
             outcome: "ok",
             error_message: None,
-            result_count: 3,
+            logical_result_count: Some(3),
             bytes_returned: 600,
             est_tokens: 150,
             est_tokens_saved: 450,
@@ -1124,7 +1137,7 @@ mod tests {
             duration_ms: 30,
             outcome: "ok",
             error_message: None,
-            result_count: 1,
+            logical_result_count: Some(1),
             bytes_returned: 200,
             est_tokens: 50,
             est_tokens_saved: 500,
@@ -1173,7 +1186,7 @@ mod tests {
             duration_ms: 50,
             outcome: "error",
             error_message: Some("Tree-sitter parse failure on invalid syntax"),
-            result_count: 0,
+            logical_result_count: None,
             bytes_returned: 0,
             est_tokens: 0,
             est_tokens_saved: 0,
@@ -1213,6 +1226,51 @@ mod tests {
     }
 
     #[test]
+    fn test_logical_result_count_persists_known_empty_and_nonempty_results() {
+        let temp = crate::safe_tempdir();
+        let conn = open_telemetry_db_at(temp.path()).expect("open db");
+        let root = temp.path();
+
+        for (tool, outcome, logical_result_count) in [
+            ("search_symbols", "empty", Some(0)),
+            ("search_symbols", "ok", Some(3)),
+        ] {
+            record_tool_call_conn(
+                &conn,
+                root,
+                &ToolInvocation {
+                    tool,
+                    duration_ms: 1,
+                    outcome,
+                    error_message: None,
+                    logical_result_count,
+                    bytes_returned: 10,
+                    est_tokens: 2,
+                    est_tokens_saved: 0,
+                },
+            );
+        }
+
+        let counts = conn
+            .prepare("SELECT result_count, result_count_known FROM tool_telemetry ORDER BY rowid")
+            .unwrap()
+            .query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(counts, vec![(0, 1), (3, 1)]);
+
+        let summary = get_telemetry_summary(&conn, &TelemetryFilter::default()).unwrap();
+        assert_eq!(summary.empty_calls, 1);
+        assert_eq!(summary.ok_calls, 1);
+        assert_eq!(summary.tool_stats[0].empty_count, 1);
+        let formatted = format_telemetry_summary(&summary);
+        assert!(formatted.contains("Success Rate: 100.0%"));
+        assert!(formatted.contains("Empty Results: 1"));
+        assert!(formatted.contains("| `search_symbols` | 2 | 1 |"));
+    }
+
+    #[test]
     fn test_telemetry_recording_and_summary() {
         let temp = crate::safe_tempdir();
         let root = temp.path();
@@ -1223,7 +1281,7 @@ mod tests {
             duration_ms: 6,
             outcome: "ok",
             error_message: None,
-            result_count: 5,
+            logical_result_count: Some(5),
             bytes_returned: 1200,
             est_tokens: 300,
             est_tokens_saved: 900,
@@ -1235,7 +1293,7 @@ mod tests {
             duration_ms: 4,
             outcome: "ok",
             error_message: None,
-            result_count: 3,
+            logical_result_count: Some(3),
             bytes_returned: 800,
             est_tokens: 200,
             est_tokens_saved: 600,
@@ -1247,7 +1305,7 @@ mod tests {
             duration_ms: 12,
             outcome: "error",
             error_message: Some("Syntax error in Rust function"),
-            result_count: 0,
+            logical_result_count: None,
             bytes_returned: 50,
             est_tokens: 12,
             est_tokens_saved: 0,
@@ -1318,6 +1376,15 @@ mod tests {
         let summary = get_telemetry_summary(&conn, &TelemetryFilter::default()).unwrap();
         assert_eq!(summary.total_calls, 1);
         assert_eq!(summary.ok_calls, 1);
+        assert_eq!(
+            conn.query_row(
+                "SELECT result_count_known FROM tool_telemetry WHERE id = 'old1'",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap(),
+            0
+        );
 
         // Verify we can insert a new record with workspace_root and query via index
         let inv = ToolInvocation {
@@ -1325,7 +1392,7 @@ mod tests {
             duration_ms: 5,
             outcome: "ok",
             error_message: None,
-            result_count: 1,
+            logical_result_count: Some(1),
             bytes_returned: 100,
             est_tokens: 25,
             est_tokens_saved: 75,
@@ -1360,7 +1427,7 @@ mod tests {
             duration_ms: 10,
             outcome: "error",
             error_message: Some(&sensitive_error),
-            result_count: 0,
+            logical_result_count: None,
             bytes_returned: 0,
             est_tokens: 0,
             est_tokens_saved: 0,
@@ -1451,7 +1518,7 @@ mod tests {
         conn.execute(
             "INSERT INTO tool_telemetry VALUES (
                 't-1', datetime('now'), ?1, 'my_repo', 'lookup_symbol',
-                12, 'error', 'Failed to find symbol Foo', 0, 100, 25, 0, '0.9.0'
+                12, 'error', 'Failed to find symbol Foo', 0, 0, 100, 25, 0, '0.9.0'
             )",
             params![raw_var_path],
         )
@@ -1478,7 +1545,7 @@ mod tests {
         conn.execute(
             "INSERT INTO tool_telemetry VALUES (
                 't-2', datetime('now'), ?1, 'other_repo', 'lookup_symbol',
-                12, 'error', 'Reverse matching error', 0, 100, 25, 0, '0.9.0'
+                12, 'error', 'Reverse matching error', 0, 0, 100, 25, 0, '0.9.0'
             )",
             params!["/private/var/folders/zz/99999999/T/other_repo"],
         )

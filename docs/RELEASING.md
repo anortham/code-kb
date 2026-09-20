@@ -139,11 +139,12 @@ git push origin vX.Y.Z
 ```
 
 ### What GitHub Actions Does:
-1. Matrix builds binaries on `ubuntu-latest`, `macos-latest`, `macos-13`, and `windows-latest`.
-2. Downloads and verifies the pinned `julie-extract` binary matching `scripts/julie-pins.json`.
-3. Packages `code-kb`, `julie-extract`, `README.md`, `LICENSE-MIT`, and `LICENSE-APACHE`.
-4. Generates `.sha256` checksums for each archive.
-5. Softprops `action-gh-release` publishes the GitHub Release with downloadable assets. If `docs/release-notes/vX.Y.Z.md` exists, it uses the file content as the release notes body via `body_path`; otherwise, it falls back to auto-generated commit logs.
+1. Confirms the tag or dispatch version matches Cargo and every plugin manifest, and CI passed for the exact commit.
+2. Matrix builds binaries on `ubuntu-latest`, `macos-latest`, `macos-13`, and `windows-latest`.
+3. Downloads and verifies the pinned `julie-extract` binary matching `scripts/julie-pins.json`.
+4. Packages `code-kb`, `julie-extract`, `README.md`, `LICENSE-MIT`, and `LICENSE-APACHE`.
+5. Generates `.sha256` checksums for each archive.
+6. Softprops `action-gh-release` publishes the GitHub Release with downloadable assets. If `docs/release-notes/vX.Y.Z.md` exists, it uses the file content as the release notes body via `body_path`; otherwise, it falls back to auto-generated commit logs.
 
 ### Updating Release Notes on GitHub:
 To update or publish release notes for an existing release without triggering a new CI build:

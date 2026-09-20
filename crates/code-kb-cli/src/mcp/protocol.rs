@@ -78,6 +78,8 @@ pub struct CallToolResult {
         default
     )]
     pub is_error: bool,
+    #[serde(skip)]
+    pub logical_result_count: Option<usize>,
 }
 
 impl CallToolResult {
@@ -88,6 +90,7 @@ impl CallToolResult {
                 text: text.into(),
             }],
             is_error: false,
+            logical_result_count: None,
         }
     }
 
@@ -98,6 +101,12 @@ impl CallToolResult {
                 text: message.into(),
             }],
             is_error: true,
+            logical_result_count: None,
         }
+    }
+
+    pub fn with_logical_result_count(mut self, count: usize) -> Self {
+        self.logical_result_count = Some(count);
+        self
     }
 }

@@ -391,6 +391,7 @@ pub fn format_find_symbol_results(
     query: &str,
     exact_matches: &[Symbol],
     fts_matches: &[SymbolSearchResult],
+    limit: usize,
 ) -> String {
     if !exact_matches.is_empty() {
         let mut out = format!(
@@ -410,6 +411,12 @@ pub fn format_find_symbol_results(
                     out.push_str(&format!("  Doc: {first}\n"));
                 }
             }
+        }
+        if exact_matches.len() >= limit {
+            out.push_str(&format!(
+                "\n[Showing {} results; increase limit to see more.]\n",
+                exact_matches.len()
+            ));
         }
         out
     } else if !fts_matches.is_empty() {
@@ -435,6 +442,12 @@ pub fn format_find_symbol_results(
                     out.push_str(&format!("  Doc: {first}\n"));
                 }
             }
+        }
+        if fts_matches.len() >= limit {
+            out.push_str(&format!(
+                "\n[Showing {} results; increase limit to see more.]\n",
+                fts_matches.len()
+            ));
         }
         out
     } else {
@@ -513,7 +526,7 @@ pub fn format_replace_symbol_result(res: &crate::edit::EditResult) -> String {
 }
 
 /// Formats FTS5 conceptual search results into token-dense markdown.
-pub fn format_search_results(query: &str, results: &[SymbolSearchResult]) -> String {
+pub fn format_search_results(query: &str, results: &[SymbolSearchResult], limit: usize) -> String {
     if results.is_empty() {
         return format!("No symbols found matching concept \"{query}\".");
     }
@@ -540,6 +553,13 @@ pub fn format_search_results(query: &str, results: &[SymbolSearchResult]) -> Str
                 out.push_str(&format!("  Doc: {first_line}\n"));
             }
         }
+    }
+
+    if results.len() >= limit {
+        out.push_str(&format!(
+            "\n[Showing {} results; increase limit to see more.]\n",
+            results.len()
+        ));
     }
 
     out
@@ -604,7 +624,7 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
 
         if total > MAX_COMPACT_TESTS {
             out.push_str(&format!(
-                "... {} more likely tests; use --json for full list.\n",
+                "... {} more likely tests; narrow the target. CLI --json shows the full returned list.\n",
                 total - MAX_COMPACT_TESTS
             ));
         }
@@ -638,7 +658,7 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
                 "rows (imports/modules)"
             };
             out.push_str(&format!(
-                "All impacted symbols are imports/modules; {low_signal_count} low-signal {row_word} hidden; use --json for full list.\n"
+                "All impacted symbols are imports/modules; {low_signal_count} low-signal {row_word} hidden; available in CLI --json.\n"
             ));
         } else {
             let visible_total = visible.len();
@@ -668,7 +688,7 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
 
             if visible_total > MAX_COMPACT_IMPACTED {
                 out.push_str(&format!(
-                    "... {} more impacted symbols; use --json for full list.\n",
+                    "... {} more impacted symbols; narrow the target. CLI --json shows the full returned list.\n",
                     visible_total - MAX_COMPACT_IMPACTED
                 ));
             }
@@ -679,7 +699,7 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
                     "rows (imports/modules)"
                 };
                 out.push_str(&format!(
-                    "... {low_signal_count} low-signal {row_word} hidden; use --json for full list.\n"
+                    "... {low_signal_count} low-signal {row_word} hidden; available in CLI --json.\n"
                 ));
             }
         }
@@ -811,12 +831,25 @@ mod tests {
             snippet: Some("Parses [tokens] from stream.".into()),
         }];
 
-        let formatted = format_search_results("tokens", &results);
+        let formatted = format_search_results("tokens", &results, 20);
         assert!(formatted.contains("Found 1 symbols matching concept \"tokens\":"));
         assert!(
             formatted.contains("- function `parse_tokens` [src/parser.rs:15-25] (score: -1.85)")
         );
         assert!(formatted.contains("Match: Parses [tokens] from stream."));
+    }
+
+    #[test]
+    fn test_format_search_results_discloses_a_reached_limit() {
+        let results = vec![SymbolSearchResult {
+            symbol: sample_symbol("parse_tokens"),
+            score: 0.0,
+            snippet: None,
+        }];
+
+        let formatted = format_search_results("tokens", &results, 1);
+
+        assert!(formatted.contains("[Showing 1 results; increase limit to see more.]"));
     }
 
     #[test]
@@ -895,19 +928,18 @@ mod tests {
 
         let formatted = format_blast_radius(&res);
 
-        // Header shows total count and capped display
         assert!(formatted.contains("### Likely Tests to Run (25 found - showing top 20)"));
-        assert!(formatted.contains("... 5 more likely tests; use --json for full list."));
+        assert!(formatted.contains(
+            "... 5 more likely tests; narrow the target. CLI --json shows the full returned list."
+        ));
 
-        // Files are grouped (file header on its own line)
         assert!(formatted.contains("tests/test_1.rs:\n"));
         assert!(formatted.contains("  - `test_"));
 
-        // Low-signal import hidden from compact downstream list
         assert!(!formatted.contains("use_foo"));
         assert!(
             formatted
-                .contains("... 1 low-signal row (import/module) hidden; use --json for full list.")
+                .contains("... 1 low-signal row (import/module) hidden; available in CLI --json.")
         );
         assert!(formatted.contains("src/service.rs:\n"));
         assert!(formatted.contains("  - [depth 1] function `service_fn` [line 20]"));

@@ -12,14 +12,51 @@ on:
       - 'v*'
 
 permissions:
+  actions: read
   contents: write
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  verify-release:
+    name: Verify release commit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require matching release version and green CI
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          DISPATCH_VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            version="$DISPATCH_VERSION"
+          else
+            version="${REF_NAME#v}"
+          fi
+          cargo_version="$(awk -F'"' '/^version = / { print $2; exit }' Cargo.toml)"
+          claude_plugin_version="$(jq -r .version .claude-plugin/plugin.json)"
+          codex_plugin_version="$(jq -r .version .codex-plugin/plugin.json)"
+          marketplace_version="$(jq -r '.plugins[] | select(.name == "code-kb") | .version' .claude-plugin/marketplace.json)"
+          root_plugin_version="$(jq -r .version plugin.json)"
+          if [[ "$version" != "$cargo_version" || "$version" != "$claude_plugin_version" || "$version" != "$codex_plugin_version" || "$version" != "$marketplace_version" || "$version" != "$root_plugin_version" ]]; then
+            echo "Release version $version must match Cargo and all plugin manifests" >&2
+            exit 1
+          fi
+          commit="$(git rev-parse "${GITHUB_SHA}^{commit}")"
+          ci_status="$(gh run list --workflow=ci.yml --commit "$commit" --limit 1 --json status,conclusion --jq '.[0] | "\(.status)/\(.conclusion)"')"
+          if [[ "$ci_status" != "completed/success" ]]; then
+            echo "CI for $commit is '$ci_status', not completed/success" >&2
+            exit 1
+          fi
+
   build:
     name: Build ${{ matrix.target }}
+    needs: verify-release
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

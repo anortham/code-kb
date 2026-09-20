@@ -15,6 +15,14 @@ mod mcp;
 
 static DEFAULT_ROUTING_BLOCK: &str = include_str!("routing-block.md");
 
+fn parse_result_limit(raw: &str) -> Result<usize, String> {
+    let limit = raw
+        .parse::<usize>()
+        .map_err(|_| "limit must be a non-negative integer".to_string())?;
+    code_kb_core::queries::validate_result_limit(limit).map_err(|error| error.to_string())?;
+    Ok(limit)
+}
+
 #[derive(Debug, Parser)]
 #[command(
     name = "code-kb",
@@ -115,8 +123,8 @@ pub struct SymbolArgs {
     /// Include test functions.
     #[arg(long, alias = "is-test")]
     pub include_tests: bool,
-    /// Maximum number of results.
-    #[arg(long, default_value_t = 20)]
+    /// Maximum number of results (0-200).
+    #[arg(long, default_value_t = 20, value_parser = parse_result_limit)]
     pub limit: usize,
 }
 
@@ -135,8 +143,8 @@ pub struct SearchArgs {
     /// Include test functions.
     #[arg(long, alias = "is-test")]
     pub include_tests: bool,
-    /// Maximum number of results.
-    #[arg(long, default_value_t = 20)]
+    /// Maximum number of results (0-200).
+    #[arg(long, default_value_t = 20, value_parser = parse_result_limit)]
     pub limit: usize,
 }
 
@@ -173,8 +181,8 @@ pub struct RefsArgs {
     /// Direction: "callers" or "callees" (default: "callers").
     #[arg(long, default_value = "callers", value_parser = ["callers", "callees"])]
     pub direction: String,
-    /// Maximum number of results.
-    #[arg(long, default_value_t = 20)]
+    /// Maximum number of results (0-200).
+    #[arg(long, default_value_t = 20, value_parser = parse_result_limit)]
     pub limit: usize,
     /// Include unresolved external runtime/stdlib primitives in callees.
     #[arg(long)]
@@ -191,8 +199,8 @@ pub struct BlastRadiusArgs {
     /// Maximum relationship hops (default: 2).
     #[arg(long, short = 'd', default_value_t = 2)]
     pub depth: usize,
-    /// Maximum results to return (default: 20).
-    #[arg(long, short = 'l', default_value_t = 20)]
+    /// Maximum results to return, 0-200 (default: 20).
+    #[arg(long, short = 'l', default_value_t = 20, value_parser = parse_result_limit)]
     pub limit: usize,
 }
 
@@ -207,8 +215,8 @@ pub struct FactsArgs {
     /// Optional file path or directory to filter structural facts.
     #[arg(short = 'p', long = "path", alias = "file", alias = "file-path")]
     pub path: Option<String>,
-    /// Maximum number of results.
-    #[arg(long, default_value_t = 30)]
+    /// Maximum combined facts and literals (0-200).
+    #[arg(long, default_value_t = 30, value_parser = parse_result_limit)]
     pub limit: usize,
 }
 
@@ -515,28 +523,14 @@ fn main() -> anyhow::Result<()> {
             let rel_path = args.path.as_deref().map(|p| workspace.relativize_filter(p));
             let path_filter = rel_path.as_deref();
 
-            let matches = if args.query.contains("::") || args.query.contains('.') {
-                match queries::get_symbol_by_name(&conn, &args.query, path_filter)? {
-                    Some(sym) => vec![sym],
-                    None => search_symbols_scoped(
-                        &conn,
-                        &args.query,
-                        args.kind.as_deref(),
-                        path_filter,
-                        args.include_tests,
-                        args.limit,
-                    )?,
-                }
-            } else {
-                search_symbols_scoped(
-                    &conn,
-                    &args.query,
-                    args.kind.as_deref(),
-                    path_filter,
-                    args.include_tests,
-                    args.limit,
-                )?
-            };
+            let matches = search_symbols_scoped(
+                &conn,
+                &args.query,
+                args.kind.as_deref(),
+                path_filter,
+                args.include_tests,
+                args.limit,
+            )?;
 
             let (exact_matches, fts_matches) = if matches.is_empty() {
                 let _ = ensure_fts_index_path(&db_path);
@@ -563,7 +557,12 @@ fn main() -> anyhow::Result<()> {
             } else {
                 print!(
                     "{}",
-                    format_find_symbol_results(&args.query, &exact_matches, &fts_matches)
+                    format_find_symbol_results(
+                        &args.query,
+                        &exact_matches,
+                        &fts_matches,
+                        args.limit
+                    )
                 );
             }
         }
@@ -583,7 +582,10 @@ fn main() -> anyhow::Result<()> {
             if cli.json {
                 println!("{}", serde_json::to_string_pretty(&matches)?);
             } else {
-                println!("{}", format_search_results(&args.query, &matches));
+                println!(
+                    "{}",
+                    format_search_results(&args.query, &matches, args.limit)
+                );
             }
         }
         Command::Body(args) => {
@@ -681,7 +683,7 @@ fn main() -> anyhow::Result<()> {
                     &conn,
                     cat,
                     rel_path.as_deref(),
-                    args.limit,
+                    args.limit.saturating_sub(facts.len()),
                 )?;
                 if cli.json {
                     println!(

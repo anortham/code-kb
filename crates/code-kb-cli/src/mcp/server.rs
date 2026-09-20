@@ -51,6 +51,21 @@ fn spawn_index_prepare(
     }))
 }
 
+fn result_limit(arguments: &Value, default: usize) -> Result<usize, CallToolResult> {
+    match arguments.get("limit") {
+        None => Ok(default),
+        Some(value) => match value.as_u64() {
+            Some(limit) if limit <= code_kb_core::queries::MAX_RESULT_LIMIT as u64 => {
+                Ok(limit as usize)
+            }
+            _ => Err(CallToolResult::error(format!(
+                "Invalid limit: expected an integer between 0 and {}",
+                code_kb_core::queries::MAX_RESULT_LIMIT
+            ))),
+        },
+    }
+}
+
 impl McpServer {
     pub fn new(workspace: Workspace, explicit_db: Option<&Path>) -> anyhow::Result<Self> {
         let db_path = workspace.locate_db(explicit_db).unwrap_or_else(|_| {
@@ -187,7 +202,9 @@ impl McpServer {
                         },
                         "limit": {
                             "type": "integer",
-                            "description": "Maximum number of symbols to return (default: 20)."
+                            "minimum": 0,
+                            "maximum": code_kb_core::queries::MAX_RESULT_LIMIT,
+                            "description": "Maximum number of symbols to return, 0-200 (default: 20)."
                         }
                     },
                     "required": ["query"]
@@ -217,7 +234,9 @@ impl McpServer {
                         },
                         "limit": {
                             "type": "integer",
-                            "description": "Maximum number of symbols to return (default: 20)."
+                            "minimum": 0,
+                            "maximum": code_kb_core::queries::MAX_RESULT_LIMIT,
+                            "description": "Maximum number of symbols to return, 0-200 (default: 20)."
                         }
                     },
                     "required": ["query"]
@@ -284,7 +303,9 @@ impl McpServer {
                         },
                         "limit": {
                             "type": "integer",
-                            "description": "Maximum references to return (default: 20)."
+                            "minimum": 0,
+                            "maximum": code_kb_core::queries::MAX_RESULT_LIMIT,
+                            "description": "Maximum references to return, 0-200 (default: 20)."
                         },
                         "include_external": {
                             "type": "boolean",
@@ -310,7 +331,9 @@ impl McpServer {
                         },
                         "limit": {
                             "type": "integer",
-                            "description": "Maximum results to return (default: 30)."
+                            "minimum": 0,
+                            "maximum": code_kb_core::queries::MAX_RESULT_LIMIT,
+                            "description": "Maximum combined facts and literals to return, 0-200 (default: 30)."
                         }
                     }
                 }),
@@ -335,7 +358,9 @@ impl McpServer {
                         },
                         "limit": {
                             "type": "integer",
-                            "description": "Maximum visible test and impact rows (default: 20)."
+                            "minimum": 0,
+                            "maximum": code_kb_core::queries::MAX_RESULT_LIMIT,
+                            "description": "Maximum visible test and impact rows, 0-200 (default: 20)."
                         }
                     }
                 }),
@@ -407,9 +432,7 @@ impl McpServer {
         } else {
             let bytes: usize = res.content.iter().map(|c| c.text.len()).sum();
             let est_tokens = bytes / 4;
-            let outcome = if res.content.is_empty()
-                || (res.content.len() == 1 && res.content[0].text.is_empty())
-            {
+            let outcome = if res.logical_result_count == Some(0) {
                 "empty"
             } else {
                 "ok"
@@ -444,13 +467,10 @@ impl McpServer {
                         .filter(|m| m.is_file())
                         .map(|m| m.len() as usize);
 
-                    if let Some(size) = file_size {
-                        (size / 4).saturating_sub(est_tokens)
-                    } else {
-                        est_tokens.saturating_mul(3)
-                    }
+                    file_size
+                        .map(|size| (size / 4).saturating_sub(est_tokens))
+                        .unwrap_or_default()
                 }
-                "lookup_symbol" | "search_symbols" => est_tokens.saturating_mul(3),
                 _ => 0,
             };
             (outcome, None, bytes, est_tokens, est_tokens_saved)
@@ -461,7 +481,7 @@ impl McpServer {
             duration_ms,
             outcome,
             error_message: error_msg,
-            result_count: res.content.len(),
+            logical_result_count: res.logical_result_count,
             bytes_returned: bytes,
             est_tokens,
             est_tokens_saved,
@@ -728,39 +748,21 @@ impl McpServer {
                     .or_else(|| arguments.get("include_tests"))
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false);
-                let limit = arguments
-                    .get("limit")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(20) as usize;
+                let limit = match result_limit(arguments, 20) {
+                    Ok(limit) => limit,
+                    Err(error) => return error,
+                };
 
-                let matches = if query.contains("::") || query.contains('.') {
-                    match code_kb_core::get_symbol_by_name(&conn, query, path_filter) {
-                        Ok(Some(sym)) => vec![sym],
-                        Ok(None) => match search_symbols_scoped(
-                            &conn,
-                            query,
-                            kind,
-                            path_filter,
-                            include_tests,
-                            limit,
-                        ) {
-                            Ok(m) => m,
-                            Err(e) => return CallToolResult::error(e.to_string()),
-                        },
-                        Err(e) => return CallToolResult::error(e.to_string()),
-                    }
-                } else {
-                    match search_symbols_scoped(
-                        &conn,
-                        query,
-                        kind,
-                        path_filter,
-                        include_tests,
-                        limit,
-                    ) {
-                        Ok(m) => m,
-                        Err(e) => return CallToolResult::error(e.to_string()),
-                    }
+                let matches = match search_symbols_scoped(
+                    &conn,
+                    query,
+                    kind,
+                    path_filter,
+                    include_tests,
+                    limit,
+                ) {
+                    Ok(m) => m,
+                    Err(e) => return CallToolResult::error(e.to_string()),
                 };
 
                 let (exact_matches, fts_matches) = if matches.is_empty() {
@@ -783,7 +785,9 @@ impl McpServer {
                     query,
                     &exact_matches,
                     &fts_matches,
+                    limit,
                 ))
+                .with_logical_result_count(exact_matches.len() + fts_matches.len())
             }
             "search_symbols" => {
                 let query = match arguments
@@ -811,10 +815,10 @@ impl McpServer {
                     .or_else(|| arguments.get("include_tests"))
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false);
-                let limit = arguments
-                    .get("limit")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(20) as usize;
+                let limit = match result_limit(arguments, 20) {
+                    Ok(limit) => limit,
+                    Err(error) => return error,
+                };
 
                 let _ = ensure_fts_index_path(&self.db_path);
 
@@ -830,7 +834,8 @@ impl McpServer {
                     Err(e) => return CallToolResult::error(e.to_string()),
                 };
 
-                CallToolResult::text(format_search_results(query, &matches))
+                CallToolResult::text(format_search_results(query, &matches, limit))
+                    .with_logical_result_count(matches.len())
             }
             "get_symbol_body" => {
                 let raw_name = match arguments
@@ -921,10 +926,10 @@ impl McpServer {
                     .get("direction")
                     .and_then(|v| v.as_str())
                     .unwrap_or("callers");
-                let limit = arguments
-                    .get("limit")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(20) as usize;
+                let limit = match result_limit(arguments, 20) {
+                    Ok(limit) => limit,
+                    Err(error) => return error,
+                };
                 let include_external = arguments
                     .get("include_external")
                     .and_then(|v| v.as_bool())
@@ -943,6 +948,7 @@ impl McpServer {
                 };
 
                 CallToolResult::text(format_references(&symbol_name, &refs, direction, limit))
+                    .with_logical_result_count(refs.len())
             }
             "find_structural_facts" => {
                 let raw_path = arguments
@@ -963,6 +969,11 @@ impl McpServer {
                     .unwrap_or("")
                     .trim();
 
+                let limit = match result_limit(arguments, 30) {
+                    Ok(limit) => limit,
+                    Err(error) => return error,
+                };
+
                 if category.is_empty() {
                     let categories =
                         match list_structural_fact_categories_scoped(&conn, path_filter) {
@@ -976,13 +987,8 @@ impl McpServer {
                             "\nCall find_structural_facts(category=\"<name>\") to query matches.",
                         );
                     }
-                    return CallToolResult::text(out);
+                    return CallToolResult::text(out).with_logical_result_count(categories.len());
                 }
-
-                let limit = arguments
-                    .get("limit")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(30) as usize;
 
                 let facts = match code_kb_core::find_structural_facts_scoped(
                     &conn,
@@ -994,11 +1000,19 @@ impl McpServer {
                     Err(e) => return CallToolResult::error(e.to_string()),
                 };
 
-                let literals =
-                    code_kb_core::find_literals_scoped(&conn, category, path_filter, limit)
-                        .unwrap_or_default();
+                let literal_limit = limit.saturating_sub(facts.len());
+                let literals = match code_kb_core::find_literals_scoped(
+                    &conn,
+                    category,
+                    path_filter,
+                    literal_limit,
+                ) {
+                    Ok(literals) => literals,
+                    Err(error) => return CallToolResult::error(error.to_string()),
+                };
 
                 CallToolResult::text(format_structural_facts(&facts, &literals, category))
+                    .with_logical_result_count(facts.len() + literals.len())
             }
             "blast_radius" | "impact" => {
                 let raw_symbol = arguments
@@ -1019,13 +1033,16 @@ impl McpServer {
                     .or_else(|| arguments.get("max_depth"))
                     .and_then(|v| v.as_u64())
                     .unwrap_or(2) as usize;
-                let limit = arguments
-                    .get("limit")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(20) as usize;
+                let limit = match result_limit(arguments, 20) {
+                    Ok(limit) => limit,
+                    Err(error) => return error,
+                };
 
                 match blast_radius_op(&self.workspace, &conn, symbol, file, depth, limit) {
-                    Ok(res) => CallToolResult::text(format_blast_radius(&res)),
+                    Ok(res) => CallToolResult::text(format_blast_radius(&res))
+                        .with_logical_result_count(
+                            res.likely_tests.len() + res.impacted_symbols.len(),
+                        ),
                     Err(e) => CallToolResult::error(e.to_string()),
                 }
             }
@@ -1219,6 +1236,99 @@ impl McpServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn telemetry_records_logical_lookup_counts_without_inventing_savings() {
+        let temp = code_kb_core::safe_tempdir();
+        let root = temp.path();
+        let db_dir = root.join(".code-kb");
+        std::fs::create_dir_all(&db_dir).unwrap();
+        let db_path = db_dir.join("artifact.db");
+        let conn = code_kb_core::open_read_write(&db_path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE files (
+                file_id TEXT PRIMARY KEY, path TEXT, language TEXT, content_hash TEXT,
+                content_bytes INTEGER, line_count INTEGER, indexed_at TEXT
+            );
+            CREATE TABLE symbols (
+                symbol_id TEXT PRIMARY KEY, file_id TEXT, path TEXT, language TEXT, name TEXT, kind TEXT,
+                signature TEXT, doc_comment TEXT, visibility TEXT, parent_symbol_id TEXT,
+                start_line INTEGER, start_column INTEGER, end_line INTEGER, end_column INTEGER,
+                start_byte INTEGER, end_byte INTEGER, body_start_line INTEGER,
+                body_start_column INTEGER, body_end_line INTEGER, body_end_column INTEGER,
+                body_start_byte INTEGER, body_end_byte INTEGER, body_hash TEXT,
+                semantic_group TEXT, is_test INTEGER, test_container INTEGER
+            );
+            CREATE TABLE relationships (
+                relationship_id TEXT PRIMARY KEY, from_symbol_id TEXT, to_symbol_id TEXT,
+                kind TEXT, path TEXT, start_line INTEGER, start_column INTEGER
+            );
+            CREATE TABLE pending_relationships (
+                from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT,
+                path TEXT, start_line INTEGER, start_column INTEGER
+            );
+            INSERT INTO files VALUES ('f', 'src/lib.rs', 'rust', 'hash', 0, 1, '2026-01-01');
+            INSERT INTO symbols VALUES
+                ('one', 'f', 'src/lib.rs', 'rust', 'needle', 'function', 'fn needle()', NULL, 'pub', NULL, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 'hash', NULL, 0, 0),
+                ('two', 'f', 'src/lib.rs', 'rust', 'needle', 'function', 'fn needle_alt()', NULL, 'pub', NULL, 2, 0, 2, 1, 2, 3, 2, 0, 2, 1, 2, 3, 'hash', NULL, 0, 0);",
+        )
+        .unwrap();
+        code_kb_core::db::ensure_fts_index(&conn).unwrap();
+        drop(conn);
+
+        let mut server = McpServer {
+            workspace: Workspace::new(root.to_path_buf()),
+            db_path,
+            explicit_db: None,
+            _watcher: None,
+            telemetry_conn: Some(code_kb_core::telemetry::open_telemetry_db_at(root).unwrap()),
+            reconcile: None,
+        };
+        assert!(
+            !server
+                .handle_call_tool("lookup_symbol", &json!({"query": "needle"}))
+                .is_error
+        );
+        assert!(
+            !server
+                .handle_call_tool("lookup_symbol", &json!({"query": "absent"}))
+                .is_error
+        );
+
+        let rows = server
+            .telemetry_conn
+            .as_ref()
+            .unwrap()
+            .prepare(
+                "SELECT outcome, result_count, result_count_known, est_tokens_saved
+                 FROM tool_telemetry ORDER BY rowid",
+            )
+            .unwrap()
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, i64>(3)?,
+                ))
+            })
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(
+            rows,
+            vec![("ok".to_string(), 2, 1, 0), ("empty".to_string(), 0, 1, 0)]
+        );
+    }
+
+    #[test]
+    fn result_limit_rejects_schema_bypassing_values() {
+        assert_eq!(result_limit(&json!({}), 20).unwrap(), 20);
+        assert_eq!(result_limit(&json!({"limit": 0}), 20).unwrap(), 0);
+        assert!(result_limit(&json!({"limit": u64::MAX}), 20).is_err());
+        assert!(result_limit(&json!({"limit": -1}), 20).is_err());
+        assert!(result_limit(&json!({"limit": 1.5}), 20).is_err());
+    }
 
     #[test]
     fn test_sanitize_symbol_name() {

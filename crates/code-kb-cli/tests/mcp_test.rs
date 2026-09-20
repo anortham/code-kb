@@ -65,17 +65,14 @@ fn test_mcp_stdio_handshake_and_tools() {
             path TEXT, start_line INTEGER, start_column INTEGER
         );
         CREATE TABLE structural_facts (
-            fact_id TEXT PRIMARY KEY, file_id TEXT, path TEXT, language TEXT,
-            pattern_id TEXT, kind TEXT, name TEXT, receiver TEXT, symbol_id TEXT,
-            scope_symbol_id TEXT, parent_fact_id TEXT, start_line INTEGER,
-            start_column INTEGER, end_line INTEGER, end_column INTEGER,
-            start_byte INTEGER, end_byte INTEGER, confidence REAL, payload TEXT
+            structural_fact_id TEXT PRIMARY KEY, path TEXT, language TEXT,
+            pattern_id TEXT, capture_name TEXT, node_kind TEXT,
+            containing_symbol_id TEXT, start_line INTEGER, end_line INTEGER,
+            confidence REAL, metadata_json TEXT
         );
         CREATE TABLE literals (
-            literal_id TEXT PRIMARY KEY, file_id TEXT, path TEXT, language TEXT,
-            kind TEXT, value TEXT, scope_symbol_id TEXT, start_line INTEGER,
-            start_column INTEGER, end_line INTEGER, end_column INTEGER,
-            start_byte INTEGER, end_byte INTEGER
+            literal_id TEXT PRIMARY KEY, path TEXT, literal_text TEXT, kind TEXT,
+            carrier TEXT, start_line INTEGER, containing_symbol_id TEXT
         );",
     )
     .unwrap();
@@ -95,8 +92,27 @@ fn test_mcp_stdio_handshake_and_tools() {
     )
     .unwrap();
     conn.execute(
+        "INSERT INTO symbols VALUES (
+            's2', 'f1', 'src/workspace.rs', 'rust', 'root', 'field',
+            'pub root: String', NULL, 'pub', 's1',
+            2, 4, 2, 20, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+            NULL, 0, 0
+        )",
+        [],
+    )
+    .unwrap();
+    conn.execute(
         "INSERT INTO pending_relationships VALUES ('s1', 'println', 'call', 'src/workspace.rs', 2, 4)",
         [],
+    )
+    .unwrap();
+    conn.execute_batch(
+        "INSERT INTO structural_facts VALUES
+            ('sf1', 'src/routes.rs', 'rust', 'axum.route', 'route', 'call', 's1', 1, 1, 1.0, NULL),
+            ('sf2', 'src/routes.rs', 'rust', 'axum.route', 'route', 'call', 's1', 2, 2, 1.0, NULL);
+         INSERT INTO literals VALUES
+            ('l1', 'src/routes.rs', '/first', 'route', 'string', 1, 's1'),
+            ('l2', 'src/routes.rs', '/second', 'route', 'string', 2, 's1');",
     )
     .unwrap();
     code_kb_core::db::ensure_fts_index(&conn).unwrap();
@@ -235,6 +251,86 @@ fn test_mcp_stdio_handshake_and_tools() {
     let content_text = resp3["result"]["content"][0]["text"].as_str().unwrap();
     assert!(content_text.contains("Workspace"));
 
+    for (id, limit) in [(30, json!(u64::MAX)), (31, json!(-1)), (32, json!(1.5))] {
+        let request = json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": "tools/call",
+            "params": {
+                "name": "lookup_symbol",
+                "arguments": { "query": "Workspace", "limit": limit }
+            }
+        });
+        let mut line = serde_json::to_string(&request).unwrap();
+        line.push('\n');
+        stdin.write_all(line.as_bytes()).unwrap();
+        stdin.flush().unwrap();
+
+        let mut response_line = String::new();
+        reader.read_line(&mut response_line).unwrap();
+        let response: Value = serde_json::from_str(&response_line).unwrap();
+        assert_eq!(response["id"], id);
+        assert_eq!(response["result"]["isError"], true);
+        assert!(
+            response["result"]["content"][0]["text"]
+                .as_str()
+                .is_some_and(|text| text.contains("Invalid limit"))
+        );
+    }
+
+    let zero_limit_request = json!({
+        "jsonrpc": "2.0",
+        "id": 33,
+        "method": "tools/call",
+        "params": {
+            "name": "lookup_symbol",
+            "arguments": { "query": "Workspace::root", "limit": 0 }
+        }
+    });
+    let mut zero_limit_line = serde_json::to_string(&zero_limit_request).unwrap();
+    zero_limit_line.push('\n');
+    stdin.write_all(zero_limit_line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut zero_limit_response_line = String::new();
+    reader.read_line(&mut zero_limit_response_line).unwrap();
+    let zero_limit_response: Value = serde_json::from_str(&zero_limit_response_line).unwrap();
+    assert_eq!(zero_limit_response["id"], 33);
+    assert_ne!(zero_limit_response["result"]["isError"], true);
+    assert!(
+        zero_limit_response["result"]["content"][0]["text"]
+            .as_str()
+            .is_some_and(|text| text.contains("No symbols found"))
+    );
+
+    let filtered_lookup_request = json!({
+        "jsonrpc": "2.0",
+        "id": 35,
+        "method": "tools/call",
+        "params": {
+            "name": "lookup_symbol",
+            "arguments": { "query": "Workspace::root", "kind": "function" }
+        }
+    });
+    let mut filtered_lookup_line = serde_json::to_string(&filtered_lookup_request).unwrap();
+    filtered_lookup_line.push('\n');
+    stdin.write_all(filtered_lookup_line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut filtered_lookup_response_line = String::new();
+    reader
+        .read_line(&mut filtered_lookup_response_line)
+        .unwrap();
+    let filtered_lookup_response: Value =
+        serde_json::from_str(&filtered_lookup_response_line).unwrap();
+    assert_eq!(filtered_lookup_response["id"], 35);
+    assert_ne!(filtered_lookup_response["result"]["isError"], true);
+    assert!(
+        filtered_lookup_response["result"]["content"][0]["text"]
+            .as_str()
+            .is_some_and(|text| text.contains("No symbols found"))
+    );
+
     // 4. Send tools/call search_symbols (FTS5 conceptual search)
     let search_req = json!({
         "jsonrpc": "2.0",
@@ -315,10 +411,32 @@ fn test_mcp_stdio_handshake_and_tools() {
     assert!(resp6["error"].is_null());
     assert_ne!(resp6["result"]["isError"], true);
     let facts_text = resp6["result"]["content"][0]["text"].as_str().unwrap();
-    assert!(
-        facts_text.contains("Available structural fact categories")
-            || facts_text.contains("No structural facts")
-    );
+    assert!(facts_text.contains("categories") || facts_text.contains("No structural facts"));
+
+    let capped_facts_req = json!({
+        "jsonrpc": "2.0",
+        "id": 34,
+        "method": "tools/call",
+        "params": {
+            "name": "find_structural_facts",
+            "arguments": { "category": "route", "limit": 3 }
+        }
+    });
+    let mut capped_facts_line = serde_json::to_string(&capped_facts_req).unwrap();
+    capped_facts_line.push('\n');
+    stdin.write_all(capped_facts_line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+
+    let mut capped_facts_response_line = String::new();
+    reader.read_line(&mut capped_facts_response_line).unwrap();
+    let capped_facts_response: Value = serde_json::from_str(&capped_facts_response_line).unwrap();
+    assert_eq!(capped_facts_response["id"], 34);
+    assert_ne!(capped_facts_response["result"]["isError"], true);
+    let capped_facts_text = capped_facts_response["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap();
+    assert!(capped_facts_text.contains("Structural facts for 'route' (2 found):"));
+    assert!(capped_facts_text.contains("Matching literals (1 found):"));
 
     // 7. Test file_skeleton with alias "file" instead of "file_path"
     let skeleton_req = json!({

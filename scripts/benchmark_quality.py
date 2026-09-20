@@ -156,18 +156,25 @@ def main():
         help="Path to write JSON benchmark report",
     )
     args = parser.parse_args()
+    if args.iterations < 1:
+        parser.error("--iterations must be at least 1")
 
     binary = args.binary
     if not os.path.isfile(binary):
         print(f"Binary not found at {binary}. Building release binary...")
         subprocess.run(["cargo", "build", "--release"], cwd=args.cwd, check=True)
 
+    version_result = subprocess.run([binary, "--version"], cwd=args.cwd, capture_output=True, text=True)
+    binary_version = version_result.stdout.strip() if version_result.returncode == 0 else "unknown"
+
     print("=================================================================")
     print("           code-kb Token Efficiency & Quality Benchmark          ")
     print("=================================================================")
     print(f"Binary: {binary}")
+    print(f"Binary version: {binary_version}")
     print(f"Workspace: {args.cwd}")
     print(f"Iterations: {args.iterations}")
+    print("Each invocation is a fresh CLI process; repeats benefit from filesystem cache. Peak RSS is for an exited process, not retained MCP or process-tree memory.")
     print()
 
     # 1. Binary Footprint
@@ -200,6 +207,7 @@ def main():
             "raw_tokens": raw_tokens,
             "skeleton_tokens": skel_tokens,
             "reduction_pct": reduction_pct,
+            "cold_ms": res["cold_ms"],
             "median_ms": res["median_ms"],
             "peak_rss_mb": res["peak_rss_mb"],
         })
@@ -225,6 +233,7 @@ def main():
             "raw_file_tokens": raw_file_tokens,
             "slice_tokens": slice_tokens,
             "saving_pct": saving_pct,
+            "cold_ms": res["cold_ms"],
             "median_ms": res["median_ms"],
             "peak_rss_mb": res["peak_rss_mb"],
         })
@@ -289,36 +298,35 @@ def main():
             "rank_1": rank_1,
             "top_5": top_5,
             "tokens": res["tokens"],
+            "cold_ms": res["cold_ms"],
             "median_ms": res["median_ms"],
             "peak_rss_mb": res["peak_rss_mb"],
         })
 
-    # 5. Summary Printouts
     print("### 1. Token Compression: Skeletons vs Full File Reads")
-    print("| File | Raw Lines | Raw Tokens | Skeleton Tokens | Token Savings | Latency (median) | Peak RSS |")
-    print("|---|---:|---:|---:|---:|---:|---:|")
+    print("| File | Raw Lines | Raw Tokens | Skeleton Tokens | Token Savings | First CLI Invocation | Fresh CLI Median | Peak Exited RSS |")
+    print("|---|---:|---:|---:|---:|---:|---:|---:|")
     for r in skeleton_results:
-        print(f"| `{r['file']}` | {r['raw_lines']:,} | ~{r['raw_tokens']:,} | ~{r['skeleton_tokens']:,} | **{r['reduction_pct']:.1f}%** | {r['median_ms']:.2f} ms | {r['peak_rss_mb']:.1f} MB |")
+        print(f"| `{r['file']}` | {r['raw_lines']:,} | ~{r['raw_tokens']:,} | ~{r['skeleton_tokens']:,} | **{r['reduction_pct']:.1f}%** | {r['cold_ms']:.2f} ms | {r['median_ms']:.2f} ms | {r['peak_rss_mb']:.1f} MB |")
     print()
 
     print("### 2. Surgical Context Slicing vs Full File Reads")
-    print("| Target Symbol | Raw File Tokens | Slice Tokens | Token Savings | Latency (median) | Peak RSS |")
-    print("|---|---:|---:|---:|---:|---:|")
+    print("| Target Symbol | Raw File Tokens | Slice Tokens | Token Savings | First CLI Invocation | Fresh CLI Median | Peak Exited RSS |")
+    print("|---|---:|---:|---:|---:|---:|---:|")
     for r in slice_results:
-        print(f"| `{r['symbol']}` | ~{r['raw_file_tokens']:,} | ~{r['slice_tokens']:,} | **{r['saving_pct']:.1f}%** | {r['median_ms']:.2f} ms | {r['peak_rss_mb']:.1f} MB |")
+        print(f"| `{r['symbol']}` | ~{r['raw_file_tokens']:,} | ~{r['slice_tokens']:,} | **{r['saving_pct']:.1f}%** | {r['cold_ms']:.2f} ms | {r['median_ms']:.2f} ms | {r['peak_rss_mb']:.1f} MB |")
     print()
 
     print("### 3. Query Latency & Search Quality")
-    print("| Query Type | Command | Target Symbol | Exact Rank | Top-1 | Top-5 | Latency (median) |")
-    print("|---|---|---|:---:|:---:|:---:|---:|")
+    print("| Query Type | Command | Target Symbol | Exact Rank | Top-1 | Top-5 | First CLI Invocation | Fresh CLI Median |")
+    print("|---|---|---|:---:|:---:|:---:|---:|---:|")
     for q in query_benchmarks:
         rank_str = f"#{q['rank']}" if q["rank"] else "N/A"
         top1_str = "YES" if q["rank_1"] else "NO"
         top5_str = "YES" if q["top_5"] else "NO"
-        print(f"| {q['name']} | `code-kb {' '.join(q['args'])}` | `{q['target']}` | {rank_str} | {top1_str} | {top5_str} | {q['median_ms']:.2f} ms |")
+        print(f"| {q['name']} | `code-kb {' '.join(q['args'])}` | `{q['target']}` | {rank_str} | {top1_str} | {top5_str} | {q['cold_ms']:.2f} ms | {q['median_ms']:.2f} ms |")
     print()
 
-    # 6. Measured Resource & Invariant Summary
     max_rss = max(
         max((r["peak_rss_mb"] for r in skeleton_results), default=0.0),
         max((r["peak_rss_mb"] for r in slice_results), default=0.0),
@@ -326,17 +334,20 @@ def main():
     )
     median_latencies = [q["median_ms"] for q in query_benchmarks]
 
-    print("### 4. Measured Resource Footprint & Verification Summary")
+    print("### 4. Fresh CLI Invocation Measurement Summary")
     print(f"- **Standalone Binary Size:** {bin_size_mb:.2f} MB")
-    print(f"- **Max Measured Peak RSS:** {max_rss:.2f} MB (includes process startup, dynamic link, and SQLite)")
-    print(f"- **Median Query Latency:** {statistics.median(median_latencies):.2f} ms (warm)")
-    print(f"- **Min Query Latency:** {min(median_latencies):.2f} ms")
+    print(f"- **Binary Version:** {binary_version}")
+    print(f"- **Max Peak Exited-Process RSS:** {max_rss:.2f} MB (includes process startup, dynamic link, and SQLite; excludes retained MCP and launcher process-tree memory)")
+    print(f"- **Median Fresh CLI Query Invocation:** {statistics.median(median_latencies):.2f} ms (filesystem-warm)")
+    print(f"- **Min Fresh CLI Query Invocation:** {min(median_latencies):.2f} ms")
     print(f"- **Search Top-1 Precision:** {sum(1 for q in query_benchmarks if q['rank_1'])}/{len(query_benchmarks)}")
     print(f"- **Search Top-5 Precision:** {sum(1 for q in query_benchmarks if q['top_5'])}/{len(query_benchmarks)}")
     print()
 
     report = {
         "binary_size_mb": bin_size_mb,
+        "binary_version": binary_version,
+        "measurement_scope": "fresh CLI invocations; repeats benefit from filesystem cache; exited-process peak RSS only, excluding retained MCP server and launcher process-tree memory",
         "max_peak_rss_mb": max_rss,
         "skeleton_compression": skeleton_results,
         "slice_compression": slice_results,

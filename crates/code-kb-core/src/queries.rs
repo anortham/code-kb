@@ -22,6 +22,17 @@ pub enum QueryError {
     AmbiguousSymbol(String, usize, String),
     #[error("Invalid direction '{0}': must be 'callers' or 'callees'")]
     InvalidDirection(String),
+    #[error("Result limit must be between 0 and {MAX_RESULT_LIMIT}, got {0}")]
+    InvalidResultLimit(usize),
+}
+
+pub const MAX_RESULT_LIMIT: usize = 200;
+
+pub fn validate_result_limit(limit: usize) -> Result<(), QueryError> {
+    if limit > MAX_RESULT_LIMIT {
+        return Err(QueryError::InvalidResultLimit(limit));
+    }
+    Ok(())
 }
 
 fn map_symbol(row: &Row) -> rusqlite::Result<Symbol> {
@@ -368,11 +379,21 @@ pub fn search_symbols_scoped(
     include_tests: bool,
     limit: usize,
 ) -> Result<Vec<Symbol>, QueryError> {
-    // Try get_symbol_by_name first for qualified queries (e.g. McpServer::new, Class.method)
+    validate_result_limit(limit)?;
+    if limit == 0 {
+        return Ok(Vec::new());
+    }
+    let norm_kind = kind_filter.map(normalize_kind);
     if (query.contains("::") || query.contains('.'))
-        && let Ok(Some(sym)) = get_symbol_by_name(conn, query, path_filter)
+        && let Some(sym) = get_symbol_by_name(conn, query, path_filter)?
     {
-        return Ok(vec![sym]);
+        let kind_matches = norm_kind.as_deref().is_none_or(|kind| sym.kind == kind);
+        let test_matches = include_tests || (!sym.is_test && !sym.test_container);
+        return Ok(if kind_matches && test_matches {
+            vec![sym]
+        } else {
+            Vec::new()
+        });
     }
 
     let pattern = format!("%{}%", escape_like(query));
@@ -383,7 +404,6 @@ pub fn search_symbols_scoped(
             .to_string()
     });
     let escaped_path = normalized_path.as_deref().map(escape_like);
-    let norm_kind = kind_filter.map(normalize_kind);
 
     let mut sql = String::from(
         "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,
@@ -458,6 +478,10 @@ pub fn fts_search_symbols_scoped(
     include_tests: bool,
     limit: usize,
 ) -> Result<Vec<SymbolSearchResult>, QueryError> {
+    validate_result_limit(limit)?;
+    if limit == 0 {
+        return Ok(Vec::new());
+    }
     let (and_q, or_q) = sanitize_fts5_query(query);
     if and_q.is_empty() {
         return Ok(Vec::new());
@@ -988,6 +1012,7 @@ pub fn find_references_scoped(
     include_external: bool,
     path_filter: Option<&str>,
 ) -> Result<Vec<ReferenceSite>, QueryError> {
+    validate_result_limit(limit)?;
     if direction != "callers" && direction != "callees" {
         return Err(QueryError::InvalidDirection(direction.to_string()));
     }
@@ -1712,6 +1737,7 @@ pub fn find_structural_facts_scoped(
     path_filter: Option<&str>,
     limit: usize,
 ) -> Result<Vec<StructuralFact>, QueryError> {
+    validate_result_limit(limit)?;
     let norm_path = path_filter
         .map(|p| {
             p.replace('\\', "/")
@@ -1809,6 +1835,7 @@ pub fn find_literals_scoped(
     path_filter: Option<&str>,
     limit: usize,
 ) -> Result<Vec<LiteralFact>, QueryError> {
+    validate_result_limit(limit)?;
     let norm_path = path_filter
         .map(|p| {
             p.replace('\\', "/")
@@ -2002,6 +2029,7 @@ pub fn compute_blast_radius_scoped(
     max_depth: usize,
     limit: usize,
 ) -> Result<BlastRadiusResult, QueryError> {
+    validate_result_limit(limit)?;
     let max_depth = max_depth.min(5);
     let resolved_seed_symbols = seed_symbols
         .iter()
@@ -2304,6 +2332,25 @@ pub fn compute_blast_radius(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn result_limit_rejects_values_above_the_shared_ceiling() {
+        assert!(validate_result_limit(MAX_RESULT_LIMIT).is_ok());
+        assert!(matches!(
+            validate_result_limit(usize::MAX),
+            Err(QueryError::InvalidResultLimit(usize::MAX))
+        ));
+    }
+
+    #[test]
+    fn find_references_rejects_an_unbounded_limit_before_sql_execution() {
+        let conn = Connection::open_in_memory().unwrap();
+
+        assert!(matches!(
+            find_references_scoped(&conn, "target", "callers", usize::MAX, false, None),
+            Err(QueryError::InvalidResultLimit(usize::MAX))
+        ));
+    }
+
     use super::*;
     use crate::db::{ensure_fts_index, open_read_write};
 
