@@ -722,7 +722,11 @@ fn candidate_filters(searching_variables: bool, include_tests: bool) -> String {
 }
 
 /// Runs the word, trigram-name, and exact-name branches with the same filters and merges
-/// them by `rowid`. Word BM25 exists only for word rows and never orders across branches.
+/// them by `rowid`. The word branch admits the rows that match every query word first and
+/// then fills its cap with rows that match any word, so one full match never hides a
+/// better partial one. Word BM25 exists only for word rows and never orders across branches.
+/// A `variable` kind filter adds locals and parameters by name, because the FTS tables
+/// exclude them.
 pub(crate) fn collect_search_candidates(
     conn: &Connection,
     query: &str,
@@ -783,7 +787,7 @@ pub(crate) fn collect_search_candidates(
             existing.exact_name |= incoming.exact_name;
             existing.word_match |= incoming.word_match;
             existing.name_match |= incoming.name_match;
-            if incoming.bm25.is_some() {
+            if incoming.bm25.is_some() && existing.bm25.is_none() {
                 existing.bm25 = incoming.bm25;
                 existing.result = incoming.result;
             }
@@ -827,6 +831,34 @@ pub(crate) fn collect_search_candidates(
     for (rowid, mut candidate) in exact_rows {
         candidate.exact_name = true;
         admit(rowid, candidate);
+    }
+
+    if searching_variables {
+        let pattern = format!("%{}%", escape_like(exact_query));
+        let local_sql = format!(
+            "SELECT {columns} FROM symbols s
+             WHERE {local} AND (s.name = :query OR s.name LIKE :pattern ESCAPE '\\') {filters}
+             ORDER BY (s.name = :query) DESC, length(s.name) ASC, s.path ASC LIMIT {limit}",
+            local = local_variable_predicate("s")
+        );
+        let local_rows = conn
+            .prepare(&local_sql)?
+            .query_map(
+                rusqlite::named_params! {
+                    ":query": exact_query,
+                    ":pattern": pattern,
+                    ":kind": kind_val,
+                    ":path": path_val,
+                    ":path_like": path_like,
+                },
+                new_candidate,
+            )?
+            .collect::<Result<Vec<_>, _>>()?;
+        for (rowid, mut candidate) in local_rows {
+            candidate.exact_name = candidate.result.symbol.name == exact_query;
+            candidate.name_match = true;
+            admit(rowid, candidate);
+        }
     }
 
     let word_sql = format!(
@@ -879,15 +911,19 @@ pub(crate) fn collect_search_candidates(
             .collect::<Result<Vec<_>, _>>()?)
     };
     if !and_q.is_empty() {
-        let mut rows = word_rows(&and_q)?;
-        let only_documentation = rows
-            .iter()
-            .all(|(_, c)| is_documentation_language(&c.result.symbol.language));
-        if only_documentation && and_q != or_q {
-            rows = word_rows(&or_q)?;
-        }
-        for (rowid, candidate) in rows {
+        let and_rows = word_rows(&and_q)?;
+        let mut word_admitted: HashSet<i64> = and_rows.iter().map(|(rowid, _)| *rowid).collect();
+        for (rowid, candidate) in and_rows {
             admit(rowid, candidate);
+        }
+        if and_q != or_q {
+            for (rowid, candidate) in word_rows(&or_q)? {
+                if word_admitted.len() >= word_cap && !word_admitted.contains(&rowid) {
+                    break;
+                }
+                word_admitted.insert(rowid);
+                admit(rowid, candidate);
+            }
         }
     }
 
@@ -1039,7 +1075,7 @@ pub fn fts_search_symbols_explained(
     let started = std::time::Instant::now();
     let ranked = rerank(candidates, query, include_tests);
     let rerank_us = started.elapsed().as_micros();
-    let mut results: Vec<SymbolSearchResult> = ranked
+    Ok(ranked
         .into_iter()
         .take(limit)
         .map(|(mut result, mut breakdown)| {
@@ -1050,21 +1086,7 @@ pub fn fts_search_symbols_explained(
             }
             result
         })
-        .collect();
-
-    if searching_variables {
-        let locals = name_search(&format!(" AND {}", local_variable_predicate("s")))?;
-        let already_found: HashSet<String> =
-            results.iter().map(|r| r.symbol.symbol_id.clone()).collect();
-        results.extend(
-            locals
-                .into_iter()
-                .filter(|r| !already_found.contains(&r.symbol.symbol_id)),
-        );
-        results.truncate(limit);
-    }
-
-    Ok(results)
+        .collect())
 }
 
 const W_NAME_WHOLE: f64 = 100.0;
@@ -1263,7 +1285,7 @@ fn kind_prior(kind: &str) -> f64 {
 }
 
 fn path_role(path: &str, words: &[QueryWord], stemmer: &Stemmer) -> f64 {
-    let Some(segment) = path.split('/').find(|seg| {
+    let Some(segment) = path.split(['/', '\\']).find(|seg| {
         DEMOTED_PATH_SEGMENTS
             .iter()
             .any(|d| d.eq_ignore_ascii_case(seg))
@@ -1928,10 +1950,6 @@ const DOCUMENTATION_LANGUAGES: &[&str] = &[
     "markdown", "yaml", "toml", "json", "html", "css", "xml", "ini", "text",
 ];
 
-fn is_documentation_language(language: &str) -> bool {
-    DOCUMENTATION_LANGUAGES.contains(&language)
-}
-
 fn documentation_language_list() -> String {
     DOCUMENTATION_LANGUAGES
         .iter()
@@ -1955,7 +1973,7 @@ fn not_documentation(conn: &Connection, alias: &str) -> String {
     }
 }
 
-fn has_table(conn: &Connection, name: &str) -> bool {
+pub(crate) fn has_table(conn: &Connection, name: &str) -> bool {
     conn.query_row(
         "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1",
         [name],
@@ -3425,16 +3443,44 @@ mod tests {
     fn name_substring_admits_a_symbol_the_word_branch_cannot_reach() {
         let conn = sidecar_fixture();
 
-        for query in ["sha256", "parse the sha256 sidecar file"] {
-            let candidates =
-                collect_search_candidates(&conn, query, None, None, false, 10).unwrap();
+        let candidates = collect_search_candidates(&conn, "sha256", None, None, false, 10).unwrap();
 
-            let target = candidate(&candidates, "parseSha256Sidecar");
-            assert!(target.name_match, "{query}");
-            assert!(!target.word_match, "{query}");
-            assert!(!target.exact_name, "{query}");
-            assert!(target.name_terms.contains(&"sha256".to_string()), "{query}");
-        }
+        let target = candidate(&candidates, "parseSha256Sidecar");
+        assert!(target.name_match);
+        assert!(!target.word_match);
+        assert!(!target.exact_name);
+        assert!(target.name_terms.contains(&"sha256".to_string()));
+    }
+
+    #[test]
+    fn a_row_matching_every_word_does_not_hide_a_row_matching_some() {
+        let conn = search_fixture(
+            &[
+                code_row(
+                    "c1",
+                    "examples/demo.rs",
+                    "rust",
+                    "demo",
+                    "restore offline state",
+                ),
+                code_row(
+                    "c2",
+                    "src/replay.rs",
+                    "rust",
+                    "replay",
+                    "restore offline records",
+                ),
+            ]
+            .join(","),
+        );
+
+        let candidates =
+            collect_search_candidates(&conn, "restore offline state", None, None, false, 10)
+                .unwrap();
+
+        assert!(candidate(&candidates, "demo").word_match);
+        assert!(candidate(&candidates, "replay").word_match);
+        assert_eq!(search_names(&conn, "restore offline state")[0], "replay");
     }
 
     #[test]
@@ -3471,6 +3517,44 @@ mod tests {
 
         assert!(candidate(&candidates, "parseSha256Sidecar").name_match);
         assert_eq!(candidates.iter().filter(|c| c.word_match).count(), 160);
+    }
+
+    #[test]
+    fn the_or_pass_fills_the_word_cap_but_never_exceeds_it() {
+        let mut rows: Vec<String> = (1..=20)
+            .map(|i| {
+                code_row(
+                    &format!("a{i:02}"),
+                    "src/a.rs",
+                    "rust",
+                    &format!("both_{i:02}"),
+                    "restore offline",
+                )
+            })
+            .collect();
+        rows.extend((1..=50).map(|i| {
+            code_row(
+                &format!("p{i:02}"),
+                "src/p.rs",
+                "rust",
+                &format!("partial_{i:02}"),
+                "restore records",
+            )
+        }));
+        let conn = search_fixture(&rows.join(","));
+
+        let candidates =
+            collect_search_candidates(&conn, "restore offline", None, None, false, 10).unwrap();
+
+        let word_rows: Vec<&Candidate> = candidates.iter().filter(|c| c.word_match).collect();
+        assert_eq!(word_rows.len(), 40);
+        assert_eq!(
+            word_rows
+                .iter()
+                .filter(|c| c.result.symbol.name.starts_with("both_"))
+                .count(),
+            20
+        );
     }
 
     #[test]
@@ -3930,6 +4014,16 @@ mod tests {
         let only_launcher = rows("launcher verify checksum");
         assert_eq!(only_launcher[0].0.symbol.path, "src/archive.rs");
         assert_eq!(only_launcher[1].1.path_role, W_PATH_ROLE);
+
+        let windows = ranked(
+            vec![plain_candidate(
+                "verifyChecksum",
+                "function",
+                "scripts\\launcher.ts",
+            )],
+            "verify checksum",
+        );
+        assert_eq!(windows[0].1.path_role, W_PATH_ROLE);
     }
 
     #[test]
@@ -4043,7 +4137,7 @@ mod tests {
     #[test]
     fn explain_is_attached_only_when_requested() {
         let conn = sidecar_fixture();
-        let query = "parse the sha256 sidecar file";
+        let query = "sha256";
 
         let silent = fts_search_symbols_scoped(&conn, query, None, None, false, 10).unwrap();
         assert!(silent.iter().all(|r| r.explain.is_none()));
@@ -4888,6 +4982,45 @@ mod tests {
                 .collect();
 
         assert_eq!(ids, vec!["local".to_string()]);
+    }
+
+    #[test]
+    fn exact_local_variable_outranks_a_partial_global_match_within_the_limit() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE symbols (
+                symbol_id TEXT PRIMARY KEY, file_id TEXT, path TEXT, language TEXT, name TEXT,
+                kind TEXT, signature TEXT, doc_comment TEXT, visibility TEXT,
+                parent_symbol_id TEXT, start_line INTEGER, start_column INTEGER,
+                end_line INTEGER, end_column INTEGER, start_byte INTEGER, end_byte INTEGER,
+                body_start_line INTEGER, body_start_column INTEGER, body_end_line INTEGER,
+                body_end_column INTEGER, body_start_byte INTEGER, body_end_byte INTEGER,
+                body_hash TEXT, semantic_group TEXT, is_test INTEGER, test_container INTEGER
+            );
+            INSERT INTO symbols (symbol_id, file_id, path, language, name, kind, signature,
+                                 parent_symbol_id, start_line, start_column, end_line, end_column,
+                                 start_byte, end_byte, is_test, test_container)
+            VALUES
+                ('func', 'f1', 'src/sum.rs', 'rust', 'digest', 'function',
+                 'fn digest()', NULL, 1, 0, 9, 1, 0, 100, 0, 0),
+                ('local', 'f1', 'src/sum.rs', 'rust', 'checksum', 'variable',
+                 'let checksum', 'func', 2, 4, 2, 30, 10, 40, 0, 0),
+                ('global', 'f1', 'src/sum.rs', 'rust', 'getChecksum', 'variable',
+                 'const getChecksum', NULL, 20, 0, 20, 30, 210, 240, 0, 0);",
+        )
+        .unwrap();
+        ensure_fts_index(&conn).unwrap();
+
+        let rows =
+            fts_search_symbols_explained(&conn, "checksum", Some("variable"), None, false, 1, true)
+                .unwrap();
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].symbol.symbol_id, "local");
+        let explain = rows[0].explain.as_ref().unwrap();
+        assert_eq!(explain.name_tier, "whole");
+        assert_eq!(explain.branches, vec!["exact", "name"]);
+        assert_eq!(explain.candidates, 2);
     }
 
     #[test]

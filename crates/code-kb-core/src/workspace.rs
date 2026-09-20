@@ -355,6 +355,7 @@ pub fn is_hard_excluded(rel_path: &str) -> bool {
                 | ".hg"
                 | ".svn"
                 | ".julie"
+                | ".miller"
                 | ".code-kb"
                 | ".memories"
                 | ".agents"
@@ -719,6 +720,17 @@ impl Workspace {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn other_indexers_state_directories_are_hard_excluded() {
+        for dir in [".julie", ".miller", ".code-kb"] {
+            assert!(
+                super::is_hard_excluded(&format!("{dir}/state.lock")),
+                "{dir}"
+            );
+        }
+        assert!(!super::is_hard_excluded("src/miller.rs"));
+    }
+
     use super::*;
 
     #[test]

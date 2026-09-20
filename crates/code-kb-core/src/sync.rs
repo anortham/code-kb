@@ -531,6 +531,16 @@ pub fn reconcile_offline_edits(
     let mut check_file_stmt = conn
         .prepare("SELECT content_bytes, content_hash FROM files WHERE path = ?1")
         .map_err(SyncError::Db)?;
+    let mut skipped_stmt = if crate::queries::has_table(conn, "skipped_files") {
+        Some(
+            conn.prepare(
+                "SELECT 1 FROM skipped_files WHERE path = ?1 AND content_bytes = ?2 AND mtime_ns = ?3",
+            )
+            .map_err(SyncError::Db)?,
+        )
+    } else {
+        None
+    };
 
     let mut walker = ignore::WalkBuilder::new(&workspace.canonical_root);
     walker
@@ -578,14 +588,15 @@ pub fn reconcile_offline_edits(
                 if crate::workspace::is_hard_excluded(&rel_str) {
                     continue;
                 }
-                let bytes = match entry.metadata() {
-                    Ok(m) => m.len() as i64,
+                let meta = match entry.metadata() {
+                    Ok(m) => m,
                     Err(e) => {
                         warn!("Failed to read metadata for '{}': {e}", path.display());
                         let _ = insert_seen_stmt.execute([&rel_str]);
                         continue;
                     }
                 };
+                let bytes = meta.len() as i64;
 
                 insert_seen_stmt
                     .execute([&rel_str])
@@ -615,7 +626,8 @@ pub fn reconcile_offline_edits(
                     if is_modified {
                         report.modified.push(rel_str);
                     }
-                } else {
+                } else if !skipped_before(skipped_stmt.as_mut(), &rel_str, bytes, mtime_ns(&meta))?
+                {
                     report.added.push(rel_str);
                 }
             }
@@ -655,6 +667,7 @@ pub fn reconcile_offline_edits(
     drop(file_rows);
     drop(files_stmt);
     drop(check_file_stmt);
+    drop(skipped_stmt);
     drop(exists_seen_stmt);
     drop(insert_seen_stmt);
     drop(temp_conn);
@@ -674,14 +687,17 @@ pub fn reconcile_offline_edits(
             scan_workspace(workspace, db_path, false)?;
         } else {
             // Incremental single-file updates
+            let mut updated: Vec<&String> = Vec::new();
             for added in &report.added {
-                if let Err(e) = update_file(workspace, db_path, added) {
-                    warn!("Failed to index added file '{}': {e}", added);
+                match update_file(workspace, db_path, added) {
+                    Ok(()) => updated.push(added),
+                    Err(e) => warn!("Failed to index added file '{}': {e}", added),
                 }
             }
             for modified in &report.modified {
-                if let Err(e) = update_file(workspace, db_path, modified) {
-                    warn!("Failed to index modified file '{}': {e}", modified);
+                match update_file(workspace, db_path, modified) {
+                    Ok(()) => updated.push(modified),
+                    Err(e) => warn!("Failed to index modified file '{}': {e}", modified),
                 }
             }
             for deleted in &report.deleted {
@@ -689,10 +705,72 @@ pub fn reconcile_offline_edits(
                     warn!("Failed to remove deleted file '{}': {e}", deleted);
                 }
             }
+            remember_skipped_files(workspace, db_path, conn, updated.into_iter())?;
         }
     }
 
     Ok(report)
+}
+
+/// A file the extractor reports as unsupported keeps no `files` row, so every reconcile
+/// would send it to the extractor again. `skipped_files` remembers such a file by path,
+/// size, and mtime until it changes.
+const SKIPPED_FILES_DDL: &str = "CREATE TABLE IF NOT EXISTS skipped_files (
+    path TEXT PRIMARY KEY, content_bytes INTEGER NOT NULL, mtime_ns INTEGER NOT NULL)";
+
+fn mtime_ns(meta: &std::fs::Metadata) -> i64 {
+    meta.modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map_or(0, |d| d.as_nanos() as i64)
+}
+
+fn skipped_before(
+    stmt: Option<&mut rusqlite::Statement<'_>>,
+    path: &str,
+    bytes: i64,
+    mtime: i64,
+) -> Result<bool, SyncError> {
+    let Some(stmt) = stmt else {
+        return Ok(false);
+    };
+    stmt.exists(rusqlite::params![path, bytes, mtime])
+        .map_err(SyncError::Db)
+}
+
+fn remember_skipped_files<'a>(
+    workspace: &Workspace,
+    db_path: &Path,
+    conn: &Connection,
+    paths: impl Iterator<Item = &'a String>,
+) -> Result<(), SyncError> {
+    let mut indexed = conn
+        .prepare("SELECT 1 FROM files WHERE path = ?1")
+        .map_err(SyncError::Db)?;
+    let mut writer: Option<Connection> = None;
+    for path in paths {
+        if indexed.exists([path]).map_err(SyncError::Db)? {
+            continue;
+        }
+        let Ok(meta) = std::fs::metadata(workspace.canonical_root.join(path)) else {
+            continue;
+        };
+        if writer.is_none() {
+            let conn = crate::db::open_read_write(db_path)?;
+            conn.execute_batch(SKIPPED_FILES_DDL)
+                .map_err(SyncError::Db)?;
+            writer = Some(conn);
+        }
+        writer
+            .as_ref()
+            .expect("opened above")
+            .execute(
+                "INSERT OR REPLACE INTO skipped_files (path, content_bytes, mtime_ns) VALUES (?1, ?2, ?3)",
+                rusqlite::params![path, meta.len() as i64, mtime_ns(&meta)],
+            )
+            .map_err(SyncError::Db)?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

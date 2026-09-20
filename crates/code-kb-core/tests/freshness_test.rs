@@ -300,6 +300,15 @@ fn test_reconcile_offline_edits_continues_when_individual_update_fails() {
             .is_none(),
         "Failed file must not be indexed into database"
     );
+
+    let retry = reconcile_offline_edits(&ws, &db_path, &conn).unwrap();
+    assert_eq!(retry.added, vec!["src/unreadable.rs".to_string()]);
+    assert!(
+        get_symbol_by_name(&conn, "unreadable_symbol", Some("src/unreadable.rs"))
+            .unwrap()
+            .is_some(),
+        "A file whose update failed once must be retried and indexed"
+    );
 }
 
 #[test]
@@ -585,4 +594,42 @@ fn test_ensure_index_matches_extractor_rebuilds_when_a_file_revision_differs() {
         )
         .unwrap();
     assert_eq!(stale, 0);
+}
+
+#[test]
+fn test_reconcile_offline_edits_remembers_files_the_extractor_skips() {
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+
+    let temp_dir = safe_tempdir();
+    let root = temp_dir.path().to_path_buf();
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(root.join("src/a.rs"), "pub fn func_a() {}\n").unwrap();
+    let lock_path = root.join("Cargo.lock");
+    fs::write(&lock_path, "[[package]]\nname = \"a\"\n").unwrap();
+
+    let ws = Workspace::new(root.clone());
+    let db_path = root.join("test.db");
+    scan_workspace(&ws, &db_path, true).expect("Scan failed");
+    let conn = open_read_only(&db_path).unwrap();
+
+    fs::write(&lock_path, "[[package]]\nname = \"a\"\nversion = \"1\"\n").unwrap();
+    let edited = reconcile_offline_edits(&ws, &db_path, &conn).unwrap();
+    assert_eq!(edited.modified, vec!["Cargo.lock".to_string()]);
+
+    let settled = reconcile_offline_edits(&ws, &db_path, &conn).unwrap();
+    assert!(settled.added.is_empty(), "got: {:?}", settled.added);
+    assert!(settled.modified.is_empty());
+    assert!(settled.deleted.is_empty());
+
+    fs::write(&lock_path, "[[package]]\nname = \"a\"\nversion = \"1.0\"\n").unwrap();
+    let edited_again = reconcile_offline_edits(&ws, &db_path, &conn).unwrap();
+    assert_eq!(edited_again.added, vec!["Cargo.lock".to_string()]);
+
+    let settled_again = reconcile_offline_edits(&ws, &db_path, &conn).unwrap();
+    assert!(
+        settled_again.added.is_empty(),
+        "got: {:?}",
+        settled_again.added
+    );
 }

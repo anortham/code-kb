@@ -160,6 +160,32 @@ Cases that rank worse than v1.1.4 (two; the lead ruled both acceptable):
   the query as a whole name, so the plan's exact-name rule puts it above the
   functions. The plan 019 label list omitted the struct.
 
+## Rerun on `main` after review (2026-09-20)
+
+All three providers again, same machine, same query sets, limit 10. code-kb
+is the v1.2.0 build from `main` with the post-review admission fixes (plan
+020, "Post-review fixes"); Julie and Miller are the same binaries as above,
+each re-indexed the checkout before the run.
+
+| set | provider | file@1 | file@3 | file@5 | file MRR | sym@1 | sym@3 | sym MRR | p50 ms |
+|---|---|---|---|---|---|---|---|---|---|
+| tuning (16) | code-kb v1.2.0 | 15 | 16 | 16 | 0.97 | 12 | 16 | 0.85 | 19 |
+| tuning (16) | julie lexical | 9 | 10 | 11 | 0.61 | 3 | 4 | 0.25 | 482 |
+| tuning (16) | miller lexical | 10 | 15 | 15 | 0.77 | 8 | 13 | 0.65 | 281 |
+| held-out (10) | code-kb v1.2.0 | 10 | 10 | 10 | 1.00 | 10 | 10 | 1.00 | 17 |
+| held-out (10) | julie lexical | 6 | 7 | 7 | 0.65 | 2 | 3 | 0.25 | 479 |
+| held-out (10) | miller lexical | 10 | 10 | 10 | 1.00 | 9 | 10 | 0.95 | 286 |
+
+code-kb now leads on every quality column of both sets (held-out 10 of 10
+on file@1 and sym@1 against Miller's 10 and 9) at 15-25x lower latency.
+The code-kb rows were re-measured after the post-review fixes in plan 020;
+before them the held-out sym@1 was 9 and the p50 was 65 ms. That 65 ms was
+not the search: Julie and Miller wrote state files (`.julieignore`,
+`.miller/`) inside the checkout during the run, the extractor cannot index
+those, and every `code-kb` command re-sent them to the extractor. The
+reconcile now remembers such files (`skipped_files`), `.miller` is
+hard-excluded, and the warm median is 17.5 ms (hyperfine, 20 runs).
+
 ## Not planned
 
 Semantic embeddings. Plan 011 records the Miller calibration where the

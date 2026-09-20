@@ -316,6 +316,53 @@ the reason for each case.
   30.7-30.8 MB, PSS 28.1 MB, anonymous 22.7 MB. Difference 0.2 MB, within
   noise.
 
+### Post-review fixes on `main` (2026-09-20)
+
+A Codex review of the merged change (v1.1.4..main) found two admission
+defects; both are fixed on `main` and measured below.
+
+- **The word branch ran the AND query and fell back to OR only when every
+  row was documentation**, not the OR query section 3 specifies. One row
+  that matched every word hid every partial match, and neither other branch
+  reached them (`ha-concept-strip-ansi` was a miss for this reason). The
+  fix admits the AND rows first and then fills the word cap from the OR
+  query; a row admitted by both keeps its first BM25, and the two passes
+  share one cap (a second Codex pass found the first version let each pass
+  spend a full cap).
+- **`kind: "variable"` appended locals after the limit.** The trigram branch
+  now reaches globals such as `getChecksum`, so at a small limit an exact
+  local `checksum` fell off the end. Locals join the candidate set by name
+  and go through the rerank like every other row (and get `explain`).
+- Found in the lead's own review: `path_role` split paths on `/` only, so
+  the `scripts`/`examples`/... demotion did not apply to Windows paths.
+- Reconcile (same review series): files the extractor reports as
+  unsupported are remembered in a `skipped_files` table so they are not
+  re-sent to the extractor on every start; only files whose update
+  succeeded are remembered, so a transient extractor failure is retried.
+  Warm `code-kb search` on this checkout went from 24.2 ms to 17.6 ms.
+
+Measured with the same runner as above, final build. Regression set: one
+rank changed, `ho-outline` symbol 2 -> 1 (sym@1 22 of 26). Development set:
+
+| repository | n | file@1 | file@3 | file MRR | sym@1 | sym@3 | sym MRR | p50 ms |
+|---|---|---|---|---|---|---|---|---|
+| code-kb | 23 | 21 | 23 | 0.95 | 21 | 23 | 0.94 | 17 |
+| hermes-agent | 22 | 15 | 20 | 0.79 | 13 | 20 | 0.75 | 216 |
+| julie | 22 | 17 | 21 | 0.87 | 16 | 20 | 0.83 | 36 |
+| miller | 22 | 16 | 19 | 0.81 | 11 | 18 | 0.64 | 67 |
+| all | 89 | 69 | 83 | 0.85 | 61 | 81 | 0.79 | 47 |
+
+Against the branch numbers (69, 81, 0.85, 61, 78, 0.78): three cases
+improved (`ha-concept-strip-ansi` file 8 -> 1 and symbol miss -> 1,
+`ha-concept-coerce-args` 4 -> 2, `mi-concept-pack-budget` symbol 6 -> 3)
+and one slipped one place (`ju-acronym-csr` 1 -> 2: `action_csrf_token`
+ties `csr` on the query `csr adjacency` because both names contain `csr`,
+and BM25 breaks the tie). Two variants were rejected on this set: a pure OR
+word branch with no AND pass (67 / 82 / 59 / 78, `mi-stem-canonicalizing`
+became a miss) and a union where each pass spent its own cap (68 / 81 / 60
+/ 80). The hermes-agent p50 fell from about 700 ms to 216 ms because the
+reconcile no longer re-sends unindexable files to the extractor.
+
 ### Corpus gate
 
 `crates/code-kb-core/tests/search_corpus_test.rs`: 12 of 12 green, none
