@@ -266,6 +266,14 @@ pub struct StatsArgs {
     #[arg(short = 'w', long)]
     pub workspace: bool,
 
+    /// Filter metrics by code-kb version (e.g. '1.1.3'), 'current' (default), or 'all'.
+    #[arg(long)]
+    pub version: Option<String>,
+
+    /// Include telemetry across all historical versions (default: false).
+    #[arg(long)]
+    pub all_versions: bool,
+
     /// Format output as raw JSON instead of human-readable table.
     #[arg(long)]
     pub json: bool,
@@ -363,9 +371,22 @@ fn main() -> anyhow::Result<()> {
         } else {
             None
         };
+        let version = if args.all_versions || args.version.as_deref() == Some("all") {
+            None
+        } else if let Some(ref v) = args.version {
+            if v == "current" {
+                Some(env!("CARGO_PKG_VERSION").to_string())
+            } else {
+                Some(v.clone())
+            }
+        } else {
+            Some(env!("CARGO_PKG_VERSION").to_string())
+        };
+
         let filter = code_kb_core::TelemetryFilter {
             time_window,
             workspace_root,
+            version: version.clone(),
         };
         let mut summary = code_kb_core::get_telemetry_summary(&conn, &filter)
             .map_err(|e| anyhow::anyhow!("Failed to query telemetry: {e}"))?;
@@ -376,6 +397,7 @@ fn main() -> anyhow::Result<()> {
             let ws_filter = code_kb_core::TelemetryFilter {
                 time_window,
                 workspace_root: Some(workspace.canonical_root.clone()),
+                version,
             };
             if let Ok(ws_summary) = code_kb_core::get_telemetry_summary(&conn, &ws_filter) {
                 summary.recent_errors = ws_summary.recent_errors;

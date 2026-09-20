@@ -535,7 +535,7 @@ fn test_cli_stats_scopes_errors_to_active_workspace() {
     // 1. Pre-seed global telemetry DB with error from unrelated workspace B
     let global_db = telem_dir.path().join("telemetry.db");
     let conn = rusqlite::Connection::open(&global_db).unwrap();
-    conn.execute_batch(
+    conn.execute_batch(&format!(
         "CREATE TABLE tool_telemetry (
             id TEXT PRIMARY KEY,
             timestamp TEXT NOT NULL,
@@ -549,13 +549,18 @@ fn test_cli_stats_scopes_errors_to_active_workspace() {
             bytes_returned INTEGER NOT NULL,
             est_tokens INTEGER NOT NULL,
             est_tokens_saved INTEGER NOT NULL DEFAULT 0,
-            version TEXT NOT NULL
+            code_kb_version TEXT NOT NULL
         );
-        INSERT INTO tool_telemetry VALUES (
+        INSERT INTO tool_telemetry (
+            id, timestamp, workspace_root, workspace_name, tool,
+            duration_ms, outcome, error_message, result_count,
+            bytes_returned, est_tokens, est_tokens_saved, code_kb_version
+        ) VALUES (
             'err-unrelated', datetime('now'), '/other/private/workspace', 'private-repo',
-            'get_symbol_body', 10, 'error', 'SECRET_LEAK_IN_OTHER_REPO', 0, 0, 0, 0, '0.7.0'
+            'get_symbol_body', 10, 'error', 'SECRET_LEAK_IN_OTHER_REPO', 0, 0, 0, 0, '{}'
         );",
-    )
+        env!("CARGO_PKG_VERSION")
+    ))
     .unwrap();
     drop(conn);
 
@@ -570,7 +575,11 @@ fn test_cli_stats_scopes_errors_to_active_workspace() {
         .output()
         .expect("Failed to execute global stats");
 
-    assert!(output.status.success());
+    assert!(
+        output.status.success(),
+        "Command failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         !stdout.contains("SECRET_LEAK_IN_OTHER_REPO"),

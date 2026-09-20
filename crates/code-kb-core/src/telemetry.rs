@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 use std::time::SystemTime;
@@ -19,6 +19,8 @@ pub struct ToolInvocation<'a> {
     pub bytes_returned: usize,
     pub est_tokens: usize,
     pub est_tokens_saved: usize,
+    pub reconcile_ms: Option<u64>,
+    pub query_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -74,6 +76,7 @@ impl std::fmt::Display for TimeWindow {
 pub struct TelemetryFilter {
     pub time_window: TimeWindow,
     pub workspace_root: Option<PathBuf>,
+    pub version: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -98,6 +101,10 @@ pub struct ToolStat {
     pub empty_count: usize,
     pub error_count: usize,
     pub avg_duration_ms: u64,
+    pub p50_ms: Option<u64>,
+    pub p95_ms: Option<u64>,
+    pub avg_reconcile_ms: Option<u64>,
+    pub avg_query_ms: Option<u64>,
     pub tokens_returned: usize,
     pub tokens_saved: usize,
 }
@@ -219,7 +226,9 @@ fn init_telemetry_db(conn: &Connection) -> Result<(), QueryError> {
              bytes_returned INTEGER NOT NULL DEFAULT 0,
              est_tokens INTEGER NOT NULL DEFAULT 0,
              est_tokens_saved INTEGER NOT NULL DEFAULT 0,
-             code_kb_version TEXT NOT NULL
+             code_kb_version TEXT NOT NULL,
+             reconcile_ms INTEGER DEFAULT NULL,
+             query_ms INTEGER DEFAULT NULL
          );
          CREATE INDEX IF NOT EXISTS idx_tool_telemetry_tool ON tool_telemetry(tool, timestamp DESC);
          CREATE INDEX IF NOT EXISTS idx_tool_telemetry_ts ON tool_telemetry(timestamp DESC);
@@ -254,6 +263,29 @@ fn init_telemetry_db(conn: &Connection) -> Result<(), QueryError> {
     if !col_names.contains("result_count_known") {
         conn.execute(
             "ALTER TABLE tool_telemetry ADD COLUMN result_count_known INTEGER NOT NULL DEFAULT 0",
+            [],
+        )?;
+    }
+    if !col_names.contains("reconcile_ms") {
+        conn.execute(
+            "ALTER TABLE tool_telemetry ADD COLUMN reconcile_ms INTEGER DEFAULT NULL",
+            [],
+        )?;
+    }
+    if !col_names.contains("query_ms") {
+        conn.execute(
+            "ALTER TABLE tool_telemetry ADD COLUMN query_ms INTEGER DEFAULT NULL",
+            [],
+        )?;
+    }
+    if col_names.contains("version") && !col_names.contains("code_kb_version") {
+        conn.execute(
+            "ALTER TABLE tool_telemetry RENAME COLUMN version TO code_kb_version",
+            [],
+        )?;
+    } else if !col_names.contains("code_kb_version") {
+        conn.execute(
+            "ALTER TABLE tool_telemetry ADD COLUMN code_kb_version TEXT NOT NULL DEFAULT ''",
             [],
         )?;
     }
@@ -325,8 +357,9 @@ pub fn record_tool_call_conn(
         "INSERT INTO tool_telemetry (
             id, timestamp, workspace_root, workspace_name, tool,
             duration_ms, outcome, error_message, result_count, result_count_known,
-            bytes_returned, est_tokens, est_tokens_saved, code_kb_version
-        ) VALUES (?1, datetime('now'), ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            bytes_returned, est_tokens, est_tokens_saved, code_kb_version,
+            reconcile_ms, query_ms
+        ) VALUES (?1, datetime('now'), ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
         params![
             id,
             norm_ws,
@@ -340,7 +373,9 @@ pub fn record_tool_call_conn(
             invocation.bytes_returned as i64,
             invocation.est_tokens as i64,
             invocation.est_tokens_saved as i64,
-            version
+            version,
+            invocation.reconcile_ms.map(|v| v as i64),
+            invocation.query_ms.map(|v| v as i64),
         ],
     );
 }
@@ -356,53 +391,67 @@ pub fn record_tool_call(workspace_root: &Path, invocation: &ToolInvocation) {
     }
 }
 
+fn calculate_percentile(sorted: &[u64], pct: f64) -> Option<u64> {
+    if sorted.is_empty() {
+        return None;
+    }
+    let rank = ((pct / 100.0) * sorted.len() as f64).ceil() as usize;
+    let idx = rank.saturating_sub(1).min(sorted.len() - 1);
+    Some(sorted[idx])
+}
+
 pub fn get_telemetry_summary(
     conn: &Connection,
     filter: &TelemetryFilter,
 ) -> Result<TelemetrySummary, QueryError> {
-    let (where_clause, ws_param, alt_ws_param) = match (
-        &filter.time_window.to_sqlite_condition(),
-        &filter.workspace_root,
-    ) {
-        (Some(time_cond), Some(ws)) => {
-            let (canon, alt) = workspace_root_match_candidates(ws);
-            if alt.is_some() {
-                (
-                    format!(
-                        "WHERE {} AND (workspace_root = ?1 OR workspace_root = ?2)",
-                        time_cond
-                    ),
-                    Some(canon),
-                    alt,
-                )
-            } else {
-                (
-                    format!("WHERE {} AND workspace_root = ?1", time_cond),
-                    Some(canon),
-                    None,
-                )
-            }
+    let mut conditions = Vec::new();
+    let mut params_vec: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+
+    if let Some(time_cond) = filter.time_window.to_sqlite_condition() {
+        conditions.push(time_cond.to_string());
+    }
+
+    if let Some(ref ws) = filter.workspace_root {
+        let (canon, alt) = workspace_root_match_candidates(ws);
+        if let Some(alt_val) = alt {
+            let idx1 = params_vec.len() + 1;
+            let idx2 = params_vec.len() + 2;
+            conditions.push(format!(
+                "(workspace_root = ?{} OR workspace_root = ?{})",
+                idx1, idx2
+            ));
+            params_vec.push(Box::new(canon));
+            params_vec.push(Box::new(alt_val));
+        } else {
+            let idx1 = params_vec.len() + 1;
+            conditions.push(format!("workspace_root = ?{}", idx1));
+            params_vec.push(Box::new(canon));
         }
-        (Some(time_cond), None) => (format!("WHERE {}", time_cond), None, None),
-        (None, Some(ws)) => {
-            let (canon, alt) = workspace_root_match_candidates(ws);
-            if alt.is_some() {
-                (
-                    "WHERE (workspace_root = ?1 OR workspace_root = ?2)".to_string(),
-                    Some(canon),
-                    alt,
-                )
-            } else {
-                ("WHERE workspace_root = ?1".to_string(), Some(canon), None)
-            }
-        }
-        (None, None) => ("".to_string(), None, None),
+    }
+
+    if let Some(ref v) = filter.version {
+        let idx = params_vec.len() + 1;
+        conditions.push(format!("code_kb_version = ?{}", idx));
+        params_vec.push(Box::new(v.clone()));
+    }
+
+    let where_clause = if conditions.is_empty() {
+        String::new()
+    } else {
+        format!("WHERE {}", conditions.join(" AND "))
     };
 
-    let scope_description = match &filter.workspace_root {
+    let ws_desc = match &filter.workspace_root {
         Some(ws) => format!("Workspace: {}", to_forward_slash(&normalize_path(ws))),
         None => "Global (all workspaces)".to_string(),
     };
+    let ver_desc = match &filter.version {
+        Some(v) => format!("Version: {}", v),
+        None => "Version: all".to_string(),
+    };
+    let scope_description = format!("{} | {}", ws_desc, ver_desc);
+
+    let params_slice: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
 
     // 1. Overall aggregations
     let totals_sql = format!(
@@ -435,14 +484,37 @@ pub fn get_telemetry_summary(
                 tokens_saved.unwrap_or(0) as usize,
             ))
         };
-        match (&ws_param, &alt_ws_param) {
-            (Some(ws), Some(alt)) => stmt.query_row(params![ws, alt], row_mapper)?,
-            (Some(ws), None) => stmt.query_row(params![ws], row_mapper)?,
-            _ => stmt.query_row([], row_mapper)?,
-        }
+        stmt.query_row(
+            rusqlite::params_from_iter(params_slice.iter().copied()),
+            row_mapper,
+        )?
     };
 
-    // 2. Per-tool statistics
+    // 2. Collect durations for percentiles
+    let mut durations_by_tool: HashMap<String, Vec<u64>> = HashMap::new();
+    {
+        let durations_sql = format!(
+            "SELECT tool, duration_ms
+             FROM tool_telemetry
+             {}
+             ORDER BY tool, duration_ms ASC",
+            where_clause
+        );
+        let mut d_stmt = conn.prepare(&durations_sql)?;
+        let d_rows = d_stmt.query_map(
+            rusqlite::params_from_iter(params_slice.iter().copied()),
+            |row| {
+                let tool: String = row.get(0)?;
+                let dur: i64 = row.get(1)?;
+                Ok((tool, dur.max(0) as u64))
+            },
+        )?;
+        for item in d_rows.flatten() {
+            durations_by_tool.entry(item.0).or_default().push(item.1);
+        }
+    }
+
+    // 3. Per-tool statistics
     let tool_stats_sql = format!(
         "SELECT tool,
                 COUNT(*),
@@ -451,7 +523,9 @@ pub fn get_telemetry_summary(
                 SUM(CASE WHEN outcome = 'error' THEN 1 ELSE 0 END),
                 ROUND(AVG(duration_ms)),
                 SUM(est_tokens),
-                SUM(est_tokens_saved)
+                SUM(est_tokens_saved),
+                ROUND(AVG(reconcile_ms)),
+                ROUND(AVG(query_ms))
          FROM tool_telemetry
          {}
          GROUP BY tool
@@ -471,6 +545,17 @@ pub fn get_telemetry_summary(
             let avg_duration: Option<f64> = row.get(5)?;
             let tokens: Option<i64> = row.get(6)?;
             let tokens_saved: Option<i64> = row.get(7)?;
+            let avg_rec: Option<f64> = row.get(8)?;
+            let avg_q: Option<f64> = row.get(9)?;
+
+            let (p50, p95) = if let Some(durs) = durations_by_tool.get(&tool) {
+                (
+                    calculate_percentile(durs, 50.0),
+                    calculate_percentile(durs, 95.0),
+                )
+            } else {
+                (None, None)
+            };
 
             Ok(ToolStat {
                 tool,
@@ -479,34 +564,25 @@ pub fn get_telemetry_summary(
                 empty_count: empty_count.unwrap_or(0) as usize,
                 error_count: error_count.unwrap_or(0) as usize,
                 avg_duration_ms: avg_duration.unwrap_or(0.0).round() as u64,
+                p50_ms: p50,
+                p95_ms: p95,
+                avg_reconcile_ms: avg_rec.map(|v| v.round() as u64),
+                avg_query_ms: avg_q.map(|v| v.round() as u64),
                 tokens_returned: tokens.unwrap_or(0) as usize,
                 tokens_saved: tokens_saved.unwrap_or(0) as usize,
             })
         };
 
-        match (&ws_param, &alt_ws_param) {
-            (Some(ws), Some(alt)) => {
-                let rows = stmt.query_map(params![ws, alt], row_mapper)?;
-                for stat in rows.flatten() {
-                    tool_stats.push(stat);
-                }
-            }
-            (Some(ws), None) => {
-                let rows = stmt.query_map(params![ws], row_mapper)?;
-                for stat in rows.flatten() {
-                    tool_stats.push(stat);
-                }
-            }
-            _ => {
-                let rows = stmt.query_map([], row_mapper)?;
-                for stat in rows.flatten() {
-                    tool_stats.push(stat);
-                }
-            }
+        let rows = stmt.query_map(
+            rusqlite::params_from_iter(params_slice.iter().copied()),
+            row_mapper,
+        )?;
+        for stat in rows.flatten() {
+            tool_stats.push(stat);
         }
     }
 
-    // 3. Recent errors
+    // 4. Recent errors
     let error_where_clause = if where_clause.is_empty() {
         "WHERE outcome = 'error' AND error_message IS NOT NULL".to_string()
     } else {
@@ -537,25 +613,12 @@ pub fn get_telemetry_summary(
             })
         };
 
-        match (&ws_param, &alt_ws_param) {
-            (Some(ws), Some(alt)) => {
-                let rows = stmt.query_map(params![ws, alt], row_mapper)?;
-                for err in rows.flatten() {
-                    recent_errors.push(err);
-                }
-            }
-            (Some(ws), None) => {
-                let rows = stmt.query_map(params![ws], row_mapper)?;
-                for err in rows.flatten() {
-                    recent_errors.push(err);
-                }
-            }
-            _ => {
-                let rows = stmt.query_map([], row_mapper)?;
-                for err in rows.flatten() {
-                    recent_errors.push(err);
-                }
-            }
+        let rows = stmt.query_map(
+            rusqlite::params_from_iter(params_slice.iter().copied()),
+            row_mapper,
+        )?;
+        for err in rows.flatten() {
+            recent_errors.push(err);
         }
     }
 
@@ -826,9 +889,9 @@ pub fn format_telemetry_summary(summary: &TelemetrySummary) -> String {
 
     out.push_str("### Tool Invocations & Performance\n");
     out.push_str(
-        "| Tool | Calls | Empty | Avg Latency | Tokens Served | Est. Tokens Saved | Success Rate |\n",
+        "| Tool | Calls | Empty | Latency (p50 / p95 / avg) | Query / Reconcile | Tokens Served | Est. Tokens Saved | Success Rate |\n",
     );
-    out.push_str("|---|---:|---:|---:|---:|---:|---:|\n");
+    out.push_str("|---|---:|---:|---:|---:|---:|---:|---:|\n");
 
     for stat in &summary.tool_stats {
         let rate = if stat.count > 0 {
@@ -836,12 +899,33 @@ pub fn format_telemetry_summary(summary: &TelemetrySummary) -> String {
         } else {
             0.0
         };
+        let p50_str = stat
+            .p50_ms
+            .map(|v| format!("{}ms", v))
+            .unwrap_or_else(|| "-".to_string());
+        let p95_str = stat
+            .p95_ms
+            .map(|v| format!("{}ms", v))
+            .unwrap_or_else(|| "-".to_string());
+        let latency_str = format!("{} / {} / {}ms", p50_str, p95_str, stat.avg_duration_ms);
+
+        let query_str = stat
+            .avg_query_ms
+            .map(|v| format!("{}ms", v))
+            .unwrap_or_else(|| "-".to_string());
+        let rec_str = stat
+            .avg_reconcile_ms
+            .map(|v| format!("{}ms", v))
+            .unwrap_or_else(|| "-".to_string());
+        let phase_str = format!("{} / {}", query_str, rec_str);
+
         out.push_str(&format!(
-            "| `{}` | {} | {} | {} ms | ~{} | ~{} | {:.1}% |\n",
+            "| `{}` | {} | {} | {} | {} | ~{} | ~{} | {:.1}% |\n",
             stat.tool,
             stat.count,
             stat.empty_count,
-            stat.avg_duration_ms,
+            latency_str,
+            phase_str,
             stat.tokens_returned,
             stat.tokens_saved,
             rate
@@ -998,6 +1082,7 @@ mod tests {
             &TelemetryFilter {
                 time_window: TimeWindow::Today,
                 workspace_root: None,
+                version: None,
             },
         )
         .unwrap();
@@ -1008,6 +1093,7 @@ mod tests {
             &TelemetryFilter {
                 time_window: TimeWindow::Last7Days,
                 workspace_root: None,
+                version: None,
             },
         )
         .unwrap();
@@ -1018,6 +1104,7 @@ mod tests {
             &TelemetryFilter {
                 time_window: TimeWindow::Last30Days,
                 workspace_root: None,
+                version: None,
             },
         )
         .unwrap();
@@ -1028,6 +1115,7 @@ mod tests {
             &TelemetryFilter {
                 time_window: TimeWindow::LastYear,
                 workspace_root: None,
+                version: None,
             },
         )
         .unwrap();
@@ -1038,6 +1126,7 @@ mod tests {
             &TelemetryFilter {
                 time_window: TimeWindow::AllTime,
                 workspace_root: None,
+                version: None,
             },
         )
         .unwrap();
@@ -1061,6 +1150,8 @@ mod tests {
             bytes_returned: 100,
             est_tokens: 25,
             est_tokens_saved: 100,
+            reconcile_ms: None,
+            query_ms: None,
         };
         record_tool_call_conn(&conn, ws_a, &inv_a);
         record_tool_call_conn(&conn, ws_a, &inv_a);
@@ -1074,12 +1165,15 @@ mod tests {
             bytes_returned: 200,
             est_tokens: 50,
             est_tokens_saved: 200,
+            reconcile_ms: None,
+            query_ms: None,
         };
         record_tool_call_conn(&conn, ws_b, &inv_b);
 
         let filter_a = TelemetryFilter {
             time_window: TimeWindow::AllTime,
             workspace_root: Some(ws_a.to_path_buf()),
+            version: None,
         };
         let sum_a = get_telemetry_summary(&conn, &filter_a).unwrap();
         assert_eq!(sum_a.total_calls, 2);
@@ -1090,6 +1184,7 @@ mod tests {
         let filter_b = TelemetryFilter {
             time_window: TimeWindow::AllTime,
             workspace_root: Some(ws_b.to_path_buf()),
+            version: None,
         };
         let sum_b = get_telemetry_summary(&conn, &filter_b).unwrap();
         assert_eq!(sum_b.total_calls, 1);
@@ -1100,10 +1195,15 @@ mod tests {
         let filter_global = TelemetryFilter {
             time_window: TimeWindow::AllTime,
             workspace_root: None,
+            version: None,
         };
         let sum_global = get_telemetry_summary(&conn, &filter_global).unwrap();
         assert_eq!(sum_global.total_calls, 3);
-        assert_eq!(sum_global.scope_description, "Global (all workspaces)");
+        assert!(
+            sum_global
+                .scope_description
+                .contains("Global (all workspaces)")
+        );
     }
 
     #[test]
@@ -1121,6 +1221,8 @@ mod tests {
             bytes_returned: 1000,
             est_tokens: 250,
             est_tokens_saved: 750,
+            reconcile_ms: None,
+            query_ms: None,
         };
         let inv2 = ToolInvocation {
             tool: "file_skeleton",
@@ -1131,6 +1233,8 @@ mod tests {
             bytes_returned: 600,
             est_tokens: 150,
             est_tokens_saved: 450,
+            reconcile_ms: None,
+            query_ms: None,
         };
         let inv3 = ToolInvocation {
             tool: "get_symbol_body",
@@ -1141,6 +1245,8 @@ mod tests {
             bytes_returned: 200,
             est_tokens: 50,
             est_tokens_saved: 500,
+            reconcile_ms: None,
+            query_ms: None,
         };
 
         record_tool_call_conn(&conn, ws, &inv1);
@@ -1190,6 +1296,8 @@ mod tests {
             bytes_returned: 0,
             est_tokens: 0,
             est_tokens_saved: 0,
+            reconcile_ms: None,
+            query_ms: None,
         };
         record_tool_call_conn(&conn, ws, &inv_err);
 
@@ -1247,6 +1355,8 @@ mod tests {
                     bytes_returned: 10,
                     est_tokens: 2,
                     est_tokens_saved: 0,
+                    reconcile_ms: None,
+                    query_ms: None,
                 },
             );
         }
@@ -1285,6 +1395,8 @@ mod tests {
             bytes_returned: 1200,
             est_tokens: 300,
             est_tokens_saved: 900,
+            reconcile_ms: None,
+            query_ms: None,
         };
         record_tool_call_conn(&conn, root, &inv1);
 
@@ -1297,6 +1409,8 @@ mod tests {
             bytes_returned: 800,
             est_tokens: 200,
             est_tokens_saved: 600,
+            reconcile_ms: None,
+            query_ms: None,
         };
         record_tool_call_conn(&conn, root, &inv2);
 
@@ -1309,6 +1423,8 @@ mod tests {
             bytes_returned: 50,
             est_tokens: 12,
             est_tokens_saved: 0,
+            reconcile_ms: None,
+            query_ms: None,
         };
         record_tool_call_conn(&conn, root, &inv3);
 
@@ -1396,12 +1512,15 @@ mod tests {
             bytes_returned: 100,
             est_tokens: 25,
             est_tokens_saved: 75,
+            reconcile_ms: None,
+            query_ms: None,
         };
         record_tool_call_conn(&conn, Path::new("/workspace/project"), &inv);
 
         let ws_filter = TelemetryFilter {
             time_window: TimeWindow::AllTime,
             workspace_root: Some(PathBuf::from("/workspace/project")),
+            version: None,
         };
         let ws_summary = get_telemetry_summary(&conn, &ws_filter).unwrap();
         assert_eq!(ws_summary.total_calls, 1);
@@ -1431,6 +1550,8 @@ mod tests {
             bytes_returned: 0,
             est_tokens: 0,
             est_tokens_saved: 0,
+            reconcile_ms: None,
+            query_ms: None,
         };
         // Create a fake malicious julie-extract binary in a .tools directory in workspace
         let ws_temp = crate::safe_tempdir();
@@ -1518,7 +1639,8 @@ mod tests {
         conn.execute(
             "INSERT INTO tool_telemetry VALUES (
                 't-1', datetime('now'), ?1, 'my_repo', 'lookup_symbol',
-                12, 'error', 'Failed to find symbol Foo', 0, 0, 100, 25, 0, '0.9.0'
+                12, 'error', 'Failed to find symbol Foo', 0, 0, 100, 25, 0, '0.9.0',
+                NULL, NULL
             )",
             params![raw_var_path],
         )
@@ -1528,6 +1650,7 @@ mod tests {
         let filter = TelemetryFilter {
             time_window: TimeWindow::AllTime,
             workspace_root: Some(PathBuf::from("/private/var/folders/zz/12345678/T/my_repo")),
+            version: None,
         };
         let summary = get_telemetry_summary(&conn, &filter).unwrap();
         assert_eq!(
@@ -1545,7 +1668,8 @@ mod tests {
         conn.execute(
             "INSERT INTO tool_telemetry VALUES (
                 't-2', datetime('now'), ?1, 'other_repo', 'lookup_symbol',
-                12, 'error', 'Reverse matching error', 0, 0, 100, 25, 0, '0.9.0'
+                12, 'error', 'Reverse matching error', 0, 0, 100, 25, 0, '0.9.0',
+                NULL, NULL
             )",
             params!["/private/var/folders/zz/99999999/T/other_repo"],
         )
@@ -1554,6 +1678,7 @@ mod tests {
         let filter_rev = TelemetryFilter {
             time_window: TimeWindow::AllTime,
             workspace_root: Some(PathBuf::from("/var/folders/zz/99999999/T/other_repo")),
+            version: None,
         };
         let summary_rev = get_telemetry_summary(&conn, &filter_rev).unwrap();
         assert_eq!(summary_rev.total_calls, 1);
@@ -1577,5 +1702,132 @@ mod tests {
                 .error_message
                 .contains("Failed to find symbol Foo")
         );
+    }
+
+    #[test]
+    fn test_phase_metrics_and_version_filtering() {
+        let temp = crate::safe_tempdir();
+        let db_path = temp.path().join("telemetry.db");
+        let conn = Connection::open(&db_path).unwrap();
+
+        // 1. Verify schema upgrade adds reconcile_ms and query_ms
+        conn.execute_batch(
+            "CREATE TABLE tool_telemetry (
+                id TEXT PRIMARY KEY,
+                timestamp TEXT NOT NULL,
+                workspace_root TEXT NOT NULL,
+                workspace_name TEXT NOT NULL,
+                tool TEXT NOT NULL,
+                duration_ms INTEGER NOT NULL,
+                outcome TEXT NOT NULL,
+                error_message TEXT,
+                result_count INTEGER NOT NULL DEFAULT 0,
+                result_count_known INTEGER NOT NULL DEFAULT 0,
+                bytes_returned INTEGER NOT NULL DEFAULT 0,
+                est_tokens INTEGER NOT NULL DEFAULT 0,
+                est_tokens_saved INTEGER NOT NULL DEFAULT 0,
+                code_kb_version TEXT NOT NULL
+            );
+            INSERT INTO tool_telemetry VALUES (
+                'legacy1', '2026-09-01 12:00:00', '/ws', 'ws', 'lookup_symbol', 10, 'ok', NULL, 1, 1, 50, 12, 0, '1.1.0'
+            );",
+        )
+        .unwrap();
+
+        init_telemetry_db(&conn).expect("schema upgrade should succeed on legacy DB");
+
+        // Verify legacy row has NULL reconcile_ms and query_ms
+        let (rec, q): (Option<i64>, Option<i64>) = conn
+            .query_row(
+                "SELECT reconcile_ms, query_ms FROM tool_telemetry WHERE id = 'legacy1'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(rec, None);
+        assert_eq!(q, None);
+
+        // 2. Insert records with phase metrics and different versions
+        let inv1 = ToolInvocation {
+            tool: "lookup_symbol",
+            duration_ms: 120,
+            outcome: "ok",
+            error_message: None,
+            logical_result_count: Some(1),
+            bytes_returned: 100,
+            est_tokens: 25,
+            est_tokens_saved: 50,
+            reconcile_ms: Some(100),
+            query_ms: Some(20),
+        };
+        // Record with custom version manually for test partitioning
+        conn.execute(
+            "INSERT INTO tool_telemetry (
+                id, timestamp, workspace_root, workspace_name, tool,
+                duration_ms, outcome, error_message, result_count, result_count_known,
+                bytes_returned, est_tokens, est_tokens_saved, code_kb_version,
+                reconcile_ms, query_ms
+            ) VALUES ('c1', datetime('now'), '/ws', 'ws', ?1, ?2, ?3, NULL, 1, 1, ?4, ?5, ?6, '1.1.2', ?7, ?8)",
+            params![
+                inv1.tool,
+                inv1.duration_ms as i64,
+                inv1.outcome,
+                inv1.bytes_returned as i64,
+                inv1.est_tokens as i64,
+                inv1.est_tokens_saved as i64,
+                inv1.reconcile_ms.map(|v| v as i64),
+                inv1.query_ms.map(|v| v as i64),
+            ],
+        ).unwrap();
+
+        for (id, dur, q_ms) in [("c2", 5, 5), ("c3", 15, 15), ("c4", 25, 25)] {
+            conn.execute(
+                "INSERT INTO tool_telemetry (
+                    id, timestamp, workspace_root, workspace_name, tool,
+                    duration_ms, outcome, error_message, result_count, result_count_known,
+                    bytes_returned, est_tokens, est_tokens_saved, code_kb_version,
+                    reconcile_ms, query_ms
+                ) VALUES (?1, datetime('now'), '/ws', 'ws', 'lookup_symbol', ?2, 'ok', NULL, 1, 1, 100, 25, 50, '1.1.3', 0, ?3)",
+                params![id, dur as i64, q_ms as i64],
+            ).unwrap();
+        }
+
+        // 3. Test version filtering: "1.1.3"
+        let filter_v113 = TelemetryFilter {
+            time_window: TimeWindow::AllTime,
+            workspace_root: None,
+            version: Some("1.1.3".to_string()),
+        };
+        let summary_v113 = get_telemetry_summary(&conn, &filter_v113).unwrap();
+        assert_eq!(summary_v113.total_calls, 3);
+        assert_eq!(summary_v113.tool_stats.len(), 1);
+        let stat = &summary_v113.tool_stats[0];
+        assert_eq!(stat.tool, "lookup_symbol");
+        assert_eq!(stat.count, 3);
+        assert_eq!(stat.p50_ms, Some(15));
+        assert_eq!(stat.p95_ms, Some(25));
+        assert_eq!(stat.avg_reconcile_ms, Some(0));
+        assert_eq!(stat.avg_query_ms, Some(15));
+
+        // 4. Test version filtering: None (all versions including legacy)
+        let filter_all = TelemetryFilter {
+            time_window: TimeWindow::AllTime,
+            workspace_root: None,
+            version: None,
+        };
+        let summary_all = get_telemetry_summary(&conn, &filter_all).unwrap();
+        assert_eq!(summary_all.total_calls, 5); // legacy1 + c1 + c2 + c3 + c4
+
+        // 5. Test record_tool_call_conn persists phase fields
+        record_tool_call_conn(&conn, Path::new("/ws"), &inv1);
+        let (last_rec, last_q): (Option<i64>, Option<i64>) = conn
+            .query_row(
+                "SELECT reconcile_ms, query_ms FROM tool_telemetry ORDER BY rowid DESC LIMIT 1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(last_rec, Some(100));
+        assert_eq!(last_q, Some(20));
     }
 }

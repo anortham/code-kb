@@ -404,6 +404,14 @@ impl McpServer {
                         "workspace_only": {
                             "type": "boolean",
                             "description": "If true, scopes metrics to the currently bound workspace instead of all workspaces (default: false)."
+                        },
+                        "version": {
+                            "type": "string",
+                            "description": "Filter metrics by code-kb version (e.g. '1.1.3'), 'current' (default), or 'all'."
+                        },
+                        "all_versions": {
+                            "type": "boolean",
+                            "description": "If true, includes telemetry across all historical versions (default: false)."
                         }
                     }
                 }),
@@ -485,6 +493,8 @@ impl McpServer {
             bytes_returned: bytes,
             est_tokens,
             est_tokens_saved,
+            reconcile_ms: res.reconcile_ms,
+            query_ms: res.query_ms,
         };
 
         if let Some(ref conn) = self.telemetry_conn {
@@ -520,6 +530,25 @@ impl McpServer {
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
 
+        let all_versions = arguments
+            .get("all_versions")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        let version_arg = arguments.get("version").and_then(|v| v.as_str());
+
+        let version = if all_versions || version_arg == Some("all") {
+            None
+        } else if let Some(v) = version_arg {
+            if v == "current" {
+                Some(env!("CARGO_PKG_VERSION").to_string())
+            } else {
+                Some(v.to_string())
+            }
+        } else {
+            Some(env!("CARGO_PKG_VERSION").to_string())
+        };
+
         let filter = TelemetryFilter {
             time_window,
             workspace_root: if workspace_only {
@@ -527,6 +556,7 @@ impl McpServer {
             } else {
                 None
             },
+            version: version.clone(),
         };
 
         let as_json = arguments
@@ -553,6 +583,7 @@ impl McpServer {
                     let ws_filter = TelemetryFilter {
                         time_window,
                         workspace_root: Some(self.workspace.canonical_root.clone()),
+                        version,
                     };
                     if let Ok(ws_summary) = get_telemetry_summary(conn, &ws_filter) {
                         summary.recent_errors = ws_summary.recent_errors;
@@ -653,10 +684,13 @@ impl McpServer {
             }
         }
 
-        let prepare_error = self
-            .reconcile
-            .take()
-            .and_then(|handle| handle.join().unwrap_or(Ok(())).err());
+        let rec_start = std::time::Instant::now();
+        let (reconcile_ms, prepare_error) = if let Some(handle) = self.reconcile.take() {
+            let err = handle.join().unwrap_or(Ok(())).err();
+            (Some(rec_start.elapsed().as_millis() as u64), err)
+        } else {
+            (Some(0), None)
+        };
 
         if self.db_path.exists() && self._watcher.is_none() {
             self._watcher = start_watcher(self.workspace.clone(), self.db_path.clone()).ok();
@@ -674,7 +708,10 @@ impl McpServer {
                 ),
             };
             tracing::error!("{}", msg);
-            return CallToolResult::error(msg);
+            let mut err_res = CallToolResult::error(msg);
+            err_res.reconcile_ms = reconcile_ms;
+            err_res.query_ms = Some(0);
+            return err_res;
         }
 
         let conn = match open_read_only(&self.db_path) {
@@ -682,11 +719,15 @@ impl McpServer {
             Err(e) => {
                 let msg = format!("Failed to open database: {e}");
                 tracing::error!("{}", msg);
-                return CallToolResult::error(msg);
+                let mut err_res = CallToolResult::error(msg);
+                err_res.reconcile_ms = reconcile_ms;
+                err_res.query_ms = Some(0);
+                return err_res;
             }
         };
 
-        let result = match name {
+        let query_start = std::time::Instant::now();
+        let mut result = match name {
             "codebase_outline" => {
                 let depth = arguments
                     .get("max_depth")
@@ -1105,6 +1146,9 @@ impl McpServer {
         } else {
             tracing::info!(tool = name, "MCP tool executed successfully");
         }
+
+        result.reconcile_ms = reconcile_ms;
+        result.query_ms = Some(query_start.elapsed().as_millis() as u64);
 
         result
     }

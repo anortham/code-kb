@@ -80,6 +80,10 @@ pub struct CallToolResult {
     pub is_error: bool,
     #[serde(skip)]
     pub logical_result_count: Option<usize>,
+    #[serde(skip)]
+    pub reconcile_ms: Option<u64>,
+    #[serde(skip)]
+    pub query_ms: Option<u64>,
 }
 
 impl CallToolResult {
@@ -91,6 +95,8 @@ impl CallToolResult {
             }],
             is_error: false,
             logical_result_count: None,
+            reconcile_ms: None,
+            query_ms: None,
         }
     }
 
@@ -102,6 +108,8 @@ impl CallToolResult {
             }],
             is_error: true,
             logical_result_count: None,
+            reconcile_ms: None,
+            query_ms: None,
         }
     }
 

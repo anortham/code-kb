@@ -1628,13 +1628,18 @@ fn test_mcp_telemetry_summary_scoped_errors_no_cross_workspace_leak() {
         &code_kb_core::Workspace::new(ws_b_dir.path().to_path_buf()).canonical_root,
     );
     let secret_error = "SECRET_PATH_EXPOSURE: failed to parse /secret/unrelated/project/token.key";
+    let current_version = env!("CARGO_PKG_VERSION");
     telem_conn
         .execute(
-            "INSERT INTO tool_telemetry VALUES (
+            "INSERT INTO tool_telemetry (
+                id, timestamp, workspace_root, workspace_name, tool,
+                duration_ms, outcome, error_message, result_count, bytes_returned,
+                est_tokens, est_tokens_saved, code_kb_version
+            ) VALUES (
                 'err-b-1', datetime('now'), ?1, 'unrelated-repo', 'get_symbol_body',
-                10, 'error', ?2, 0, 100, 25, 0, '0.7.0'
+                10, 'error', ?2, 0, 100, 25, 0, ?3
             )",
-            rusqlite::params![ws_b_root, secret_error],
+            rusqlite::params![ws_b_root, secret_error, current_version],
         )
         .unwrap();
 
@@ -1646,11 +1651,15 @@ fn test_mcp_telemetry_summary_scoped_errors_no_cross_workspace_leak() {
     let local_error = "Active repo local error: symbol MissingSymbol not found";
     telem_conn
         .execute(
-            "INSERT INTO tool_telemetry VALUES (
+            "INSERT INTO tool_telemetry (
+                id, timestamp, workspace_root, workspace_name, tool,
+                duration_ms, outcome, error_message, result_count, bytes_returned,
+                est_tokens, est_tokens_saved, code_kb_version
+            ) VALUES (
                 'err-a-1', datetime('now'), ?1, 'active-repo', 'get_symbol_body',
-                10, 'error', ?2, 0, 100, 25, 0, '0.7.0'
+                10, 'error', ?2, 0, 100, 25, 0, ?3
             )",
-            rusqlite::params![ws_a_root, local_error],
+            rusqlite::params![ws_a_root, local_error, current_version],
         )
         .unwrap();
     drop(telem_conn);
