@@ -453,20 +453,117 @@ pub fn search_symbols_scoped(
 
 /// Sanitizes a free-form user query into `(and_query, or_query)` formatted for SQLite FTS5.
 /// Each alphanumeric/underscore token is quoted and given a prefix wildcard: `"token"*`.
+/// Identifiers are split at case boundaries too (`parseHTTPResponse` -> `parse HTTP Response`),
+/// so a camelCase query finds a snake_case symbol. Each split identifier keeps its unsplit form
+/// as an alternative inside its own required term, so a camelCase symbol, which FTS5 indexes as
+/// one token, still matches. A query of two or three words also tries their concatenation.
+/// English stop words are dropped unless the whole query is stop words, and tokens under three
+/// characters get no prefix wildcard.
 pub fn sanitize_fts5_query(query: &str) -> (String, String) {
-    let words: Vec<String> = query
+    const STOP_WORDS: &[&str] = &[
+        "a", "an", "the", "for", "to", "of", "in", "on", "and", "or", "with", "from", "by",
+        "before", "after", "that", "this", "is", "are", "be", "it", "as", "at",
+    ];
+    let is_stop = |s: &str| STOP_WORDS.contains(&s.to_ascii_lowercase().as_str());
+
+    let raw_words: Vec<&str> = query
         .split(|c: char| !c.is_alphanumeric() && c != '_')
         .filter(|s| !s.is_empty())
-        .map(|s| format!("\"{s}\"*"))
         .collect();
+    let split: Vec<(Vec<&str>, Option<&str>)> = raw_words
+        .iter()
+        .map(|raw| {
+            let parts = split_identifier(raw);
+            let whole = (parts.len() > 1).then_some(*raw);
+            (parts, whole)
+        })
+        .collect();
+    let any_content = split
+        .iter()
+        .any(|(parts, _)| parts.iter().any(|p| !is_stop(p)));
 
-    if words.is_empty() {
+    let mut and_groups: Vec<String> = Vec::new();
+    let mut or_terms: Vec<String> = Vec::new();
+    for (parts, whole) in split {
+        let parts: Vec<String> = parts
+            .into_iter()
+            .filter(|p| !any_content || !is_stop(p))
+            .map(fts5_term)
+            .collect();
+        let whole = whole.map(fts5_term);
+        let group = match (parts.is_empty(), whole.as_deref()) {
+            (true, None) => continue,
+            (true, Some(w)) => w.to_string(),
+            (false, None) => parts.join(" "),
+            (false, Some(w)) => format!("(({}) OR {w})", parts.join(" ")),
+        };
+        and_groups.push(group);
+        or_terms.extend(parts);
+        or_terms.extend(whole);
+    }
+
+    if and_groups.is_empty() {
         return (String::new(), String::new());
     }
 
-    let and_query = words.join(" ");
-    let or_query = words.join(" OR ");
-    (and_query, or_query)
+    let mut and_query = and_groups.join(" AND ");
+    if (2..=3).contains(&raw_words.len()) {
+        let all: String = raw_words.concat();
+        if all.len() <= 64 {
+            let all = fts5_term(&all);
+            and_query = format!("({and_query}) OR {all}");
+            or_terms.push(all);
+        }
+    }
+    (and_query, or_terms.join(" OR "))
+}
+
+/// Quotes one token for FTS5 with a prefix wildcard, except for tokens under three characters.
+fn fts5_term(token: &str) -> String {
+    if token.chars().count() < 3 {
+        format!("\"{token}\"")
+    } else {
+        format!("\"{token}\"*")
+    }
+}
+
+/// FTS5 query for a symbol name as typed: no case splitting, no stop words.
+/// `isReady` -> `"isReady"*`, so related-test lookup stays as strict as the name.
+fn name_prefix_query(name: &str) -> String {
+    name.split(|c: char| !c.is_alphanumeric() && c != '_')
+        .filter(|s| !s.is_empty())
+        .map(|s| format!("\"{s}\"*"))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Splits one identifier into words at `_`, digit runs, and case boundaries.
+/// `parseHTTPResponse2` -> `["parse", "HTTP", "Response", "2"]`.
+fn split_identifier(word: &str) -> Vec<&str> {
+    let chars: Vec<(usize, char)> = word.char_indices().collect();
+    let mut out = Vec::new();
+    let mut start = 0;
+    for i in 1..chars.len() {
+        let (idx, c) = chars[i];
+        let prev = chars[i - 1].1;
+        let next_lower = chars
+            .get(i + 1)
+            .map(|(_, n)| n.is_lowercase())
+            .unwrap_or(false);
+        let boundary = c == '_'
+            || prev == '_'
+            || (c.is_uppercase() && (prev.is_lowercase() || prev.is_ascii_digit()))
+            || (c.is_uppercase() && prev.is_uppercase() && next_lower)
+            || (c.is_ascii_digit() != prev.is_ascii_digit());
+        if boundary {
+            out.push(&word[start..idx]);
+            start = idx;
+        }
+    }
+    out.push(&word[start..]);
+    out.into_iter()
+        .filter(|p| !p.is_empty() && *p != "_")
+        .collect()
 }
 
 /// Conceptual full-text search with optional path scoping filter.
@@ -591,7 +688,8 @@ pub fn fts_search_symbols_scoped(
         }
 
         sql.push_str(&format!(
-            " ORDER BY (s.kind = 'import') ASC, (s.language IN ('markdown', 'yaml', 'toml', 'json', 'html', 'css', 'xml', 'ini', 'text')) ASC, {not_doc} DESC, rank_score ASC LIMIT ",
+            " ORDER BY (s.kind = 'import') ASC, (s.language IN ({doc_langs})) ASC, {not_doc} DESC, (s.name = :query COLLATE NOCASE) DESC, rank_score ASC LIMIT ",
+            doc_langs = documentation_language_list(),
             not_doc = not_documentation(conn, "s")
         ));
         sql.push_str(&limit.to_string());
@@ -630,6 +728,7 @@ pub fn fts_search_symbols_scoped(
             .query_map(
                 rusqlite::named_params! {
                     ":match": match_clause,
+                    ":query": query.trim(),
                     ":kind": kind_val,
                     ":path": path_val,
                     ":path_like": path_like,
@@ -642,7 +741,10 @@ pub fn fts_search_symbols_scoped(
     };
 
     let mut results = execute_search(&and_q)?;
-    if results.is_empty() && and_q != or_q {
+    let only_documentation = results
+        .iter()
+        .all(|r| is_documentation_language(&r.symbol.language));
+    if only_documentation && and_q != or_q {
         results = execute_search(&or_q)?;
     }
 
@@ -783,7 +885,7 @@ pub fn find_related_tests(
          LIMIT ?2"
         );
 
-        let (and_q, _or_q) = sanitize_fts5_query(&target_symbol.name);
+        let and_q = name_prefix_query(&target_symbol.name);
         if !and_q.is_empty()
             && let Ok(mut stmt) = conn.prepare(&fts_sql)
             && let Ok(rows) = stmt.query_map(params![and_q, (remaining * 2) as i64], map_symbol)
@@ -1139,6 +1241,22 @@ fn pending_target_predicate(target: &str, parent: &str) -> String {
 
 /// SQL predicate excluding rows julie marked as documentation, or the always-true `1 = 1` when
 /// the column is absent, because a bare `1` in ORDER BY means the first result column in SQLite.
+const DOCUMENTATION_LANGUAGES: &[&str] = &[
+    "markdown", "yaml", "toml", "json", "html", "css", "xml", "ini", "text",
+];
+
+fn is_documentation_language(language: &str) -> bool {
+    DOCUMENTATION_LANGUAGES.contains(&language)
+}
+
+fn documentation_language_list() -> String {
+    DOCUMENTATION_LANGUAGES
+        .iter()
+        .map(|l| format!("'{l}'"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 fn not_documentation(conn: &Connection, alias: &str) -> String {
     let has_content_type: bool = conn
         .query_row(
@@ -2379,16 +2497,222 @@ mod tests {
     #[test]
     fn test_sanitize_fts5_query() {
         let (and_q, or_q) = sanitize_fts5_query("parse tokens");
-        assert_eq!(and_q, "\"parse\"* \"tokens\"*");
-        assert_eq!(or_q, "\"parse\"* OR \"tokens\"*");
+        assert_eq!(and_q, "(\"parse\"* AND \"tokens\"*) OR \"parsetokens\"*");
+        assert_eq!(or_q, "\"parse\"* OR \"tokens\"* OR \"parsetokens\"*");
 
         let (and_q, or_q) = sanitize_fts5_query("  Option<T>  ");
-        assert_eq!(and_q, "\"Option\"* \"T\"*");
-        assert_eq!(or_q, "\"Option\"* OR \"T\"*");
+        assert_eq!(and_q, "(\"Option\"* AND \"T\") OR \"OptionT\"*");
+        assert_eq!(or_q, "\"Option\"* OR \"T\" OR \"OptionT\"*");
 
         let (and_q, or_q) = sanitize_fts5_query("   ");
         assert!(and_q.is_empty());
         assert!(or_q.is_empty());
+    }
+
+    #[test]
+    fn sanitize_splits_case_boundaries_and_drops_stop_words() {
+        let (and_q, or_q) = sanitize_fts5_query("ValidateSyntax");
+        assert_eq!(
+            and_q,
+            "((\"Validate\"* \"Syntax\"*) OR \"ValidateSyntax\"*)"
+        );
+        assert_eq!(or_q, "\"Validate\"* OR \"Syntax\"* OR \"ValidateSyntax\"*");
+
+        let (and_q, _) = sanitize_fts5_query("find tests related to a symbol");
+        assert_eq!(
+            and_q,
+            "\"find\"* AND \"tests\"* AND \"related\"* AND \"symbol\"*"
+        );
+
+        let (and_q, or_q) = sanitize_fts5_query("parseHTTPResponse2");
+        assert_eq!(
+            and_q,
+            "((\"parse\"* \"HTTP\"* \"Response\"* \"2\") OR \"parseHTTPResponse2\"*)"
+        );
+        assert!(or_q.ends_with("OR \"parseHTTPResponse2\"*"));
+
+        let (and_q, _) = sanitize_fts5_query("validate_syntax");
+        assert_eq!(
+            and_q,
+            "((\"validate\"* \"syntax\"*) OR \"validate_syntax\"*)"
+        );
+
+        let (and_q, _) = sanitize_fts5_query("isReady");
+        assert_eq!(and_q, "((\"Ready\"*) OR \"isReady\"*)");
+
+        let (and_q, _) = sanitize_fts5_query("before");
+        assert_eq!(and_q, "\"before\"*");
+
+        let (and_q, _) = sanitize_fts5_query("fooBar quux");
+        assert_eq!(
+            and_q,
+            "(((\"foo\"* \"Bar\"*) OR \"fooBar\"*) AND \"quux\"*) OR \"fooBarquux\"*"
+        );
+
+        let (and_q, _) = sanitize_fts5_query("the for a");
+        assert_eq!(and_q, "(\"the\"* AND \"for\"* AND \"a\") OR \"thefora\"*");
+    }
+
+    fn search_fixture(rows: &str) -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(&format!(
+            "CREATE TABLE symbols (
+                symbol_id TEXT PRIMARY KEY, file_id TEXT, path TEXT, language TEXT, name TEXT,
+                kind TEXT, signature TEXT, doc_comment TEXT, visibility TEXT, parent_symbol_id TEXT,
+                start_line INTEGER, start_column INTEGER, end_line INTEGER, end_column INTEGER,
+                start_byte INTEGER, end_byte INTEGER, body_start_line INTEGER,
+                body_start_column INTEGER, body_end_line INTEGER, body_end_column INTEGER,
+                body_start_byte INTEGER, body_end_byte INTEGER, body_hash TEXT,
+                semantic_group TEXT, is_test INTEGER, test_container INTEGER, content_type TEXT
+            );
+            INSERT INTO symbols VALUES {rows};"
+        ))
+        .unwrap();
+        ensure_fts_index(&conn).unwrap();
+        conn
+    }
+
+    fn code_row(id: &str, path: &str, language: &str, name: &str, doc: &str) -> String {
+        format!(
+            "('{id}', 'f_{id}', '{path}', '{language}', '{name}', 'function', 'fn {name}()', '{doc}', 'pub', NULL,
+              10, 0, 20, 1, 100, 250, 12, 4, 19, 1, 120, 240, 'h_{id}', NULL, 0, 0, 'code')"
+        )
+    }
+
+    fn doc_row(id: &str, name: &str, doc: &str) -> String {
+        format!(
+            "('{id}', 'f_{id}', 'docs/{id}.md', 'markdown', '{name}', 'module', '{name}', '{doc}', NULL, NULL,
+              3, 0, 3, 1, 10, 40, NULL, NULL, NULL, NULL, NULL, NULL, 'h_{id}', NULL, 0, 0, 'documentation')"
+        )
+    }
+
+    fn search_names(conn: &Connection, query: &str) -> Vec<String> {
+        fts_search_symbols_scoped(conn, query, None, None, false, 10)
+            .unwrap()
+            .into_iter()
+            .map(|r| r.symbol.name)
+            .collect()
+    }
+
+    #[test]
+    fn concept_query_prefers_partial_code_match_over_full_doc_match() {
+        let conn = search_fixture(
+            &[
+                doc_row(
+                    "d1",
+                    "Safety guarantees",
+                    "Pre-flight syntax validation runs before the edit touches disk",
+                ),
+                doc_row(
+                    "d2",
+                    "Audit",
+                    "The syntax validation before an edit is the invariant",
+                ),
+                code_row(
+                    "c1",
+                    "src/syntax.rs",
+                    "rust",
+                    "validate_syntax",
+                    "Validate the syntax of a file",
+                ),
+                code_row(
+                    "c2",
+                    "src/edit.rs",
+                    "rust",
+                    "replace_symbol_body",
+                    "Atomic edit with validation",
+                ),
+            ]
+            .join(","),
+        );
+
+        let names = search_names(&conn, "syntax validation before edit");
+
+        assert_eq!(names[0], "validate_syntax");
+        assert!(names.contains(&"replace_symbol_body".to_string()));
+        assert!(names.contains(&"Safety guarantees".to_string()));
+    }
+
+    #[test]
+    fn camel_case_query_finds_snake_case_symbol_and_vice_versa() {
+        let conn = search_fixture(
+            &[
+                code_row("c1", "src/syntax.rs", "rust", "validate_syntax", ""),
+                code_row("c2", "src/syntax.ts", "typescript", "validateSyntax", ""),
+            ]
+            .join(","),
+        );
+
+        let mut camel = search_names(&conn, "ValidateSyntax");
+        camel.sort();
+        assert_eq!(camel, vec!["validateSyntax", "validate_syntax"]);
+        let mut words = search_names(&conn, "validate syntax");
+        words.sort();
+        assert_eq!(words, vec!["validateSyntax", "validate_syntax"]);
+    }
+
+    #[test]
+    fn stop_word_prefixed_camel_case_symbol_is_still_found() {
+        let conn = search_fixture(
+            &[
+                code_row("c1", "src/state.ts", "typescript", "isReady", ""),
+                code_row("c2", "src/hooks.rs", "rust", "before", ""),
+                code_row(
+                    "c3",
+                    "src/x.rs",
+                    "rust",
+                    "fooBar",
+                    "has fooBar but not the other word",
+                ),
+            ]
+            .join(","),
+        );
+
+        assert_eq!(search_names(&conn, "isReady"), vec!["isReady"]);
+        assert_eq!(search_names(&conn, "before"), vec!["before"]);
+    }
+
+    #[test]
+    fn related_tests_use_the_name_as_typed_without_splitting() {
+        let conn = search_fixture(
+            &[
+                code_row("c1", "src/state.ts", "typescript", "isReady", ""),
+                "('t1', 'f_t1', 'tests/ready.rs', 'rust', 'test_ready', 'function', 'fn test_ready()', NULL, NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_t1', NULL, 1, 0, 'code')".to_string(),
+                "('t2', 'f_t2', 'tests/state.rs', 'rust', 'isReady_reports_true', 'function', 'fn isReady_reports_true()', NULL, NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_t2', NULL, 1, 0, 'code')".to_string(),
+            ]
+            .join(","),
+        );
+        let target = get_symbol_by_name(&conn, "isReady", None).unwrap().unwrap();
+
+        let names: Vec<String> = find_related_tests(&conn, &target, 5)
+            .unwrap()
+            .into_iter()
+            .map(|t| t.name)
+            .collect();
+
+        assert_eq!(names, vec!["isReady_reports_true"]);
+    }
+
+    #[test]
+    fn exact_name_ranks_before_longer_names_with_the_same_tokens() {
+        let conn = search_fixture(
+            &[
+                code_row(
+                    "c1",
+                    "src/queries.rs",
+                    "rust",
+                    "fts_search_symbols_scoped",
+                    "search symbols scoped with fts",
+                ),
+                code_row("c2", "src/queries.rs", "rust", "search_symbols_scoped", ""),
+            ]
+            .join(","),
+        );
+
+        assert_eq!(
+            search_names(&conn, "search_symbols_scoped")[0],
+            "search_symbols_scoped"
+        );
     }
 
     #[test]
