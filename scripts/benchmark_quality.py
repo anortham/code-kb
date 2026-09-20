@@ -11,9 +11,11 @@ import json
 import os
 import re
 import selectors
+import shutil
 import statistics
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -132,6 +134,250 @@ def measure_memory_and_latency(binary: str, args: list[str], cwd: str, iteration
     }
 
 
+class PersistentMcpClient:
+    """Manages a live stdio JSON-RPC MCP server session."""
+
+    def __init__(self, binary: str, cwd: str):
+        self.cwd = cwd
+        self.proc = subprocess.Popen(
+            [binary, "serve"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            cwd=cwd,
+        )
+        self.next_id = 1
+
+    def send(self, obj: dict[str, Any]) -> None:
+        line = json.dumps(obj) + "\n"
+        self.proc.stdin.write(line)
+        self.proc.stdin.flush()
+
+    def recv(self) -> dict[str, Any]:
+        line = self.proc.stdout.readline()
+        if not line:
+            stderr = self.proc.stderr.read() if self.proc.stderr else ""
+            raise RuntimeError(f"Server closed connection unexpectedly. Stderr: {stderr}")
+        return json.loads(line)
+
+    def initialize(self) -> float:
+        start = time.perf_counter()
+        req_id = self.next_id
+        self.next_id += 1
+        self.send({
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "benchmark_quality", "version": "1.0"},
+            },
+        })
+        resp = self.recv()
+        elapsed_ms = (time.perf_counter() - start) * 1000.0
+        if "error" in resp:
+            raise RuntimeError(f"Initialization failed: {resp['error']}")
+        self.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+        return elapsed_ms
+
+    def call_tool(self, name: str, arguments: dict[str, Any]) -> tuple[dict[str, Any], float]:
+        start = time.perf_counter()
+        req_id = self.next_id
+        self.next_id += 1
+        self.send({
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "method": "tools/call",
+            "params": {"name": name, "arguments": arguments},
+        })
+        resp = self.recv()
+        elapsed_ms = (time.perf_counter() - start) * 1000.0
+        return resp, elapsed_ms
+
+    def get_live_memory(self) -> dict[str, float]:
+        pid = self.proc.pid
+        try:
+            smaps_path = f"/proc/{pid}/smaps_rollup"
+            if os.path.exists(smaps_path):
+                with open(smaps_path, "r", encoding="utf-8") as f:
+                    smaps = f.read()
+                rss_m = re.search(r"Rss:\s+(\d+)\s+kB", smaps)
+                pss_m = re.search(r"Pss:\s+(\d+)\s+kB", smaps)
+                anon_m = re.search(r"Anonymous:\s+(\d+)\s+kB", smaps)
+                return {
+                    "rss_mb": round(float(rss_m.group(1)) / 1024.0, 2) if rss_m else 0.0,
+                    "pss_mb": round(float(pss_m.group(1)) / 1024.0, 2) if pss_m else 0.0,
+                    "anon_mb": round(float(anon_m.group(1)) / 1024.0, 2) if anon_m else 0.0,
+                }
+            statm_path = f"/proc/{pid}/statm"
+            if os.path.exists(statm_path):
+                with open(statm_path, "r", encoding="utf-8") as f:
+                    parts = f.read().split()
+                pagesize = 4096.0
+                rss_bytes = int(parts[1]) * pagesize
+                return {"rss_mb": round(rss_bytes / (1024.0 * 1024.0), 2), "pss_mb": 0.0, "anon_mb": 0.0}
+        except Exception:
+            pass
+        return {"rss_mb": 0.0, "pss_mb": 0.0, "anon_mb": 0.0}
+
+    def close(self) -> None:
+        try:
+            self.proc.stdin.close()
+            self.proc.terminate()
+            self.proc.wait(timeout=2)
+        except Exception:
+            try:
+                self.proc.kill()
+            except Exception:
+                pass
+
+
+def measure_persistent_mcp(binary: str, cwd: str, iterations: int = 5) -> dict[str, Any]:
+    client = PersistentMcpClient(binary, cwd)
+    try:
+        init_ms = client.initialize()
+        baseline_mem = client.get_live_memory()
+
+        # Warm-up call
+        client.call_tool("lookup_symbol", {"query": "search_symbols_scoped"})
+
+        tool_specs = [
+            ("codebase_outline", {"depth": 2}),
+            ("file_skeleton", {"file_path": "crates/code-kb-core/src/queries.rs"}),
+            ("lookup_symbol", {"query": "search_symbols_scoped"}),
+            ("search_symbols", {"query": "syntax validation"}),
+            ("get_symbol_body", {"symbol_name": "validate_syntax"}),
+            ("get_symbol_context", {"symbol_name": "search_symbols_scoped"}),
+            ("find_references", {"symbol_name": "search_symbols_scoped"}),
+            ("blast_radius", {"symbol": "find_callee_signatures"}),
+            ("telemetry_summary", {}),
+        ]
+
+        tool_results = []
+        for name, args in tool_specs:
+            latencies = []
+            sample_tokens = 0
+            for _ in range(iterations):
+                resp, ms = client.call_tool(name, args)
+                latencies.append(ms)
+                if "result" in resp and "content" in resp["result"]:
+                    text = "".join(c.get("text", "") for c in resp["result"]["content"])
+                    sample_tokens = estimate_tokens(text)
+
+            latencies.sort()
+            p50_idx = max(0, int(len(latencies) * 0.5) - 1)
+            p95_idx = max(0, int(len(latencies) * 0.95) - 1)
+
+            tool_results.append({
+                "tool": name,
+                "args": args,
+                "tokens": sample_tokens,
+                "min_ms": round(min(latencies), 2),
+                "p50_ms": round(latencies[p50_idx], 2),
+                "median_ms": round(statistics.median(latencies), 2),
+                "mean_ms": round(statistics.mean(latencies), 2),
+                "p95_ms": round(latencies[p95_idx], 2),
+                "max_ms": round(max(latencies), 2),
+            })
+
+        post_query_mem = client.get_live_memory()
+
+        # Changed-file reconciliation benchmark
+        probe_path = os.path.join(cwd, "crates/code-kb-core/src/reconcile_benchmark_probe.rs")
+        reconcile_ms = None
+        reconcile_found = False
+        try:
+            with open(probe_path, "w", encoding="utf-8") as f:
+                f.write("pub fn probe_benchmark_symbol_unique_12345() -> usize { 42 }\n")
+
+            resp, reconcile_ms = client.call_tool("lookup_symbol", {"query": "probe_benchmark_symbol_unique_12345"})
+            if "result" in resp and "content" in resp["result"]:
+                text = "".join(c.get("text", "") for c in resp["result"]["content"])
+                reconcile_found = "probe_benchmark_symbol_unique_12345" in text
+        finally:
+            if os.path.exists(probe_path):
+                os.remove(probe_path)
+            # Reconcile removal
+            client.call_tool("lookup_symbol", {"query": "search_symbols_scoped"})
+
+        final_mem = client.get_live_memory()
+
+        return {
+            "init_handshake_ms": round(init_ms, 2),
+            "baseline_memory": baseline_mem,
+            "post_query_memory": post_query_mem,
+            "final_memory": final_mem,
+            "tool_calls": tool_results,
+            "reconcile_benchmark": {
+                "elapsed_ms": round(reconcile_ms, 2) if reconcile_ms is not None else None,
+                "reconciled_symbol_found": reconcile_found,
+            },
+        }
+    finally:
+        client.close()
+
+
+def measure_large_corpus(binary: str, num_files: int = 500, iterations: int = 3) -> dict[str, Any]:
+    """Opt-in benchmark generating a disposable large synthetic project and measuring indexing & queries."""
+    temp_dir = tempfile.mkdtemp(prefix="code_kb_large_corpus_")
+    try:
+        # Generate synthetic repository
+        subprocess.run(["git", "init", "-q"], cwd=temp_dir, check=True)
+        subprocess.run(["git", "config", "user.name", "bench"], cwd=temp_dir, check=True)
+        subprocess.run(["git", "config", "user.email", "bench@test.com"], cwd=temp_dir, check=True)
+
+        src_dir = os.path.join(temp_dir, "src")
+        os.makedirs(src_dir, exist_ok=True)
+
+        for i in range(num_files):
+            sub = os.path.join(src_dir, f"module_{i // 50}")
+            os.makedirs(sub, exist_ok=True)
+            file_path = os.path.join(sub, f"worker_{i}.rs")
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(f"""//! Synthetic module {i} for large corpus benchmark.
+
+pub struct Worker{i} {{
+    pub id: usize,
+}}
+
+impl Worker{i} {{
+    pub fn new(id: usize) -> Self {{
+        Self {{ id }}
+    }}
+
+    pub fn process_{i}(&self) -> usize {{
+        self.id * 2
+    }}
+}}
+""")
+
+        # Measure scan duration and artifact size
+        scan_start = time.perf_counter()
+        rc, _, stderr, scan_ms, scan_rss = run_cmd_single([binary, "scan"], cwd=temp_dir)
+        if rc != 0:
+            raise RuntimeError(f"Scan failed on large corpus: {stderr}")
+
+        db_path = os.path.join(temp_dir, ".code-kb", "artifact.db")
+        db_size_mb = os.path.getsize(db_path) / (1024.0 * 1024.0) if os.path.exists(db_path) else 0.0
+
+        # Query latency on large corpus
+        lookup_res = measure_memory_and_latency(binary, ["symbol", "process_100"], cwd=temp_dir, iterations=iterations)
+        search_res = measure_memory_and_latency(binary, ["search", "synthetic worker"], cwd=temp_dir, iterations=iterations)
+
+        return {
+            "num_files": num_files,
+            "scan_ms": round(scan_ms, 2),
+            "scan_peak_rss_mb": round(scan_rss, 2),
+            "artifact_db_size_mb": round(db_size_mb, 2),
+            "lookup_process_100_median_ms": lookup_res["median_ms"],
+            "search_synthetic_worker_median_ms": search_res["median_ms"],
+        }
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description="code-kb Performance & Quality Benchmark")
     parser.add_argument(
@@ -155,11 +401,28 @@ def main():
         default="benchmark_report.json",
         help="Path to write JSON benchmark report",
     )
+    parser.add_argument(
+        "--skip-cli",
+        action="store_true",
+        help="Skip fresh CLI invocation benchmarks",
+    )
+    parser.add_argument(
+        "--skip-mcp",
+        action="store_true",
+        help="Skip persistent MCP session benchmark",
+    )
+    parser.add_argument(
+        "--large-corpus",
+        type=int,
+        default=None,
+        metavar="N_FILES",
+        help="Opt-in disposable large synthetic corpus benchmark with N files",
+    )
     args = parser.parse_args()
     if args.iterations < 1:
         parser.error("--iterations must be at least 1")
 
-    binary = args.binary
+    binary = str(Path(args.binary).resolve())
     if not os.path.isfile(binary):
         print(f"Binary not found at {binary}. Building release binary...")
         subprocess.run(["cargo", "build", "--release"], cwd=args.cwd, check=True)
@@ -303,56 +566,95 @@ def main():
             "peak_rss_mb": res["peak_rss_mb"],
         })
 
-    print("### 1. Token Compression: Skeletons vs Full File Reads")
-    print("| File | Raw Lines | Raw Tokens | Skeleton Tokens | Token Savings | First CLI Invocation | Fresh CLI Median | Peak Exited RSS |")
-    print("|---|---:|---:|---:|---:|---:|---:|---:|")
-    for r in skeleton_results:
-        print(f"| `{r['file']}` | {r['raw_lines']:,} | ~{r['raw_tokens']:,} | ~{r['skeleton_tokens']:,} | **{r['reduction_pct']:.1f}%** | {r['cold_ms']:.2f} ms | {r['median_ms']:.2f} ms | {r['peak_rss_mb']:.1f} MB |")
-    print()
-
-    print("### 2. Surgical Context Slicing vs Full File Reads")
-    print("| Target Symbol | Raw File Tokens | Slice Tokens | Token Savings | First CLI Invocation | Fresh CLI Median | Peak Exited RSS |")
-    print("|---|---:|---:|---:|---:|---:|---:|")
-    for r in slice_results:
-        print(f"| `{r['symbol']}` | ~{r['raw_file_tokens']:,} | ~{r['slice_tokens']:,} | **{r['saving_pct']:.1f}%** | {r['cold_ms']:.2f} ms | {r['median_ms']:.2f} ms | {r['peak_rss_mb']:.1f} MB |")
-    print()
-
-    print("### 3. Query Latency & Search Quality")
-    print("| Query Type | Command | Target Symbol | Exact Rank | Top-1 | Top-5 | First CLI Invocation | Fresh CLI Median |")
-    print("|---|---|---|:---:|:---:|:---:|---:|---:|")
-    for q in query_benchmarks:
-        rank_str = f"#{q['rank']}" if q["rank"] else "N/A"
-        top1_str = "YES" if q["rank_1"] else "NO"
-        top5_str = "YES" if q["top_5"] else "NO"
-        print(f"| {q['name']} | `code-kb {' '.join(q['args'])}` | `{q['target']}` | {rank_str} | {top1_str} | {top5_str} | {q['cold_ms']:.2f} ms | {q['median_ms']:.2f} ms |")
-    print()
-
-    max_rss = max(
-        max((r["peak_rss_mb"] for r in skeleton_results), default=0.0),
-        max((r["peak_rss_mb"] for r in slice_results), default=0.0),
-        max((q["peak_rss_mb"] for q in query_benchmarks), default=0.0),
-    )
-    median_latencies = [q["median_ms"] for q in query_benchmarks]
-
-    print("### 4. Fresh CLI Invocation Measurement Summary")
-    print(f"- **Standalone Binary Size:** {bin_size_mb:.2f} MB")
-    print(f"- **Binary Version:** {binary_version}")
-    print(f"- **Max Peak Exited-Process RSS:** {max_rss:.2f} MB (includes process startup, dynamic link, and SQLite; excludes retained MCP and launcher process-tree memory)")
-    print(f"- **Median Fresh CLI Query Invocation:** {statistics.median(median_latencies):.2f} ms (filesystem-warm)")
-    print(f"- **Min Fresh CLI Query Invocation:** {min(median_latencies):.2f} ms")
-    print(f"- **Search Top-1 Precision:** {sum(1 for q in query_benchmarks if q['rank_1'])}/{len(query_benchmarks)}")
-    print(f"- **Search Top-5 Precision:** {sum(1 for q in query_benchmarks if q['top_5'])}/{len(query_benchmarks)}")
-    print()
-
-    report = {
+    report: dict[str, Any] = {
         "binary_size_mb": bin_size_mb,
         "binary_version": binary_version,
-        "measurement_scope": "fresh CLI invocations; repeats benefit from filesystem cache; exited-process peak RSS only, excluding retained MCP server and launcher process-tree memory",
-        "max_peak_rss_mb": max_rss,
-        "skeleton_compression": skeleton_results,
-        "slice_compression": slice_results,
-        "queries": query_benchmarks,
     }
+
+    if not args.skip_cli:
+        print("### 1. Token Compression: Skeletons vs Full File Reads")
+        print("| File | Raw Lines | Raw Tokens | Skeleton Tokens | Token Savings | First CLI Invocation | Fresh CLI Median | Peak Exited RSS |")
+        print("|---|---:|---:|---:|---:|---:|---:|---:|")
+        for r in skeleton_results:
+            print(f"| `{r['file']}` | {r['raw_lines']:,} | ~{r['raw_tokens']:,} | ~{r['skeleton_tokens']:,} | **{r['reduction_pct']:.1f}%** | {r['cold_ms']:.2f} ms | {r['median_ms']:.2f} ms | {r['peak_rss_mb']:.1f} MB |")
+        print()
+
+        print("### 2. Surgical Context Slicing vs Full File Reads")
+        print("| Target Symbol | Raw File Tokens | Slice Tokens | Token Savings | First CLI Invocation | Fresh CLI Median | Peak Exited RSS |")
+        print("|---|---:|---:|---:|---:|---:|---:|")
+        for r in slice_results:
+            print(f"| `{r['symbol']}` | ~{r['raw_file_tokens']:,} | ~{r['slice_tokens']:,} | **{r['saving_pct']:.1f}%** | {r['cold_ms']:.2f} ms | {r['median_ms']:.2f} ms | {r['peak_rss_mb']:.1f} MB |")
+        print()
+
+        print("### 3. Query Latency & Search Quality")
+        print("| Query Type | Command | Target Symbol | Exact Rank | Top-1 | Top-5 | First CLI Invocation | Fresh CLI Median |")
+        print("|---|---|---|:---:|:---:|:---:|---:|---:|")
+        for q in query_benchmarks:
+            rank_str = f"#{q['rank']}" if q["rank"] else "N/A"
+            top1_str = "YES" if q["rank_1"] else "NO"
+            top5_str = "YES" if q["top_5"] else "NO"
+            print(f"| {q['name']} | `code-kb {' '.join(q['args'])}` | `{q['target']}` | {rank_str} | {top1_str} | {top5_str} | {q['cold_ms']:.2f} ms | {q['median_ms']:.2f} ms |")
+        print()
+
+        max_rss = max(
+            max((r["peak_rss_mb"] for r in skeleton_results), default=0.0),
+            max((r["peak_rss_mb"] for r in slice_results), default=0.0),
+            max((q["peak_rss_mb"] for q in query_benchmarks), default=0.0),
+        )
+        median_latencies = [q["median_ms"] for q in query_benchmarks]
+
+        print("### 4. Fresh CLI Invocation Measurement Summary")
+        print(f"- **Standalone Binary Size:** {bin_size_mb:.2f} MB")
+        print(f"- **Binary Version:** {binary_version}")
+        print(f"- **Max Peak Exited-Process RSS:** {max_rss:.2f} MB (includes process startup, dynamic link, and SQLite; excludes retained MCP and launcher process-tree memory)")
+        print(f"- **Median Fresh CLI Query Invocation:** {statistics.median(median_latencies):.2f} ms (filesystem-warm)")
+        print(f"- **Min Fresh CLI Query Invocation:** {min(median_latencies):.2f} ms")
+        print(f"- **Search Top-1 Precision:** {sum(1 for q in query_benchmarks if q['rank_1'])}/{len(query_benchmarks)}")
+        print(f"- **Search Top-5 Precision:** {sum(1 for q in query_benchmarks if q['top_5'])}/{len(query_benchmarks)}")
+        print()
+
+        report.update({
+            "measurement_scope": "fresh CLI invocations; repeats benefit from filesystem cache; exited-process peak RSS only, excluding retained MCP server and launcher process-tree memory",
+            "max_peak_rss_mb": max_rss,
+            "skeleton_compression": skeleton_results,
+            "slice_compression": slice_results,
+            "queries": query_benchmarks,
+        })
+
+    if not args.skip_mcp:
+        print("### 5. Persistent MCP Server Session Benchmark")
+        print("Measuring live stdio JSON-RPC MCP server session over persistent connection...")
+        mcp_res = measure_persistent_mcp(binary, args.cwd, iterations=args.iterations)
+        print(f"- **Initial Handshake (initialize + initialized):** {mcp_res['init_handshake_ms']:.2f} ms")
+        b_mem = mcp_res["baseline_memory"]
+        f_mem = mcp_res["final_memory"]
+        print(f"- **Live Baseline Retained Memory:** RSS: {b_mem['rss_mb']:.2f} MB | PSS: {b_mem['pss_mb']:.2f} MB | Anon: {b_mem['anon_mb']:.2f} MB")
+        print(f"- **Live Post-Workload Retained Memory:** RSS: {f_mem['rss_mb']:.2f} MB | PSS: {f_mem['pss_mb']:.2f} MB | Anon: {f_mem['anon_mb']:.2f} MB")
+        recon = mcp_res["reconcile_benchmark"]
+        if recon.get("elapsed_ms") is not None:
+            print(f"- **Changed-File Reconciliation & Live Extraction:** {recon['elapsed_ms']:.2f} ms (symbol found: {recon['reconciled_symbol_found']})")
+        print()
+        print("| Tool | Call Arguments | Tokens | Min Latency | p50 Latency | Median | Mean | p95 Latency | Max Latency |")
+        print("|---|---|---:|---:|---:|---:|---:|---:|---:|")
+        for tc in mcp_res["tool_calls"]:
+            args_str = json.dumps(tc["args"])
+            if len(args_str) > 35:
+                args_str = args_str[:32] + "..."
+            print(f"| `{tc['tool']}` | `{args_str}` | ~{tc['tokens']:,} | {tc['min_ms']:.2f} ms | {tc['p50_ms']:.2f} ms | {tc['median_ms']:.2f} ms | {tc['mean_ms']:.2f} ms | {tc['p95_ms']:.2f} ms | {tc['max_ms']:.2f} ms |")
+        print()
+        report["persistent_mcp"] = mcp_res
+
+    if args.large_corpus is not None:
+        print(f"### 6. Large Disposable Synthetic Corpus Benchmark ({args.large_corpus} files)")
+        print(f"Generating disposable {args.large_corpus}-file project and measuring scan & queries...")
+        lc_res = measure_large_corpus(binary, num_files=args.large_corpus, iterations=args.iterations)
+        print(f"- **Scan Time ({lc_res['num_files']} files):** {lc_res['scan_ms']:.2f} ms ({lc_res['scan_ms']/1000.0:.2f} s)")
+        print(f"- **Scan Peak RSS:** {lc_res['scan_peak_rss_mb']:.2f} MB")
+        print(f"- **Generated Artifact DB Size:** {lc_res['artifact_db_size_mb']:.2f} MB")
+        print(f"- **Lookup Symbol Latency (median):** {lc_res['lookup_process_100_median_ms']:.2f} ms")
+        print(f"- **FTS Search Latency (median):** {lc_res['search_synthetic_worker_median_ms']:.2f} ms")
+        print()
+        report["large_corpus"] = lc_res
 
     report_path = Path(args.cwd) / args.json_output
     with open(report_path, "w", encoding="utf-8") as f:
