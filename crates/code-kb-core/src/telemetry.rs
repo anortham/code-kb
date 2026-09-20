@@ -117,13 +117,25 @@ pub struct TelemetryErrorRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IndexFacts {
+    pub extractor_version: Option<String>,
+    pub schema_version: Option<String>,
+    pub index_level: Option<String>,
+    pub updated_at: Option<String>,
+    pub file_count: i64,
+    pub symbol_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BugReportBundle {
     pub os_info: String,
     pub arch_info: String,
     pub code_kb_version: String,
     pub julie_extract_version: String,
     pub active_workspace_name: Option<String>,
+    pub index: Option<IndexFacts>,
     pub recent_errors: Vec<TelemetryErrorRecord>,
+    pub log_tail: Vec<String>,
     pub markdown_body: String,
     pub github_issue_url: String,
 }
@@ -637,49 +649,52 @@ pub fn get_telemetry_summary(
 }
 
 fn sanitize_error_message(msg: &str) -> String {
-    let mut home_candidates = Vec::new();
-    if let Ok(home) = std::env::var("HOME")
-        && !home.trim().is_empty()
-        && home != "/"
-    {
-        let simplified = dunce::simplified(Path::new(&home))
-            .to_string_lossy()
-            .to_string();
-        if simplified != home {
-            home_candidates.push(simplified);
-        }
-        home_candidates.push(home);
-    }
-    if let Ok(profile) = std::env::var("USERPROFILE")
-        && !profile.trim().is_empty()
-        && profile != "/"
-    {
-        let simplified = dunce::simplified(Path::new(&profile))
-            .to_string_lossy()
-            .to_string();
-        if simplified != profile {
-            home_candidates.push(simplified);
-        }
-        home_candidates.push(profile);
-    }
-
+    let home_candidates = home_candidates();
     sanitize_error_message_with_homes(msg, &home_candidates)
 }
 
-fn sanitize_error_message_with_homes(msg: &str, home_candidates: &[String]) -> String {
-    let mut sanitized = msg.to_string();
+/// Replaces the user's home directory with `~` and keeps everything else, including newlines.
+fn mask_home_paths(text: &str) -> String {
+    mask_home_paths_with(text, &home_candidates())
+}
 
+fn home_candidates() -> Vec<String> {
+    let mut candidates = Vec::new();
+    for var in ["HOME", "USERPROFILE"] {
+        if let Ok(home) = std::env::var(var)
+            && !home.trim().is_empty()
+            && home != "/"
+        {
+            let simplified = dunce::simplified(Path::new(&home))
+                .to_string_lossy()
+                .to_string();
+            if simplified != home {
+                candidates.push(simplified);
+            }
+            candidates.push(home);
+        }
+    }
+    candidates
+}
+
+fn mask_home_paths_with(text: &str, home_candidates: &[String]) -> String {
+    let mut masked = text.to_string();
     for home in home_candidates {
         let norm_home = to_forward_slash(&normalize_path(Path::new(home)));
-        sanitized = sanitized.replace(home.as_str(), "~");
+        masked = masked.replace(home.as_str(), "~");
         if norm_home != *home {
-            sanitized = sanitized.replace(&norm_home, "~");
+            masked = masked.replace(&norm_home, "~");
         }
         let backslash_home = home.replace('/', "\\");
         if backslash_home != *home {
-            sanitized = sanitized.replace(&backslash_home, "~");
+            masked = masked.replace(&backslash_home, "~");
         }
     }
+    masked
+}
+
+fn sanitize_error_message_with_homes(msg: &str, home_candidates: &[String]) -> String {
+    let mut sanitized = mask_home_paths_with(msg, home_candidates);
 
     // Replace newlines with spaces to avoid breaking markdown tables
     sanitized = sanitized.replace("\r\n", " ").replace(['\n', '\r'], " ");
@@ -699,10 +714,76 @@ fn sanitize_error_message_with_homes(msg: &str, home_candidates: &[String]) -> S
     }
 }
 
+fn index_facts(workspace_root: &Path) -> Option<IndexFacts> {
+    let db_path = workspace_root.join(".code-kb").join("artifact.db");
+    let conn = crate::db::open_read_only(&db_path).ok()?;
+    let metadata = |key: &str| {
+        conn.query_row(
+            "SELECT value FROM artifact_metadata WHERE key = ?1",
+            [key],
+            |row| row.get::<_, String>(0),
+        )
+        .ok()
+    };
+    let count = |table: &str| {
+        conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+            row.get::<_, i64>(0)
+        })
+        .unwrap_or(0)
+    };
+    Some(IndexFacts {
+        extractor_version: metadata("binary_version"),
+        schema_version: metadata("schema_version"),
+        index_level: metadata("index_level"),
+        updated_at: metadata("updated_at"),
+        file_count: count("files"),
+        symbol_count: count("symbols"),
+    })
+}
+
+fn log_tail(workspace_root: &Path, lines: usize) -> Vec<String> {
+    let mut tail: Vec<String> = Vec::new();
+    for path in crate::workspace::log_files_newest_first(workspace_root) {
+        if tail.len() >= lines {
+            break;
+        }
+        let Ok(content) = std::fs::read_to_string(path) else {
+            continue;
+        };
+        let wanted = lines - tail.len();
+        let file_lines: Vec<&str> = content.lines().collect();
+        let mut older: Vec<String> = file_lines[file_lines.len().saturating_sub(wanted)..]
+            .iter()
+            .map(|line| mask_home_paths(line))
+            .collect();
+        older.append(&mut tail);
+        tail = older;
+    }
+    tail
+}
+
+/// Browsers and GitHub truncate query strings past a few kilobytes.
+const MAX_ISSUE_URL_LEN: usize = 8000;
+
+fn build_issue_url(title: &str, body: &str) -> Result<url::Url, QueryError> {
+    let mut issue_url = url::Url::parse("https://github.com/anortham/code-kb/issues/new")
+        .map_err(|e| QueryError::Sqlite(rusqlite::Error::ToSqlConversionFailure(Box::new(e))))?;
+    issue_url
+        .query_pairs_mut()
+        .append_pair("title", title)
+        .append_pair("body", body);
+    Ok(issue_url)
+}
+
+/// Builds the diagnostic bundle for a GitHub issue. `markdown_body` is complete. The
+/// pre-filled issue URL omits the log tail, and falls back to the environment and index
+/// sections alone when the rest would push it past `MAX_ISSUE_URL_LEN`.
 pub fn generate_bug_report(
     conn: &Connection,
     workspace_root: Option<&Path>,
     issue_title: Option<&str>,
+    description: Option<&str>,
+    log_lines: usize,
 ) -> Result<BugReportBundle, QueryError> {
     let os_info = std::env::consts::OS.to_string();
     let arch_info = std::env::consts::ARCH.to_string();
@@ -824,8 +905,31 @@ pub fn generate_bug_report(
     if let Some(ref ws) = active_workspace_name {
         markdown.push_str(&format!("- **Active Workspace:** {}\n", ws));
     }
-    markdown
-        .push_str("\n### Description\n<!-- Please describe the bug or unexpected behavior -->\n\n");
+
+    let index = workspace_root.and_then(index_facts);
+    markdown.push_str("\n### Index\n");
+    match &index {
+        Some(facts) => {
+            let field = |value: &Option<String>| value.clone().unwrap_or_else(|| "unknown".into());
+            markdown.push_str(&format!(
+                "- **Extractor:** {} (schema {}, level {})\n- **Updated:** {}\n- **Files / Symbols:** {} / {}\n",
+                field(&facts.extractor_version),
+                field(&facts.schema_version),
+                field(&facts.index_level),
+                field(&facts.updated_at),
+                facts.file_count,
+                facts.symbol_count
+            ));
+        }
+        None => markdown.push_str("- No `.code-kb/artifact.db` in the active workspace.\n"),
+    }
+
+    let short_body = markdown.clone();
+    markdown.push_str("\n### Description\n");
+    match description.map(str::trim).filter(|text| !text.is_empty()) {
+        Some(text) => markdown.push_str(&format!("{}\n\n", mask_home_paths(text))),
+        None => markdown.push_str("<!-- Please describe the bug or unexpected behavior -->\n\n"),
+    }
 
     if !recent_errors.is_empty() {
         markdown.push_str("### Recent Telemetry Errors\n");
@@ -839,16 +943,26 @@ pub fn generate_bug_report(
         }
     }
 
-    // Generate GitHub issue URL
     let title_str = issue_title
         .map(sanitize_error_message)
         .unwrap_or_else(|| "Bug report".to_string());
-    let mut issue_url = url::Url::parse("https://github.com/anortham/code-kb/issues/new")
-        .map_err(|e| QueryError::Sqlite(rusqlite::Error::ToSqlConversionFailure(Box::new(e))))?;
-    issue_url
-        .query_pairs_mut()
-        .append_pair("title", &title_str)
-        .append_pair("body", &markdown);
+    let mut issue_url = build_issue_url(&title_str, &markdown)?;
+    if issue_url.as_str().len() > MAX_ISSUE_URL_LEN {
+        let short_body = format!(
+            "{short_body}\n<!-- The full report was too long for a URL. Paste the output of `code-kb bug-report` here. -->\n"
+        );
+        issue_url = build_issue_url(&title_str, &short_body)?;
+    }
+
+    let log_tail = workspace_root
+        .map(|root| log_tail(root, log_lines))
+        .unwrap_or_default();
+    if !log_tail.is_empty() {
+        markdown.push_str(&format!(
+            "\n### Recent Log Lines\n```text\n{}\n```\n",
+            log_tail.join("\n")
+        ));
+    }
 
     Ok(BugReportBundle {
         os_info,
@@ -856,7 +970,9 @@ pub fn generate_bug_report(
         code_kb_version,
         julie_extract_version,
         active_workspace_name,
+        index,
         recent_errors,
+        log_tail,
         markdown_body: markdown,
         github_issue_url: issue_url.to_string(),
     })
@@ -1301,7 +1417,7 @@ mod tests {
         };
         record_tool_call_conn(&conn, ws, &inv_err);
 
-        let bundle = generate_bug_report(&conn, Some(ws), Some("Parser failure")).unwrap();
+        let bundle = generate_bug_report(&conn, Some(ws), Some("Parser failure"), None, 0).unwrap();
         assert_eq!(bundle.code_kb_version, env!("CARGO_PKG_VERSION"));
         assert!(!bundle.os_info.is_empty());
         assert!(!bundle.arch_info.is_empty());
@@ -1527,6 +1643,116 @@ mod tests {
     }
 
     #[test]
+    fn test_bug_report_includes_index_facts_description_and_masked_log_tail() {
+        let telemetry_dir = crate::safe_tempdir();
+        let conn = open_telemetry_db_at(telemetry_dir.path()).unwrap();
+        let workspace = crate::safe_tempdir();
+        let root = workspace.path();
+        let kb_dir = root.join(".code-kb");
+        std::fs::create_dir_all(kb_dir.join("logs")).unwrap();
+        let index = Connection::open(kb_dir.join("artifact.db")).unwrap();
+        index
+            .execute_batch(
+                "CREATE TABLE artifact_metadata (key TEXT PRIMARY KEY, value TEXT);
+                 INSERT INTO artifact_metadata VALUES ('binary_version', '3.1.1'), ('schema_version', '7'), ('index_level', 'facts');
+                 CREATE TABLE files (file_id TEXT); INSERT INTO files VALUES ('a'), ('b');
+                 CREATE TABLE symbols (symbol_id TEXT); INSERT INTO symbols VALUES ('s');",
+            )
+            .unwrap();
+        drop(index);
+        let home = std::env::var("HOME")
+            .or_else(|_| std::env::var("USERPROFILE"))
+            .unwrap_or_else(|_| "/default/home".to_string());
+        let logs = kb_dir.join("logs");
+        std::fs::write(
+            logs.join("code-kb.log.2026-09-19"),
+            "older one\nolder two\n",
+        )
+        .unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        std::fs::write(
+            logs.join("code-kb.log.2026-09-20"),
+            format!("first\nsecond {home}/repo/src/lib.rs\nthird\n"),
+        )
+        .unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        std::fs::write(logs.join("notes.txt"), "not a log\n").unwrap();
+
+        let bundle =
+            generate_bug_report(&conn, Some(root), Some("Crash"), Some("  It crashed.  "), 2)
+                .unwrap();
+
+        let facts = bundle.index.as_ref().unwrap();
+        assert_eq!(facts.extractor_version.as_deref(), Some("3.1.1"));
+        assert_eq!(facts.schema_version.as_deref(), Some("7"));
+        assert_eq!(facts.index_level.as_deref(), Some("facts"));
+        assert_eq!(facts.updated_at, None);
+        assert_eq!((facts.file_count, facts.symbol_count), (2, 1));
+        assert_eq!(bundle.log_tail, vec!["second ~/repo/src/lib.rs", "third"]);
+        assert!(
+            bundle
+                .markdown_body
+                .contains("- **Extractor:** 3.1.1 (schema 7, level facts)")
+        );
+        assert!(
+            bundle
+                .markdown_body
+                .contains("- **Files / Symbols:** 2 / 1")
+        );
+        assert!(
+            bundle
+                .markdown_body
+                .contains("### Description\nIt crashed.\n")
+        );
+        assert!(
+            bundle
+                .markdown_body
+                .contains("### Recent Log Lines\n```text\nsecond ~/repo/src/lib.rs\nthird\n```")
+        );
+        assert!(!bundle.markdown_body.contains(&home));
+        assert!(!bundle.github_issue_url.contains("Recent+Log+Lines"));
+        assert!(bundle.github_issue_url.contains("It+crashed."));
+
+        let across_rollover = generate_bug_report(
+            &conn,
+            Some(root),
+            None,
+            Some(&format!("{home}/x\nline two")),
+            4,
+        )
+        .unwrap();
+        assert_eq!(
+            across_rollover.log_tail,
+            vec!["older two", "first", "second ~/repo/src/lib.rs", "third"]
+        );
+        assert!(
+            across_rollover
+                .markdown_body
+                .contains("### Description\n~/x\nline two\n")
+        );
+        assert!(!across_rollover.markdown_body.contains(&home));
+        assert!(!across_rollover.github_issue_url.contains("notes"));
+
+        let oversized =
+            generate_bug_report(&conn, Some(root), None, Some(&"y".repeat(9000)), 0).unwrap();
+        assert!(oversized.markdown_body.contains(&"y".repeat(9000)));
+        assert!(oversized.github_issue_url.len() <= MAX_ISSUE_URL_LEN);
+        assert!(oversized.github_issue_url.contains("too+long+for+a+URL"));
+        assert!(oversized.github_issue_url.contains("Files+%2F+Symbols"));
+
+        let without_index =
+            generate_bug_report(&conn, Some(Path::new("/nonexistent/ws")), None, None, 0).unwrap();
+        assert!(without_index.index.is_none());
+        assert!(without_index.log_tail.is_empty());
+        assert!(
+            without_index
+                .markdown_body
+                .contains("No `.code-kb/artifact.db`")
+        );
+        assert!(without_index.markdown_body.contains("<!-- Please describe"));
+    }
+
+    #[test]
     fn test_bug_report_sanitization_and_no_external_exec() {
         let temp = crate::safe_tempdir();
         let conn = open_telemetry_db_at(temp.path()).unwrap();
@@ -1570,8 +1796,14 @@ mod tests {
             std::fs::set_permissions(&fake_bin, std::fs::Permissions::from_mode(0o755)).unwrap();
         }
 
-        let bundle =
-            generate_bug_report(&conn, Some(ws_temp.path()), Some("Issue with | pipes")).unwrap();
+        let bundle = generate_bug_report(
+            &conn,
+            Some(ws_temp.path()),
+            Some("Issue with | pipes"),
+            None,
+            0,
+        )
+        .unwrap();
 
         // 1. Path sanitization verification
         if !current_home.is_empty() && current_home != "/" {
@@ -1694,6 +1926,8 @@ mod tests {
             &conn,
             Some(Path::new("/private/var/folders/zz/12345678/T/my_repo")),
             Some("test issue"),
+            None,
+            0,
         )
         .unwrap();
         assert_eq!(bug_report.recent_errors.len(), 1);

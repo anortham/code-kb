@@ -53,7 +53,7 @@ When a user asks questions such as *"how many tokens has code-kb saved me this m
 ### Generating Bug Reports & Diagnosing Failures
 When diagnosing unexpected tool errors or when assisting a user with filing an issue:
 * Call `telemetry_summary()` to inspect recent error counts and failure rates across tools.
-* Run `code-kb bug-report` (or `code-kb bug-report --title "..."`) via the terminal to produce a self-contained diagnostic markdown bundle containing platform information (OS, arch, version, SQLite schema) and recent tool error logs, along with a pre-filled GitHub issue URL (`https://github.com/anortham/code-kb/issues/new?title=...&body=...`).
+* Run `code-kb bug-report --title "..." --description "..." [--logs N] [--json]` via the terminal to produce a self-contained diagnostic markdown bundle: platform (OS, arch, both binary versions), index facts (extractor, schema, level, file and symbol counts), the last 10 tool errors, and the last N log lines (default 40) with home paths masked, along with a pre-filled GitHub issue URL. The `/report-issue` skill walks through filing it with `gh issue create`.
 * Use `code-kb bug-report --json` or `code-kb stats --json` when programmatic or machine-readable diagnostics are needed.
 
 ## Quick Reference

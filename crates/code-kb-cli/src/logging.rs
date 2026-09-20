@@ -7,7 +7,7 @@ use tracing_subscriber::{EnvFilter, fmt};
 
 /// Returns the primary log directory for the given workspace root.
 pub fn get_log_dir(workspace_root: &Path) -> PathBuf {
-    workspace_root.join(".code-kb").join("logs")
+    code_kb_core::workspace::log_dir(workspace_root)
 }
 
 /// Initializes structured logging to `.code-kb/logs/code-kb.log` and optionally stderr.

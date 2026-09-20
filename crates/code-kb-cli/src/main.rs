@@ -285,6 +285,14 @@ pub struct BugReportArgs {
     #[arg(short = 't', long)]
     pub title: Option<String>,
 
+    /// Description of the problem, inserted into the report body.
+    #[arg(short = 'd', long)]
+    pub description: Option<String>,
+
+    /// Number of recent log lines to include (0 disables).
+    #[arg(long, default_value_t = 40)]
+    pub logs: usize,
+
     /// Format output as raw JSON diagnostic bundle.
     #[arg(long)]
     pub json: bool,
@@ -422,6 +430,8 @@ fn main() -> anyhow::Result<()> {
             &conn,
             Some(&workspace.canonical_root),
             args.title.as_deref(),
+            args.description.as_deref(),
+            args.logs,
         )
         .map_err(|e| anyhow::anyhow!("Failed to generate bug report: {e}"))?;
         if cli.json || args.json {
@@ -438,32 +448,18 @@ fn main() -> anyhow::Result<()> {
         let log_dir = logging::get_log_dir(&workspace.canonical_root);
         println!("Log directory: {}", log_dir.display());
 
-        let mut log_files = Vec::new();
-        if let Ok(entries) = std::fs::read_dir(&log_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_file()
-                    && let Ok(meta) = entry.metadata()
-                {
-                    let mtime = meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH);
-                    log_files.push((path, mtime));
+        match code_kb_core::workspace::latest_log_file(&workspace.canonical_root) {
+            Some(latest_file) => {
+                println!("Latest log file: {}\n", latest_file.display());
+                if let Ok(content) = std::fs::read_to_string(&latest_file) {
+                    let all_lines: Vec<&str> = content.lines().collect();
+                    let start = all_lines.len().saturating_sub(args.lines);
+                    for line in &all_lines[start..] {
+                        println!("{line}");
+                    }
                 }
             }
-        }
-
-        log_files.sort_by_key(|a| std::cmp::Reverse(a.1));
-
-        if let Some((latest_file, _)) = log_files.first() {
-            println!("Latest log file: {}\n", latest_file.display());
-            if let Ok(content) = std::fs::read_to_string(latest_file) {
-                let all_lines: Vec<&str> = content.lines().collect();
-                let start = all_lines.len().saturating_sub(args.lines);
-                for line in &all_lines[start..] {
-                    println!("{line}");
-                }
-            }
-        } else {
-            println!("No log files found yet in {}", log_dir.display());
+            None => println!("No log files found yet in {}", log_dir.display()),
         }
         return Ok(());
     }

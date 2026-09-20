@@ -45,8 +45,8 @@ pub use sync::{
 };
 pub use syntax::{SyntaxError, validate_syntax};
 pub use telemetry::{
-    BugReportBundle, TelemetryErrorRecord, TelemetryFilter, TelemetrySummary, TimeWindow,
-    ToolInvocation, ToolStat, format_telemetry_summary, generate_bug_report,
+    BugReportBundle, IndexFacts, TelemetryErrorRecord, TelemetryFilter, TelemetrySummary,
+    TimeWindow, ToolInvocation, ToolStat, format_telemetry_summary, generate_bug_report,
     get_global_telemetry_dir, get_telemetry_summary, open_global_telemetry_db, open_telemetry_db,
     record_tool_call, record_tool_call_conn,
 };

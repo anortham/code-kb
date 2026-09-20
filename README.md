@@ -391,8 +391,9 @@ code-kb logs
 code-kb stats --since month
 code-kb stats --workspace
 
-# Self-contained diagnostic bundle with a pre-filled GitHub issue link
-code-kb bug-report --title "lookup returns nothing"
+# Self-contained diagnostic bundle (versions, index facts, recent errors, log tail) with a
+# pre-filled GitHub issue link; the /report-issue skill files it through `gh issue create`
+code-kb bug-report --title "lookup returns nothing" --description "what went wrong"
 
 # Output agent lifecycle hook payload (SessionStart / SubagentStart / PreInvocation)
 code-kb hook SessionStart
