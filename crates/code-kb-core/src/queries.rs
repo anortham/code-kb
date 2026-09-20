@@ -1212,13 +1212,15 @@ fn text_hits<'a>(
         .collect()
 }
 
-/// Rarity of each query word inside the candidate set: `ln(1 + N / (df + 1))`, where `df`
-/// counts the candidates whose name, signature, or doc covers the word.
-fn word_weights(hits: &[Hits], word_count: usize) -> Vec<f64> {
-    let n = hits.len() as f64;
+/// Rarity of each query word: `ln(1 + N / (df + 1))`, where `df` counts the sampled
+/// candidates whose name, signature, or doc covers the word. The sample is the word branch's
+/// own matched set, because the name branch admits rows precisely for containing a query word
+/// and would make the rare words look common; without any word row, every candidate counts.
+fn word_weights(sample: &[&Hits], word_count: usize) -> Vec<f64> {
+    let n = sample.len() as f64;
     (0..word_count)
         .map(|i| {
-            let df = hits
+            let df = sample
                 .iter()
                 .filter(|h| h.name[i] || h.signature[i] || h.doc[i])
                 .count() as f64;
@@ -1351,7 +1353,18 @@ fn rerank(
             }
         })
         .collect();
-    let weights = word_weights(&hits, words.len());
+    let word_rows: Vec<&Hits> = candidates
+        .iter()
+        .zip(&hits)
+        .filter(|(candidate, _)| candidate.word_match)
+        .map(|(_, hits)| hits)
+        .collect();
+    let sample: Vec<&Hits> = if word_rows.is_empty() {
+        hits.iter().collect()
+    } else {
+        word_rows
+    };
+    let weights = word_weights(&sample, words.len());
     let word_weights: Vec<(String, f64)> = words
         .iter()
         .zip(&weights)
@@ -3715,14 +3728,22 @@ mod tests {
 
     #[test]
     fn coverage_weights_each_word_by_its_rarity_inside_the_candidate_set() {
-        let mut documented = function("unrelated");
+        let word_row = |name: &str| {
+            let mut row = function(name);
+            row.word_match = true;
+            row
+        };
+        let mut documented = word_row("unrelated");
         documented.result.symbol.doc_comment = Some("rebuilds the fts table".into());
+        let mut name_only = function("index_c");
+        name_only.name_match = true;
         let rows = ranked(
             vec![
-                function("create_index"),
-                function("fts_writer"),
-                function("index_a"),
-                function("index_b"),
+                word_row("create_index"),
+                word_row("fts_writer"),
+                word_row("index_a"),
+                word_row("index_b"),
+                name_only,
                 documented,
             ],
             "fts index",
@@ -3736,7 +3757,11 @@ mod tests {
         let explain_of = |name: &str| &rows.iter().find(|(r, _)| r.symbol.name == name).unwrap().1;
 
         assert_eq!(rows[0].0.symbol.name, "fts_writer");
-        assert_eq!(rows[4].0.symbol.name, "unrelated");
+        assert_eq!(rows[5].0.symbol.name, "unrelated");
+        assert_eq!(
+            explain_of("index_c").name_coverage,
+            explain_of("index_a").name_coverage
+        );
         assert_eq!(rows[0].1.word_weights, expected);
         assert_eq!(rows[0].1.name_tier, "partial");
         assert_eq!(rows[0].1.name_coverage, idf(2.0) / (idf(2.0) + idf(3.0)));
