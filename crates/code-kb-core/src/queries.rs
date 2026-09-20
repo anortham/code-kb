@@ -527,19 +527,23 @@ fn query_words(query: &str) -> Vec<&str> {
         .collect()
 }
 
-/// Lowercase query words of three or more characters for the trigram name index. Stop words
-/// are dropped unless the whole query is stop words. Empty when no word qualifies.
+/// Lowercase terms of three or more characters for the trigram name index: every query word
+/// and every identifier part of it (`collapse_name` -> `collapse_name`, `collapse`, `name`),
+/// deduplicated. Stop words are dropped unless every term is a stop word. Empty when no term
+/// qualifies.
 fn trigram_name_terms(query: &str) -> Vec<String> {
-    let words: Vec<&str> = query_words(query)
-        .into_iter()
-        .filter(|w| w.chars().count() >= 3)
-        .collect();
-    let any_content = words.iter().any(|w| !is_stop_word(w));
-    words
-        .into_iter()
-        .filter(|w| !any_content || !is_stop_word(w))
-        .map(str::to_lowercase)
-        .collect()
+    let mut terms: Vec<String> = Vec::new();
+    for word in query_words(query) {
+        for term in std::iter::once(word).chain(split_identifier(word)) {
+            let lower = term.to_lowercase();
+            if lower.chars().count() >= 3 && !terms.contains(&lower) {
+                terms.push(lower);
+            }
+        }
+    }
+    let any_content = terms.iter().any(|t| !is_stop_word(t));
+    terms.retain(|t| !any_content || !is_stop_word(t));
+    terms
 }
 
 /// Quotes one token for FTS5 with a prefix wildcard, except for tokens under three characters.
@@ -982,8 +986,9 @@ pub fn fts_search_symbols_explained(
 const W_NAME_WHOLE: f64 = 100.0;
 const W_NAME_ALL_WORDS: f64 = 60.0;
 const W_NAME_PARTIAL: f64 = 30.0;
+const W_NAME_ANY: f64 = 5.0;
 pub(crate) const W_SIGNATURE: f64 = 4.0;
-pub(crate) const W_DOC: f64 = 10.0;
+pub(crate) const W_DOC: f64 = 18.0;
 const W_KIND_DEFINITION: f64 = 4.0;
 const W_KIND_MEMBER: f64 = 0.0;
 const W_KIND_IMPORT: f64 = -50.0;
@@ -1009,6 +1014,13 @@ const TEST_INTENT_WORDS: &[&str] = &["test", "tests", "spec", "specs"];
 struct QueryWord {
     word: String,
     stem: String,
+}
+
+/// Per-word hits of one candidate: which query words its name, signature, and capped doc cover.
+struct Hits {
+    name: Vec<bool>,
+    signature: Vec<bool>,
+    doc: Vec<bool>,
 }
 
 /// Lowercase query words for the rerank: every `query_words` token is split like an
@@ -1054,7 +1066,7 @@ fn token_run_equals(tokens: &[String], word: &str) -> bool {
     })
 }
 
-fn name_coverage(name: &str, words: &[QueryWord], stemmer: &Stemmer) -> f64 {
+fn name_hits(name: &str, words: &[QueryWord], stemmer: &Stemmer) -> Vec<bool> {
     let tokens: Vec<String> = split_identifier(name)
         .into_iter()
         .map(str::to_lowercase)
@@ -1064,32 +1076,58 @@ fn name_coverage(name: &str, words: &[QueryWord], stemmer: &Stemmer) -> f64 {
         .map(|t| stemmer.stem(t).into_owned())
         .collect();
     let collapsed = collapse(name);
-    let covered = words
+    words
         .iter()
-        .filter(|w| {
+        .map(|w| {
             token_run_equals(&tokens, &w.word)
                 || (w.word.chars().count() >= 3 && collapsed.contains(&w.word))
                 || stems.contains(&w.stem)
         })
-        .count();
-    covered as f64 / words.len() as f64
+        .collect()
 }
 
-fn text_coverage(text: &str, words: &[QueryWord]) -> f64 {
-    let lower = text.to_lowercase();
-    let covered = words
+fn text_hits(text: Option<&str>, words: &[QueryWord]) -> Vec<bool> {
+    let lower = text.unwrap_or("").to_lowercase();
+    words
         .iter()
-        .filter(|w| lower.contains(&w.word) || lower.contains(&w.stem))
-        .count();
-    covered as f64 / words.len() as f64
+        .map(|w| lower.contains(&w.word) || lower.contains(&w.stem))
+        .collect()
 }
 
-/// Score points a name tier is worth at the given coverage fraction.
+/// Rarity of each query word inside the candidate set: `ln(1 + N / (df + 1))`, where `df`
+/// counts the candidates whose name, signature, or doc covers the word.
+fn word_weights(hits: &[Hits], word_count: usize) -> Vec<f64> {
+    let n = hits.len() as f64;
+    (0..word_count)
+        .map(|i| {
+            let df = hits
+                .iter()
+                .filter(|h| h.name[i] || h.signature[i] || h.doc[i])
+                .count() as f64;
+            (1.0 + n / (df + 1.0)).ln()
+        })
+        .collect()
+}
+
+fn weighted_coverage(flags: &[bool], weights: &[f64]) -> f64 {
+    let total: f64 = weights.iter().fold(0.0, |acc, w| acc + w);
+    if total == 0.0 {
+        return 0.0;
+    }
+    let covered = flags
+        .iter()
+        .zip(weights)
+        .filter(|(hit, _)| **hit)
+        .fold(0.0, |acc, (_, w)| acc + w);
+    covered / total
+}
+
+/// Score points a name tier is worth at the given weighted coverage fraction.
 pub(crate) fn name_tier_score(tier: &str, coverage: f64) -> f64 {
     match tier {
         "whole" => W_NAME_WHOLE,
         "all" => W_NAME_ALL_WORDS,
-        "partial" => W_NAME_PARTIAL * coverage,
+        "partial" => (W_NAME_PARTIAL * coverage).max(W_NAME_ANY),
         _ => 0.0,
     }
 }
@@ -1120,19 +1158,27 @@ fn path_role(path: &str, words: &[QueryWord], stemmer: &Stemmer) -> f64 {
     if named { 0.0 } else { W_PATH_ROLE }
 }
 
-fn bracket_first_term(name: &str, terms: &[String]) -> String {
+fn bracket_longest_term(name: &str, terms: &[String]) -> String {
     let lower = name.to_lowercase();
-    if lower.len() == name.len() {
-        for term in terms {
-            if let Some(start) = lower.find(term.as_str()) {
-                let end = start + term.len();
-                if name.is_char_boundary(start) && name.is_char_boundary(end) {
-                    return format!("{}[{}]{}", &name[..start], &name[start..end], &name[end..]);
-                }
+    if lower.len() != name.len() {
+        return name.to_string();
+    }
+    let mut best: Option<(usize, usize)> = None;
+    for term in terms {
+        if let Some(start) = lower.find(term.as_str()) {
+            let end = start + term.len();
+            let longer = best.is_none_or(|(s, e)| end - start > e - s);
+            if longer && name.is_char_boundary(start) && name.is_char_boundary(end) {
+                best = Some((start, end));
             }
         }
     }
-    name.to_string()
+    match best {
+        Some((start, end)) => {
+            format!("{}[{}]{}", &name[..start], &name[start..end], &name[end..])
+        }
+        None => name.to_string(),
+    }
 }
 
 fn branch_snippet(candidate: &Candidate) -> Option<String> {
@@ -1142,12 +1188,13 @@ fn branch_snippet(candidate: &Candidate) -> Option<String> {
     } else if candidate.exact_name {
         Some(name.clone())
     } else {
-        Some(bracket_first_term(name, &candidate.name_terms))
+        Some(bracket_longest_term(name, &candidate.name_terms))
     }
 }
 
 /// Scores every admitted candidate with the weight table above and returns them best
-/// first. Ties fall to word BM25 (rows without one last), then name length, path, name.
+/// first. Coverage is weighted by each word's rarity inside the candidate set. Ties fall
+/// to word BM25 (rows without one last), then name length, path, name.
 fn rerank(
     candidates: Vec<Candidate>,
     query: &str,
@@ -1167,32 +1214,47 @@ fn rerank(
             .iter()
             .any(|w| TEST_INTENT_WORDS.contains(&w.word.as_str()));
 
-    let mut scored: Vec<(SymbolSearchResult, SearchExplain)> = candidates
-        .into_iter()
+    let hits: Vec<Hits> = candidates
+        .iter()
         .map(|candidate| {
             let symbol = &candidate.result.symbol;
-            let coverage = if words.is_empty() {
-                0.0
-            } else {
-                name_coverage(&symbol.name, &words, &stemmer)
-            };
+            Hits {
+                name: name_hits(&symbol.name, &words, &stemmer),
+                signature: text_hits(symbol.signature.as_deref(), &words),
+                doc: text_hits(
+                    symbol
+                        .doc_comment
+                        .as_deref()
+                        .map(|doc| head_bytes(doc, DOC_COVERAGE_BYTES)),
+                    &words,
+                ),
+            }
+        })
+        .collect();
+    let weights = word_weights(&hits, words.len());
+    let word_weights: Vec<(String, f64)> = words
+        .iter()
+        .zip(&weights)
+        .map(|(w, weight)| (w.word.clone(), *weight))
+        .collect();
+
+    let mut scored: Vec<(SymbolSearchResult, SearchExplain)> = candidates
+        .into_iter()
+        .zip(hits)
+        .map(|(candidate, hits)| {
+            let symbol = &candidate.result.symbol;
+            let coverage = weighted_coverage(&hits.name, &weights);
             let tier = if !collapsed_query.is_empty() && collapse(&symbol.name) == collapsed_query {
                 "whole"
-            } else if coverage >= 1.0 {
+            } else if !hits.name.is_empty() && hits.name.iter().all(|hit| *hit) {
                 "all"
-            } else if coverage > 0.0 {
+            } else if hits.name.iter().any(|hit| *hit) {
                 "partial"
             } else {
                 "none"
             };
-            let signature_coverage = match (&symbol.signature, words.is_empty()) {
-                (Some(signature), false) => text_coverage(signature, &words),
-                _ => 0.0,
-            };
-            let doc_coverage = match (&symbol.doc_comment, words.is_empty()) {
-                (Some(doc), false) => text_coverage(head_bytes(doc, DOC_COVERAGE_BYTES), &words),
-                _ => 0.0,
-            };
+            let signature_coverage = weighted_coverage(&hits.signature, &weights);
+            let doc_coverage = weighted_coverage(&hits.doc, &weights);
             let explain = SearchExplain {
                 bm25: candidate.bm25,
                 branches: [
@@ -1220,6 +1282,7 @@ fn rerank(
                 } else {
                     0.0
                 },
+                word_weights: word_weights.clone(),
                 candidates: 0,
                 rerank_us: 0,
             };
@@ -3361,6 +3424,40 @@ mod tests {
         assert!(candidate(&candidates, "ab").exact_name);
     }
 
+    #[test]
+    fn trigram_terms_include_the_identifier_parts_of_each_word() {
+        assert_eq!(
+            trigram_name_terms("collapse_name"),
+            vec!["collapse_name", "collapse", "name"]
+        );
+        assert_eq!(
+            trigram_name_terms("parse the sha256 sidecar"),
+            vec!["parse", "sha256", "sha", "256", "sidecar"]
+        );
+        assert_eq!(trigram_name_terms("isReady"), vec!["isready", "ready"]);
+        assert_eq!(trigram_name_terms("the before"), vec!["the", "before"]);
+        assert!(trigram_name_terms("ab").is_empty());
+    }
+
+    #[test]
+    fn snake_case_query_admits_a_pascal_case_name_through_the_name_branch() {
+        let conn = search_fixture(
+            &[
+                code_row("c1", "src/collapse.rs", "rust", "CollapseName", ""),
+                code_row("c2", "src/other.rs", "rust", "name_collapsed", ""),
+            ]
+            .join(","),
+        );
+
+        let candidates =
+            collect_search_candidates(&conn, "collapse_name", None, None, false, 10).unwrap();
+
+        let target = candidate(&candidates, "CollapseName");
+        assert!(target.name_match);
+        assert_eq!(target.name_terms, vec!["collapse", "name"]);
+        assert_eq!(search_names(&conn, "collapse_name")[0], "CollapseName");
+    }
+
     fn plain_candidate(name: &str, kind: &str, path: &str) -> Candidate {
         Candidate {
             result: SymbolSearchResult {
@@ -3460,18 +3557,23 @@ mod tests {
             })
             .collect();
 
+        let partial = tiers[2].2;
+        assert!(partial > 0.0 && partial < 1.0);
         assert_eq!(
             tiers,
             vec![
                 ("validate_syntax", "whole", 1.0),
                 ("validate_syntax_now", "all", 1.0),
-                ("validate_everything", "partial", 0.5),
+                ("validate_everything", "partial", partial),
                 ("unrelated", "none", 0.0),
             ]
         );
         assert_eq!(rows[0].0.score, W_NAME_WHOLE + W_KIND_DEFINITION);
         assert_eq!(rows[1].0.score, W_NAME_ALL_WORDS + W_KIND_DEFINITION);
-        assert_eq!(rows[2].0.score, W_NAME_PARTIAL * 0.5 + W_KIND_DEFINITION);
+        assert_eq!(
+            rows[2].0.score,
+            name_tier_score("partial", partial) + W_KIND_DEFINITION
+        );
     }
 
     #[test]
@@ -3486,7 +3588,62 @@ mod tests {
         assert_eq!(coverage("is_ok", "ok"), 1.0);
         assert_eq!(coverage("isReady", "is"), 1.0);
         assert_eq!(coverage("größe_berechnen", "größe"), 1.0);
-        assert_eq!(coverage("parseSha256Sidecar", "sidecar checksum"), 0.5);
+        let half = coverage("parseSha256Sidecar", "sidecar checksum");
+        assert!(half > 0.0 && half < 1.0);
+        assert_eq!(coverage("parseSha256Sidecar", "checksum digest"), 0.0);
+    }
+
+    #[test]
+    fn coverage_weights_each_word_by_its_rarity_inside_the_candidate_set() {
+        let mut documented = function("unrelated");
+        documented.result.symbol.doc_comment = Some("rebuilds the fts table".into());
+        let rows = ranked(
+            vec![
+                function("create_index"),
+                function("fts_writer"),
+                function("index_a"),
+                function("index_b"),
+                documented,
+            ],
+            "fts index",
+        );
+        let idf = |df: f64| (1.0 + 5.0 / (df + 1.0)).ln();
+        let expected = vec![
+            ("fts".to_string(), idf(2.0)),
+            ("index".to_string(), idf(3.0)),
+        ];
+
+        let explain_of = |name: &str| &rows.iter().find(|(r, _)| r.symbol.name == name).unwrap().1;
+
+        assert_eq!(rows[0].0.symbol.name, "fts_writer");
+        assert_eq!(rows[4].0.symbol.name, "unrelated");
+        assert_eq!(rows[0].1.word_weights, expected);
+        assert_eq!(rows[0].1.name_tier, "partial");
+        assert_eq!(rows[0].1.name_coverage, idf(2.0) / (idf(2.0) + idf(3.0)));
+        assert_eq!(
+            explain_of("create_index").name_coverage,
+            idf(3.0) / (idf(2.0) + idf(3.0))
+        );
+        assert_eq!(
+            explain_of("unrelated").doc_coverage,
+            rows[0].1.name_coverage
+        );
+    }
+
+    #[test]
+    fn any_name_hit_outranks_a_zero_coverage_definition_for_long_queries() {
+        let rows = ranked(
+            vec![
+                function("render_mode"),
+                plain_candidate("retry_count", "constant", "src/scan.rs"),
+            ],
+            "how many times a failed download is tried again retry limit",
+        );
+
+        assert_eq!(rows[0].0.symbol.name, "retry_count");
+        assert_eq!(rows[0].1.name_tier, "partial");
+        assert_eq!(rows[0].0.score, W_NAME_ANY);
+        assert_eq!(rows[1].0.score, W_KIND_DEFINITION);
     }
 
     #[test]
@@ -3496,9 +3653,12 @@ mod tests {
         row.result.symbol.doc_comment = Some(format!("{}settings", "é".repeat(200)));
         let (result, explain) = ranked(vec![row], "config settings").remove(0);
 
-        assert_eq!(explain.signature_coverage, 0.5);
+        assert!(explain.signature_coverage > 0.0 && explain.signature_coverage < 1.0);
         assert_eq!(explain.doc_coverage, 0.0);
-        assert_eq!(result.score, 0.5 * W_SIGNATURE + W_KIND_DEFINITION);
+        assert_eq!(
+            result.score,
+            explain.signature_coverage * W_SIGNATURE + W_KIND_DEFINITION
+        );
     }
 
     #[test]
@@ -3659,7 +3819,7 @@ mod tests {
         word_row.result.snippet = Some("parse the [sha256] sidecar file".into());
         let mut name_row = function("parseSha256Sidecar");
         name_row.name_match = true;
-        name_row.name_terms = vec!["sha256".into(), "sidecar".into()];
+        name_row.name_terms = vec!["sha".into(), "sha256".into(), "256".into()];
         let mut exact_row = function("sha256");
         exact_row.exact_name = true;
         let rows = ranked(vec![word_row, name_row, exact_row], "sha256");

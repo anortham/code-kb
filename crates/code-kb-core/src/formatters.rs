@@ -538,9 +538,18 @@ pub fn format_search_results(query: &str, results: &[SymbolSearchResult], limit:
     );
     if let Some(explain) = results.first().and_then(|r| r.explain.as_ref()) {
         out.push_str(&format!(
-            "rerank: {} candidates in {} µs\n",
+            "rerank: {} candidates in {} µs",
             explain.candidates, explain.rerank_us
         ));
+        if !explain.word_weights.is_empty() {
+            let words: Vec<String> = explain
+                .word_weights
+                .iter()
+                .map(|(word, weight)| format!("{word} {weight:.2}"))
+                .collect();
+            out.push_str(&format!("; words {}", words.join(", ")));
+        }
+        out.push('\n');
     }
     out.push('\n');
     for r in results {
@@ -890,6 +899,7 @@ mod tests {
                 path_role: -10.0,
                 documentation: 0.0,
                 test_intent: 5.0,
+                word_weights: vec![("sha".into(), 2.6), ("256".into(), 0.97)],
                 candidates: 37,
                 rerank_us: 180,
             }),
@@ -897,7 +907,7 @@ mod tests {
 
         let formatted = format_search_results("sha256", std::slice::from_ref(&result), 20);
         assert!(formatted.contains(
-            "Found 1 symbols matching concept \"sha256\":\nrerank: 37 candidates in 180 µs\n\n- "
+            "Found 1 symbols matching concept \"sha256\":\nrerank: 37 candidates in 180 µs; words sha 2.60, 256 0.97\n\n- "
         ));
         assert!(formatted.contains(&format!(
             "  explain: score 71.6 = name all 60.0 + sig 0.25*{W_SIGNATURE} + doc 0.00*{W_DOC} + kind 4.0 + path -10.0 + test 5.0 [word,name] bm25 -3.21\n"

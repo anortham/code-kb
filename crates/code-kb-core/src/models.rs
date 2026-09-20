@@ -118,8 +118,8 @@ pub struct SymbolSearchResult {
 }
 
 /// Rerank breakdown for one `search` hit: which recall branches admitted the row, the
-/// coverage fractions, the fixed priors as score points, and the timer over the whole
-/// candidate set.
+/// rarity-weighted coverage fractions, the fixed priors as score points, the query words
+/// with their rarity weights, and the timer over the whole candidate set.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SearchExplain {
     pub bm25: Option<f64>,
@@ -132,6 +132,7 @@ pub struct SearchExplain {
     pub path_role: f64,
     pub documentation: f64,
     pub test_intent: f64,
+    pub word_weights: Vec<(String, f64)>,
     pub candidates: usize,
     pub rerank_us: u128,
 }

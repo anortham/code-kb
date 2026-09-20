@@ -341,6 +341,7 @@ fn test_cli_search_explain_flag() {
     assert!(text.status.success());
     let stdout = String::from_utf8_lossy(&text.stdout);
     assert!(stdout.contains("rerank: 1 candidates in "));
+    assert!(stdout.contains(" µs; words discovery "));
     assert!(stdout.contains("  explain: score "));
     assert!(stdout.contains("[word] bm25 "));
 
@@ -360,6 +361,7 @@ fn test_cli_search_explain_flag() {
     assert_eq!(explain["candidates"], 1);
     assert!(explain["bm25"].as_f64().unwrap() < 0.0);
     assert_eq!(explain["doc_coverage"], 1.0);
+    assert_eq!(explain["word_weights"][0][0], "discovery");
     assert!(rows[0]["score"].as_f64().unwrap() > 0.0);
 }
 
