@@ -205,3 +205,4 @@ test('a binary at <CODE_KB_HOME>/bin/code-kb overrides the download and the chec
   assert.equal(launcher.overrideBinary('code-kb', { CODE_KB_HOME: home }), path.join(home, 'bin', 'code-kb'));
   assert.equal(launcher.overrideBinary('code-kb', { CODE_KB_HOME: tempDir('code-kb-empty-home-') }), null);
 });
+

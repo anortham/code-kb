@@ -262,6 +262,13 @@ async function ensureBinary({ version, platformInfo, cacheRoot = defaultCacheRoo
 }
 
 function runBinary(binaryPath, args) {
+  if (require.main === module && typeof process.execve === 'function') {
+    try {
+      process.execve(binaryPath, [binaryPath, ...args], process.env);
+    } catch {
+      // Fall back to childProcess.spawn if execve fails
+    }
+  }
   const child = childProcess.spawn(binaryPath, args, { stdio: 'inherit', windowsHide: true });
   for (const signal of ['SIGINT', 'SIGTERM']) {
     process.once(signal, () => child.kill(signal));
@@ -318,6 +325,7 @@ module.exports = {
   parseSha256Sidecar,
   readPluginVersion,
   releaseArchiveName,
+  runBinary,
   validateArchiveEntryNames,
 };
 
