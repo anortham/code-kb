@@ -1,4 +1,4 @@
-use rusqlite::{Connection, Row, params};
+use rusqlite::{Connection, Row, ToSql, params};
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 
@@ -625,7 +625,9 @@ fn candidate_filters(searching_variables: bool, include_tests: bool) -> String {
         sql.push_str(&format!(" AND NOT {}", local_variable_predicate("s")));
     }
     if !include_tests {
-        sql.push_str(" AND s.is_test = 0 AND s.test_container = 0");
+        // Unary `+` keeps the planner off the test-flag indexes: without ANALYZE statistics it
+        // would otherwise prefer them over the name index and walk nearly every row.
+        sql.push_str(" AND +s.is_test = 0 AND +s.test_container = 0");
     }
     sql
 }
@@ -702,21 +704,35 @@ pub(crate) fn collect_search_candidates(
         }
     };
 
-    let exact_sql = format!(
-        "SELECT {columns} FROM symbols s WHERE s.name = :query COLLATE NOCASE {filters}
-         ORDER BY s.path ASC, s.start_line ASC LIMIT {MAX_RESULT_LIMIT}"
-    );
+    let has_trigram = has_table(conn, "symbol_names_tri");
+    let exact_query = query.trim();
+    let exact_phrase = format!("\"{}\"", exact_query.replace('"', "\"\""));
+    let exact_via_trigram = has_trigram && exact_query.chars().count() >= 3;
+    let exact_sql = if exact_via_trigram {
+        format!(
+            "SELECT {columns} FROM symbol_names_tri
+             CROSS JOIN symbols s ON s.rowid = symbol_names_tri.rowid
+             WHERE symbol_names_tri MATCH :exact AND length(s.name) = length(:query) {filters}
+             ORDER BY s.path ASC, s.start_line ASC LIMIT {MAX_RESULT_LIMIT}"
+        )
+    } else {
+        format!(
+            "SELECT {columns} FROM symbols s WHERE s.name = :query {filters}
+             ORDER BY s.path ASC, s.start_line ASC LIMIT {MAX_RESULT_LIMIT}"
+        )
+    };
+    let mut exact_params: Vec<(&str, &dyn ToSql)> = vec![
+        (":query", &exact_query),
+        (":kind", &kind_val),
+        (":path", &path_val),
+        (":path_like", &path_like),
+    ];
+    if exact_via_trigram {
+        exact_params.push((":exact", &exact_phrase));
+    }
     let exact_rows = conn
         .prepare(&exact_sql)?
-        .query_map(
-            rusqlite::named_params! {
-                ":query": query.trim(),
-                ":kind": kind_val,
-                ":path": path_val,
-                ":path_like": path_like,
-            },
-            new_candidate,
-        )?
+        .query_map(exact_params.as_slice(), new_candidate)?
         .collect::<Result<Vec<_>, _>>()?;
     for (rowid, mut candidate) in exact_rows {
         candidate.exact_name = true;
@@ -785,7 +801,7 @@ pub(crate) fn collect_search_candidates(
         }
     }
 
-    if !terms.is_empty() && has_table(conn, "symbol_names_tri") {
+    if !terms.is_empty() && has_trigram {
         let match_clause = terms
             .iter()
             .map(|t| format!("\"{t}\""))
@@ -2973,8 +2989,29 @@ mod tests {
 
         let candidates =
             collect_search_candidates(&conn, "XYZZY_Q", None, None, false, 10).unwrap();
-
         assert!(candidate(&candidates, "xyzzy_q").exact_name);
+
+        conn.execute_batch("DROP TABLE symbol_names_tri").unwrap();
+        let candidates =
+            collect_search_candidates(&conn, "xyzzy_q", None, None, false, 10).unwrap();
+        assert!(candidate(&candidates, "xyzzy_q").exact_name);
+    }
+
+    #[test]
+    fn exact_name_with_a_quote_is_admitted_through_the_trigram_index() {
+        let conn = search_fixture(&code_row(
+            "c1",
+            "src/say.js",
+            "javascript",
+            "say \"hi\"",
+            "",
+        ));
+
+        let candidates =
+            collect_search_candidates(&conn, "say \"hi\"", None, None, false, 10).unwrap();
+
+        let target = candidate(&candidates, "say \"hi\"");
+        assert!(target.exact_name && target.name_match);
     }
 
     #[test]
