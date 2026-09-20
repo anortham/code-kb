@@ -1,7 +1,9 @@
 # 020: Search v1.2 — name recall and a deterministic rerank
 
-Date: 2026-09-20. Status: plan, not started. Follows plan 019. Revised the
-same day after a Codex review (eight findings, all folded in below).
+Date: 2026-09-20. Status: implemented on branch feat/search-v1.2-recall-rerank,
+evaluated 2026-09-20; release pending. Follows plan 019. Revised the same day
+after a Codex review (eight findings, all folded in below). Measurements are in
+"Results (2026-09-20)" at the end.
 
 ## Goal
 
@@ -219,3 +221,114 @@ Semantic embeddings, Tantivy, container expansion (Miller surfaces a struct
 when its methods match), synonym lists, reference-count and language
 priors. Container expansion can be a follow-up if the acceptance set shows
 a need.
+
+## Results (2026-09-20)
+
+Binary: `target/release/code-kb` built from `fe93213` on
+`feat/search-v1.2-recall-rerank`. It still reports version 1.1.4; the bump
+is part of task 7. The sets, `runner.py`, and every results file live in
+`~/.code-kb/search-eval/` outside the checkout. v1.2 numbers come from
+`results-v1.2.0-{regression,development,acceptance}.json` and the console
+tables in the matching `.txt` files. v1.1.4 numbers come from
+`baseline-v1.1.4-{regression,development}.json`, run through the
+byte-identical copy `bin/code-kb-1.1.4`. The runner defines the columns:
+file@k counts the cases whose expected file is in the top k of 10; sym@k
+also needs the symbol name; MRR is the mean of 1/rank with a miss as 0;
+p50 is the median wall time of one `code-kb search` process, which includes
+the per-command reconcile of changed files.
+
+### Acceptance set (sealed, 10 per repository, run once)
+
+Target: file@1 at least 8 of 10 and sym@1 at least 7 of 10 on each
+repository.
+
+| repository | file@1 | file@3 | file MRR | sym@1 | sym@3 | sym MRR | p50 ms | file@1 >= 8 | sym@1 >= 7 |
+|---|---|---|---|---|---|---|---|---|---|
+| code-kb | 8 | 9 | 0.88 | 6 | 6 | 0.68 | 27 | met | not met |
+| hermes-agent | 1 | 1 | 0.12 | 1 | 1 | 0.12 | 803 | not met | not met |
+| julie | 5 | 6 | 0.57 | 4 | 6 | 0.50 | 43 | not met | not met |
+| miller | 5 | 7 | 0.61 | 3 | 6 | 0.43 | 85 | not met | not met |
+| all (40) | 19 | 23 | 0.54 | 14 | 19 | 0.43 | 64 | | |
+
+Only code-kb file@1 meets the target. Every other number misses it. The
+lead's reading of the misses:
+
+- Most acceptance queries are README sentences. Their words do not appear
+  in the name, signature, or doc comment of the answer (`ha-acc-doctor` and
+  `ha-acc-past-conversations` are two examples). Lexical search cannot
+  bridge that gap, and this plan excluded semantic search on purpose.
+- Three hermes-agent misses rank a symbol from a test file first because
+  julie did not flag the file as a test. Two of them show it in the
+  recorded top-1 (`ha-acc-past-conversations`, `ha-acc-subagents`).
+- The hermes-agent p50 of 803 ms is the per-command reconcile walk over
+  12,788 files, not the search.
+
+These are follow-ups. They are not fixed on this branch, because the sealed
+set is not run again.
+
+### Development set (89 queries, tuned on this set only)
+
+| repository | n | version | file@1 | file@3 | file MRR | sym@1 | sym@3 | sym MRR | p50 ms |
+|---|---|---|---|---|---|---|---|---|---|
+| code-kb | 23 | v1.1.4 | 20 | 21 | 0.90 | 18 | 19 | 0.82 | 20 |
+| code-kb | 23 | v1.2 | 21 | 23 | 0.95 | 21 | 23 | 0.94 | 22 |
+| hermes-agent | 22 | v1.1.4 | 11 | 14 | 0.59 | 6 | 9 | 0.37 | 685 |
+| hermes-agent | 22 | v1.2 | 14 | 18 | 0.74 | 12 | 18 | 0.69 | 713 |
+| julie | 22 | v1.1.4 | 14 | 19 | 0.76 | 12 | 17 | 0.67 | 44 |
+| julie | 22 | v1.2 | 18 | 21 | 0.89 | 17 | 20 | 0.85 | 33 |
+| miller | 22 | v1.1.4 | 10 | 11 | 0.54 | 6 | 9 | 0.37 | 71 |
+| miller | 22 | v1.2 | 16 | 19 | 0.81 | 11 | 17 | 0.63 | 66 |
+| all | 89 | v1.1.4 | 55 | 65 | 0.70 | 42 | 54 | 0.56 | 66 |
+| all | 89 | v1.2 | 69 | 81 | 0.85 | 61 | 78 | 0.78 | 46 |
+
+### Regression set (26 plan 019 queries, code-kb repository)
+
+v1.2: file@1 25, file@3 26, file MRR 0.98, sym@1 21, sym@3 25, sym MRR 0.89,
+p50 23 ms. v1.1.4: 22, 24, 0.89, 17, 20, 0.73, 21 ms. Eight cases improved.
+Two cases rank one place lower than v1.1.4 (`concept-fts` file 1 -> 2,
+`concept-telemetry` symbol 1 -> 2); the lead ruled both acceptable. Plan
+019's "v1.2 (plan 020) rerun" section has the tuning and held-out split and
+the reason for each case.
+
+### Migration (task 4m, build from `8ab5a50`)
+
+- code-kb index (6,998 symbols, 21.7 MiB): migration 25-34 ms. Database
+  size unchanged, because the new table fit in the freelist (262 KB
+  footprint). WAL peak 766 KB. Peak RSS 7.9 MB in-process.
+- hermes-agent index (990,975 symbols, 1.62 GiB): migration 3.9 s on tmpfs,
+  5.8 s on NVMe, 6.1 s through the CLI. Database +31,375,360 B (+1.8%).
+  WAL peak 73.4 MiB. Peak RSS 9.5 MB in-process.
+- Trigger overhead: update and delete medians roughly double (0.02 -> 0.05
+  ms); insert +0.1-0.26 ms; all medians under 0.5 ms.
+- A second process during a migration waits on the write lock (busy timeout
+  60 s on the migration connection) instead of failing.
+
+### Latency and memory
+
+- Rerank timer (explain output, code-kb checkout): 177 candidates in
+  0.44 ms, the largest set observed. Worst rate 4.5 µs per candidate, about
+  0.9 ms projected at 200.
+- Warm `code-kb search` median 24.3 ms (hyperfine, 20 runs) against 21.9 ms
+  for v1.1.4 in the same session. The added time is the two extra recall
+  branches, not the rerank.
+- Live `serve` RSS after 8 `search_symbols` calls plus one lookup, measured
+  twice each: v1.1.4 RSS 30.58 MB, PSS 27.9 MB, anonymous 22.5 MB; v1.2 RSS
+  30.7-30.8 MB, PSS 28.1 MB, anonymous 22.7 MB. Difference 0.2 MB, within
+  noise.
+
+### Corpus gate
+
+`crates/code-kb-core/tests/search_corpus_test.rs`: 12 of 12 green, none
+ignored.
+
+### Acceptance criteria
+
+| criterion | result |
+|---|---|
+| Regression set: no query ranks worse than in plan 019 | Not met to the letter. 2 of 26 cases rank one place lower, both ruled acceptable; 8 improved; every total rose. |
+| Acceptance set: file@1 >= 8 and sym@1 >= 7 per repository | Not met. code-kb file@1 (8) meets it; the other seven numbers miss. |
+| Warm search p50 under 25 ms on the code-kb checkout | Met. 24.3 ms (hyperfine); regression-set p50 23 ms. |
+| Rerank under 1 ms at 200 candidates | Met. 0.44 ms at 177; 0.9 ms projected at 200. |
+| Live `serve` RSS: no rise beyond noise; migration peak RSS reported | Met. +0.2 MB; migration peak RSS 7.9 MB (code-kb) and 9.5 MB (hermes-agent). |
+| First-start migration on hermes-agent completes; duration, growth, WAL peak in the release notes | Measured (5.8 s NVMe, +31,375,360 B, WAL peak 73.4 MiB). The release notes are task 7. |
+| Failed migration visible to the first tool call and retried; never reported as success | Met. `scan_workspace` and the CLI return the migration error instead of discarding it (`8ab5a50`, `6997b20`); `db.rs` tests cover an interrupted migration, a missing table, and a concurrent writer. |

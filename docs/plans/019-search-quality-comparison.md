@@ -1,6 +1,6 @@
 # 019: Search Quality Comparison (code-kb vs julie vs miller)
 
-Date: 2026-09-20. Status: query-side fixes 1-3 implemented and reviewed by Codex the same day. Fix 4 (index-side name splitting) is open.
+Date: 2026-09-20. Status: query-side fixes 1-3 implemented and reviewed by Codex the same day. Fix 4 (index-side name splitting) is closed by plan 020, which adds a trigram name index and a rerank; the rerun on that build is in "v1.2 (plan 020) rerun" below.
 
 ## Method
 
@@ -104,16 +104,61 @@ why the held-out set exists.
    always OR and rely on BM25 plus the existing docs-last ordering; measure
    both on the 16 cases.
 3. Add `(s.name = :raw_query COLLATE NOCASE) DESC` to the ORDER BY.
-4. Open. The FTS table is an external-content table over `symbols`, so a
+4. Closed by plan 020. The FTS table is an external-content table over `symbols`, so a
    computed column is not possible, and a split function in the triggers
    would have to exist inside julie-extract's process, which writes the
    symbols. The query side carries each identifier unsplit and concatenates
    two- and three-word queries, which covers `validate syntax` ->
    `validateSyntax` but not a longer phrase. Closing the held-out gap needs a
    code-kb-maintained words table refreshed per changed file after each sync,
-   or a split-name column written by the extractor. Decide before v1.2.
+   or a split-name column written by the extractor. Plan 020 chose a
+   trigram FTS5 table on names, kept current by plain SQL triggers.
 
 Result on the tuning set: file@3 from 9 to 15, sym@1 from 7 to 11.
+
+## v1.2 (plan 020) rerun
+
+Both sets above became the plan 020 regression set (26 cases, code-kb
+repository). The runner and the set live in `~/.code-kb/search-eval/`
+outside every checkout. The rerun used `runner.py` with limit 10 on
+2026-09-20: v1.1.4 through the byte-identical copy `bin/code-kb-1.1.4`
+(`baseline-v1.1.4-regression.json`), v1.2 through `target/release/code-kb`
+built from `fe93213` on `feat/search-v1.2-recall-rerank`
+(`results-v1.2.0-regression.json`). The v1.1.4 rows equal the "code-kb after"
+rows above on every column except p50, which was measured warm this time.
+
+| set | provider | file@1 | file@3 | file MRR | sym@1 | sym@3 | sym MRR | p50 ms |
+|---|---|---|---|---|---|---|---|---|
+| tuning (16) | code-kb v1.1.4 | 15 | 15 | 0.95 | 11 | 13 | 0.76 | 21 |
+| tuning (16) | code-kb v1.2 | 15 | 16 | 0.97 | 12 | 15 | 0.85 | 23 |
+| held-out (10) | code-kb v1.1.4 | 7 | 9 | 0.80 | 6 | 7 | 0.68 | 21 |
+| held-out (10) | code-kb v1.2 | 10 | 10 | 1.00 | 9 | 10 | 0.95 | 23 |
+
+The v1.2 held-out row equals Miller's lexical row above on every quality
+column, at 23 ms against 522 ms.
+
+Cases that improved (rank in v1.1.4 -> v1.2; "miss" means not in the top 10):
+
+- `ho-js-sha`: file miss -> 1, symbol miss -> 1. The trigram index reaches
+  `parseSha256Sidecar`, the case that motivated plan 020.
+- `ho-skeleton`: file 2 -> 1, symbol 2 -> 1. The function now outranks the
+  short enum variant.
+- `ho-outline`: file 2 -> 1, symbol miss -> 2.
+- `ho-js-download`: symbol 4 -> 1.
+- `partial-words`: file 4 -> 1, symbol 4 -> 1.
+- `concept-worktree`: symbol miss -> 2.
+- `concept-sanitize`: symbol 2 -> 1.
+- `concept-julie-find`: symbol 9 -> 4.
+
+Cases that rank worse than v1.1.4 (two; the lead ruled both acceptable):
+
+- `concept-fts`: file 1 -> 2. `create_index` now outranks `ensure_fts_index`.
+  Both names cover two query words. Inside the word index's matched rows,
+  `fts` is more common than `create`, so the rarity weight favors
+  `create_index`, and `create_index` is a plausible answer to the query.
+- `concept-telemetry`: symbol 1 -> 2. The struct `TelemetrySummary` matches
+  the query as a whole name, so the plan's exact-name rule puts it above the
+  functions. The plan 019 label list omitted the struct.
 
 ## Not planned
 
