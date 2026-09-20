@@ -97,7 +97,7 @@ pub fn local_variable_predicate(alias: &str) -> String {
 
 /// Identifies the rule the FTS content was built under. A stored marker that differs from this
 /// value means the index predates the rule and must be repopulated once.
-const FTS_RULE: &str = "exclude-locals-v1";
+const FTS_RULE: &str = "exclude-locals-v1+names-trigram-v1";
 
 fn stored_fts_rule(conn: &Connection) -> Option<String> {
     conn.query_row(
@@ -108,7 +108,17 @@ fn stored_fts_rule(conn: &Connection) -> Option<String> {
     .ok()
 }
 
-fn fts_content_is_missing(conn: &Connection) -> bool {
+fn fts_content_is_missing(conn: &Connection, table: &str) -> bool {
+    let table_exists = conn
+        .query_row(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1",
+            [table],
+            |_| Ok(true),
+        )
+        .unwrap_or(false);
+    if !table_exists {
+        return true;
+    }
     let has_symbols = conn
         .query_row("SELECT 1 FROM symbols LIMIT 1", [], |_| Ok(true))
         .unwrap_or(false);
@@ -116,15 +126,19 @@ fn fts_content_is_missing(conn: &Connection) -> bool {
         return false;
     }
     !conn
-        .query_row("SELECT 1 FROM symbols_fts_docsize LIMIT 1", [], |_| {
-            Ok(true)
-        })
+        .query_row(
+            &format!("SELECT 1 FROM {table}_docsize LIMIT 1"),
+            [],
+            |_| Ok(true),
+        )
         .unwrap_or(false)
 }
 
-/// Ensures the `symbols_fts` FTS5 virtual table and synchronization triggers exist in the SQLite
-/// database, and that it holds every symbol except locals and parameters. An index built under an
-/// earlier rule, or one left without content, is repopulated once.
+/// Ensures the `symbols_fts` (words) and `symbol_names_tri` (name trigrams) FTS5 virtual tables
+/// and their synchronization triggers exist in the SQLite database, and that both hold every
+/// symbol except locals and parameters. An index built under an earlier rule, or one left
+/// without content or without one of the tables, is repopulated once inside a single
+/// transaction; the rule marker is written last so an interrupted migration reruns.
 /// julie may write a local before its enclosing function, so the insert trigger also drops any
 /// same-file variable that became local when its parent arrived.
 pub fn ensure_fts_index(conn: &Connection) -> Result<(), rusqlite::Error> {
@@ -140,7 +154,10 @@ pub fn ensure_fts_index(conn: &Connection) -> Result<(), rusqlite::Error> {
         return Ok(());
     }
 
-    if stored_fts_rule(conn).as_deref() == Some(FTS_RULE) && !fts_content_is_missing(conn) {
+    if stored_fts_rule(conn).as_deref() == Some(FTS_RULE)
+        && !fts_content_is_missing(conn, "symbols_fts")
+        && !fts_content_is_missing(conn, "symbol_names_tri")
+    {
         return Ok(());
     }
 
@@ -148,8 +165,11 @@ pub fn ensure_fts_index(conn: &Connection) -> Result<(), rusqlite::Error> {
     let new_is_local = local_variable_predicate("new");
     let child_is_local = local_variable_predicate("c");
     let already_indexed = "EXISTS (SELECT 1 FROM symbols_fts_docsize d WHERE d.id = old.rowid)";
+    let name_already_indexed =
+        "EXISTS (SELECT 1 FROM symbol_names_tri_docsize d WHERE d.id = old.rowid)";
 
-    conn.execute_batch(&format!(
+    let tx = conn.unchecked_transaction()?;
+    tx.execute_batch(&format!(
         "CREATE VIRTUAL TABLE IF NOT EXISTS symbols_fts USING fts5(
             name,
             signature,
@@ -157,6 +177,13 @@ pub fn ensure_fts_index(conn: &Connection) -> Result<(), rusqlite::Error> {
             content='symbols',
             content_rowid='rowid',
             tokenize='porter unicode61'
+        );
+
+        CREATE VIRTUAL TABLE IF NOT EXISTS symbol_names_tri USING fts5(
+            name,
+            content='symbols',
+            content_rowid='rowid',
+            tokenize='trigram'
         );
 
         DROP TRIGGER IF EXISTS symbols_ai;
@@ -167,6 +194,9 @@ pub fn ensure_fts_index(conn: &Connection) -> Result<(), rusqlite::Error> {
             INSERT INTO symbols_fts(rowid, name, signature, doc_comment)
             SELECT new.rowid, new.name, new.signature, new.doc_comment
             WHERE NOT {new_is_local};
+            INSERT INTO symbol_names_tri(rowid, name)
+            SELECT new.rowid, new.name
+            WHERE NOT {new_is_local};
             INSERT INTO symbols_fts(symbols_fts, rowid, name, signature, doc_comment)
             SELECT 'delete', c.rowid, c.name, c.signature, c.doc_comment
             FROM symbols c
@@ -175,46 +205,58 @@ pub fn ensure_fts_index(conn: &Connection) -> Result<(), rusqlite::Error> {
               AND c.kind = 'variable'
               AND {child_is_local}
               AND EXISTS (SELECT 1 FROM symbols_fts_docsize d WHERE d.id = c.rowid);
+            INSERT INTO symbol_names_tri(symbol_names_tri, rowid, name)
+            SELECT 'delete', c.rowid, c.name
+            FROM symbols c
+            WHERE new.kind IN ('function', 'method', 'constructor')
+              AND c.path = new.path
+              AND c.kind = 'variable'
+              AND {child_is_local}
+              AND EXISTS (SELECT 1 FROM symbol_names_tri_docsize d WHERE d.id = c.rowid);
         END;
 
         CREATE TRIGGER symbols_ad AFTER DELETE ON symbols BEGIN
             INSERT INTO symbols_fts(symbols_fts, rowid, name, signature, doc_comment)
             SELECT 'delete', old.rowid, old.name, old.signature, old.doc_comment
             WHERE {already_indexed};
+            INSERT INTO symbol_names_tri(symbol_names_tri, rowid, name)
+            SELECT 'delete', old.rowid, old.name
+            WHERE {name_already_indexed};
         END;
 
         CREATE TRIGGER symbols_au AFTER UPDATE ON symbols BEGIN
             INSERT INTO symbols_fts(symbols_fts, rowid, name, signature, doc_comment)
             SELECT 'delete', old.rowid, old.name, old.signature, old.doc_comment
             WHERE {already_indexed};
+            INSERT INTO symbol_names_tri(symbol_names_tri, rowid, name)
+            SELECT 'delete', old.rowid, old.name
+            WHERE {name_already_indexed};
             INSERT INTO symbols_fts(rowid, name, signature, doc_comment)
             SELECT new.rowid, new.name, new.signature, new.doc_comment
             WHERE NOT {new_is_local};
-        END;"
+            INSERT INTO symbol_names_tri(rowid, name)
+            SELECT new.rowid, new.name
+            WHERE NOT {new_is_local};
+        END;
+
+        INSERT INTO symbols_fts(symbols_fts) VALUES('delete-all');
+        INSERT INTO symbol_names_tri(symbol_names_tri) VALUES('delete-all');
+
+        INSERT INTO symbols_fts(rowid, name, signature, doc_comment)
+        SELECT s.rowid, s.name, s.signature, s.doc_comment
+        FROM symbols s WHERE NOT {is_local};
+        INSERT INTO symbol_names_tri(rowid, name)
+        SELECT s.rowid, s.name
+        FROM symbols s WHERE NOT {is_local};
+
+        CREATE TABLE IF NOT EXISTS artifact_metadata (key TEXT PRIMARY KEY, value TEXT);"
     ))?;
-
-    conn.execute(
-        "INSERT INTO symbols_fts(symbols_fts) VALUES('delete-all')",
-        [],
-    )?;
-    conn.execute(
-        &format!(
-            "INSERT INTO symbols_fts(rowid, name, signature, doc_comment)
-             SELECT s.rowid, s.name, s.signature, s.doc_comment
-             FROM symbols s WHERE NOT {is_local}"
-        ),
-        [],
-    )?;
-
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS artifact_metadata (key TEXT PRIMARY KEY, value TEXT)",
-        [],
-    )?;
-    conn.execute(
+    tx.execute(
         "INSERT INTO artifact_metadata (key, value) VALUES ('fts_rule', ?1)
          ON CONFLICT(key) DO UPDATE SET value = excluded.value",
         [FTS_RULE],
     )?;
+    tx.commit()?;
 
     Ok(())
 }
@@ -430,6 +472,8 @@ mod tests {
             )
             .unwrap();
         assert_eq!(count, 0);
+        assert!(trigram_names(&conn, "drifted").is_empty());
+        assert_eq!(trigram_names(&conn, "later"), vec!["later"]);
     }
 
     #[test]
@@ -468,6 +512,164 @@ mod tests {
             )
             .unwrap();
         assert_eq!(count, 1);
+    }
+
+    fn symbols_db(file: &str) -> (tempfile::TempDir, Connection) {
+        let dir = crate::safe_tempdir();
+        let conn = open_read_write(&dir.path().join(file)).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE symbols (
+                symbol_id TEXT PRIMARY KEY,
+                path TEXT,
+                name TEXT,
+                kind TEXT,
+                parent_symbol_id TEXT,
+                signature TEXT,
+                doc_comment TEXT
+            );
+            INSERT INTO symbols VALUES ('1', 'src/sidecar.ts', 'parseSha256Sidecar', 'function', NULL, 'function parseSha256Sidecar()', 'Reads the checksum sidecar');
+            INSERT INTO symbols VALUES ('2', 'src/sidecar.ts', 'digestBuffer', 'variable', '1', 'const digestBuffer', '');",
+        )
+        .unwrap();
+        (dir, conn)
+    }
+
+    fn trigram_names(conn: &Connection, term: &str) -> Vec<String> {
+        let mut stmt = conn
+            .prepare(
+                "SELECT name FROM symbol_names_tri WHERE symbol_names_tri MATCH ?1 ORDER BY name",
+            )
+            .unwrap();
+        stmt.query_map([format!("\"{term}\"")], |r| r.get(0))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect()
+    }
+
+    fn word_names(conn: &Connection, term: &str) -> Vec<String> {
+        let mut stmt = conn
+            .prepare("SELECT name FROM symbols_fts WHERE symbols_fts MATCH ?1 ORDER BY name")
+            .unwrap();
+        stmt.query_map([term], |r| r.get(0))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect()
+    }
+
+    fn docsize_rows(conn: &Connection, table: &str) -> i64 {
+        conn.query_row(&format!("SELECT count(*) FROM {table}_docsize"), [], |r| {
+            r.get(0)
+        })
+        .unwrap()
+    }
+
+    fn schema_version(conn: &Connection) -> i64 {
+        conn.query_row("PRAGMA schema_version", [], |r| r.get(0))
+            .unwrap()
+    }
+
+    #[test]
+    fn fresh_index_populates_both_tables_without_locals() {
+        let (_dir, conn) = symbols_db("fresh.db");
+
+        ensure_fts_index(&conn).unwrap();
+
+        assert_eq!(trigram_names(&conn, "sha256"), vec!["parseSha256Sidecar"]);
+        assert_eq!(word_names(&conn, "sidecar"), vec!["parseSha256Sidecar"]);
+        assert!(trigram_names(&conn, "digest").is_empty());
+        assert!(word_names(&conn, "digestBuffer").is_empty());
+        assert_eq!(stored_fts_rule(&conn).as_deref(), Some(FTS_RULE));
+    }
+
+    #[test]
+    fn upgrade_from_exclude_locals_v1_adds_the_trigram_table() {
+        let (_dir, conn) = symbols_db("upgrade.db");
+        conn.execute_batch(
+            "CREATE VIRTUAL TABLE symbols_fts USING fts5(
+                name, signature, doc_comment,
+                content='symbols', content_rowid='rowid', tokenize='porter unicode61'
+            );
+            INSERT INTO symbols_fts(rowid, name, signature, doc_comment)
+            SELECT rowid, name, signature, doc_comment FROM symbols WHERE kind != 'variable';
+            CREATE TABLE artifact_metadata (key TEXT PRIMARY KEY, value TEXT);
+            INSERT INTO artifact_metadata VALUES ('fts_rule', 'exclude-locals-v1');",
+        )
+        .unwrap();
+
+        ensure_fts_index(&conn).unwrap();
+
+        assert_eq!(trigram_names(&conn, "sha256"), vec!["parseSha256Sidecar"]);
+        assert_eq!(word_names(&conn, "sidecar"), vec!["parseSha256Sidecar"]);
+        assert_eq!(stored_fts_rule(&conn).as_deref(), Some(FTS_RULE));
+    }
+
+    #[test]
+    fn interrupted_migration_is_completed_once_and_then_left_alone() {
+        let (_dir, conn) = symbols_db("interrupted.db");
+        ensure_fts_index(&conn).unwrap();
+        conn.execute("DELETE FROM artifact_metadata WHERE key = 'fts_rule'", [])
+            .unwrap();
+        let before_repair = schema_version(&conn);
+
+        ensure_fts_index(&conn).unwrap();
+
+        assert_eq!(stored_fts_rule(&conn).as_deref(), Some(FTS_RULE));
+        assert_eq!(trigram_names(&conn, "sha256"), vec!["parseSha256Sidecar"]);
+        assert_ne!(schema_version(&conn), before_repair);
+        let settled = schema_version(&conn);
+        let rows = (
+            docsize_rows(&conn, "symbols_fts"),
+            docsize_rows(&conn, "symbol_names_tri"),
+        );
+
+        ensure_fts_index(&conn).unwrap();
+
+        assert_eq!(schema_version(&conn), settled);
+        assert_eq!(
+            (
+                docsize_rows(&conn, "symbols_fts"),
+                docsize_rows(&conn, "symbol_names_tri")
+            ),
+            rows
+        );
+    }
+
+    #[test]
+    fn missing_trigram_table_is_recreated_despite_the_marker() {
+        let (_dir, conn) = symbols_db("dropped.db");
+        ensure_fts_index(&conn).unwrap();
+        conn.execute("DROP TABLE symbol_names_tri", []).unwrap();
+
+        ensure_fts_index(&conn).unwrap();
+
+        assert_eq!(trigram_names(&conn, "sha256"), vec!["parseSha256Sidecar"]);
+        assert_eq!(docsize_rows(&conn, "symbol_names_tri"), 1);
+    }
+
+    #[test]
+    fn triggers_keep_the_trigram_table_in_sync() {
+        let (_dir, conn) = symbols_db("triggers.db");
+        ensure_fts_index(&conn).unwrap();
+
+        conn.execute(
+            "INSERT INTO symbols VALUES ('3', 'src/verify.ts', 'verifyChecksum', 'function', NULL, 'function verifyChecksum()', '')",
+            [],
+        )
+        .unwrap();
+        assert_eq!(trigram_names(&conn, "checksum"), vec!["verifyChecksum"]);
+
+        conn.execute(
+            "UPDATE symbols SET name = 'verifyDigest' WHERE symbol_id = '3'",
+            [],
+        )
+        .unwrap();
+        assert!(trigram_names(&conn, "checksum").is_empty());
+        assert_eq!(trigram_names(&conn, "digest"), vec!["verifyDigest"]);
+
+        conn.execute("DELETE FROM symbols WHERE symbol_id = '3'", [])
+            .unwrap();
+        assert!(trigram_names(&conn, "digest").is_empty());
+        assert_eq!(docsize_rows(&conn, "symbol_names_tri"), 1);
     }
 
     #[test]

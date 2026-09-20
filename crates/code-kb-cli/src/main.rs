@@ -551,7 +551,7 @@ fn main() -> anyhow::Result<()> {
             )?;
 
             let (exact_matches, fts_matches) = if matches.is_empty() {
-                let _ = ensure_fts_index_path(&db_path);
+                ensure_fts_index_path(&db_path)?;
                 let fts = fts_search_symbols_scoped(
                     &conn,
                     &args.query,
@@ -587,7 +587,7 @@ fn main() -> anyhow::Result<()> {
         Command::Search(args) => {
             let rel_path = args.path.as_deref().map(|p| workspace.relativize_filter(p));
             let path_filter = rel_path.as_deref();
-            let _ = ensure_fts_index_path(&db_path);
+            ensure_fts_index_path(&db_path)?;
             let matches = fts_search_symbols_scoped(
                 &conn,
                 &args.query,

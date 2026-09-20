@@ -3,7 +3,7 @@ use sha2::Digest;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use thiserror::Error;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 use crate::queries;
 use crate::workspace::Workspace;
@@ -217,8 +217,10 @@ pub fn scan_workspace(workspace: &Workspace, db_path: &Path, force: bool) -> Res
         Err(e) => return Err(e),
     }
 
-    // Ensure FTS5 index is built and triggers are established
-    let _ = crate::db::ensure_fts_index_path(db_path);
+    crate::db::ensure_fts_index_path(db_path).map_err(|e| {
+        error!(db = %db_path.display(), "FTS index preparation failed: {e}");
+        e
+    })?;
 
     Ok(())
 }

@@ -43,7 +43,7 @@ fn spawn_index_prepare(
             tracing::info!(ws = %ws.canonical_root.display(), "Database not found; running automatic initial scan");
             create_index(&ws, &db).map_err(|e| e.to_string())?;
         }
-        let _ = ensure_fts_index_path(&db);
+        ensure_fts_index_path(&db).map_err(|e| e.to_string())?;
         if let Ok(conn) = open_read_only(&db) {
             let _ = reconcile_offline_edits(&ws, &db, &conn);
         }
@@ -719,6 +719,19 @@ impl McpServer {
             return err_res;
         }
 
+        if let Some(e) = prepare_error {
+            self.reconcile = spawn_index_prepare(&self.workspace, &self.db_path);
+            let msg = format!(
+                "Index preparation of '{}' failed: {e}; it will be retried on the next tool call",
+                self.workspace.canonical_root.display()
+            );
+            tracing::error!("{}", msg);
+            let mut err_res = CallToolResult::error(msg);
+            err_res.reconcile_ms = reconcile_ms;
+            err_res.query_ms = Some(0);
+            return err_res;
+        }
+
         let conn = match open_read_only(&self.db_path) {
             Ok(c) => c,
             Err(e) => {
@@ -812,7 +825,9 @@ impl McpServer {
                 };
 
                 let (exact_matches, fts_matches) = if matches.is_empty() {
-                    let _ = ensure_fts_index_path(&self.db_path);
+                    if let Err(e) = ensure_fts_index_path(&self.db_path) {
+                        return CallToolResult::error(format!("Search index is not ready: {e}"));
+                    }
                     let fts = fts_search_symbols_scoped(
                         &conn,
                         query,
@@ -866,7 +881,9 @@ impl McpServer {
                     Err(error) => return error,
                 };
 
-                let _ = ensure_fts_index_path(&self.db_path);
+                if let Err(e) = ensure_fts_index_path(&self.db_path) {
+                    return CallToolResult::error(format!("Search index is not ready: {e}"));
+                }
 
                 let matches = match fts_search_symbols_scoped(
                     &conn,

@@ -60,6 +60,9 @@ MCP tool schema.**
 - Retained memory is about 25 MB today. Measure a live `serve` process before and after any change that could raise it.
 - All symbol searches, skeleton rendering, context slices, and reference lookups
   are executed as direct, indexed SQLite queries with `open_read_only`.
+- The search index is two FTS5 tables over `symbols`: `symbols_fts` for words and `symbol_names_tri`
+  for name substrings. `ensure_fts_index` migrates both in one transaction, guarded by the `fts_rule`
+  marker; a failed migration is reported by the first tool call and retried on the next start.
 
 ### 3. Single-Turn Atomic Edits
 - `replace_symbol_body` must perform pre-flight syntax validation through
