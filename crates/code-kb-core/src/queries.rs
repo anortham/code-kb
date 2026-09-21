@@ -484,7 +484,11 @@ pub fn search_symbols_scoped(
     });
     let escaped_path = normalized_path.as_deref().map(escape_like);
 
-    let sql = search_symbols_sql(norm_kind.as_deref() == Some("variable"), include_tests, limit);
+    let sql = search_symbols_sql(
+        norm_kind.as_deref() == Some("variable"),
+        include_tests,
+        limit,
+    );
     let mut stmt = conn.prepare(&sql)?;
 
     let path_val = normalized_path.as_deref();
@@ -3970,7 +3974,10 @@ mod tests {
              CREATE INDEX idx_symbols_is_test ON symbols(is_test);",
         )
         .unwrap();
-        let sql = format!("EXPLAIN QUERY PLAN {}", search_symbols_sql(false, false, 20));
+        let sql = format!(
+            "EXPLAIN QUERY PLAN {}",
+            search_symbols_sql(false, false, 20)
+        );
         let plan: Vec<String> = conn
             .prepare(&sql)
             .unwrap()
