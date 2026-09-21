@@ -127,6 +127,7 @@ pub struct SearchExplain {
     pub name_tier: String,
     pub name_coverage: f64,
     pub name_strength: u32,
+    pub terms: Vec<(String, String, u8)>,
     pub signature_coverage: f64,
     pub doc_coverage: f64,
     pub kind_prior: f64,

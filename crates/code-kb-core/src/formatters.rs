@@ -603,6 +603,14 @@ fn explain_line(score: f64, e: &SearchExplain) -> String {
     if let Some(bm25) = e.bm25 {
         line.push_str(&format!(" bm25 {bm25:.2}"));
     }
+    if !e.terms.is_empty() {
+        let terms: Vec<String> = e
+            .terms
+            .iter()
+            .map(|(term, field, credit)| format!("{term}={field}:{credit}"))
+            .collect();
+        line.push_str(&format!(" terms {}", terms.join(" ")));
+    }
     line
 }
 
@@ -895,6 +903,10 @@ mod tests {
                 name_tier: "all".into(),
                 name_coverage: 1.0,
                 name_strength: 6,
+                terms: vec![
+                    ("sha".into(), "name".into(), 3),
+                    ("256".into(), "name".into(), 3),
+                ],
                 signature_coverage: 0.25,
                 doc_coverage: 0.0,
                 kind_prior: 4.0,
@@ -912,7 +924,7 @@ mod tests {
             "Found 1 symbols matching concept \"sha256\":\nrerank: 37 candidates in 180 µs; words sha 2.60, 256 0.97\n\n- "
         ));
         assert!(formatted.contains(&format!(
-            "  explain: score 71.6 = name all(6) 60.0 + sig 0.25*{W_SIGNATURE} + doc 0.00*{W_DOC} + kind 4.0 + path -10.0 + test 5.0 [word,name] bm25 -3.21\n"
+            "  explain: score 71.6 = name all(6) 60.0 + sig 0.25*{W_SIGNATURE} + doc 0.00*{W_DOC} + kind 4.0 + path -10.0 + test 5.0 [word,name] bm25 -3.21 terms sha=name:3 256=name:3\n"
         )));
 
         result.explain = None;
