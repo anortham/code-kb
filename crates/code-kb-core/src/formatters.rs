@@ -5,7 +5,6 @@ use crate::models::{
     BlastRadiusResult, ContextSlice, ImpactedSymbol, ReferenceSite, SearchExplain, Symbol,
     SymbolSearchResult, TestTarget,
 };
-use crate::queries::{W_DOC, W_SIGNATURE, name_tier_score};
 
 /// Format progressive disclosure file skeleton with implementation bodies stripped.
 pub fn format_file_skeleton(
@@ -549,9 +548,6 @@ pub fn format_search_results(query: &str, results: &[SymbolSearchResult], limit:
                 .collect();
             out.push_str(&format!("; words {}", words.join(", ")));
         }
-        if !explain.scorer.is_empty() {
-            out.push_str(&format!("; {}", explain.scorer));
-        }
         out.push('\n');
     }
     out.push('\n');
@@ -587,17 +583,11 @@ pub fn format_search_results(query: &str, results: &[SymbolSearchResult], limit:
 
 fn explain_line(score: f64, e: &SearchExplain) -> String {
     let mut line = format!(
-        "score {score:.1} = name {}({}) {:.1} + sig {:.2}*{W_SIGNATURE} + doc {:.2}*{W_DOC} + kind {:.1} + path {:.1}",
-        e.name_tier,
-        e.name_strength,
-        name_tier_score(&e.name_tier, e.name_coverage),
-        e.signature_coverage,
-        e.doc_coverage,
-        e.kind_prior,
-        e.path_role,
+        "score {score:.1} = terms {:.1} + name {}({}) {:.1} + kind {:.1} + path {:.1}",
+        e.term_score, e.name_tier, e.name_strength, e.name_bonus, e.kind_prior, e.path_role,
     );
     if e.documentation != 0.0 {
-        line.push_str(&format!(" + documentation {:.1}", e.documentation));
+        line.push_str(&format!(" + doc {:.1}", e.documentation));
     }
     if e.test_intent != 0.0 {
         line.push_str(&format!(" + test {:.1}", e.test_intent));
@@ -895,6 +885,49 @@ mod tests {
     }
 
     #[test]
+    fn every_printed_part_of_the_explain_line_sums_to_the_score() {
+        let e = SearchExplain {
+            bm25: Some(-3.21),
+            branches: vec!["word".into()],
+            name_tier: "all".into(),
+            name_strength: 6,
+            term_score: 24.5,
+            name_bonus: 60.0,
+            kind_prior: 4.0,
+            path_role: -10.0,
+            documentation: -200.0,
+            test_intent: 5.0,
+            terms: vec![("sha".into(), "name".into(), 3.0)],
+            word_weights: vec![("sha".into(), 2.6)],
+            candidates: 1,
+            rerank_us: 1,
+        };
+        let score = e.term_score
+            + e.name_bonus
+            + e.kind_prior
+            + e.path_role
+            + e.documentation
+            + e.test_intent;
+
+        let line = explain_line(score, &e);
+        let parts: f64 = line
+            .split(" = ")
+            .nth(1)
+            .unwrap()
+            .split(" [")
+            .next()
+            .unwrap()
+            .split(" + ")
+            .map(|part| part.rsplit(' ').next().unwrap().parse::<f64>().unwrap())
+            .sum();
+
+        assert!(line.starts_with(&format!(
+            "score {score:.1} = terms 24.5 + name all(6) 60.0 "
+        )));
+        assert_eq!(format!("{parts:.1}"), format!("{score:.1}"));
+    }
+
+    #[test]
     fn test_format_search_results_prints_the_explain_breakdown_when_present() {
         let mut result = SymbolSearchResult {
             symbol: sample_symbol("parseSha256Sidecar"),
@@ -904,20 +937,18 @@ mod tests {
                 bm25: Some(-3.21),
                 branches: vec!["word".into(), "name".into()],
                 name_tier: "all".into(),
-                name_coverage: 1.0,
                 name_strength: 6,
                 terms: vec![
                     ("sha".into(), "name".into(), 3.0),
                     ("256".into(), "name".into(), 3.0),
                 ],
-                signature_coverage: 0.25,
-                doc_coverage: 0.0,
+                term_score: 12.6,
+                name_bonus: 60.0,
                 kind_prior: 4.0,
                 path_role: -10.0,
                 documentation: 0.0,
                 test_intent: 5.0,
                 word_weights: vec![("sha".into(), 2.6), ("256".into(), 0.97)],
-                scorer: "distinct weights=idf credit=2 sig=400 cap=52".into(),
                 candidates: 37,
                 rerank_us: 180,
             }),
@@ -925,11 +956,11 @@ mod tests {
 
         let formatted = format_search_results("sha256", std::slice::from_ref(&result), 20);
         assert!(formatted.contains(
-            "Found 1 symbols matching concept \"sha256\":\nrerank: 37 candidates in 180 µs; words sha 2.60, 256 0.97; distinct weights=idf credit=2 sig=400 cap=52\n\n- "
+            "Found 1 symbols matching concept \"sha256\":\nrerank: 37 candidates in 180 µs; words sha 2.60, 256 0.97\n\n- "
         ));
-        assert!(formatted.contains(&format!(
-            "  explain: score 71.6 = name all(6) 60.0 + sig 0.25*{W_SIGNATURE} + doc 0.00*{W_DOC} + kind 4.0 + path -10.0 + test 5.0 [word,name] bm25 -3.21 terms sha=name:3 256=name:3\n"
-        )));
+        assert!(formatted.contains(
+            "  explain: score 71.6 = terms 12.6 + name all(6) 60.0 + kind 4.0 + path -10.0 + test 5.0 [word,name] bm25 -3.21 terms sha=name:3 256=name:3\n"
+        ));
 
         result.explain = None;
         let silent = format_search_results("sha256", std::slice::from_ref(&result), 20);

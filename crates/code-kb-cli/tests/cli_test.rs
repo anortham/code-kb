@@ -360,7 +360,8 @@ fn test_cli_search_explain_flag() {
     assert_eq!(explain["branches"], serde_json::json!(["word"]));
     assert_eq!(explain["candidates"], 1);
     assert!(explain["bm25"].as_f64().unwrap() < 0.0);
-    assert_eq!(explain["doc_coverage"], 1.0);
+    assert_eq!(explain["terms"][0][1], "doc");
+    assert!(explain["term_score"].as_f64().unwrap() > 0.0);
     assert_eq!(explain["word_weights"][0][0], "discovery");
     assert!(rows[0]["score"].as_f64().unwrap() > 0.0);
 }

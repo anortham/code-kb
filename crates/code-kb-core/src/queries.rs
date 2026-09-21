@@ -1077,10 +1077,8 @@ pub fn fts_search_symbols_explained(
         collect_search_candidates(conn, query, kind_filter, path_filter, include_tests, limit)?;
     let candidate_count = candidates.len();
     let started = std::time::Instant::now();
-    let scorer = Scorer::from_env();
-    let idf = (scorer.distinct && scorer.weights == WeightSource::Idf)
-        .then(|| idf_weights(conn, &rerank_words(query)));
-    let ranked = rerank_with(candidates, query, include_tests, scorer, idf.as_deref());
+    let idf = idf_weights(conn, &rerank_words(query));
+    let ranked = rerank_with(candidates, query, include_tests, Some(&idf));
     let rerank_us = started.elapsed().as_micros();
     Ok(ranked
         .into_iter()
@@ -1098,10 +1096,6 @@ pub fn fts_search_symbols_explained(
 
 const W_NAME_WHOLE: f64 = 100.0;
 const W_NAME_ALL_WORDS: f64 = 60.0;
-const W_NAME_PARTIAL: f64 = 30.0;
-const W_NAME_ANY: f64 = 5.0;
-pub(crate) const W_SIGNATURE: f64 = 4.0;
-pub(crate) const W_DOC: f64 = 18.0;
 const W_KIND_DEFINITION: f64 = 4.0;
 const W_KIND_MEMBER: f64 = 0.0;
 const W_KIND_IMPORT: f64 = -50.0;
@@ -1110,8 +1104,8 @@ const W_DOCUMENTATION_ROW: f64 = -200.0;
 const W_TEST_INTENT: f64 = 5.0;
 const W_TERMS: f64 = 52.0;
 const MAX_TERM_CREDIT: f64 = 3.0;
-const TEXT_CREDIT: f64 = 2.0;
-const DOC_COVERAGE_BYTES: usize = 400;
+const TEXT_CREDIT: f64 = 1.0;
+const TEXT_HEAD_BYTES: usize = 400;
 
 const DEFINITION_KINDS: &[&str] = &[
     "function",
@@ -1138,96 +1132,6 @@ struct Hits {
     name: Vec<u8>,
     signature: Vec<bool>,
     doc: Vec<bool>,
-}
-
-/// Where the rerank takes each query term's weight from: the whole index, flat, or the
-/// candidate sample.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum WeightSource {
-    Idf,
-    Uniform,
-    Rarity,
-}
-
-impl WeightSource {
-    fn name(self) -> &'static str {
-        match self {
-            WeightSource::Idf => "idf",
-            WeightSource::Uniform => "uniform",
-            WeightSource::Rarity => "rarity",
-        }
-    }
-}
-
-/// How the rerank scores a candidate. The distinct-term scorer credits each query term once
-/// from its strongest field; it and its knobs are selected by the `CODE_KB_RERANK` variables
-/// for measurement only, and are never a tool parameter or a CLI flag.
-#[derive(Clone, Copy)]
-struct Scorer {
-    distinct: bool,
-    weights: WeightSource,
-    text_credit: f64,
-    sig_bytes: usize,
-    nameless_cap: f64,
-}
-
-fn env_parsed<T: std::str::FromStr>(key: &str, fallback: T) -> T {
-    std::env::var(key)
-        .ok()
-        .and_then(|value| value.parse().ok())
-        .unwrap_or(fallback)
-}
-
-impl Scorer {
-    fn coverage() -> Self {
-        Scorer {
-            distinct: false,
-            weights: WeightSource::Rarity,
-            text_credit: TEXT_CREDIT,
-            sig_bytes: usize::MAX,
-            nameless_cap: W_TERMS,
-        }
-    }
-
-    fn distinct() -> Self {
-        Scorer {
-            distinct: true,
-            weights: WeightSource::Idf,
-            sig_bytes: DOC_COVERAGE_BYTES,
-            ..Scorer::coverage()
-        }
-    }
-
-    fn from_env() -> Self {
-        let mut scorer = match std::env::var("CODE_KB_RERANK").as_deref() {
-            Ok("distinct") => Scorer::distinct(),
-            Ok("distinct-rarity") => Scorer {
-                weights: WeightSource::Rarity,
-                ..Scorer::distinct()
-            },
-            _ => return Scorer::coverage(),
-        };
-        scorer.weights = match std::env::var("CODE_KB_RERANK_WEIGHTS").as_deref() {
-            Ok("idf") => WeightSource::Idf,
-            Ok("uniform") => WeightSource::Uniform,
-            Ok("rarity") => WeightSource::Rarity,
-            _ => scorer.weights,
-        };
-        scorer.text_credit = env_parsed("CODE_KB_RERANK_TEXT_CREDIT", scorer.text_credit);
-        scorer.sig_bytes = env_parsed("CODE_KB_RERANK_SIG_BYTES", scorer.sig_bytes);
-        scorer.nameless_cap = env_parsed("CODE_KB_RERANK_NAMELESS_CAP", scorer.nameless_cap);
-        scorer
-    }
-
-    fn label(&self) -> String {
-        format!(
-            "distinct weights={} credit={} sig={} cap={}",
-            self.weights.name(),
-            self.text_credit,
-            self.sig_bytes,
-            self.nameless_cap
-        )
-    }
 }
 
 /// Global rarity of each lowercase rerank term: `ln(1 + N / (df + 1))`, where `df` is the
@@ -1270,8 +1174,8 @@ fn document_frequency(stmt: &mut rusqlite::Statement<'_>, term: &str) -> Option<
 }
 
 /// The field that credits each query term and the credit it is worth: a name whole token 3,
-/// a name stem 2, a signature or doc hit `text_credit`, a name substring 1, nothing 0.
-fn term_credits(hits: &Hits, words: &[QueryWord], text_credit: f64) -> Vec<(String, String, f64)> {
+/// a name stem 2, a signature or doc hit `TEXT_CREDIT`, a name substring 1, nothing 0.
+fn term_credits(hits: &Hits, words: &[QueryWord]) -> Vec<(String, String, f64)> {
     words
         .iter()
         .enumerate()
@@ -1279,8 +1183,8 @@ fn term_credits(hits: &Hits, words: &[QueryWord], text_credit: f64) -> Vec<(Stri
             let (field, credit) = match hits.name[i] {
                 3 => ("name", 3.0),
                 2 => ("name", 2.0),
-                _ if hits.signature[i] => ("signature", text_credit),
-                _ if hits.doc[i] => ("doc", text_credit),
+                _ if hits.signature[i] => ("signature", TEXT_CREDIT),
+                _ if hits.doc[i] => ("doc", TEXT_CREDIT),
                 1 => ("name", 1.0),
                 _ => ("none", 0.0),
             };
@@ -1416,46 +1320,6 @@ fn text_hits<'a>(
         .collect()
 }
 
-/// Rarity of each query word: `ln(1 + N / (df + 1))`, where `df` counts the sampled
-/// candidates whose name, signature, or doc covers the word. The sample is the word branch's
-/// own matched set, because the name branch admits rows precisely for containing a query word
-/// and would make the rare words look common; without any word row, every candidate counts.
-fn word_weights(sample: &[&Hits], word_count: usize) -> Vec<f64> {
-    let n = sample.len() as f64;
-    (0..word_count)
-        .map(|i| {
-            let df = sample
-                .iter()
-                .filter(|h| h.name[i] > 0 || h.signature[i] || h.doc[i])
-                .count() as f64;
-            (1.0 + n / (df + 1.0)).ln()
-        })
-        .collect()
-}
-
-fn weighted_coverage(flags: impl IntoIterator<Item = bool>, weights: &[f64]) -> f64 {
-    let total: f64 = weights.iter().fold(0.0, |acc, w| acc + w);
-    if total == 0.0 {
-        return 0.0;
-    }
-    let covered = flags
-        .into_iter()
-        .zip(weights)
-        .filter(|(hit, _)| *hit)
-        .fold(0.0, |acc, (_, w)| acc + w);
-    covered / total
-}
-
-/// Score points a name tier is worth at the given weighted coverage fraction.
-pub(crate) fn name_tier_score(tier: &str, coverage: f64) -> f64 {
-    match tier {
-        "whole" => W_NAME_WHOLE,
-        "all" => W_NAME_ALL_WORDS,
-        "partial" => (W_NAME_PARTIAL * coverage).max(W_NAME_ANY),
-        _ => 0.0,
-    }
-}
-
 fn kind_prior(kind: &str) -> f64 {
     let kind = normalize_kind(kind);
     match kind.as_str() {
@@ -1516,14 +1380,14 @@ fn branch_snippet(candidate: &Candidate) -> Option<String> {
     }
 }
 
-/// Scores every admitted candidate with the weight table above and returns them best
-/// first. Coverage is weighted by each word's rarity inside the candidate set. Ties fall
+/// Scores every admitted candidate and returns them best first. Each query term is credited
+/// once from its strongest field and weighted by `idf`, the term's rarity across the index;
+/// a weight vector of the wrong length, or none, makes every term count the same. Ties fall
 /// to name strength, then word BM25 (rows without one last), then name length, path, name.
 fn rerank_with(
     candidates: Vec<Candidate>,
     query: &str,
     include_tests: bool,
-    scorer: Scorer,
     idf: Option<&[f64]>,
 ) -> Vec<(SymbolSearchResult, SearchExplain)> {
     let stemmer = Stemmer::create(Algorithm::English);
@@ -1551,7 +1415,7 @@ fn rerank_with(
                     symbol
                         .signature
                         .as_deref()
-                        .map(|signature| head_bytes(signature, scorer.sig_bytes)),
+                        .map(|signature| head_bytes(signature, TEXT_HEAD_BYTES)),
                     &words,
                     &mut tokens,
                 ),
@@ -1559,90 +1423,39 @@ fn rerank_with(
                     symbol
                         .doc_comment
                         .as_deref()
-                        .map(|doc| head_bytes(doc, DOC_COVERAGE_BYTES)),
+                        .map(|doc| head_bytes(doc, TEXT_HEAD_BYTES)),
                     &words,
                     &mut tokens,
                 ),
             }
         })
         .collect();
-    let word_rows: Vec<&Hits> = candidates
-        .iter()
-        .zip(&hits)
-        .filter(|(candidate, _)| candidate.word_match)
-        .map(|(_, hits)| hits)
-        .collect();
-    let sample: Vec<&Hits> = if word_rows.is_empty() {
-        hits.iter().collect()
-    } else {
-        word_rows
-    };
-    let weights = word_weights(&sample, words.len());
-    let term_weights: Vec<f64> = match scorer.weights {
-        WeightSource::Rarity => weights.clone(),
-        WeightSource::Idf if idf.is_some_and(|w| w.len() == words.len()) => {
-            idf.unwrap_or_default().to_vec()
-        }
+    let term_weights: Vec<f64> = match idf {
+        Some(weights) if weights.len() == words.len() => weights.to_vec(),
         _ => vec![1.0; words.len()],
-    };
-    let reported_weights = if scorer.distinct {
-        &term_weights
-    } else {
-        &weights
     };
     let word_weights: Vec<(String, f64)> = words
         .iter()
-        .zip(reported_weights)
+        .zip(&term_weights)
         .map(|(w, weight)| (w.word.clone(), *weight))
         .collect();
-    let scorer_label = if scorer.distinct {
-        scorer.label()
-    } else {
-        String::new()
-    };
 
     let mut scored: Vec<(SymbolSearchResult, SearchExplain)> = candidates
         .into_iter()
         .zip(hits)
         .map(|(candidate, hits)| {
             let symbol = &candidate.result.symbol;
-            let mut coverage = weighted_coverage(hits.name.iter().map(|s| *s > 0), &weights);
             let name_strength: u32 = hits.name.iter().map(|s| u32::from(*s)).sum();
-            let all_words_floor = if scorer.distinct { 2 } else { 1 };
             let tier = if !collapsed_query.is_empty() && collapse(&symbol.name) == collapsed_query {
                 "whole"
-            } else if !hits.name.is_empty() && hits.name.iter().all(|s| *s >= all_words_floor) {
+            } else if !hits.name.is_empty() && hits.name.iter().all(|s| *s >= 2) {
                 "all"
             } else if hits.name.iter().any(|s| *s > 0) {
                 "partial"
             } else {
                 "none"
             };
-            let signature_coverage = weighted_coverage(hits.signature.iter().copied(), &weights);
-            let doc_coverage = weighted_coverage(hits.doc.iter().copied(), &weights);
-            let terms = term_credits(&hits, &words, scorer.text_credit);
-            let term_points = if scorer.distinct {
-                let points = term_score(&terms, &term_weights);
-                if hits.name.iter().all(|strength| *strength == 0) {
-                    points.min(scorer.nameless_cap)
-                } else {
-                    points
-                }
-            } else {
-                0.0
-            };
-            let name_points = if scorer.distinct {
-                match tier {
-                    "whole" => W_NAME_WHOLE,
-                    "all" => W_NAME_ALL_WORDS,
-                    _ => 0.0,
-                }
-            } else {
-                name_tier_score(tier, coverage)
-            };
-            if scorer.distinct {
-                coverage = term_points / W_TERMS;
-            }
+            let terms = term_credits(&hits, &words);
             let explain = SearchExplain {
                 bm25: candidate.bm25,
                 branches: [
@@ -1655,10 +1468,13 @@ fn rerank_with(
                 .map(|(_, branch)| branch.to_string())
                 .collect(),
                 name_tier: tier.to_string(),
-                name_coverage: coverage,
                 name_strength,
-                signature_coverage,
-                doc_coverage,
+                term_score: term_score(&terms, &term_weights),
+                name_bonus: match tier {
+                    "whole" => W_NAME_WHOLE,
+                    "all" => W_NAME_ALL_WORDS,
+                    _ => 0.0,
+                },
                 kind_prior: kind_prior(&symbol.kind),
                 path_role: path_role(&symbol.path, &words, &stemmer),
                 documentation: if candidate.documentation {
@@ -1673,17 +1489,11 @@ fn rerank_with(
                 },
                 terms,
                 word_weights: word_weights.clone(),
-                scorer: scorer_label.clone(),
                 candidates: 0,
                 rerank_us: 0,
             };
-            let field_points = if scorer.distinct {
-                term_points
-            } else {
-                signature_coverage * W_SIGNATURE + doc_coverage * W_DOC
-            };
-            let score = name_points
-                + field_points
+            let score = explain.term_score
+                + explain.name_bonus
                 + explain.kind_prior
                 + explain.path_role
                 + explain.documentation
@@ -4149,15 +3959,11 @@ mod tests {
     }
 
     fn ranked(candidates: Vec<Candidate>, query: &str) -> Vec<(SymbolSearchResult, SearchExplain)> {
-        rerank_with(candidates, query, false, Scorer::coverage(), None)
+        rerank_with(candidates, query, false, None)
     }
 
     fn ranked_names(candidates: Vec<Candidate>, query: &str) -> Vec<String> {
-        ranked_names_with(candidates, query, Scorer::coverage())
-    }
-
-    fn ranked_names_with(candidates: Vec<Candidate>, query: &str, scorer: Scorer) -> Vec<String> {
-        rerank_with(candidates, query, false, scorer, None)
+        ranked(candidates, query)
             .into_iter()
             .map(|(r, _)| r.symbol.name)
             .collect()
@@ -4212,53 +4018,31 @@ mod tests {
         );
         let tiers: Vec<(&str, &str, f64)> = rows
             .iter()
-            .map(|(r, e)| {
-                (
-                    r.symbol.name.as_str(),
-                    e.name_tier.as_str(),
-                    e.name_coverage,
-                )
-            })
+            .map(|(r, e)| (r.symbol.name.as_str(), e.name_tier.as_str(), e.name_bonus))
             .collect();
 
-        let partial = tiers[2].2;
-        assert!(partial > 0.0 && partial < 1.0);
         assert_eq!(
             tiers,
             vec![
-                ("validate_syntax", "whole", 1.0),
-                ("validate_syntax_now", "all", 1.0),
-                ("validate_everything", "partial", partial),
+                ("validate_syntax", "whole", W_NAME_WHOLE),
+                ("validate_syntax_now", "all", W_NAME_ALL_WORDS),
+                ("validate_everything", "partial", 0.0),
                 ("unrelated", "none", 0.0),
             ]
         );
-        assert_eq!(rows[0].0.score, W_NAME_WHOLE + W_KIND_DEFINITION);
-        assert_eq!(rows[1].0.score, W_NAME_ALL_WORDS + W_KIND_DEFINITION);
+        assert_eq!(rows[0].0.score, W_NAME_WHOLE + W_TERMS + W_KIND_DEFINITION);
         assert_eq!(
-            rows[2].0.score,
-            name_tier_score("partial", partial) + W_KIND_DEFINITION
+            rows[1].0.score,
+            W_NAME_ALL_WORDS + W_TERMS + W_KIND_DEFINITION
         );
+        assert_eq!(rows[2].0.score, W_TERMS / 2.0 + W_KIND_DEFINITION);
+        assert_eq!(rows[3].0.score, W_KIND_DEFINITION);
     }
 
     #[test]
     fn distinct_scoring_prefers_three_terms_covered_once_over_two_terms_repeated() {
         assert_eq!(
-            ranked_names_with(
-                strip_ansi_case(),
-                "strip ansi escape codes",
-                Scorer::distinct()
-            ),
-            vec!["strip_ansi", "_strip_code_fences"]
-        );
-        assert_eq!(
-            ranked_names_with(
-                strip_ansi_case(),
-                "strip ansi escape codes",
-                Scorer {
-                    weights: WeightSource::Rarity,
-                    ..Scorer::distinct()
-                }
-            ),
+            ranked_names(strip_ansi_case(), "strip ansi escape codes"),
             vec!["strip_ansi", "_strip_code_fences"]
         );
     }
@@ -4270,10 +4054,20 @@ mod tests {
             documented("slice_bytes", None, "cut a byte range"),
         ];
 
+        let rows = ranked(candidates, "cut");
+        let bonuses: Vec<(&str, &str, f64)> = rows
+            .iter()
+            .map(|(r, e)| (r.symbol.name.as_str(), e.name_tier.as_str(), e.name_bonus))
+            .collect();
+
         assert_eq!(
-            ranked_names_with(candidates, "cut", Scorer::distinct()),
-            vec!["slice_bytes", "execute_julie_extract"]
+            bonuses,
+            vec![
+                ("execute_julie_extract", "partial", 0.0),
+                ("slice_bytes", "none", 0.0),
+            ]
         );
+        assert_eq!(rows[0].0.score, rows[1].0.score);
     }
 
     #[test]
@@ -4286,7 +4080,7 @@ mod tests {
         ];
 
         assert_eq!(
-            ranked_names_with(candidates, "validate syntax", Scorer::distinct()),
+            ranked_names(candidates, "validate syntax"),
             vec![
                 "validate_syntax",
                 "validate_syntax_now",
@@ -4330,52 +4124,22 @@ mod tests {
 
     #[test]
     fn a_signature_hit_past_the_head_byte_cap_does_not_credit_its_term() {
-        let crediting_field = |sig_bytes: usize| {
+        let crediting_field = |padding: usize| {
             let mut row = function("handler");
-            row.result.symbol.signature =
-                Some(format!("fn handler({}sidecar: u8)", "a: u8, ".repeat(80)));
-            let scorer = Scorer {
-                sig_bytes,
-                ..Scorer::distinct()
-            };
-            rerank_with(vec![row], "sidecar", false, scorer, None)[0]
-                .1
-                .terms[0]
-                .1
-                .clone()
+            row.result.symbol.signature = Some(format!(
+                "fn handler({}sidecar: u8)",
+                "a: u8, ".repeat(padding)
+            ));
+            ranked(vec![row], "sidecar")[0].1.terms[0].1.clone()
         };
 
-        assert_eq!(crediting_field(usize::MAX), "signature");
-        assert_eq!(crediting_field(40), "none");
-    }
-
-    #[test]
-    fn the_nameless_cap_limits_only_a_row_no_query_term_names() {
-        let score = |name: &str, nameless_cap: f64| {
-            let row = documented(name, None, "compact the memory nudge blueprint");
-            let scorer = Scorer {
-                nameless_cap,
-                ..Scorer::distinct()
-            };
-            rerank_with(vec![row], "compact the memory nudge", false, scorer, None)[0]
-                .0
-                .score
-        };
-
-        assert!(score("CATALOG", W_TERMS) > score("CATALOG", 10.0));
-        assert_eq!(score("CATALOG", 10.0), 10.0 + W_KIND_DEFINITION);
-        assert!(score("compact_memory", 10.0) > 10.0 + W_KIND_DEFINITION);
+        assert_eq!(crediting_field(4), "signature");
+        assert_eq!(crediting_field(80), "none");
     }
 
     #[test]
     fn explain_terms_name_the_crediting_field_of_every_query_term() {
-        let rows = rerank_with(
-            strip_ansi_case(),
-            "strip ansi escape codes",
-            false,
-            Scorer::distinct(),
-            None,
-        );
+        let rows = ranked(strip_ansi_case(), "strip ansi escape codes");
         let terms: Vec<(&str, &str, f64)> = rows[0]
             .1
             .terms
@@ -4389,7 +4153,7 @@ mod tests {
             vec![
                 ("strip", "name", 3.0),
                 ("ansi", "name", 3.0),
-                ("escape", "doc", 2.0),
+                ("escape", "doc", TEXT_CREDIT),
                 ("codes", "none", 0.0),
             ]
         );
@@ -4427,52 +4191,22 @@ mod tests {
     }
 
     #[test]
-    fn coverage_weights_each_word_by_its_rarity_inside_the_candidate_set() {
-        let word_row = |name: &str| {
-            let mut row = function(name);
-            row.word_match = true;
-            row
-        };
-        let mut documented = word_row("unrelated");
-        documented.result.symbol.doc_comment = Some("rebuilds the fts table".into());
-        let mut name_only = function("index_c");
-        name_only.name_match = true;
-        let rows = ranked(
-            vec![
-                word_row("create_index"),
-                word_row("fts_writer"),
-                word_row("index_a"),
-                word_row("index_b"),
-                name_only,
-                documented,
-            ],
-            "fts index",
+    fn a_rarer_term_moves_the_score_more_than_a_common_one() {
+        let weights = [4.0, 1.0];
+        let rows = rerank_with(
+            vec![function("rare_helper"), function("common_helper")],
+            "rare common",
+            false,
+            Some(&weights),
         );
-        let idf = |df: f64| (1.0 + 5.0 / (df + 1.0)).ln();
-        let expected = vec![
-            ("fts".to_string(), idf(2.0)),
-            ("index".to_string(), idf(3.0)),
-        ];
 
-        let explain_of = |name: &str| &rows.iter().find(|(r, _)| r.symbol.name == name).unwrap().1;
-
-        assert_eq!(rows[0].0.symbol.name, "fts_writer");
-        assert_eq!(rows[5].0.symbol.name, "unrelated");
         assert_eq!(
-            explain_of("index_c").name_coverage,
-            explain_of("index_a").name_coverage
+            rows[0].1.word_weights,
+            vec![("rare".to_string(), 4.0), ("common".to_string(), 1.0)]
         );
-        assert_eq!(rows[0].1.word_weights, expected);
-        assert_eq!(rows[0].1.name_tier, "partial");
-        assert_eq!(rows[0].1.name_coverage, idf(2.0) / (idf(2.0) + idf(3.0)));
-        assert_eq!(
-            explain_of("create_index").name_coverage,
-            idf(3.0) / (idf(2.0) + idf(3.0))
-        );
-        assert_eq!(
-            explain_of("unrelated").doc_coverage,
-            rows[0].1.name_coverage
-        );
+        assert_eq!(rows[0].0.symbol.name, "rare_helper");
+        assert_eq!(rows[0].0.score, W_TERMS * 4.0 / 5.0 + W_KIND_DEFINITION);
+        assert_eq!(rows[1].0.score, W_TERMS * 1.0 / 5.0 + W_KIND_DEFINITION);
     }
 
     #[test]
@@ -4487,49 +4221,56 @@ mod tests {
 
         assert_eq!(rows[0].0.symbol.name, "retry_count");
         assert_eq!(rows[0].1.name_tier, "partial");
-        assert_eq!(rows[0].0.score, W_NAME_ANY);
+        assert!(rows[0].0.score > rows[1].0.score);
         assert_eq!(rows[1].0.score, W_KIND_DEFINITION);
     }
 
     #[test]
-    fn signature_and_doc_coverage_use_the_first_400_doc_bytes() {
+    fn a_doc_hit_past_the_head_byte_cap_does_not_credit_its_term() {
         let mut row = function("load");
         row.result.symbol.signature = Some("fn load(config: &Config) -> Loaded".into());
         row.result.symbol.doc_comment = Some(format!("{}settings", "é".repeat(200)));
         let (result, explain) = ranked(vec![row], "config settings").remove(0);
 
-        assert!(explain.signature_coverage > 0.0 && explain.signature_coverage < 1.0);
-        assert_eq!(explain.doc_coverage, 0.0);
         assert_eq!(
-            result.score,
-            explain.signature_coverage * W_SIGNATURE + W_KIND_DEFINITION
+            explain.terms,
+            vec![
+                ("config".into(), "signature".into(), TEXT_CREDIT),
+                ("settings".into(), "none".into(), 0.0),
+            ]
         );
+        assert_eq!(result.score, explain.term_score + W_KIND_DEFINITION);
     }
 
     #[test]
     fn text_coverage_matches_whole_tokens_by_word_or_stem_prefix() {
-        let doc_covered = |doc: &str, query: &str| {
+        let crediting_field =
+            |row: Candidate, query: &str| ranked(vec![row], query).remove(0).1.terms[0].1.clone();
+        let doc_field = |doc: &str, query: &str| {
             let mut row = function("row");
             row.result.symbol.doc_comment = Some(doc.into());
-            ranked(vec![row], query).remove(0).1.doc_coverage
+            crediting_field(row, query)
         };
-        let sig_covered = |signature: &str, query: &str| {
+        let sig_field = |signature: &str, query: &str| {
             let mut row = function("row");
             row.result.symbol.signature = Some(signature.into());
-            ranked(vec![row], query).remove(0).1.signature_coverage
+            crediting_field(row, query)
         };
 
-        assert_eq!(doc_covered("The system runs.", "stemming"), 0.0);
-        assert_eq!(doc_covered("The stemmer runs.", "stemming"), 1.0);
-        assert_eq!(doc_covered("Compares stems.", "stemming"), 1.0);
-        assert_eq!(doc_covered("An important port.", "porter"), 0.0);
+        assert_eq!(doc_field("The system runs.", "stemming"), "none");
+        assert_eq!(doc_field("The stemmer runs.", "stemming"), "doc");
+        assert_eq!(doc_field("Compares stems.", "stemming"), "doc");
+        assert_eq!(doc_field("An important port.", "porter"), "none");
         assert_eq!(
-            sig_covered("fn sha256sum(data: &[u8]) -> String", "sha256"),
-            1.0
+            sig_field("fn sha256sum(data: &[u8]) -> String", "sha256"),
+            "signature"
         );
-        assert_eq!(sig_covered("fn is_ok()", "ok"), 1.0);
-        assert_eq!(sig_covered("fn okay()", "ok"), 0.0);
-        assert_eq!(sig_covered("fn parseSha256Sidecar(text)", "sidecar"), 1.0);
+        assert_eq!(sig_field("fn is_ok()", "ok"), "signature");
+        assert_eq!(sig_field("fn okay()", "ok"), "none");
+        assert_eq!(
+            sig_field("fn parseSha256Sidecar(text)", "sidecar"),
+            "signature"
+        );
     }
 
     #[test]
@@ -4562,12 +4303,15 @@ mod tests {
     }
 
     #[test]
-    fn doc_coverage_matches_stems_inside_the_capped_doc() {
+    fn a_doc_credits_a_term_by_its_stem() {
         let mut row = function("check");
         row.result.symbol.doc_comment = Some("Validates the input.".into());
         let explain = ranked(vec![row], "validation").remove(0).1;
 
-        assert_eq!(explain.doc_coverage, 1.0);
+        assert_eq!(
+            explain.terms,
+            vec![("validation".into(), "doc".into(), TEXT_CREDIT)]
+        );
     }
 
     #[test]
@@ -4669,13 +4413,7 @@ mod tests {
             let mut test_row = plain_candidate("payment_flow", "function", "tests/payment.rs");
             test_row.result.symbol.is_test = true;
             let plain_row = plain_candidate("payment_flow", "function", "src/payment.rs");
-            rerank_with(
-                vec![plain_row, test_row],
-                query,
-                include_tests,
-                Scorer::coverage(),
-                None,
-            )
+            rerank_with(vec![plain_row, test_row], query, include_tests, None)
         };
 
         let boosted = rows("payment flow tests", true);
@@ -4737,7 +4475,7 @@ mod tests {
 
         let rows = ranked(vec![substring, token], "csr adjacency");
 
-        assert_eq!(rows[0].0.score, rows[1].0.score);
+        assert!(rows[0].0.score > rows[1].0.score);
         assert_eq!(rows[0].0.symbol.name, "csr");
     }
 
@@ -4750,7 +4488,7 @@ mod tests {
 
         let rows = ranked(vec![substring, token], "http");
 
-        assert_eq!(rows[0].0.score, rows[1].0.score);
+        assert!(rows[0].0.score > rows[1].0.score);
         assert_eq!(rows[0].0.symbol.name, "http_client");
     }
 

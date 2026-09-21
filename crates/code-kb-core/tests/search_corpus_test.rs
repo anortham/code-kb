@@ -116,6 +116,31 @@ function loadConfig(path: string): string {
 "#,
     ),
     (
+        "tools/ansi.py",
+        r#"def trim_ansi(text):
+    """Remove escape sequences."""
+    return text
+
+
+def escape_palette_table(key):
+    """The escape palette table, keyed by every escape palette entry."""
+    return key
+"#,
+    ),
+    (
+        "src/allocation.rs",
+        r#"/// Splits the work between the callees of one request.
+pub fn allocate_pack_budget(total: usize) -> usize {
+    total
+}
+
+/// The token budget allocated to the context pack for one request.
+pub struct Allocation {
+    pub remaining: usize,
+}
+"#,
+    ),
+    (
         "src/http.ts",
         r#"/** Parses a raw HTTP response into its status line, headers, and payload. */
 function parseHTTPResponse(raw: string): string[] {
@@ -306,6 +331,23 @@ fn minority_language_symbol_wins_its_concept_query() {
         "reconcile files edited while server was offline",
         "function",
         "reconcile_offline_edits",
+    );
+}
+
+#[test]
+fn a_name_and_doc_covering_three_words_beat_a_name_that_repeats_two() {
+    let (_dir, db) = scanned_repo(MULTI_LANGUAGE_CORPUS);
+    assert_top(&db, "trim ansi escape palette", "function", "trim_ansi");
+}
+
+#[test]
+fn two_whole_token_name_words_beat_a_doc_holding_every_word() {
+    let (_dir, db) = scanned_repo(MULTI_LANGUAGE_CORPUS);
+    assert_top(
+        &db,
+        "token budget for the context pack",
+        "function",
+        "allocate_pack_budget",
     );
 }
 
