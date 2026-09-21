@@ -764,45 +764,6 @@ fn test_edit_file_edits_an_unsupported_text_file() {
 }
 
 #[test]
-fn test_edit_file_detects_concurrent_modification() {
-    let dir = safe_tempdir();
-    let big: String = (0..20_000)
-        .map(|i| format!("pub fn f{i}(a: i32) -> i32 {{\n    let x = a * {i};\n    x + 1\n}}\n"))
-        .collect();
-    let (ws, db_path) = scan_into(dir.path(), &[("src/big.rs", big.as_str())]);
-    let conn = open_read_only(&db_path).unwrap();
-
-    let target = dir.path().join("src/big.rs");
-    let rival = target.clone();
-    let writer = std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(30));
-        fs::write(&rival, "pub fn only() -> i32 {\n    0\n}\n").unwrap();
-    });
-
-    let res = edit_file(
-        &ws,
-        &db_path,
-        &conn,
-        "src/big.rs",
-        "let x = a * 7;",
-        "let x = a * 8;",
-        Occurrence::Only,
-    );
-    writer.join().unwrap();
-
-    assert!(
-        matches!(res, Err(code_kb_core::EditError::ConcurrentModification(_))),
-        "a write during the edit must abort it, got: {res:?}"
-    );
-    assert_eq!(
-        fs::read_to_string(&target).unwrap(),
-        "pub fn only() -> i32 {\n    0\n}\n",
-        "the rival write must stand"
-    );
-}
-
-#[cfg(unix)]
-#[test]
 fn test_edit_file_preserves_file_permissions() {
     let dir = safe_tempdir();
     let (ws, db_path) = scan_into(

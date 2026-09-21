@@ -714,4 +714,32 @@ mod tests {
             .expect("persist_with_retry must succeed");
         assert_eq!(fs::read_to_string(&target_file).unwrap(), "updated");
     }
+
+    #[test]
+    fn test_commit_file_edit_refuses_bytes_read_before_a_rival_write() {
+        let dir = crate::safe_tempdir();
+        let rel_path = "src/a.rs";
+        let abs_path = dir.path().join(rel_path);
+        fs::create_dir_all(abs_path.parent().unwrap()).unwrap();
+        let on_disk = b"pub fn rival() -> i32 {\n    1\n}\n";
+        fs::write(&abs_path, on_disk).unwrap();
+        let permissions = fs::metadata(&abs_path).unwrap().permissions();
+        let workspace = Workspace::new(dir.path().to_path_buf());
+
+        let res = commit_file_edit(
+            &workspace,
+            &dir.path().join("test.db"),
+            &abs_path,
+            rel_path,
+            b"pub fn stale() -> i32 {\n    0\n}\n",
+            &permissions,
+            b"pub fn edited() -> i32 {\n    0\n}\n",
+        );
+
+        assert!(
+            matches!(res, Err(EditError::ConcurrentModification(_))),
+            "got: {res:?}"
+        );
+        assert_eq!(fs::read(&abs_path).unwrap(), on_disk);
+    }
 }
