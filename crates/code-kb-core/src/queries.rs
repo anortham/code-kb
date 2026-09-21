@@ -2899,6 +2899,116 @@ pub fn find_callee_signatures(
     Ok(signatures)
 }
 
+const SQL_FAMILIES: &[&str] = &["sql."];
+
+const ROUTE_FAMILIES: &[&str] = &[
+    ".route.",
+    ".attribute_route.",
+    ".scope_route.",
+    ".file_route.",
+    ".route_handler.",
+    ".route_reference.",
+    ".route_group.",
+    ".route_prefix.",
+    ".resource_route.",
+    ".router_mount.",
+    ".include_router.",
+    ".server_route.",
+    ".route_definition.",
+];
+
+const CONFIG_FAMILIES: &[&str] = &["toml.", "yaml.", "json.", "env."];
+
+const MODEL_FAMILIES: &[&str] = &[
+    "sql.table_definition.v1",
+    "sql.column_definition.v1",
+    "sql.constraint.v1",
+    "sql.foreign_key.v1",
+    "sql.index_definition.v1",
+    "json.schema.v1",
+];
+
+/// Category aliases mapped to the pattern-id families they name.
+///
+/// A rule that starts with a dot matches any pattern id that contains it, a rule that ends with a
+/// dot matches any pattern id that starts with it, and any other rule matches one exact id.
+pub const CATEGORY_ALIASES: &[(&str, &[&str])] = &[
+    ("sql", SQL_FAMILIES),
+    ("query", SQL_FAMILIES),
+    ("queries", SQL_FAMILIES),
+    ("route", ROUTE_FAMILIES),
+    ("routes", ROUTE_FAMILIES),
+    ("config", CONFIG_FAMILIES),
+    ("model", MODEL_FAMILIES),
+    ("models", MODEL_FAMILIES),
+];
+
+fn category_families(category: &str) -> Option<&'static [&'static str]> {
+    let wanted = category.trim().to_ascii_lowercase();
+    CATEGORY_ALIASES
+        .iter()
+        .find(|(alias, _)| *alias == wanted)
+        .map(|(_, families)| *families)
+}
+
+fn matches_family(pattern_id: &str, rule: &str) -> bool {
+    if rule.starts_with('.') {
+        pattern_id.contains(rule)
+    } else if rule.ends_with('.') {
+        pattern_id.starts_with(rule)
+    } else {
+        pattern_id == rule
+    }
+}
+
+fn family_clause(column: &str, families: &[&str]) -> String {
+    let alternatives: Vec<String> = families
+        .iter()
+        .map(|rule| {
+            let escaped = escape_like(rule);
+            if rule.starts_with('.') {
+                format!("{column} LIKE '%{escaped}%' ESCAPE '\\'")
+            } else if rule.ends_with('.') {
+                format!("{column} LIKE '{escaped}%' ESCAPE '\\'")
+            } else {
+                format!("{column} = '{rule}'")
+            }
+        })
+        .collect();
+    format!("({})", alternatives.join(" OR "))
+}
+
+/// True when the category text names one of the aliases in `CATEGORY_ALIASES`.
+pub fn is_category_alias(category: &str) -> bool {
+    category_families(category).is_some()
+}
+
+/// Counts the patterns and facts each category alias reaches, given a category listing.
+///
+/// Only one alias per family list is reported, and an alias with no facts is left out.
+pub fn alias_fact_counts(categories: &[(String, usize)]) -> Vec<(&'static str, usize, usize)> {
+    let mut reported: Vec<&[&str]> = Vec::new();
+    let mut counts = Vec::new();
+    for (alias, families) in CATEGORY_ALIASES {
+        if reported.contains(families) {
+            continue;
+        }
+        reported.push(families);
+        let mut patterns = 0;
+        let mut facts = 0;
+        for (pattern_id, count) in categories {
+            if families.iter().any(|rule| matches_family(pattern_id, rule)) {
+                patterns += 1;
+                facts += count;
+            }
+        }
+        if facts > 0 {
+            counts.push((*alias, patterns, facts));
+        }
+    }
+    counts
+}
+
 /// Find structural facts by category (e.g. route, query, model, config), optionally scoped by path.
 pub fn find_structural_facts_scoped(
     conn: &Connection,
@@ -2920,20 +3030,11 @@ pub fn find_structural_facts_scoped(
         .map(|p| format!("{}/%", escape_like(p)));
     let cat_pattern = format!("%{}%", escape_like(category));
 
-    let cat_lower = category.trim().to_ascii_lowercase();
-    let cat_clause = match cat_lower.as_str() {
-        "config" => {
-            "(sf.pattern_id LIKE '%.key_value.%' OR sf.pattern_id LIKE '%config%' OR sf.capture_name LIKE '%config%' OR sf.node_kind LIKE '%config%')"
-        }
-        "route" | "routes" => {
-            "(sf.pattern_id LIKE '%.route%' OR sf.pattern_id LIKE '%route%' OR sf.capture_name LIKE '%route%')"
-        }
-        "query" | "queries" | "sql" => {
-            "(sf.pattern_id LIKE '%.sql.%' OR sf.pattern_id LIKE '%query%')"
-        }
-        "model" | "models" => "sf.pattern_id LIKE '%.model%'",
-        _ => {
+    let cat_clause = match category_families(category) {
+        Some(families) => family_clause("sf.pattern_id", families),
+        None => {
             "(sf.pattern_id LIKE :cat ESCAPE '\\' OR sf.capture_name LIKE :cat ESCAPE '\\' OR sf.node_kind LIKE :cat ESCAPE '\\')"
+                .to_string()
         }
     };
 
@@ -5518,9 +5619,10 @@ mod tests {
             INSERT INTO structural_facts VALUES
                 ('sf_toml', 'f1', 'Cargo.toml', 'toml', 'toml.key_value.v1', 'key_value', 'table', NULL, 1, 2, 1.0, '{\"key\":\"command\",\"key_path\":\"mcp_servers.code-kb.command\"}'),
                 ('sf_yaml', 'f6', '.github/workflows/ci.yml', 'yaml', 'yaml.key_value.v1', 'key_value', 'block_mapping_pair', NULL, 3, 3, 1.0, '{\"key\":\"name\",\"key_path\":\"$.on.name\"}'),
-                ('sf_route', 'f2', 'src/routes/api.rs', 'rust', 'http.route.v1', 'get_users', 'function', NULL, 10, 20, 1.0, '{\"verb\":\"GET\",\"normalized_route_template\":\"/api/v1/users/:id\"}'),
-                ('sf_sql', 'f3', 'src/db/queries.rs', 'rust', 'db.sql.select', 'select_users', 'function', NULL, 30, 40, 1.0, NULL),
-                ('sf_model', 'f4', 'src/models/user.rs', 'rust', 'orm.model.entity', 'User', 'struct', NULL, 50, 60, 1.0, NULL),
+                ('sf_route', 'f2', 'src/routes/api.rs', 'rust', 'axum.route.v1', 'get_users', 'function', NULL, 10, 20, 1.0, '{\"verb\":\"GET\",\"normalized_route_template\":\"/api/v1/users/:id\"}'),
+                ('sf_sql', 'f3', 'src/db/queries.rs', 'rust', 'sql.select_query.v1', 'select_users', 'function', NULL, 30, 40, 1.0, NULL),
+                ('sf_model', 'f4', 'src/models/user.rs', 'rust', 'sql.table_definition.v1', 'User', 'struct', NULL, 50, 60, 1.0, NULL),
+                ('sf_css', 'f7', 'web/site.css', 'css', 'css.media_query.v1', 'media', 'media_statement', NULL, 1, 1, 1.0, NULL),
                 ('sf_custom', 'f5', 'src/custom.rs', 'rust', 'my_custom_pattern', 'custom_name', 'item', NULL, 70, 80, 1.0, NULL);
             INSERT INTO literals VALUES
                 ('lit_toml', 'f1', 'Cargo.toml', 'toml', 'toml_key', '\"version\"', 'key', NULL, 3, 0, 3, 9, 20, 29),
@@ -5547,7 +5649,7 @@ mod tests {
         // 2. "route" and "routes" aliases
         let facts_route = find_structural_facts_scoped(&conn, "route", None, 10).unwrap();
         assert_eq!(facts_route.len(), 1);
-        assert_eq!(facts_route[0].pattern_id, "http.route.v1");
+        assert_eq!(facts_route[0].pattern_id, "axum.route.v1");
         assert_eq!(facts_route[0].key.as_deref(), Some("/api/v1/users/:id"));
         let facts_routes = find_structural_facts_scoped(&conn, "routes", None, 10).unwrap();
         assert_eq!(facts_routes.len(), 1);
@@ -5558,8 +5660,8 @@ mod tests {
         // 3. "query", "queries", "sql" aliases
         for q in &["query", "queries", "sql"] {
             let facts = find_structural_facts_scoped(&conn, q, None, 10).unwrap();
-            assert_eq!(facts.len(), 1, "Failed for {}", q);
-            assert_eq!(facts[0].pattern_id, "db.sql.select");
+            assert_eq!(facts.len(), 2, "Failed for {}", q);
+            assert!(facts.iter().all(|f| f.pattern_id.starts_with("sql.")));
             let lits = find_literals_scoped(&conn, q, None, 10).unwrap();
             assert_eq!(lits.len(), 1, "Failed for {}", q);
             assert_eq!(lits[0].kind, "sql_query");
@@ -5569,7 +5671,7 @@ mod tests {
         for m in &["model", "models"] {
             let facts = find_structural_facts_scoped(&conn, m, None, 10).unwrap();
             assert_eq!(facts.len(), 1, "Failed for {}", m);
-            assert_eq!(facts[0].pattern_id, "orm.model.entity");
+            assert_eq!(facts[0].pattern_id, "sql.table_definition.v1");
             let lits = find_literals_scoped(&conn, m, None, 10).unwrap();
             assert_eq!(lits.len(), 1, "Failed for {}", m);
             assert_eq!(lits[0].kind, "model_table");

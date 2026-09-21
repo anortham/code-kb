@@ -1166,16 +1166,32 @@ impl McpServer {
                         Err(e) => return CallToolResult::error(e.to_string()),
                     };
 
-                    let literal_limit = limit.saturating_sub(facts.len());
                     let literals = match code_kb_core::find_literals_scoped(
                         &conn,
                         category,
                         path_filter,
-                        literal_limit,
+                        limit,
                     ) {
                         Ok(literals) => literals,
                         Err(error) => return CallToolResult::error(error.to_string()),
                     };
+
+                    if facts.is_empty()
+                        && literals.is_empty()
+                        && code_kb_core::is_category_alias(category)
+                    {
+                        let categories =
+                            match list_structural_fact_categories_scoped(&conn, path_filter) {
+                                Ok(c) => c,
+                                Err(e) => return CallToolResult::error(e.to_string()),
+                            };
+                        let out = format!(
+                            "No facts match '{category}' in this repository.\n\n{}",
+                            format_fact_categories(&categories)
+                        );
+                        return CallToolResult::text(out)
+                            .with_logical_result_count(categories.len());
+                    }
 
                     let baseline_paths = facts
                         .iter()
@@ -1183,9 +1199,11 @@ impl McpServer {
                         .chain(literals.iter().map(|literal| literal.path.clone()))
                         .collect();
 
-                    CallToolResult::text(format_structural_facts(&facts, &literals, category))
-                        .with_logical_result_count(facts.len() + literals.len())
-                        .with_baseline_paths(baseline_paths)
+                    CallToolResult::text(format_structural_facts(
+                        &facts, &literals, category, limit,
+                    ))
+                    .with_logical_result_count(facts.len() + literals.len())
+                    .with_baseline_paths(baseline_paths)
                 }
             }
             "blast_radius" | "impact" => {

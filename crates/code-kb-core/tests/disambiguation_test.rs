@@ -1,8 +1,9 @@
 use code_kb_core::{
     Workspace, ensure_fts_index, find_callee_signatures, find_julie_extract_binary,
-    find_references_scoped, find_structural_facts_scoped, get_context_slice_op, get_symbol_by_name,
-    open_read_only, open_read_write, safe_tempdir, scan_workspace, search_symbols_scoped,
-    suggest_file_paths, suggest_symbol_names,
+    find_literals_scoped, find_references_scoped, find_structural_facts_scoped,
+    format_fact_categories, format_structural_facts, get_context_slice_op, get_symbol_by_name,
+    list_structural_fact_categories_scoped, open_read_only, open_read_write, safe_tempdir,
+    scan_workspace, search_symbols_scoped, suggest_file_paths, suggest_symbol_names,
 };
 use std::fs;
 
@@ -498,6 +499,12 @@ fn setup_test_db(conn: &rusqlite::Connection) {
             structural_fact_id TEXT PRIMARY KEY, file_id TEXT, path TEXT NOT NULL, language TEXT,
             pattern_id TEXT, capture_name TEXT, node_kind TEXT, containing_symbol_id TEXT,
             start_line INTEGER, end_line INTEGER, confidence REAL, metadata_json TEXT
+        );
+        CREATE TABLE literals (
+            literal_id TEXT PRIMARY KEY, file_id TEXT, path TEXT NOT NULL, language TEXT,
+            kind TEXT, literal_text TEXT, carrier TEXT, containing_symbol_id TEXT,
+            start_line INTEGER, start_column INTEGER, end_line INTEGER, end_column INTEGER,
+            start_byte INTEGER, end_byte INTEGER
         );",
     )
     .unwrap();
@@ -597,8 +604,8 @@ fn test_structural_facts_scoped_boundary_matching() {
         "INSERT INTO structural_facts (structural_fact_id, file_id, path, language, pattern_id, capture_name, node_kind, containing_symbol_id, start_line, end_line, confidence) VALUES
             ('sf1', 'f1', 'Cargo.toml', 'toml', 'toml.key_value.v1', 'name', 'table', NULL, 1, 1, 1.0),
             ('sf2', 'f2', 'crates/a/Cargo.toml', 'toml', 'toml.key_value.v1', 'name', 'table', NULL, 1, 1, 1.0),
-            ('sf3', 'f3', 'src/api/users.rs', 'rust', 'route', 'get_users', 'function_item', NULL, 1, 1, 1.0),
-            ('sf4', 'f4', 'src/api_backup/users.rs', 'rust', 'route', 'get_users', 'function_item', NULL, 1, 1, 1.0);",
+            ('sf3', 'f3', 'src/api/users.rs', 'rust', 'axum.route.v1', 'get_users', 'function_item', NULL, 1, 1, 1.0),
+            ('sf4', 'f4', 'src/api_backup/users.rs', 'rust', 'axum.route.v1', 'get_users', 'function_item', NULL, 1, 1, 1.0);",
     )
     .unwrap();
 
@@ -907,4 +914,64 @@ fn a_missing_symbol_with_no_neighbour_names_the_workspace() {
         err.to_string(),
         "Symbol 'zzzqqq' not found in widget-shop. No similar name is indexed; check the workspace and spelling."
     );
+}
+
+fn facts_alias_fixture(conn: &rusqlite::Connection) {
+    conn.execute_batch(
+        "INSERT INTO structural_facts (structural_fact_id, file_id, path, language, pattern_id, capture_name, node_kind, containing_symbol_id, start_line, end_line, confidence) VALUES
+            ('sf_css', 'f1', 'web/site.css', 'css', 'css.media_query.v1', 'media', 'media_statement', NULL, 1, 1, 1.0),
+            ('sf_sql', 'f2', 'db/reports.sql', 'sql', 'sql.select_query.v1', 'select', 'select_statement', NULL, 1, 1, 1.0);",
+    )
+    .unwrap();
+}
+
+#[test]
+fn the_sql_alias_matches_only_the_sql_family() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+    facts_alias_fixture(&conn);
+
+    let facts = find_structural_facts_scoped(&conn, "sql", None, 10).unwrap();
+    assert_eq!(facts.len(), 1);
+    assert_eq!(facts[0].pattern_id, "sql.select_query.v1");
+}
+
+#[test]
+fn the_category_listing_names_the_aliases_that_match_this_index() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+    facts_alias_fixture(&conn);
+
+    let categories = list_structural_fact_categories_scoped(&conn, None).unwrap();
+    let listing = format_fact_categories(&categories);
+    let alias_line = listing.lines().next().unwrap();
+    assert!(alias_line.starts_with("Aliases:"), "{listing}");
+    assert!(alias_line.contains("sql (1 pattern, 1 fact)"), "{listing}");
+    assert!(!alias_line.contains("css"), "{listing}");
+}
+
+#[test]
+fn facts_and_literals_each_get_the_whole_limit() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+    conn.execute_batch(
+        "INSERT INTO structural_facts (structural_fact_id, file_id, path, language, pattern_id, capture_name, node_kind, containing_symbol_id, start_line, end_line, confidence) VALUES
+            ('sf_a', 'f1', 'db/a.sql', 'sql', 'sql.select_query.v1', 'select', 'select_statement', NULL, 1, 1, 1.0),
+            ('sf_b', 'f1', 'db/a.sql', 'sql', 'sql.insert_statement.v1', 'insert', 'insert_statement', NULL, 2, 2, 1.0);
+         INSERT INTO literals (literal_id, file_id, path, language, kind, literal_text, carrier, containing_symbol_id, start_line, start_column, end_line, end_column, start_byte, end_byte) VALUES
+            ('lit_a', 'f1', 'db/a.sql', 'sql', 'sql_query', 'SELECT 1', 'string', NULL, 1, 0, 1, 8, 0, 8),
+            ('lit_b', 'f1', 'db/a.sql', 'sql', 'sql_query', 'SELECT 2', 'string', NULL, 2, 0, 2, 8, 9, 17);",
+    )
+    .unwrap();
+
+    let facts = find_structural_facts_scoped(&conn, "sql", None, 1).unwrap();
+    let literals = find_literals_scoped(&conn, "sql", None, 1).unwrap();
+    assert_eq!(facts.len(), 1);
+    assert_eq!(literals.len(), 1);
+
+    let out = format_structural_facts(&facts, &literals, "sql", 1);
+    assert_eq!(out.matches("limit reached").count(), 2, "{out}");
 }

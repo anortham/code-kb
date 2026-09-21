@@ -108,8 +108,8 @@ fn test_mcp_stdio_handshake_and_tools() {
     .unwrap();
     conn.execute_batch(
         "INSERT INTO structural_facts VALUES
-            ('sf1', 'src/routes.rs', 'rust', 'axum.route', 'route', 'call', 's1', 1, 1, 1.0, NULL),
-            ('sf2', 'src/routes.rs', 'rust', 'axum.route', 'route', 'call', 's1', 2, 2, 1.0, NULL);
+            ('sf1', 'src/routes.rs', 'rust', 'axum.route.v1', 'route', 'call', 's1', 1, 1, 1.0, NULL),
+            ('sf2', 'src/routes.rs', 'rust', 'axum.route.v1', 'route', 'call', 's1', 2, 2, 1.0, NULL);
          INSERT INTO literals VALUES
             ('l1', 'src/routes.rs', '/first', 'route', 'string', 1, 's1'),
             ('l2', 'src/routes.rs', '/second', 'route', 'string', 2, 's1');",
@@ -454,7 +454,7 @@ fn test_mcp_stdio_handshake_and_tools() {
         .as_str()
         .unwrap();
     assert!(capped_facts_text.contains("Structural facts for 'route' (2 found):"));
-    assert!(capped_facts_text.contains("Matching literals (1 found):"));
+    assert!(capped_facts_text.contains("Matching literals (2 found):"));
 
     // 7. Test file_skeleton with alias "file" instead of "file_path"
     let skeleton_req = json!({

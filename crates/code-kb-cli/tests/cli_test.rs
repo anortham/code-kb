@@ -810,6 +810,49 @@ fn test_cli_facts_with_config_alias_and_path_filter() {
 }
 
 #[test]
+fn test_cli_facts_alias_limits_and_listing() {
+    let repo = setup_test_repo();
+    let root = repo.path();
+
+    let db_path = root.join(".code-kb/artifact.db");
+    let conn = code_kb_core::open_read_write(&db_path).unwrap();
+    conn.execute_batch(
+        "INSERT INTO structural_facts VALUES
+            ('sf_css', 'f1', 'web/site.css', 'css', 'css.media_query.v1', 'media', 'media_statement', NULL, 1, 1, 1.0, NULL),
+            ('sf_sql1', 'f1', 'db/a.sql', 'sql', 'sql.select_query.v1', 'select', 'select_statement', NULL, 1, 1, 1.0, NULL),
+            ('sf_sql2', 'f1', 'db/a.sql', 'sql', 'sql.insert_statement.v1', 'insert', 'insert_statement', NULL, 2, 2, 1.0, NULL);
+         INSERT INTO literals VALUES
+            ('lit_a', 'f1', 'db/a.sql', 'sql', 'sql_query', 'SELECT 1', 'string', NULL, 1, 0, 1, 8, 0, 8),
+            ('lit_b', 'f1', 'db/a.sql', 'sql', 'sql_query', 'SELECT 2', 'string', NULL, 2, 0, 2, 8, 9, 17);",
+    )
+    .unwrap();
+    drop(conn);
+
+    let run = |args: &[&str]| {
+        let out = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .arg("--root")
+            .arg(root)
+            .args(args)
+            .output()
+            .expect("Failed to execute facts");
+        assert!(out.status.success(), "{args:?} failed");
+        String::from_utf8_lossy(&out.stdout).to_string()
+    };
+
+    let sql = run(&["facts", "sql"]);
+    assert!(!sql.contains("css.media_query.v1"), "{sql}");
+    assert!(sql.contains("sql.select_query.v1"), "{sql}");
+
+    let capped = run(&["facts", "sql", "--limit", "1"]);
+    assert!(capped.contains("Matching literals"), "{capped}");
+    assert_eq!(capped.matches("limit reached").count(), 2, "{capped}");
+
+    let listing = run(&["facts"]);
+    assert!(listing.starts_with("Aliases:"), "{listing}");
+    assert!(listing.contains("sql (2 patterns, 2 facts)"), "{listing}");
+}
+
+#[test]
 fn test_cli_edit_atomic_replacement() {
     let _extract_bin = code_kb_core::find_julie_extract_binary()
         .expect("julie-extract binary must be present for tests");
@@ -1105,7 +1148,7 @@ fn test_cli_json_strict_forward_slash_invariants() {
         let db_path = root.join(".code-kb").join("artifact.db");
         let conn = code_kb_core::open_read_write(&db_path).unwrap();
         conn.execute(
-            "INSERT INTO structural_facts VALUES ('sf1', 'f1', 'src/workspace.rs', 'rust', 'route', 'get_index', 'route', 's1', 1, 10, 1.0, NULL)",
+            "INSERT INTO structural_facts VALUES ('sf1', 'f1', 'src/workspace.rs', 'rust', 'axum.route.v1', 'get_index', 'route', 's1', 1, 10, 1.0, NULL)",
             [],
         ).unwrap();
         conn.execute(

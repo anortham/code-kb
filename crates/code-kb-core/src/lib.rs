@@ -37,7 +37,7 @@ pub use queries::{
     find_references_ext, find_references_for_symbol, find_references_scoped, find_related_tests,
     find_structural_facts, find_structural_facts_scoped, find_type_facts,
     fts_search_symbols_explained, fts_search_symbols_scoped, get_file, get_symbol_by_name,
-    get_symbol_by_name_exact, is_test_path, list_structural_fact_categories,
+    get_symbol_by_name_exact, is_category_alias, is_test_path, list_structural_fact_categories,
     list_structural_fact_categories_scoped, load_file_symbols, load_scoped_outline_symbols,
     normalize_kind, sanitize_fts5_query, search_symbols, search_symbols_scoped, suggest_file_paths,
     suggest_symbol_names, workspace_name,

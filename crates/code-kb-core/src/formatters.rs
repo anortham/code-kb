@@ -460,14 +460,37 @@ pub fn format_fact_categories(categories: &[(String, usize)]) -> String {
     if categories.is_empty() {
         return "No structural facts or literals indexed in this repository.".to_string();
     }
-    let mut out = format!(
+    let mut out = String::new();
+    let aliases = crate::queries::alias_fact_counts(categories);
+    if !aliases.is_empty() {
+        let parts: Vec<String> = aliases
+            .iter()
+            .map(|(alias, patterns, facts)| {
+                format!(
+                    "{alias} ({patterns} {}, {facts} {})",
+                    plural(*patterns, "pattern"),
+                    plural(*facts, "fact")
+                )
+            })
+            .collect();
+        out.push_str(&format!("Aliases: {}\n\n", parts.join(", ")));
+    }
+    out.push_str(&format!(
         "Available structural fact & literal categories ({} found):\n\n",
         categories.len()
-    );
+    ));
     for (name, count) in categories {
         out.push_str(&format!("- `{name}` ({count} occurrences)\n"));
     }
     out
+}
+
+fn plural(count: usize, word: &str) -> String {
+    if count == 1 {
+        word.to_string()
+    } else {
+        format!("{word}s")
+    }
 }
 
 /// Format structural facts and matching literals into token-dense markdown.
@@ -475,6 +498,7 @@ pub fn format_structural_facts(
     facts: &[crate::models::StructuralFact],
     literals: &[crate::models::LiteralFact],
     category: &str,
+    limit: usize,
 ) -> String {
     let mut out = format!(
         "Structural facts for '{category}' ({} found):\n",
@@ -492,6 +516,9 @@ pub fn format_structural_facts(
             f.path, f.start_line, f.pattern_id
         ));
     }
+    if limit > 0 && facts.len() >= limit {
+        out.push_str(&cap_notice(facts.len(), limit));
+    }
     if !literals.is_empty() {
         out.push_str(&format!(
             "\nMatching literals ({} found):\n",
@@ -502,6 +529,9 @@ pub fn format_structural_facts(
                 "- \"{}\" [{}:{}] (kind: {})\n",
                 l.literal_text, l.path, l.start_line, l.kind
             ));
+        }
+        if limit > 0 && literals.len() >= limit {
+            out.push_str(&cap_notice(literals.len(), limit));
         }
     }
     out
@@ -808,12 +838,13 @@ mod tests {
             &[structural_fact(Some("mcp_servers.code-kb.command"))],
             &[],
             "config",
+            30,
         );
         assert!(with_key.contains(
             "- mcp_servers.code-kb.command [.codex/config.toml:2] (pattern: toml.key_value.v1)"
         ));
 
-        let without_key = format_structural_facts(&[structural_fact(None)], &[], "config");
+        let without_key = format_structural_facts(&[structural_fact(None)], &[], "config", 30);
         assert!(
             without_key.contains("- key_value [.codex/config.toml:2] (pattern: toml.key_value.v1)")
         );

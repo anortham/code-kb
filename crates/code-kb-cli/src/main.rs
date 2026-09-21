@@ -221,7 +221,7 @@ pub struct FactsArgs {
     /// Optional file path or directory to filter structural facts.
     #[arg(short = 'p', long = "path", alias = "file", alias = "file-path")]
     pub path: Option<String>,
-    /// Maximum combined facts and literals (0-200).
+    /// Maximum facts and, separately, maximum literals (0-200).
     #[arg(long, default_value_t = 30, value_parser = parse_result_limit)]
     pub limit: usize,
 }
@@ -722,7 +722,7 @@ fn main() -> anyhow::Result<()> {
                     &conn,
                     cat,
                     rel_path.as_deref(),
-                    args.limit.saturating_sub(facts.len()),
+                    args.limit,
                 )?;
                 if cli.json {
                     println!(
@@ -732,8 +732,19 @@ fn main() -> anyhow::Result<()> {
                             "literals": literals
                         }))?
                     );
+                } else if facts.is_empty()
+                    && literals.is_empty()
+                    && code_kb_core::is_category_alias(cat)
+                {
+                    let categories =
+                        list_structural_fact_categories_scoped(&conn, rel_path.as_deref())?;
+                    println!("No facts match '{cat}' in this repository.\n");
+                    println!("{}", format_fact_categories(&categories));
                 } else {
-                    print!("{}", format_structural_facts(&facts, &literals, cat));
+                    print!(
+                        "{}",
+                        format_structural_facts(&facts, &literals, cat, args.limit)
+                    );
                 }
             }
         }

@@ -41,7 +41,7 @@ fn setup_adversarial_test_repo() -> tempfile::TempDir {
 
     conn.execute(
         "INSERT INTO structural_facts (structural_fact_id, file_id, path, language, pattern_id, capture_name, node_kind, containing_symbol_id, start_line, start_column, end_line, end_column, start_byte, end_byte, confidence)
-         VALUES ('sf1', ?1, 'src/workspace.rs', 'rust', 'route', 'get_index', 'route', NULL, 1, 0, 10, 1, 0, 100, 1.0)",
+         VALUES ('sf1', ?1, 'src/workspace.rs', 'rust', 'axum.route.v1', 'get_index', 'route', NULL, 1, 0, 10, 1, 0, 100, 1.0)",
         [&file_id],
     )
     .unwrap();
