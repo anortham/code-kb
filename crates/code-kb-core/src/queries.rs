@@ -2274,6 +2274,7 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                           AND json_valid(alias_import.metadata_json)
                           AND (json_extract(alias_import.metadata_json, '$.alias') = p.target_receiver
                                OR json_extract(alias_import.metadata_json, '$.local_name') = p.target_receiver)
+                          AND COALESCE(json_extract(alias_import.metadata_json, '$.source'), '') NOT LIKE 'Qt%'
                     )"
     } else {
         ""

@@ -424,3 +424,44 @@ fn the_impact_walk_follows_base_type_edges() {
         "{radius:?}"
     );
 }
+
+const QT_AND_WORKSPACE_MODULE_ALIASES: &[(&str, &str)] = &[
+    (
+        "src/controls/Page.qml",
+        "import QtQuick\n\nItem {\n    id: page\n}\n",
+    ),
+    (
+        "examples/ImagePage.qml",
+        "import QtQuick\nimport QtQuick.Controls as QQC2\n\nItem {\n    QQC2.Page {\n        id: body\n    }\n}\n",
+    ),
+    (
+        "autotests/TestPage.qml",
+        "import QtQuick\nimport org.kde.kirigami as Kirigami\n\nItem {\n    Kirigami.Page {\n        id: probe\n    }\n}\n",
+    ),
+];
+
+#[test]
+fn an_alias_of_a_qt_module_does_not_resolve_to_a_workspace_component() {
+    let (_repo, db) = scanned_repo(QT_AND_WORKSPACE_MODULE_ALIASES);
+    let conn = open_read_only(&db).unwrap();
+
+    let refs = find_references_scoped(
+        &conn,
+        "Page",
+        "callers",
+        20,
+        false,
+        Some("src/controls/Page.qml"),
+    )
+    .unwrap();
+
+    let sites: Vec<(&str, &str, Option<usize>)> = refs
+        .iter()
+        .map(|r| (r.path.as_str(), r.kind.as_str(), r.start_line))
+        .collect();
+    assert_eq!(
+        sites,
+        vec![("autotests/TestPage.qml", "instantiates", Some(5))],
+        "{refs:?}"
+    );
+}
