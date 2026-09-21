@@ -549,6 +549,9 @@ pub fn format_search_results(query: &str, results: &[SymbolSearchResult], limit:
                 .collect();
             out.push_str(&format!("; words {}", words.join(", ")));
         }
+        if !explain.scorer.is_empty() {
+            out.push_str(&format!("; {}", explain.scorer));
+        }
         out.push('\n');
     }
     out.push('\n');
@@ -904,8 +907,8 @@ mod tests {
                 name_coverage: 1.0,
                 name_strength: 6,
                 terms: vec![
-                    ("sha".into(), "name".into(), 3),
-                    ("256".into(), "name".into(), 3),
+                    ("sha".into(), "name".into(), 3.0),
+                    ("256".into(), "name".into(), 3.0),
                 ],
                 signature_coverage: 0.25,
                 doc_coverage: 0.0,
@@ -914,6 +917,7 @@ mod tests {
                 documentation: 0.0,
                 test_intent: 5.0,
                 word_weights: vec![("sha".into(), 2.6), ("256".into(), 0.97)],
+                scorer: "distinct weights=idf credit=2 sig=400 cap=52".into(),
                 candidates: 37,
                 rerank_us: 180,
             }),
@@ -921,7 +925,7 @@ mod tests {
 
         let formatted = format_search_results("sha256", std::slice::from_ref(&result), 20);
         assert!(formatted.contains(
-            "Found 1 symbols matching concept \"sha256\":\nrerank: 37 candidates in 180 µs; words sha 2.60, 256 0.97\n\n- "
+            "Found 1 symbols matching concept \"sha256\":\nrerank: 37 candidates in 180 µs; words sha 2.60, 256 0.97; distinct weights=idf credit=2 sig=400 cap=52\n\n- "
         ));
         assert!(formatted.contains(&format!(
             "  explain: score 71.6 = name all(6) 60.0 + sig 0.25*{W_SIGNATURE} + doc 0.00*{W_DOC} + kind 4.0 + path -10.0 + test 5.0 [word,name] bm25 -3.21 terms sha=name:3 256=name:3\n"

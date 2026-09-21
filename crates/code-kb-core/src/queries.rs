@@ -3,7 +3,7 @@ use rust_stemmers::{Algorithm, Stemmer};
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 
-use crate::db::local_variable_predicate;
+use crate::db::{VOCAB_TABLE, local_variable_predicate};
 use crate::models::{
     BlastRadiusResult, FileFact, ImpactedSymbol, LiteralFact, ReferenceSite, SearchExplain,
     StructuralFact, Symbol, SymbolSearchResult, TestTarget, TypeFact,
@@ -1077,7 +1077,10 @@ pub fn fts_search_symbols_explained(
         collect_search_candidates(conn, query, kind_filter, path_filter, include_tests, limit)?;
     let candidate_count = candidates.len();
     let started = std::time::Instant::now();
-    let ranked = rerank_with(candidates, query, include_tests, Scorer::from_env());
+    let scorer = Scorer::from_env();
+    let idf = (scorer.distinct && scorer.weights == WeightSource::Idf)
+        .then(|| idf_weights(conn, &rerank_words(query)));
+    let ranked = rerank_with(candidates, query, include_tests, scorer, idf.as_deref());
     let rerank_us = started.elapsed().as_micros();
     Ok(ranked
         .into_iter()
@@ -1107,6 +1110,7 @@ const W_DOCUMENTATION_ROW: f64 = -200.0;
 const W_TEST_INTENT: f64 = 5.0;
 const W_TERMS: f64 = 52.0;
 const MAX_TERM_CREDIT: f64 = 3.0;
+const TEXT_CREDIT: f64 = 2.0;
 const DOC_COVERAGE_BYTES: usize = 400;
 
 const DEFINITION_KINDS: &[&str] = &[
@@ -1136,47 +1140,156 @@ struct Hits {
     doc: Vec<bool>,
 }
 
-/// Which scoring formula the rerank applies. `Distinct` and `DistinctRarity` credit each
-/// query term once from its strongest field; they are selected by `CODE_KB_RERANK` for
-/// measurement only and are never exposed as a tool parameter or a CLI flag.
+/// Where the rerank takes each query term's weight from: the whole index, flat, or the
+/// candidate sample.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Scorer {
-    Coverage,
-    Distinct,
-    DistinctRarity,
+enum WeightSource {
+    Idf,
+    Uniform,
+    Rarity,
 }
 
-impl Scorer {
-    fn from_env() -> Self {
-        match std::env::var("CODE_KB_RERANK").as_deref() {
-            Ok("distinct") => Scorer::Distinct,
-            Ok("distinct-rarity") => Scorer::DistinctRarity,
-            _ => Scorer::Coverage,
+impl WeightSource {
+    fn name(self) -> &'static str {
+        match self {
+            WeightSource::Idf => "idf",
+            WeightSource::Uniform => "uniform",
+            WeightSource::Rarity => "rarity",
         }
     }
 }
 
+/// How the rerank scores a candidate. The distinct-term scorer credits each query term once
+/// from its strongest field; it and its knobs are selected by the `CODE_KB_RERANK` variables
+/// for measurement only, and are never a tool parameter or a CLI flag.
+#[derive(Clone, Copy)]
+struct Scorer {
+    distinct: bool,
+    weights: WeightSource,
+    text_credit: f64,
+    sig_bytes: usize,
+    nameless_cap: f64,
+}
+
+fn env_parsed<T: std::str::FromStr>(key: &str, fallback: T) -> T {
+    std::env::var(key)
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(fallback)
+}
+
+impl Scorer {
+    fn coverage() -> Self {
+        Scorer {
+            distinct: false,
+            weights: WeightSource::Rarity,
+            text_credit: TEXT_CREDIT,
+            sig_bytes: usize::MAX,
+            nameless_cap: W_TERMS,
+        }
+    }
+
+    fn distinct() -> Self {
+        Scorer {
+            distinct: true,
+            weights: WeightSource::Idf,
+            sig_bytes: DOC_COVERAGE_BYTES,
+            ..Scorer::coverage()
+        }
+    }
+
+    fn from_env() -> Self {
+        let mut scorer = match std::env::var("CODE_KB_RERANK").as_deref() {
+            Ok("distinct") => Scorer::distinct(),
+            Ok("distinct-rarity") => Scorer {
+                weights: WeightSource::Rarity,
+                ..Scorer::distinct()
+            },
+            _ => return Scorer::coverage(),
+        };
+        scorer.weights = match std::env::var("CODE_KB_RERANK_WEIGHTS").as_deref() {
+            Ok("idf") => WeightSource::Idf,
+            Ok("uniform") => WeightSource::Uniform,
+            Ok("rarity") => WeightSource::Rarity,
+            _ => scorer.weights,
+        };
+        scorer.text_credit = env_parsed("CODE_KB_RERANK_TEXT_CREDIT", scorer.text_credit);
+        scorer.sig_bytes = env_parsed("CODE_KB_RERANK_SIG_BYTES", scorer.sig_bytes);
+        scorer.nameless_cap = env_parsed("CODE_KB_RERANK_NAMELESS_CAP", scorer.nameless_cap);
+        scorer
+    }
+
+    fn label(&self) -> String {
+        format!(
+            "distinct weights={} credit={} sig={} cap={}",
+            self.weights.name(),
+            self.text_credit,
+            self.sig_bytes,
+            self.nameless_cap
+        )
+    }
+}
+
+/// Global rarity of each lowercase rerank term: `ln(1 + N / (df + 1))`, where `df` is the
+/// number of indexed symbols holding the term and `N` an upper bound on the index size.
+fn idf_weights(conn: &Connection, words: &[String]) -> Vec<f64> {
+    let n = conn
+        .query_row("SELECT max(rowid) FROM symbols", [], |r| {
+            r.get::<_, Option<i64>>(0)
+        })
+        .ok()
+        .flatten()
+        .unwrap_or(0) as f64;
+    let stemmer = Stemmer::create(Algorithm::English);
+    let mut vocab = conn
+        .prepare(&format!("SELECT doc FROM {VOCAB_TABLE} WHERE term = ?1"))
+        .ok();
+    let mut matched = if vocab.is_none() {
+        conn.prepare("SELECT count(*) FROM symbols_fts WHERE symbols_fts MATCH ?1")
+            .ok()
+    } else {
+        None
+    };
+    words
+        .iter()
+        .map(|word| {
+            let df = match vocab.as_mut() {
+                Some(stmt) => document_frequency(stmt, &stemmer.stem(word))
+                    .or_else(|| document_frequency(stmt, word)),
+                None => matched
+                    .as_mut()
+                    .and_then(|stmt| document_frequency(stmt, &format!("\"{word}\""))),
+            };
+            (1.0 + n / (df.unwrap_or(0) as f64 + 1.0)).ln()
+        })
+        .collect()
+}
+
+fn document_frequency(stmt: &mut rusqlite::Statement<'_>, term: &str) -> Option<i64> {
+    stmt.query_row([term], |r| r.get(0)).ok()
+}
+
 /// The field that credits each query term and the credit it is worth: a name whole token 3,
-/// a name stem 2, a signature or doc hit 2, a name substring 1, nothing 0.
-fn term_credits(hits: &Hits, words: &[QueryWord]) -> Vec<(String, String, u8)> {
+/// a name stem 2, a signature or doc hit `text_credit`, a name substring 1, nothing 0.
+fn term_credits(hits: &Hits, words: &[QueryWord], text_credit: f64) -> Vec<(String, String, f64)> {
     words
         .iter()
         .enumerate()
         .map(|(i, w)| {
             let (field, credit) = match hits.name[i] {
-                3 => ("name", 3),
-                2 => ("name", 2),
-                _ if hits.signature[i] => ("signature", 2),
-                _ if hits.doc[i] => ("doc", 2),
-                1 => ("name", 1),
-                _ => ("none", 0),
+                3 => ("name", 3.0),
+                2 => ("name", 2.0),
+                _ if hits.signature[i] => ("signature", text_credit),
+                _ if hits.doc[i] => ("doc", text_credit),
+                1 => ("name", 1.0),
+                _ => ("none", 0.0),
             };
             (w.word.clone(), field.to_string(), credit)
         })
         .collect()
 }
 
-fn term_score(terms: &[(String, String, u8)], weights: &[f64]) -> f64 {
+fn term_score(terms: &[(String, String, f64)], weights: &[f64]) -> f64 {
     let total: f64 = weights.iter().sum();
     if total == 0.0 {
         return 0.0;
@@ -1184,7 +1297,7 @@ fn term_score(terms: &[(String, String, u8)], weights: &[f64]) -> f64 {
     let credited: f64 = terms
         .iter()
         .zip(weights)
-        .map(|((_, _, credit), weight)| f64::from(*credit) * weight)
+        .map(|((_, _, credit), weight)| credit * weight)
         .sum();
     W_TERMS * credited / (MAX_TERM_CREDIT * total)
 }
@@ -1411,6 +1524,7 @@ fn rerank_with(
     query: &str,
     include_tests: bool,
     scorer: Scorer,
+    idf: Option<&[f64]>,
 ) -> Vec<(SymbolSearchResult, SearchExplain)> {
     let stemmer = Stemmer::create(Algorithm::English);
     let words: Vec<QueryWord> = rerank_words(query)
@@ -1433,7 +1547,14 @@ fn rerank_with(
             let symbol = &candidate.result.symbol;
             Hits {
                 name: name_hits(&symbol.name, &words, &stemmer),
-                signature: text_hits(symbol.signature.as_deref(), &words, &mut tokens),
+                signature: text_hits(
+                    symbol
+                        .signature
+                        .as_deref()
+                        .map(|signature| head_bytes(signature, scorer.sig_bytes)),
+                    &words,
+                    &mut tokens,
+                ),
                 doc: text_hits(
                     symbol
                         .doc_comment
@@ -1457,12 +1578,28 @@ fn rerank_with(
         word_rows
     };
     let weights = word_weights(&sample, words.len());
-    let uniform_weights = vec![1.0; words.len()];
+    let term_weights: Vec<f64> = match scorer.weights {
+        WeightSource::Rarity => weights.clone(),
+        WeightSource::Idf if idf.is_some_and(|w| w.len() == words.len()) => {
+            idf.unwrap_or_default().to_vec()
+        }
+        _ => vec![1.0; words.len()],
+    };
+    let reported_weights = if scorer.distinct {
+        &term_weights
+    } else {
+        &weights
+    };
     let word_weights: Vec<(String, f64)> = words
         .iter()
-        .zip(&weights)
+        .zip(reported_weights)
         .map(|(w, weight)| (w.word.clone(), *weight))
         .collect();
+    let scorer_label = if scorer.distinct {
+        scorer.label()
+    } else {
+        String::new()
+    };
 
     let mut scored: Vec<(SymbolSearchResult, SearchExplain)> = candidates
         .into_iter()
@@ -1471,7 +1608,7 @@ fn rerank_with(
             let symbol = &candidate.result.symbol;
             let mut coverage = weighted_coverage(hits.name.iter().map(|s| *s > 0), &weights);
             let name_strength: u32 = hits.name.iter().map(|s| u32::from(*s)).sum();
-            let all_words_floor = if scorer == Scorer::Coverage { 1 } else { 2 };
+            let all_words_floor = if scorer.distinct { 2 } else { 1 };
             let tier = if !collapsed_query.is_empty() && collapse(&symbol.name) == collapsed_query {
                 "whole"
             } else if !hits.name.is_empty() && hits.name.iter().all(|s| *s >= all_words_floor) {
@@ -1483,21 +1620,27 @@ fn rerank_with(
             };
             let signature_coverage = weighted_coverage(hits.signature.iter().copied(), &weights);
             let doc_coverage = weighted_coverage(hits.doc.iter().copied(), &weights);
-            let terms = term_credits(&hits, &words);
-            let term_points = match scorer {
-                Scorer::Coverage => 0.0,
-                Scorer::Distinct => term_score(&terms, &uniform_weights),
-                Scorer::DistinctRarity => term_score(&terms, &weights),
+            let terms = term_credits(&hits, &words, scorer.text_credit);
+            let term_points = if scorer.distinct {
+                let points = term_score(&terms, &term_weights);
+                if hits.name.iter().all(|strength| *strength == 0) {
+                    points.min(scorer.nameless_cap)
+                } else {
+                    points
+                }
+            } else {
+                0.0
             };
-            let name_points = match scorer {
-                Scorer::Coverage => name_tier_score(tier, coverage),
-                _ => match tier {
+            let name_points = if scorer.distinct {
+                match tier {
                     "whole" => W_NAME_WHOLE,
                     "all" => W_NAME_ALL_WORDS,
                     _ => 0.0,
-                },
+                }
+            } else {
+                name_tier_score(tier, coverage)
             };
-            if scorer != Scorer::Coverage {
+            if scorer.distinct {
                 coverage = term_points / W_TERMS;
             }
             let explain = SearchExplain {
@@ -1530,12 +1673,14 @@ fn rerank_with(
                 },
                 terms,
                 word_weights: word_weights.clone(),
+                scorer: scorer_label.clone(),
                 candidates: 0,
                 rerank_us: 0,
             };
-            let field_points = match scorer {
-                Scorer::Coverage => signature_coverage * W_SIGNATURE + doc_coverage * W_DOC,
-                _ => term_points,
+            let field_points = if scorer.distinct {
+                term_points
+            } else {
+                signature_coverage * W_SIGNATURE + doc_coverage * W_DOC
             };
             let score = name_points
                 + field_points
@@ -4004,15 +4149,15 @@ mod tests {
     }
 
     fn ranked(candidates: Vec<Candidate>, query: &str) -> Vec<(SymbolSearchResult, SearchExplain)> {
-        rerank_with(candidates, query, false, Scorer::Coverage)
+        rerank_with(candidates, query, false, Scorer::coverage(), None)
     }
 
     fn ranked_names(candidates: Vec<Candidate>, query: &str) -> Vec<String> {
-        ranked_names_with(candidates, query, Scorer::Coverage)
+        ranked_names_with(candidates, query, Scorer::coverage())
     }
 
     fn ranked_names_with(candidates: Vec<Candidate>, query: &str, scorer: Scorer) -> Vec<String> {
-        rerank_with(candidates, query, false, scorer)
+        rerank_with(candidates, query, false, scorer, None)
             .into_iter()
             .map(|(r, _)| r.symbol.name)
             .collect()
@@ -4101,7 +4246,7 @@ mod tests {
             ranked_names_with(
                 strip_ansi_case(),
                 "strip ansi escape codes",
-                Scorer::Distinct
+                Scorer::distinct()
             ),
             vec!["strip_ansi", "_strip_code_fences"]
         );
@@ -4109,7 +4254,10 @@ mod tests {
             ranked_names_with(
                 strip_ansi_case(),
                 "strip ansi escape codes",
-                Scorer::DistinctRarity
+                Scorer {
+                    weights: WeightSource::Rarity,
+                    ..Scorer::distinct()
+                }
             ),
             vec!["strip_ansi", "_strip_code_fences"]
         );
@@ -4123,7 +4271,7 @@ mod tests {
         ];
 
         assert_eq!(
-            ranked_names_with(candidates, "cut", Scorer::Distinct),
+            ranked_names_with(candidates, "cut", Scorer::distinct()),
             vec!["slice_bytes", "execute_julie_extract"]
         );
     }
@@ -4138,7 +4286,7 @@ mod tests {
         ];
 
         assert_eq!(
-            ranked_names_with(candidates, "validate syntax", Scorer::Distinct),
+            ranked_names_with(candidates, "validate syntax", Scorer::distinct()),
             vec![
                 "validate_syntax",
                 "validate_syntax_now",
@@ -4149,14 +4297,86 @@ mod tests {
     }
 
     #[test]
+    fn idf_weights_rank_a_term_in_one_row_above_a_term_in_most_rows() {
+        let mut rows: Vec<String> = (0..10)
+            .map(|i| {
+                code_row(
+                    &format!("s{i}"),
+                    &format!("src/f{i}.rs"),
+                    "rust",
+                    &format!("search_{i}"),
+                    "searches the index",
+                )
+            })
+            .collect();
+        rows.push(code_row(
+            "rare",
+            "src/rare.rs",
+            "rust",
+            "sanitize_input",
+            "sanitize the input",
+        ));
+        let conn = search_fixture(&rows.join(", "));
+        let terms = vec!["sanitize".to_string(), "search".to_string()];
+
+        let weights = idf_weights(&conn, &terms);
+        assert!(weights[0] > weights[1]);
+
+        conn.execute_batch(&format!("DROP TABLE {VOCAB_TABLE};"))
+            .unwrap();
+        let without_vocab = idf_weights(&conn, &terms);
+        assert!(without_vocab[0] > without_vocab[1]);
+    }
+
+    #[test]
+    fn a_signature_hit_past_the_head_byte_cap_does_not_credit_its_term() {
+        let crediting_field = |sig_bytes: usize| {
+            let mut row = function("handler");
+            row.result.symbol.signature =
+                Some(format!("fn handler({}sidecar: u8)", "a: u8, ".repeat(80)));
+            let scorer = Scorer {
+                sig_bytes,
+                ..Scorer::distinct()
+            };
+            rerank_with(vec![row], "sidecar", false, scorer, None)[0]
+                .1
+                .terms[0]
+                .1
+                .clone()
+        };
+
+        assert_eq!(crediting_field(usize::MAX), "signature");
+        assert_eq!(crediting_field(40), "none");
+    }
+
+    #[test]
+    fn the_nameless_cap_limits_only_a_row_no_query_term_names() {
+        let score = |name: &str, nameless_cap: f64| {
+            let row = documented(name, None, "compact the memory nudge blueprint");
+            let scorer = Scorer {
+                nameless_cap,
+                ..Scorer::distinct()
+            };
+            rerank_with(vec![row], "compact the memory nudge", false, scorer, None)[0]
+                .0
+                .score
+        };
+
+        assert!(score("CATALOG", W_TERMS) > score("CATALOG", 10.0));
+        assert_eq!(score("CATALOG", 10.0), 10.0 + W_KIND_DEFINITION);
+        assert!(score("compact_memory", 10.0) > 10.0 + W_KIND_DEFINITION);
+    }
+
+    #[test]
     fn explain_terms_name_the_crediting_field_of_every_query_term() {
         let rows = rerank_with(
             strip_ansi_case(),
             "strip ansi escape codes",
             false,
-            Scorer::Distinct,
+            Scorer::distinct(),
+            None,
         );
-        let terms: Vec<(&str, &str, u8)> = rows[0]
+        let terms: Vec<(&str, &str, f64)> = rows[0]
             .1
             .terms
             .iter()
@@ -4167,10 +4387,10 @@ mod tests {
         assert_eq!(
             terms,
             vec![
-                ("strip", "name", 3),
-                ("ansi", "name", 3),
-                ("escape", "doc", 2),
-                ("codes", "none", 0),
+                ("strip", "name", 3.0),
+                ("ansi", "name", 3.0),
+                ("escape", "doc", 2.0),
+                ("codes", "none", 0.0),
             ]
         );
     }
@@ -4453,7 +4673,8 @@ mod tests {
                 vec![plain_row, test_row],
                 query,
                 include_tests,
-                Scorer::Coverage,
+                Scorer::coverage(),
+                None,
             )
         };
 
