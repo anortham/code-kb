@@ -72,8 +72,11 @@ MCP tool schema.**
 - `edit_file` (CLI: `code-kb edit-file`) replaces text in any file without reading it first.
   It matches in two tiers and no more: exact substring, then line by line with each line trimmed,
   so a different indentation still matches. There is no edit-distance matching. A match that
-  occurs more than once is refused with every matching line number unless `occurrence` is
-  `first`, `last`, or `all`; `only` is the default.
+  occurs more than once, overlapping matches included, is refused with up to ten matching line
+  numbers and a count of the rest unless `occurrence` is `first`, `last`, or `all`; `only` is
+  the default, and `all` replaces the non-overlapping matches. The result file is capped at the
+  same 8 MiB as the input, and only the first line of a failed edit's error reaches telemetry,
+  never the quoted file lines.
 - `replace_symbol_body` keeps the optional `body_hash` check and replaces a whole symbol body.
 - Do not implement two-step preview-and-confirm handshakes that waste agent turns.
 

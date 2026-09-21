@@ -37,7 +37,7 @@ Before modifying or understanding a specific function/method:
 When changing a file:
 * Call `edit_file(file_path, old_text, new_text)` first. This is the default edit path for any text file, code or not. You do not read the file first.
   1. It finds `old_text` exactly. If that fails, it matches again ignoring indentation.
-  2. It refuses a match that occurs more than once, and names every matching line. Add more context, or set `occurrence` to `first`, `last`, or `all`.
+  2. It refuses a match that occurs more than once, overlapping matches included, and names up to ten matching lines. Add more context, or set `occurrence` to `first`, `last`, or `all` (`all` replaces the non-overlapping matches).
   3. It validates code files through `julie-extract check`, writes the file atomically, and re-indexes SQLite AST facts in the same turn.
 * Call `replace_symbol_body(symbol_name, file_path, new_body, expected_body_hash)` when you hold a body hash and replace a whole function body.
 * Both tools report validation skipped for paths with no grammar, and both roll the file back when the re-index fails.

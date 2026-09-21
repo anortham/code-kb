@@ -483,7 +483,7 @@ impl McpServer {
                     .unwrap_or("error");
                 (
                     "error",
-                    Some(err_text),
+                    Some(err_text.lines().next().unwrap_or("error")),
                     err_text.len(),
                     err_text.len() / 4,
                     0,

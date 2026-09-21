@@ -947,3 +947,142 @@ fn test_edit_file_touched_symbols_prefer_the_enclosing_definition_over_a_local()
 
     assert_eq!(res.touched_symbols, vec!["run".to_string()]);
 }
+
+#[test]
+fn test_edit_file_overlapping_matches_are_ambiguous_and_last_picks_the_last_start() {
+    let dir = safe_tempdir();
+    let (ws, db_path) = scan_into(dir.path(), &[("notes/word.txt", "banana\n")]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let err = edit_file(
+        &ws,
+        &db_path,
+        &conn,
+        "notes/word.txt",
+        "ana",
+        "X",
+        Occurrence::Only,
+    )
+    .expect_err("overlapping matches must be refused");
+    match &err {
+        code_kb_core::EditError::AmbiguousMatch(_, lines) => assert_eq!(lines, &vec![1, 1]),
+        other => panic!("expected AmbiguousMatch, got {other:?}"),
+    }
+
+    let res = edit_file(
+        &ws,
+        &db_path,
+        &conn,
+        "notes/word.txt",
+        "ana",
+        "X",
+        Occurrence::Last,
+    )
+    .expect("last must pick the last start");
+    assert_eq!(res.replacements, 1);
+    assert_eq!(
+        fs::read_to_string(dir.path().join("notes/word.txt")).unwrap(),
+        "banX\n"
+    );
+}
+
+#[test]
+fn test_edit_file_occurrence_all_replaces_non_overlapping_matches_only() {
+    let dir = safe_tempdir();
+    let (ws, db_path) = scan_into(dir.path(), &[("notes/word.txt", "aaaa\n")]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let res = edit_file(
+        &ws,
+        &db_path,
+        &conn,
+        "notes/word.txt",
+        "aa",
+        "b",
+        Occurrence::All,
+    )
+    .expect("all must replace the non-overlapping matches");
+    assert_eq!(res.replacements, 2);
+    assert_eq!(
+        fs::read_to_string(dir.path().join("notes/word.txt")).unwrap(),
+        "bb\n"
+    );
+}
+
+#[test]
+fn test_edit_file_overlapping_line_windows_are_ambiguous() {
+    let dir = safe_tempdir();
+    let (ws, db_path) = scan_into(dir.path(), &[("notes/list.txt", "  x\n  x\n  x\n")]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let err = edit_file(
+        &ws,
+        &db_path,
+        &conn,
+        "notes/list.txt",
+        "x\nx",
+        "y",
+        Occurrence::Only,
+    )
+    .expect_err("two line windows must be refused");
+    match &err {
+        code_kb_core::EditError::AmbiguousMatch(_, lines) => assert_eq!(lines, &vec![1, 2]),
+        other => panic!("expected AmbiguousMatch, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_edit_file_many_matches_stay_cheap_and_a_too_large_result_is_refused() {
+    let dir = safe_tempdir();
+    let big = "a".repeat(1024 * 1024);
+    let (ws, db_path) = scan_into(dir.path(), &[("notes/big.txt", &big)]);
+    let conn = open_read_only(&db_path).unwrap();
+    let replacement = "b".repeat(4096);
+    let started = std::time::Instant::now();
+
+    let err = edit_file(
+        &ws,
+        &db_path,
+        &conn,
+        "notes/big.txt",
+        "a",
+        &replacement,
+        Occurrence::Only,
+    )
+    .expect_err("a million matches must be refused as ambiguous");
+    let message = err.to_string();
+    assert!(message.contains("and 1048566 more"), "{message}");
+    assert!(message.len() < 400, "{message}");
+
+    let err = edit_file(
+        &ws,
+        &db_path,
+        &conn,
+        "notes/big.txt",
+        "a",
+        &replacement,
+        Occurrence::All,
+    )
+    .expect_err("a result above the size cap must be refused");
+    assert!(
+        matches!(err, code_kb_core::EditError::EditTooLarge),
+        "{err:?}"
+    );
+    assert_eq!(
+        fs::read_to_string(dir.path().join("notes/big.txt")).unwrap(),
+        big
+    );
+
+    let res = edit_file(
+        &ws,
+        &db_path,
+        &conn,
+        "notes/big.txt",
+        "a",
+        &replacement,
+        Occurrence::First,
+    )
+    .expect("first must succeed");
+    assert_eq!(res.bytes_written, big.len() - 1 + replacement.len());
+    assert!(started.elapsed() < std::time::Duration::from_secs(10));
+}

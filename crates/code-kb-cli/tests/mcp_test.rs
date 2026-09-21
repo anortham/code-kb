@@ -2492,3 +2492,98 @@ fn test_mcp_records_a_known_baseline_for_references_and_none_for_an_outline() {
     drop(stdin);
     let _ = child.wait();
 }
+
+#[test]
+fn test_mcp_records_only_the_first_line_of_a_failed_edit_in_telemetry() {
+    let repo = reference_baseline_repo();
+    let root = repo.path();
+    std::fs::write(
+        root.join("src").join("secret.txt"),
+        "token = live-value-123\n",
+    )
+    .unwrap();
+
+    let mut child = ChildGuard(
+        Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+            .arg("serve")
+            .arg("--root")
+            .arg(root)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("Failed to spawn code-kb serve"),
+    );
+    let mut stdin = child.stdin.take().unwrap();
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+
+    let mut call = |id: u64, request: Value| -> Value {
+        let mut line = serde_json::to_string(&request).unwrap();
+        line.push('\n');
+        stdin.write_all(line.as_bytes()).unwrap();
+        stdin.flush().unwrap();
+        let mut response = String::new();
+        reader.read_line(&mut response).unwrap();
+        let parsed: Value = serde_json::from_str(&response).unwrap();
+        assert_eq!(parsed["id"], id, "{parsed}");
+        parsed
+    };
+
+    call(
+        1,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": { "name": "test-client", "version": "1.0" }
+            }
+        }),
+    );
+
+    let miss = call(
+        2,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "edit_file",
+                "arguments": {
+                    "file_path": "src/secret.txt",
+                    "old_text": "token = old-value",
+                    "new_text": "token = new-value"
+                }
+            }
+        }),
+    );
+    let answer = miss["result"]["content"][0]["text"].as_str().unwrap();
+    assert_eq!(miss["result"]["isError"], true, "{miss}");
+    assert!(answer.contains("live-value-123"), "{answer}");
+
+    let stats = call(
+        3,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "telemetry_summary",
+                "arguments": { "workspace_only": true, "json": true }
+            }
+        }),
+    );
+    let summary: Value =
+        serde_json::from_str(stats["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    let recent_errors = summary["recent_errors"].as_array().unwrap();
+    assert_eq!(recent_errors.len(), 1, "{summary}");
+    let recorded = recent_errors[0]["error_message"].as_str().unwrap();
+    assert!(
+        recorded.starts_with("The file 'src/secret.txt' has no match for old_text."),
+        "{recorded}"
+    );
+    assert!(!recorded.contains("live-value-123"), "{recorded}");
+    assert!(!recorded.contains('\n'), "{recorded}");
+}

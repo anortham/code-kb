@@ -1,6 +1,7 @@
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::borrow::Cow;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
@@ -63,9 +64,13 @@ pub enum EditError {
     #[error(
         "The file '{path}' has more than one match for old_text, at lines {lines}. Pass occurrence, or add more context lines.",
         path = .0,
-        lines = .1.iter().map(usize::to_string).collect::<Vec<_>>().join(", ")
+        lines = ambiguous_lines(.1)
     )]
     AmbiguousMatch(String, Vec<usize>),
+    #[error(
+        "The edit would make the file more than 8388608 bytes. edit_file writes files up to that size."
+    )]
+    EditTooLarge,
     #[error("old_text is empty. Give the text to replace.")]
     EmptyOldText,
     #[error("old_text and new_text are the same. The file needs no edit.")]
@@ -374,34 +379,71 @@ pub struct TextEditResult {
     pub bytes_written: usize,
 }
 
-struct TextMatch {
+const AMBIGUOUS_LINES_SHOWN: usize = 10;
+
+fn ambiguous_lines(lines: &[usize]) -> String {
+    let shown = lines
+        .iter()
+        .take(AMBIGUOUS_LINES_SHOWN)
+        .map(usize::to_string)
+        .collect::<Vec<_>>()
+        .join(", ");
+    match lines.len().saturating_sub(AMBIGUOUS_LINES_SHOWN) {
+        0 => shown,
+        more => format!("{shown}, and {more} more"),
+    }
+}
+
+/// One place `old_text` occurs, with the indentation of the first matched file line.
+struct TextMatch<'a> {
     start: usize,
     end: usize,
-    replacement: String,
+    indent: &'a str,
 }
 
 fn leading_whitespace(line: &str) -> &str {
     &line[..line.len() - line.trim_start().len()]
 }
 
-fn line_of(text: &str, offset: usize) -> usize {
-    text[..offset].matches('\n').count() + 1
-}
-
-fn exact_matches(haystack: &str, old_text: &str, new_text: &str) -> Vec<TextMatch> {
+/// Every start where the bytes of `old_text` occur, overlapping starts included, so an
+/// ambiguity check sees `ana` twice in `banana`.
+fn exact_matches<'a>(haystack: &'a str, old_text: &str) -> Vec<TextMatch<'a>> {
+    let step = old_text.chars().next().map_or(1, char::len_utf8);
     let mut found = Vec::new();
     let mut from = 0;
     while let Some(offset) = haystack[from..].find(old_text) {
         let start = from + offset;
-        let end = start + old_text.len();
         found.push(TextMatch {
             start,
-            end,
-            replacement: new_text.to_string(),
+            end: start + old_text.len(),
+            indent: "",
         });
-        from = end;
+        from = start + step;
     }
     found
+}
+
+fn non_overlapping(matches: Vec<TextMatch<'_>>) -> Vec<TextMatch<'_>> {
+    let mut kept: Vec<TextMatch<'_>> = Vec::new();
+    for found in matches {
+        if kept.last().is_none_or(|last| found.start >= last.end) {
+            kept.push(found);
+        }
+    }
+    kept
+}
+
+fn match_lines(text: &str, matches: &[TextMatch<'_>]) -> Vec<usize> {
+    let mut line = 1;
+    let mut cursor = 0;
+    matches
+        .iter()
+        .map(|found| {
+            line += text[cursor..found.start].matches('\n').count();
+            cursor = found.start;
+            line
+        })
+        .collect()
 }
 
 fn reindent(new_text: &str, old_indent: &str, file_indent: &str) -> String {
@@ -415,9 +457,9 @@ fn reindent(new_text: &str, old_indent: &str, file_indent: &str) -> String {
         .join("\n")
 }
 
-/// Matches the lines of `old_text` against whole file lines, with both ends of each line trimmed,
-/// and gives the replacement the indentation of the first matched file line.
-fn whitespace_matches(haystack: &str, old_text: &str, new_text: &str) -> Vec<TextMatch> {
+/// Matches the lines of `old_text` against whole file lines, with both ends of each line trimmed.
+/// Every window start is reported, overlapping windows included.
+fn whitespace_matches<'a>(haystack: &'a str, old_text: &str) -> Vec<TextMatch<'a>> {
     let old_lines: Vec<&str> = old_text.lines().collect();
     let file_lines: Vec<&str> = haystack.lines().collect();
     if old_lines.is_empty() || file_lines.len() < old_lines.len() {
@@ -426,23 +468,19 @@ fn whitespace_matches(haystack: &str, old_text: &str, new_text: &str) -> Vec<Tex
     let mut line_starts = vec![0usize];
     line_starts.extend(haystack.match_indices('\n').map(|(at, _)| at + 1));
 
-    let old_indent = leading_whitespace(old_lines[0]);
     let mut found = Vec::new();
-    let mut first = 0;
-    while first + old_lines.len() <= file_lines.len() {
+    for first in 0..=file_lines.len() - old_lines.len() {
         let same = (0..old_lines.len())
             .all(|step| file_lines[first + step].trim() == old_lines[step].trim());
         if !same {
-            first += 1;
             continue;
         }
         let last = first + old_lines.len() - 1;
         found.push(TextMatch {
             start: line_starts[first],
             end: line_starts[last] + file_lines[last].len(),
-            replacement: reindent(new_text, old_indent, leading_whitespace(file_lines[first])),
+            indent: leading_whitespace(file_lines[first]),
         });
-        first = last + 1;
     }
     found
 }
@@ -553,11 +591,11 @@ pub fn edit_file(
         return Err(EditError::NoChange);
     }
 
-    let exact = exact_matches(&file_text, &old_text, &new_text);
+    let exact = exact_matches(&file_text, &old_text);
     let (match_tier, matches) = if exact.is_empty() {
         (
             MatchTier::Whitespace,
-            whitespace_matches(&file_text, &old_text, &new_text),
+            whitespace_matches(&file_text, &old_text),
         )
     } else {
         (MatchTier::Exact, exact)
@@ -567,13 +605,11 @@ pub fn edit_file(
         Occurrence::Only if matches.len() > 1 => {
             return Err(EditError::AmbiguousMatch(
                 rel_path,
-                matches
-                    .iter()
-                    .map(|found| line_of(&file_text, found.start))
-                    .collect(),
+                match_lines(&file_text, &matches),
             ));
         }
-        Occurrence::Only | Occurrence::All => matches,
+        Occurrence::Only => matches,
+        Occurrence::All => non_overlapping(matches),
         Occurrence::First => matches.into_iter().take(1).collect(),
         Occurrence::Last => matches.into_iter().next_back().into_iter().collect(),
     };
@@ -585,18 +621,26 @@ pub fn edit_file(
         ));
     }
 
+    let old_indent = leading_whitespace(old_text.lines().next().unwrap_or_default());
     let mut edited = String::with_capacity(file_text.len() + new_text.len());
     let mut cursor = 0;
     let mut newlines = 0;
     let mut edited_ranges: Vec<(usize, usize)> = Vec::new();
     for found in &selected {
+        let replacement: Cow<'_, str> = match match_tier {
+            MatchTier::Exact => Cow::Borrowed(new_text.as_str()),
+            MatchTier::Whitespace => Cow::Owned(reindent(&new_text, old_indent, found.indent)),
+        };
         let gap = &file_text[cursor..found.start];
         edited.push_str(gap);
         newlines += gap.matches('\n').count();
         let first_line = newlines + 1;
-        edited.push_str(&found.replacement);
-        newlines += found.replacement.matches('\n').count();
-        let last_line = if found.replacement.ends_with('\n') {
+        edited.push_str(&replacement);
+        if edited.len() > MAX_EDIT_FILE_BYTES {
+            return Err(EditError::EditTooLarge);
+        }
+        newlines += replacement.matches('\n').count();
+        let last_line = if replacement.ends_with('\n') {
             newlines.max(first_line)
         } else {
             newlines + 1
