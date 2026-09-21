@@ -281,6 +281,18 @@ pub fn get_file(conn: &Connection, path: &str) -> Result<Option<FileFact>, Query
 }
 
 /// Count parse diagnostics recorded for a file, returning 0 when the index has none.
+/// Number of indexed symbols in one file, without loading the rows.
+pub fn count_file_symbols(conn: &Connection, path: &str) -> usize {
+    conn.query_row(
+        "SELECT COUNT(*) FROM symbols
+         WHERE path = ?1 COLLATE NOCASE OR path = ?2 COLLATE NOCASE",
+        params![path.replace('\\', "/"), path.replace('/', "\\")],
+        |row| row.get::<_, i64>(0),
+    )
+    .map(|count| count as usize)
+    .unwrap_or(0)
+}
+
 pub fn count_parse_diagnostics(conn: &Connection, path: &str) -> usize {
     conn.query_row(
         "SELECT COUNT(*) FROM parse_diagnostics
@@ -400,6 +412,40 @@ pub fn search_symbols(
 /// the caller passes `kind = "variable"` or names one explicitly as a qualified name such as
 /// `open_conn::conn`. With `kind = "variable"` they match by name only, because they are not in
 /// the full-text index.
+/// The lookup statement. The exact-name bypass of the test filter is written as `+name` so
+/// SQLite cannot plan it as a multi-index OR, which scans every non-test row through the
+/// test-path predicate (about 8 ms on this repository's index against 1 ms).
+fn search_symbols_sql(variables_wanted: bool, include_tests: bool, limit: usize) -> String {
+    let mut sql = String::from(
+        "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,
+                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,
+                start_byte, end_byte, body_start_line, body_start_column, body_end_line,
+                body_end_column, body_start_byte, body_end_byte, body_hash, semantic_group,
+                is_test, test_container
+         FROM symbols s
+         WHERE (name = :query OR name LIKE :pattern ESCAPE '\\')
+           AND (:kind IS NULL OR kind = :kind)
+           AND (:path IS NULL OR replace(path, '\\', '/') = :path COLLATE NOCASE OR replace(path, '\\', '/') LIKE :path_like || '/%' ESCAPE '\\' OR replace(path, '\\', '/') LIKE '%/' || :path_like ESCAPE '\\')",
+    );
+
+    if !variables_wanted {
+        sql.push_str(&format!(" AND NOT {}", local_variable_predicate("s")));
+    }
+
+    if !include_tests {
+        sql.push_str(&format!(
+            " AND (+name = :query OR (is_test = 0 AND test_container = 0 AND NOT {}))",
+            test_path_predicate("s")
+        ));
+    }
+
+    sql.push_str(
+        " ORDER BY (name = :query) DESC, (kind IN ('function', 'struct', 'class', 'trait', 'method', 'enum', 'interface', 'type')) DESC, length(name) ASC, path ASC LIMIT ",
+    );
+    sql.push_str(&limit.to_string());
+    sql
+}
+
 pub fn search_symbols_scoped(
     conn: &Connection,
     query: &str,
@@ -429,34 +475,7 @@ pub fn search_symbols_scoped(
     });
     let escaped_path = normalized_path.as_deref().map(escape_like);
 
-    let mut sql = String::from(
-        "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,
-                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,
-                start_byte, end_byte, body_start_line, body_start_column, body_end_line,
-                body_end_column, body_start_byte, body_end_byte, body_hash, semantic_group,
-                is_test, test_container
-         FROM symbols s
-         WHERE (name = :query OR name LIKE :pattern ESCAPE '\\')
-           AND (:kind IS NULL OR kind = :kind)
-           AND (:path IS NULL OR replace(path, '\\', '/') = :path COLLATE NOCASE OR replace(path, '\\', '/') LIKE :path_like || '/%' ESCAPE '\\' OR replace(path, '\\', '/') LIKE '%/' || :path_like ESCAPE '\\')",
-    );
-
-    if norm_kind.as_deref() != Some("variable") {
-        sql.push_str(&format!(" AND NOT {}", local_variable_predicate("s")));
-    }
-
-    if !include_tests {
-        sql.push_str(&format!(
-            " AND (name = :query OR (is_test = 0 AND test_container = 0 AND NOT {}))",
-            test_path_predicate("s")
-        ));
-    }
-
-    sql.push_str(
-        " ORDER BY (name = :query) DESC, (kind IN ('function', 'struct', 'class', 'trait', 'method', 'enum', 'interface', 'type')) DESC, length(name) ASC, path ASC LIMIT ",
-    );
-    sql.push_str(&limit.to_string());
-
+    let sql = search_symbols_sql(norm_kind.as_deref() == Some("variable"), include_tests, limit);
     let mut stmt = conn.prepare(&sql)?;
 
     let path_val = normalized_path.as_deref();
@@ -3910,6 +3929,38 @@ mod tests {
                 .map(|s| s.name)
                 .collect();
         assert!(lookup_with_tests.contains(&"parse_sidecar_fixture".to_string()));
+    }
+
+    #[test]
+    fn lookup_statement_is_not_planned_as_a_multi_index_or() {
+        let conn = search_fixture(&code_row("a", "src/lib.rs", "rust", "needle", ""));
+        conn.execute_batch(
+            "CREATE INDEX idx_symbols_name_kind ON symbols(name, kind);
+             CREATE INDEX idx_symbols_test_container ON symbols(test_container);
+             CREATE INDEX idx_symbols_is_test ON symbols(is_test);",
+        )
+        .unwrap();
+        let sql = format!("EXPLAIN QUERY PLAN {}", search_symbols_sql(false, false, 20));
+        let plan: Vec<String> = conn
+            .prepare(&sql)
+            .unwrap()
+            .query_map(
+                rusqlite::named_params! {
+                    ":query": "needle",
+                    ":pattern": "%needle%",
+                    ":kind": None::<&str>,
+                    ":path": None::<&str>,
+                    ":path_like": None::<&str>,
+                },
+                |row| row.get::<_, String>(3),
+            )
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert!(
+            !plan.iter().any(|step| step.contains("MULTI-INDEX OR")),
+            "{plan:?}"
+        );
     }
 
     #[test]

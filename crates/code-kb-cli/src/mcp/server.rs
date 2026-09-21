@@ -528,15 +528,8 @@ impl McpServer {
                     _ => None,
                 };
 
-                let baseline_bytes = argument_file_size.or_else(|| {
-                    if res.baseline_paths.is_empty() {
-                        return None;
-                    }
-                    open_read_only(&self.db_path)
-                        .ok()
-                        .map(|conn| file_sizes_for_paths(&conn, &res.baseline_paths))
-                        .filter(|baseline| *baseline > 0)
-                });
+                let baseline_bytes =
+                    argument_file_size.or_else(|| Some(res.baseline_bytes).filter(|b| *b > 0));
 
                 match baseline_bytes {
                     Some(baseline) => (
@@ -850,11 +843,10 @@ impl McpServer {
                 match file_skeleton_op(&self.workspace, &self.db_path, &conn, file_path) {
                     Ok(skeleton) => {
                         let result = CallToolResult::text(skeleton);
-                        match rendered_file
-                            .as_deref()
-                            .and_then(|rel| code_kb_core::load_file_symbols(&conn, rel).ok())
-                        {
-                            Some(symbols) => result.with_logical_result_count(symbols.len()),
+                        match rendered_file.as_deref() {
+                            Some(rel) => result.with_logical_result_count(
+                                code_kb_core::count_file_symbols(&conn, rel),
+                            ),
                             None => result,
                         }
                     }
@@ -1355,6 +1347,9 @@ impl McpServer {
             tracing::info!(tool = name, "MCP tool executed successfully");
         }
 
+        if !result.baseline_paths.is_empty() {
+            result.baseline_bytes = file_sizes_for_paths(&conn, &result.baseline_paths);
+        }
         result.reconcile_ms = reconcile_ms;
         result.query_ms = Some(query_start.elapsed().as_millis() as u64);
 

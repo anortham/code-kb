@@ -87,6 +87,9 @@ pub struct CallToolResult {
     /// Workspace-relative files this answer points into, used as the tokens-saved baseline.
     #[serde(skip)]
     pub baseline_paths: Vec<String>,
+    /// Indexed size of `baseline_paths`, summed by the dispatcher while its connection is open.
+    #[serde(skip)]
+    pub baseline_bytes: usize,
 }
 
 impl CallToolResult {
@@ -101,6 +104,7 @@ impl CallToolResult {
             reconcile_ms: None,
             query_ms: None,
             baseline_paths: Vec::new(),
+            baseline_bytes: 0,
         }
     }
 
@@ -115,6 +119,7 @@ impl CallToolResult {
             reconcile_ms: None,
             query_ms: None,
             baseline_paths: Vec::new(),
+            baseline_bytes: 0,
         }
     }
 

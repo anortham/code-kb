@@ -32,7 +32,8 @@ pub use ops::{
     get_symbol_body_op,
 };
 pub use queries::{
-    QueryError, compute_blast_radius, compute_blast_radius_scoped, file_sizes_for_paths,
+    QueryError, compute_blast_radius, compute_blast_radius_scoped, count_file_symbols,
+    file_sizes_for_paths,
     find_callee_signatures, find_literals, find_literals_scoped, find_references,
     find_references_ext, find_references_for_symbol, find_references_scoped, find_related_tests,
     find_structural_facts, find_structural_facts_scoped, find_type_facts,
