@@ -513,8 +513,17 @@ pub fn sanitize_fts5_query(query: &str) -> (String, String) {
 }
 
 const STOP_WORDS: &[&str] = &[
-    "a", "an", "the", "for", "to", "of", "in", "on", "and", "or", "with", "from", "by", "before",
-    "after", "that", "this", "is", "are", "be", "it", "as", "at",
+    "a", "about", "after", "again", "all", "already", "also", "always", "an", "and", "another",
+    "any", "are", "as", "at", "be", "because", "been", "before", "being", "between", "both", "but",
+    "by", "can", "could", "did", "do", "does", "each", "either", "else", "ever", "every", "for",
+    "from", "had", "has", "have", "here", "how", "if", "in", "instead", "is", "it", "its",
+    "itself", "just", "many", "may", "might", "more", "most", "much", "must", "neither", "never",
+    "no", "nor", "not", "of", "on", "once", "one", "only", "or", "other", "our", "per", "rather",
+    "same", "should", "since", "so", "some", "still", "such", "than", "that", "the", "their",
+    "them", "then", "there", "these", "they", "this", "those", "through", "to", "too", "two",
+    "until", "very", "via", "was", "we", "were", "what", "when", "where", "whether", "which",
+    "while", "who", "whom", "why", "will", "with", "within", "without", "would", "yet", "you",
+    "your",
 ];
 
 fn is_stop_word(word: &str) -> bool {
@@ -1471,8 +1480,12 @@ fn rerank_with(
                 name_strength,
                 term_score: term_score(&terms, &term_weights),
                 name_bonus: match tier {
-                    "whole" => W_NAME_WHOLE,
-                    "all" => W_NAME_ALL_WORDS,
+                    "whole"
+                        if DEFINITION_KINDS.contains(&normalize_kind(&symbol.kind).as_str()) =>
+                    {
+                        W_NAME_WHOLE
+                    }
+                    "whole" | "all" => W_NAME_ALL_WORDS,
                     _ => 0.0,
                 },
                 kind_prior: kind_prior(&symbol.kind),
@@ -1510,6 +1523,12 @@ fn rerank_with(
         b.score
             .total_cmp(&a.score)
             .then_with(|| eb.name_strength.cmp(&ea.name_strength))
+            .then_with(|| {
+                a.symbol
+                    .name
+                    .starts_with('_')
+                    .cmp(&b.symbol.name.starts_with('_'))
+            })
             .then_with(|| ea.bm25.is_none().cmp(&eb.bm25.is_none()))
             .then_with(|| ea.bm25.unwrap_or(0.0).total_cmp(&eb.bm25.unwrap_or(0.0)))
             .then_with(|| a.symbol.name.len().cmp(&b.symbol.name.len()))
@@ -4003,6 +4022,51 @@ mod tests {
         );
         assert_eq!(rerank_words("is_ok"), vec!["ok"]);
         assert_eq!(rerank_words("the before"), vec!["the", "before"]);
+    }
+
+    #[test]
+    fn stop_words_cover_english_function_words_but_not_identifier_directions() {
+        for word in ["was", "whether", "another"] {
+            assert!(is_stop_word(word), "{word} must be a stop word");
+        }
+        for word in ["down", "into", "run"] {
+            assert!(!is_stop_word(word), "{word} must stay a content word");
+        }
+        assert_eq!(rerank_words("what was the file"), vec!["file"]);
+    }
+
+    #[test]
+    fn a_public_name_sorts_before_its_private_twin_at_an_equal_score() {
+        let mut private = function("_create_skill");
+        private.bm25 = Some(-9.0);
+        let mut public = function("create_skill");
+        public.bm25 = Some(-1.0);
+
+        let rows = ranked(vec![private, public], "create skill");
+
+        assert_eq!(rows[0].0.score, rows[1].0.score);
+        assert_eq!(rows[0].1.name_strength, rows[1].1.name_strength);
+        assert_eq!(
+            rows.iter()
+                .map(|(r, _)| r.symbol.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["create_skill", "_create_skill"]
+        );
+    }
+
+    #[test]
+    fn a_whole_name_constant_yields_to_a_function_that_holds_the_word_with_context() {
+        let rows = ranked(
+            vec![
+                plain_candidate("Glob", "constant", "src/glob.rs"),
+                function("matches_glob_pattern"),
+            ],
+            "glob",
+        );
+
+        assert_eq!(rows[0].0.symbol.name, "matches_glob_pattern");
+        assert_eq!(rows[1].1.name_tier, "whole");
+        assert_eq!(rows[1].1.name_bonus, W_NAME_ALL_WORDS);
     }
 
     #[test]

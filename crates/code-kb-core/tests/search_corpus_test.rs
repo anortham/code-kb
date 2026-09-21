@@ -203,6 +203,18 @@ func LoadConfig(path string) (string, error) {
 "#,
     ),
     (
+        "tools/skills.py",
+        r#"def create_skill(name):
+    """Create a skill from the template registry and return the new skill."""
+    return name
+
+
+def _create_skill(name):
+    """Create a skill."""
+    return name
+"#,
+    ),
+    (
         "README.md",
         r#"# Distribution
 
@@ -349,6 +361,18 @@ fn two_whole_token_name_words_beat_a_doc_holding_every_word() {
         "function",
         "allocate_pack_budget",
     );
+}
+
+#[test]
+fn a_function_holding_the_word_with_context_beats_a_member_named_exactly_the_query() {
+    let (_dir, db) = scanned_repo(MULTI_LANGUAGE_CORPUS);
+    assert_top(&db, "outline", "function", "render_codebase_outline");
+}
+
+#[test]
+fn a_public_name_ranks_before_its_private_twin() {
+    let (_dir, db) = scanned_repo(MULTI_LANGUAGE_CORPUS);
+    assert_top(&db, "create skill", "function", "create_skill");
 }
 
 #[test]
