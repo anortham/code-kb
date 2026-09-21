@@ -108,12 +108,20 @@ MCP tool schema.**
   substring search first, then from `symbol_names_tri` trigram rows kept within an edit distance
   of the query. File candidates match by basename, then by stem, then by the last two segments.
 - Structural-fact categories: `CATEGORY_ALIASES` in `queries.rs` is the whole alias table
-  (`sql`/`query`/`queries`, `route`/`routes`, `config`, `model`/`models`), and each alias maps to
-  the pattern-id families it names, never to a substring. An unknown category still falls back to a
+  (`sql`/`query`/`queries`, `route`/`routes`, `config`, `model`/`models`, `signal`/`signals`,
+  `import`/`imports`, `binding`/`bindings`, `component`/`components`, `module`/`modules`,
+  `pragma`), and each alias maps to the pattern-id families it names, never to a substring.
+  An unknown category still falls back to a
   substring match, so raw pattern ids work. With no category the answer lists the aliases with
   facts in this index before the raw pattern list. Facts and literals have separate limits, each
   with its own cap notice.
 - Search ranking: `search_symbols` admits rows from three branches (exact name, FTS5 word match, trigram name substring, so `sha256` finds `parseSha256Sidecar`), then a deterministic Rust rerank in `queries.rs` credits each query term once from its strongest field (name whole token 3, name stem 2, name substring 1, signature or docstring 1), weighted by the term's rarity across the index (a capped FTS5 match count per term), and adds the whole-name and all-words bonuses (the whole-name bonus is 100 for definition kinds and 60 for every other kind) and the kind, path, documentation, and test priors; `score` is that rerank score. Rows from test files are hidden by default: a path rule in `queries.rs` (`is_test_path` and its SQL mirror `test_path_predicate`) hides the whole file, not only the symbols `julie-extract` flags, and `is_test: true` / `--include-tests` shows them again. A `lookup_symbol` row whose name equals the query is shown either way. Equal scores break by name strength, the sum over query words of 3 for a whole-token name match, 2 for a stem match, 1 for a substring match, and 0 for none, then names that do not start with `_` before names that do; `--explain` reports the name strength as `name_strength`. `code-kb search --explain` prints the breakdown and the rerank timer; the MCP tool takes no `explain` parameter, and `--verbose` stays debug logging.
+- Reference rules: a member access whose receiver names a type-like target groups to one row per
+  file with an `occurrences` count. An identifier row is dropped when a relationship row already
+  covers the same site. An import alias satisfies a pending receiver unless the import source
+  starts with `Qt`. An `extends` row never resolves to its own component. A handler row is
+  labelled `handler` when the receiver names the owner and `handler (candidate)` otherwise. Test
+  paths include `/autotests/` directories and file names that start with `tst_`.
 - Language-agnostic callee filtering: `find_references(direction="callees")` and `get_symbol_context`
   filter unresolved AST tokens against workspace symbols, eliminating external stdlib/runtime noise
   across all ~40 supported languages by default (`include_external: true` / `--include-external` restores them).

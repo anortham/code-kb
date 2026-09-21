@@ -157,7 +157,7 @@ get_symbol_context("search_symbols_scoped")</pre>
     <section id="what" class="section">
       <p class="margin-label">What it does</p>
       <div class="section-body">
-        <h2>Seven capabilities for AI coding agents</h2>
+        <h2>Eight capabilities for AI coding agents</h2>
         <dl class="features">
           <div>
             <dt>Skeletons</dt>
@@ -182,6 +182,10 @@ get_symbol_context("search_symbols_scoped")</pre>
           <div>
             <dt>Windows first</dt>
             <dd>Every release ships a Windows binary tested on NTFS. Paths use forward slashes, verbatim prefixes are stripped, and file handles close before any rename.</dd>
+          </div>
+          <div>
+            <dt>Qt and QML</dt>
+            <dd>QML components index as an object tree, with <code>qmldir</code> modules, <code>.qmltypes</code> type descriptors, Qt JavaScript files, and Qt C++ headers. <code>.ui</code> designer files and CMake files are not indexed.</dd>
           </div>
           <div>
             <dt>Native hooks</dt>
