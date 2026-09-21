@@ -1650,7 +1650,7 @@ pub fn find_related_tests(
        AND {not_documentation}
        AND {pred}
      LIMIT ?2",
-            pred = pending_target_predicate("s_target", "s_target_parent")
+            pred = pending_target_predicate(conn, "s_target", "s_target_parent")
         );
 
         if let Ok(mut stmt) = conn.prepare(&pending_sql)
@@ -2260,12 +2260,24 @@ fn call_site_proximity(candidate_path: &str) -> String {
 
 /// SQL predicate that decides whether a pending call edge `p` (with caller `s_from`) points at
 /// the candidate definition `target` (whose parent symbol is joined as `parent`).
-fn pending_target_predicate(target: &str, parent: &str) -> String {
+fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> String {
     let ns = "json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END)";
     let target_path = format!("('/' || replace({target}.path, '\\', '/'))");
     let like_value = "replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_')";
     let closer_rank = call_site_proximity("closer.path");
     let target_rank = call_site_proximity(&format!("{target}.path"));
+    let import_alias_receiver = if has_column(conn, "symbols", "metadata_json") {
+        "OR EXISTS (
+                        SELECT 1 FROM symbols alias_import
+                        WHERE alias_import.kind = 'import'
+                          AND alias_import.path = p.path
+                          AND json_valid(alias_import.metadata_json)
+                          AND (json_extract(alias_import.metadata_json, '$.alias') = p.target_receiver
+                               OR json_extract(alias_import.metadata_json, '$.local_name') = p.target_receiver)
+                    )"
+    } else {
+        ""
+    };
     format!(
         "(
             (
@@ -2304,7 +2316,11 @@ fn pending_target_predicate(target: &str, parent: &str) -> String {
             )
             OR (
                 (p.target_namespace_json IS NULL OR p.target_namespace_json = '[]')
-                AND (p.target_receiver IS NULL OR p.target_receiver = '')
+                AND (
+                    p.target_receiver IS NULL
+                    OR p.target_receiver = ''
+                    {import_alias_receiver}
+                )
                 AND ({target}.parent_symbol_id IS NULL OR s_from.parent_symbol_id = {target}.parent_symbol_id)
                 AND ({target}.parent_symbol_id IS NOT NULL OR NOT EXISTS (
                     SELECT 1 FROM symbols closer
@@ -2354,6 +2370,15 @@ fn not_documentation(conn: &Connection, alias: &str) -> String {
     } else {
         "1 = 1".to_string()
     }
+}
+
+fn has_column(conn: &Connection, table: &str, column: &str) -> bool {
+    conn.query_row(
+        "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2",
+        [table, column],
+        |_| Ok(true),
+    )
+    .unwrap_or(false)
 }
 
 pub(crate) fn has_table(conn: &Connection, name: &str) -> bool {
@@ -2452,7 +2477,7 @@ fn find_references_internal(
                          LEFT JOIN symbols s_target_parent ON s_target.parent_symbol_id = s_target_parent.symbol_id
                           WHERE p.target_terminal_name = ?1
                             AND {pred}
-                          LIMIT ?2", pred = pending_target_predicate("s_target", "s_target_parent")),
+                          LIMIT ?2", pred = pending_target_predicate(conn, "s_target", "s_target_parent")),
                     )?;
 
                     let p_rows = pending_stmt.query_map(
@@ -2709,7 +2734,7 @@ fn find_references_internal(
                              AND s_to.kind NOT IN ('import', 'variable', 'parameter', 'field', 'property', 'module', 'namespace')
                              AND {pred}
                        )
-                     LIMIT ?2", pred = pending_target_predicate("s_to", "s_to_parent"))
+                     LIMIT ?2", pred = pending_target_predicate(conn, "s_to", "s_to_parent"))
                 };
                 let mut pending_stmt = conn.prepare(&sql)?;
                 let rows = pending_stmt.query_map(
@@ -2847,7 +2872,7 @@ pub fn find_callee_signatures(
                  WHERE s_from.name = ?1 AND p.from_symbol_id = ?2
                    AND s_to.kind NOT IN ('import', 'variable', 'parameter', 'field', 'property', 'module', 'namespace')
                     AND {pred}
-                 LIMIT ?3", pred = pending_target_predicate("s_to", "s_parent")),
+                 LIMIT ?3", pred = pending_target_predicate(conn, "s_to", "s_parent")),
             )?;
 
                 let rows =
@@ -2914,7 +2939,7 @@ pub fn find_callee_signatures(
                          AND s_to.kind NOT IN ('import', 'variable', 'parameter', 'field', 'property', 'module', 'namespace')
                          AND {pred}
                    )
-                 LIMIT ?3", pred = pending_target_predicate("s_to", "s_parent")),
+                 LIMIT ?3", pred = pending_target_predicate(conn, "s_to", "s_parent")),
             )?;
 
             let rows =
@@ -3571,7 +3596,7 @@ pub fn compute_blast_radius_scoped(
             (
                 "LEFT JOIN symbols s_target_parent ON s_target.parent_symbol_id = s_target_parent.symbol_id
             LEFT JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id",
-                format!("AND {pred}", pred = pending_target_predicate("s_target", "s_target_parent")),
+                format!("AND {pred}", pred = pending_target_predicate(conn, "s_target", "s_target_parent")),
             )
         } else {
             ("", String::new())

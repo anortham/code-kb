@@ -263,3 +263,59 @@ fn test_blast_radius_predicted_tests_inclusion_and_absent_exclusion() {
         "test_unrelated_audit must NOT be in likely_tests for verify_credentials (absent match)"
     );
 }
+
+const ALIASED_QML_IMPORT: &[(&str, &str)] = &[
+    ("Ui/Page.qml", "import QtQuick\n\nItem {\n    id: page\n}\n"),
+    (
+        "App/Main.qml",
+        "import QtQuick\nimport \"../Ui\" as Ui\n\nItem {\n    Ui.Page {\n        id: body\n    }\n}\n",
+    ),
+];
+
+const SAME_NAMED_METHODS_BEHIND_A_USE: &[(&str, &str)] = &[
+    (
+        "src/store.rs",
+        "pub struct Store;\n\nimpl Store {\n    pub fn open() -> u8 {\n        1\n    }\n}\n",
+    ),
+    (
+        "src/cache.rs",
+        "pub struct Cache;\n\nimpl Cache {\n    pub fn open() -> u8 {\n        2\n    }\n}\n",
+    ),
+    (
+        "src/boot.rs",
+        "use crate::store::Store;\n\npub fn boot() -> u8 {\n    Store::open()\n}\n",
+    ),
+];
+
+#[test]
+fn an_import_alias_receiver_resolves_a_qualified_instantiation() {
+    let (_repo, db) = scanned_repo(ALIASED_QML_IMPORT);
+    let conn = open_read_only(&db).unwrap();
+
+    let refs =
+        find_references_scoped(&conn, "Page", "callers", 20, false, Some("Ui/Page.qml")).unwrap();
+
+    let sites: Vec<(&str, &str, Option<usize>)> = refs
+        .iter()
+        .map(|r| (r.path.as_str(), r.kind.as_str(), r.start_line))
+        .collect();
+    assert_eq!(
+        sites,
+        vec![("App/Main.qml", "instantiates", Some(5))],
+        "{refs:?}"
+    );
+}
+
+#[test]
+fn a_namespaced_call_keeps_its_parent_when_the_caller_imports_that_name() {
+    let (_repo, db) = scanned_repo(SAME_NAMED_METHODS_BEHIND_A_USE);
+    let conn = open_read_only(&db).unwrap();
+
+    let from_store =
+        find_references_scoped(&conn, "open", "callers", 20, false, Some("src/store.rs")).unwrap();
+    let from_cache =
+        find_references_scoped(&conn, "open", "callers", 20, false, Some("src/cache.rs")).unwrap();
+
+    assert_eq!(caller_names(&from_store), ["boot"], "{from_store:?}");
+    assert!(from_cache.is_empty(), "{from_cache:?}");
+}
