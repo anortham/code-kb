@@ -214,6 +214,13 @@ pub fn scan_workspace(workspace: &Workspace, db_path: &Path, force: bool) -> Res
             remove_artifact_files(db_path)?;
             execute_julie_extract(&scan_args(true))?;
         }
+        Err(SyncError::ExtractionFailed(1, stderr))
+            if stderr.starts_with("partial") && db_path.exists() =>
+        {
+            warn!(
+                "Extractor skipped files it could not read; the next reconcile retries them:\n{stderr}"
+            );
+        }
         Err(e) => return Err(e),
     }
 

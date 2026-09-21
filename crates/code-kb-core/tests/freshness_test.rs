@@ -645,3 +645,36 @@ fn test_reconcile_offline_edits_remembers_files_the_extractor_skips() {
         settled_again.added
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn test_scan_workspace_keeps_the_index_when_one_file_cannot_be_read() {
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+
+    let temp_dir = safe_tempdir();
+    let root = temp_dir.path().to_path_buf();
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(root.join("src/ok.rs"), "pub fn readable_symbol() {}\n").unwrap();
+    let locked = root.join("src/locked.rs");
+    fs::write(&locked, "pub fn locked_symbol() {}\n").unwrap();
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o000)).unwrap();
+
+    let ws = Workspace::new(root.clone());
+    let db_path = root.join("test.db");
+    let result = scan_workspace(&ws, &db_path, true);
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o644)).unwrap();
+
+    result.expect("a scan that skips an unreadable file must keep the index");
+    let conn = open_read_only(&db_path).unwrap();
+    assert!(
+        get_symbol_by_name(&conn, "readable_symbol", Some("src/ok.rs"))
+            .unwrap()
+            .is_some()
+    );
+    assert!(
+        get_symbol_by_name(&conn, "locked_symbol", Some("src/locked.rs"))
+            .unwrap()
+            .is_none()
+    );
+}
