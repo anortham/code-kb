@@ -121,7 +121,7 @@ pub struct SymbolArgs {
     /// Filter by symbol kind (e.g. function, struct, trait, class, interface, enum).
     #[arg(long)]
     pub kind: Option<String>,
-    /// Include test functions.
+    /// Include test functions, test containers, and rows from test files.
     #[arg(long, alias = "is-test")]
     pub include_tests: bool,
     /// Maximum number of results (0-200).
@@ -141,7 +141,7 @@ pub struct SearchArgs {
     /// Filter by symbol kind (e.g. function, struct, trait, class, interface, enum).
     #[arg(long)]
     pub kind: Option<String>,
-    /// Include test functions.
+    /// Include test functions, test containers, and rows from test files.
     #[arg(long, alias = "is-test")]
     pub include_tests: bool,
     /// Maximum number of results (0-200).

@@ -203,7 +203,7 @@ impl McpServer {
                         },
                         "is_test": {
                             "type": "boolean",
-                            "description": "Include test functions and containers (default: false)."
+                            "description": "Include test functions, test containers, and rows from test files (default: false)."
                         },
                         "limit": {
                             "type": "integer",
@@ -235,7 +235,7 @@ impl McpServer {
                         },
                         "is_test": {
                             "type": "boolean",
-                            "description": "Include test functions and containers (default: false)."
+                            "description": "Include test functions, test containers, and rows from test files (default: false)."
                         },
                         "limit": {
                             "type": "integer",

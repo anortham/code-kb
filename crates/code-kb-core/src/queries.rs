@@ -389,7 +389,8 @@ pub fn search_symbols_scoped(
         && let Some(sym) = get_symbol_by_name(conn, query, path_filter)?
     {
         let kind_matches = norm_kind.as_deref().is_none_or(|kind| sym.kind == kind);
-        let test_matches = include_tests || (!sym.is_test && !sym.test_container);
+        let test_matches =
+            include_tests || (!sym.is_test && !sym.test_container && !is_test_path(&sym.path));
         return Ok(if kind_matches && test_matches {
             vec![sym]
         } else {
@@ -424,6 +425,7 @@ pub fn search_symbols_scoped(
 
     if !include_tests {
         sql.push_str(" AND is_test = 0 AND test_container = 0");
+        sql.push_str(&format!(" AND NOT {}", test_path_predicate("s")));
     }
 
     sql.push_str(
@@ -717,6 +719,7 @@ fn candidate_filters(searching_variables: bool, include_tests: bool) -> String {
         // Unary `+` keeps the planner off the test-flag indexes: without ANALYZE statistics it
         // would otherwise prefer them over the name index and walk nearly every row.
         sql.push_str(" AND +s.is_test = 0 AND +s.test_container = 0");
+        sql.push_str(&format!(" AND NOT {}", test_path_predicate("s")));
     }
     sql
 }
@@ -1026,6 +1029,7 @@ pub fn fts_search_symbols_explained(
         sql.push_str(local_clause);
         if !include_tests {
             sql.push_str(" AND is_test = 0 AND test_container = 0");
+            sql.push_str(&format!(" AND NOT {}", test_path_predicate("s")));
         }
         sql.push_str(
             " ORDER BY (name = :query) DESC, (kind IN ('function', 'struct', 'class', 'trait', 'method', 'enum', 'interface', 'type')) DESC, length(name) ASC, path ASC LIMIT ",
@@ -2838,6 +2842,32 @@ pub fn is_test_path(path: &str) -> bool {
         || p.starts_with("test_")
 }
 
+/// SQL boolean over `alias.path` that mirrors [`is_test_path`] rule for rule.
+///
+/// `sql_test_path_predicate_matches_the_rust_rule` runs both forms over one path list so the two
+/// cannot drift apart.
+pub(crate) fn test_path_predicate(alias: &str) -> String {
+    let p = format!("lower(replace({alias}.path, '\\', '/'))");
+    let clauses = [
+        "%/test/%",
+        "%/tests/%",
+        "%/\\_\\_tests\\_\\_/%",
+        "%\\_test.%",
+        "%.test.%",
+        "%.spec.%",
+        "%test.rs",
+        "%tests.rs",
+        "%tests.cs",
+        "%test.go",
+        "test\\_%",
+    ]
+    .iter()
+    .map(|pattern| format!("{p} LIKE '{pattern}' ESCAPE '\\'"))
+    .collect::<Vec<_>>()
+    .join(" OR ");
+    format!("({clauses})")
+}
+
 /// Compute blast radius and likely tests for given seed symbols or seed file paths.
 /// Recursively walks reverse reachability (transitive callers) up to `max_depth` in SQLite.
 pub fn compute_blast_radius_scoped(
@@ -3293,6 +3323,122 @@ mod tests {
             .into_iter()
             .map(|r| r.symbol.name)
             .collect()
+    }
+
+    const TEST_PATH_CASES: &[&str] = &[
+        "tests/foo.py",
+        "src/tests/x.rs",
+        "a/__tests__/b.ts",
+        "x/foo_test.go",
+        "x/foo.test.ts",
+        "x/foo.spec.js",
+        "src/lib_test.rs",
+        "src/tests.rs",
+        "Foo.Tests.cs",
+        "test_config.py",
+        "src/attest.rs",
+        "contest/x.py",
+        "src/testing.rs",
+        "tests\\x.py",
+        "src/test/Helper.java",
+        "src/main.rs",
+        "pkg/service.go",
+    ];
+
+    #[test]
+    fn sql_test_path_predicate_matches_the_rust_rule() {
+        let conn = Connection::open_in_memory().unwrap();
+        let sql = format!(
+            "SELECT {} FROM (SELECT :path AS path) s",
+            test_path_predicate("s")
+        );
+        let mut stmt = conn.prepare(&sql).unwrap();
+        for path in TEST_PATH_CASES {
+            let from_sql: bool = stmt
+                .query_row(rusqlite::named_params! { ":path": path }, |row| row.get(0))
+                .unwrap();
+            assert_eq!(from_sql, is_test_path(path), "{path}");
+        }
+    }
+
+    #[test]
+    fn unflagged_test_file_rows_are_hidden_unless_tests_are_included() {
+        let conn = search_fixture(
+            &[
+                code_row(
+                    "a",
+                    "src/parser.rs",
+                    "rust",
+                    "parse_sidecar",
+                    "Parse a sidecar.",
+                ),
+                code_row(
+                    "b",
+                    "src/tests/helpers.py",
+                    "python",
+                    "parse_sidecar_fixture",
+                    "Parse a sidecar.",
+                ),
+            ]
+            .join(", "),
+        );
+
+        let default_search: Vec<String> =
+            fts_search_symbols_scoped(&conn, "parse sidecar", None, None, false, 10)
+                .unwrap()
+                .into_iter()
+                .map(|r| r.symbol.name)
+                .collect();
+        assert_eq!(default_search, vec!["parse_sidecar".to_string()]);
+
+        let with_tests: Vec<String> =
+            fts_search_symbols_scoped(&conn, "parse sidecar", None, None, true, 10)
+                .unwrap()
+                .into_iter()
+                .map(|r| r.symbol.name)
+                .collect();
+        assert!(with_tests.contains(&"parse_sidecar_fixture".to_string()));
+
+        let default_lookup: Vec<String> =
+            search_symbols_scoped(&conn, "parse_sidecar", None, None, false, 10)
+                .unwrap()
+                .into_iter()
+                .map(|s| s.name)
+                .collect();
+        assert_eq!(default_lookup, vec!["parse_sidecar".to_string()]);
+
+        let lookup_with_tests: Vec<String> =
+            search_symbols_scoped(&conn, "parse_sidecar", None, None, true, 10)
+                .unwrap()
+                .into_iter()
+                .map(|s| s.name)
+                .collect();
+        assert!(lookup_with_tests.contains(&"parse_sidecar_fixture".to_string()));
+    }
+
+    #[test]
+    fn qualified_lookup_in_a_test_file_needs_include_tests() {
+        let conn = search_fixture(
+            &[
+                "('c', 'f_c', 'src/tests/helpers.py', 'python', 'Helpers', 'class', 'class Helpers', '', 'pub', NULL,
+                  1, 0, 9, 1, 0, 90, 1, 0, 9, 1, 5, 88, 'h_c', NULL, 0, 0, 'code')".to_string(),
+                "('d', 'f_d', 'src/tests/helpers.py', 'python', 'load_fixture', 'method', 'def load_fixture()', '', 'pub', 'c',
+                  10, 0, 20, 1, 100, 250, 12, 4, 19, 1, 120, 240, 'h_d', NULL, 0, 0, 'code')".to_string(),
+            ]
+            .join(", "),
+        );
+
+        assert!(
+            search_symbols_scoped(&conn, "Helpers.load_fixture", None, None, false, 10)
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(
+            search_symbols_scoped(&conn, "Helpers.load_fixture", None, None, true, 10)
+                .unwrap()
+                .len(),
+            1
+        );
     }
 
     #[test]
