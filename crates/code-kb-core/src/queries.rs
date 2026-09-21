@@ -2594,7 +2594,16 @@ fn find_references_internal(
                 "SELECT COALESCE(s.name, ''),
                         COALESCE(i.containing_symbol_id, ''),
                         i.name,
-                        i.kind,
+                        CASE WHEN json_valid(i.metadata_json)
+                                  AND json_extract(i.metadata_json, '$.role') = 'signal_handler'
+                             THEN CASE WHEN json_extract(i.metadata_json, '$.receiver') = (
+                                      SELECT CASE WHEN t.kind IN ('class', 'struct', 'enum', 'interface', 'trait', 'module', 'namespace')
+                                                  THEN t.name ELSE tp.name END
+                                      FROM symbols t
+                                      LEFT JOIN symbols tp ON tp.symbol_id = t.parent_symbol_id
+                                      WHERE t.symbol_id = ?3)
+                                  THEN 'handler' ELSE 'handler (candidate)' END
+                             ELSE i.kind END,
                         i.path,
                         i.start_line,
                         i.start_column

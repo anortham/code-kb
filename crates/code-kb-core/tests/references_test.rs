@@ -1,6 +1,6 @@
 use code_kb_core::{
     Workspace, compute_blast_radius, find_julie_extract_binary, find_references_scoped,
-    open_read_only, safe_tempdir, scan_workspace,
+    open_read_only, open_read_write, safe_tempdir, scan_workspace,
 };
 use std::fs;
 
@@ -432,4 +432,68 @@ fn receiver_matches_of_a_type_come_after_the_rows_that_name_it() {
     let names: Vec<&str> = refs.iter().map(|r| r.to_symbol_name.as_str()).collect();
 
     assert_eq!(names, vec!["runtime", "tag"], "{refs:?}");
+}
+
+const QML_SIGNAL_AND_HANDLERS: &[(&str, &str)] = &[
+    (
+        "Ui/Button.qml",
+        "import QtQuick\n\nItem {\n    signal clicked()\n}\n",
+    ),
+    (
+        "App/Main.qml",
+        "import QtQuick\nimport \"../Ui\"\n\nItem {\n    Button {\n        id: button\n    }\n}\n",
+    ),
+];
+
+#[test]
+fn a_signal_handler_is_a_candidate_until_its_receiver_names_the_owner() {
+    let (_repo, db_path) = scanned_repo(QML_SIGNAL_AND_HANDLERS);
+    let conn = open_read_write(&db_path).unwrap();
+    conn.execute_batch(
+        r#"INSERT INTO reference_sites
+            (reference_site_id, file_id, path, language, is_exact, provenance)
+         SELECT 'rs_handlers', file_id, path, language, 0, 'spanless'
+         FROM files WHERE path = 'App/Main.qml';
+         INSERT INTO identifiers
+            (identifier_id, reference_site_id, file_id, path, language, name, kind,
+             start_line, start_column, end_line, end_column, start_byte, end_byte,
+             confidence, metadata_json)
+         SELECT 'i_' || v.id, 'rs_handlers', f.file_id, f.path, f.language,
+                'clicked', 'member_access', v.line, 0, v.line, 9, 0, 9, 1.0, v.metadata
+         FROM files f
+         JOIN (SELECT 'owned' AS id, 6 AS line,
+                      '{"role":"signal_handler","receiver":"Button"}' AS metadata
+               UNION ALL SELECT 'unowned', 7, '{"role":"signal_handler"}'
+               UNION ALL SELECT 'foreign', 8,
+                      '{"role":"signal_handler","receiver":"Timer"}'
+               UNION ALL SELECT 'plain', 9, '{"receiver":"Button"}') v
+         WHERE f.path = 'App/Main.qml'"#,
+    )
+    .unwrap();
+
+    let refs = find_references_scoped(
+        &conn,
+        "clicked",
+        "callers",
+        20,
+        false,
+        Some("Ui/Button.qml"),
+    )
+    .unwrap();
+
+    let mut sites: Vec<(Option<usize>, &str)> = refs
+        .iter()
+        .map(|r| (r.start_line, r.kind.as_str()))
+        .collect();
+    sites.sort();
+    assert_eq!(
+        sites,
+        vec![
+            (Some(6), "handler"),
+            (Some(7), "handler (candidate)"),
+            (Some(8), "handler (candidate)"),
+            (Some(9), "member_access"),
+        ],
+        "{refs:?}"
+    );
 }
