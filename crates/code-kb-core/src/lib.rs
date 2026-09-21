@@ -18,9 +18,10 @@ pub use edit::{
     EditError, EditResult, MatchTier, Occurrence, TextEditResult, edit_file, replace_symbol_body,
 };
 pub use formatters::{
-    format_blast_radius, format_context_slice, format_fact_categories, format_file_skeleton,
-    format_find_symbol_results, format_references, format_replace_symbol_result,
-    format_search_results, format_structural_facts, format_symbol_body,
+    format_blast_radius, format_context_slice, format_edit_file_result, format_fact_categories,
+    format_file_skeleton, format_find_symbol_results, format_references,
+    format_replace_symbol_result, format_search_results, format_structural_facts,
+    format_symbol_body,
 };
 pub use models::{
     BlastRadiusResult, ContextSlice, FileFact, ImpactedSymbol, LiteralFact, ReferenceSite,

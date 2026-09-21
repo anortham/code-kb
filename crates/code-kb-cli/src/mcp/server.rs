@@ -3,10 +3,10 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
 use code_kb_core::{
-    Connection, TelemetryFilter, TimeWindow, WatcherHandle, Workspace, WorkspaceError,
-    blast_radius_op, codebase_outline_op, create_index, ensure_fts_index_path,
+    Connection, Occurrence, TelemetryFilter, TimeWindow, WatcherHandle, Workspace, WorkspaceError,
+    blast_radius_op, codebase_outline_op, create_index, edit_file, ensure_fts_index_path,
     ensure_index_matches_extractor, file_skeleton_op, format_blast_radius, format_context_slice,
-    format_fact_categories, format_find_symbol_results, format_references,
+    format_edit_file_result, format_fact_categories, format_find_symbol_results, format_references,
     format_replace_symbol_result, format_search_results, format_structural_facts,
     format_symbol_body, format_telemetry_summary, fts_search_symbols_scoped, get_context_slice_op,
     get_symbol_body_op, get_telemetry_summary, installed_extractor_version, is_project_root,
@@ -49,6 +49,14 @@ fn spawn_index_prepare(
         }
         Ok(())
     }))
+}
+
+fn occurrence_argument(arguments: &Value) -> Result<Occurrence, String> {
+    match arguments.get("occurrence") {
+        None | Some(Value::Null) => Ok(Occurrence::default()),
+        Some(value) => serde_json::from_value(value.clone())
+            .map_err(|_| "occurrence must be one of: only, first, last, all.".to_string()),
+    }
 }
 
 fn result_limit(arguments: &Value, default: usize) -> Result<usize, CallToolResult> {
@@ -394,6 +402,33 @@ impl McpServer {
                         }
                     },
                     "required": ["symbol_name", "file_path", "new_body"]
+                }),
+            },
+            Tool {
+                name: "edit_file".to_string(),
+                description: "Replaces text in any file without reading it first. Finds old_text exactly, then ignoring indentation; refuses when it matches more than once unless occurrence is set. Validates code files through julie-extract, writes atomically, and re-indexes in one turn. Use replace_symbol_body when you hold a body hash and replace a whole function body.".to_string(),
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "file_path": {
+                            "type": "string",
+                            "description": "Path to the file to edit."
+                        },
+                        "old_text": {
+                            "type": "string",
+                            "description": "Text to find in the file."
+                        },
+                        "new_text": {
+                            "type": "string",
+                            "description": "Text that replaces old_text."
+                        },
+                        "occurrence": {
+                            "type": "string",
+                            "enum": ["only", "first", "last", "all"],
+                            "description": "Which match to replace. 'only' refuses two or more matches (default: 'only')."
+                        }
+                    },
+                    "required": ["file_path", "old_text", "new_text"]
                 }),
             },
             Tool {
@@ -1162,6 +1197,53 @@ impl McpServer {
                     Err(e) => CallToolResult::error(e.to_string()),
                 }
             }
+            "edit_file" => {
+                let file_path = match arguments
+                    .get("file_path")
+                    .or_else(|| arguments.get("file"))
+                    .or_else(|| arguments.get("path"))
+                    .and_then(|v| v.as_str())
+                {
+                    Some(p) => p,
+                    None => return CallToolResult::error("Missing required parameter: file_path"),
+                };
+                let old_text = match arguments
+                    .get("old_text")
+                    .or_else(|| arguments.get("old"))
+                    .or_else(|| arguments.get("find"))
+                    .and_then(|v| v.as_str())
+                {
+                    Some(t) => t,
+                    None => return CallToolResult::error("Missing required parameter: old_text"),
+                };
+                let new_text = match arguments
+                    .get("new_text")
+                    .or_else(|| arguments.get("new"))
+                    .or_else(|| arguments.get("replace"))
+                    .and_then(|v| v.as_str())
+                {
+                    Some(t) => t,
+                    None => return CallToolResult::error("Missing required parameter: new_text"),
+                };
+                let occurrence = match occurrence_argument(arguments) {
+                    Ok(value) => value,
+                    Err(message) => return CallToolResult::error(message),
+                };
+
+                match edit_file(
+                    &self.workspace,
+                    &self.db_path,
+                    &conn,
+                    file_path,
+                    old_text,
+                    new_text,
+                    occurrence,
+                ) {
+                    Ok(res) => CallToolResult::text(format_edit_file_result(&res))
+                        .with_logical_result_count(res.replacements),
+                    Err(e) => CallToolResult::error(e.to_string()),
+                }
+            }
             _ => CallToolResult::error(format!("Unknown tool: '{name}'")),
         };
 
@@ -1270,7 +1352,7 @@ impl McpServer {
                         "name": "code-kb",
                         "version": env!("CARGO_PKG_VERSION")
                     },
-                    "instructions": "For progressive code exploration, start with codebase_outline (~200 tokens) for directory structure. Use file_skeleton to inspect interfaces without bodies. Use lookup_symbol for exact name lookups and search_symbols for natural-language concepts. Use get_symbol_context for surgical context before editing; use get_symbol_body only when the isolated implementation is needed. Trace callers/callees with find_references. Use blast_radius to assess downstream impact and predict which tests to run before/after edits. Use replace_symbol_body for atomic, syntax-validated edits with immediate re-indexing."
+                    "instructions": "For progressive code exploration, start with codebase_outline (~200 tokens) for directory structure. Use file_skeleton to inspect interfaces without bodies. Use lookup_symbol for exact name lookups and search_symbols for natural-language concepts. Use get_symbol_context for surgical context before editing; use get_symbol_body only when the isolated implementation is needed. Trace callers/callees with find_references. Use blast_radius to assess downstream impact and predict which tests to run before/after edits. Use edit_file to replace text in any file without reading it first, and replace_symbol_body when you hold a body hash and replace a whole function body."
                 });
                 Some(JsonRpcResponse::success(id, init_result))
             }

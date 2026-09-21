@@ -3,12 +3,12 @@ use std::path::{Path, PathBuf};
 
 use code_kb_core::{
     Workspace, codebase_outline_op, ensure_fresh_file, ensure_fts_index_path, file_skeleton_op,
-    format_context_slice, format_fact_categories, format_find_symbol_results, format_references,
-    format_replace_symbol_result, format_search_results, format_structural_facts,
-    format_symbol_body, fts_search_symbols_explained, fts_search_symbols_scoped,
-    get_context_slice_op, get_symbol_body_op, list_structural_fact_categories_scoped,
-    load_file_symbols, open_read_only, queries, replace_symbol_body, scan_workspace,
-    search_symbols_scoped,
+    format_context_slice, format_edit_file_result, format_fact_categories,
+    format_find_symbol_results, format_references, format_replace_symbol_result,
+    format_search_results, format_structural_facts, format_symbol_body,
+    fts_search_symbols_explained, fts_search_symbols_scoped, get_context_slice_op,
+    get_symbol_body_op, list_structural_fact_categories_scoped, load_file_symbols, open_read_only,
+    queries, replace_symbol_body, scan_workspace, search_symbols_scoped,
 };
 
 mod logging;
@@ -77,6 +77,8 @@ pub enum Command {
     Facts(FactsArgs),
     /// Atomically replace the body of a symbol.
     Edit(EditArgs),
+    /// Replace text in one file without reading it first.
+    EditFile(EditFileArgs),
     /// Run initial or full workspace scan.
     Scan(ScanArgs),
     /// Stream server activity logs from background file watcher and reconciliation.
@@ -237,6 +239,21 @@ pub struct EditArgs {
     /// Optional optimistic lock hash of existing body.
     #[arg(long, alias = "expected-body-hash", alias = "body-hash")]
     pub expected_hash: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct EditFileArgs {
+    /// Path to the file to edit.
+    pub file: String,
+    /// Text to find in the file.
+    #[arg(long, alias = "find", alias = "old-text")]
+    pub old: String,
+    /// Text that replaces the found text.
+    #[arg(long, alias = "replace", alias = "new-text")]
+    pub new: String,
+    /// Which match to replace. "only" refuses two or more matches.
+    #[arg(long, default_value = "only", value_parser = ["only", "first", "last", "all"])]
+    pub occurrence: String,
 }
 
 #[derive(Debug, Args)]
@@ -735,6 +752,18 @@ fn main() -> anyhow::Result<()> {
                 println!("{}", serde_json::to_string_pretty(&res)?);
             } else {
                 println!("{}", format_replace_symbol_result(&res));
+            }
+        }
+        Command::EditFile(args) => {
+            let occurrence = serde_json::from_value(serde_json::Value::String(args.occurrence))?;
+            let res = code_kb_core::edit_file(
+                &workspace, &db_path, &conn, &args.file, &args.old, &args.new, occurrence,
+            )?;
+
+            if cli.json {
+                println!("{}", serde_json::to_string_pretty(&res)?);
+            } else {
+                println!("{}", format_edit_file_result(&res));
             }
         }
         Command::Serve(_)

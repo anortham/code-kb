@@ -671,8 +671,8 @@ fn test_adversarial_mcp_core_invariant_1_exhaustive_blacklist() {
 
     assert_eq!(
         tools.len(),
-        11,
-        "MCP server must advertise exactly 11 tools"
+        12,
+        "MCP server must advertise exactly 12 tools"
     );
 
     let forbidden_param_blacklist = [

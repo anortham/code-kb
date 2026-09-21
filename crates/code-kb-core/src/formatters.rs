@@ -525,6 +525,35 @@ pub fn format_replace_symbol_result(res: &crate::edit::EditResult) -> String {
     )
 }
 
+/// Formats a text edit result into one compact line.
+pub fn format_edit_file_result(res: &crate::edit::TextEditResult) -> String {
+    let tier = match res.match_tier {
+        crate::edit::MatchTier::Exact => "exact match",
+        crate::edit::MatchTier::Whitespace => "match with other indentation",
+    };
+    let syntax = if res.syntax_checked {
+        "checked"
+    } else {
+        "skipped"
+    };
+    let count = if res.replacements == 1 {
+        format!("1 replacement at line {}", res.first_line)
+    } else {
+        format!(
+            "{} replacements, first at line {}",
+            res.replacements, res.first_line
+        )
+    };
+    let mut out = format!(
+        "Edited {}: {count} ({tier}). Syntax: {syntax}.",
+        res.file_path
+    );
+    if !res.touched_symbols.is_empty() {
+        out.push_str(&format!(" Touched: {}.", res.touched_symbols.join(", ")));
+    }
+    out
+}
+
 /// Formats FTS5 conceptual search results into token-dense markdown.
 pub fn format_search_results(query: &str, results: &[SymbolSearchResult], limit: usize) -> String {
     if results.is_empty() {

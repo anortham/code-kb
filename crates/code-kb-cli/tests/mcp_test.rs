@@ -193,7 +193,7 @@ fn test_mcp_stdio_handshake_and_tools() {
     let tools = resp2["result"]["tools"]
         .as_array()
         .expect("Expected tools array");
-    assert_eq!(tools.len(), 11);
+    assert_eq!(tools.len(), 12);
 
     let tool_names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
 
@@ -207,7 +207,25 @@ fn test_mcp_stdio_handshake_and_tools() {
     assert!(tool_names.contains(&"find_structural_facts"));
     assert!(tool_names.contains(&"blast_radius"));
     assert!(tool_names.contains(&"replace_symbol_body"));
+    assert!(tool_names.contains(&"edit_file"));
     assert!(tool_names.contains(&"telemetry_summary"));
+
+    let edit_file_schema = tools
+        .iter()
+        .find(|tool| tool["name"] == "edit_file")
+        .expect("edit_file tool")["inputSchema"]
+        .clone();
+    let edit_file_props = &edit_file_schema["properties"];
+    for property in ["file_path", "old_text", "new_text", "occurrence"] {
+        assert!(
+            edit_file_props.get(property).is_some(),
+            "edit_file schema must expose {property}"
+        );
+    }
+    assert_eq!(
+        edit_file_schema["required"],
+        json!(["file_path", "old_text", "new_text"])
+    );
 
     // Verify zero workspace pollution across all tools
     for tool in tools {
@@ -2230,4 +2248,119 @@ fn test_mcp_lookup_symbol_reports_a_broken_search_index() {
                     .is_some_and(|message| message.contains("symbols_fts"))),
         "{summary_json}"
     );
+}
+
+const EDIT_FILE_EXPECTED_TEXT: &str =
+    "Edited src/lib.rs: 1 replacement at line 2 (exact match). Syntax: checked. Touched: alpha.";
+
+const EDIT_FILE_FIXTURE: &str = "pub fn alpha() {\n    println!(\"start\");\n    println!(\"shared\");\n}\n\npub fn beta() {\n    println!(\"stop\");\n    println!(\"shared\");\n}\n";
+
+fn edit_file_fixture_repo() -> tempfile::TempDir {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let root = temp_dir.path();
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"editable\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("src").join("lib.rs"), EDIT_FILE_FIXTURE).unwrap();
+    temp_dir
+}
+
+#[test]
+fn test_mcp_edit_file_replaces_text_and_refuses_an_ambiguous_match() {
+    let repo = edit_file_fixture_repo();
+    let root = repo.path();
+
+    let mut child = ChildGuard(
+        Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+            .arg("serve")
+            .arg("--root")
+            .arg(root)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("Failed to spawn code-kb serve"),
+    );
+    let mut stdin = child.stdin.take().unwrap();
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+
+    let init_req = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": { "name": "test-client", "version": "1.0" }
+        }
+    });
+    let mut line = serde_json::to_string(&init_req).unwrap();
+    line.push('\n');
+    stdin.write_all(line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+    let mut init_resp = String::new();
+    reader.read_line(&mut init_resp).unwrap();
+
+    let edit_req = json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+            "name": "edit_file",
+            "arguments": {
+                "file_path": "src/lib.rs",
+                "old_text": "println!(\"start\");",
+                "new_text": "println!(\"begin\");"
+            }
+        }
+    });
+    let mut line = serde_json::to_string(&edit_req).unwrap();
+    line.push('\n');
+    stdin.write_all(line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+    let mut edit_resp_line = String::new();
+    reader.read_line(&mut edit_resp_line).unwrap();
+    let edit_resp: Value = serde_json::from_str(&edit_resp_line).unwrap();
+    assert_ne!(edit_resp["result"]["isError"], true, "{edit_resp}");
+    assert_eq!(
+        edit_resp["result"]["content"][0]["text"].as_str().unwrap(),
+        EDIT_FILE_EXPECTED_TEXT
+    );
+    let on_disk = std::fs::read_to_string(root.join("src").join("lib.rs")).unwrap();
+    assert!(on_disk.contains("println!(\"begin\");"), "{on_disk}");
+
+    let ambiguous_req = json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+            "name": "edit_file",
+            "arguments": {
+                "file_path": "src/lib.rs",
+                "old_text": "println!(\"shared\");",
+                "new_text": "eprintln!(\"shared\");"
+            }
+        }
+    });
+    let mut line = serde_json::to_string(&ambiguous_req).unwrap();
+    line.push('\n');
+    stdin.write_all(line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+    let mut ambiguous_resp_line = String::new();
+    reader.read_line(&mut ambiguous_resp_line).unwrap();
+    let ambiguous_resp: Value = serde_json::from_str(&ambiguous_resp_line).unwrap();
+    assert_eq!(
+        ambiguous_resp["result"]["isError"], true,
+        "{ambiguous_resp}"
+    );
+    let message = ambiguous_resp["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap();
+    assert!(message.contains("lines 3, 8"), "{message}");
+
+    drop(stdin);
+    let _ = child.wait();
 }

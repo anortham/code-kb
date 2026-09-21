@@ -821,8 +821,8 @@ fn test_adversarial_core_invariant_1_mcp_tool_schemas_strictly_zero_workspace_pa
 
     assert_eq!(
         tools.len(),
-        11,
-        "Server must advertise exactly 11 MCP tools"
+        12,
+        "Server must advertise exactly 12 MCP tools"
     );
 
     // Exhaustive list of forbidden workspace-polluting parameters
