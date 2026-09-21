@@ -389,13 +389,7 @@ pub fn search_symbols_scoped(
         && let Some(sym) = get_symbol_by_name(conn, query, path_filter)?
     {
         let kind_matches = norm_kind.as_deref().is_none_or(|kind| sym.kind == kind);
-        let test_matches =
-            include_tests || (!sym.is_test && !sym.test_container && !is_test_path(&sym.path));
-        return Ok(if kind_matches && test_matches {
-            vec![sym]
-        } else {
-            Vec::new()
-        });
+        return Ok(if kind_matches { vec![sym] } else { Vec::new() });
     }
 
     let pattern = format!("%{}%", escape_like(query));
@@ -424,8 +418,10 @@ pub fn search_symbols_scoped(
     }
 
     if !include_tests {
-        sql.push_str(" AND is_test = 0 AND test_container = 0");
-        sql.push_str(&format!(" AND NOT {}", test_path_predicate("s")));
+        sql.push_str(&format!(
+            " AND (name = :query OR (is_test = 0 AND test_container = 0 AND NOT {}))",
+            test_path_predicate("s")
+        ));
     }
 
     sql.push_str(
@@ -3523,7 +3519,7 @@ mod tests {
     }
 
     #[test]
-    fn qualified_lookup_in_a_test_file_needs_include_tests() {
+    fn qualified_lookup_in_a_test_file_returns_the_named_row() {
         let conn = search_fixture(
             &[
                 "('c', 'f_c', 'src/tests/helpers.py', 'python', 'Helpers', 'class', 'class Helpers', '', 'pub', NULL,
@@ -3534,16 +3530,22 @@ mod tests {
             .join(", "),
         );
 
-        assert!(
+        assert_eq!(
             search_symbols_scoped(&conn, "Helpers.load_fixture", None, None, false, 10)
                 .unwrap()
-                .is_empty()
+                .len(),
+            1
         );
         assert_eq!(
             search_symbols_scoped(&conn, "Helpers.load_fixture", None, None, true, 10)
                 .unwrap()
                 .len(),
             1
+        );
+        assert!(
+            search_symbols_scoped(&conn, "load_fix", None, None, false, 10)
+                .unwrap()
+                .is_empty()
         );
     }
 

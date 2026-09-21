@@ -1,7 +1,7 @@
 use code_kb_core::{
     Workspace, find_callee_signatures, find_julie_extract_binary, find_references_scoped,
     find_structural_facts_scoped, get_context_slice_op, get_symbol_by_name, open_read_only,
-    open_read_write, safe_tempdir, scan_workspace,
+    open_read_write, safe_tempdir, scan_workspace, search_symbols_scoped,
 };
 use std::fs;
 
@@ -478,6 +478,32 @@ fn setup_test_db(conn: &rusqlite::Connection) {
         );",
     )
     .unwrap();
+}
+
+#[test]
+fn exact_name_lookup_returns_a_test_row_that_substring_lookup_hides() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+
+    conn.execute_batch(
+        "INSERT INTO symbols VALUES
+            ('s1', 'f1', 'tests/alpha_test.rs', 'rust', 'test_alpha', 'function', NULL, NULL, NULL, NULL, 1, 0, 1, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1, 0),
+            ('s2', 'f2', 'src/alpha.rs', 'rust', 'alpha', 'function', NULL, NULL, NULL, NULL, 1, 0, 1, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0);",
+    )
+    .unwrap();
+
+    let paths = |query: &str| {
+        search_symbols_scoped(&conn, query, None, None, false, 10)
+            .unwrap()
+            .into_iter()
+            .map(|s| s.path)
+            .collect::<Vec<_>>()
+    };
+
+    assert_eq!(paths("test_alpha"), vec!["tests/alpha_test.rs"]);
+    assert_eq!(paths("alpha"), vec!["src/alpha.rs"]);
+    assert_eq!(paths("alph"), vec!["src/alpha.rs"]);
 }
 
 #[test]
