@@ -2961,6 +2961,18 @@ const MODEL_FAMILIES: &[&str] = &[
     "json.schema.v1",
 ];
 
+const SIGNAL_FAMILIES: &[&str] = &[".signal_declaration."];
+
+const IMPORT_FAMILIES: &[&str] = &[".import_statement.", ".import."];
+
+const BINDING_FAMILIES: &[&str] = &[".binding."];
+
+const COMPONENT_FAMILIES: &[&str] = &[".object_instantiation.", ".object_type."];
+
+const MODULE_FAMILIES: &[&str] = &[".module."];
+
+const PRAGMA_FAMILIES: &[&str] = &[".pragma."];
+
 /// Category aliases mapped to the pattern-id families they name.
 ///
 /// A rule that starts with a dot matches any pattern id that contains it, a rule that ends with a
@@ -2974,6 +2986,17 @@ pub const CATEGORY_ALIASES: &[(&str, &[&str])] = &[
     ("config", CONFIG_FAMILIES),
     ("model", MODEL_FAMILIES),
     ("models", MODEL_FAMILIES),
+    ("signal", SIGNAL_FAMILIES),
+    ("signals", SIGNAL_FAMILIES),
+    ("import", IMPORT_FAMILIES),
+    ("imports", IMPORT_FAMILIES),
+    ("binding", BINDING_FAMILIES),
+    ("bindings", BINDING_FAMILIES),
+    ("component", COMPONENT_FAMILIES),
+    ("components", COMPONENT_FAMILIES),
+    ("module", MODULE_FAMILIES),
+    ("modules", MODULE_FAMILIES),
+    ("pragma", PRAGMA_FAMILIES),
 ];
 
 fn category_families(category: &str) -> Option<&'static [&'static str]> {
