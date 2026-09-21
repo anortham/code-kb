@@ -1126,9 +1126,10 @@ struct QueryWord {
     stem: String,
 }
 
-/// Per-word hits of one candidate: which query words its name, signature, and capped doc cover.
+/// Per-word hits of one candidate: which query words its name, signature, and capped doc
+/// cover. The name carries a match strength per word, the others a plain hit.
 struct Hits {
-    name: Vec<bool>,
+    name: Vec<u8>,
     signature: Vec<bool>,
     doc: Vec<bool>,
 }
@@ -1176,7 +1177,10 @@ fn token_run_equals(tokens: &[String], word: &str) -> bool {
     })
 }
 
-fn name_hits(name: &str, words: &[QueryWord], stemmer: &Stemmer) -> Vec<bool> {
+/// Match strength of a name per query word: `3` when a run of its tokens equals the word,
+/// `2` when a token stem equals the word stem, `1` when the collapsed name contains the word,
+/// `0` when nothing matches.
+fn name_hits(name: &str, words: &[QueryWord], stemmer: &Stemmer) -> Vec<u8> {
     let tokens: Vec<String> = split_identifier(name)
         .into_iter()
         .map(str::to_lowercase)
@@ -1189,9 +1193,15 @@ fn name_hits(name: &str, words: &[QueryWord], stemmer: &Stemmer) -> Vec<bool> {
     words
         .iter()
         .map(|w| {
-            token_run_equals(&tokens, &w.word)
-                || (w.word.chars().count() >= 3 && collapsed.contains(&w.word))
-                || stems.contains(&w.stem)
+            if token_run_equals(&tokens, &w.word) {
+                3
+            } else if stems.contains(&w.stem) {
+                2
+            } else if w.word.chars().count() >= 3 && collapsed.contains(&w.word) {
+                1
+            } else {
+                0
+            }
         })
         .collect()
 }
@@ -1248,22 +1258,22 @@ fn word_weights(sample: &[&Hits], word_count: usize) -> Vec<f64> {
         .map(|i| {
             let df = sample
                 .iter()
-                .filter(|h| h.name[i] || h.signature[i] || h.doc[i])
+                .filter(|h| h.name[i] > 0 || h.signature[i] || h.doc[i])
                 .count() as f64;
             (1.0 + n / (df + 1.0)).ln()
         })
         .collect()
 }
 
-fn weighted_coverage(flags: &[bool], weights: &[f64]) -> f64 {
+fn weighted_coverage(flags: impl IntoIterator<Item = bool>, weights: &[f64]) -> f64 {
     let total: f64 = weights.iter().fold(0.0, |acc, w| acc + w);
     if total == 0.0 {
         return 0.0;
     }
     let covered = flags
-        .iter()
+        .into_iter()
         .zip(weights)
-        .filter(|(hit, _)| **hit)
+        .filter(|(hit, _)| *hit)
         .fold(0.0, |acc, (_, w)| acc + w);
     covered / total
 }
@@ -1402,18 +1412,19 @@ fn rerank(
         .zip(hits)
         .map(|(candidate, hits)| {
             let symbol = &candidate.result.symbol;
-            let coverage = weighted_coverage(&hits.name, &weights);
+            let coverage = weighted_coverage(hits.name.iter().map(|s| *s > 0), &weights);
+            let name_strength: u32 = hits.name.iter().map(|s| u32::from(*s)).sum();
             let tier = if !collapsed_query.is_empty() && collapse(&symbol.name) == collapsed_query {
                 "whole"
-            } else if !hits.name.is_empty() && hits.name.iter().all(|hit| *hit) {
+            } else if !hits.name.is_empty() && hits.name.iter().all(|s| *s > 0) {
                 "all"
-            } else if hits.name.iter().any(|hit| *hit) {
+            } else if hits.name.iter().any(|s| *s > 0) {
                 "partial"
             } else {
                 "none"
             };
-            let signature_coverage = weighted_coverage(&hits.signature, &weights);
-            let doc_coverage = weighted_coverage(&hits.doc, &weights);
+            let signature_coverage = weighted_coverage(hits.signature.iter().copied(), &weights);
+            let doc_coverage = weighted_coverage(hits.doc.iter().copied(), &weights);
             let explain = SearchExplain {
                 bm25: candidate.bm25,
                 branches: [
@@ -1427,6 +1438,7 @@ fn rerank(
                 .collect(),
                 name_tier: tier.to_string(),
                 name_coverage: coverage,
+                name_strength,
                 signature_coverage,
                 doc_coverage,
                 kind_prior: kind_prior(&symbol.kind),
@@ -1463,6 +1475,7 @@ fn rerank(
     scored.sort_by(|(a, ea), (b, eb)| {
         b.score
             .total_cmp(&a.score)
+            .then_with(|| eb.name_strength.cmp(&ea.name_strength))
             .then_with(|| ea.bm25.is_none().cmp(&eb.bm25.is_none()))
             .then_with(|| ea.bm25.unwrap_or(0.0).total_cmp(&eb.bm25.unwrap_or(0.0)))
             .then_with(|| a.symbol.name.len().cmp(&b.symbol.name.len()))
@@ -3961,19 +3974,33 @@ mod tests {
 
     #[test]
     fn name_coverage_accepts_token_runs_substrings_and_stems() {
-        let coverage =
-            |name: &str, query: &str| ranked(vec![function(name)], query)[0].1.name_coverage;
+        let strengths = |name: &str, query: &str| {
+            let stemmer = Stemmer::create(Algorithm::English);
+            let words: Vec<QueryWord> = rerank_words(query)
+                .into_iter()
+                .map(|word| QueryWord {
+                    stem: stemmer.stem(&word).into_owned(),
+                    word,
+                })
+                .collect();
+            name_hits(name, &words, &stemmer)
+        };
 
-        assert_eq!(coverage("parseSha256Sidecar", "sha 256"), 1.0);
-        assert_eq!(coverage("parseSha256Sidecar", "sha256"), 1.0);
-        assert_eq!(coverage("parseSha256Sidecar", "esha"), 1.0);
-        assert_eq!(coverage("validate_syntax", "validation"), 1.0);
-        assert_eq!(coverage("is_ok", "ok"), 1.0);
-        assert_eq!(coverage("isReady", "is"), 1.0);
-        assert_eq!(coverage("größe_berechnen", "größe"), 1.0);
-        let half = coverage("parseSha256Sidecar", "sidecar checksum");
-        assert!(half > 0.0 && half < 1.0);
-        assert_eq!(coverage("parseSha256Sidecar", "checksum digest"), 0.0);
+        assert_eq!(strengths("parseSha256Sidecar", "sha 256"), vec![3, 3]);
+        assert_eq!(strengths("parseSha256Sidecar", "sha256"), vec![3, 3]);
+        assert_eq!(strengths("parseSha256Sidecar", "esha"), vec![1]);
+        assert_eq!(strengths("validate_syntax", "validation"), vec![2]);
+        assert_eq!(strengths("is_ok", "ok"), vec![3]);
+        assert_eq!(strengths("isReady", "is"), vec![3]);
+        assert_eq!(strengths("größe_berechnen", "größe"), vec![3]);
+        assert_eq!(
+            strengths("parseSha256Sidecar", "sidecar checksum"),
+            vec![3, 0]
+        );
+        assert_eq!(
+            strengths("parseSha256Sidecar", "checksum digest"),
+            vec![0, 0]
+        );
     }
 
     #[test]
@@ -4270,6 +4297,39 @@ mod tests {
             "gateway",
         );
         assert_eq!(by_length, vec!["payment_gateway", "payment_gateway_client"]);
+    }
+
+    #[test]
+    fn a_whole_token_name_outranks_a_substring_name_with_better_bm25() {
+        let mut token = function("csr");
+        token.bm25 = Some(-1.0);
+        let mut substring = function("action_csrf_token");
+        substring.bm25 = Some(-5.0);
+
+        let rows = ranked(vec![substring, token], "csr adjacency");
+
+        assert_eq!(rows[0].0.score, rows[1].0.score);
+        assert_eq!(rows[0].0.symbol.name, "csr");
+    }
+
+    #[test]
+    fn an_acronym_token_outranks_a_name_that_only_contains_it() {
+        let mut token = function("http_client");
+        token.bm25 = Some(-1.0);
+        let mut substring = function("shttpd_config");
+        substring.bm25 = Some(-5.0);
+
+        let rows = ranked(vec![substring, token], "http");
+
+        assert_eq!(rows[0].0.score, rows[1].0.score);
+        assert_eq!(rows[0].0.symbol.name, "http_client");
+    }
+
+    #[test]
+    fn explain_reports_the_sum_of_the_name_strengths() {
+        let rows = ranked(vec![function("action_csrf_token")], "csr token");
+
+        assert_eq!(rows[0].1.name_strength, 4);
     }
 
     #[test]

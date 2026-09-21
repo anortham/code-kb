@@ -584,8 +584,9 @@ pub fn format_search_results(query: &str, results: &[SymbolSearchResult], limit:
 
 fn explain_line(score: f64, e: &SearchExplain) -> String {
     let mut line = format!(
-        "score {score:.1} = name {} {:.1} + sig {:.2}*{W_SIGNATURE} + doc {:.2}*{W_DOC} + kind {:.1} + path {:.1}",
+        "score {score:.1} = name {}({}) {:.1} + sig {:.2}*{W_SIGNATURE} + doc {:.2}*{W_DOC} + kind {:.1} + path {:.1}",
         e.name_tier,
+        e.name_strength,
         name_tier_score(&e.name_tier, e.name_coverage),
         e.signature_coverage,
         e.doc_coverage,
@@ -893,6 +894,7 @@ mod tests {
                 branches: vec!["word".into(), "name".into()],
                 name_tier: "all".into(),
                 name_coverage: 1.0,
+                name_strength: 6,
                 signature_coverage: 0.25,
                 doc_coverage: 0.0,
                 kind_prior: 4.0,
@@ -910,7 +912,7 @@ mod tests {
             "Found 1 symbols matching concept \"sha256\":\nrerank: 37 candidates in 180 µs; words sha 2.60, 256 0.97\n\n- "
         ));
         assert!(formatted.contains(&format!(
-            "  explain: score 71.6 = name all 60.0 + sig 0.25*{W_SIGNATURE} + doc 0.00*{W_DOC} + kind 4.0 + path -10.0 + test 5.0 [word,name] bm25 -3.21\n"
+            "  explain: score 71.6 = name all(6) 60.0 + sig 0.25*{W_SIGNATURE} + doc 0.00*{W_DOC} + kind 4.0 + path -10.0 + test 5.0 [word,name] bm25 -3.21\n"
         )));
 
         result.explain = None;
