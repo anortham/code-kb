@@ -97,3 +97,85 @@ remains the recorded first run.
 - Lead: full branch gate as in plan 021, plus `runner.py` over all three
   sets for v1.2.0 and each scorer variant.
 - Security scope: none declared.
+
+## Results (2026-09-21)
+
+### Task 7: label review
+
+61 misses ruled with evidence: keep 41, add 20, replace 0, drop 0. Every
+addition is a public entry point, an async twin, a sibling of the same
+operation, or a set-internal consistency fix; nothing was removed. Three of
+the six "never admitted" cases were label gaps. One regression-set case
+(`concept-discover`) gained a second legitimate answer the same day. The
+sets before the review are kept beside the live ones. Every number below
+uses the reviewed labels, for v1.2.0 as well.
+
+### Tasks 8 and 9: the scorer behind a switch, then the grid
+
+Text credit is the credit a signature or doc hit earns per term (name whole
+token 3, name stem 2, name substring 1). Numbers are file@1 / file@3 /
+symbol@1 / symbol@3.
+
+| scorer | regression (26) | development (89) | development-2 (60) |
+|---|---|---|---|
+| v1.2.0 | 25 / 26 / 22 / 26 | 72 / 87 / 68 / 85 | 29 / 43 / 27 / 39 |
+| plan 021 default (test-path rule, tie-break) | 25 / 26 / 22 / 25 | 73 / 88 / 68 / 85 | 31 / 43 / 30 / 38 |
+| distinct, uniform, credit 2 | 26 / 26 / 18 / 23 | 76 / 85 / 68 / 82 | 35 / 49 / 30 / 41 |
+| distinct, sample rarity, credit 2 | 24 / 26 / 20 / 24 | 74 / 85 / 68 / 82 | 28 / 45 / 23 / 37 |
+| distinct, IDF, credit 2 | 25 / 26 / 20 / 26 | 76 / 86 / 68 / 83 | 35 / 48 / 29 / 43 |
+| distinct, IDF, credit 1.5 | 26 / 26 / 20 / 26 | 77 / 86 / 68 / 84 | 38 / 51 / 32 / 47 |
+| **distinct, IDF, credit 1** | **26 / 26 / 22 / 26** | **78 / 85 / 70 / 83** | **40 / 53 / 34 / 48** |
+| distinct, IDF, credit 0.75 | 26 / 26 / 22 / 26 | 77 / 85 / 70 / 82 | 38 / 54 / 33 / 49 |
+| distinct, IDF, credit 0.5 | 26 / 26 / 22 / 26 | 77 / 85 / 69 / 81 | 38 / 53 / 32 / 48 |
+| distinct, uniform, credit 1 | 26 / 26 / 21 / 24 | 74 / 85 / 69 / 81 | 39 / 50 / 35 / 46 |
+
+- A nameless cap of 22 changed nothing at credit 1.5 or 1 and cost one
+  development symbol@1 at credit 2, so it is not built.
+- IDF weights come from an `fts5vocab` table over `symbols_fts`, created on
+  the write path at the next open (no rebuild); an index without it falls
+  back to a `MATCH` count per term. The lookups cost about 100 µs per query.
+- Credit 1 is the peak on symbol@1; the tension it leaves is a README-only
+  answer (`OutputStallTimeout`, whose docstring holds the query) losing to a
+  name that holds two common words. Lower credit widens that loss; higher
+  credit lets doc-heavy constants outrank the answer.
+
+### Gate against v1.2.0 (reviewed labels)
+
+- Regression: file@1 26 against 25, symbol@1 22 against 22, symbol@3 26
+  against 26. No case lower after the `concept-discover` ruling.
+- Development: file@1 78 against 72, symbol@1 70 against 68; symbol@3 83
+  against 85 and file@3 85 against 87 are the two top-3 columns that moved
+  down, both by two cases.
+- Development-2: file@1 40 against 29, symbol@1 34 against 27, symbol@3 48
+  against 39.
+
+### Task 10: promotion (commit bb2e4fd)
+
+- The promoted scorer equals the winning grid row on every set. The one
+  moved rank is `concept-discover` (symbol rank 3 to 1), which the
+  regression-set label ruling explains.
+- Warm `code-kb search` p50 on the code-kb checkout: 18.8 ms (v1.2.0
+  17.9 ms). Live `serve` RSS after 20 searches: 28.2 MiB (v1.2.0 29.7 MiB).
+- Branch gate on bb2e4fd: fmt, clippy with warnings denied, the workspace
+  tests, the 16 plugin tests, and the AGENTS.md / CLAUDE.md byte check all
+  pass.
+
+### Sealed acceptance-2 (per-repository summaries only)
+
+Three summary runs exist; no per-case result was read. Numbers are
+file@1 / file@3 / symbol@1 / symbol@3, then the count never admitted at
+`--limit 200`.
+
+| build | code-kb | hermes-agent | julie | miller | all |
+|---|---|---|---|---|---|
+| v1.2.0 (`bin/code-kb-1.2.0`) | 6 / 8 / 5 / 7 | 3 / 7 / 3 / 6 | 7 / 7 / 5 / 6 | 3 / 5 / 2 / 3 | 19 / 27 / 15 / 22, 10 |
+| plan 021 build (run 1) | 6 / 8 / 5 / 7 | 4 / 7 / 4 / 6 | 7 / 7 / 5 / 7 | 3 / 6 / 2 / 4 | 20 / 28 / 16 / 24, 8 |
+| promoted bb2e4fd (run 2) | 5 / 8 / 4 / 6 | 3 / 7 / 1 / 6 | 7 / 8 / 6 / 8 | 3 / 4 / 1 / 2 | 18 / 27 / 12 / 22, 8 |
+
+The held-out README set does not show the gain the tuning sets show. The
+promoted build is one file@1 and three symbol@1 below v1.2.0 on it, and a
+quarter of its cases are never admitted on either build. The owner's gate
+("better than v1.2.0") is therefore not met on held-out README wording, and
+v1.3.0 does not ship on this build. The plan 022 gate (regression,
+development, development-2) is met; the next plan records why the two
+disagree and what is built next.
