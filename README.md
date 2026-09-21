@@ -321,6 +321,73 @@ binaries from your `PATH`.
 
 ---
 
+## Qt and QML
+
+For a Qt developer, `code-kb` answers the everyday questions about a QML code base.
+`file_skeleton` prints the component as its object tree: declared properties, signals,
+functions, inline components, and every nested object under its owner.
+`find_references` crosses component files: it lists the components that extend a base
+type as `extends` rows, the plain and qualified instantiations (`Kirigami.Page` as well
+as `Page`), the files that read a singleton, and the signal handlers, each labelled
+`handler` when the receiver names the owner and `handler (candidate)` when it does not.
+`qmldir` module files and `.qmltypes` type descriptors are indexed. Qt JavaScript files
+parse, including the `.pragma library` and `.import` directives, so `edit_file` works on
+them. KDE test files under `autotests/` and files named `tst_*.qml` are hidden from
+search by default; `--include-tests` shows them. This needs julie-extract 3.2.0.
+
+Expanded QML and Quickshell support, validated on pinned corpus revisions; Qt C++ headers
+are indexed with known macro gaps; static reference results have documented limits; `.ui`
+and CMake files are not indexed.
+
+### Validated on
+
+| Corpus | Pinned commit | QML files |
+| :--- | :--- | ---: |
+| Omarchy shell (Quickshell) | `49306774` | 106 |
+| KDE Kirigami | `ca7d636` | 225 |
+| KDE plasma-workspace | `a45871a` | 222 |
+| Quickshell examples | `c6d1236` | 14 |
+
+Measured with the branch binaries on Omarchy and Kirigami:
+
+```bash
+# Omarchy
+code-kb skeleton shell/Ui/Button.qml
+# 71 lines for a 209-line file; the object tree nests, so ToolTip, Row, MouseArea,
+# and HoverHandler hold their own children.
+
+code-kb refs BarWidget --file shell/Ui/BarWidget.qml --limit 200
+# 16 rows: 12 `extends` rows, one per component that extends BarWidget.
+# The other 4 rows are signal handlers, grouped one row per file.
+
+code-kb refs Color --file shell/Commons/Color.qml --limit 200
+# 53 rows, one per file that reads the Color singleton.
+
+code-kb refs clicked --file shell/Ui/Button.qml
+# 20 rows: 4 emit sites, 1 `handler` row, and 15 `handler (candidate)` rows.
+
+code-kb lookup SpeedDial
+# 1 row: class SpeedDial [shell/Ui/SpeedTestOverlay.qml:206-411],
+# signature `component SpeedDial: Item`, an inline component.
+
+# Kirigami
+code-kb refs Page --file src/controls/Page.qml --limit 200
+# 60 rows, of which 3 are `extends` rows.
+```
+
+### Known limits
+
+- Qt C++ headers index, but the Qt macros still break parts of them: `Q_PROPERTY` yields
+  no property symbols, and `Q_SIGNALS:` sections mis-parse. A later extractor release
+  fixes this.
+- `.ui` designer files and CMake files are not indexed.
+- A QML module imported through an alias resolves to a workspace file only when the alias
+  is not a Qt module. `QtQuick.*` and `QtQml.*` aliases never name a workspace symbol.
+- A reference list caps at 200 rows. For a heavily used singleton, `refs` groups the
+  member accesses per file, one row per file with a count.
+
+---
+
 ## MCP Tool Catalog
 
 | Tool | Purpose | Key Parameters | Aliases |
