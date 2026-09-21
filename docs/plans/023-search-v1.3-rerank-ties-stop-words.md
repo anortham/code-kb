@@ -161,3 +161,43 @@ signature, or docstring of their answers, which is the lexical ceiling
 this engine has without embeddings (a declared non-goal). The gate of
 plan 022 is met on every set, including the held-out one; the owner
 decides on the release.
+
+## Codex review of the branch (2026-09-21, before the merge)
+
+`codex exec` reviewed `main..HEAD` (read-only, redacted bundle) and returned two
+findings, both confirmed on the hermes-agent index (990,975 symbols):
+
+1. **The vocabulary lookup used a different stemmer than the index.** `idf_weights`
+   looked the term up in the `fts5vocab` table by its Snowball stem and its raw form,
+   but `symbols_fts` stems with `porter unicode61`. `news` is indexed as `new`, so
+   the lookup found no row and the word got the unseen-term weight (13.8 instead of
+   5.2 on that index).
+2. **The vocabulary count walks every posting of a common term.** `self` (49,308
+   rows) cost 4.2 ms per lookup, `name` 1.9 ms, so a prose query with several
+   common words spent tens of milliseconds in the weight stage on a large index.
+
+Fix (one commit): the document frequency is a capped FTS5 `MATCH` count per term
+(`SELECT count(*) FROM (SELECT rowid FROM symbols_fts WHERE symbols_fts MATCH
+'"word"' LIMIT 20000)`), which stems the query word with the index's own tokenizer
+and bounds the walk at `DF_CAP` rows (under 1 ms per term on the same index). The
+`symbols_fts_vocab` table is no longer created; an index that has one keeps it
+unused. A unit test pins the stemmer agreement (`news` counts the rows indexed as
+`new`). The measurement after the fix is recorded below.
+
+### After the fix (runner, reviewed labels, same machine)
+
+| set | before the fix (cab888a) | after the fix |
+|---|---|---|
+| regression (26) | 26 / 26 / 23 / 26 | 26 / 26 / 23 / 25 |
+| development (89) | 82 / 84 / 76 / 83 | 82 / 84 / 76 / 83 |
+| development-2 (60) | 40 / 52 / 35 / 47 | 40 / 53 / 35 / 48 |
+| development-3 (40) | 21 / 29 / 17 / 25 | 22 / 30 / 18 / 26 |
+| acceptance-3 (40, sealed, second run) | 14 / 19 / 10 / 12, 19 never admitted | 14 / 19 / 10 / 12, 19 never admitted |
+
+- Ruling, regression case `concept-fts` (symbol rank 3 to 4; v1.2.0 also 3):
+  four functions tie at the same score with the same evidence (`fts` and
+  `index` as whole name tokens, no row holds `porter` or `stemming` in any
+  field), and BM25 orders the tie. With the corrected weights `create` and
+  `fts` weigh the same, so `create_index` joins the tie above the answer.
+  Rank 3 or 4 inside a four-way tie is not a scorer defect; accepted.
+- Warm `code-kb search` p50: 19 ms. Branch gate on the fixed tree: green.

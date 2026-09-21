@@ -136,17 +136,6 @@ fn fts_content_is_missing(conn: &Connection, table: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// The `fts5vocab` view over `symbols_fts`, read for the global document frequency of a term.
-pub(crate) const VOCAB_TABLE: &str = "symbols_fts_vocab";
-
-/// Creates the vocabulary view when it is absent. Best effort: it stores nothing, the index
-/// works without it, and a writer holding the schema lock must not fail the migration.
-fn ensure_vocab_table(conn: &Connection) {
-    let _ = conn.execute_batch(&format!(
-        "CREATE VIRTUAL TABLE IF NOT EXISTS {VOCAB_TABLE} USING fts5vocab('symbols_fts', 'row');"
-    ));
-}
-
 fn fts_index_is_ready(conn: &Connection) -> bool {
     stored_fts_rule(conn).as_deref() == Some(FTS_RULE)
         && !fts_content_is_missing(conn, "symbols_fts")
@@ -177,7 +166,6 @@ pub fn ensure_fts_index(conn: &Connection) -> Result<(), rusqlite::Error> {
     }
 
     if fts_index_is_ready(conn) {
-        ensure_vocab_table(conn);
         return Ok(());
     }
 
@@ -281,7 +269,6 @@ pub fn ensure_fts_index(conn: &Connection) -> Result<(), rusqlite::Error> {
         [FTS_RULE],
     )?;
     tx.commit()?;
-    ensure_vocab_table(conn);
 
     Ok(())
 }
@@ -728,41 +715,6 @@ mod tests {
             .unwrap();
         assert!(trigram_names(&conn, "digest").is_empty());
         assert_eq!(docsize_rows(&conn, "symbol_names_tri"), 1);
-    }
-
-    #[test]
-    fn a_read_only_connection_queries_the_vocab_table_after_the_migration() {
-        let (dir, conn) = symbols_db("vocab.db");
-
-        ensure_fts_index(&conn).unwrap();
-
-        drop(conn);
-        let reader = open_read_only(&dir.path().join("vocab.db")).unwrap();
-        let doc: i64 = reader
-            .query_row(
-                &format!("SELECT doc FROM {VOCAB_TABLE} WHERE term = 'sidecar'"),
-                [],
-                |r| r.get(0),
-            )
-            .unwrap();
-        assert_eq!(doc, 1);
-    }
-
-    #[test]
-    fn a_ready_index_gains_the_vocab_table_without_a_rebuild() {
-        let (_dir, conn) = symbols_db("vocab-upgrade.db");
-        ensure_fts_index(&conn).unwrap();
-        conn.execute_batch(&format!(
-            "DROP TABLE {VOCAB_TABLE};
-             DROP TRIGGER symbols_ai;
-             INSERT INTO symbols VALUES ('3', 'src/g.ts', 'ghostSymbol', 'function', NULL, '', '');"
-        ))
-        .unwrap();
-
-        ensure_fts_index(&conn).unwrap();
-
-        assert!(crate::queries::has_table(&conn, VOCAB_TABLE));
-        assert!(word_names(&conn, "ghostSymbol").is_empty());
     }
 
     #[test]

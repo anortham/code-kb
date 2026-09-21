@@ -3,7 +3,7 @@ use rust_stemmers::{Algorithm, Stemmer};
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 
-use crate::db::{VOCAB_TABLE, local_variable_predicate};
+use crate::db::local_variable_predicate;
 use crate::models::{
     BlastRadiusResult, FileFact, ImpactedSymbol, LiteralFact, ReferenceSite, SearchExplain,
     StructuralFact, Symbol, SymbolSearchResult, TestTarget, TypeFact,
@@ -1143,8 +1143,14 @@ struct Hits {
     doc: Vec<bool>,
 }
 
+/// Symbols a query word may be counted in before it is called common: the count walks the
+/// word's postings, so the cap bounds the cost of a word held by most of a million symbols.
+const DF_CAP: usize = 20_000;
+
 /// Global rarity of each lowercase rerank term: `ln(1 + N / (df + 1))`, where `df` is the
-/// number of indexed symbols holding the term and `N` an upper bound on the index size.
+/// number of indexed symbols holding the term (capped at `DF_CAP`) and `N` an upper bound on
+/// the index size. The count is an FTS5 `MATCH`, so the term is stemmed by the index's own
+/// tokenizer and `news` finds the rows indexed as `new`.
 fn idf_weights(conn: &Connection, words: &[String]) -> Vec<f64> {
     let n = conn
         .query_row("SELECT max(rowid) FROM symbols", [], |r| {
@@ -1153,27 +1159,19 @@ fn idf_weights(conn: &Connection, words: &[String]) -> Vec<f64> {
         .ok()
         .flatten()
         .unwrap_or(0) as f64;
-    let stemmer = Stemmer::create(Algorithm::English);
-    let mut vocab = conn
-        .prepare(&format!("SELECT doc FROM {VOCAB_TABLE} WHERE term = ?1"))
+    let mut count = conn
+        .prepare(&format!(
+            "SELECT count(*) FROM (SELECT rowid FROM symbols_fts WHERE symbols_fts MATCH ?1 LIMIT {DF_CAP})"
+        ))
         .ok();
-    let mut matched = if vocab.is_none() {
-        conn.prepare("SELECT count(*) FROM symbols_fts WHERE symbols_fts MATCH ?1")
-            .ok()
-    } else {
-        None
-    };
     words
         .iter()
         .map(|word| {
-            let df = match vocab.as_mut() {
-                Some(stmt) => document_frequency(stmt, &stemmer.stem(word))
-                    .or_else(|| document_frequency(stmt, word)),
-                None => matched
-                    .as_mut()
-                    .and_then(|stmt| document_frequency(stmt, &format!("\"{word}\""))),
-            };
-            (1.0 + n / (df.unwrap_or(0) as f64 + 1.0)).ln()
+            let df = count
+                .as_mut()
+                .and_then(|stmt| document_frequency(stmt, &format!("\"{word}\"")))
+                .unwrap_or(0);
+            (1.0 + n / (df as f64 + 1.0)).ln()
         })
         .collect()
 }
@@ -4179,11 +4177,22 @@ mod tests {
 
         let weights = idf_weights(&conn, &terms);
         assert!(weights[0] > weights[1]);
+    }
 
-        conn.execute_batch(&format!("DROP TABLE {VOCAB_TABLE};"))
-            .unwrap();
-        let without_vocab = idf_weights(&conn, &terms);
-        assert!(without_vocab[0] > without_vocab[1]);
+    #[test]
+    fn idf_weights_count_a_term_the_way_the_index_tokenizer_stems_it() {
+        let conn = search_fixture(&code_row(
+            "n",
+            "src/news.rs",
+            "rust",
+            "fetch_news",
+            "fetch the news feed",
+        ));
+        let terms = vec!["news".to_string(), "unseen".to_string()];
+
+        let weights = idf_weights(&conn, &terms);
+
+        assert!(weights[0] < weights[1]);
     }
 
     #[test]
