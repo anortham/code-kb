@@ -480,17 +480,21 @@ fn nearest_lines(haystack: &str, probe: &str) -> String {
 fn innermost_symbol_names(symbols: &[Symbol], ranges: &[(usize, usize)]) -> Vec<String> {
     let mut names: Vec<String> = Vec::new();
     for (first, last) in ranges {
-        let mut best: Option<&Symbol> = None;
-        for symbol in symbols {
-            if symbol.start_line <= *first
-                && symbol.end_line >= *last
-                && best.is_none_or(|other| {
-                    symbol.end_line - symbol.start_line < other.end_line - other.start_line
-                })
-            {
-                best = Some(symbol);
-            }
-        }
+        let enclosing = symbols
+            .iter()
+            .filter(|symbol| symbol.start_line <= *first && symbol.end_line >= *last);
+        let definitions: Vec<&Symbol> = enclosing
+            .clone()
+            .filter(|symbol| is_definition(symbol))
+            .collect();
+        let candidates = if definitions.is_empty() {
+            enclosing.collect()
+        } else {
+            definitions
+        };
+        let best = candidates
+            .into_iter()
+            .min_by_key(|symbol| symbol.end_line - symbol.start_line);
         if let Some(symbol) = best
             && !names.contains(&symbol.name)
         {
@@ -498,6 +502,10 @@ fn innermost_symbol_names(symbols: &[Symbol], ranges: &[(usize, usize)]) -> Vec<
         }
     }
     names
+}
+
+fn is_definition(symbol: &Symbol) -> bool {
+    queries::DEFINITION_KINDS.contains(&queries::normalize_kind(&symbol.kind).as_str())
 }
 
 /// Atomically replaces `old_text` with `new_text` in one file.

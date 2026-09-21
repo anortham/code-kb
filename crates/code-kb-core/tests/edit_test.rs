@@ -921,3 +921,29 @@ fn test_edit_file_reports_the_nearest_lines_when_nothing_matches() {
     assert!(message.contains("let sum = a + b;"), "{message}");
     assert!(message.contains("2"), "{message}");
 }
+
+#[test]
+fn test_edit_file_touched_symbols_prefer_the_enclosing_definition_over_a_local() {
+    let dir = safe_tempdir();
+    let (ws, db_path) = scan_into(
+        dir.path(),
+        &[(
+            "src/run.rs",
+            "pub fn run() -> i32 {\n    let total = 1 + 1;\n    total\n}\n",
+        )],
+    );
+    let conn = open_read_only(&db_path).unwrap();
+
+    let res = edit_file(
+        &ws,
+        &db_path,
+        &conn,
+        "src/run.rs",
+        "1 + 1",
+        "2 + 2",
+        Occurrence::Only,
+    )
+    .expect("edit_file must succeed");
+
+    assert_eq!(res.touched_symbols, vec!["run".to_string()]);
+}

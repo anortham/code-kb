@@ -1140,7 +1140,8 @@ const MAX_TERM_CREDIT: f64 = 3.0;
 const TEXT_CREDIT: f64 = 1.0;
 const TEXT_HEAD_BYTES: usize = 400;
 
-const DEFINITION_KINDS: &[&str] = &[
+/// Symbol kinds that define a body: the kinds a touched-symbol or ranking rule prefers over locals.
+pub const DEFINITION_KINDS: &[&str] = &[
     "function",
     "method",
     "class",
