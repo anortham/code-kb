@@ -59,7 +59,8 @@ acceptance misses attributed to test files rank exactly such rows first
 `tests/tools/test_web_tools_config.py`). `candidate_filters` in
 `crates/code-kb-core/src/queries.rs` trusts the two flags only; `code-kb`
 already owns a path rule, `is_test_path` in the same file, used today only
-by `find_related_tests`. This is a code-kb fix, not an extractor fix.
+by `compute_blast_radius_scoped` (likely tests). This is a code-kb fix, not
+an extractor fix.
 
 **Tie mechanics.** `name_hits` in `queries.rs` returns one boolean per query
 word for token-run equality, substring containment (three or more
@@ -105,17 +106,24 @@ name credit as the function `csr`, and BM25 breaks the tie
 ### 2. Test-file rows excluded by default
 
 - One SQL predicate, `test_path_predicate(alias)` in `queries.rs`, that
-  mirrors `is_test_path` rule for rule over `replace(alias.path, '\', '/')`
-  (`/test/`, `/tests/`, `/__tests__/`, `_test.`, `.test.`, `.spec.`, the
-  `test.rs`, `tests.rs`, `tests.cs`, `test.go` endings, `test_` prefix).
-  `is_test_path` gets a unit test that runs both forms over the same path
-  list so they cannot drift.
+  mirrors `is_test_path` rule for rule. Both evaluate the lowercased,
+  forward-slash path with a `/` prepended, so directory rules match at the
+  repository root (the rule as it stood needed a slash before `tests/` and
+  so missed 384,043 of the 384,268 hermes-agent rows under a root `tests/`
+  directory). Rules: `/test/`, `/tests/`, `/__tests__/`; `/test_` for `.py`
+  and `.rb` files only (the pytest and minitest convention; Rust modules
+  such as `test_quality.rs` are production code); `_test.`, `.test.`,
+  `.spec.`; `/test.rs`, `/tests.rs`, `tests.cs`. The bare `test.rs`,
+  `tests.rs`, and `test.go` endings were dropped because they hid
+  `likely_tests.rs`, `latest.rs`, and `latest.go`. A unit test pins 34
+  paths to their expected boolean for the Rust rule and for the SQL mirror.
 - `candidate_filters` and the `name_search` fallback in
   `fts_search_symbols_explained`, and the lookup query in
   `search_symbols_scoped`, add `AND NOT <predicate>` when tests are
   excluded, beside the existing flag checks. `is_test: true` (MCP) and
   `--include-tests` (CLI) lift both.
-- `find_related_tests` and `blast_radius` are untouched: they want test rows.
+- `find_related_tests` and `blast_radius` keep their test rows; `blast_radius`
+  inherits the corrected `is_test_path` for its likely-tests list.
 - Measured on the v1.2.0 development set before and after; the three
   hermes-agent acceptance misses are not re-run, the effect shows in
   `acceptance-2.json` at the end.
@@ -211,8 +219,8 @@ with nothing else touching the eval directory.
 
 - The test-path rule hides production code in a directory called `tests`
   or a file named `test_*.py` that is not a test. Mitigation: the same rule
-  already drives `find_related_tests`; `is_test: true` shows everything;
-  measured on four repositories before it ships.
+  already drives the blast-radius likely-tests list; `is_test: true` shows
+  everything; measured on four repositories before it ships.
 - The strength tie-break reorders more than the tie cases. Mitigation: it
   sits after `score`, so only equal-score rows move; the development sets
   measure it.
@@ -228,3 +236,108 @@ with nothing else touching the eval directory.
 Semantic embeddings, Tantivy, synonym or abbreviation lists, container
 expansion, changes to julie-extract's `is_test` semantics, and any
 `workspace` parameter on any tool.
+
+## Results (2026-09-21, branch `feat/search-v1.3`)
+
+Tasks 1 to 5 ran in order with one opus implementer per code task and the
+lead reviewing inline. Numbers are from `~/.code-kb/search-eval` result
+files; the v1.2.0 reference for `development.json` and `regression.json` is
+the rerun on the released binary (`results-v1.2.0-*-rerun.json`), which
+equals plan 020's final post-review table.
+
+### Task 1: sets and the admission column
+
+- `development-2.json` (60) and `acceptance-2.json` (40, sealed, run once)
+  exist with every legitimate answer labelled. `runner.py` reports
+  `admitted` and `branches` per case and a `notAdm` column.
+- v1.2.0 on `development-2.json`: 29 / 41 file@1 / file@3, 25 / 35 symbol@1
+  / symbol@3, 5 of 60 not admitted.
+
+### Design 2: test-file rows hidden (three commits: a0ad988, 3094e68, 6670c85)
+
+- The first rule shipped rule-for-rule against `is_test_path` and matched
+  225 of the 384,268 hermes-agent rows under a root `tests/` directory. The
+  design text above records the corrected rule.
+- Effect against v1.2.0 (task 2 final): development 69 / 84 / 60 / 80,
+  not admitted 1; development-2 31 / 41 / 27 / 34, not admitted 5;
+  regression 25 / 26 / 22 / 25. No test-file row outranks a labelled answer
+  in any set now.
+
+### Design 3: whole-token tie-break (commit aa8f3d7)
+
+- No score changed. Development 70 / 84 / 61 / 80 (`ju-acronym-csr` back
+  to 1, `ju-short-glob` symbol 8 to 6). Development-2 and regression
+  unchanged. No case worse than after design 2.
+
+### Design 4a: identifier vocabulary (offline, no code)
+
+- 63 misses examined (both development sets), 6 of them not admitted.
+- Query word equals an identifier name inside the expected symbol: 6 of 63,
+  none of them a not-admitted case, and every matched word is common
+  (`root` in 234 containing symbols, `path` 104, `web` 68, `route` 36,
+  `pivot` 11, `file` 2). Design 4b weights only rows no other branch
+  reached, so it would move 0 of the 63 misses. The literal count meets the
+  threshold of 5 and its purpose does not: **4b is not built.**
+- Extra measurement for the "index file content" question: the expected
+  symbol's body text holds at least one query word for 60 of 63 misses (4 of
+  the 6 not admitted, through words such as `used`) and every query word for
+  21 of 63. Full text would admit almost everything; the identifiers table
+  (`member_access` and `type_usage` only) holds too little of the vocabulary
+  to help. A body-token branch, if ever built, needs call and variable
+  identifiers from the extractor first.
+
+### Regression gate (final tree aa8f3d7 against v1.2.0)
+
+| set | n | v1.2.0 file@1 / @3 / sym@1 / @3 / notAdm | v1.3 |
+|---|---|---|---|
+| regression (plan 019) | 26 | 25 / 26 / 22 / 26 / 0 | 25 / 26 / 22 / 25 / 0 |
+| development | 89 | 69 / 83 / 61 / 81 / 1 | 70 / 84 / 61 / 80 / 1 |
+| development-2 | 60 | 29 / 41 / 25 / 35 / 5 | 31 / 41 / 27 / 34 / 5 |
+
+Eleven cases rank one to three places lower; every one stays admitted.
+Ruling for all eleven: hiding test-file rows frees slots under the recall
+caps and removes rows from the sample that sets the word rarity weights, so
+a different production row wins a close partial-name contest (for example
+`_strip_code_fences` above `strip_ansi` once `codes` became rarer than
+`ansi` in the sample). None is a lost answer and none is a defect in the
+new rules. The cases: `ha-concept-docker` 1 to 2, `ha-concept-strip-ansi`
+1 to 2, `mi-concept-sensitive-root` 2 to 3, `mi-concept-pack-budget` 3 to 4,
+`concept-julie-find` 3 to 4, `kb-d2-persist-retry` 7 to miss (admitted 7),
+`ha-d2-dialectic` 4 to 5, `ju-d2-impact-budget` 2 to 3, `mi-d2-content-import`
+file 3 to 4, `mi-d2-route-bridge` 3 to 4, `mi-d2-family-store` file 6 to miss
+(admitted 41).
+
+### Acceptance (sealed `acceptance-2.json`, run once on aa8f3d7)
+
+| repo | file@1 | file@3 | sym@1 | sym@3 | not admitted |
+|---|---|---|---|---|---|
+| code-kb | 6 | 8 | 5 | 7 | 0 |
+| hermes-agent | 4 | 7 | 4 | 6 | 2 |
+| julie | 7 | 7 | 5 | 7 | 2 |
+| miller | 3 | 6 | 2 | 4 | 4 |
+| all (40) | 20 | 28 | 16 | 24 | 8 |
+
+The v1 acceptance set (plan 020) was 19 / 40 file@1 and 14 / 40 symbol@1.
+
+### Acceptance criteria
+
+- Regression gate: met with the eleven rulings above.
+- `development-2.json` symbol@1 +5: **not met** (+2, 25 to 27). Not
+  admitted at most 2 of 60: **not met** (5; only a new recall branch could
+  move those, and 4a showed the identifiers table is not it).
+- `acceptance-2.json` 8 of 10 file@1 and 7 of 10 symbol@1 per repository:
+  **not met** on every repository. The misses are README wording that never
+  appears in a name, signature, or docstring; 8 of 40 are not admitted at
+  all.
+- Warm `code-kb search` p50 on the code-kb checkout: 19.6 ms (v1.2.0 binary
+  on the same machine and run: 17.9 ms; the difference is the eleven-clause
+  path predicate). Under 25 ms: met.
+- Live `serve` RSS after 20 searches: 29.8 MiB against 29.5 MiB for v1.2.0.
+  Unchanged within noise: met.
+- `search_symbols` schema unchanged; `mcp_test.rs` green: met.
+
+What ships is correct and small: test-file helpers no longer outrank
+production code, ties prefer whole-token names, and the blast-radius test
+list uses a rule that matches a root `tests/` directory. What the plan
+hoped for, a symbol@1 gain on README-phrased queries, did not happen; the
+lexical levers left are exhausted on these sets.
