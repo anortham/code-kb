@@ -96,10 +96,10 @@ What the misses showed:
 ## Tasks
 
 1. The three rules with tests (one worker, `serial-worker-commit`). Done.
-2. Label review of the 28 development-3 misses (eval directory only).
+2. Label review of the 28 development-3 misses (eval directory only). Done.
 3. Lead: apply labels, run v1.2.0 and the new build on regression,
-   development, development-2, development-3; record; branch gate.
-4. `acceptance-3.json` once, summary only; owner decides on the release.
+   development, development-2, development-3; record; branch gate. Done.
+4. `acceptance-3.json` once, summary only; owner decides on the release. Run; awaiting the owner.
 
 ## Verification
 
@@ -109,3 +109,55 @@ What the misses showed:
   plugin tests, AGENTS.md byte check), `runner.py` on the four tuning sets
   for both binaries, p50 and RSS, and the one acceptance-3 run.
 - Security scope: none declared.
+
+## Results (2026-09-21)
+
+Task 1 landed as cab888a (three unit tests, two corpus cases, CLAUDE.md and
+AGENTS.md updated). Task 2 ruled the 28 development-3 misses: keep 9, add
+19 (24 pairs), replace 0, drop 0; six miller cases had labeled the tool
+class and not the entry method that carries the README sentence, and three
+of the eight never-admitted cases stay real recall failures. The sets
+before the review are kept beside the live ones in the evaluation
+directory. Numbers are file@1 / file@3 / symbol@1 / symbol@3 from the
+runner at limit 10, on the reviewed labels, both binaries on the same
+machine and the same day.
+
+| set | v1.2.0 | plan 022 build (bb2e4fd) | plan 023 build (cab888a) |
+|---|---|---|---|
+| regression (26) | 25 / 26 / 22 / 26 | 26 / 26 / 23 / 26 | 26 / 26 / 23 / 26 |
+| development (89) | 72 / 87 / 68 / 85 | 78 / 85 / 70 / 83 | 82 / 84 / 76 / 83 |
+| development-2 (60) | 29 / 43 / 27 / 39 | 40 / 53 / 34 / 48 | 40 / 52 / 35 / 47 |
+| development-3 (40, reviewed labels) | 20 / 27 / 15 / 22 | not run | 21 / 29 / 17 / 25 |
+
+- The runner agrees with the simulation within the expected cap
+  difference: development-3 on the pre-review labels moved 18 / 27 / 12 /
+  22 (plan 022 build) to 19 / 28 / 14 / 22, one symbol@1 short of v1.2.0;
+  the reviewed labels give the same four cases to both builds and the new
+  build then leads on every column.
+- Development file@3 (84 against 87) and symbol@3 (83 against 85) stay
+  below v1.2.0; every file@1 and symbol@1 column is above it.
+- Warm `code-kb search` p50 on the code-kb checkout: 20 ms (v1.2.0 19 ms,
+  same session). Live `serve` RSS after 20 searches: 28.0 MiB (v1.2.0
+  30.4 MiB); both figures move by about 2 MiB between runs.
+- Branch gate on cab888a: fmt, clippy with warnings denied, the workspace
+  tests (139 in code-kb-core), the 16 plugin tests, and the AGENTS.md
+  byte check pass.
+- Not built, measured at plus or minus one case: the full docstring instead
+  of its first 400 bytes (+2 / -1 on development), and no signature credit
+  for members whose signature is a string value (+1 development-3, -1
+  development-2 file@1).
+
+### Sealed acceptance-3 (one run per binary, per-repository summaries only)
+
+| build | code-kb | hermes-agent | julie | miller | all, never admitted |
+|---|---|---|---|---|---|
+| v1.2.0 | 7 / 9 / 5 / 7 | 0 / 1 / 0 / 0 | 5 / 5 / 2 / 2 | 1 / 2 / 1 / 1 | 13 / 17 / 8 / 10, 20 |
+| plan 023 build | 7 / 9 / 7 / 8 | 1 / 2 / 0 / 0 | 5 / 5 / 2 / 3 | 1 / 3 / 1 / 1 | 14 / 19 / 10 / 12, 19 |
+
+The new build is above v1.2.0 on every column of the held-out set, by one
+to two cases. Half of the 40 answers are never admitted by either build:
+the set's hermes-agent and julie sentences share no word with the name,
+signature, or docstring of their answers, which is the lexical ceiling
+this engine has without embeddings (a declared non-goal). The gate of
+plan 022 is met on every set, including the held-out one; the owner
+decides on the release.
