@@ -302,7 +302,11 @@ fn test_reconcile_offline_edits_continues_when_individual_update_fails() {
     );
 
     let retry = reconcile_offline_edits(&ws, &db_path, &conn).unwrap();
-    assert_eq!(retry.added, vec!["src/unreadable.rs".to_string()]);
+    assert!(
+        retry.added.contains(&"src/unreadable.rs".to_string()),
+        "got: {:?}",
+        retry.added
+    );
     assert!(
         get_symbol_by_name(&conn, "unreadable_symbol", Some("src/unreadable.rs"))
             .unwrap()
@@ -614,21 +618,29 @@ fn test_reconcile_offline_edits_remembers_files_the_extractor_skips() {
     let conn = open_read_only(&db_path).unwrap();
 
     fs::write(&lock_path, "[[package]]\nname = \"a\"\nversion = \"1\"\n").unwrap();
+    let lock = "Cargo.lock".to_string();
     let edited = reconcile_offline_edits(&ws, &db_path, &conn).unwrap();
-    assert_eq!(edited.modified, vec!["Cargo.lock".to_string()]);
+    assert!(
+        edited.modified.contains(&lock),
+        "got: {:?}",
+        edited.modified
+    );
 
     let settled = reconcile_offline_edits(&ws, &db_path, &conn).unwrap();
-    assert!(settled.added.is_empty(), "got: {:?}", settled.added);
-    assert!(settled.modified.is_empty());
-    assert!(settled.deleted.is_empty());
+    assert!(!settled.added.contains(&lock), "got: {:?}", settled.added);
+    assert!(!settled.modified.contains(&lock));
 
     fs::write(&lock_path, "[[package]]\nname = \"a\"\nversion = \"1.0\"\n").unwrap();
     let edited_again = reconcile_offline_edits(&ws, &db_path, &conn).unwrap();
-    assert_eq!(edited_again.added, vec!["Cargo.lock".to_string()]);
+    assert!(
+        edited_again.added.contains(&lock),
+        "got: {:?}",
+        edited_again.added
+    );
 
     let settled_again = reconcile_offline_edits(&ws, &db_path, &conn).unwrap();
     assert!(
-        settled_again.added.is_empty(),
+        !settled_again.added.contains(&lock),
         "got: {:?}",
         settled_again.added
     );

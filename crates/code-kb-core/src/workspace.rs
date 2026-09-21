@@ -396,6 +396,10 @@ pub fn is_hard_excluded(rel_path: &str) -> bool {
         ".tmp",
         ".swp",
         "~",
+        ".db-wal",
+        ".db-shm",
+        ".sqlite-wal",
+        ".sqlite-shm",
     ];
 
     EXCLUDED_SUFFIXES.iter().any(|suffix| p.ends_with(suffix))

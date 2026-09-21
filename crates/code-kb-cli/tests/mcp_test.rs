@@ -1588,7 +1588,7 @@ fn test_mcp_server_start_creates_missing_index() {
     reader.read_line(&mut call_resp_line).unwrap();
     let resp: Value = serde_json::from_str(&call_resp_line).expect("Failed to parse JSON response");
     assert_eq!(resp["id"], 2);
-    assert_ne!(resp["result"]["isError"], true);
+    assert_ne!(resp["result"]["isError"], true, "{resp}");
     let text = resp["result"]["content"][0]["text"].as_str().unwrap();
     assert!(text.contains("unindexed_func"), "{text}");
 
