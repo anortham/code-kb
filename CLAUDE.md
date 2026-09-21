@@ -65,10 +65,16 @@ MCP tool schema.**
   marker; a failed migration is reported by the first tool call and retried on the next start.
 
 ### 3. Single-Turn Atomic Edits
-- `replace_symbol_body` must perform pre-flight syntax validation through
-  `julie-extract check` (code-kb bundles no tree-sitter grammars of its own),
-  optional `body_hash` concurrency verification, atomic file replacement, and
-  immediate SQLite re-indexing in a single turn.
+- Two edit tools share one write path (`commit_file_edit` in `edit.rs`): pre-flight syntax
+  validation through `julie-extract check` (code-kb bundles no tree-sitter grammars of its own),
+  concurrency verification, atomic file replacement, immediate SQLite re-indexing, and rollback
+  when the re-index fails. Both finish in a single turn.
+- `edit_file` (CLI: `code-kb edit-file`) replaces text in any file without reading it first.
+  It matches in two tiers and no more: exact substring, then line by line with each line trimmed,
+  so a different indentation still matches. There is no edit-distance matching. A match that
+  occurs more than once is refused with every matching line number unless `occurrence` is
+  `first`, `last`, or `all`; `only` is the default.
+- `replace_symbol_body` keeps the optional `body_hash` check and replaces a whole symbol body.
 - Do not implement two-step preview-and-confirm handshakes that waste agent turns.
 
 ### 4. Token-Dense Progressive Disclosure
@@ -87,10 +93,23 @@ MCP tool schema.**
 
 ### 6. Zero-Friction Tool Ergonomics
 - Tool handlers accept intuitive parameter aliases (`file`/`path` for `file_path`,
-  `symbol`/`name` for `symbol_name`, `body`/`code` for `new_body`, `q`/`name` for `query`).
+  `symbol`/`name` for `symbol_name`, `body`/`code` for `new_body`, `q`/`name` for `query`,
+  `old`/`find` for `old_text`, `new`/`replace` for `new_text`).
 - Optional parameters provide safe defaults (`direction` in `find_references` defaults to
   `"callers"`, `category` in `find_structural_facts` lists all categories with counts when omitted).
 - Scoped search: `lookup_symbol`, `search_symbols`, `find_references`, and `find_structural_facts` support an optional `path`/`file_path` filter.
+- Recovery on a miss: every not-found path builds its text from `symbol_not_found_parts` or
+  `file_not_found_parts` in `queries.rs`. The text names the bound workspace, then either
+  `Did you mean one of:` with up to three candidates as `kind `name` (path:line)`, or
+  `No similar name is indexed; check the workspace and spelling.` Candidates come from the
+  substring search first, then from `symbol_names_tri` trigram rows kept within an edit distance
+  of the query. File candidates match by basename, then by stem, then by the last two segments.
+- Structural-fact categories: `CATEGORY_ALIASES` in `queries.rs` is the whole alias table
+  (`sql`/`query`/`queries`, `route`/`routes`, `config`, `model`/`models`), and each alias maps to
+  the pattern-id families it names, never to a substring. An unknown category still falls back to a
+  substring match, so raw pattern ids work. With no category the answer lists the aliases with
+  facts in this index before the raw pattern list. Facts and literals have separate limits, each
+  with its own cap notice.
 - Search ranking: `search_symbols` admits rows from three branches (exact name, FTS5 word match, trigram name substring, so `sha256` finds `parseSha256Sidecar`), then a deterministic Rust rerank in `queries.rs` credits each query term once from its strongest field (name whole token 3, name stem 2, name substring 1, signature or docstring 1), weighted by the term's rarity across the index (a capped FTS5 match count per term), and adds the whole-name and all-words bonuses (the whole-name bonus is 100 for definition kinds and 60 for every other kind) and the kind, path, documentation, and test priors; `score` is that rerank score. Rows from test files are hidden by default: a path rule in `queries.rs` (`is_test_path` and its SQL mirror `test_path_predicate`) hides the whole file, not only the symbols `julie-extract` flags, and `is_test: true` / `--include-tests` shows them again. A `lookup_symbol` row whose name equals the query is shown either way. Equal scores break by name strength, the sum over query words of 3 for a whole-token name match, 2 for a stem match, 1 for a substring match, and 0 for none, then names that do not start with `_` before names that do; `--explain` reports the name strength as `name_strength`. `code-kb search --explain` prints the breakdown and the rerank timer; the MCP tool takes no `explain` parameter, and `--verbose` stays debug logging.
 - Language-agnostic callee filtering: `find_references(direction="callees")` and `get_symbol_context`
   filter unresolved AST tokens against workspace symbols, eliminating external stdlib/runtime noise

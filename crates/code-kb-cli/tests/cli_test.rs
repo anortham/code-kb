@@ -1577,3 +1577,64 @@ fn test_cli_edit_file_refuses_an_ambiguous_match() {
     let stderr = String::from_utf8_lossy(&edit.stderr);
     assert!(stderr.contains("lines 3, 8"), "{stderr}");
 }
+
+#[test]
+fn test_guidance_docs_use_canonical_parameter_names() {
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let root = manifest_dir.parent().unwrap().parent().unwrap();
+    for doc in [
+        "hooks/code-kb-routing-block.md",
+        "crates/code-kb-cli/src/routing-block.md",
+        "skills/code-kb/SKILL.md",
+        "README.md",
+    ] {
+        let text = std::fs::read_to_string(root.join(doc)).unwrap();
+        for (index, line) in text.lines().enumerate() {
+            let position = format!("{doc}:{}", index + 1);
+            assert!(
+                !line.contains("codebase_outline(subpath"),
+                "{position} calls codebase_outline with subpath"
+            );
+            assert!(
+                !line.contains("blast_radius(path="),
+                "{position} calls blast_radius with path"
+            );
+        }
+    }
+}
+
+#[test]
+fn test_routing_block_names_edit_file_and_stays_under_three_kilobytes() {
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let root = manifest_dir.parent().unwrap().parent().unwrap();
+    let text = std::fs::read_to_string(root.join("hooks/code-kb-routing-block.md")).unwrap();
+    assert!(text.contains("edit_file("), "routing block omits edit_file");
+    assert!(text.len() < 3072, "routing block is {} bytes", text.len());
+}
+
+#[test]
+fn test_todo_file_holds_no_checklist() {
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let root = manifest_dir.parent().unwrap().parent().unwrap();
+    let text = std::fs::read_to_string(root.join("TODO.md")).unwrap();
+    for (index, line) in text.lines().enumerate() {
+        assert!(
+            !line.trim_start().starts_with("- ["),
+            "TODO.md:{} still holds a checklist item",
+            index + 1
+        );
+    }
+    assert!(text.contains("docs/plans/"), "TODO.md omits the plans path");
+}
+
+#[test]
+fn test_routing_block_sync_contract() {
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let root = manifest_dir.parent().unwrap().parent().unwrap();
+    let hook_copy = std::fs::read_to_string(root.join("hooks/code-kb-routing-block.md")).unwrap();
+    let compiled_copy = std::fs::read_to_string(manifest_dir.join("src/routing-block.md")).unwrap();
+    assert_eq!(
+        hook_copy, compiled_copy,
+        "hooks/code-kb-routing-block.md and crates/code-kb-cli/src/routing-block.md must be byte-for-byte identical"
+    );
+}

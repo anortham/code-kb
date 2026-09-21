@@ -1,6 +1,6 @@
 ---
 name: code-kb
-description: Use when exploring unfamiliar code, inspecting types or function signatures, finding symbols across the codebase, obtaining surgical context before modifying a function, performing atomic AST-validated symbol edits, or checking tool telemetry and token savings.
+description: Use when exploring unfamiliar code, inspecting types or function signatures, finding symbols across the codebase, obtaining surgical context before modifying a function, replacing text in a file or a whole symbol body in one turn, or checking tool telemetry and token savings.
 ---
 
 # code-kb: Token-Dense Code Intelligence
@@ -17,8 +17,8 @@ When entering a new repository, unfamiliar subsystem, or crate:
 ### 2. Interface Discovery
 When inspecting how a module or component is shaped:
 * Call `file_skeleton(file_path)` to inspect structs, traits, methods, signatures, and docstrings with implementation bodies stripped. A directory path returns its outline instead.
-* Call `lookup_symbol(query="...", path="optional/subpath")` for exact or prefix symbol name matching across the entire codebase or scoped to a directory/file. Test functions, test containers, and rows from test files are hidden unless `is_test` is true, except a row whose name equals the query.
-* Call `search_symbols(query="...", path="optional/subpath")` for natural-language / conceptual search (e.g. `"parse tokens"`, `"auth middleware"`) over names, signatures, and docstrings; substrings inside identifiers are found (`sha256` finds `parseSha256Sidecar`).
+* Call `lookup_symbol(query="...", path="optional/dir")` for exact or prefix symbol name matching across the entire codebase or scoped to a directory/file. Test functions, test containers, and rows from test files are hidden unless `is_test` is true, except a row whose name equals the query.
+* Call `search_symbols(query="...", path="optional/dir")` for natural-language / conceptual search (e.g. `"parse tokens"`, `"auth middleware"`) over names, signatures, and docstrings; substrings inside identifiers are found (`sha256` finds `parseSha256Sidecar`).
 * **Never** read a 500-line source file just to look up a signature or type definition.
 
 ### 3. Surgical Context
@@ -33,12 +33,14 @@ Before modifying or understanding a specific function/method:
 * Call `blast_radius(symbol="...")` or `blast_radius(file="...")` or `blast_radius()` (auto-detects uncommitted git changes) to calculate multi-hop transitive callers and pinpoint targeted tests to run before/after editing. (Tool alias: `impact`).
 * Call `find_structural_facts()` to list all detected framework categories, or `find_structural_facts(category="route")` to query specific routes, SQL queries, models, or config keys.
 
-### 4. Atomic Symbol Edits
-When modifying an existing function or method:
-* Call `replace_symbol_body(symbol_name, file_path, new_body, expected_body_hash)`.
-* Performs pre-flight syntax validation through `julie-extract check` for every language the extractor supports; reports validation skipped for paths with no grammar.
-* Checks optimistic concurrency hash to avoid overwriting conflicting edits.
-* Re-indexes SQLite AST facts in a single atomic turn.
+### 4. Atomic Edits
+When changing a file:
+* Call `edit_file(file_path, old_text, new_text)` first. This is the default edit path for any text file, code or not. You do not read the file first.
+  1. It finds `old_text` exactly. If that fails, it matches again ignoring indentation.
+  2. It refuses a match that occurs more than once, and names every matching line. Add more context, or set `occurrence` to `first`, `last`, or `all`.
+  3. It validates code files through `julie-extract check`, writes the file atomically, and re-indexes SQLite AST facts in the same turn.
+* Call `replace_symbol_body(symbol_name, file_path, new_body, expected_body_hash)` when you hold a body hash and replace a whole function body.
+* Both tools report validation skipped for paths with no grammar, and both roll the file back when the re-index fails.
 
 ## Telemetry & Diagnostics
 
@@ -48,7 +50,9 @@ When modifying an existing function or method:
 When a user asks questions such as *"how many tokens has code-kb saved me this month?"*, *"what is my token efficiency this week?"*, or *"how often do symbol edits succeed?"*:
 * Call `telemetry_summary(time_window="month")` (valid windows: `"today"`, `"7d"`, `"30d"`, `"month"`, `"year"`, `"all"`; default is `"all"`).
 * Pass `workspace_only=true` if the user wants metrics scoped strictly to the current workspace instead of global history across all projects.
-* Report back the summarized numbers: total tool calls, successful vs failed calls, estimated tokens consumed, estimated tokens saved compared to raw full-file reads, and the net efficiency multiplier.
+* Report back the summarized numbers: total tool calls, successful vs failed calls, estimated tokens consumed, estimated tokens saved, and the net efficiency multiplier.
+* Say what "saved" means: the size, in estimated tokens, of the files the answer points into, minus the tokens served. A skeleton, body, or context read is measured against its own file. A lookup, search, references, blast-radius, or facts answer is measured against the distinct files its rows name, at most 20 files. A call with no file to point at, such as an outline or a telemetry summary, records no baseline and is not counted as saved.
+* The summary states coverage beside the number: `Est. Tokens Saved: ~N (baseline known for K of M calls)`, and `~N (K/M)` per tool. Report the coverage with the number.
 
 ### Generating Bug Reports & Diagnosing Failures
 When diagnosing unexpected tool errors or when assisting a user with filing an issue:
@@ -69,6 +73,7 @@ When diagnosing unexpected tool errors or when assisting a user with filing an i
 | Trace callers / callees | Text grep for call sites | `find_references(symbol_name, file_path?)` | `code-kb refs <symbol> [--file <f>] [--include-external]` |
 | Assess impact & find tests | Wide test suite runs | `blast_radius(symbol="...")` | `code-kb blast-radius [target]` |
 | Discover routes / models | Search string literals | `find_structural_facts(category="route")` | `code-kb facts [category]` |
+| Edit any text in a file | Read the file, then rewrite it | `edit_file(file_path, old_text, new_text)` | `code-kb edit-file <f> --old <t> --new <t> [--occurrence only\|first\|last\|all]` |
 | Edit implementation | Multi-line search/replace | `replace_symbol_body(...)` | `code-kb edit <symbol> --file <f> --body <b>` |
 | Check token savings & usage | Guesswork, parsing logs | `telemetry_summary(time_window="month")` | `code-kb stats [--since <window>] [--workspace]` |
 | Generate diagnostic bug report | Manual system info triage | `telemetry_summary()` (for errors) | `code-kb bug-report [--title <title>]` |
@@ -83,6 +88,9 @@ Use the canonical names from the MCP schema in tool calls. The aliases below are
 * `query`: accepts `name`, `q`, `symbol_name`, `symbol`.
 * `new_body`: accepts `body`, `code`, `content`.
 * `expected_body_hash`: accepts `body_hash`, `expected_hash`.
+* `old_text` in `edit_file`: accepts `old`, `find`.
+* `new_text` in `edit_file`: accepts `new`, `replace`.
+* `occurrence` in `edit_file`: optional, one of `only`, `first`, `last`, `all`; defaults to `only`.
 * `codebase_outline.path`: accepts `subpath`, `dir`.
 * `direction` in `find_references`: defaults to `"callers"`.
 * `include_external` in `find_references` & `get_symbol_context`: defaults to `false` (filters noise across all ~40 languages).

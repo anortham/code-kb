@@ -1,25 +1,6 @@
 # TODO
 
-- [x] **GitHub Actions release binaries:** Matrix workflow in `.github/workflows/release-binaries.yml` for Linux (`x86_64-unknown-linux-gnu`), Windows (`x86_64-pc-windows-msvc`), macOS Intel (`x86_64-apple-darwin`), and macOS Apple Silicon (`aarch64-apple-darwin`), plus `.github/workflows/ci.yml`.
-- [x] **MCP server instructions & tool adoption:** Tuned tool descriptions with progressive disclosure contrast keywords; verified `initialize` instructions.
-- [x] **Hooks and/or skills:** Created token-dense agent skill `skills/code-kb/SKILL.md` (and `.claude-plugin/skills/code-kb/SKILL.md`).
-- [x] **License files:** Added `LICENSE-MIT` and `LICENSE-APACHE` to repository root; aligned `Cargo.toml` to `MIT OR Apache-2.0`.
-- [x] **v0.5.0, v0.5.1, v0.6.0, v0.6.1 & v0.7.0 GitHub Releases:** Published binary releases on GitHub with bundled `julie-extract` v2.42.1 for Linux x86_64, macOS Apple Silicon, macOS Intel (`macos-15-intel`), and Windows x86_64.
-- [x] **Release documentation & pre-flight:** Created `docs/RELEASING.md` and `scripts/release-preflight.sh` automating all 7 pre-flight checks across Linux and Windows.
-- [x] **GitHub Pages deployment:** Configured and deployed showcase site at https://anortham.github.io/code-kb/ via `.github/workflows/pages.yml`.
-- [ ] **Crates.io publication:**
-  - Publish `code-kb-core` v0.7.0 (`cargo publish -p code-kb-core`).
-  - Publish `code-kb-cli` v0.7.0 (`cargo publish -p code-kb-cli`).
-- [x] **Directories/Files to ignore:** Aligned hard exclusion lists across `julie-extract` (`HARD_EXCLUDE_DIRS`) and `code-kb` (`is_hard_excluded`), adding `.claude`, `.venv`, `venv`, `.env`, `.tox`, `.vs`, `.code-kb-ignore`, `.codekbignore`.
-- [x] **Worktrees:** Validated git worktree lifecycle and index isolation in `crates/code-kb-core/tests/worktree_test.rs`; implemented self-cleaning in-tree databases at `<root>/.code-kb/artifact.db` with parent DB auto-copy and fast reconciliation.
-- [x] **julie-extract:** Synchronized hard exclusions in `julie-extract-cli` (commit `0ef89729`), passed all 13 contract tests, and verified binary discovery.
-- [x] **benchmarks:** Built `scripts/benchmark_quality.py`; measured 75–98% token compression on skeletons/slices, 1–6ms query latency, exact symbol lookup, and conceptual FTS5 BM25 search. Added `--path` scoping for targeted search.
-- [x] **tool parameters:** Added zero-friction aliases across MCP tools (`symbol`/`name`, `file`/`path`, `body`/`code`), made `direction` optional (default `"callers"`), made `category` optional in `find_structural_facts` (lists categories and counts), added optional `path` filter.
-- [x] **hooks:** Added `SessionStart` and `SubagentStart` hooks (`hooks/claude-codex-hooks.json`, `code-kb hook [SessionStart|SubagentStart]`, `hooks/code-kb-routing-block.md`) and linked into `.claude-plugin/plugin.json`.
-- [x] **comparision with miller/julie:** Synthesized 1,000+ hours of prior telemetry in `docs/plans/011-miller-julie-comparative-analysis-and-lessons.md` (zero-workspace schemas, <15 MB RAM, 1-turn atomic edits, FTS5 vs vector noise).
-- [x] **Callee noise filtering:** Implemented language-agnostic workspace boundary filter on unresolved calls in `pending_relationships` and `get_context_slice`, dropping external stdlib/runtime primitives (`print`, `console.log`, `fmt.Println`, `to_string`, `map`, `is_some`, `unwrap_or`, `push_str`) across all ~40 supported languages; exposed `include_external: bool` in CLI/MCP.
-- [x] **Blast radius & test prediction:** Implemented `blast_radius` (aliased as `impact`, CLI `code-kb blast-radius` / `impact`) using SQLite recursive CTEs to compute multi-hop transitive callers and pinpoint likely test targets. Supports symbol target, file target, or zero-arg git working-tree auto-discovery. Tests run natively in agent terminal while `code-kb` predicts minimal targeted test suite.
-- [x] **initial release prep:** Comprehensive verification across skills, hooks, `README.md`, client configurations (`.mcp.json`, Claude plugin, Codex/AGY routing), and MCP tool schemas. Created a GitHub Pages showcase site in `docs/site/` (`index.html`, `style.css`) with benchmark charts and architectural comparison table, accompanied by `.github/workflows/pages.yml` for automated deployment.
-- [x] **agent adoption:** Tested real agent adoption in an interactive session with `.mcp.json`. Observed that the agent autonomously leveraged `codebase_outline`, `file_skeleton`, `blast_radius`, and `get_context_slice` rather than dumping files with `cat`/`view_file` or running `grep`. Live tool calls were recorded into local SQLite WAL telemetry with 100% success rate.
-- [x] **telemetry:** Built zero-overhead, non-panicking, SQLite WAL-backed telemetry engine in `crates/code-kb-core/src/telemetry.rs` writing to `<workspace>/.code-kb/telemetry.db` (isolated from `artifact.db` re-scans). Tracks tool invocation counts, latency percentiles, error rates, bytes, and estimated token savings. Exposed via `code-kb stats` and `code-kb telemetry [--json]` CLI commands.
-- [x] **test coverage:** Configured `scripts/run_tests.sh` using `cargo-nextest` to report sub-millisecond execution timings for every test across all 10 test suites (all 68 tests passing in ~0.9s). Installed `cargo-llvm-cov` to measure line and region coverage across the entire workspace (achieving ~77% workspace line coverage, 96% on db, 91% on telemetry, 89% on ops, 87% on syntax). Added `crates/code-kb-cli/tests/cli_test.rs` ensuring full 1:1 CLI parity for all MCP tools.
+Open work lives in `docs/plans/`, the newest plan first. Each plan carries its own
+tasks, acceptance criteria, and verification commands.
+
+Shipped work is recorded in `docs/release-notes/` and in the git history.

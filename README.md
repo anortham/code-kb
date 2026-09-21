@@ -17,7 +17,7 @@ Traditional AI coding agents burn massive amounts of context loading entire sour
 2. **File Skeletons (`file_skeleton`):** Inspect function signatures, types, traits, and docstrings with implementation bodies stripped.
 3. **Symbol Lookup & Discovery (`lookup_symbol` / `search_symbols`):** Instant exact/prefix identifier lookups and conceptual search over names, signatures, and docstrings; substrings inside identifiers are found (`sha256` finds `parseSha256Sidecar`).
 4. **Surgical Symbol Context (`get_symbol_context`):** In a single turn, fetch a target function's body along with its callee signatures, parameter types, and associated unit tests.
-5. **Atomic AST Edits (`replace_symbol_body`):** Replace symbol implementations atomically with pre-flight syntax validation by `julie-extract` for every language it parses, then re-index immediately.
+5. **Single-Turn Edits (`edit_file` / `replace_symbol_body`):** Replace text in any file without reading it first, or replace a whole symbol body. Both validate the syntax with `julie-extract` for every language it parses, write atomically, and re-index immediately.
 
 ---
 
@@ -334,8 +334,9 @@ binaries from your `PATH`.
 | `find_references` | Callers or callees of a symbol, matched by name from AST call sites and ranked by same file, same directory, then receiver type; callers also include type usages and member accesses (filters external stdlib noise; qualify overloaded names). | `symbol_name` (req), `file_path` (opt), `direction` ("callers" \| "callees", def: callers), `include_external` (opt, def: false) | `symbol`, `name`, `file`, `path` |
 | `blast_radius` | Multi-hop reverse reachability (CTEs) & targeted test prediction. | `symbol` (opt), `file` (opt), `depth` (opt, def: 2), `limit` (opt) | `name`, `path`, `impact` |
 | `find_structural_facts` | Queries framework facts (routes, SQL queries, config keys, tables). Lists all categories when omitted. | `category` (opt), `path` (opt), `limit` (opt) | `cat`, `kind`, `type`, `file`, `file_path` |
+| `edit_file` | Replaces text in any file without reading it first. Finds `old_text` exactly, then ignoring indentation. Refuses a match that occurs more than once unless `occurrence` is set, and names every matching line. | `file_path` (req), `old_text` (req), `new_text` (req), `occurrence` (opt, "only" \| "first" \| "last" \| "all", def: only) | `file`, `path`, `old`, `find`, `new`, `replace` |
 | `replace_symbol_body` | Atomically replaces a symbol's implementation; `julie-extract check` validates the syntax for every language it parses (about 40), other paths report validation skipped. | `symbol_name` (req), `file_path` (req), `new_body` (req), `expected_body_hash` (opt) | `symbol`, `file`, `body`, `code` |
-| `telemetry_summary` | Token savings, call counts, and error rates from `~/.code-kb/telemetry.db`, across all workspaces or scoped to the current one. | `time_window` (opt, def: all), `workspace_only` (opt, def: false), `json` (opt) | `since`, `window` |
+| `telemetry_summary` | Token savings with their coverage, call counts, and error rates from `~/.code-kb/telemetry.db`, across all workspaces or scoped to the current one. | `time_window` (opt, def: all), `workspace_only` (opt, def: false), `json` (opt) | `since`, `window` |
 
 ---
 
@@ -386,6 +387,10 @@ code-kb facts route --limit 10
 # Atomically edit a symbol body with pre-flight syntax validation by julie-extract
 code-kb edit my_func --file src/lib.rs --body "{\n    println!(\"hello\");\n}"
 
+# Replace text in any file, without reading it first; --occurrence only|first|last|all
+code-kb edit-file src/lib.rs --old "let timeout = 5;" --new "let timeout = 30;"
+code-kb edit-file docs/guide.md --old "the old name" --new "the new name" --occurrence all
+
 # View active log file and recent diagnostic messages
 code-kb logs
 
@@ -402,6 +407,30 @@ code-kb hook SessionStart
 code-kb hook SubagentStart
 code-kb hook PreInvocation
 ```
+
+---
+
+## Telemetry and What "Saved" Means
+
+`code-kb` records every tool call in `~/.code-kb/telemetry.db`. `telemetry_summary` and
+`code-kb stats` report the calls, the latency, the error rate, the tokens served, and the
+tokens saved.
+
+Saved is the size, in estimated tokens, of the files the answer points into, minus the tokens
+served. A skeleton, body, or context read is measured against its own file. A lookup, search,
+references, blast-radius, or facts answer is measured against the distinct files its rows name,
+at most 20 files. A call with no file to point at, such as an outline or a telemetry summary,
+records no baseline and is not counted as saved.
+
+The report states that coverage beside the number, so you can see how much of the window it
+covers:
+
+```text
+Est. Tokens Saved: ~<saved> (baseline known for <K> of <M> calls)
+```
+
+Each tool row carries the same pair as `~N (K/M)`. Rows written before this measurement existed
+carry no baseline and are never rewritten.
 
 ---
 
