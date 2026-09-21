@@ -2826,40 +2826,40 @@ pub fn find_type_facts(conn: &Connection, symbol_id: &str) -> Result<Vec<TypeFac
     Ok(results)
 }
 
-/// Helper to determine if a relative path looks like a test file across ecosystems.
+/// True when a repository-relative path looks like a test file: a `test`, `tests`, or `__tests__`
+/// directory or a `test_` segment anywhere including the repository root, a `_test.`, `.test.`, or
+/// `.spec.` file name, a whole-file `test.rs` or `tests.rs`, or the C# `Tests.cs` ending.
 pub fn is_test_path(path: &str) -> bool {
-    let p = path.to_lowercase().replace('\\', "/");
+    let p = format!("/{}", path.to_lowercase().replace('\\', "/"));
     p.contains("/test/")
         || p.contains("/tests/")
         || p.contains("/__tests__/")
+        || p.contains("/test_")
         || p.contains("_test.")
         || p.contains(".test.")
         || p.contains(".spec.")
-        || p.ends_with("test.rs")
-        || p.ends_with("tests.rs")
+        || p.ends_with("/test.rs")
+        || p.ends_with("/tests.rs")
         || p.ends_with("tests.cs")
-        || p.ends_with("test.go")
-        || p.starts_with("test_")
 }
 
 /// SQL boolean over `alias.path` that mirrors [`is_test_path`] rule for rule.
 ///
-/// `sql_test_path_predicate_matches_the_rust_rule` runs both forms over one path list so the two
-/// cannot drift apart.
+/// `test_path_rule_and_its_sql_mirror_agree_on_every_path` runs both forms over one path list so
+/// the two cannot drift apart.
 pub(crate) fn test_path_predicate(alias: &str) -> String {
-    let p = format!("lower(replace({alias}.path, '\\', '/'))");
+    let p = format!("'/' || lower(replace({alias}.path, '\\', '/'))");
     let clauses = [
         "%/test/%",
         "%/tests/%",
         "%/\\_\\_tests\\_\\_/%",
+        "%/test\\_%",
         "%\\_test.%",
         "%.test.%",
         "%.spec.%",
-        "%test.rs",
-        "%tests.rs",
+        "%/test.rs",
+        "%/tests.rs",
         "%tests.cs",
-        "%test.go",
-        "test\\_%",
     ]
     .iter()
     .map(|pattern| format!("{p} LIKE '{pattern}' ESCAPE '\\'"))
@@ -3325,39 +3325,54 @@ mod tests {
             .collect()
     }
 
-    const TEST_PATH_CASES: &[&str] = &[
-        "tests/foo.py",
-        "src/tests/x.rs",
-        "a/__tests__/b.ts",
-        "x/foo_test.go",
-        "x/foo.test.ts",
-        "x/foo.spec.js",
-        "src/lib_test.rs",
-        "src/tests.rs",
-        "Foo.Tests.cs",
-        "test_config.py",
-        "src/attest.rs",
-        "contest/x.py",
-        "src/testing.rs",
-        "tests\\x.py",
-        "src/test/Helper.java",
-        "src/main.rs",
-        "pkg/service.go",
+    const TEST_PATH_CASES: &[(&str, bool)] = &[
+        ("tests/foo.py", true),
+        ("tests/x.py", true),
+        ("tests/tools/test_web.py", true),
+        ("src/tests/x.rs", true),
+        ("__tests__/a.ts", true),
+        ("a/__tests__/b.ts", true),
+        ("test/x.java", true),
+        ("src/test/Helper.java", true),
+        ("src/test_utils.py", true),
+        ("pkg/test_data/x.json", true),
+        ("test_config.py", true),
+        ("x/foo_test.go", true),
+        ("x/foo.test.ts", true),
+        ("x/foo.spec.js", true),
+        ("src/lib_test.rs", true),
+        ("src/test.rs", true),
+        ("tests.rs", true),
+        ("src/tests.rs", true),
+        ("Foo.Tests.cs", true),
+        ("x/FooTests.cs", true),
+        ("tests\\x.py", true),
+        ("crates/x/src/impact/likely_tests.rs", false),
+        ("x/foo_tests.rs", false),
+        ("src/latest.rs", false),
+        ("x/latest.go", false),
+        ("x/manifest.rs", false),
+        ("src/attest.rs", false),
+        ("contest/x.py", false),
+        ("src/testing.rs", false),
+        ("src/main.rs", false),
+        ("pkg/service.go", false),
     ];
 
     #[test]
-    fn sql_test_path_predicate_matches_the_rust_rule() {
+    fn test_path_rule_and_its_sql_mirror_agree_on_every_path() {
         let conn = Connection::open_in_memory().unwrap();
         let sql = format!(
             "SELECT {} FROM (SELECT :path AS path) s",
             test_path_predicate("s")
         );
         let mut stmt = conn.prepare(&sql).unwrap();
-        for path in TEST_PATH_CASES {
+        for (path, expected) in TEST_PATH_CASES {
+            assert_eq!(is_test_path(path), *expected, "rust rule: {path}");
             let from_sql: bool = stmt
                 .query_row(rusqlite::named_params! { ":path": path }, |row| row.get(0))
                 .unwrap();
-            assert_eq!(from_sql, is_test_path(path), "{path}");
+            assert_eq!(from_sql, *expected, "sql mirror: {path}");
         }
     }
 
