@@ -281,16 +281,25 @@ pub fn get_file(conn: &Connection, path: &str) -> Result<Option<FileFact>, Query
 }
 
 /// Count parse diagnostics recorded for a file, returning 0 when the index has none.
-/// Number of indexed symbols in one file, without loading the rows.
+/// Number of indexed symbols in one file, without loading the rows. Like `load_file_symbols`,
+/// an exact-case path wins and the case-insensitive match is only the fallback.
 pub fn count_file_symbols(conn: &Connection, path: &str) -> usize {
-    conn.query_row(
-        "SELECT COUNT(*) FROM symbols
-         WHERE path = ?1 COLLATE NOCASE OR path = ?2 COLLATE NOCASE",
-        params![path.replace('\\', "/"), path.replace('/', "\\")],
-        |row| row.get::<_, i64>(0),
-    )
-    .map(|count| count as usize)
-    .unwrap_or(0)
+    let count = |sql: &str| {
+        conn.query_row(
+            sql,
+            params![path.replace('\\', "/"), path.replace('/', "\\")],
+            |row| row.get::<_, i64>(0),
+        )
+        .map(|count| count.max(0) as usize)
+        .unwrap_or(0)
+    };
+    match count("SELECT COUNT(*) FROM symbols WHERE path = ?1 OR path = ?2") {
+        0 => count(
+            "SELECT COUNT(*) FROM symbols
+             WHERE path = ?1 COLLATE NOCASE OR path = ?2 COLLATE NOCASE",
+        ),
+        exact => exact,
+    }
 }
 
 pub fn count_parse_diagnostics(conn: &Connection, path: &str) -> usize {
@@ -3929,6 +3938,27 @@ mod tests {
                 .map(|s| s.name)
                 .collect();
         assert!(lookup_with_tests.contains(&"parse_sidecar_fixture".to_string()));
+    }
+
+    #[test]
+    fn count_file_symbols_prefers_the_exact_case_path_like_the_loader() {
+        let conn = search_fixture(
+            &[
+                code_row("a", "src/Foo.rs", "rust", "one", ""),
+                code_row("b", "src/foo.rs", "rust", "two", ""),
+                code_row("c", "src/foo.rs", "rust", "three", ""),
+            ]
+            .join(", "),
+        );
+        for path in ["src/Foo.rs", "src/foo.rs", "src/FOO.rs", "src\\foo.rs"] {
+            assert_eq!(
+                count_file_symbols(&conn, path),
+                load_file_symbols(&conn, path).unwrap().len(),
+                "{path}"
+            );
+        }
+        assert_eq!(count_file_symbols(&conn, "src/Foo.rs"), 1);
+        assert_eq!(count_file_symbols(&conn, "src/FOO.rs"), 3);
     }
 
     #[test]
