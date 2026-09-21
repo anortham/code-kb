@@ -763,6 +763,7 @@ fn test_edit_file_edits_an_unsupported_text_file() {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn test_edit_file_preserves_file_permissions() {
     let dir = safe_tempdir();
