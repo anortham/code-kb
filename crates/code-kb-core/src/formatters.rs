@@ -109,7 +109,9 @@ fn render_symbol_skeleton(
 
     let children = children_map.get(&Some(sym.symbol_id.clone()));
 
-    if is_container_kind(&sym.kind) && children.is_some() {
+    let spans_multiple_lines = sym.end_line > sym.start_line;
+
+    if is_container_kind(&sym.kind) && spans_multiple_lines && children.is_some() {
         let raw_sig = sym.signature.as_deref().unwrap_or(&sym.name);
         let sig = sanitize_skeleton_sig(raw_sig, &sym.name);
         out.push_str(&format!("{indent}{sig} {{\n"));
@@ -1355,6 +1357,37 @@ mod tests {
              \n\
              } // L1-8\n\
              \n"
+        );
+    }
+
+    #[test]
+    fn skeleton_renders_a_single_line_symbol_with_children_as_a_leaf() {
+        let syms = vec![
+            skeleton_row(
+                "rusqlite",
+                None,
+                "field",
+                "rusqlite",
+                "rusqlite = { workspace = true }",
+                (15, 15),
+                None,
+            ),
+            skeleton_row(
+                "workspace",
+                Some("rusqlite"),
+                "property",
+                "workspace",
+                "workspace = true",
+                (15, 15),
+                None,
+            ),
+        ];
+
+        assert_eq!(
+            format_file_skeleton("Cargo.toml", &syms, Some(15), 0),
+            "// File: Cargo.toml (Lines 1-15)\n\
+             \n\
+             rusqlite =; // L15-15\n"
         );
     }
 
