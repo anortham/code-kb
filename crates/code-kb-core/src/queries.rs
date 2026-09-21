@@ -2827,14 +2827,15 @@ pub fn find_type_facts(conn: &Connection, symbol_id: &str) -> Result<Vec<TypeFac
 }
 
 /// True when a repository-relative path looks like a test file: a `test`, `tests`, or `__tests__`
-/// directory or a `test_` segment anywhere including the repository root, a `_test.`, `.test.`, or
-/// `.spec.` file name, a whole-file `test.rs` or `tests.rs`, or the C# `Tests.cs` ending.
+/// directory anywhere including the repository root, a `test_` segment in a Python or Ruby file,
+/// a `_test.`, `.test.`, or `.spec.` file name, a whole-file `test.rs` or `tests.rs`, or the C#
+/// `Tests.cs` ending.
 pub fn is_test_path(path: &str) -> bool {
     let p = format!("/{}", path.to_lowercase().replace('\\', "/"));
     p.contains("/test/")
         || p.contains("/tests/")
         || p.contains("/__tests__/")
-        || p.contains("/test_")
+        || (p.contains("/test_") && (p.ends_with(".py") || p.ends_with(".rb")))
         || p.contains("_test.")
         || p.contains(".test.")
         || p.contains(".spec.")
@@ -2853,7 +2854,8 @@ pub(crate) fn test_path_predicate(alias: &str) -> String {
         "%/test/%",
         "%/tests/%",
         "%/\\_\\_tests\\_\\_/%",
-        "%/test\\_%",
+        "%/test\\_%.py",
+        "%/test\\_%.rb",
         "%\\_test.%",
         "%.test.%",
         "%.spec.%",
@@ -3335,8 +3337,11 @@ mod tests {
         ("test/x.java", true),
         ("src/test/Helper.java", true),
         ("src/test_utils.py", true),
-        ("pkg/test_data/x.json", true),
+        ("lib/test_helper.rb", true),
         ("test_config.py", true),
+        ("pkg/test_data/x.json", false),
+        ("src/test_detection.rs", false),
+        ("crates/julie-index/src/analysis/test_quality.rs", false),
         ("x/foo_test.go", true),
         ("x/foo.test.ts", true),
         ("x/foo.spec.js", true),
