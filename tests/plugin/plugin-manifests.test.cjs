@@ -114,3 +114,17 @@ test('the release gate requires green exact-commit CI and matching versions', { 
   assert.equal(runReleaseGate({ EVENT_NAME: 'push', REF_NAME: `v${version}.mismatch` }).status, 1);
   assert.equal(runReleaseGate({ MOCK_MARKETPLACE_VERSION: `${version}.mismatch` }).status, 1);
 });
+
+test('the manifest version reaches the crate, the workflow, the site, and the release notes', () => {
+  const version = read('.claude-plugin/plugin.json').version;
+  const text = (file) => fs.readFileSync(path.join(root, file), 'utf8');
+
+  assert.match(text('Cargo.toml'), new RegExp(`^version = "${version}"$`, 'm'));
+  assert.match(text('crates/code-kb-cli/Cargo.toml'), new RegExp(`code-kb-core = \\{ version = "${version}"`));
+  for (const crate of ['code-kb-cli', 'code-kb-core']) {
+    assert.match(text('Cargo.lock'), new RegExp(`name = "${crate}"\\nversion = "${version}"`));
+  }
+  assert.match(text('.github/workflows/release-binaries.yml'), new RegExp(`default: "${version}"`));
+  assert.match(text('docs/site/index.html'), new RegExp(`<span class="version">v${version}</span>`));
+  assert.ok(fs.existsSync(path.join(root, `docs/release-notes/v${version}.md`)));
+});
