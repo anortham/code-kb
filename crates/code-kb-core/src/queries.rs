@@ -2600,6 +2600,47 @@ fn find_references_internal(
             for r in rows {
                 results.push(r?);
             }
+
+            if let Some(sid) = symbol_id.filter(|_| results.len() < limit) {
+                let remaining = limit - results.len();
+                let mut receiver_stmt = conn.prepare(
+                    "SELECT COALESCE(s.name, ''),
+                            COALESCE(i.containing_symbol_id, ''),
+                            i.name,
+                            i.kind,
+                            i.path,
+                            i.start_line,
+                            i.start_column
+                     FROM identifiers i
+                     LEFT JOIN symbols s ON i.containing_symbol_id = s.symbol_id
+                     JOIN symbols target ON target.symbol_id = ?2
+                     LEFT JOIN symbols target_parent ON target_parent.symbol_id = target.parent_symbol_id
+                     WHERE i.kind = 'member_access'
+                       AND i.name != target.name
+                       AND COALESCE(s.kind, '') != 'import'
+                       AND target.kind IN ('class', 'struct', 'enum', 'interface', 'trait', 'module', 'namespace')
+                       AND json_valid(i.metadata_json)
+                       AND json_extract(i.metadata_json, '$.receiver') = target.name
+                       AND (json_extract(i.metadata_json, '$.receiver_qualifier') IS NULL
+                            OR json_extract(i.metadata_json, '$.receiver_qualifier') = target_parent.name)
+                     ORDER BY i.path, i.start_line
+                     LIMIT ?1",
+                )?;
+                let rows = receiver_stmt.query_map(params![remaining as i64, sid], |row| {
+                    Ok(ReferenceSite {
+                        from_symbol_name: row.get(0)?,
+                        from_symbol_id: row.get(1)?,
+                        to_symbol_name: row.get(2)?,
+                        kind: row.get(3)?,
+                        path: row.get::<_, String>(4)?.replace('\\', "/"),
+                        start_line: row.get::<_, Option<i64>>(5)?.map(|v| v as usize),
+                        start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
+                    })
+                })?;
+                for r in rows {
+                    results.push(r?);
+                }
+            }
         }
     } else {
         // Find callees: symbols called by target symbol
