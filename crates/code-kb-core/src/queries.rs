@@ -1749,7 +1749,7 @@ fn get_symbol_by_name_internal(
          FROM symbols s
          LEFT JOIN symbols p ON s.parent_symbol_id = p.symbol_id
          WHERE (s.name = :name OR (s.name = :term AND (:parent IS NULL OR p.name = :parent)))
-           AND (:path IS NULL OR s.path = :path COLLATE NOCASE OR s.path = :path_bs COLLATE NOCASE OR (:exact = 0 AND (s.path LIKE '%/' || :path_like ESCAPE '\\' OR s.path LIKE '%\\\\' || :path_like_bs ESCAPE '\\')))
+           AND (:path IS NULL OR s.path = :path COLLATE NOCASE OR s.path = :path_bs COLLATE NOCASE OR (:exact = 0 AND (s.path LIKE '%/' || :path_like ESCAPE '\\' OR s.path LIKE '%\\\\' || :path_like_bs ESCAPE '\\' OR s.path LIKE :path_like || '/%' ESCAPE '\\' OR s.path LIKE :path_like_bs || '\\\\%' ESCAPE '\\')))
          ORDER BY (s.kind != 'import') DESC,
                   (s.kind IN ('function', 'struct', 'class', 'trait', 'method', 'enum', 'interface', 'type')) DESC,
                   (s.name = :name) DESC,

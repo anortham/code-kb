@@ -1940,15 +1940,10 @@ fn test_adversarial_defect2_negative_non_boundary_matches() {
         r"vices\PaymentService.rs",
         "FooServices/PaymentService.rs",
         r"FooServices\PaymentService.rs",
-        // Directory only without filename
+        // Directory that is not a prefix of the path
         "Services",
         "Services/",
         r"Services\",
-        "src/Services",
-        r"src\Services",
-        // Earlier prefix only
-        "src",
-        "src/",
     ];
 
     for neg in &non_boundary_negatives_payment {
@@ -1957,6 +1952,18 @@ fn test_adversarial_defect2_negative_non_boundary_matches() {
             sym.is_none(),
             "Non-boundary filter '{}' must NOT match 'src/Services/PaymentService.rs'",
             neg
+        );
+    }
+
+    let directory_prefixes_payment = ["src", "src/", "src/Services", r"src\Services"];
+
+    for prefix in &directory_prefixes_payment {
+        let sym = get_symbol_by_name(&conn, "ProcessPayment", Some(prefix)).unwrap();
+        assert_eq!(
+            sym.map(|s| s.path).as_deref(),
+            Some("src/Services/PaymentService.rs"),
+            "Directory prefix '{}' must match 'src/Services/PaymentService.rs'",
+            prefix
         );
     }
 

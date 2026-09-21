@@ -105,6 +105,12 @@ fn test_path_filter_boundary_matching() {
     fs::write(src_dir.join("domain.rs"), "pub fn run_it() {}\n").unwrap();
     fs::write(src_dir.join("main.rs"), "pub fn run_it() {}\n").unwrap();
 
+    let widget = "pub struct Widget;\nimpl Widget {\n    pub fn render() {}\n}\n";
+    fs::create_dir_all(src_dir.join("core")).unwrap();
+    fs::create_dir_all(src_dir.join("core2")).unwrap();
+    fs::write(src_dir.join("core").join("widget.rs"), widget).unwrap();
+    fs::write(src_dir.join("core2").join("widget.rs"), widget).unwrap();
+
     let ws = Workspace::new(root.clone());
     let db_path = root.join("test.db");
 
@@ -117,6 +123,22 @@ fn test_path_filter_boundary_matching() {
         .expect("run_it in main.rs must be found");
 
     assert_eq!(sym.path, "src/main.rs");
+
+    let in_core = get_symbol_by_name(&conn, "Widget::render", Some("src/core"))
+        .expect("Query failed")
+        .expect("Widget::render in src/core must be found");
+    assert_eq!(in_core.path, "src/core/widget.rs");
+
+    let in_core2 = get_symbol_by_name(&conn, "Widget::render", Some("src/core2"))
+        .expect("Query failed")
+        .expect("Widget::render in src/core2 must be found");
+    assert_eq!(in_core2.path, "src/core2/widget.rs");
+
+    assert!(
+        get_symbol_by_name(&conn, "Widget::render", Some("src/cor"))
+            .expect("Query failed")
+            .is_none()
+    );
 }
 
 #[test]
