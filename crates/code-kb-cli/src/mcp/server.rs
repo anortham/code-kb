@@ -203,7 +203,7 @@ impl McpServer {
                         },
                         "is_test": {
                             "type": "boolean",
-                            "description": "Include test functions, test containers, and rows from test files (default: false)."
+                            "description": "Include test functions, test containers, and rows from test files (default: false). A row whose name equals the query is returned either way."
                         },
                         "limit": {
                             "type": "integer",
