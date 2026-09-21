@@ -1725,6 +1725,10 @@ fn ancestor_names(conn: &Connection, symbol_id: &str) -> Result<Vec<String>, Que
     Ok(names)
 }
 
+/// A qualified name with several ancestor segments is filtered in Rust after the SQL, so the SQL
+/// must not truncate the candidate set the way the 25-row cap does for plain and one-segment names.
+const ANCESTOR_WALK_ROW_CAP: i64 = 2000;
+
 fn chain_contains(chain: &[String], wanted: &[&str]) -> bool {
     let mut remaining = chain.iter();
     wanted
@@ -1755,8 +1759,13 @@ fn get_symbol_by_name_internal(
                   (s.name = :name) DESC,
                   (:path IS NOT NULL AND (s.path = :path COLLATE NOCASE OR s.path = :path_bs COLLATE NOCASE)) DESC,
                   s.is_test ASC
-         LIMIT 25";
+         LIMIT :limit";
 
+    let row_cap: i64 = if ancestor_segments.len() > 1 {
+        ANCESTOR_WALK_ROW_CAP
+    } else {
+        25
+    };
     let mut stmt = conn.prepare(sql)?;
     let normalized_path = path_filter.map(|p| p.replace('\\', "/").trim_matches('/').to_string());
     let backslash_path = normalized_path.as_deref().map(|p| p.replace('/', "\\"));
@@ -1772,6 +1781,7 @@ fn get_symbol_by_name_internal(
         ":path_like": path_like.as_deref(),
         ":path_like_bs": path_like_bs.as_deref(),
         ":exact": if exact_path { 1 } else { 0 },
+        ":limit": row_cap,
     })?;
 
     let mut matches: Vec<Symbol> = Vec::new();

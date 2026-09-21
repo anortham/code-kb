@@ -796,3 +796,50 @@ fn qualified_lookup_with_a_full_chain_still_honors_the_path_filter() {
         .expect("the path filter must pick one of the two chains");
     assert_eq!(found.symbol_id, "run_b");
 }
+
+fn insert_inner_run_chains(conn: &rusqlite::Connection, decoys: usize, wanted: &[&str]) {
+    let mut rows = Vec::new();
+    for i in 0..decoys {
+        rows.push(format!(
+            "('outer{i}', 'f{i}', 'src/decoy{i}.rs', 'rust', 'Other{i}', 'struct', NULL, NULL, 'pub', NULL, 1, 0, 30, 0, 0, 300, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'struct', 0, 0),
+             ('inner{i}', 'f{i}', 'src/decoy{i}.rs', 'rust', 'Inner', 'struct', NULL, NULL, 'pub', 'outer{i}', 2, 4, 20, 4, 10, 200, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'struct', 0, 0),
+             ('run{i}', 'f{i}', 'src/decoy{i}.rs', 'rust', 'run', 'method', 'pub fn run(&self)', NULL, 'pub', 'inner{i}', 3, 8, 6, 8, 20, 60, 3, 8, 6, 8, 20, 60, 'h{i}', 'method', 0, 0)"
+        ));
+    }
+    for id in wanted {
+        rows.push(format!(
+            "('outer_{id}', 'fw_{id}', 'src/{id}.rs', 'rust', 'Wanted', 'struct', NULL, NULL, 'pub', NULL, 1, 0, 30, 0, 0, 300, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'struct', 0, 0),
+             ('inner_{id}', 'fw_{id}', 'src/{id}.rs', 'rust', 'Inner', 'struct', NULL, NULL, 'pub', 'outer_{id}', 2, 4, 20, 4, 10, 200, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'struct', 0, 0),
+             ('{id}', 'fw_{id}', 'src/{id}.rs', 'rust', 'run', 'method', 'pub fn run(&self)', NULL, 'pub', 'inner_{id}', 3, 8, 6, 8, 20, 60, 3, 8, 6, 8, 20, 60, 'hw_{id}', 'method', 1, 0)"
+        ));
+    }
+    conn.execute_batch(&format!("INSERT INTO symbols VALUES {};", rows.join(",\n")))
+        .unwrap();
+}
+
+#[test]
+fn qualified_lookup_finds_a_chain_sorted_past_the_row_cap() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+    insert_inner_run_chains(&conn, 40, &["wanted_run"]);
+
+    let found = get_symbol_by_name(&conn, "Wanted::Inner::run", None)
+        .unwrap()
+        .expect("the wanted chain sorts after 40 decoys and must still be found");
+    assert_eq!(found.symbol_id, "wanted_run");
+}
+
+#[test]
+fn qualified_lookup_reports_ambiguity_past_the_row_cap() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+    insert_inner_run_chains(&conn, 40, &["wanted_a", "wanted_b"]);
+
+    let err = get_symbol_by_name(&conn, "Wanted::Inner::run", None).unwrap_err();
+    let text = err.to_string();
+    assert!(text.contains("Ambiguous"), "{text}");
+    assert!(text.contains("src/wanted_a.rs"), "{text}");
+    assert!(text.contains("src/wanted_b.rs"), "{text}");
+}
