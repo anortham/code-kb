@@ -1,6 +1,7 @@
 use code_kb_core::{
     Workspace, compute_blast_radius_scoped, find_callee_signatures, find_julie_extract_binary,
-    find_references_scoped, get_symbol_by_name, open_read_only, safe_tempdir, scan_workspace,
+    find_references_scoped, get_symbol_by_name, open_read_only, open_read_write, safe_tempdir,
+    scan_workspace,
 };
 use std::fs;
 
@@ -318,4 +319,108 @@ fn a_namespaced_call_keeps_its_parent_when_the_caller_imports_that_name() {
 
     assert_eq!(caller_names(&from_store), ["boot"], "{from_store:?}");
     assert!(from_cache.is_empty(), "{from_cache:?}");
+}
+
+const QML_BASE_TYPES: &[(&str, &str)] = &[
+    (
+        "Ui/BarWidget.qml",
+        "import QtQuick\n\nItem {\n    id: root\n}\n",
+    ),
+    (
+        "clock/BarWidget.qml",
+        "import QtQuick\n\nBarWidget {\n    id: clockBar\n}\n",
+    ),
+    (
+        "media/Plugin.qml",
+        "import QtQuick\n\nBarWidget {\n    id: plugin\n}\n",
+    ),
+];
+
+fn repo_with_base_type_edges() -> (tempfile::TempDir, std::path::PathBuf) {
+    let (repo, db) = scanned_repo(QML_BASE_TYPES);
+    let conn = open_read_write(&db).unwrap();
+    conn.execute_batch(
+        "INSERT INTO reference_sites
+            (reference_site_id, file_id, path, language, is_exact, provenance)
+         SELECT 'rs_' || symbol_id, file_id, path, language, 0, 'spanless'
+         FROM symbols
+         WHERE kind = 'class' AND path != 'Ui/BarWidget.qml';
+         INSERT INTO pending_relationships
+            (pending_relationship_id, reference_site_id, from_symbol_id, file_id, path, kind,
+             target_display_name, target_terminal_name, target_namespace_json,
+             start_line, start_column, confidence)
+         SELECT 'pr_' || symbol_id, 'rs_' || symbol_id, symbol_id, file_id, path, 'extends',
+                'BarWidget', 'BarWidget', '[]', start_line, 0, 1.0
+         FROM symbols
+         WHERE kind = 'class' AND path != 'Ui/BarWidget.qml'",
+    )
+    .unwrap();
+    (repo, db)
+}
+
+#[test]
+fn a_base_type_edge_resolves_to_the_base_and_never_to_the_file_that_shares_its_name() {
+    let (_repo, db) = repo_with_base_type_edges();
+    let conn = open_read_only(&db).unwrap();
+
+    let base = find_references_scoped(
+        &conn,
+        "BarWidget",
+        "callers",
+        20,
+        false,
+        Some("Ui/BarWidget.qml"),
+    )
+    .unwrap();
+    let mut sites: Vec<(&str, &str)> = base
+        .iter()
+        .map(|r| (r.path.as_str(), r.kind.as_str()))
+        .collect();
+    sites.sort();
+    assert_eq!(
+        sites,
+        vec![
+            ("clock/BarWidget.qml", "extends"),
+            ("media/Plugin.qml", "extends")
+        ],
+        "{base:?}"
+    );
+
+    let derived = find_references_scoped(
+        &conn,
+        "BarWidget",
+        "callers",
+        20,
+        false,
+        Some("clock/BarWidget.qml"),
+    )
+    .unwrap();
+    assert!(
+        !derived.iter().any(|r| r.path == "clock/BarWidget.qml"),
+        "{derived:?}"
+    );
+}
+
+#[test]
+fn the_impact_walk_follows_base_type_edges() {
+    let (_repo, db) = repo_with_base_type_edges();
+    let conn = open_read_only(&db).unwrap();
+
+    let radius =
+        compute_blast_radius_scoped(&conn, &[], None, &["Ui/BarWidget.qml"], 3, 50).unwrap();
+
+    let mut impacted: Vec<(&str, &str)> = radius
+        .impacted_symbols
+        .iter()
+        .map(|s| (s.path.as_str(), s.name.as_str()))
+        .collect();
+    impacted.sort();
+    assert_eq!(
+        impacted,
+        vec![
+            ("clock/BarWidget.qml", "BarWidget"),
+            ("media/Plugin.qml", "Plugin")
+        ],
+        "{radius:?}"
+    );
 }

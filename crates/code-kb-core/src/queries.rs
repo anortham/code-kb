@@ -2280,6 +2280,8 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
     };
     format!(
         "(
+            NOT (p.kind IS 'extends' AND p.from_symbol_id = {target}.symbol_id)
+            AND (
             (
                 {target}.parent_symbol_id IS NOT NULL
                 AND {parent}.name IS NOT NULL
@@ -2328,6 +2330,7 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                       AND closer.symbol_id != {target}.symbol_id
                       AND closer.parent_symbol_id IS NULL
                       AND closer.kind = {target}.kind
+                      AND NOT (p.kind IS 'extends' AND closer.symbol_id = p.from_symbol_id)
                       AND {closer_rank} > {target_rank}
                 ))
             )
@@ -2338,6 +2341,7 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                     WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super')
                       AND {target_path} LIKE '%/' || {like_value} || '.%' ESCAPE '\\'
                 )
+            )
             )
         )"
     )
