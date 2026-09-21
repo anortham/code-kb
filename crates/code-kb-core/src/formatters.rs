@@ -57,10 +57,11 @@ pub fn format_file_skeleton(
 }
 
 fn is_container_kind(kind: &str) -> bool {
-    matches!(
+    let hides_its_body = matches!(
         kind,
-        "struct" | "class" | "trait" | "interface" | "enum" | "impl" | "module" | "namespace"
-    )
+        "function" | "method" | "constructor" | "destructor" | "operator"
+    );
+    !is_skippable_kind(kind) && !hides_its_body
 }
 
 fn is_skippable_kind(kind: &str) -> bool {
@@ -106,7 +107,6 @@ fn render_symbol_skeleton(
 
     let span_str = format!("L{}-{}", sym.start_line, sym.end_line);
 
-    // Check if this symbol is a container (class, struct, trait, enum, etc.)
     let children = children_map.get(&Some(sym.symbol_id.clone()));
 
     if is_container_kind(&sym.kind) && children.is_some() {
@@ -1261,5 +1261,153 @@ mod tests {
         assert!(formatted.contains(
             "### Downstream Impact (200+ symbols - traversal ceiling reached; increase depth/limit or narrow target)\n"
         ));
+    }
+
+    fn skeleton_row(
+        id: &str,
+        parent: Option<&str>,
+        kind: &str,
+        name: &str,
+        signature: &str,
+        lines: (usize, usize),
+        body: Option<(usize, usize)>,
+    ) -> Symbol {
+        Symbol {
+            symbol_id: id.into(),
+            file_id: "f1".into(),
+            path: "src/lib.rs".into(),
+            language: "rust".into(),
+            name: name.into(),
+            kind: kind.into(),
+            signature: Some(signature.into()),
+            doc_comment: None,
+            visibility: None,
+            parent_symbol_id: parent.map(str::to_string),
+            start_line: lines.0,
+            start_column: 0,
+            end_line: lines.1,
+            end_column: 1,
+            start_byte: 0,
+            end_byte: 0,
+            body_start_line: body.map(|b| b.0),
+            body_start_column: None,
+            body_end_line: body.map(|b| b.1),
+            body_end_column: None,
+            body_start_byte: None,
+            body_end_byte: None,
+            body_hash: None,
+            semantic_group: None,
+            is_test: false,
+            test_container: false,
+        }
+    }
+
+    #[test]
+    fn skeleton_nests_an_object_under_the_field_that_declares_it() {
+        let syms = vec![
+            skeleton_row(
+                "root",
+                None,
+                "class",
+                "shell",
+                "extends ShellRoot",
+                (1, 8),
+                None,
+            ),
+            skeleton_row(
+                "timer",
+                Some("root"),
+                "field",
+                "localPluginReloadTimer",
+                "localPluginReloadTimer: Timer",
+                (2, 7),
+                Some((2, 7)),
+            ),
+            skeleton_row(
+                "interval",
+                Some("timer"),
+                "property",
+                "interval",
+                "interval: 150",
+                (3, 3),
+                None,
+            ),
+            skeleton_row(
+                "fire",
+                Some("timer"),
+                "function",
+                "fire",
+                "function fire()",
+                (5, 7),
+                Some((6, 7)),
+            ),
+        ];
+
+        assert_eq!(
+            format_file_skeleton("shell/shell.qml", &syms, Some(8), 0),
+            "// File: shell/shell.qml (Lines 1-8)\n\
+             \n\
+             extends ShellRoot {\n\
+             \x20   localPluginReloadTimer: Timer {\n\
+             \x20       interval: 150; // L3-3\n\
+             \x20       function fire() { /* 2 lines hidden: L6-L7 */ }\n\
+             \x20   } // L2-7\n\
+             \n\
+             } // L1-8\n\
+             \n"
+        );
+    }
+
+    #[test]
+    fn skeleton_keeps_plain_fields_and_function_locals_unchanged() {
+        let syms = vec![
+            skeleton_row(
+                "cfg",
+                None,
+                "struct",
+                "Config",
+                "pub struct Config",
+                (1, 3),
+                None,
+            ),
+            skeleton_row(
+                "retries",
+                Some("cfg"),
+                "field",
+                "retries",
+                "pub retries: u32",
+                (2, 2),
+                None,
+            ),
+            skeleton_row(
+                "run",
+                None,
+                "function",
+                "run",
+                "pub fn run()",
+                (5, 9),
+                Some((6, 8)),
+            ),
+            skeleton_row(
+                "tmp",
+                Some("run"),
+                "variable",
+                "tmp",
+                "let tmp",
+                (7, 7),
+                None,
+            ),
+        ];
+
+        assert_eq!(
+            format_file_skeleton("src/lib.rs", &syms, Some(9), 0),
+            "// File: src/lib.rs (Lines 1-9)\n\
+             \n\
+             pub struct Config {\n\
+             \x20   pub retries: u32; // L2-2\n\
+             } // L1-3\n\
+             \n\
+             pub fn run() { /* 3 lines hidden: L6-L8 */ }\n"
+        );
     }
 }
