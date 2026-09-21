@@ -2165,3 +2165,69 @@ fn test_first_tool_call_sees_files_changed_while_no_server_ran() {
     let text = response["result"]["content"][0]["text"].as_str().unwrap();
     assert!(text.contains("added_while_no_server_ran"), "{text}");
 }
+
+#[test]
+fn test_mcp_lookup_symbol_reports_a_broken_search_index() {
+    let repo = setup_test_repo();
+    let root = repo.path();
+
+    let conn = code_kb_core::open_read_write(&root.join(".code-kb").join("artifact.db")).unwrap();
+    conn.execute_batch("DROP TABLE symbols_fts_data;").unwrap();
+    drop(conn);
+
+    let mut child = ChildGuard(
+        Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+            .current_dir(root)
+            .arg("serve")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("Failed to spawn code-kb serve"),
+    );
+
+    let mut stdin = child.stdin.take().unwrap();
+    let stdout = child.stdout.take().unwrap();
+    let mut reader = BufReader::new(stdout);
+
+    let mut rpc = |request: Value| -> Value {
+        let mut line = serde_json::to_string(&request).unwrap();
+        line.push('\n');
+        stdin.write_all(line.as_bytes()).unwrap();
+        stdin.flush().unwrap();
+        let mut response = String::new();
+        reader.read_line(&mut response).unwrap();
+        serde_json::from_str(&response).unwrap()
+    };
+
+    rpc(json!({
+        "jsonrpc": "2.0", "id": 1, "method": "initialize",
+        "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}
+    }));
+
+    let response = rpc(json!({
+        "jsonrpc": "2.0", "id": 2, "method": "tools/call",
+        "params": {"name": "lookup_symbol", "arguments": {"query": "ZzzAbsentSymbol"}}
+    }));
+    assert_eq!(response["result"]["isError"], true);
+    let text = response["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains("symbols_fts"), "{text}");
+    assert!(!text.contains("No exact name match"), "{text}");
+
+    let summary = rpc(json!({
+        "jsonrpc": "2.0", "id": 3, "method": "tools/call",
+        "params": {"name": "telemetry_summary", "arguments": {"workspace_only": true, "json": true}}
+    }));
+    let summary_json: Value =
+        serde_json::from_str(summary["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    let recent_errors = summary_json["recent_errors"].as_array().unwrap();
+    assert!(
+        recent_errors
+            .iter()
+            .any(|entry| entry["tool"] == "lookup_symbol"
+                && entry["error_message"]
+                    .as_str()
+                    .is_some_and(|message| message.contains("symbols_fts"))),
+        "{summary_json}"
+    );
+}

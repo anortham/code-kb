@@ -563,8 +563,7 @@ fn main() -> anyhow::Result<()> {
                     path_filter,
                     args.include_tests,
                     args.limit,
-                )
-                .unwrap_or_default();
+                )?;
                 (Vec::new(), fts)
             } else {
                 (matches, Vec::new())

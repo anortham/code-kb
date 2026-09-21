@@ -828,15 +828,17 @@ impl McpServer {
                     if let Err(e) = ensure_fts_index_path(&self.db_path) {
                         return CallToolResult::error(format!("Search index is not ready: {e}"));
                     }
-                    let fts = fts_search_symbols_scoped(
+                    let fts = match fts_search_symbols_scoped(
                         &conn,
                         query,
                         kind,
                         path_filter,
                         include_tests,
                         limit,
-                    )
-                    .unwrap_or_default();
+                    ) {
+                        Ok(fts) => fts,
+                        Err(e) => return CallToolResult::error(e.to_string()),
+                    };
                     (Vec::new(), fts)
                 } else {
                     (matches, Vec::new())

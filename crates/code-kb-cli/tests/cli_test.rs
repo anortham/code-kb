@@ -1379,3 +1379,28 @@ fn test_cli_query_builds_and_refreshes_the_index_without_scan() {
     .unwrap();
     assert!(lookup("added_while_no_server_ran").contains("added_while_no_server_ran"));
 }
+
+#[test]
+fn test_cli_lookup_reports_a_broken_search_index() {
+    let repo = setup_test_repo();
+    let root = repo.path();
+
+    let conn = code_kb_core::open_read_write(&root.join(".code-kb").join("artifact.db")).unwrap();
+    conn.execute_batch("DROP TABLE symbols_fts_data;").unwrap();
+    drop(conn);
+
+    let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .arg("lookup")
+        .arg("ZzzAbsentSymbol")
+        .output()
+        .expect("Failed to execute lookup");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!output.status.success(), "stderr: {stderr}");
+    assert!(stderr.contains("Database query error"), "stderr: {stderr}");
+    assert!(stderr.contains("symbols_fts"), "stderr: {stderr}");
+    assert!(!stdout.contains("No exact name match"), "stdout: {stdout}");
+}
