@@ -381,8 +381,12 @@ pub fn format_references(
         } else {
             &r.to_symbol_name
         };
+        let in_file = match r.occurrences {
+            Some(n) => format!(", {n} in file"),
+            None => String::new(),
+        };
         out.push_str(&format!(
-            "- `{other}` [{}{line_info}] (kind: {})\n",
+            "- `{other}` [{}{line_info}] (kind: {}{in_file})\n",
             r.path, r.kind
         ));
     }
@@ -849,6 +853,32 @@ mod tests {
         let without_key = format_structural_facts(&[structural_fact(None)], &[], "config", 30);
         assert!(
             without_key.contains("- key_value [.codex/config.toml:2] (pattern: toml.key_value.v1)")
+        );
+    }
+
+    #[test]
+    fn format_references_reports_the_occurrence_count_of_a_grouped_row() {
+        let site = |occurrences| ReferenceSite {
+            from_symbol_name: "Button".into(),
+            from_symbol_id: "s1".into(),
+            to_symbol_name: "background".into(),
+            kind: "member_access".into(),
+            path: "Ui/Button.qml".into(),
+            start_line: Some(5),
+            start_column: Some(4),
+            occurrences,
+        };
+
+        let grouped = format_references("Color", &[site(Some(6))], "callers", 30);
+        assert!(
+            grouped.contains("- `Button` [Ui/Button.qml:5] (kind: member_access, 6 in file)"),
+            "{grouped}"
+        );
+
+        let single = format_references("Color", &[site(None)], "callers", 30);
+        assert!(
+            single.contains("- `Button` [Ui/Button.qml:5] (kind: member_access)"),
+            "{single}"
         );
     }
 

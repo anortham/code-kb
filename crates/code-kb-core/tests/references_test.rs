@@ -361,7 +361,8 @@ fn callers_of_a_type_include_the_member_accesses_that_name_it_as_receiver() {
     )
     .unwrap();
 
-    let mut sites: Vec<(String, Option<usize>, String, String)> = refs
+    type Site = (String, Option<usize>, String, String, Option<usize>);
+    let mut sites: Vec<Site> = refs
         .iter()
         .map(|r| {
             (
@@ -369,28 +370,51 @@ fn callers_of_a_type_include_the_member_accesses_that_name_it_as_receiver() {
                 r.start_line,
                 r.to_symbol_name.clone(),
                 r.kind.clone(),
+                r.occurrences,
             )
         })
         .collect();
     sites.sort();
     assert_eq!(
         sites,
-        vec![
-            (
-                "Ui/Button.qml".to_string(),
-                Some(5),
-                "background".to_string(),
-                "member_access".to_string()
-            ),
-            (
-                "Ui/Button.qml".to_string(),
-                Some(6),
-                "foreground".to_string(),
-                "member_access".to_string()
-            ),
-        ],
+        vec![(
+            "Ui/Button.qml".to_string(),
+            Some(5),
+            "background".to_string(),
+            "member_access".to_string(),
+            Some(2)
+        )],
         "{refs:?}"
     );
+}
+
+#[test]
+fn a_call_site_caller_row_reports_no_occurrence_count() {
+    let (_repo, db_path) = scanned_repo(&[
+        (
+            "Core/Repositories/EmailSettingQueryRepository.cs",
+            REPOSITORY_CS,
+        ),
+        (
+            "Core/ApplicationServices/AnnualReportingAttestationNotificationBuilder.cs",
+            BUILDER_CS,
+        ),
+        ("Web/Controllers/EmailSettingController.cs", CONTROLLER_CS),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let refs = find_references_scoped(
+        &conn,
+        "EmailSettingPlaceholderGenerators.AnnualAttestationNotification",
+        "callers",
+        20,
+        false,
+        None,
+    )
+    .unwrap();
+
+    assert!(refs.iter().any(|r| r.kind == "calls"), "{refs:?}");
+    assert!(refs.iter().all(|r| r.occurrences.is_none()), "{refs:?}");
 }
 
 #[test]

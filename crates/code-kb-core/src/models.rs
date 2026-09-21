@@ -60,6 +60,8 @@ pub struct ReferenceSite {
     pub path: String,
     pub start_line: Option<usize>,
     pub start_column: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub occurrences: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

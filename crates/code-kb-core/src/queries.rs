@@ -2455,6 +2455,7 @@ fn find_references_internal(
                 path: row.get::<_, String>(4)?.replace('\\', "/"),
                 start_line: row.get::<_, Option<i64>>(5)?.map(|v| v as usize),
                 start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
+                occurrences: None,
             })
         })?;
 
@@ -2495,6 +2496,7 @@ fn find_references_internal(
                                 path: row.get::<_, String>(4)?.replace('\\', "/"),
                                 start_line: Some(row.get::<_, i64>(5)? as usize),
                                 start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
+                                occurrences: None,
                             })
                         },
                     )?;
@@ -2535,6 +2537,7 @@ fn find_references_internal(
                                 path: row.get::<_, String>(4)?.replace('\\', "/"),
                                 start_line: Some(row.get::<_, i64>(5)? as usize),
                                 start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
+                                occurrences: None,
                             })
                         })?;
                     for r in p_rows {
@@ -2578,6 +2581,7 @@ fn find_references_internal(
                                 path: row.get::<_, String>(4)?.replace('\\', "/"),
                                 start_line: Some(row.get::<_, i64>(5)? as usize),
                                 start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
+                                occurrences: None,
                             })
                         })?;
 
@@ -2633,6 +2637,7 @@ fn find_references_internal(
                         path: row.get::<_, String>(4)?.replace('\\', "/"),
                         start_line: row.get::<_, Option<i64>>(5)?.map(|v| v as usize),
                         start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
+                        occurrences: None,
                     })
                 })?;
             for r in rows {
@@ -2647,8 +2652,9 @@ fn find_references_internal(
                             i.name,
                             i.kind,
                             i.path,
-                            i.start_line,
-                            i.start_column
+                            MIN(i.start_line),
+                            i.start_column,
+                            COUNT(*)
                      FROM identifiers i
                      LEFT JOIN symbols s ON i.containing_symbol_id = s.symbol_id
                      JOIN symbols target ON target.symbol_id = ?2
@@ -2661,6 +2667,7 @@ fn find_references_internal(
                        AND json_extract(i.metadata_json, '$.receiver') = target.name
                        AND (json_extract(i.metadata_json, '$.receiver_qualifier') IS NULL
                             OR json_extract(i.metadata_json, '$.receiver_qualifier') = target_parent.name)
+                     GROUP BY i.path
                      ORDER BY i.path, i.start_line
                      LIMIT ?1",
                 )?;
@@ -2673,6 +2680,7 @@ fn find_references_internal(
                         path: row.get::<_, String>(4)?.replace('\\', "/"),
                         start_line: row.get::<_, Option<i64>>(5)?.map(|v| v as usize),
                         start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
+                        occurrences: Some(row.get::<_, i64>(7)? as usize),
                     })
                 })?;
                 for r in rows {
@@ -2706,6 +2714,7 @@ fn find_references_internal(
                 path: row.get::<_, String>(4)?.replace('\\', "/"),
                 start_line: row.get::<_, Option<i64>>(5)?.map(|v| v as usize),
                 start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
+                occurrences: None,
             })
         })?;
 
@@ -2761,6 +2770,7 @@ fn find_references_internal(
                             path: row.get::<_, String>(4)?.replace('\\', "/"),
                             start_line: Some(row.get::<_, i64>(5)? as usize),
                             start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
+                            occurrences: None,
                         })
                     },
                 )?;
@@ -2809,6 +2819,7 @@ fn find_references_internal(
                             path: row.get::<_, String>(4)?.replace('\\', "/"),
                             start_line: Some(row.get::<_, i64>(5)? as usize),
                             start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
+                            occurrences: None,
                         })
                     },
                 )?;
