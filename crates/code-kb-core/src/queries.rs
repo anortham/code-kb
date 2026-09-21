@@ -3307,8 +3307,9 @@ pub fn find_type_facts(conn: &Connection, symbol_id: &str) -> Result<Vec<TypeFac
 }
 
 /// True when a repository-relative path looks like a test file. Directory rules and file-name
-/// rules are kept apart: a `test`, `tests`, or `__tests__` directory anywhere including the
-/// repository root, or a file name that starts with `test_` in Python or Ruby, contains `_test.`,
+/// rules are kept apart: a `test`, `tests`, `autotests`, or `__tests__` directory anywhere
+/// including the repository root, or a file name that starts with Qt's `tst_`, starts with
+/// `test_` in Python or Ruby, contains `_test.`,
 /// `.test.`, or `.spec.`, is exactly `test.rs` or `tests.rs`, or ends with the C# `Tests.cs`
 /// (case-sensitive, so `Contests.cs` is a production file).
 pub fn is_test_path(path: &str) -> bool {
@@ -3319,7 +3320,9 @@ pub fn is_test_path(path: &str) -> bool {
     let lower_name = file_name.to_lowercase();
     directories.contains("/test/")
         || directories.contains("/tests/")
+        || directories.contains("/autotests/")
         || directories.contains("/__tests__/")
+        || lower_name.starts_with("tst_")
         || (lower_name.starts_with("test_")
             && (lower_name.ends_with(".py") || lower_name.ends_with(".rb")))
         || lower_name.contains("_test.")
@@ -3335,11 +3338,13 @@ pub fn is_test_path(path: &str) -> bool {
 /// `test_path_rule_and_its_sql_mirror_agree_on_every_path` runs both forms over one path list so
 /// the two cannot drift apart.
 ///
-/// Every rule needs the word `test` or `spec` in the path, so a cheap substring test guards the
+/// Every rule needs `test`, `spec`, or `tst_` in the path, so a cheap substring test guards the
 /// rules and lets most rows skip the path split. Without the guard the split costs about seven
 /// times more over a half-million rows.
 pub(crate) fn test_path_predicate(alias: &str) -> String {
-    let guard = format!("(lower({alias}.path) LIKE '%test%' OR lower({alias}.path) LIKE '%spec%')");
+    let guard = format!(
+        "(lower({alias}.path) LIKE '%test%' OR lower({alias}.path) LIKE '%spec%' OR lower({alias}.path) LIKE '%tst\\_%' ESCAPE '\\')"
+    );
     let p = format!("replace({alias}.path, '\\', '/')");
     let directories = format!("'/' || lower(rtrim({p}, replace({p}, '/', ''))) || '/'");
     let file_name = format!("replace({p}, rtrim({p}, replace({p}, '/', '')), '')");
@@ -3348,7 +3353,9 @@ pub(crate) fn test_path_predicate(alias: &str) -> String {
     let clauses = [
         like(&directories, "%/test/%"),
         like(&directories, "%/tests/%"),
+        like(&directories, "%/autotests/%"),
         like(&directories, "%/\\_\\_tests\\_\\_/%"),
+        like(&lower_name, "tst\\_%"),
         like(&lower_name, "test\\_%.py"),
         like(&lower_name, "test\\_%.rb"),
         like(&lower_name, "%\\_test.%"),
@@ -3839,6 +3846,16 @@ mod tests {
         ("test_config.py", true),
         ("pkg/test_data/x.json", false),
         ("src/test_detection.rs", false),
+        ("autotests/tst_pagerow.qml", true),
+        ("autotests/helper.qml", true),
+        ("src/autotests/columnview.cpp", true),
+        ("tst_foo.qml", true),
+        ("src/tst_columnview.qml", true),
+        ("autotests\\tst_bar.qml", true),
+        ("autotests_helper/x.rs", false),
+        ("src/autotest.rs", false),
+        ("src/tstamp.rs", false),
+        ("src/tst.rs", false),
         ("crates/julie-index/src/analysis/test_quality.rs", false),
         ("x/foo_test.go", true),
         ("x/foo.test.ts", true),
