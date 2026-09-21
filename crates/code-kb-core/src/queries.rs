@@ -2615,6 +2615,20 @@ fn find_references_internal(
                  LEFT JOIN symbols s ON i.containing_symbol_id = s.symbol_id
                  WHERE i.name = ?1 AND i.kind IN ('type_usage', 'member_access')
                    AND COALESCE(s.kind, '') != 'import'
+                   AND NOT EXISTS (
+                       SELECT 1 FROM relationships covered
+                       JOIN symbols covered_to ON covered.to_symbol_id = covered_to.symbol_id
+                       WHERE covered_to.name = i.name
+                         AND covered.path = i.path
+                         AND covered.start_line = i.start_line
+                         AND (?3 IS NULL OR covered.to_symbol_id = ?3)
+                   )
+                   AND NOT EXISTS (
+                       SELECT 1 FROM pending_relationships covered
+                       WHERE covered.target_terminal_name = i.name
+                         AND covered.path = i.path
+                         AND covered.start_line = i.start_line
+                   )
                    AND (?3 IS NULL OR NOT EXISTS (
                        SELECT 1 FROM symbols owner
                        JOIN symbols member ON member.parent_symbol_id = owner.symbol_id

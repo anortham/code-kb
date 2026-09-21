@@ -521,3 +521,46 @@ fn a_signal_handler_is_a_candidate_until_its_receiver_names_the_owner() {
         "{refs:?}"
     );
 }
+
+const INHERITANCE_SITES_THAT_ALSO_EMIT_IDENTIFIERS: &[(&str, &str)] = &[
+    (
+        "src/tree.py",
+        "class Parent:\n    def go(self):\n        return 1\n\n\nclass Child(Parent):\n    def go(self):\n        return 2\n",
+    ),
+    (
+        "src/base.ts",
+        "export class Base {\n    go() { return 1; }\n}\n",
+    ),
+    (
+        "src/leaf.ts",
+        "import { Base } from \"./base\";\n\nexport class Leaf extends Base {\n    go() { return 2; }\n}\n",
+    ),
+];
+
+#[test]
+fn a_site_with_both_a_relationship_and_an_identifier_yields_one_row() {
+    let (_repo, db_path) = scanned_repo(INHERITANCE_SITES_THAT_ALSO_EMIT_IDENTIFIERS);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let sites = |refs: &[code_kb_core::ReferenceSite]| -> Vec<(String, Option<usize>, String)> {
+        refs.iter()
+            .map(|r| (r.path.clone(), r.start_line, r.kind.clone()))
+            .collect()
+    };
+
+    let concrete =
+        find_references_scoped(&conn, "Parent", "callers", 20, false, Some("src/tree.py")).unwrap();
+    let pending =
+        find_references_scoped(&conn, "Base", "callers", 20, false, Some("src/base.ts")).unwrap();
+
+    assert_eq!(
+        sites(&concrete),
+        vec![("src/tree.py".to_string(), Some(6), "extends".to_string())],
+        "{concrete:?}"
+    );
+    assert_eq!(
+        sites(&pending),
+        vec![("src/leaf.ts".to_string(), Some(3), "extends".to_string())],
+        "{pending:?}"
+    );
+}
