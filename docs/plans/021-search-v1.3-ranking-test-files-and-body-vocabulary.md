@@ -1,10 +1,10 @@
 # 021: Search v1.3 — ranking ties, test-file rows, and body vocabulary
 
-Date: 2026-09-20. Status: draft, awaiting approval. Follows plan 020 (shipped
+Date: 2026-09-20. Status: approved 2026-09-20, in progress. Follows plan 020 (shipped
 as v1.2.0). Spec: this document; the evidence is plan 020's "Results" and
 "Post-review fixes" sections, plan 019's rerun tables, and the two
 measurements below. Reviewed the same day by Codex as a second opinion; its
-ordering (evaluation first, extractor test flags next, the cheap rank lever
+ordering (evaluation first, the test-file path rule next, the cheap rank lever
 before any new index) is adopted.
 
 ## Goal
@@ -19,6 +19,10 @@ stays at about 25 MB.
 
 - Plan 019 sets: code-kb leads Julie and Miller on every column; held-out
   10 of 10 on file@1 and symbol@1. Saturated: they only detect regressions.
+- Second development set (60 queries, 15 per repository), v1.2.0 baseline, as
+  file@1 / symbol@1 / symbol@3 / not admitted: code-kb 9 / 8 / 8 / 2,
+  hermes-agent 9 / 7 / 11 / 0, julie 7 / 7 / 9 / 1, miller 4 / 3 / 7 / 2.
+  Total 29 / 25 / 35 / 5 of 60.
 - Development set (89 queries, 4 repositories): 61 of 89 symbol@1, 81 of
   89 symbol@3.
 - Sealed acceptance set (40 README-phrased queries, run once on the branch
