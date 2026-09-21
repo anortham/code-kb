@@ -19,6 +19,8 @@ pub struct ToolInvocation<'a> {
     pub bytes_returned: usize,
     pub est_tokens: usize,
     pub est_tokens_saved: usize,
+    /// True when the answer had files to measure against, so `est_tokens_saved` is a real figure.
+    pub est_tokens_saved_known: bool,
     pub reconcile_ms: Option<u64>,
     pub query_ms: Option<u64>,
 }
@@ -87,6 +89,7 @@ pub struct TelemetrySummary {
     pub error_calls: usize,
     pub total_tokens_returned: usize,
     pub est_tokens_saved: usize,
+    pub saved_known_calls: usize,
     pub time_window: TimeWindow,
     pub scope_description: String,
     pub tool_stats: Vec<ToolStat>,
@@ -107,6 +110,7 @@ pub struct ToolStat {
     pub avg_query_ms: Option<u64>,
     pub tokens_returned: usize,
     pub tokens_saved: usize,
+    pub saved_known_count: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -238,6 +242,7 @@ fn init_telemetry_db(conn: &Connection) -> Result<(), QueryError> {
              bytes_returned INTEGER NOT NULL DEFAULT 0,
              est_tokens INTEGER NOT NULL DEFAULT 0,
              est_tokens_saved INTEGER NOT NULL DEFAULT 0,
+             est_tokens_saved_known INTEGER NOT NULL DEFAULT 0,
              code_kb_version TEXT NOT NULL,
              reconcile_ms INTEGER DEFAULT NULL,
              query_ms INTEGER DEFAULT NULL
@@ -269,6 +274,12 @@ fn init_telemetry_db(conn: &Connection) -> Result<(), QueryError> {
     if !col_names.contains("est_tokens_saved") {
         conn.execute(
             "ALTER TABLE tool_telemetry ADD COLUMN est_tokens_saved INTEGER NOT NULL DEFAULT 0",
+            [],
+        )?;
+    }
+    if !col_names.contains("est_tokens_saved_known") {
+        conn.execute(
+            "ALTER TABLE tool_telemetry ADD COLUMN est_tokens_saved_known INTEGER NOT NULL DEFAULT 0",
             [],
         )?;
     }
@@ -369,9 +380,9 @@ pub fn record_tool_call_conn(
         "INSERT INTO tool_telemetry (
             id, timestamp, workspace_root, workspace_name, tool,
             duration_ms, outcome, error_message, result_count, result_count_known,
-            bytes_returned, est_tokens, est_tokens_saved, code_kb_version,
-            reconcile_ms, query_ms
-        ) VALUES (?1, datetime('now'), ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+            bytes_returned, est_tokens, est_tokens_saved, est_tokens_saved_known,
+            code_kb_version, reconcile_ms, query_ms
+        ) VALUES (?1, datetime('now'), ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
         params![
             id,
             norm_ws,
@@ -385,6 +396,7 @@ pub fn record_tool_call_conn(
             invocation.bytes_returned as i64,
             invocation.est_tokens as i64,
             invocation.est_tokens_saved as i64,
+            invocation.est_tokens_saved_known as i64,
             version,
             invocation.reconcile_ms.map(|v| v as i64),
             invocation.query_ms.map(|v| v as i64),
@@ -472,13 +484,22 @@ pub fn get_telemetry_summary(
                 SUM(CASE WHEN outcome = 'empty' THEN 1 ELSE 0 END),
                 SUM(CASE WHEN outcome = 'error' THEN 1 ELSE 0 END),
                 SUM(est_tokens),
-                SUM(est_tokens_saved)
+                SUM(est_tokens_saved),
+                SUM(CASE WHEN est_tokens_saved_known = 1 THEN 1 ELSE 0 END)
          FROM tool_telemetry
          {}",
         where_clause
     );
 
-    let (total_calls, ok_calls, empty_calls, error_calls, total_tokens_returned, est_tokens_saved) = {
+    let (
+        total_calls,
+        ok_calls,
+        empty_calls,
+        error_calls,
+        total_tokens_returned,
+        est_tokens_saved,
+        saved_known_calls,
+    ) = {
         let mut stmt = conn.prepare(&totals_sql)?;
         let row_mapper = |row: &rusqlite::Row| {
             let total: i64 = row.get(0)?;
@@ -487,6 +508,7 @@ pub fn get_telemetry_summary(
             let error: Option<i64> = row.get(3)?;
             let tokens: Option<i64> = row.get(4)?;
             let tokens_saved: Option<i64> = row.get(5)?;
+            let saved_known: Option<i64> = row.get(6)?;
             Ok((
                 total as usize,
                 ok.unwrap_or(0) as usize,
@@ -494,6 +516,7 @@ pub fn get_telemetry_summary(
                 error.unwrap_or(0) as usize,
                 tokens.unwrap_or(0) as usize,
                 tokens_saved.unwrap_or(0) as usize,
+                saved_known.unwrap_or(0) as usize,
             ))
         };
         stmt.query_row(
@@ -536,6 +559,7 @@ pub fn get_telemetry_summary(
                 ROUND(AVG(duration_ms)),
                 SUM(est_tokens),
                 SUM(est_tokens_saved),
+                SUM(CASE WHEN est_tokens_saved_known = 1 THEN 1 ELSE 0 END),
                 ROUND(AVG(reconcile_ms)),
                 ROUND(AVG(query_ms))
          FROM tool_telemetry
@@ -557,8 +581,9 @@ pub fn get_telemetry_summary(
             let avg_duration: Option<f64> = row.get(5)?;
             let tokens: Option<i64> = row.get(6)?;
             let tokens_saved: Option<i64> = row.get(7)?;
-            let avg_rec: Option<f64> = row.get(8)?;
-            let avg_q: Option<f64> = row.get(9)?;
+            let saved_known: Option<i64> = row.get(8)?;
+            let avg_rec: Option<f64> = row.get(9)?;
+            let avg_q: Option<f64> = row.get(10)?;
 
             let (p50, p95) = if let Some(durs) = durations_by_tool.get(&tool) {
                 (
@@ -582,6 +607,7 @@ pub fn get_telemetry_summary(
                 avg_query_ms: avg_q.map(|v| v.round() as u64),
                 tokens_returned: tokens.unwrap_or(0) as usize,
                 tokens_saved: tokens_saved.unwrap_or(0) as usize,
+                saved_known_count: saved_known.unwrap_or(0) as usize,
             })
         };
 
@@ -641,6 +667,7 @@ pub fn get_telemetry_summary(
         error_calls,
         total_tokens_returned,
         est_tokens_saved,
+        saved_known_calls,
         time_window: filter.time_window,
         scope_description,
         tool_stats,
@@ -999,8 +1026,16 @@ pub fn format_telemetry_summary(summary: &TelemetrySummary) -> String {
     };
 
     out.push_str(&format!(
-        "Scope: {} | Window: {} | Total Tool Calls: {} | Success Rate: {:.1}% | Empty Results: {} | Tokens Served: ~{} | Est. Tokens Saved (read tools only): ~{}\n\n",
-        summary.scope_description, summary.time_window, summary.total_calls, success_rate, summary.empty_calls, summary.total_tokens_returned, summary.est_tokens_saved
+        "Scope: {} | Window: {} | Total Tool Calls: {} | Success Rate: {:.1}% | Empty Results: {} | Tokens Served: ~{} | Est. Tokens Saved: ~{} (baseline known for {} of {} calls)\n\n",
+        summary.scope_description,
+        summary.time_window,
+        summary.total_calls,
+        success_rate,
+        summary.empty_calls,
+        summary.total_tokens_returned,
+        summary.est_tokens_saved,
+        summary.saved_known_calls,
+        summary.total_calls
     ));
 
     out.push_str("### Tool Invocations & Performance\n");
@@ -1036,7 +1071,7 @@ pub fn format_telemetry_summary(summary: &TelemetrySummary) -> String {
         let phase_str = format!("{} / {}", query_str, rec_str);
 
         out.push_str(&format!(
-            "| `{}` | {} | {} | {} | {} | ~{} | ~{} | {:.1}% |\n",
+            "| `{}` | {} | {} | {} | {} | ~{} | ~{} ({}/{}) | {:.1}% |\n",
             stat.tool,
             stat.count,
             stat.empty_count,
@@ -1044,6 +1079,8 @@ pub fn format_telemetry_summary(summary: &TelemetrySummary) -> String {
             phase_str,
             stat.tokens_returned,
             stat.tokens_saved,
+            stat.saved_known_count,
+            stat.count,
             rate
         ));
     }
@@ -1266,6 +1303,7 @@ mod tests {
             bytes_returned: 100,
             est_tokens: 25,
             est_tokens_saved: 100,
+            est_tokens_saved_known: true,
             reconcile_ms: None,
             query_ms: None,
         };
@@ -1281,6 +1319,7 @@ mod tests {
             bytes_returned: 200,
             est_tokens: 50,
             est_tokens_saved: 200,
+            est_tokens_saved_known: true,
             reconcile_ms: None,
             query_ms: None,
         };
@@ -1337,6 +1376,7 @@ mod tests {
             bytes_returned: 1000,
             est_tokens: 250,
             est_tokens_saved: 750,
+            est_tokens_saved_known: true,
             reconcile_ms: None,
             query_ms: None,
         };
@@ -1349,6 +1389,7 @@ mod tests {
             bytes_returned: 600,
             est_tokens: 150,
             est_tokens_saved: 450,
+            est_tokens_saved_known: true,
             reconcile_ms: None,
             query_ms: None,
         };
@@ -1361,6 +1402,7 @@ mod tests {
             bytes_returned: 200,
             est_tokens: 50,
             est_tokens_saved: 500,
+            est_tokens_saved_known: true,
             reconcile_ms: None,
             query_ms: None,
         };
@@ -1398,6 +1440,85 @@ mod tests {
     }
 
     #[test]
+    fn test_saved_baseline_coverage_counts_known_and_unknown_apart() {
+        let temp = crate::safe_tempdir();
+        let conn = open_telemetry_db_at(temp.path()).expect("open db");
+        let ws = Path::new("/projects/coverage_test");
+
+        let known = ToolInvocation {
+            tool: "find_references",
+            duration_ms: 10,
+            outcome: "ok",
+            error_message: None,
+            logical_result_count: Some(4),
+            bytes_returned: 400,
+            est_tokens: 100,
+            est_tokens_saved: 900,
+            est_tokens_saved_known: true,
+            reconcile_ms: None,
+            query_ms: None,
+        };
+        let unknown = ToolInvocation {
+            tool: "find_references",
+            duration_ms: 12,
+            outcome: "ok",
+            error_message: None,
+            logical_result_count: Some(0),
+            bytes_returned: 40,
+            est_tokens: 10,
+            est_tokens_saved: 0,
+            est_tokens_saved_known: false,
+            reconcile_ms: None,
+            query_ms: None,
+        };
+        let outline = ToolInvocation {
+            tool: "codebase_outline",
+            duration_ms: 8,
+            outcome: "ok",
+            error_message: None,
+            logical_result_count: Some(7),
+            bytes_returned: 200,
+            est_tokens: 50,
+            est_tokens_saved: 0,
+            est_tokens_saved_known: false,
+            reconcile_ms: None,
+            query_ms: None,
+        };
+
+        record_tool_call_conn(&conn, ws, &known);
+        record_tool_call_conn(&conn, ws, &unknown);
+        record_tool_call_conn(&conn, ws, &outline);
+
+        let summary = get_telemetry_summary(&conn, &TelemetryFilter::default()).unwrap();
+        assert_eq!(summary.total_calls, 3);
+        assert_eq!(summary.est_tokens_saved, 900);
+        assert_eq!(summary.saved_known_calls, 1);
+
+        let refs_stat = summary
+            .tool_stats
+            .iter()
+            .find(|s| s.tool == "find_references")
+            .unwrap();
+        assert_eq!(refs_stat.count, 2);
+        assert_eq!(refs_stat.saved_known_count, 1);
+
+        let outline_stat = summary
+            .tool_stats
+            .iter()
+            .find(|s| s.tool == "codebase_outline")
+            .unwrap();
+        assert_eq!(outline_stat.saved_known_count, 0);
+
+        let formatted = format_telemetry_summary(&summary);
+        assert!(
+            formatted.contains("Est. Tokens Saved: ~900 (baseline known for 1 of 3 calls)"),
+            "{formatted}"
+        );
+        assert!(formatted.contains("~900 (1/2)"), "{formatted}");
+        assert!(formatted.contains("~0 (0/1)"), "{formatted}");
+    }
+
+    #[test]
     fn test_bug_report_bundle_generation() {
         let temp = crate::safe_tempdir();
         let conn = open_telemetry_db_at(temp.path()).unwrap();
@@ -1412,6 +1533,7 @@ mod tests {
             bytes_returned: 0,
             est_tokens: 0,
             est_tokens_saved: 0,
+            est_tokens_saved_known: true,
             reconcile_ms: None,
             query_ms: None,
         };
@@ -1471,6 +1593,7 @@ mod tests {
                     bytes_returned: 10,
                     est_tokens: 2,
                     est_tokens_saved: 0,
+                    est_tokens_saved_known: true,
                     reconcile_ms: None,
                     query_ms: None,
                 },
@@ -1511,6 +1634,7 @@ mod tests {
             bytes_returned: 1200,
             est_tokens: 300,
             est_tokens_saved: 900,
+            est_tokens_saved_known: true,
             reconcile_ms: None,
             query_ms: None,
         };
@@ -1525,6 +1649,7 @@ mod tests {
             bytes_returned: 800,
             est_tokens: 200,
             est_tokens_saved: 600,
+            est_tokens_saved_known: true,
             reconcile_ms: None,
             query_ms: None,
         };
@@ -1539,6 +1664,7 @@ mod tests {
             bytes_returned: 50,
             est_tokens: 12,
             est_tokens_saved: 0,
+            est_tokens_saved_known: true,
             reconcile_ms: None,
             query_ms: None,
         };
@@ -1617,6 +1743,21 @@ mod tests {
             .unwrap(),
             0
         );
+        assert_eq!(
+            conn.query_row(
+                "SELECT est_tokens_saved_known FROM tool_telemetry WHERE id = 'old1'",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap(),
+            0
+        );
+        assert_eq!(
+            get_telemetry_summary(&conn, &TelemetryFilter::default())
+                .unwrap()
+                .saved_known_calls,
+            0
+        );
 
         // Verify we can insert a new record with workspace_root and query via index
         let inv = ToolInvocation {
@@ -1628,6 +1769,7 @@ mod tests {
             bytes_returned: 100,
             est_tokens: 25,
             est_tokens_saved: 75,
+            est_tokens_saved_known: true,
             reconcile_ms: None,
             query_ms: None,
         };
@@ -1776,6 +1918,7 @@ mod tests {
             bytes_returned: 0,
             est_tokens: 0,
             est_tokens_saved: 0,
+            est_tokens_saved_known: true,
             reconcile_ms: None,
             query_ms: None,
         };
@@ -1871,7 +2014,7 @@ mod tests {
         conn.execute(
             "INSERT INTO tool_telemetry VALUES (
                 't-1', datetime('now'), ?1, 'my_repo', 'lookup_symbol',
-                12, 'error', 'Failed to find symbol Foo', 0, 0, 100, 25, 0, '0.9.0',
+                12, 'error', 'Failed to find symbol Foo', 0, 0, 100, 25, 0, 0, '0.9.0',
                 NULL, NULL
             )",
             params![raw_var_path],
@@ -1900,7 +2043,7 @@ mod tests {
         conn.execute(
             "INSERT INTO tool_telemetry VALUES (
                 't-2', datetime('now'), ?1, 'other_repo', 'lookup_symbol',
-                12, 'error', 'Reverse matching error', 0, 0, 100, 25, 0, '0.9.0',
+                12, 'error', 'Reverse matching error', 0, 0, 100, 25, 0, 0, '0.9.0',
                 NULL, NULL
             )",
             params!["/private/var/folders/zz/99999999/T/other_repo"],
@@ -1991,6 +2134,7 @@ mod tests {
             bytes_returned: 100,
             est_tokens: 25,
             est_tokens_saved: 50,
+            est_tokens_saved_known: true,
             reconcile_ms: Some(100),
             query_ms: Some(20),
         };

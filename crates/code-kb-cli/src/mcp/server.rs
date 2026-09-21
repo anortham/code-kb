@@ -5,17 +5,27 @@ use std::path::{Path, PathBuf};
 use code_kb_core::{
     Connection, Occurrence, TelemetryFilter, TimeWindow, WatcherHandle, Workspace, WorkspaceError,
     blast_radius_op, codebase_outline_op, create_index, edit_file, ensure_fts_index_path,
-    ensure_index_matches_extractor, file_skeleton_op, format_blast_radius, format_context_slice,
-    format_edit_file_result, format_fact_categories, format_find_symbol_results, format_references,
-    format_replace_symbol_result, format_search_results, format_structural_facts,
-    format_symbol_body, format_telemetry_summary, fts_search_symbols_scoped, get_context_slice_op,
-    get_symbol_body_op, get_telemetry_summary, installed_extractor_version, is_project_root,
-    list_structural_fact_categories_scoped, open_global_telemetry_db, open_read_only,
-    reconcile_offline_edits, record_tool_call, record_tool_call_conn, replace_symbol_body,
-    search_symbols_scoped, start_watcher,
+    ensure_index_matches_extractor, file_sizes_for_paths, file_skeleton_op, format_blast_radius,
+    format_context_slice, format_edit_file_result, format_fact_categories,
+    format_find_symbol_results, format_references, format_replace_symbol_result,
+    format_search_results, format_structural_facts, format_symbol_body, format_telemetry_summary,
+    fts_search_symbols_scoped, get_context_slice_op, get_symbol_body_op, get_telemetry_summary,
+    installed_extractor_version, is_project_root, list_structural_fact_categories_scoped,
+    open_global_telemetry_db, open_read_only, reconcile_offline_edits, record_tool_call,
+    record_tool_call_conn, replace_symbol_body, search_symbols_scoped, start_watcher,
 };
 
 use super::protocol::{CallToolResult, JsonRpcRequest, JsonRpcResponse, Tool};
+
+/// Counts the tree lines a `codebase_outline` answer renders, ignoring the root header
+/// and the bracketed notices that follow the tree.
+fn rendered_outline_entries(outline: &str) -> usize {
+    outline
+        .lines()
+        .skip(1)
+        .filter(|line| !line.trim().is_empty() && !line.starts_with('['))
+        .count()
+}
 
 pub struct McpServer {
     pub workspace: Workspace,
@@ -464,30 +474,31 @@ impl McpServer {
         let res = self.handle_call_tool_inner(name, arguments);
         let duration_ms = start.elapsed().as_millis() as u64;
 
-        let (outcome, error_msg, bytes, est_tokens, est_tokens_saved) = if res.is_error {
-            let err_text = res
-                .content
-                .first()
-                .map(|c| c.text.as_str())
-                .unwrap_or("error");
-            (
-                "error",
-                Some(err_text),
-                err_text.len(),
-                err_text.len() / 4,
-                0,
-            )
-        } else {
-            let bytes: usize = res.content.iter().map(|c| c.text.len()).sum();
-            let est_tokens = bytes / 4;
-            let outcome = if res.logical_result_count == Some(0) {
-                "empty"
+        let (outcome, error_msg, bytes, est_tokens, est_tokens_saved, est_tokens_saved_known) =
+            if res.is_error {
+                let err_text = res
+                    .content
+                    .first()
+                    .map(|c| c.text.as_str())
+                    .unwrap_or("error");
+                (
+                    "error",
+                    Some(err_text),
+                    err_text.len(),
+                    err_text.len() / 4,
+                    0,
+                    false,
+                )
             } else {
-                "ok"
-            };
-            let est_tokens_saved = match name {
-                "file_skeleton" | "get_symbol_body" | "get_symbol_context" => {
-                    let file_size = arguments
+                let bytes: usize = res.content.iter().map(|c| c.text.len()).sum();
+                let est_tokens = bytes / 4;
+                let outcome = if res.logical_result_count == Some(0) {
+                    "empty"
+                } else {
+                    "ok"
+                };
+                let argument_file_size = match name {
+                    "file_skeleton" | "get_symbol_body" | "get_symbol_context" => arguments
                         .get("file_path")
                         .or_else(|| arguments.get("file"))
                         .or_else(|| arguments.get("path"))
@@ -513,16 +524,32 @@ impl McpServer {
                         })
                         .and_then(|abs| std::fs::metadata(&abs).ok())
                         .filter(|m| m.is_file())
-                        .map(|m| m.len() as usize);
+                        .map(|m| m.len() as usize),
+                    _ => None,
+                };
 
-                    file_size
-                        .map(|size| (size / 4).saturating_sub(est_tokens))
-                        .unwrap_or_default()
+                let baseline_bytes = argument_file_size.or_else(|| {
+                    if res.baseline_paths.is_empty() {
+                        return None;
+                    }
+                    open_read_only(&self.db_path)
+                        .ok()
+                        .map(|conn| file_sizes_for_paths(&conn, &res.baseline_paths))
+                        .filter(|baseline| *baseline > 0)
+                });
+
+                match baseline_bytes {
+                    Some(baseline) => (
+                        outcome,
+                        None,
+                        bytes,
+                        est_tokens,
+                        (baseline / 4).saturating_sub(est_tokens),
+                        true,
+                    ),
+                    None => (outcome, None, bytes, est_tokens, 0, false),
                 }
-                _ => 0,
             };
-            (outcome, None, bytes, est_tokens, est_tokens_saved)
-        };
 
         let invocation = code_kb_core::ToolInvocation {
             tool: name,
@@ -533,6 +560,7 @@ impl McpServer {
             bytes_returned: bytes,
             est_tokens,
             est_tokens_saved,
+            est_tokens_saved_known,
             reconcile_ms: res.reconcile_ms,
             query_ms: res.query_ms,
         };
@@ -794,7 +822,10 @@ impl McpServer {
                     .and_then(|v| v.as_str());
 
                 match codebase_outline_op(&self.workspace, &conn, depth, path_filter) {
-                    Ok(text) => CallToolResult::text(text),
+                    Ok(text) => {
+                        let entries = rendered_outline_entries(&text);
+                        CallToolResult::text(text).with_logical_result_count(entries)
+                    }
                     Err(e) => CallToolResult::error(e.to_string()),
                 }
             }
@@ -809,8 +840,24 @@ impl McpServer {
                     None => return CallToolResult::error("Missing required parameter: file_path"),
                 };
 
+                let rendered_file = self
+                    .workspace
+                    .resolve_path(Path::new(file_path))
+                    .ok()
+                    .filter(|(abs, _)| abs.is_file())
+                    .map(|(_, rel)| rel);
+
                 match file_skeleton_op(&self.workspace, &self.db_path, &conn, file_path) {
-                    Ok(skeleton) => CallToolResult::text(skeleton),
+                    Ok(skeleton) => {
+                        let result = CallToolResult::text(skeleton);
+                        match rendered_file
+                            .as_deref()
+                            .and_then(|rel| code_kb_core::load_file_symbols(&conn, rel).ok())
+                        {
+                            Some(symbols) => result.with_logical_result_count(symbols.len()),
+                            None => result,
+                        }
+                    }
                     Err(e) => CallToolResult::error(e.to_string()),
                 }
             }
@@ -879,6 +926,12 @@ impl McpServer {
                     (matches, Vec::new())
                 };
 
+                let baseline_paths = exact_matches
+                    .iter()
+                    .map(|symbol| symbol.path.clone())
+                    .chain(fts_matches.iter().map(|hit| hit.symbol.path.clone()))
+                    .collect();
+
                 CallToolResult::text(format_find_symbol_results(
                     query,
                     &exact_matches,
@@ -886,6 +939,7 @@ impl McpServer {
                     limit,
                 ))
                 .with_logical_result_count(exact_matches.len() + fts_matches.len())
+                .with_baseline_paths(baseline_paths)
             }
             "search_symbols" => {
                 let query = match arguments
@@ -934,8 +988,11 @@ impl McpServer {
                     Err(e) => return CallToolResult::error(e.to_string()),
                 };
 
+                let baseline_paths = matches.iter().map(|hit| hit.symbol.path.clone()).collect();
+
                 CallToolResult::text(format_search_results(query, &matches, limit))
                     .with_logical_result_count(matches.len())
+                    .with_baseline_paths(baseline_paths)
             }
             "get_symbol_body" => {
                 let raw_name = match arguments
@@ -963,7 +1020,9 @@ impl McpServer {
                     &symbol_name,
                     file_path,
                 ) {
-                    Ok((symbol, body)) => CallToolResult::text(format_symbol_body(&symbol, &body)),
+                    Ok((symbol, body)) => CallToolResult::text(format_symbol_body(&symbol, &body))
+                        .with_logical_result_count(1)
+                        .with_baseline_paths(vec![symbol.path.clone()]),
                     Err(e) => CallToolResult::error(e.to_string()),
                 }
             }
@@ -998,7 +1057,12 @@ impl McpServer {
                     file_path,
                     include_external,
                 ) {
-                    Ok(slice) => CallToolResult::text(format_context_slice(&slice)),
+                    Ok(slice) => {
+                        let target_path = slice.target_symbol.path.clone();
+                        CallToolResult::text(format_context_slice(&slice))
+                            .with_logical_result_count(1)
+                            .with_baseline_paths(vec![target_path])
+                    }
                     Err(e) => CallToolResult::error(e.to_string()),
                 }
             }
@@ -1047,8 +1111,11 @@ impl McpServer {
                     Err(e) => return CallToolResult::error(e.to_string()),
                 };
 
+                let baseline_paths = refs.iter().map(|site| site.path.clone()).collect();
+
                 CallToolResult::text(format_references(&symbol_name, &refs, direction, limit))
                     .with_logical_result_count(refs.len())
+                    .with_baseline_paths(baseline_paths)
             }
             "find_structural_facts" => {
                 let raw_path = arguments
@@ -1110,8 +1177,15 @@ impl McpServer {
                         Err(error) => return CallToolResult::error(error.to_string()),
                     };
 
+                    let baseline_paths = facts
+                        .iter()
+                        .map(|fact| fact.path.clone())
+                        .chain(literals.iter().map(|literal| literal.path.clone()))
+                        .collect();
+
                     CallToolResult::text(format_structural_facts(&facts, &literals, category))
                         .with_logical_result_count(facts.len() + literals.len())
+                        .with_baseline_paths(baseline_paths)
                 }
             }
             "blast_radius" | "impact" => {
@@ -1139,10 +1213,20 @@ impl McpServer {
                 };
 
                 match blast_radius_op(&self.workspace, &conn, symbol, file, depth, limit) {
-                    Ok(res) => CallToolResult::text(format_blast_radius(&res))
-                        .with_logical_result_count(
-                            res.likely_tests.len() + res.impacted_symbols.len(),
-                        ),
+                    Ok(res) => {
+                        let baseline_paths = res
+                            .likely_tests
+                            .iter()
+                            .map(|test| test.path.clone())
+                            .chain(res.impacted_symbols.iter().map(|sym| sym.path.clone()))
+                            .collect();
+
+                        CallToolResult::text(format_blast_radius(&res))
+                            .with_logical_result_count(
+                                res.likely_tests.len() + res.impacted_symbols.len(),
+                            )
+                            .with_baseline_paths(baseline_paths)
+                    }
                     Err(e) => CallToolResult::error(e.to_string()),
                 }
             }

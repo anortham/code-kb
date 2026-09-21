@@ -224,6 +224,32 @@ pub fn load_scoped_outline_symbols(
     Ok(symbols_by_file)
 }
 
+/// The largest number of files one answer is measured against.
+pub const BASELINE_PATH_CAP: usize = 20;
+
+/// Sums the indexed byte size of up to `BASELINE_PATH_CAP` distinct paths.
+/// Returns 0 when no path is indexed, so telemetry never fails a tool call.
+pub fn file_sizes_for_paths(conn: &Connection, paths: &[String]) -> usize {
+    let mut seen = std::collections::HashSet::new();
+    let distinct: Vec<&String> = paths
+        .iter()
+        .filter(|path| seen.insert(path.as_str()))
+        .take(BASELINE_PATH_CAP)
+        .collect();
+    if distinct.is_empty() {
+        return 0;
+    }
+
+    let placeholders = vec!["?"; distinct.len()].join(", ");
+    let sql =
+        format!("SELECT COALESCE(SUM(content_bytes), 0) FROM files WHERE path IN ({placeholders})");
+    conn.query_row(&sql, rusqlite::params_from_iter(distinct), |row| {
+        row.get::<_, i64>(0)
+    })
+    .map(|bytes| bytes.max(0) as usize)
+    .unwrap_or(0)
+}
+
 /// Lookup single file metadata by path with slash-boundary matching.
 pub fn get_file(conn: &Connection, path: &str) -> Result<Option<FileFact>, QueryError> {
     let normalized = path.replace('\\', "/");

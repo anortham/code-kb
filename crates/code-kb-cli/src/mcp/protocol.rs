@@ -84,6 +84,9 @@ pub struct CallToolResult {
     pub reconcile_ms: Option<u64>,
     #[serde(skip)]
     pub query_ms: Option<u64>,
+    /// Workspace-relative files this answer points into, used as the tokens-saved baseline.
+    #[serde(skip)]
+    pub baseline_paths: Vec<String>,
 }
 
 impl CallToolResult {
@@ -97,6 +100,7 @@ impl CallToolResult {
             logical_result_count: None,
             reconcile_ms: None,
             query_ms: None,
+            baseline_paths: Vec::new(),
         }
     }
 
@@ -110,11 +114,17 @@ impl CallToolResult {
             logical_result_count: None,
             reconcile_ms: None,
             query_ms: None,
+            baseline_paths: Vec::new(),
         }
     }
 
     pub fn with_logical_result_count(mut self, count: usize) -> Self {
         self.logical_result_count = Some(count);
+        self
+    }
+
+    pub fn with_baseline_paths(mut self, paths: Vec<String>) -> Self {
+        self.baseline_paths = paths;
         self
     }
 }

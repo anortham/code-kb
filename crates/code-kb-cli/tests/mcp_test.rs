@@ -2364,3 +2364,131 @@ fn test_mcp_edit_file_replaces_text_and_refuses_an_ambiguous_match() {
     drop(stdin);
     let _ = child.wait();
 }
+
+fn reference_baseline_repo() -> tempfile::TempDir {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let root = temp_dir.path();
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"baseline\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    let padding = "x".repeat(80);
+    let mut source = String::from("pub struct Alpha {\n    pub n: u32,\n}\n");
+    for index in 0..40 {
+        source.push_str(&format!(
+            "\npub fn make_{index}(seed: u32) -> Alpha {{\n    let note = \"{padding}\";\n    let _ = note;\n    Alpha {{ n: seed + {index} }}\n}}\n"
+        ));
+    }
+    std::fs::write(root.join("src").join("lib.rs"), &source).unwrap();
+    temp_dir
+}
+
+#[test]
+fn test_mcp_records_a_known_baseline_for_references_and_none_for_an_outline() {
+    let repo = reference_baseline_repo();
+    let root = repo.path();
+
+    let mut child = ChildGuard(
+        Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+            .arg("serve")
+            .arg("--root")
+            .arg(root)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("Failed to spawn code-kb serve"),
+    );
+    let mut stdin = child.stdin.take().unwrap();
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+
+    let mut call = |id: u64, request: Value| -> Value {
+        let mut line = serde_json::to_string(&request).unwrap();
+        line.push('\n');
+        stdin.write_all(line.as_bytes()).unwrap();
+        stdin.flush().unwrap();
+        let mut response = String::new();
+        reader.read_line(&mut response).unwrap();
+        let parsed: Value = serde_json::from_str(&response).unwrap();
+        assert_eq!(parsed["id"], id, "{parsed}");
+        parsed
+    };
+
+    call(
+        1,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": { "name": "test-client", "version": "1.0" }
+            }
+        }),
+    );
+
+    let refs = call(
+        2,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": { "name": "find_references", "arguments": { "symbol_name": "Alpha" } }
+        }),
+    );
+    assert_ne!(refs["result"]["isError"], true, "{refs}");
+
+    let outline = call(
+        3,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": { "name": "codebase_outline", "arguments": {} }
+        }),
+    );
+    assert_ne!(outline["result"]["isError"], true, "{outline}");
+
+    let stats = call(
+        4,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {
+                "name": "telemetry_summary",
+                "arguments": { "workspace_only": true, "json": true }
+            }
+        }),
+    );
+    let summary: Value =
+        serde_json::from_str(stats["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+
+    let refs_stat = summary["tool_stats"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["tool"] == "find_references")
+        .expect("find_references stat should be present");
+    assert_eq!(refs_stat["saved_known_count"], 1, "{refs_stat}");
+    assert!(
+        refs_stat["tokens_saved"].as_u64().unwrap() > 0,
+        "{refs_stat}"
+    );
+
+    let outline_stat = summary["tool_stats"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["tool"] == "codebase_outline")
+        .expect("codebase_outline stat should be present");
+    assert_eq!(outline_stat["saved_known_count"], 0, "{outline_stat}");
+    assert_eq!(outline_stat["tokens_saved"], 0, "{outline_stat}");
+    assert_eq!(summary["saved_known_calls"], 1, "{summary}");
+
+    drop(stdin);
+    let _ = child.wait();
+}
