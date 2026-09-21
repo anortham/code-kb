@@ -1,9 +1,9 @@
 ---
 id: search-v1-2-name-recall-and-deterministic-rerank-p
 title: "Search v1.2: name recall and deterministic rerank (plan 020)"
-status: active
+status: completed
 created: 2026-09-20T18:42:01.489Z
-updated: 2026-09-20T18:42:01.489Z
+updated: 2026-09-21T00:50:44.980Z
 tags:
   - search
   - v1.2
