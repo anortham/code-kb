@@ -2839,48 +2839,60 @@ pub fn find_type_facts(conn: &Connection, symbol_id: &str) -> Result<Vec<TypeFac
     Ok(results)
 }
 
-/// True when a repository-relative path looks like a test file: a `test`, `tests`, or `__tests__`
-/// directory anywhere including the repository root, a `test_` segment in a Python or Ruby file,
-/// a `_test.`, `.test.`, or `.spec.` file name, a whole-file `test.rs` or `tests.rs`, or the C#
-/// `Tests.cs` ending.
+/// True when a repository-relative path looks like a test file. Directory rules and file-name
+/// rules are kept apart: a `test`, `tests`, or `__tests__` directory anywhere including the
+/// repository root, or a file name that starts with `test_` in Python or Ruby, contains `_test.`,
+/// `.test.`, or `.spec.`, is exactly `test.rs` or `tests.rs`, or ends with the C# `Tests.cs`
+/// (case-sensitive, so `Contests.cs` is a production file).
 pub fn is_test_path(path: &str) -> bool {
-    let p = format!("/{}", path.to_lowercase().replace('\\', "/"));
-    p.contains("/test/")
-        || p.contains("/tests/")
-        || p.contains("/__tests__/")
-        || (p.contains("/test_") && (p.ends_with(".py") || p.ends_with(".rb")))
-        || p.contains("_test.")
-        || p.contains(".test.")
-        || p.contains(".spec.")
-        || p.ends_with("/test.rs")
-        || p.ends_with("/tests.rs")
-        || p.ends_with("tests.cs")
+    let p = path.replace('\\', "/");
+    let cut = p.rfind('/').map_or(0, |i| i + 1);
+    let directories = format!("/{}/", p[..cut].to_lowercase());
+    let file_name = &p[cut..];
+    let lower_name = file_name.to_lowercase();
+    directories.contains("/test/")
+        || directories.contains("/tests/")
+        || directories.contains("/__tests__/")
+        || (lower_name.starts_with("test_")
+            && (lower_name.ends_with(".py") || lower_name.ends_with(".rb")))
+        || lower_name.contains("_test.")
+        || lower_name.contains(".test.")
+        || lower_name.contains(".spec.")
+        || lower_name == "test.rs"
+        || lower_name == "tests.rs"
+        || file_name.ends_with("Tests.cs")
 }
 
 /// SQL boolean over `alias.path` that mirrors [`is_test_path`] rule for rule.
 ///
 /// `test_path_rule_and_its_sql_mirror_agree_on_every_path` runs both forms over one path list so
 /// the two cannot drift apart.
+///
+/// Every rule needs the word `test` or `spec` in the path, so a cheap substring test guards the
+/// rules and lets most rows skip the path split. Without the guard the split costs about seven
+/// times more over a half-million rows.
 pub(crate) fn test_path_predicate(alias: &str) -> String {
-    let p = format!("'/' || lower(replace({alias}.path, '\\', '/'))");
+    let guard = format!("(lower({alias}.path) LIKE '%test%' OR lower({alias}.path) LIKE '%spec%')");
+    let p = format!("replace({alias}.path, '\\', '/')");
+    let directories = format!("'/' || lower(rtrim({p}, replace({p}, '/', ''))) || '/'");
+    let file_name = format!("replace({p}, rtrim({p}, replace({p}, '/', '')), '')");
+    let lower_name = format!("lower({file_name})");
+    let like = |subject: &String, pattern: &str| format!("{subject} LIKE '{pattern}' ESCAPE '\\'");
     let clauses = [
-        "%/test/%",
-        "%/tests/%",
-        "%/\\_\\_tests\\_\\_/%",
-        "%/test\\_%.py",
-        "%/test\\_%.rb",
-        "%\\_test.%",
-        "%.test.%",
-        "%.spec.%",
-        "%/test.rs",
-        "%/tests.rs",
-        "%tests.cs",
+        like(&directories, "%/test/%"),
+        like(&directories, "%/tests/%"),
+        like(&directories, "%/\\_\\_tests\\_\\_/%"),
+        like(&lower_name, "test\\_%.py"),
+        like(&lower_name, "test\\_%.rb"),
+        like(&lower_name, "%\\_test.%"),
+        like(&lower_name, "%.test.%"),
+        like(&lower_name, "%.spec.%"),
+        format!("{lower_name} = 'test.rs'"),
+        format!("{lower_name} = 'tests.rs'"),
+        format!("{file_name} GLOB '*Tests.cs'"),
     ]
-    .iter()
-    .map(|pattern| format!("{p} LIKE '{pattern}' ESCAPE '\\'"))
-    .collect::<Vec<_>>()
     .join(" OR ");
-    format!("({clauses})")
+    format!("({guard} AND ({clauses}))")
 }
 
 /// Compute blast radius and likely tests for given seed symbols or seed file paths.
@@ -3364,7 +3376,17 @@ mod tests {
         ("src/tests.rs", true),
         ("Foo.Tests.cs", true),
         ("x/FooTests.cs", true),
+        ("src/FooTests.cs", true),
+        ("src/Foo.Tests.cs", true),
+        ("tests/Foo.cs", true),
+        ("x/parser.spec.ts", true),
+        ("test_x.py", true),
+        ("test.rs", true),
         ("tests\\x.py", true),
+        ("src/protocol.spec.v1/parser.rs", false),
+        ("pkg/test_support/runtime.py", false),
+        ("src/Contests.cs", false),
+        ("spec/x.rb", false),
         ("crates/x/src/impact/likely_tests.rs", false),
         ("x/foo_tests.rs", false),
         ("src/latest.rs", false),

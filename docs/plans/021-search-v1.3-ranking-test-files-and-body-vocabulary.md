@@ -106,17 +106,26 @@ name credit as the function `csr`, and BM25 breaks the tie
 ### 2. Test-file rows excluded by default
 
 - One SQL predicate, `test_path_predicate(alias)` in `queries.rs`, that
-  mirrors `is_test_path` rule for rule. Both evaluate the lowercased,
-  forward-slash path with a `/` prepended, so directory rules match at the
-  repository root (the rule as it stood needed a slash before `tests/` and
-  so missed 384,043 of the 384,268 hermes-agent rows under a root `tests/`
-  directory). Rules: `/test/`, `/tests/`, `/__tests__/`; `/test_` for `.py`
-  and `.rb` files only (the pytest and minitest convention; Rust modules
-  such as `test_quality.rs` are production code); `_test.`, `.test.`,
-  `.spec.`; `/test.rs`, `/tests.rs`, `tests.cs`. The bare `test.rs`,
+  mirrors `is_test_path` rule for rule. Both turn back slashes into forward
+  slashes and then split the path into the directory part and the file name,
+  so a directory name can never satisfy a file-name rule. Directory rules
+  run over the lowercased directory part framed by slashes, so they match at
+  the repository root too (the rule as it stood needed a slash before
+  `tests/` and so missed 384,043 of the 384,268 hermes-agent rows under a
+  root `tests/` directory): `/test/`, `/tests/`, `/__tests__/`. File-name
+  rules run over the lowercased file name: a `test_` prefix on `.py` and
+  `.rb` files only (the pytest and minitest convention; Rust modules such as
+  `test_quality.rs` are production code); `_test.`, `.test.`, `.spec.`; the
+  whole names `test.rs` and `tests.rs`. One rule keeps the raw file name: a
+  `Tests.cs` ending, case-sensitive, so `FooTests.cs` is a test file and
+  `Contests.cs` is not. Every rule needs the word `test` or `spec` in the
+  path, so the SQL form puts a cheap substring test in front of the rules
+  and most rows skip the path split; without it the split cost about seven
+  times more over the 548,580 hermes-agent rows. The bare `test.rs`,
   `tests.rs`, and `test.go` endings were dropped because they hid
-  `likely_tests.rs`, `latest.rs`, and `latest.go`. A unit test pins 34
-  paths to their expected boolean for the Rust rule and for the SQL mirror.
+  `likely_tests.rs`, `latest.rs`, and
+  `latest.go`. A unit test pins 44 paths to their expected boolean for the
+  Rust rule and for the SQL mirror.
 - `candidate_filters` and the `name_search` fallback in
   `fts_search_symbols_explained`, and the lookup query in
   `search_symbols_scoped`, add `AND NOT <predicate>` when tests are
@@ -253,15 +262,25 @@ equals plan 020's final post-review table.
 - v1.2.0 on `development-2.json`: 29 / 41 file@1 / file@3, 25 / 35 symbol@1
   / symbol@3, 5 of 60 not admitted.
 
-### Design 2: test-file rows hidden (three commits: a0ad988, 3094e68, 6670c85)
+### Design 2: test-file rows hidden (commits a0ad988, 3094e68, 6670c85, and the basename fix)
 
 - The first rule shipped rule-for-rule against `is_test_path` and matched
-  225 of the 384,268 hermes-agent rows under a root `tests/` directory. The
-  design text above records the corrected rule.
+  225 of the 384,268 hermes-agent rows under a root `tests/` directory. An
+  external review then found that the file-name rules still read the whole
+  path, so a directory name could hide a production file:
+  `src/protocol.spec.v1/parser.rs`, `pkg/test_support/runtime.py`, and
+  `src/Contests.cs` were all treated as test files. The fix splits the path
+  before the rules run and reads the raw file name for the `Tests.cs` ending.
+  The design text above records the corrected rule.
 - Effect against v1.2.0 (task 2 final): development 69 / 84 / 60 / 80,
   not admitted 1; development-2 31 / 41 / 27 / 34, not admitted 5;
   regression 25 / 26 / 22 / 25. No test-file row outranks a labelled answer
   in any set now.
+- The basename fix changed no score: development 70 / 84 / 61 / 80, not
+  admitted 1; development-2 31 / 41 / 27 / 34, not admitted 5; regression
+  25 / 26 / 22 / 25. No case ranked worse than the design 3 baseline in any
+  set. The three corrected paths have no labelled case, so the gain is in
+  the rule, not in the numbers.
 
 ### Design 3: whole-token tie-break (commit aa8f3d7)
 
