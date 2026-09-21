@@ -6,6 +6,7 @@ use std::io::Write;
 use std::path::Path;
 use thiserror::Error;
 
+use crate::models::Symbol;
 use crate::queries;
 use crate::slicer;
 use crate::sync;
@@ -47,6 +48,22 @@ pub enum EditError {
     Workspace(#[from] crate::workspace::WorkspaceError),
     #[error("Query error: {0}")]
     Query(#[from] queries::QueryError),
+    #[error("The file '{0}' has no match for old_text. {1}")]
+    NoMatch(String, String),
+    #[error(
+        "The file '{path}' has more than one match for old_text, at lines {lines}. Pass occurrence, or add more context lines.",
+        path = .0,
+        lines = .1.iter().map(usize::to_string).collect::<Vec<_>>().join(", ")
+    )]
+    AmbiguousMatch(String, Vec<usize>),
+    #[error("old_text is empty. Give the text to replace.")]
+    EmptyOldText,
+    #[error("old_text and new_text are the same. The file needs no edit.")]
+    NoChange,
+    #[error("The file is {0} bytes. edit_file reads files up to 8388608 bytes.")]
+    FileTooLarge(usize),
+    #[error("The path '{0}' is not a file.")]
+    NotAFile(String),
 }
 
 /// Result of an atomic symbol body replacement.
@@ -109,6 +126,87 @@ fn persist_with_retry(
         }
     }
     unreachable!()
+}
+
+/// Validates, writes, and re-indexes `new_file_bytes` as the whole content of `abs_path`.
+/// Returns whether the extractor checked the syntax. Rolls the file back when re-indexing fails.
+fn commit_file_edit(
+    workspace: &Workspace,
+    db_path: &Path,
+    abs_path: &Path,
+    rel_path: &str,
+    existing_bytes: &[u8],
+    existing_permissions: &fs::Permissions,
+    new_file_bytes: &[u8],
+) -> Result<bool, EditError> {
+    let new_file_str =
+        std::str::from_utf8(new_file_bytes).map_err(|e| EditError::InvalidUtf8(e.to_string()))?;
+    let syntax_checked = syntax::validate_syntax(rel_path, new_file_str)?;
+
+    let current_disk =
+        fs::read(abs_path).map_err(|e| EditError::Io(abs_path.display().to_string(), e))?;
+    if current_disk != existing_bytes {
+        return Err(EditError::ConcurrentModification(rel_path.to_string()));
+    }
+
+    let target_dir = abs_path.parent().unwrap_or(Path::new("."));
+    let mut temp_file = tempfile::Builder::new()
+        .prefix(".code-kb-edit-")
+        .suffix(".tmp")
+        .tempfile_in(target_dir)
+        .map_err(|e| EditError::Io(abs_path.display().to_string(), e))?;
+
+    temp_file
+        .write_all(new_file_bytes)
+        .map_err(|e| EditError::Io(abs_path.display().to_string(), e))?;
+    temp_file
+        .flush()
+        .map_err(|e| EditError::Io(abs_path.display().to_string(), e))?;
+
+    let _ = temp_file
+        .as_file()
+        .set_permissions(existing_permissions.clone());
+
+    persist_with_retry(temp_file, abs_path, Some(existing_bytes)).map_err(|e| {
+        if e.to_string().contains("concurrently modified") {
+            EditError::ConcurrentModification(rel_path.to_string())
+        } else {
+            EditError::Io(abs_path.display().to_string(), e)
+        }
+    })?;
+
+    if let Err(err) = sync::update_file(workspace, db_path, rel_path) {
+        let disk_post_write = fs::read(abs_path);
+        if disk_post_write.as_deref().ok() != Some(new_file_bytes) {
+            return Err(EditError::ConcurrentModification(format!(
+                "File was concurrently modified during re-indexing; rollback aborted: {err}"
+            )));
+        }
+
+        let rollback_res = (|| -> Result<(), std::io::Error> {
+            let mut rollback_tmp = tempfile::Builder::new()
+                .prefix(".code-kb-rollback-")
+                .suffix(".tmp")
+                .tempfile_in(target_dir)?;
+            rollback_tmp.write_all(existing_bytes)?;
+            rollback_tmp.flush()?;
+            let _ = rollback_tmp
+                .as_file()
+                .set_permissions(existing_permissions.clone());
+            persist_with_retry(rollback_tmp, abs_path, Some(new_file_bytes))?;
+            Ok(())
+        })();
+
+        return match rollback_res {
+            Ok(()) => Err(EditError::SyncWithRollback(err.to_string())),
+            Err(rollback_err) => Err(EditError::SyncRollbackFailed {
+                sync_error: err.to_string(),
+                rollback_error: rollback_err.to_string(),
+            }),
+        };
+    }
+
+    Ok(syntax_checked)
 }
 
 /// Atomically replaces the implementation body of a symbol by name.
@@ -186,85 +284,15 @@ pub fn replace_symbol_body(
     new_file_bytes.extend_from_slice(normalized_body.as_bytes());
     new_file_bytes.extend_from_slice(&existing_bytes[body_end..]);
 
-    // Pre-flight syntax validation before touching disk
-    let new_file_str =
-        std::str::from_utf8(&new_file_bytes).map_err(|e| EditError::InvalidUtf8(e.to_string()))?;
-    let syntax_checked = syntax::validate_syntax(&rel_path, new_file_str)?;
-
-    // Backup original bytes for rollback if re-indexing fails
-    let backup_bytes = existing_bytes.clone();
-
-    // Final pre-commit disk check: ensure file was not concurrently modified between read and write
-    let current_disk =
-        fs::read(&abs_path).map_err(|e| EditError::Io(abs_path.display().to_string(), e))?;
-    if current_disk != existing_bytes {
-        return Err(EditError::ConcurrentModification(rel_path));
-    }
-
-    // Write file atomically: write to a temporary file in the target directory, then persist
-    let target_dir = abs_path.parent().unwrap_or(Path::new("."));
-    let mut temp_file = tempfile::Builder::new()
-        .prefix(".code-kb-edit-")
-        .suffix(".tmp")
-        .tempfile_in(target_dir)
-        .map_err(|e| EditError::Io(abs_path.display().to_string(), e))?;
-
-    temp_file
-        .write_all(&new_file_bytes)
-        .map_err(|e| EditError::Io(abs_path.display().to_string(), e))?;
-    temp_file
-        .flush()
-        .map_err(|e| EditError::Io(abs_path.display().to_string(), e))?;
-
-    // Preserve existing file permissions (e.g. +x 0755)
-    let _ = temp_file
-        .as_file()
-        .set_permissions(existing_permissions.clone());
-
-    persist_with_retry(temp_file, &abs_path, Some(&existing_bytes)).map_err(|e| {
-        if e.to_string().contains("concurrently modified") {
-            EditError::ConcurrentModification(rel_path.clone())
-        } else {
-            EditError::Io(abs_path.display().to_string(), e)
-        }
-    })?;
-
-    // Tier 1: Immediately re-index the file so catalog is 100% fresh.
-    // If indexing fails, roll back to original content safely and atomically.
-    if let Err(err) = sync::update_file(workspace, db_path, &rel_path) {
-        // First check if the file on disk is still our newly written file
-        let disk_post_write = fs::read(&abs_path);
-        if disk_post_write.as_deref().ok() != Some(new_file_bytes.as_slice()) {
-            return Err(EditError::ConcurrentModification(format!(
-                "File was concurrently modified during re-indexing; rollback aborted: {err}"
-            )));
-        }
-
-        // Perform rollback atomically via temporary file
-        let rollback_res = (|| -> Result<(), std::io::Error> {
-            let mut rollback_tmp = tempfile::Builder::new()
-                .prefix(".code-kb-rollback-")
-                .suffix(".tmp")
-                .tempfile_in(target_dir)?;
-            rollback_tmp.write_all(&backup_bytes)?;
-            rollback_tmp.flush()?;
-            let _ = rollback_tmp
-                .as_file()
-                .set_permissions(existing_permissions.clone());
-            persist_with_retry(rollback_tmp, &abs_path, Some(&new_file_bytes))?;
-            Ok(())
-        })();
-
-        match rollback_res {
-            Ok(()) => return Err(EditError::SyncWithRollback(err.to_string())),
-            Err(rollback_err) => {
-                return Err(EditError::SyncRollbackFailed {
-                    sync_error: err.to_string(),
-                    rollback_error: rollback_err.to_string(),
-                });
-            }
-        }
-    }
+    let syntax_checked = commit_file_edit(
+        workspace,
+        db_path,
+        &abs_path,
+        &rel_path,
+        &existing_bytes,
+        &existing_permissions,
+        &new_file_bytes,
+    )?;
 
     let new_body_hash = hash_content(&normalized_body);
 
@@ -275,6 +303,293 @@ pub fn replace_symbol_body(
         new_body_hash,
         bytes_written: new_file_bytes.len(),
         syntax_checked,
+    })
+}
+
+/// Largest file `edit_file` reads, in bytes.
+const MAX_EDIT_FILE_BYTES: usize = 8 * 1024 * 1024;
+
+/// Which match `edit_file` replaces when `old_text` occurs more than once.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Occurrence {
+    /// Replace the only match, and refuse when there is more than one.
+    #[default]
+    Only,
+    First,
+    Last,
+    All,
+}
+
+/// How `edit_file` found `old_text` in the file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MatchTier {
+    /// The bytes of `old_text` are in the file.
+    Exact,
+    /// The lines of `old_text` are in the file, with other indentation.
+    Whitespace,
+}
+
+/// Result of an atomic text edit.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TextEditResult {
+    pub file_path: String,
+    pub replacements: usize,
+    pub first_line: usize,
+    pub match_tier: MatchTier,
+    pub touched_symbols: Vec<String>,
+    pub syntax_checked: bool,
+    pub bytes_written: usize,
+}
+
+struct TextMatch {
+    start: usize,
+    end: usize,
+    replacement: String,
+}
+
+fn leading_whitespace(line: &str) -> &str {
+    &line[..line.len() - line.trim_start().len()]
+}
+
+fn line_of(text: &str, offset: usize) -> usize {
+    text[..offset].matches('\n').count() + 1
+}
+
+fn exact_matches(haystack: &str, old_text: &str, new_text: &str) -> Vec<TextMatch> {
+    let mut found = Vec::new();
+    let mut from = 0;
+    while let Some(offset) = haystack[from..].find(old_text) {
+        let start = from + offset;
+        let end = start + old_text.len();
+        found.push(TextMatch {
+            start,
+            end,
+            replacement: new_text.to_string(),
+        });
+        from = end;
+    }
+    found
+}
+
+fn reindent(new_text: &str, old_indent: &str, file_indent: &str) -> String {
+    new_text
+        .lines()
+        .map(|line| match line.strip_prefix(old_indent) {
+            Some(rest) if !line.trim().is_empty() => format!("{file_indent}{rest}"),
+            _ => line.to_string(),
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Matches the lines of `old_text` against whole file lines, with both ends of each line trimmed,
+/// and gives the replacement the indentation of the first matched file line.
+fn whitespace_matches(haystack: &str, old_text: &str, new_text: &str) -> Vec<TextMatch> {
+    let old_lines: Vec<&str> = old_text.lines().collect();
+    let file_lines: Vec<&str> = haystack.lines().collect();
+    if old_lines.is_empty() || file_lines.len() < old_lines.len() {
+        return Vec::new();
+    }
+    let mut line_starts = vec![0usize];
+    line_starts.extend(haystack.match_indices('\n').map(|(at, _)| at + 1));
+
+    let old_indent = leading_whitespace(old_lines[0]);
+    let mut found = Vec::new();
+    let mut first = 0;
+    while first + old_lines.len() <= file_lines.len() {
+        let same = (0..old_lines.len())
+            .all(|step| file_lines[first + step].trim() == old_lines[step].trim());
+        if !same {
+            first += 1;
+            continue;
+        }
+        let last = first + old_lines.len() - 1;
+        found.push(TextMatch {
+            start: line_starts[first],
+            end: line_starts[last] + file_lines[last].len(),
+            replacement: reindent(new_text, old_indent, leading_whitespace(file_lines[first])),
+        });
+        first = last + 1;
+    }
+    found
+}
+
+fn common_prefix_len(left: &str, right: &str) -> usize {
+    left.chars()
+        .zip(right.chars())
+        .take_while(|(l, r)| l == r)
+        .count()
+}
+
+/// The three file lines that share the longest opening with `probe`, so the caller sees
+/// what the file holds where the match failed.
+fn nearest_lines(haystack: &str, probe: &str) -> String {
+    let probe = probe.trim();
+    let mut scored: Vec<(usize, usize, &str)> = haystack
+        .lines()
+        .enumerate()
+        .map(|(index, line)| (common_prefix_len(line.trim(), probe), index + 1, line))
+        .filter(|(score, _, _)| *score > 0)
+        .collect();
+    if scored.is_empty() {
+        return "No line in the file is similar.".to_string();
+    }
+    scored.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+    scored.truncate(3);
+    scored.sort_by_key(|(_, line, _)| *line);
+    let mut report = String::from("The nearest lines are:");
+    for (_, line, text) in scored {
+        report.push_str(&format!("\n{line}: {}", text.trim_end()));
+    }
+    report
+}
+
+fn innermost_symbol_names(symbols: &[Symbol], ranges: &[(usize, usize)]) -> Vec<String> {
+    let mut names: Vec<String> = Vec::new();
+    for (first, last) in ranges {
+        let mut best: Option<&Symbol> = None;
+        for symbol in symbols {
+            if symbol.start_line <= *first
+                && symbol.end_line >= *last
+                && best.is_none_or(|other| {
+                    symbol.end_line - symbol.start_line < other.end_line - other.start_line
+                })
+            {
+                best = Some(symbol);
+            }
+        }
+        if let Some(symbol) = best
+            && !names.contains(&symbol.name)
+        {
+            names.push(symbol.name.clone());
+        }
+    }
+    names
+}
+
+/// Atomically replaces `old_text` with `new_text` in one file.
+///
+/// The file is read from disk, so the caller needs no index of its content. An exact match wins;
+/// when there is none, the lines of `old_text` are matched with their indentation ignored.
+pub fn edit_file(
+    workspace: &Workspace,
+    db_path: &Path,
+    conn: &Connection,
+    file_path: &str,
+    old_text: &str,
+    new_text: &str,
+    occurrence: Occurrence,
+) -> Result<TextEditResult, EditError> {
+    if old_text.is_empty() {
+        return Err(EditError::EmptyOldText);
+    }
+    let (abs_path, rel_path) = workspace.resolve_path(Path::new(file_path))?;
+    if !abs_path.is_file() {
+        return Err(EditError::NotAFile(rel_path));
+    }
+    let metadata =
+        fs::metadata(&abs_path).map_err(|e| EditError::Io(abs_path.display().to_string(), e))?;
+    if metadata.len() as usize > MAX_EDIT_FILE_BYTES {
+        return Err(EditError::FileTooLarge(metadata.len() as usize));
+    }
+    let existing_permissions = metadata.permissions();
+
+    sync::ensure_fresh_file(workspace, db_path, conn, &rel_path)?;
+
+    let existing_bytes =
+        fs::read(&abs_path).map_err(|e| EditError::Io(abs_path.display().to_string(), e))?;
+    let existing_text =
+        std::str::from_utf8(&existing_bytes).map_err(|e| EditError::InvalidUtf8(e.to_string()))?;
+
+    let is_crlf = existing_bytes.windows(2).any(|w| w == b"\r\n");
+    let file_text = existing_text.replace("\r\n", "\n");
+    let old_text = old_text.replace("\r\n", "\n");
+    let new_text = new_text.replace("\r\n", "\n");
+    if old_text == new_text {
+        return Err(EditError::NoChange);
+    }
+
+    let exact = exact_matches(&file_text, &old_text, &new_text);
+    let (match_tier, matches) = if exact.is_empty() {
+        (
+            MatchTier::Whitespace,
+            whitespace_matches(&file_text, &old_text, &new_text),
+        )
+    } else {
+        (MatchTier::Exact, exact)
+    };
+
+    let selected: Vec<TextMatch> = match occurrence {
+        Occurrence::Only if matches.len() > 1 => {
+            return Err(EditError::AmbiguousMatch(
+                rel_path,
+                matches
+                    .iter()
+                    .map(|found| line_of(&file_text, found.start))
+                    .collect(),
+            ));
+        }
+        Occurrence::Only | Occurrence::All => matches,
+        Occurrence::First => matches.into_iter().take(1).collect(),
+        Occurrence::Last => matches.into_iter().next_back().into_iter().collect(),
+    };
+    if selected.is_empty() {
+        let probe = old_text.lines().next().unwrap_or(&old_text);
+        return Err(EditError::NoMatch(
+            rel_path,
+            nearest_lines(&file_text, probe),
+        ));
+    }
+
+    let mut edited = String::with_capacity(file_text.len() + new_text.len());
+    let mut cursor = 0;
+    let mut newlines = 0;
+    let mut edited_ranges: Vec<(usize, usize)> = Vec::new();
+    for found in &selected {
+        let gap = &file_text[cursor..found.start];
+        edited.push_str(gap);
+        newlines += gap.matches('\n').count();
+        let first_line = newlines + 1;
+        edited.push_str(&found.replacement);
+        newlines += found.replacement.matches('\n').count();
+        let last_line = if found.replacement.ends_with('\n') {
+            newlines.max(first_line)
+        } else {
+            newlines + 1
+        };
+        edited_ranges.push((first_line, last_line));
+        cursor = found.end;
+    }
+    edited.push_str(&file_text[cursor..]);
+
+    let new_file_bytes = if is_crlf {
+        edited.replace('\n', "\r\n").into_bytes()
+    } else {
+        edited.into_bytes()
+    };
+
+    let syntax_checked = commit_file_edit(
+        workspace,
+        db_path,
+        &abs_path,
+        &rel_path,
+        &existing_bytes,
+        &existing_permissions,
+        &new_file_bytes,
+    )?;
+
+    let symbols = queries::load_file_symbols(conn, &rel_path)?;
+
+    Ok(TextEditResult {
+        file_path: rel_path,
+        replacements: selected.len(),
+        first_line: edited_ranges[0].0,
+        match_tier,
+        touched_symbols: innermost_symbol_names(&symbols, &edited_ranges),
+        syntax_checked,
+        bytes_written: new_file_bytes.len(),
     })
 }
 

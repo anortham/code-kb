@@ -1,6 +1,6 @@
 use code_kb_core::{
-    Workspace, find_julie_extract_binary, open_read_only, replace_symbol_body, safe_tempdir,
-    scan_workspace, slicer,
+    MatchTier, Occurrence, Workspace, edit_file, find_julie_extract_binary, open_read_only,
+    replace_symbol_body, safe_tempdir, scan_workspace, slicer,
 };
 use std::fs;
 #[cfg(unix)]
@@ -474,4 +474,450 @@ fn validate_syntax_skips_paths_the_extractor_has_no_grammar_for() {
         code_kb_core::validate_syntax("src/lib.rs", "pub fn f() {}\n"),
         Ok(true)
     );
+}
+
+fn scan_into(root: &std::path::Path, files: &[(&str, &str)]) -> (Workspace, std::path::PathBuf) {
+    find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+    for (rel, content) in files {
+        let path = root.join(rel);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, content).unwrap();
+    }
+    let ws = Workspace::new(root.to_path_buf());
+    let db_path = root.join("test.db");
+    scan_workspace(&ws, &db_path, true).expect("Scan failed");
+    (ws, db_path)
+}
+
+#[test]
+fn test_edit_file_replaces_one_exact_match() {
+    let dir = safe_tempdir();
+    let (ws, db_path) = scan_into(
+        dir.path(),
+        &[(
+            "src/calc.rs",
+            "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n",
+        )],
+    );
+    let conn = open_read_only(&db_path).unwrap();
+
+    let res = edit_file(
+        &ws,
+        &db_path,
+        &conn,
+        "src/calc.rs",
+        "a + b",
+        "a - b",
+        Occurrence::Only,
+    )
+    .expect("edit_file must succeed");
+
+    assert_eq!(res.file_path, "src/calc.rs");
+    assert_eq!(res.replacements, 1);
+    assert_eq!(res.first_line, 2);
+    assert_eq!(res.match_tier, MatchTier::Exact);
+    assert!(res.syntax_checked);
+    assert_eq!(
+        fs::read_to_string(dir.path().join("src/calc.rs")).unwrap(),
+        "pub fn add(a: i32, b: i32) -> i32 {\n    a - b\n}\n"
+    );
+}
+
+#[test]
+fn test_edit_file_matches_ignoring_indentation() {
+    let dir = safe_tempdir();
+    let (ws, db_path) = scan_into(
+        dir.path(),
+        &[(
+            "src/calc.rs",
+            "pub fn add(a: i32, b: i32) -> i32 {\n    let sum = a + b;\n    sum\n}\n",
+        )],
+    );
+    let conn = open_read_only(&db_path).unwrap();
+
+    let res = edit_file(
+        &ws,
+        &db_path,
+        &conn,
+        "src/calc.rs",
+        "let sum = a + b;\nsum",
+        "let sum = a - b;\nsum",
+        Occurrence::Only,
+    )
+    .expect("edit_file must succeed");
+
+    assert_eq!(res.match_tier, MatchTier::Whitespace);
+    assert_eq!(res.replacements, 1);
+    assert_eq!(res.first_line, 2);
+    assert_eq!(
+        fs::read_to_string(dir.path().join("src/calc.rs")).unwrap(),
+        "pub fn add(a: i32, b: i32) -> i32 {\n    let sum = a - b;\n    sum\n}\n"
+    );
+}
+
+#[test]
+fn test_edit_file_refuses_ambiguous_match_and_lists_lines() {
+    let dir = safe_tempdir();
+    let (ws, db_path) = scan_into(
+        dir.path(),
+        &[(
+            "src/calc.rs",
+            "pub fn a() -> i32 {\n    1 + 1\n}\n\npub fn b() -> i32 {\n    1 + 1\n}\n",
+        )],
+    );
+    let conn = open_read_only(&db_path).unwrap();
+
+    let err = edit_file(
+        &ws,
+        &db_path,
+        &conn,
+        "src/calc.rs",
+        "1 + 1",
+        "2 + 2",
+        Occurrence::Only,
+    )
+    .expect_err("two matches must be refused");
+
+    match &err {
+        code_kb_core::EditError::AmbiguousMatch(path, lines) => {
+            assert_eq!(path, "src/calc.rs");
+            assert_eq!(lines, &vec![2, 6]);
+        }
+        other => panic!("expected AmbiguousMatch, got {other:?}"),
+    }
+    let message = err.to_string();
+    assert!(message.contains("2"), "{message}");
+    assert!(message.contains("6"), "{message}");
+    assert!(message.contains("occurrence"), "{message}");
+    assert!(
+        fs::read_to_string(dir.path().join("src/calc.rs"))
+            .unwrap()
+            .contains("1 + 1")
+    );
+}
+
+#[test]
+fn test_edit_file_occurrence_all_replaces_every_match() {
+    let dir = safe_tempdir();
+    let (ws, db_path) = scan_into(
+        dir.path(),
+        &[(
+            "src/calc.rs",
+            "pub fn a() -> i32 {\n    1 + 1\n}\n\npub fn b() -> i32 {\n    1 + 1\n}\n",
+        )],
+    );
+    let conn = open_read_only(&db_path).unwrap();
+
+    let res = edit_file(
+        &ws,
+        &db_path,
+        &conn,
+        "src/calc.rs",
+        "1 + 1",
+        "2 + 2",
+        Occurrence::All,
+    )
+    .expect("edit_file must succeed");
+
+    assert_eq!(res.replacements, 2);
+    assert_eq!(res.first_line, 2);
+    assert_eq!(
+        fs::read_to_string(dir.path().join("src/calc.rs")).unwrap(),
+        "pub fn a() -> i32 {\n    2 + 2\n}\n\npub fn b() -> i32 {\n    2 + 2\n}\n"
+    );
+    assert_eq!(res.touched_symbols, vec!["a".to_string(), "b".to_string()]);
+}
+
+#[test]
+fn test_edit_file_rejects_syntax_error_and_leaves_file_unchanged() {
+    let dir = safe_tempdir();
+    let initial = "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n";
+    let (ws, db_path) = scan_into(dir.path(), &[("src/calc.rs", initial)]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let err = edit_file(
+        &ws,
+        &db_path,
+        &conn,
+        "src/calc.rs",
+        "a + b",
+        "a + ",
+        Occurrence::Only,
+    )
+    .expect_err("broken Rust must be rejected");
+
+    assert!(err.to_string().contains("syntax"), "{err}");
+    assert_eq!(
+        fs::read_to_string(dir.path().join("src/calc.rs")).unwrap(),
+        initial
+    );
+}
+
+#[test]
+fn test_edit_file_preserves_crlf() {
+    let dir = safe_tempdir();
+    let (ws, db_path) = scan_into(
+        dir.path(),
+        &[("src/crlf.rs", "pub fn crlf_fn() -> i32 {\r\n    1\r\n}\r\n")],
+    );
+    let conn = open_read_only(&db_path).unwrap();
+
+    edit_file(
+        &ws,
+        &db_path,
+        &conn,
+        "src/crlf.rs",
+        "    1\n",
+        "    let a = 2;\n    a\n",
+        Occurrence::Only,
+    )
+    .expect("edit_file must succeed");
+
+    let disk = fs::read_to_string(dir.path().join("src/crlf.rs")).unwrap();
+    assert_eq!(
+        disk, "pub fn crlf_fn() -> i32 {\r\n    let a = 2;\r\n    a\r\n}\r\n",
+        "CRLF endings must survive the edit"
+    );
+}
+
+#[test]
+fn test_edit_file_reindexes_shifted_symbol_offsets() {
+    let dir = safe_tempdir();
+    let (ws, db_path) = scan_into(
+        dir.path(),
+        &[(
+            "src/calc.rs",
+            "pub fn head() -> i32 {\n    1\n}\n\npub fn tail() -> i32 {\n    2\n}\n",
+        )],
+    );
+    let conn = open_read_only(&db_path).unwrap();
+
+    edit_file(
+        &ws,
+        &db_path,
+        &conn,
+        "src/calc.rs",
+        "pub fn head() -> i32 {\n    1\n}",
+        "pub fn head() -> i32 {\n    let x = 1;\n    x\n}",
+        Occurrence::Only,
+    )
+    .expect("edit_file must succeed");
+
+    let tail = code_kb_core::get_symbol_by_name(&conn, "tail", Some("src/calc.rs"))
+        .unwrap()
+        .unwrap();
+    assert_eq!(tail.start_line, 6);
+}
+
+#[test]
+fn test_edit_file_edits_an_unsupported_text_file() {
+    let readme = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("README.md");
+    let readme_text = fs::read_to_string(&readme).expect("repository README.md must be readable");
+    let heading = "## Why code-kb?";
+    assert_eq!(readme_text.matches(heading).count(), 1);
+
+    let dir = safe_tempdir();
+    let (ws, db_path) = scan_into(
+        dir.path(),
+        &[
+            ("notes.txt", "hello\nworld\n"),
+            ("README.md", readme_text.as_str()),
+        ],
+    );
+    let conn = open_read_only(&db_path).unwrap();
+
+    let text = edit_file(
+        &ws,
+        &db_path,
+        &conn,
+        "notes.txt",
+        "world",
+        "there",
+        Occurrence::Only,
+    )
+    .expect("editing a text file must succeed");
+    assert!(!text.syntax_checked);
+    assert!(text.touched_symbols.is_empty());
+    assert_eq!(
+        fs::read_to_string(dir.path().join("notes.txt")).unwrap(),
+        "hello\nthere\n"
+    );
+
+    edit_file(
+        &ws,
+        &db_path,
+        &conn,
+        "README.md",
+        heading,
+        "## Why use code-kb?",
+        Occurrence::Only,
+    )
+    .expect("editing a Markdown file must succeed");
+    assert!(
+        fs::read_to_string(dir.path().join("README.md"))
+            .unwrap()
+            .contains("## Why use code-kb?")
+    );
+}
+
+#[test]
+fn test_edit_file_detects_concurrent_modification() {
+    let dir = safe_tempdir();
+    let big: String = (0..20_000)
+        .map(|i| format!("pub fn f{i}(a: i32) -> i32 {{\n    let x = a * {i};\n    x + 1\n}}\n"))
+        .collect();
+    let (ws, db_path) = scan_into(dir.path(), &[("src/big.rs", big.as_str())]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let target = dir.path().join("src/big.rs");
+    let rival = target.clone();
+    let writer = std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        fs::write(&rival, "pub fn only() -> i32 {\n    0\n}\n").unwrap();
+    });
+
+    let res = edit_file(
+        &ws,
+        &db_path,
+        &conn,
+        "src/big.rs",
+        "let x = a * 7;",
+        "let x = a * 8;",
+        Occurrence::Only,
+    );
+    writer.join().unwrap();
+
+    assert!(
+        matches!(res, Err(code_kb_core::EditError::ConcurrentModification(_))),
+        "a write during the edit must abort it, got: {res:?}"
+    );
+    assert_eq!(
+        fs::read_to_string(&target).unwrap(),
+        "pub fn only() -> i32 {\n    0\n}\n",
+        "the rival write must stand"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_edit_file_preserves_file_permissions() {
+    let dir = safe_tempdir();
+    let (ws, db_path) = scan_into(
+        dir.path(),
+        &[("src/script.rs", "pub fn run_script() -> i32 {\n    1\n}\n")],
+    );
+    let conn = open_read_only(&db_path).unwrap();
+    let target = dir.path().join("src/script.rs");
+    fs::set_permissions(&target, fs::Permissions::from_mode(0o755)).unwrap();
+
+    edit_file(
+        &ws,
+        &db_path,
+        &conn,
+        "src/script.rs",
+        "    1\n",
+        "    42\n",
+        Occurrence::Only,
+    )
+    .expect("edit_file must succeed");
+
+    let mode = fs::metadata(&target).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode, 0o755, "permissions must stay 0755, got {mode:o}");
+}
+
+#[test]
+fn test_edit_file_reports_touched_symbols() {
+    let dir = safe_tempdir();
+    let (ws, db_path) = scan_into(
+        dir.path(),
+        &[(
+            "src/item.rs",
+            "pub struct Item;\n\nimpl Item {\n    pub fn get(&self) -> i32 {\n        1\n    }\n}\n",
+        )],
+    );
+    let conn = open_read_only(&db_path).unwrap();
+
+    let res = edit_file(
+        &ws,
+        &db_path,
+        &conn,
+        "src/item.rs",
+        "        1\n",
+        "        2\n",
+        Occurrence::Only,
+    )
+    .expect("edit_file must succeed");
+
+    assert_eq!(res.touched_symbols, vec!["get".to_string()]);
+}
+
+#[test]
+fn test_edit_file_rejects_empty_old_text_and_a_no_op_edit() {
+    let dir = safe_tempdir();
+    let (ws, db_path) = scan_into(
+        dir.path(),
+        &[("src/calc.rs", "pub fn add() -> i32 {\n    1\n}\n")],
+    );
+    let conn = open_read_only(&db_path).unwrap();
+
+    assert!(matches!(
+        edit_file(
+            &ws,
+            &db_path,
+            &conn,
+            "src/calc.rs",
+            "",
+            "x",
+            Occurrence::Only
+        ),
+        Err(code_kb_core::EditError::EmptyOldText)
+    ));
+    assert!(matches!(
+        edit_file(
+            &ws,
+            &db_path,
+            &conn,
+            "src/calc.rs",
+            "    1\n",
+            "    1\n",
+            Occurrence::Only
+        ),
+        Err(code_kb_core::EditError::NoChange)
+    ));
+    assert!(matches!(
+        edit_file(&ws, &db_path, &conn, "src", "a", "b", Occurrence::Only),
+        Err(code_kb_core::EditError::NotAFile(_))
+    ));
+}
+
+#[test]
+fn test_edit_file_reports_the_nearest_lines_when_nothing_matches() {
+    let dir = safe_tempdir();
+    let (ws, db_path) = scan_into(
+        dir.path(),
+        &[(
+            "src/calc.rs",
+            "pub fn add(a: i32, b: i32) -> i32 {\n    let sum = a + b;\n    sum\n}\n",
+        )],
+    );
+    let conn = open_read_only(&db_path).unwrap();
+
+    let err = edit_file(
+        &ws,
+        &db_path,
+        &conn,
+        "src/calc.rs",
+        "let sum = a * b;",
+        "let sum = a / b;",
+        Occurrence::Only,
+    )
+    .expect_err("a missing text must be refused");
+
+    let message = err.to_string();
+    assert!(message.contains("src/calc.rs"), "{message}");
+    assert!(message.contains("let sum = a + b;"), "{message}");
+    assert!(message.contains("2"), "{message}");
 }

@@ -14,7 +14,9 @@ pub mod workspace;
 pub use db::{
     Connection, DbError, ensure_fts_index, ensure_fts_index_path, open_read_only, open_read_write,
 };
-pub use edit::{EditError, EditResult, replace_symbol_body};
+pub use edit::{
+    EditError, EditResult, MatchTier, Occurrence, TextEditResult, edit_file, replace_symbol_body,
+};
 pub use formatters::{
     format_blast_radius, format_context_slice, format_fact_categories, format_file_skeleton,
     format_find_symbol_results, format_references, format_replace_symbol_result,
