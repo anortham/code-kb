@@ -726,3 +726,51 @@ fn context_slice_omits_markdown_code_blocks_from_related_tests() {
             .collect::<Vec<_>>()
     );
 }
+
+#[test]
+fn qualified_lookup_requires_every_ancestor_segment() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+
+    conn.execute_batch(
+        "INSERT INTO symbols VALUES
+            ('outer', 'f1', 'src/tree.rs', 'rust', 'Outer', 'struct', NULL, NULL, 'pub', NULL, 1, 0, 30, 0, 0, 300, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'struct', 0, 0),
+            ('inner', 'f1', 'src/tree.rs', 'rust', 'Inner', 'struct', NULL, NULL, 'pub', 'outer', 2, 4, 20, 4, 10, 200, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'struct', 0, 0),
+            ('run', 'f1', 'src/tree.rs', 'rust', 'run', 'method', 'pub fn run(&self)', NULL, 'pub', 'inner', 3, 8, 6, 8, 20, 60, 3, 8, 6, 8, 20, 60, 'h1', 'method', 0, 0);",
+    )
+    .unwrap();
+
+    let lookup = |name: &str| {
+        get_symbol_by_name(&conn, name, None)
+            .unwrap()
+            .map(|s| s.symbol_id)
+    };
+
+    assert_eq!(lookup("Outer::Inner::run").as_deref(), Some("run"));
+    assert_eq!(lookup("Inner::run").as_deref(), Some("run"));
+    assert_eq!(lookup("Bogus::Inner::run"), None);
+}
+
+#[test]
+fn qualified_lookup_with_a_full_chain_still_honors_the_path_filter() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+
+    conn.execute_batch(
+        "INSERT INTO symbols VALUES
+            ('outer_a', 'f1', 'src/alpha.rs', 'rust', 'Outer', 'struct', NULL, NULL, 'pub', NULL, 1, 0, 30, 0, 0, 300, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'struct', 0, 0),
+            ('inner_a', 'f1', 'src/alpha.rs', 'rust', 'Inner', 'struct', NULL, NULL, 'pub', 'outer_a', 2, 4, 20, 4, 10, 200, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'struct', 0, 0),
+            ('run_a', 'f1', 'src/alpha.rs', 'rust', 'run', 'method', 'pub fn run(&self)', NULL, 'pub', 'inner_a', 3, 8, 6, 8, 20, 60, 3, 8, 6, 8, 20, 60, 'h1', 'method', 0, 0),
+            ('outer_b', 'f2', 'src/beta.rs', 'rust', 'Outer', 'struct', NULL, NULL, 'pub', NULL, 1, 0, 30, 0, 0, 300, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'struct', 0, 0),
+            ('inner_b', 'f2', 'src/beta.rs', 'rust', 'Inner', 'struct', NULL, NULL, 'pub', 'outer_b', 2, 4, 20, 4, 10, 200, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'struct', 0, 0),
+            ('run_b', 'f2', 'src/beta.rs', 'rust', 'run', 'method', 'pub fn run(&self)', NULL, 'pub', 'inner_b', 3, 8, 6, 8, 20, 60, 3, 8, 6, 8, 20, 60, 'h2', 'method', 0, 0);",
+    )
+    .unwrap();
+
+    let found = get_symbol_by_name(&conn, "Outer::Inner::run", Some("src/beta.rs"))
+        .unwrap()
+        .expect("the path filter must pick one of the two chains");
+    assert_eq!(found.symbol_id, "run_b");
+}

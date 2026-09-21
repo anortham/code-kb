@@ -1691,34 +1691,55 @@ pub fn get_symbol_by_name_exact(
     get_symbol_by_name_internal(conn, name, Some(exact_path), true)
 }
 
+/// Split `Outer::Inner::run` or `Outer.Inner.run` into its ancestor segments, outermost first, and the terminal name.
+fn split_qualified_name(name: &str) -> (Vec<&str>, &str) {
+    let separator = if name.contains("::") {
+        "::"
+    } else if name.contains('.') {
+        "."
+    } else {
+        return (Vec::new(), name);
+    };
+    let mut segments: Vec<&str> = name.split(separator).collect();
+    let terminal = segments.pop().unwrap_or(name);
+    (segments, terminal)
+}
+
+/// Names of the parents of `symbol_id`, innermost first.
+fn ancestor_names(conn: &Connection, symbol_id: &str) -> Result<Vec<String>, QueryError> {
+    let mut stmt = conn.prepare(
+        "SELECT p.symbol_id, p.name FROM symbols s
+         JOIN symbols p ON s.parent_symbol_id = p.symbol_id
+         WHERE s.symbol_id = ?1",
+    )?;
+    let mut names = Vec::new();
+    let mut current = symbol_id.to_string();
+    for _ in 0..32 {
+        let mut rows = stmt.query(params![current])?;
+        let Some(row) = rows.next()? else { break };
+        let parent_id: String = row.get(0)?;
+        let parent_name: String = row.get(1)?;
+        names.push(parent_name);
+        current = parent_id;
+    }
+    Ok(names)
+}
+
+fn chain_contains(chain: &[String], wanted: &[&str]) -> bool {
+    let mut remaining = chain.iter();
+    wanted
+        .iter()
+        .all(|segment| remaining.any(|name| name == segment))
+}
+
 fn get_symbol_by_name_internal(
     conn: &Connection,
     name: &str,
     path_filter: Option<&str>,
     exact_path: bool,
 ) -> Result<Option<Symbol>, QueryError> {
-    // Check if name is qualified like `Struct::method` or `Class.method`
-    let (parent_name, terminal_name) = if let Some(idx) = name.rfind("::") {
-        let parent = &name[..idx];
-        let term = &name[idx + 2..];
-        let immediate_parent = if let Some(p_idx) = parent.rfind("::") {
-            &parent[p_idx + 2..]
-        } else {
-            parent
-        };
-        (Some(immediate_parent), term)
-    } else if let Some(idx) = name.rfind('.') {
-        let parent = &name[..idx];
-        let term = &name[idx + 1..];
-        let immediate_parent = if let Some(p_idx) = parent.rfind('.') {
-            &parent[p_idx + 1..]
-        } else {
-            parent
-        };
-        (Some(immediate_parent), term)
-    } else {
-        (None, name)
-    };
+    let (ancestor_segments, terminal_name) = split_qualified_name(name);
+    let parent_name = ancestor_segments.last().copied();
 
     let sql = "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,
                 s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,
@@ -1756,6 +1777,20 @@ fn get_symbol_by_name_internal(
     let mut matches: Vec<Symbol> = Vec::new();
     while let Some(row) = rows.next()? {
         matches.push(map_symbol(row)?);
+    }
+    drop(rows);
+
+    if ancestor_segments.len() > 1 {
+        let required: Vec<&str> = ancestor_segments.iter().rev().copied().collect();
+        let mut kept = Vec::with_capacity(matches.len());
+        for symbol in matches {
+            if symbol.name == name
+                || chain_contains(&ancestor_names(conn, &symbol.symbol_id)?, &required)
+            {
+                kept.push(symbol);
+            }
+        }
+        matches = kept;
     }
 
     if matches.is_empty() {
