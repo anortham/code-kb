@@ -975,3 +975,94 @@ fn facts_and_literals_each_get_the_whole_limit() {
     let out = format_structural_facts(&facts, &literals, "sql", 1);
     assert_eq!(out.matches("limit reached").count(), 2, "{out}");
 }
+
+fn qt_facts_fixture(conn: &rusqlite::Connection) {
+    conn.execute_batch(
+        "INSERT INTO structural_facts (structural_fact_id, file_id, path, language, pattern_id, capture_name, node_kind, containing_symbol_id, start_line, end_line, confidence) VALUES
+            ('qf_sig', 'f1', 'ui/Button.qml', 'qml', 'qml.signal_declaration.v1', 'signal', 'ui_signal', NULL, 1, 1, 1.0),
+            ('qf_imp', 'f1', 'ui/Button.qml', 'qml', 'qml.import_statement.v1', 'import', 'ui_import', NULL, 2, 2, 1.0),
+            ('qf_dirimp', 'f2', 'ui/qmldir', 'qmldir', 'qmldir.import.v1', 'import', 'import', NULL, 1, 1, 1.0),
+            ('qf_bind', 'f1', 'ui/Button.qml', 'qml', 'qml.binding.v1', 'binding', 'ui_binding', NULL, 3, 3, 1.0),
+            ('qf_obj', 'f1', 'ui/Button.qml', 'qml', 'qml.object_instantiation.v1', 'object', 'ui_object_definition', NULL, 4, 4, 1.0),
+            ('qf_type', 'f2', 'ui/qmldir', 'qmldir', 'qmldir.object_type.v1', 'type', 'object_type', NULL, 2, 2, 1.0),
+            ('qf_mod', 'f2', 'ui/qmldir', 'qmldir', 'qmldir.module.v1', 'module', 'module', NULL, 3, 3, 1.0),
+            ('qf_prag', 'f1', 'ui/Button.qml', 'qml', 'qml.pragma.v1', 'pragma', 'ui_pragma', NULL, 5, 5, 1.0);",
+    )
+    .unwrap();
+}
+
+#[test]
+fn qt_fact_aliases_reach_their_pattern_families() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+    qt_facts_fixture(&conn);
+
+    let expected: &[(&str, &[&str])] = &[
+        ("signal", &["qml.signal_declaration.v1"]),
+        ("signals", &["qml.signal_declaration.v1"]),
+        ("import", &["qml.import_statement.v1", "qmldir.import.v1"]),
+        ("imports", &["qml.import_statement.v1", "qmldir.import.v1"]),
+        ("binding", &["qml.binding.v1"]),
+        ("bindings", &["qml.binding.v1"]),
+        (
+            "component",
+            &["qml.object_instantiation.v1", "qmldir.object_type.v1"],
+        ),
+        (
+            "components",
+            &["qml.object_instantiation.v1", "qmldir.object_type.v1"],
+        ),
+        ("module", &["qmldir.module.v1"]),
+        ("modules", &["qmldir.module.v1"]),
+        ("pragma", &["qml.pragma.v1"]),
+    ];
+
+    for (alias, patterns) in expected {
+        let facts = find_structural_facts_scoped(&conn, alias, None, 10).unwrap();
+        let mut ids: Vec<String> = facts.iter().map(|f| f.pattern_id.clone()).collect();
+        ids.sort();
+        ids.dedup();
+        assert_eq!(ids, *patterns, "{alias}");
+    }
+}
+
+#[test]
+fn a_scoped_qt_fact_alias_keeps_its_path_filter() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+    qt_facts_fixture(&conn);
+
+    let facts = find_structural_facts_scoped(&conn, "import", Some("ui/qmldir"), 10).unwrap();
+
+    assert_eq!(facts.len(), 1);
+    assert_eq!(facts[0].pattern_id, "qmldir.import.v1");
+}
+
+#[test]
+fn the_category_listing_names_the_qt_aliases() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+    qt_facts_fixture(&conn);
+
+    let categories = list_structural_fact_categories_scoped(&conn, None).unwrap();
+    let alias_line = format_fact_categories(&categories)
+        .lines()
+        .next()
+        .unwrap()
+        .to_string();
+
+    for alias in [
+        "signal (1 pattern, 1 fact)",
+        "import (2 patterns, 2 facts)",
+        "binding (1 pattern, 1 fact)",
+        "component (2 patterns, 2 facts)",
+        "module (1 pattern, 1 fact)",
+        "pragma (1 pattern, 1 fact)",
+    ] {
+        assert!(alias_line.contains(alias), "{alias_line}");
+    }
+    assert!(!alias_line.contains("signals ("), "{alias_line}");
+}

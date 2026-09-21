@@ -1650,7 +1650,7 @@ pub fn find_related_tests(
        AND {not_documentation}
        AND {pred}
      LIMIT ?2",
-            pred = pending_target_predicate("s_target", "s_target_parent")
+            pred = pending_target_predicate(conn, "s_target", "s_target_parent")
         );
 
         if let Ok(mut stmt) = conn.prepare(&pending_sql)
@@ -2260,12 +2260,24 @@ fn call_site_proximity(candidate_path: &str) -> String {
 
 /// SQL predicate that decides whether a pending call edge `p` (with caller `s_from`) points at
 /// the candidate definition `target` (whose parent symbol is joined as `parent`).
-fn pending_target_predicate(target: &str, parent: &str) -> String {
+fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> String {
     let ns = "json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END)";
     let target_path = format!("('/' || replace({target}.path, '\\', '/'))");
     let like_value = "replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_')";
     let closer_rank = call_site_proximity("closer.path");
     let target_rank = call_site_proximity(&format!("{target}.path"));
+    let import_alias_receiver = if has_column(conn, "symbols", "metadata_json") {
+        "OR EXISTS (
+                        SELECT 1 FROM symbols alias_import
+                        WHERE alias_import.kind = 'import'
+                          AND alias_import.path = p.path
+                          AND json_valid(alias_import.metadata_json)
+                          AND (json_extract(alias_import.metadata_json, '$.alias') = p.target_receiver
+                               OR json_extract(alias_import.metadata_json, '$.local_name') = p.target_receiver)
+                    )"
+    } else {
+        ""
+    };
     format!(
         "(
             (
@@ -2304,7 +2316,11 @@ fn pending_target_predicate(target: &str, parent: &str) -> String {
             )
             OR (
                 (p.target_namespace_json IS NULL OR p.target_namespace_json = '[]')
-                AND (p.target_receiver IS NULL OR p.target_receiver = '')
+                AND (
+                    p.target_receiver IS NULL
+                    OR p.target_receiver = ''
+                    {import_alias_receiver}
+                )
                 AND ({target}.parent_symbol_id IS NULL OR s_from.parent_symbol_id = {target}.parent_symbol_id)
                 AND ({target}.parent_symbol_id IS NOT NULL OR NOT EXISTS (
                     SELECT 1 FROM symbols closer
@@ -2354,6 +2370,15 @@ fn not_documentation(conn: &Connection, alias: &str) -> String {
     } else {
         "1 = 1".to_string()
     }
+}
+
+fn has_column(conn: &Connection, table: &str, column: &str) -> bool {
+    conn.query_row(
+        "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2",
+        [table, column],
+        |_| Ok(true),
+    )
+    .unwrap_or(false)
 }
 
 pub(crate) fn has_table(conn: &Connection, name: &str) -> bool {
@@ -2452,7 +2477,7 @@ fn find_references_internal(
                          LEFT JOIN symbols s_target_parent ON s_target.parent_symbol_id = s_target_parent.symbol_id
                           WHERE p.target_terminal_name = ?1
                             AND {pred}
-                          LIMIT ?2", pred = pending_target_predicate("s_target", "s_target_parent")),
+                          LIMIT ?2", pred = pending_target_predicate(conn, "s_target", "s_target_parent")),
                     )?;
 
                     let p_rows = pending_stmt.query_map(
@@ -2600,6 +2625,47 @@ fn find_references_internal(
             for r in rows {
                 results.push(r?);
             }
+
+            if let Some(sid) = symbol_id.filter(|_| results.len() < limit) {
+                let remaining = limit - results.len();
+                let mut receiver_stmt = conn.prepare(
+                    "SELECT COALESCE(s.name, ''),
+                            COALESCE(i.containing_symbol_id, ''),
+                            i.name,
+                            i.kind,
+                            i.path,
+                            i.start_line,
+                            i.start_column
+                     FROM identifiers i
+                     LEFT JOIN symbols s ON i.containing_symbol_id = s.symbol_id
+                     JOIN symbols target ON target.symbol_id = ?2
+                     LEFT JOIN symbols target_parent ON target_parent.symbol_id = target.parent_symbol_id
+                     WHERE i.kind = 'member_access'
+                       AND i.name != target.name
+                       AND COALESCE(s.kind, '') != 'import'
+                       AND target.kind IN ('class', 'struct', 'enum', 'interface', 'trait', 'module', 'namespace')
+                       AND json_valid(i.metadata_json)
+                       AND json_extract(i.metadata_json, '$.receiver') = target.name
+                       AND (json_extract(i.metadata_json, '$.receiver_qualifier') IS NULL
+                            OR json_extract(i.metadata_json, '$.receiver_qualifier') = target_parent.name)
+                     ORDER BY i.path, i.start_line
+                     LIMIT ?1",
+                )?;
+                let rows = receiver_stmt.query_map(params![remaining as i64, sid], |row| {
+                    Ok(ReferenceSite {
+                        from_symbol_name: row.get(0)?,
+                        from_symbol_id: row.get(1)?,
+                        to_symbol_name: row.get(2)?,
+                        kind: row.get(3)?,
+                        path: row.get::<_, String>(4)?.replace('\\', "/"),
+                        start_line: row.get::<_, Option<i64>>(5)?.map(|v| v as usize),
+                        start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
+                    })
+                })?;
+                for r in rows {
+                    results.push(r?);
+                }
+            }
         }
     } else {
         // Find callees: symbols called by target symbol
@@ -2668,7 +2734,7 @@ fn find_references_internal(
                              AND s_to.kind NOT IN ('import', 'variable', 'parameter', 'field', 'property', 'module', 'namespace')
                              AND {pred}
                        )
-                     LIMIT ?2", pred = pending_target_predicate("s_to", "s_to_parent"))
+                     LIMIT ?2", pred = pending_target_predicate(conn, "s_to", "s_to_parent"))
                 };
                 let mut pending_stmt = conn.prepare(&sql)?;
                 let rows = pending_stmt.query_map(
@@ -2806,7 +2872,7 @@ pub fn find_callee_signatures(
                  WHERE s_from.name = ?1 AND p.from_symbol_id = ?2
                    AND s_to.kind NOT IN ('import', 'variable', 'parameter', 'field', 'property', 'module', 'namespace')
                     AND {pred}
-                 LIMIT ?3", pred = pending_target_predicate("s_to", "s_parent")),
+                 LIMIT ?3", pred = pending_target_predicate(conn, "s_to", "s_parent")),
             )?;
 
                 let rows =
@@ -2873,7 +2939,7 @@ pub fn find_callee_signatures(
                          AND s_to.kind NOT IN ('import', 'variable', 'parameter', 'field', 'property', 'module', 'namespace')
                          AND {pred}
                    )
-                 LIMIT ?3", pred = pending_target_predicate("s_to", "s_parent")),
+                 LIMIT ?3", pred = pending_target_predicate(conn, "s_to", "s_parent")),
             )?;
 
             let rows =
@@ -2961,6 +3027,18 @@ const MODEL_FAMILIES: &[&str] = &[
     "json.schema.v1",
 ];
 
+const SIGNAL_FAMILIES: &[&str] = &[".signal_declaration."];
+
+const IMPORT_FAMILIES: &[&str] = &[".import_statement.", ".import."];
+
+const BINDING_FAMILIES: &[&str] = &[".binding."];
+
+const COMPONENT_FAMILIES: &[&str] = &[".object_instantiation.", ".object_type."];
+
+const MODULE_FAMILIES: &[&str] = &[".module."];
+
+const PRAGMA_FAMILIES: &[&str] = &[".pragma."];
+
 /// Category aliases mapped to the pattern-id families they name.
 ///
 /// A rule that starts with a dot matches any pattern id that contains it, a rule that ends with a
@@ -2974,6 +3052,17 @@ pub const CATEGORY_ALIASES: &[(&str, &[&str])] = &[
     ("config", CONFIG_FAMILIES),
     ("model", MODEL_FAMILIES),
     ("models", MODEL_FAMILIES),
+    ("signal", SIGNAL_FAMILIES),
+    ("signals", SIGNAL_FAMILIES),
+    ("import", IMPORT_FAMILIES),
+    ("imports", IMPORT_FAMILIES),
+    ("binding", BINDING_FAMILIES),
+    ("bindings", BINDING_FAMILIES),
+    ("component", COMPONENT_FAMILIES),
+    ("components", COMPONENT_FAMILIES),
+    ("module", MODULE_FAMILIES),
+    ("modules", MODULE_FAMILIES),
+    ("pragma", PRAGMA_FAMILIES),
 ];
 
 fn category_families(category: &str) -> Option<&'static [&'static str]> {
@@ -3307,8 +3396,9 @@ pub fn find_type_facts(conn: &Connection, symbol_id: &str) -> Result<Vec<TypeFac
 }
 
 /// True when a repository-relative path looks like a test file. Directory rules and file-name
-/// rules are kept apart: a `test`, `tests`, or `__tests__` directory anywhere including the
-/// repository root, or a file name that starts with `test_` in Python or Ruby, contains `_test.`,
+/// rules are kept apart: a `test`, `tests`, `autotests`, or `__tests__` directory anywhere
+/// including the repository root, or a file name that starts with Qt's `tst_`, starts with
+/// `test_` in Python or Ruby, contains `_test.`,
 /// `.test.`, or `.spec.`, is exactly `test.rs` or `tests.rs`, or ends with the C# `Tests.cs`
 /// (case-sensitive, so `Contests.cs` is a production file).
 pub fn is_test_path(path: &str) -> bool {
@@ -3319,7 +3409,9 @@ pub fn is_test_path(path: &str) -> bool {
     let lower_name = file_name.to_lowercase();
     directories.contains("/test/")
         || directories.contains("/tests/")
+        || directories.contains("/autotests/")
         || directories.contains("/__tests__/")
+        || lower_name.starts_with("tst_")
         || (lower_name.starts_with("test_")
             && (lower_name.ends_with(".py") || lower_name.ends_with(".rb")))
         || lower_name.contains("_test.")
@@ -3335,11 +3427,13 @@ pub fn is_test_path(path: &str) -> bool {
 /// `test_path_rule_and_its_sql_mirror_agree_on_every_path` runs both forms over one path list so
 /// the two cannot drift apart.
 ///
-/// Every rule needs the word `test` or `spec` in the path, so a cheap substring test guards the
+/// Every rule needs `test`, `spec`, or `tst_` in the path, so a cheap substring test guards the
 /// rules and lets most rows skip the path split. Without the guard the split costs about seven
 /// times more over a half-million rows.
 pub(crate) fn test_path_predicate(alias: &str) -> String {
-    let guard = format!("(lower({alias}.path) LIKE '%test%' OR lower({alias}.path) LIKE '%spec%')");
+    let guard = format!(
+        "(lower({alias}.path) LIKE '%test%' OR lower({alias}.path) LIKE '%spec%' OR lower({alias}.path) LIKE '%tst\\_%' ESCAPE '\\')"
+    );
     let p = format!("replace({alias}.path, '\\', '/')");
     let directories = format!("'/' || lower(rtrim({p}, replace({p}, '/', ''))) || '/'");
     let file_name = format!("replace({p}, rtrim({p}, replace({p}, '/', '')), '')");
@@ -3348,7 +3442,9 @@ pub(crate) fn test_path_predicate(alias: &str) -> String {
     let clauses = [
         like(&directories, "%/test/%"),
         like(&directories, "%/tests/%"),
+        like(&directories, "%/autotests/%"),
         like(&directories, "%/\\_\\_tests\\_\\_/%"),
+        like(&lower_name, "tst\\_%"),
         like(&lower_name, "test\\_%.py"),
         like(&lower_name, "test\\_%.rb"),
         like(&lower_name, "%\\_test.%"),
@@ -3500,7 +3596,7 @@ pub fn compute_blast_radius_scoped(
             (
                 "LEFT JOIN symbols s_target_parent ON s_target.parent_symbol_id = s_target_parent.symbol_id
             LEFT JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id",
-                format!("AND {pred}", pred = pending_target_predicate("s_target", "s_target_parent")),
+                format!("AND {pred}", pred = pending_target_predicate(conn, "s_target", "s_target_parent")),
             )
         } else {
             ("", String::new())
@@ -3839,6 +3935,16 @@ mod tests {
         ("test_config.py", true),
         ("pkg/test_data/x.json", false),
         ("src/test_detection.rs", false),
+        ("autotests/tst_pagerow.qml", true),
+        ("autotests/helper.qml", true),
+        ("src/autotests/columnview.cpp", true),
+        ("tst_foo.qml", true),
+        ("src/tst_columnview.qml", true),
+        ("autotests\\tst_bar.qml", true),
+        ("autotests_helper/x.rs", false),
+        ("src/autotest.rs", false),
+        ("src/tstamp.rs", false),
+        ("src/tst.rs", false),
         ("crates/julie-index/src/analysis/test_quality.rs", false),
         ("x/foo_test.go", true),
         ("x/foo.test.ts", true),

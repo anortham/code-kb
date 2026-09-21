@@ -323,3 +323,113 @@ fn references_and_blast_radius_report_the_same_missing_symbol() {
     assert!(refs_error.contains("Did you mean one of:"), "{refs_error}");
     assert!(refs_error.contains("`Config`"), "{refs_error}");
 }
+
+const QML_SINGLETON_AND_CONSUMER: &[(&str, &str)] = &[
+    (
+        "Commons/Color.qml",
+        "pragma Singleton\nimport QtQuick\n\nQtObject {\n    property color foreground: \"#ffffff\"\n    property color background: \"#000000\"\n}\n",
+    ),
+    (
+        "Ui/Button.qml",
+        "import QtQuick\nimport \"../Commons\"\n\nRectangle {\n    color: Color.background\n    border.color: Color.foreground\n}\n",
+    ),
+];
+
+const QUALIFIED_RECEIVER_JS: &[(&str, &str)] = &[
+    (
+        "src/runtime.js",
+        "export class runtime {\n    static start() {\n        return 1;\n    }\n}\n",
+    ),
+    (
+        "src/host.js",
+        "export function boot(chrome) {\n    return chrome.runtime.lastError;\n}\n\nexport function version() {\n    return runtime.tag;\n}\n",
+    ),
+];
+
+#[test]
+fn callers_of_a_type_include_the_member_accesses_that_name_it_as_receiver() {
+    let (_repo, db_path) = scanned_repo(QML_SINGLETON_AND_CONSUMER);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let refs = find_references_scoped(
+        &conn,
+        "Color",
+        "callers",
+        20,
+        false,
+        Some("Commons/Color.qml"),
+    )
+    .unwrap();
+
+    let mut sites: Vec<(String, Option<usize>, String, String)> = refs
+        .iter()
+        .map(|r| {
+            (
+                r.path.clone(),
+                r.start_line,
+                r.to_symbol_name.clone(),
+                r.kind.clone(),
+            )
+        })
+        .collect();
+    sites.sort();
+    assert_eq!(
+        sites,
+        vec![
+            (
+                "Ui/Button.qml".to_string(),
+                Some(5),
+                "background".to_string(),
+                "member_access".to_string()
+            ),
+            (
+                "Ui/Button.qml".to_string(),
+                Some(6),
+                "foreground".to_string(),
+                "member_access".to_string()
+            ),
+        ],
+        "{refs:?}"
+    );
+}
+
+#[test]
+fn a_member_access_under_a_foreign_qualifier_is_not_a_reference_to_the_type() {
+    let (_repo, db_path) = scanned_repo(QUALIFIED_RECEIVER_JS);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let refs = find_references_scoped(
+        &conn,
+        "runtime",
+        "callers",
+        20,
+        false,
+        Some("src/runtime.js"),
+    )
+    .unwrap();
+
+    assert!(
+        !refs.iter().any(|r| r.to_symbol_name == "lastError"),
+        "{refs:?}"
+    );
+}
+
+#[test]
+fn receiver_matches_of_a_type_come_after_the_rows_that_name_it() {
+    let (_repo, db_path) = scanned_repo(QUALIFIED_RECEIVER_JS);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let refs = find_references_scoped(
+        &conn,
+        "runtime",
+        "callers",
+        20,
+        false,
+        Some("src/runtime.js"),
+    )
+    .unwrap();
+
+    let names: Vec<&str> = refs.iter().map(|r| r.to_symbol_name.as_str()).collect();
+
+    assert_eq!(names, vec!["runtime", "tag"], "{refs:?}");
+}
