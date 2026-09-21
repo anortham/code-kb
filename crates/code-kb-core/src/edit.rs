@@ -15,8 +15,18 @@ use crate::workspace::Workspace;
 
 #[derive(Debug, Error)]
 pub enum EditError {
-    #[error("Symbol '{0}' not found in '{1}'")]
-    SymbolNotFound(String, String),
+    #[error("Symbol '{name}' not found in {workspace}. {hint}")]
+    SymbolNotFound {
+        name: String,
+        workspace: String,
+        hint: String,
+    },
+    #[error("File '{path}' not found in {workspace}. {hint}")]
+    FileNotFound {
+        path: String,
+        workspace: String,
+        hint: String,
+    },
     #[error("Symbol has no body defined (e.g. trait declaration without default implementation)")]
     NoBodyDefined,
     #[error("Optimistic lock failed: expected body hash '{0}', found '{1}'")]
@@ -75,6 +85,24 @@ pub struct EditResult {
     pub new_body_hash: String,
     pub bytes_written: usize,
     pub syntax_checked: bool,
+}
+
+fn symbol_not_found(conn: &Connection, name: &str, path_filter: Option<&str>) -> EditError {
+    let (workspace, hint) = queries::symbol_not_found_parts(conn, name, path_filter);
+    EditError::SymbolNotFound {
+        name: name.to_string(),
+        workspace,
+        hint,
+    }
+}
+
+fn file_not_found(conn: &Connection, rel_path: &str) -> EditError {
+    let (workspace, hint) = queries::file_not_found_parts(conn, rel_path);
+    EditError::FileNotFound {
+        path: rel_path.to_string(),
+        workspace,
+        hint,
+    }
 }
 
 /// Computes SHA256 of a string content.
@@ -220,13 +248,16 @@ pub fn replace_symbol_body(
     expected_body_hash: Option<&str>,
 ) -> Result<EditResult, EditError> {
     let (abs_path, rel_path) = workspace.resolve_path(Path::new(file_path))?;
+    if !abs_path.exists() {
+        return Err(file_not_found(conn, &rel_path));
+    }
 
     // Tier 2: Refresh file in index before querying symbol offsets, propagating any sync errors
     sync::ensure_fresh_file(workspace, db_path, conn, &rel_path)?;
 
     // Find symbol in database with exact path
     let symbol = queries::get_symbol_by_name_exact(conn, symbol_name, &rel_path)?
-        .ok_or_else(|| EditError::SymbolNotFound(symbol_name.to_string(), rel_path.clone()))?;
+        .ok_or_else(|| symbol_not_found(conn, symbol_name, Some(&rel_path)))?;
 
     let body_start = symbol.body_start_byte.ok_or(EditError::NoBodyDefined)?;
     let body_end = symbol.body_end_byte.ok_or(EditError::NoBodyDefined)?;
@@ -486,6 +517,9 @@ pub fn edit_file(
         return Err(EditError::EmptyOldText);
     }
     let (abs_path, rel_path) = workspace.resolve_path(Path::new(file_path))?;
+    if !abs_path.exists() {
+        return Err(file_not_found(conn, &rel_path));
+    }
     if !abs_path.is_file() {
         return Err(EditError::NotAFile(rel_path));
     }

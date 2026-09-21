@@ -13,10 +13,12 @@ use crate::models::{
 pub enum QueryError {
     #[error("Database query error: {0}")]
     Sqlite(#[from] rusqlite::Error),
-    #[error("Symbol '{0}' not found")]
-    SymbolNotFound(String),
-    #[error("Symbol '{0}' not found. Did you mean one of:\n{1}")]
-    SymbolNotFoundWithSuggestions(String, String),
+    #[error("Symbol '{name}' not found in {workspace}. {hint}")]
+    SymbolNotFound {
+        name: String,
+        workspace: String,
+        hint: String,
+    },
     #[error(
         "Ambiguous symbol '{0}': found {1} matching candidates. Specify file_path or qualified name to disambiguate:\n{2}"
     )]
@@ -1898,6 +1900,228 @@ fn get_symbol_by_name_internal(
     ))
 }
 
+/// The name of the repository this index was built for, for not-found messages.
+pub fn workspace_name(conn: &Connection) -> String {
+    conn.query_row(
+        "SELECT value FROM artifact_metadata WHERE key = 'root_path'",
+        [],
+        |row| row.get::<_, String>(0),
+    )
+    .ok()
+    .map(|root| root.replace('\\', "/"))
+    .and_then(|root| {
+        root.trim_end_matches('/')
+            .rsplit('/')
+            .next()
+            .filter(|name| !name.is_empty())
+            .map(str::to_string)
+    })
+    .unwrap_or_else(|| "this workspace".to_string())
+}
+
+fn edit_distance(left: &str, right: &str) -> usize {
+    let left: Vec<char> = left.chars().collect();
+    let right: Vec<char> = right.chars().collect();
+    let mut previous: Vec<usize> = (0..=right.len()).collect();
+    let mut current = vec![0usize; right.len() + 1];
+    for (i, a) in left.iter().enumerate() {
+        current[0] = i + 1;
+        for (j, b) in right.iter().enumerate() {
+            let substitution = previous[j] + usize::from(a != b);
+            current[j + 1] = substitution.min(previous[j + 1] + 1).min(current[j] + 1);
+        }
+        std::mem::swap(&mut previous, &mut current);
+    }
+    previous[right.len()]
+}
+
+/// Names within a small edit distance of `name`, recalled through the name trigram index.
+fn near_names_by_trigram(
+    conn: &Connection,
+    name: &str,
+    path_filter: Option<&str>,
+) -> Result<Vec<Symbol>, QueryError> {
+    if !has_table(conn, "symbol_names_tri") {
+        return Ok(Vec::new());
+    }
+    let lower = name.to_lowercase();
+    let chars: Vec<char> = lower.chars().collect();
+    let chunks: Vec<String> = chars
+        .windows(3)
+        .map(|window| window.iter().collect::<String>())
+        .filter(|chunk| chunk.chars().all(|c| c.is_alphanumeric() || c == '_'))
+        .collect();
+    if chunks.is_empty() {
+        return Ok(Vec::new());
+    }
+    let match_clause = chunks
+        .iter()
+        .map(|chunk| format!("\"{chunk}\""))
+        .collect::<Vec<_>>()
+        .join(" OR ");
+
+    let normalized_path = path_filter.map(|p| {
+        p.replace('\\', "/")
+            .trim_start_matches("./")
+            .trim_matches('/')
+            .to_string()
+    });
+    let escaped_path = normalized_path.as_deref().map(escape_like);
+    let kind_val: Option<&str> = None;
+    let columns = candidate_columns(conn);
+    let filters = candidate_filters(false, false);
+    let sql = format!(
+        "SELECT {columns} FROM symbol_names_tri
+         CROSS JOIN symbols s ON s.rowid = symbol_names_tri.rowid
+         WHERE symbol_names_tri MATCH :match {filters}
+         ORDER BY bm25(symbol_names_tri) ASC, length(s.name) ASC, s.path ASC LIMIT 20"
+    );
+    let rows = conn
+        .prepare(&sql)?
+        .query_map(
+            rusqlite::named_params! {
+                ":match": match_clause,
+                ":kind": kind_val,
+                ":path": normalized_path.as_deref(),
+                ":path_like": escaped_path.as_deref(),
+            },
+            map_symbol,
+        )?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let budget = (chars.len() / 4).max(2);
+    let mut scored: Vec<(usize, Symbol)> = rows
+        .into_iter()
+        .map(|symbol| (edit_distance(&lower, &symbol.name.to_lowercase()), symbol))
+        .filter(|(distance, _)| *distance <= budget)
+        .collect();
+    scored.sort_by_key(|(distance, symbol)| (*distance, symbol.name.chars().count()));
+    Ok(scored
+        .into_iter()
+        .map(|(_, symbol)| symbol)
+        .take(3)
+        .collect())
+}
+
+/// Up to three indexed symbols whose names are close to `name`. Never fails.
+pub fn suggest_symbol_names(
+    conn: &Connection,
+    name: &str,
+    path_filter: Option<&str>,
+) -> Vec<Symbol> {
+    let (ancestors, terminal) = split_qualified_name(name);
+    let mut found =
+        search_symbols_scoped(conn, terminal, None, path_filter, false, 3).unwrap_or_default();
+    if found.is_empty() && terminal.chars().count() >= 4 {
+        found = near_names_by_trigram(conn, terminal, path_filter).unwrap_or_default();
+    }
+    if let Some(parent) = ancestors.last().copied() {
+        let mut ranked: Vec<(bool, Symbol)> = found
+            .into_iter()
+            .map(|symbol| {
+                let shares_parent = ancestor_names(conn, &symbol.symbol_id)
+                    .unwrap_or_default()
+                    .first()
+                    .is_some_and(|found_parent| found_parent == parent);
+                (!shares_parent, symbol)
+            })
+            .collect();
+        ranked.sort_by_key(|(demoted, _)| *demoted);
+        found = ranked.into_iter().map(|(_, symbol)| symbol).collect();
+    }
+    found.truncate(3);
+    found
+}
+
+/// Up to three indexed file paths close to `rel_path`. Never fails.
+pub fn suggest_file_paths(conn: &Connection, rel_path: &str) -> Vec<String> {
+    let wanted = rel_path.replace('\\', "/");
+    let wanted = wanted.trim_start_matches("./").trim_matches('/');
+    let basename = wanted.rsplit('/').next().unwrap_or(wanted).to_lowercase();
+    if basename.is_empty() {
+        return Vec::new();
+    }
+    let stem = basename.split('.').next().unwrap_or(&basename).to_string();
+    let segments: Vec<&str> = wanted.split('/').collect();
+    let tail = if segments.len() >= 2 {
+        segments[segments.len() - 2..].join("/").to_lowercase()
+    } else {
+        basename.clone()
+    };
+
+    let path_expr = "replace(files.path, '\\', '/')";
+    let file_name = format!(
+        "lower(replace({path_expr}, rtrim({path_expr}, replace({path_expr}, '/', '')), ''))"
+    );
+    let rules = [
+        (format!("{file_name} = :value"), basename.clone()),
+        (
+            format!("{file_name} LIKE :value ESCAPE '\\'"),
+            format!("{}%", escape_like(&stem)),
+        ),
+        (
+            format!("lower({path_expr}) LIKE :value ESCAPE '\\'"),
+            format!("%{}", escape_like(&tail)),
+        ),
+    ];
+
+    for (predicate, value) in rules {
+        let sql = format!(
+            "SELECT {path_expr} FROM files WHERE {predicate}
+             ORDER BY length(files.path) ASC, files.path ASC LIMIT 3"
+        );
+        let found: Vec<String> = conn
+            .prepare(&sql)
+            .and_then(|mut stmt| {
+                stmt.query_map(rusqlite::named_params! { ":value": value }, |row| {
+                    row.get::<_, String>(0)
+                })?
+                .collect()
+            })
+            .unwrap_or_default();
+        if !found.is_empty() {
+            return found;
+        }
+    }
+    Vec::new()
+}
+
+/// The workspace name and the recovery hint for a symbol that is not indexed.
+pub fn symbol_not_found_parts(
+    conn: &Connection,
+    name: &str,
+    path_filter: Option<&str>,
+) -> (String, String) {
+    let candidates = suggest_symbol_names(conn, name, path_filter);
+    let hint = if candidates.is_empty() {
+        "No similar name is indexed; check the workspace and spelling.".to_string()
+    } else {
+        let list = candidates
+            .iter()
+            .map(|s| format!("  - {} `{}` ({}:{})", s.kind, s.name, s.path, s.start_line))
+            .collect::<Vec<_>>()
+            .join("\n");
+        format!("Did you mean one of:\n{list}")
+    };
+    (workspace_name(conn), hint)
+}
+
+/// The workspace name and the recovery hint for a file that is not indexed.
+pub fn file_not_found_parts(conn: &Connection, rel_path: &str) -> (String, String) {
+    let candidates = suggest_file_paths(conn, rel_path);
+    let hint = if candidates.is_empty() {
+        "No similar path is indexed; check the workspace and spelling.".to_string()
+    } else {
+        let list = candidates
+            .iter()
+            .map(|path| format!("  - {path}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        format!("Did you mean one of:\n{list}")
+    };
+    (workspace_name(conn), hint)
+}
+
 /// Find callers or callees of a symbol (filters unresolved external stdlib/runtime primitives by default).
 pub fn find_references(
     conn: &Connection,
@@ -1943,21 +2167,12 @@ pub fn find_references_scoped(
             include_external,
         ),
         None => {
-            let suggestions = search_symbols_scoped(conn, symbol_name, None, path_filter, false, 3)
-                .unwrap_or_default();
-            if suggestions.is_empty() {
-                Err(QueryError::SymbolNotFound(symbol_name.to_string()))
-            } else {
-                let list = suggestions
-                    .into_iter()
-                    .map(|s| format!("  - {} `{}` ({}:{})", s.kind, s.name, s.path, s.start_line))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                Err(QueryError::SymbolNotFoundWithSuggestions(
-                    symbol_name.to_string(),
-                    list,
-                ))
-            }
+            let (workspace, hint) = symbol_not_found_parts(conn, symbol_name, path_filter);
+            Err(QueryError::SymbolNotFound {
+                name: symbol_name.to_string(),
+                workspace,
+                hint,
+            })
         }
     }
 }
@@ -3002,8 +3217,14 @@ pub fn compute_blast_radius_scoped(
     let resolved_seed_symbols = seed_symbols
         .iter()
         .map(|name| {
-            get_symbol_by_name(conn, name, symbol_path_filter)?
-                .ok_or_else(|| QueryError::SymbolNotFound((*name).to_string()))
+            get_symbol_by_name(conn, name, symbol_path_filter)?.ok_or_else(|| {
+                let (workspace, hint) = symbol_not_found_parts(conn, name, symbol_path_filter);
+                QueryError::SymbolNotFound {
+                    name: (*name).to_string(),
+                    workspace,
+                    hint,
+                }
+            })
         })
         .collect::<Result<Vec<_>, _>>()?;
     let mut seeds = Vec::new();

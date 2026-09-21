@@ -196,7 +196,7 @@ fn blast_radius_rejects_unknown_or_ambiguous_symbol_seeds() {
     ));
     assert!(matches!(
         compute_blast_radius(&conn, &["missing"], &[], 1, 20),
-        Err(code_kb_core::QueryError::SymbolNotFound(name)) if name == "missing"
+        Err(code_kb_core::QueryError::SymbolNotFound { ref name, .. }) if name == "missing"
     ));
 }
 

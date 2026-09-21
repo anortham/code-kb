@@ -1,7 +1,8 @@
 use code_kb_core::{
-    Workspace, find_callee_signatures, find_julie_extract_binary, find_references_scoped,
-    find_structural_facts_scoped, get_context_slice_op, get_symbol_by_name, open_read_only,
-    open_read_write, safe_tempdir, scan_workspace, search_symbols_scoped,
+    Workspace, ensure_fts_index, find_callee_signatures, find_julie_extract_binary,
+    find_references_scoped, find_structural_facts_scoped, get_context_slice_op, get_symbol_by_name,
+    open_read_only, open_read_write, safe_tempdir, scan_workspace, search_symbols_scoped,
+    suggest_file_paths, suggest_symbol_names,
 };
 use std::fs;
 
@@ -842,4 +843,68 @@ fn qualified_lookup_reports_ambiguity_past_the_row_cap() {
     assert!(text.contains("Ambiguous"), "{text}");
     assert!(text.contains("src/wanted_a.rs"), "{text}");
     assert!(text.contains("src/wanted_b.rs"), "{text}");
+}
+
+#[test]
+fn a_symbol_typo_suggests_the_closest_indexed_name() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+    conn.execute_batch(
+        "INSERT INTO symbols VALUES
+            ('s1', 'f1', 'src/formatters.rs', 'rust', 'format_symbol_body', 'function', NULL, NULL, 'pub', NULL, 10, 0, 20, 0, 0, 100, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
+            ('s2', 'f2', 'src/server.rs', 'rust', 'handle_call_tool', 'function', NULL, NULL, 'pub', NULL, 5, 0, 9, 0, 0, 80, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0);",
+    )
+    .unwrap();
+    ensure_fts_index(&conn).unwrap();
+
+    let names: Vec<String> = suggest_symbol_names(&conn, "format_sybmol_body", None)
+        .into_iter()
+        .map(|s| s.name)
+        .collect();
+
+    assert_eq!(names, ["format_symbol_body"]);
+}
+
+#[test]
+fn a_wrong_file_path_suggests_the_indexed_file_with_the_same_stem() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+    conn.execute_batch(
+        "INSERT INTO files VALUES
+            ('f1', 'crates/code-kb-core/src/formatters.rs', 'rust', 'h1', 100, 10, 't'),
+            ('f2', 'crates/code-kb-cli/src/mcp/server.rs', 'rust', 'h2', 100, 10, 't');",
+    )
+    .unwrap();
+
+    let found = suggest_file_paths(&conn, "crates/code-kb-cli/src/mcp/format.rs");
+
+    assert_eq!(found, ["crates/code-kb-core/src/formatters.rs"]);
+}
+
+#[test]
+fn a_missing_symbol_with_no_neighbour_names_the_workspace() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+    conn.execute_batch(
+        "INSERT INTO symbols VALUES
+            ('s1', 'f1', 'src/formatters.rs', 'rust', 'format_symbol_body', 'function', NULL, NULL, 'pub', NULL, 10, 0, 20, 0, 0, 100, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0);",
+    )
+    .unwrap();
+    ensure_fts_index(&conn).unwrap();
+    conn.execute(
+        "INSERT INTO artifact_metadata (key, value) VALUES ('root_path', ?1)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        ["/home/dev/widget-shop"],
+    )
+    .unwrap();
+
+    let err = find_references_scoped(&conn, "zzzqqq", "callers", 10, false, None).unwrap_err();
+
+    assert_eq!(
+        err.to_string(),
+        "Symbol 'zzzqqq' not found in widget-shop. No similar name is indexed; check the workspace and spelling."
+    );
 }

@@ -1154,7 +1154,9 @@ fn test_adversarial_stress_scoped_outline_and_depth_limits() {
     let missing_err =
         code_kb_core::codebase_outline_op(&ws, &conn, 2, Some("nonexistent/dir")).unwrap_err();
     match missing_err {
-        code_kb_core::ops::OpError::FileNotFound(f) => assert_eq!(f, "nonexistent/dir"),
+        code_kb_core::ops::OpError::FileNotFound { path, .. } => {
+            assert_eq!(path, "nonexistent/dir")
+        }
         other => panic!("Expected FileNotFound, got {:?}", other),
     }
 }

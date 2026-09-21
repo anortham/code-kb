@@ -13,12 +13,18 @@ use crate::workspace::{Workspace, WorkspaceError};
 
 #[derive(Debug, Error)]
 pub enum OpError {
-    #[error("Symbol '{0}' not found")]
-    SymbolNotFound(String),
-    #[error("Symbol '{0}' not found. Did you mean one of:\n{1}")]
-    SymbolNotFoundWithSuggestions(String, String),
-    #[error("File '{0}' not found")]
-    FileNotFound(String),
+    #[error("Symbol '{name}' not found in {workspace}. {hint}")]
+    SymbolNotFound {
+        name: String,
+        workspace: String,
+        hint: String,
+    },
+    #[error("File '{path}' not found in {workspace}. {hint}")]
+    FileNotFound {
+        path: String,
+        workspace: String,
+        hint: String,
+    },
     #[error("Path '{0}' is a directory, not a file")]
     IsADirectory(String),
     #[error("Workspace error: {0}")]
@@ -29,6 +35,24 @@ pub enum OpError {
     Query(#[from] QueryError),
     #[error("Slice error: {0}")]
     Slice(#[from] SliceError),
+}
+
+fn symbol_not_found(conn: &Connection, name: &str, path_filter: Option<&str>) -> OpError {
+    let (workspace, hint) = queries::symbol_not_found_parts(conn, name, path_filter);
+    OpError::SymbolNotFound {
+        name: name.to_string(),
+        workspace,
+        hint,
+    }
+}
+
+fn file_not_found(conn: &Connection, rel_path: &str) -> OpError {
+    let (workspace, hint) = queries::file_not_found_parts(conn, rel_path);
+    OpError::FileNotFound {
+        path: rel_path.to_string(),
+        workspace,
+        hint,
+    }
 }
 
 /// Retrieve the body of a symbol by name, guaranteeing fresh offsets and file contents.
@@ -43,7 +67,7 @@ pub fn get_symbol_body_op(
     let resolved_rel = if let Some(fp) = file_path {
         let (effective_abs, rel) = workspace.resolve_path(Path::new(fp))?;
         if !effective_abs.exists() {
-            return Err(OpError::FileNotFound(rel));
+            return Err(file_not_found(conn, &rel));
         }
         if effective_abs.is_dir() {
             return Err(OpError::IsADirectory(rel));
@@ -55,28 +79,9 @@ pub fn get_symbol_body_op(
     };
 
     // 2. Query symbol from database
-    let initial_symbol = queries::get_symbol_by_name(conn, symbol_name, resolved_rel.as_deref())?
-        .ok_or_else(|| {
-        let suggestions = queries::search_symbols_scoped(
-            conn,
-            symbol_name,
-            None,
-            resolved_rel.as_deref(),
-            false,
-            3,
-        )
-        .unwrap_or_default();
-        if suggestions.is_empty() {
-            OpError::SymbolNotFound(symbol_name.to_string())
-        } else {
-            let list = suggestions
-                .into_iter()
-                .map(|s| format!("  - {} `{}` ({}:{})", s.kind, s.name, s.path, s.start_line))
-                .collect::<Vec<_>>()
-                .join("\n");
-            OpError::SymbolNotFoundWithSuggestions(symbol_name.to_string(), list)
-        }
-    })?;
+    let initial_symbol =
+        queries::get_symbol_by_name(conn, symbol_name, resolved_rel.as_deref())?
+            .ok_or_else(|| symbol_not_found(conn, symbol_name, resolved_rel.as_deref()))?;
 
     // 3. If file_path was not provided initially, refresh the file found from the symbol
     let symbol = if resolved_rel.is_none() {
@@ -85,7 +90,7 @@ pub fn get_symbol_body_op(
         if was_refreshed {
             // CRUCIAL: Reload symbol after re-indexing so we have fresh offsets!
             queries::get_symbol_by_name_exact(conn, symbol_name, &initial_symbol.path)?
-                .ok_or_else(|| OpError::SymbolNotFound(symbol_name.to_string()))?
+                .ok_or_else(|| symbol_not_found(conn, symbol_name, resolved_rel.as_deref()))?
         } else {
             initial_symbol
         }
@@ -148,7 +153,7 @@ pub fn file_skeleton_op(
 ) -> Result<String, OpError> {
     let (effective_abs, rel_path) = workspace.resolve_path(Path::new(file_path))?;
     if !effective_abs.exists() {
-        return Err(OpError::FileNotFound(rel_path));
+        return Err(file_not_found(conn, &rel_path));
     }
     if effective_abs.is_dir() {
         return codebase_outline_op(workspace, conn, 2, Some(&rel_path));
@@ -227,7 +232,7 @@ pub fn codebase_outline_op(
     if let Some(filter) = path_filter
         && files_found == 0
     {
-        return Err(OpError::FileNotFound(filter.to_string()));
+        return Err(file_not_found(conn, filter));
     }
 
     let symbols_by_file = if file_paths.is_empty() {

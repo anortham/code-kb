@@ -1,6 +1,6 @@
 use code_kb_core::{
-    Workspace, find_julie_extract_binary, find_references_scoped, open_read_only, safe_tempdir,
-    scan_workspace,
+    Workspace, compute_blast_radius, find_julie_extract_binary, find_references_scoped,
+    open_read_only, safe_tempdir, scan_workspace,
 };
 use std::fs;
 
@@ -302,4 +302,24 @@ fn same_named_containers_with_same_named_members_keep_the_shared_caller() {
         assert_eq!(refs[0].kind, "member_access");
         assert_eq!(refs[0].start_line, Some(5));
     }
+}
+
+#[test]
+fn references_and_blast_radius_report_the_same_missing_symbol() {
+    let (_repo, db_path) = scanned_repo(&[(
+        "src/config.rs",
+        "pub struct Config {\n    pub path: String,\n}\n",
+    )]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let refs_error = find_references_scoped(&conn, "Confgi", "callers", 20, false, None)
+        .unwrap_err()
+        .to_string();
+    let blast_error = compute_blast_radius(&conn, &["Confgi"], &[], 1, 20)
+        .unwrap_err()
+        .to_string();
+
+    assert_eq!(refs_error, blast_error);
+    assert!(refs_error.contains("Did you mean one of:"), "{refs_error}");
+    assert!(refs_error.contains("`Config`"), "{refs_error}");
 }

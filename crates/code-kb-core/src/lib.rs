@@ -39,7 +39,8 @@ pub use queries::{
     fts_search_symbols_scoped, get_file, get_symbol_by_name, get_symbol_by_name_exact,
     is_test_path, list_structural_fact_categories, list_structural_fact_categories_scoped,
     load_file_symbols, load_scoped_outline_symbols, normalize_kind, sanitize_fts5_query,
-    search_symbols, search_symbols_scoped,
+    search_symbols, search_symbols_scoped, suggest_file_paths, suggest_symbol_names,
+    workspace_name,
 };
 pub use slicer::{SliceError, slice_symbol, slice_symbol_body};
 pub use sync::{
