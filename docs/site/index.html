@@ -217,7 +217,7 @@ get_symbol_context("search_symbols_scoped")</pre>
         </div>
         <div class="note">
           <h3>Current limits</h3>
-          <p><code>.ui</code> designer files and CMake files are not indexed. Signal handlers can still be candidates when the receiver is ambiguous. One batch of changed <code>.h</code> files temporarily triggers one full workspace re-extraction. The <a href="https://github.com/anortham/code-kb#qt-and-qml" target="_blank" rel="noopener">README</a> has the historical code-kb 1.6.0 / Julie 3.3.0 corpus measurements and details.</p>
+          <p><code>.ui</code> designer files and CMake files are not indexed. Signal handlers can still be candidates when the receiver is ambiguous. One batch of changed <code>.h</code> files temporarily triggers a content-aware workspace scan that only re-extracts changed files. The <a href="https://github.com/anortham/code-kb#qt-and-qml" target="_blank" rel="noopener">README</a> has the historical code-kb 1.6.0 / Julie 3.3.0 corpus measurements and details.</p>
         </div>
       </div>
     </section>

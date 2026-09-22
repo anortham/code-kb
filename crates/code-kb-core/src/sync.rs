@@ -165,7 +165,7 @@ fn is_header_path(rel_path: &str) -> bool {
         .is_some_and(|extension| extension.eq_ignore_ascii_case("h"))
 }
 
-/// Tier 1 & Incremental Update: updates one file, except headers force a scan for language detection.
+/// Tier 1 & Incremental Update: updates one file, except headers use a content-aware scan for language detection.
 pub fn update_file(workspace: &Workspace, db_path: &Path, rel_path: &str) -> Result<(), SyncError> {
     if db_path.is_file() && is_header_path(rel_path) {
         return scan_header_file(workspace, db_path, rel_path);
@@ -193,8 +193,8 @@ fn scan_header_file(
     if header_hash_matches_disk(workspace, db_path, rel_path)? {
         return Ok(());
     }
-    // Julie 3.3.1 classifies `.h` files as C in `update`, while a full scan preserves C++ Qt facts.
-    scan_workspace(workspace, db_path, true)?;
+    // Julie 3.3.1 classifies `.h` files as C in `update`, while a content-aware scan preserves C++ Qt facts.
+    scan_workspace(workspace, db_path, false)?;
 
     if !header_hash_matches_disk(workspace, db_path, rel_path)? {
         return Err(SyncError::TargetNotIndexed(rel_path.to_string()));
@@ -753,7 +753,7 @@ pub fn reconcile_offline_edits(
         let changed_paths = report.added.iter().chain(&report.modified);
         let changed_headers = changed_paths.clone().any(|path| is_header_path(path));
         if total_changes > 50 || changed_headers {
-            scan_workspace(workspace, db_path, changed_headers)?;
+            scan_workspace(workspace, db_path, false)?;
             remember_skipped_files(workspace, db_path, conn, changed_paths)?;
         } else {
             let mut updated: Vec<&String> = Vec::new();

@@ -7,6 +7,7 @@ Measures real performance, token reduction, peak RSS, and search precision acros
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -21,6 +22,42 @@ import time
 import uuid
 from pathlib import Path
 from typing import Any
+
+
+def percentile(samples: list[float], fraction: float) -> float:
+    ordered = sorted(samples)
+    return ordered[max(0, math.ceil(len(ordered) * fraction) - 1)]
+
+
+def mcp_result(response: dict[str, Any], request_id: int, operation: str) -> dict[str, Any]:
+    if response.get("id") != request_id:
+        raise RuntimeError(f"{operation} response id did not match request id {request_id}")
+    if "error" in response:
+        raise RuntimeError(f"{operation} failed: {response['error']}")
+    result = response.get("result")
+    if not isinstance(result, dict):
+        raise RuntimeError(f"{operation} returned no result")
+    if result.get("isError"):
+        raise RuntimeError(f"{operation} returned an MCP tool error")
+    return result
+
+
+def contains_symbol_declaration(result: dict[str, Any], symbol: str, path: str) -> bool:
+    content = result.get("content", [])
+    text = "".join(item.get("text", "") for item in content if isinstance(item, dict))
+    declaration = re.compile(
+        rf"^- function `{re.escape(symbol)}` \[{re.escape(Path(path).as_posix())}:\d+(?:-\d+)?\]",
+        re.MULTILINE,
+    )
+    return declaration.search(text) is not None
+
+
+def file_sha256(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as binary_file:
+        for chunk in iter(lambda: binary_file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def estimate_tokens(text: str) -> int:
@@ -128,7 +165,10 @@ def measure_memory_and_latency(binary: str, args: list[str], cwd: str, iteration
         "min_ms": min(warm_latencies),
         "median_ms": statistics.median(warm_latencies),
         "mean_ms": statistics.mean(warm_latencies),
+        "p95_ms": percentile(warm_latencies, 0.95),
         "max_ms": max(warm_latencies),
+        "raw_samples_ms": latencies,
+        "warm_samples_ms": warm_latencies,
         "peak_rss_mb": peak_rss,
         "output": output_text,
         "tokens": estimate_tokens(output_text),
@@ -182,8 +222,7 @@ class PersistentMcpClient:
         })
         resp = self.recv()
         elapsed_ms = (time.perf_counter() - start) * 1000.0
-        if "error" in resp:
-            raise RuntimeError(f"Initialization failed: {resp['error']}")
+        mcp_result(resp, req_id, "Initialization")
         self.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
         return elapsed_ms
 
@@ -199,6 +238,7 @@ class PersistentMcpClient:
         })
         resp = self.recv()
         elapsed_ms = (time.perf_counter() - start) * 1000.0
+        mcp_result(resp, req_id, f"Tool call {name}")
         return resp, elapsed_ms
 
     def get_live_memory(self) -> dict[str, float]:
@@ -266,29 +306,28 @@ def measure_persistent_mcp(binary: str, cwd: str, iterations: int = 5) -> dict[s
 
         tool_results = []
         for name, args in tool_specs:
+            _, discarded_warmup_ms = client.call_tool(name, args)
             latencies = []
             sample_tokens = 0
             for _ in range(iterations):
                 resp, ms = client.call_tool(name, args)
                 latencies.append(ms)
-                if "result" in resp and "content" in resp["result"]:
-                    text = "".join(c.get("text", "") for c in resp["result"]["content"])
+                result = resp["result"]
+                if "content" in result:
+                    text = "".join(c.get("text", "") for c in result["content"])
                     sample_tokens = estimate_tokens(text)
-
-            latencies.sort()
-            n = len(latencies)
-            p50_idx = max(0, min(n - 1, math.ceil(n * 0.50) - 1))
-            p95_idx = max(0, min(n - 1, math.ceil(n * 0.95) - 1))
 
             tool_results.append({
                 "tool": name,
                 "args": args,
                 "tokens": sample_tokens,
+                "discarded_warmup_ms": round(discarded_warmup_ms, 2),
+                "raw_samples_ms": [round(ms, 2) for ms in latencies],
                 "min_ms": round(min(latencies), 2),
-                "p50_ms": round(latencies[p50_idx], 2),
+                "p50_ms": round(percentile(latencies, 0.50), 2),
                 "median_ms": round(statistics.median(latencies), 2),
                 "mean_ms": round(statistics.mean(latencies), 2),
-                "p95_ms": round(latencies[p95_idx], 2),
+                "p95_ms": round(percentile(latencies, 0.95), 2),
                 "max_ms": round(max(latencies), 2),
             })
 
@@ -308,12 +347,10 @@ def measure_persistent_mcp(binary: str, cwd: str, iterations: int = 5) -> dict[s
             deadline = start_reconcile + 2.0
             while time.perf_counter() < deadline:
                 resp, _ = client.call_tool("lookup_symbol", {"query": probe_symbol})
-                if "result" in resp and "content" in resp["result"]:
-                    text = "".join(c.get("text", "") for c in resp["result"]["content"])
-                    if probe_symbol in text and "No symbols found" not in text:
-                        reconcile_found = True
-                        reconcile_ms = (time.perf_counter() - start_reconcile) * 1000.0
-                        break
+                if contains_symbol_declaration(resp["result"], probe_symbol, Path(probe_path).name):
+                    reconcile_found = True
+                    reconcile_ms = (time.perf_counter() - start_reconcile) * 1000.0
+                    break
                 time.sleep(0.05)
         except OSError:
             pass
@@ -452,6 +489,7 @@ def main():
 
     version_result = subprocess.run([binary, "--version"], cwd=args.cwd, capture_output=True, text=True)
     binary_version = version_result.stdout.strip() if version_result.returncode == 0 else "unknown"
+    binary_commit = os.environ.get("CODE_KB_BENCHMARK_BINARY_COMMIT")
 
     print("=================================================================")
     print("           code-kb Token Efficiency & Quality Benchmark          ")
@@ -504,6 +542,9 @@ def main():
                     "reduction_pct": reduction_pct,
                     "cold_ms": res["cold_ms"],
                     "median_ms": res["median_ms"],
+                    "p95_ms": res["p95_ms"],
+                    "raw_samples_ms": res["raw_samples_ms"],
+                    "warm_samples_ms": res["warm_samples_ms"],
                     "peak_rss_mb": res["peak_rss_mb"],
                 })
 
@@ -529,6 +570,9 @@ def main():
                     "saving_pct": saving_pct,
                     "cold_ms": res["cold_ms"],
                     "median_ms": res["median_ms"],
+                    "p95_ms": res["p95_ms"],
+                    "raw_samples_ms": res["raw_samples_ms"],
+                    "warm_samples_ms": res["warm_samples_ms"],
                     "peak_rss_mb": res["peak_rss_mb"],
                 })
 
@@ -593,37 +637,52 @@ def main():
                     "tokens": res["tokens"],
                     "cold_ms": res["cold_ms"],
                     "median_ms": res["median_ms"],
+                    "p95_ms": res["p95_ms"],
+                    "raw_samples_ms": res["raw_samples_ms"],
+                    "warm_samples_ms": res["warm_samples_ms"],
                     "peak_rss_mb": res["peak_rss_mb"],
                 })
 
     report: dict[str, Any] = {
         "binary_size_mb": bin_size_mb,
         "binary_version": binary_version,
+        "metadata": {
+            "binary_path": binary,
+            "binary_sha256": file_sha256(binary),
+            "binary_commit": binary_commit,
+            "workspace": str(Path(args.cwd).resolve()),
+            "iterations": args.iterations,
+            "workloads": {
+                "cli": not args.skip_cli,
+                "persistent_mcp": not args.skip_mcp,
+                "large_corpus_files": args.large_corpus,
+            },
+        },
     }
 
     if not args.skip_cli:
         print("### 1. Token Compression: Skeletons vs Full File Reads")
-        print("| File | Raw Lines | Raw Tokens | Skeleton Tokens | Token Savings | First CLI Invocation | Fresh CLI Median | Peak Exited RSS |")
-        print("|---|---:|---:|---:|---:|---:|---:|---:|")
+        print("| File | Raw Lines | Raw Tokens | Skeleton Tokens | Token Savings | First CLI Invocation | Fresh CLI Median | Fresh CLI p95 | Peak Exited RSS |")
+        print("|---|---:|---:|---:|---:|---:|---:|---:|---:|")
         for r in skeleton_results:
-            print(f"| `{r['file']}` | {r['raw_lines']:,} | ~{r['raw_tokens']:,} | ~{r['skeleton_tokens']:,} | **{r['reduction_pct']:.1f}%** | {r['cold_ms']:.2f} ms | {r['median_ms']:.2f} ms | {r['peak_rss_mb']:.1f} MB |")
+            print(f"| `{r['file']}` | {r['raw_lines']:,} | ~{r['raw_tokens']:,} | ~{r['skeleton_tokens']:,} | **{r['reduction_pct']:.1f}%** | {r['cold_ms']:.2f} ms | {r['median_ms']:.2f} ms | {r['p95_ms']:.2f} ms | {r['peak_rss_mb']:.1f} MB |")
         print()
 
         print("### 2. Surgical Context Slicing vs Full File Reads")
-        print("| Target Symbol | Raw File Tokens | Slice Tokens | Token Savings | First CLI Invocation | Fresh CLI Median | Peak Exited RSS |")
-        print("|---|---:|---:|---:|---:|---:|---:|")
+        print("| Target Symbol | Raw File Tokens | Slice Tokens | Token Savings | First CLI Invocation | Fresh CLI Median | Fresh CLI p95 | Peak Exited RSS |")
+        print("|---|---:|---:|---:|---:|---:|---:|---:|")
         for r in slice_results:
-            print(f"| `{r['symbol']}` | ~{r['raw_file_tokens']:,} | ~{r['slice_tokens']:,} | **{r['saving_pct']:.1f}%** | {r['cold_ms']:.2f} ms | {r['median_ms']:.2f} ms | {r['peak_rss_mb']:.1f} MB |")
+            print(f"| `{r['symbol']}` | ~{r['raw_file_tokens']:,} | ~{r['slice_tokens']:,} | **{r['saving_pct']:.1f}%** | {r['cold_ms']:.2f} ms | {r['median_ms']:.2f} ms | {r['p95_ms']:.2f} ms | {r['peak_rss_mb']:.1f} MB |")
         print()
 
         print("### 3. Query Latency & Search Quality")
-        print("| Query Type | Command | Target Symbol | Exact Rank | Top-1 | Top-5 | First CLI Invocation | Fresh CLI Median |")
-        print("|---|---|---|:---:|:---:|:---:|---:|---:|")
+        print("| Query Type | Command | Target Symbol | Exact Rank | Top-1 | Top-5 | First CLI Invocation | Fresh CLI Median | Fresh CLI p95 |")
+        print("|---|---|---|:---:|:---:|:---:|---:|---:|---:|")
         for q in query_benchmarks:
             rank_str = f"#{q['rank']}" if q["rank"] else "N/A"
             top1_str = "YES" if q["rank_1"] else "NO"
             top5_str = "YES" if q["top_5"] else "NO"
-            print(f"| {q['name']} | `code-kb {' '.join(q['args'])}` | `{q['target']}` | {rank_str} | {top1_str} | {top5_str} | {q['cold_ms']:.2f} ms | {q['median_ms']:.2f} ms |")
+            print(f"| {q['name']} | `code-kb {' '.join(q['args'])}` | `{q['target']}` | {rank_str} | {top1_str} | {top5_str} | {q['cold_ms']:.2f} ms | {q['median_ms']:.2f} ms | {q['p95_ms']:.2f} ms |")
         print()
 
         max_rss = max(
@@ -664,13 +723,13 @@ def main():
         if recon.get("elapsed_ms") is not None:
             print(f"- **Changed-File Reconciliation & Live Extraction:** {recon['elapsed_ms']:.2f} ms (symbol found: {recon['reconciled_symbol_found']})")
         print()
-        print("| Tool | Call Arguments | Tokens | Min Latency | p50 Latency | Median | Mean | p95 Latency | Max Latency |")
-        print("|---|---|---:|---:|---:|---:|---:|---:|---:|")
+        print("| Tool | Call Arguments | Tokens | Discarded Warm-up | Min Latency | p50 Latency | Median | Mean | p95 Latency | Max Latency |")
+        print("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|")
         for tc in mcp_res["tool_calls"]:
             args_str = json.dumps(tc["args"])
             if len(args_str) > 35:
                 args_str = args_str[:32] + "..."
-            print(f"| `{tc['tool']}` | `{args_str}` | ~{tc['tokens']:,} | {tc['min_ms']:.2f} ms | {tc['p50_ms']:.2f} ms | {tc['median_ms']:.2f} ms | {tc['mean_ms']:.2f} ms | {tc['p95_ms']:.2f} ms | {tc['max_ms']:.2f} ms |")
+            print(f"| `{tc['tool']}` | `{args_str}` | ~{tc['tokens']:,} | {tc['discarded_warmup_ms']:.2f} ms | {tc['min_ms']:.2f} ms | {tc['p50_ms']:.2f} ms | {tc['median_ms']:.2f} ms | {tc['mean_ms']:.2f} ms | {tc['p95_ms']:.2f} ms | {tc['max_ms']:.2f} ms |")
         print()
         report["persistent_mcp"] = mcp_res
 
@@ -686,10 +745,10 @@ def main():
         print()
         report["large_corpus"] = lc_res
 
-        report_path = Path(args.cwd) / args.json_output
-        with open(report_path, "w", encoding="utf-8") as f:
-            json.dump(report, f, indent=2)
-        print(f"Report written to {report_path}")
+    report_path = Path(args.cwd) / args.json_output
+    with open(report_path, "w", encoding="utf-8") as f:
+        json.dump(report, f, indent=2)
+    print(f"Report written to {report_path}")
 
 
 if __name__ == "__main__":

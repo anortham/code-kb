@@ -77,7 +77,7 @@ MCP tool schema.**
   the default, and `all` replaces the non-overlapping matches. The result file is capped at the
   same 8 MiB as the input, and only the first line of a failed edit's error reaches telemetry,
   never the quoted file lines.
-- Until upstream header updates preserve C++ language detection, `.h` refreshes and edits trigger a full workspace re-extraction.
+- Until upstream header updates preserve C++ language detection, `.h` refreshes and edits trigger a content-aware workspace scan that only re-extracts changed files.
 - `replace_symbol_body` keeps the optional `body_hash` check and replaces a whole symbol body.
 - Do not implement two-step preview-and-confirm handshakes that waste agent turns.
 

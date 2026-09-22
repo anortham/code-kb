@@ -354,7 +354,7 @@ declarations and the Qt C++ `Q_PROPERTY` facts together, each fact naming its cl
 Property facts expose their available Qt metadata, including `property_type`, accessors,
 and the optional `designable`, `scriptable`, `stored`, `user`, and `revision` attributes.
 Until upstream header updates preserve C++ language detection, one batch of changed `.h`
-files triggers one full workspace re-extraction.
+files triggers a content-aware workspace scan that only re-extracts changed files.
 
 First-class Qt support: QML, `qmldir`, `.qmltypes`, Qt JavaScript, and Qt C++ headers,
 validated on pinned corpus revisions; static reference results have documented limits;

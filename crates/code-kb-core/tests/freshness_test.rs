@@ -64,7 +64,7 @@ fn test_update_file_scans_headers_with_cpp_detection() {
     let workspace = Workspace::new(root);
     let db = workspace.canonical_root.join("index.db");
     scan_workspace(&workspace, &db, true).unwrap();
-    let (header_hash, unchanged_hash) = {
+    let (header_hash, unchanged_hash, unchanged_revision, revisions_before) = {
         let conn = open_read_only(&db).unwrap();
         let header = get_file(&conn, "src/widget.h").unwrap().unwrap();
         assert_eq!(header.language, "cpp");
@@ -72,7 +72,24 @@ fn test_update_file_scans_headers_with_cpp_detection() {
             .unwrap()
             .unwrap()
             .content_hash;
-        (header.content_hash, unchanged_hash)
+        let unchanged_revision: i64 = conn
+            .query_row(
+                "SELECT last_revision_id FROM files WHERE path = ?1",
+                ["src/unchanged.rs"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let revisions_before: i64 = conn
+            .query_row("SELECT COUNT(*) FROM extraction_revisions", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        (
+            header.content_hash,
+            unchanged_hash,
+            unchanged_revision,
+            revisions_before,
+        )
     };
 
     fs::write(
@@ -92,6 +109,22 @@ fn test_update_file_scans_headers_with_cpp_detection() {
             .unwrap()
             .content_hash,
         unchanged_hash
+    );
+    assert_eq!(
+        conn.query_row(
+            "SELECT last_revision_id FROM files WHERE path = ?1",
+            ["src/unchanged.rs"],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap(),
+        unchanged_revision
+    );
+    assert_eq!(
+        conn.query_row("SELECT COUNT(*) FROM extraction_revisions", [], |row| {
+            row.get::<_, i64>(0)
+        })
+        .unwrap(),
+        revisions_before + 1
     );
     drop(conn);
 
@@ -204,6 +237,7 @@ fn test_reconcile_offline_edits_refreshes_two_headers_together() {
         )
         .unwrap();
     }
+    fs::write(src_dir.join("unchanged.rs"), "pub fn unchanged() {}\n").unwrap();
 
     let ws = Workspace::new(root);
     let db_path = ws.canonical_root.join("test.db");
@@ -218,6 +252,14 @@ fn test_reconcile_offline_edits_refreshes_two_headers_together() {
             )
         })
         .collect();
+    let unchanged = get_file(&conn, "src/unchanged.rs").unwrap().unwrap();
+    let unchanged_revision: i64 = conn
+        .query_row(
+            "SELECT last_revision_id FROM files WHERE path = ?1",
+            ["src/unchanged.rs"],
+            |row| row.get(0),
+        )
+        .unwrap();
     let revisions_before: i64 = conn
         .query_row("SELECT COUNT(*) FROM extraction_revisions", [], |row| {
             row.get(0)
@@ -241,6 +283,22 @@ fn test_reconcile_offline_edits_refreshes_two_headers_together() {
             "{path} was not refreshed"
         );
     }
+    assert_eq!(
+        get_file(&conn, "src/unchanged.rs")
+            .unwrap()
+            .unwrap()
+            .content_hash,
+        unchanged.content_hash
+    );
+    assert_eq!(
+        conn.query_row(
+            "SELECT last_revision_id FROM files WHERE path = ?1",
+            ["src/unchanged.rs"],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap(),
+        unchanged_revision
+    );
     let revisions_after: i64 = conn
         .query_row("SELECT COUNT(*) FROM extraction_revisions", [], |row| {
             row.get(0)
@@ -250,7 +308,7 @@ fn test_reconcile_offline_edits_refreshes_two_headers_together() {
 }
 
 #[test]
-fn test_reconcile_offline_edits_forces_a_large_batch_with_a_header() {
+fn test_reconcile_offline_edits_refreshes_a_large_batch_with_a_header() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
     let temp_dir = safe_tempdir();
@@ -269,6 +327,7 @@ fn test_reconcile_offline_edits_forces_a_large_batch_with_a_header() {
         )
         .unwrap();
     }
+    fs::write(src_dir.join("unchanged.rs"), "pub fn unchanged() {}\n").unwrap();
 
     let ws = Workspace::new(root);
     let db_path = ws.canonical_root.join("test.db");
@@ -278,6 +337,14 @@ fn test_reconcile_offline_edits_forces_a_large_batch_with_a_header() {
         .unwrap()
         .unwrap()
         .content_hash;
+    let unchanged = get_file(&conn, "src/unchanged.rs").unwrap().unwrap();
+    let unchanged_revision: i64 = conn
+        .query_row(
+            "SELECT last_revision_id FROM files WHERE path = ?1",
+            ["src/unchanged.rs"],
+            |row| row.get(0),
+        )
+        .unwrap();
     let revisions_before: i64 = conn
         .query_row("SELECT COUNT(*) FROM extraction_revisions", [], |row| {
             row.get(0)
@@ -301,6 +368,22 @@ fn test_reconcile_offline_edits_forces_a_large_batch_with_a_header() {
     assert_eq!(report.modified.len(), 51, "{report:?}");
     let stored = get_file(&conn, "src/widget.h").unwrap().unwrap();
     assert_ne!(stored.content_hash, header_hash);
+    assert_eq!(
+        get_file(&conn, "src/unchanged.rs")
+            .unwrap()
+            .unwrap()
+            .content_hash,
+        unchanged.content_hash
+    );
+    assert_eq!(
+        conn.query_row(
+            "SELECT last_revision_id FROM files WHERE path = ?1",
+            ["src/unchanged.rs"],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap(),
+        unchanged_revision
+    );
     let revisions_after: i64 = conn
         .query_row("SELECT COUNT(*) FROM extraction_revisions", [], |row| {
             row.get(0)
