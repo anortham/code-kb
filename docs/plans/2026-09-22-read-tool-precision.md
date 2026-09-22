@@ -2,7 +2,7 @@
 
 > For agentic workers: use `razorback:subagent-driven-development` with `terra_worker` implementers. Use `razorback:executing-plans` only when delegation is unavailable or the user selects single-agent execution. The lead owns design decisions, review, and integration verification.
 
-**Status:** Approved for implementation on 2026-09-22. Task 1 complete; tasks 2 and 3 pending.
+**Status:** Approved for implementation on 2026-09-22. Tasks 1 and 2 complete; task 3 pending.
 
 **Goal:** Make impact limits explicit, use consistent test discovery, and let agents select an exact symbol through the existing read tools.
 
@@ -165,10 +165,10 @@ Core paths above are under `crates/code-kb-core/src/` unless marked `tests/`; `b
 **Focused checks:** `cargo test -p code-kb-core related_tests`; `cargo test -p code-kb-core context_slice`; `cargo test -p code-kb-core test_path_rule_and_its_sql_mirror_agree_on_every_path`.
 
 **Acceptance criteria:**
-- [ ] Each candidate source can return an unflagged test in a recognized test path.
-- [ ] A matching production-path control, Markdown code example, and path-only local/import remain excluded; existing flag-based admission is unchanged.
-- [ ] Namespace disambiguation, uniqueness, ordering, and the five-test context cap are preserved.
-- [ ] Context and blast-radius fixtures agree on flag-or-path classification; focused tests pass and lead reviews before commit.
+- [x] Each candidate source can return an unflagged test in a recognized test path.
+- [x] A matching production-path control, Markdown code example, and path-only local/import remain excluded; existing flag-based admission is unchanged.
+- [x] Namespace disambiguation, uniqueness, ordering, and the five-test context cap are preserved.
+- [x] Context and blast-radius fixtures agree on flag-or-path classification; focused tests pass and lead reviews before commit.
 
 ### Task 3: Carry exact identity from discovery through inspection and impact
 

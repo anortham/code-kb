@@ -375,6 +375,82 @@ fn test_context_slice_finds_related_tests() {
 }
 
 #[test]
+fn context_slice_and_blast_radius_classify_unflagged_test_paths_the_same() {
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+    let temp_dir = safe_tempdir();
+    let root = temp_dir.path().to_path_buf();
+    let src_dir = root.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
+    fs::write(
+        src_dir.join("calc.rs"),
+        "pub fn calculate_price(base: i32) -> i32 {\n    base * 2\n}\n",
+    )
+    .unwrap();
+
+    let tests_dir = root.join("tests");
+    fs::create_dir_all(&tests_dir).unwrap();
+    fs::write(
+        tests_dir.join("calc_test.rs"),
+        "#[test]\nfn test_calculate_price() {\n    assert_eq!(calculate_price(5), 10);\n}\n",
+    )
+    .unwrap();
+
+    let ws = Workspace::new(root.clone());
+    let db_path = root.join("test.db");
+    scan_workspace(&ws, &db_path, true).expect("Scan failed");
+    let conn = code_kb_core::db::open_read_write(&db_path).unwrap();
+    conn.execute(
+        "UPDATE symbols SET is_test = 0, test_container = 0 WHERE name = 'test_calculate_price'",
+        [],
+    )
+    .unwrap();
+    conn.execute_batch("PRAGMA foreign_keys = OFF;").unwrap();
+    conn.execute(
+        "INSERT INTO relationships (reference_site_id, file_id, from_symbol_id, to_symbol_id, kind, path, start_line, start_column, confidence)
+         SELECT 'forced-test-path-call', test.file_id, test.symbol_id, target.symbol_id, 'calls', test.path, test.start_line, 0, 1.0
+         FROM symbols test CROSS JOIN symbols target
+         WHERE test.name = 'test_calculate_price' AND target.name = 'calculate_price'",
+        [],
+    )
+    .unwrap();
+
+    let slice = get_context_slice_op(
+        &ws,
+        &db_path,
+        &conn,
+        "calculate_price",
+        Some("src/calc.rs"),
+        false,
+    )
+    .expect("get_context_slice_op failed");
+    let blast = code_kb_core::ops::blast_radius_op(
+        &ws,
+        &conn,
+        Some("calculate_price"),
+        Some("src/calc.rs"),
+        2,
+        20,
+    )
+    .expect("blast_radius_op failed");
+
+    assert!(
+        slice
+            .related_tests
+            .iter()
+            .any(|test| test.name == "test_calculate_price")
+    );
+    assert!(
+        blast
+            .likely_tests
+            .iter()
+            .any(|test| test.name == "test_calculate_price" && test.path == "tests/calc_test.rs"),
+        "blast radius must classify the same test path, got: {:?}",
+        blast.likely_tests
+    );
+}
+
+#[test]
 fn test_context_slice_include_external() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");

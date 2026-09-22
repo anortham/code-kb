@@ -1593,6 +1593,9 @@ fn rerank_with(
     scored
 }
 
+const LOW_SIGNAL_KINDS_SQL: &str =
+    "'import','variable','parameter','field','property','module','namespace'";
+
 /// Find tests related to a target symbol by caller relationships, naming pattern, or FTS matching.
 pub fn find_related_tests(
     conn: &Connection,
@@ -1608,7 +1611,10 @@ pub fn find_related_tests(
             s.start_byte, s.end_byte, s.body_start_line, s.body_start_column, s.body_end_line,
             s.body_end_column, s.body_start_byte, s.body_end_byte, s.body_hash, s.semantic_group,
             s.is_test, s.test_container";
-    const IS_TEST: &str = "(s.is_test = 1 OR s.test_container = 1)";
+    let is_test = format!(
+        "(s.is_test = 1 OR s.test_container = 1 OR ({} AND s.kind NOT IN ({LOW_SIGNAL_KINDS_SQL})))",
+        test_path_predicate("s")
+    );
     let not_documentation = not_documentation(conn, "s");
 
     let mut tests = Vec::new();
@@ -1618,7 +1624,7 @@ pub fn find_related_tests(
         "SELECT {COLUMNS}
      FROM symbols s
      JOIN relationships r ON r.from_symbol_id = s.symbol_id
-     WHERE r.to_symbol_id = ?1 AND {IS_TEST} AND {not_documentation}
+     WHERE r.to_symbol_id = ?1 AND {is_test} AND {not_documentation}
      LIMIT ?2"
     );
 
@@ -1646,7 +1652,7 @@ pub fn find_related_tests(
      JOIN symbols s_target ON s_target.symbol_id = ?1
      LEFT JOIN symbols s_target_parent ON s_target.parent_symbol_id = s_target_parent.symbol_id
      WHERE p.target_terminal_name = s_target.name
-       AND {IS_TEST}
+       AND {is_test}
        AND {not_documentation}
        AND {pred}
      LIMIT ?2",
@@ -1674,7 +1680,7 @@ pub fn find_related_tests(
     let name_sql = format!(
         "SELECT {COLUMNS}
      FROM symbols s
-     WHERE {IS_TEST}
+     WHERE {is_test}
        AND {not_documentation}
        AND (s.name LIKE '%' || ?1 || '%' OR s.signature LIKE '%' || ?1 || '%')
      ORDER BY (s.name LIKE '%' || ?1 || '%') DESC
@@ -1711,7 +1717,7 @@ pub fn find_related_tests(
             "SELECT {COLUMNS}
          FROM symbols_fts
          CROSS JOIN symbols s ON s.rowid = symbols_fts.rowid
-         WHERE symbols_fts MATCH ?1 AND {IS_TEST} AND {not_documentation}
+         WHERE symbols_fts MATCH ?1 AND {is_test} AND {not_documentation}
          LIMIT ?2"
         );
 
@@ -3641,7 +3647,7 @@ pub fn compute_blast_radius_scoped(
              JOIN impact_walk iw ON r.to_symbol_id = iw.symbol_id
              JOIN symbols s_from ON r.from_symbol_id = s_from.symbol_id
              WHERE iw.depth < ?{max_depth_idx}
-               AND s_from.kind NOT IN ('import','variable','parameter','field','property','module','namespace')"
+               AND s_from.kind NOT IN ({LOW_SIGNAL_KINDS_SQL})"
         ));
     }
 
@@ -3670,7 +3676,7 @@ pub fn compute_blast_radius_scoped(
              JOIN impact_walk iw ON s_target.symbol_id = iw.symbol_id
              {parent_join}
              WHERE iw.depth < ?{max_depth_idx}
-               AND s_target.kind NOT IN ('import','variable','parameter','field','property','module','namespace')
+               AND s_target.kind NOT IN ({LOW_SIGNAL_KINDS_SQL})
                {ns_condition}"
         ));
     }
@@ -3683,7 +3689,7 @@ pub fn compute_blast_radius_scoped(
                 SELECT symbol_id, 0
                 FROM symbols
                 WHERE ({seed_condition})
-                  AND kind NOT IN ('import','variable','parameter','field','property','module','namespace')
+                  AND kind NOT IN ({LOW_SIGNAL_KINDS_SQL})
 
                 UNION
 
@@ -3692,7 +3698,7 @@ pub fn compute_blast_radius_scoped(
             SELECT s.symbol_id, s.name, s.kind, s.path, s.start_line, s.is_test, s.test_container, MIN(iw.depth) as min_depth
             FROM impact_walk iw
             CROSS JOIN symbols s ON iw.symbol_id = s.symbol_id
-            WHERE s.kind NOT IN ('import','variable','parameter','field','property','module','namespace')
+            WHERE s.kind NOT IN ({LOW_SIGNAL_KINDS_SQL})
               AND {not_documentation}
             GROUP BY s.symbol_id, s.name, s.kind, s.path, s.start_line, s.is_test, s.test_container
             HAVING MIN(iw.depth) > 0
@@ -4305,6 +4311,47 @@ mod tests {
             .collect();
 
         assert_eq!(names, vec!["isReady_reports_true"]);
+    }
+
+    #[test]
+    fn related_tests_admit_recognized_unflagged_paths_without_low_signal_rows() {
+        let conn = search_fixture(
+            "('target', 'f_target', 'src/core.rs', 'rust', 'calculate', 'function', 'fn calculate()', NULL, NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_target', NULL, 0, 0, 'code'),
+              ('direct', 'f_direct', 'tests/direct.rs', 'rust', 'direct_case', 'function', 'fn direct_case()', NULL, NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_direct', NULL, 0, 0, 'code'),
+              ('pending', 'f_pending', 'autotests/tst_pending.qml', 'qml', 'pending_case', 'function', 'function pending_case() {}', NULL, NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_pending', NULL, 0, 0, 'code'),
+              ('name', 'f_name', 'tests/name.rs', 'rust', 'calculate_named_case', 'function', 'fn calculate_named_case()', NULL, NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_name', NULL, 0, 0, 'code'),
+              ('fts', 'f_fts', 'tests/fts.rs', 'rust', 'fts_case', 'function', 'fn fts_case()', 'calculate behavior', NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_fts', NULL, 0, 0, 'code'),
+              ('local', 'f_local', 'tests/name.rs', 'rust', 'calculate_local', 'variable', 'let calculate_local = 1;', NULL, NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_local', NULL, 0, 0, 'code'),
+              ('import', 'f_import', 'tests/name.rs', 'rust', 'calculate_import', 'import', 'use calculate_import;', NULL, NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_import', NULL, 0, 0, 'code'),
+              ('production', 'f_production', 'src/testing.rs', 'rust', 'calculate_production', 'function', 'fn calculate_production()', NULL, NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_production', NULL, 0, 0, 'code')",
+        );
+        conn.execute_batch(
+            "CREATE TABLE relationships (from_symbol_id TEXT, to_symbol_id TEXT, kind TEXT, path TEXT, start_line INTEGER, start_column INTEGER);
+             CREATE TABLE pending_relationships (from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT, path TEXT, start_line INTEGER, start_column INTEGER, target_receiver TEXT, target_namespace_json TEXT, target_display_name TEXT);
+             CREATE TABLE type_facts (type_fact_id TEXT, symbol_id TEXT, language TEXT, resolved_type TEXT, generic_params_json TEXT);
+             INSERT INTO relationships VALUES ('direct', 'target', 'calls', 'tests/direct.rs', 1, 0);
+             INSERT INTO pending_relationships VALUES ('pending', 'calculate', 'calls', 'autotests/tst_pending.qml', 1, 0, NULL, '[]', 'calculate');",
+        )
+        .unwrap();
+        let target = get_symbol_by_name(&conn, "calculate", None)
+            .unwrap()
+            .unwrap();
+
+        let names: Vec<String> = find_related_tests(&conn, &target, 5)
+            .unwrap()
+            .into_iter()
+            .map(|test| test.name)
+            .collect();
+
+        assert_eq!(
+            names,
+            vec![
+                "direct_case",
+                "pending_case",
+                "calculate_named_case",
+                "fts_case"
+            ]
+        );
     }
 
     #[test]
