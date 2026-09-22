@@ -231,6 +231,9 @@ main { max-width: var(--page); margin: 0 auto; padding: 0 var(--gutter); }
   border-top: 1px solid var(--rule);
 }
 
+#tools, #install { overflow-x: clip; }
+#compared { overflow-x: auto; }
+
 .section:first-child { margin-top: 3.5rem; }
 
 .margin-label {

@@ -190,6 +190,126 @@ fn test_reconcile_offline_edits_equal_size() {
 }
 
 #[test]
+fn test_reconcile_offline_edits_refreshes_two_headers_together() {
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+    let temp_dir = safe_tempdir();
+    let root = temp_dir.path().to_path_buf();
+    let src_dir = root.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
+    for (name, value) in [("first", 0), ("second", 0)] {
+        fs::write(
+            src_dir.join(format!("{name}.h")),
+            format!("class {name} {{ public: int value = {value}; }};\n"),
+        )
+        .unwrap();
+    }
+
+    let ws = Workspace::new(root);
+    let db_path = ws.canonical_root.join("test.db");
+    scan_workspace(&ws, &db_path, true).unwrap();
+    let conn = open_read_only(&db_path).unwrap();
+    let initial_hashes: Vec<(String, String)> = ["src/first.h", "src/second.h"]
+        .into_iter()
+        .map(|path| {
+            (
+                path.to_string(),
+                get_file(&conn, path).unwrap().unwrap().content_hash,
+            )
+        })
+        .collect();
+    let revisions_before: i64 = conn
+        .query_row("SELECT COUNT(*) FROM extraction_revisions", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    for (name, value) in [("first", 1), ("second", 1)] {
+        fs::write(
+            ws.canonical_root.join(format!("src/{name}.h")),
+            format!("class {name} {{ public: int value = {value}; }};\n"),
+        )
+        .unwrap();
+    }
+
+    let report = reconcile_offline_edits(&ws, &db_path, &conn).unwrap();
+
+    assert_eq!(report.modified.len(), 2, "{report:?}");
+    for (path, initial_hash) in initial_hashes {
+        let stored = get_file(&conn, &path).unwrap().unwrap();
+        assert_ne!(
+            stored.content_hash, initial_hash,
+            "{path} was not refreshed"
+        );
+    }
+    let revisions_after: i64 = conn
+        .query_row("SELECT COUNT(*) FROM extraction_revisions", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(revisions_after, revisions_before + 1);
+}
+
+#[test]
+fn test_reconcile_offline_edits_forces_a_large_batch_with_a_header() {
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+    let temp_dir = safe_tempdir();
+    let root = temp_dir.path().to_path_buf();
+    let src_dir = root.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
+    fs::write(
+        src_dir.join("widget.h"),
+        "class Widget { int old_value; };\n",
+    )
+    .unwrap();
+    for index in 0..50 {
+        fs::write(
+            src_dir.join(format!("file_{index}.rs")),
+            format!("pub fn old_{index}() {{}}\n"),
+        )
+        .unwrap();
+    }
+
+    let ws = Workspace::new(root);
+    let db_path = ws.canonical_root.join("test.db");
+    scan_workspace(&ws, &db_path, true).unwrap();
+    let conn = open_read_only(&db_path).unwrap();
+    let header_hash = get_file(&conn, "src/widget.h")
+        .unwrap()
+        .unwrap()
+        .content_hash;
+    let revisions_before: i64 = conn
+        .query_row("SELECT COUNT(*) FROM extraction_revisions", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    fs::write(
+        ws.canonical_root.join("src/widget.h"),
+        "class Widget { int new_value; };\n",
+    )
+    .unwrap();
+    for index in 0..50 {
+        fs::write(
+            ws.canonical_root.join(format!("src/file_{index}.rs")),
+            format!("pub fn new_{index}() {{}}\n"),
+        )
+        .unwrap();
+    }
+
+    let report = reconcile_offline_edits(&ws, &db_path, &conn).unwrap();
+
+    assert_eq!(report.modified.len(), 51, "{report:?}");
+    let stored = get_file(&conn, "src/widget.h").unwrap().unwrap();
+    assert_ne!(stored.content_hash, header_hash);
+    let revisions_after: i64 = conn
+        .query_row("SELECT COUNT(*) FROM extraction_revisions", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(revisions_after, revisions_before + 1);
+}
+
+#[test]
 fn test_get_symbol_body_fresh_after_comment_added() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");

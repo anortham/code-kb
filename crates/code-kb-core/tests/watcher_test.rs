@@ -1,6 +1,6 @@
 use code_kb_core::{
-    Workspace, find_julie_extract_binary, open_read_only, safe_tempdir, scan_workspace,
-    search_symbols, start_watcher,
+    Occurrence, Workspace, edit_file, find_julie_extract_binary, get_file, open_read_only,
+    safe_tempdir, scan_workspace, search_symbols, start_watcher,
 };
 use std::fs;
 use std::thread::sleep;
@@ -225,4 +225,117 @@ fn test_watcher_does_not_reindex_on_reads() {
         initial_timestamps, final_timestamps,
         "Reading files must not trigger watcher re-indexing"
     );
+}
+
+#[test]
+fn test_watcher_refreshes_a_header_batch() {
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+    let temp_dir = safe_tempdir();
+    let root = temp_dir.path().to_path_buf();
+    let src_dir = root.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
+    let first = src_dir.join("first.h");
+    let second = src_dir.join("second.h");
+    fs::write(&first, "class First { int old_value; };\n").unwrap();
+    fs::write(&second, "class Second { int old_value; };\n").unwrap();
+
+    let ws = Workspace::new(root);
+    let db_path = ws.canonical_root.join("watcher_test.db");
+    scan_workspace(&ws, &db_path, true).unwrap();
+    let (first_hash, second_hash) = {
+        let conn = open_read_only(&db_path).unwrap();
+        (
+            get_file(&conn, "src/first.h")
+                .unwrap()
+                .unwrap()
+                .content_hash,
+            get_file(&conn, "src/second.h")
+                .unwrap()
+                .unwrap()
+                .content_hash,
+        )
+    };
+    let _watcher = start_watcher(ws, db_path.clone()).unwrap();
+
+    fs::write(&first, "class First { int new_value; };\n").unwrap();
+    fs::write(&second, "class Second { int new_value; };\n").unwrap();
+
+    for _ in 0..25 {
+        sleep(Duration::from_millis(200));
+        let conn = open_read_only(&db_path).unwrap();
+        let current = (
+            get_file(&conn, "src/first.h")
+                .unwrap()
+                .unwrap()
+                .content_hash,
+            get_file(&conn, "src/second.h")
+                .unwrap()
+                .unwrap()
+                .content_hash,
+        );
+        if current.0 != first_hash && current.1 != second_hash {
+            return;
+        }
+    }
+
+    panic!("Watcher did not refresh both headers");
+}
+
+#[test]
+fn test_watcher_leaves_a_header_edit_fresh() {
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+    let temp_dir = safe_tempdir();
+    let root = temp_dir.path().to_path_buf();
+    let src_dir = root.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
+    let header = src_dir.join("widget.h");
+    fs::write(&header, "class Widget { public: int old_value = 0; };\n").unwrap();
+
+    let ws = Workspace::new(root);
+    let db_path = ws.canonical_root.join("watcher_test.db");
+    scan_workspace(&ws, &db_path, true).unwrap();
+    let (original_hash, revisions_before): (String, i64) = {
+        let conn = open_read_only(&db_path).unwrap();
+        (
+            get_file(&conn, "src/widget.h")
+                .unwrap()
+                .unwrap()
+                .content_hash,
+            conn.query_row("SELECT COUNT(*) FROM extraction_revisions", [], |row| {
+                row.get(0)
+            })
+            .unwrap(),
+        )
+    };
+    let _watcher = start_watcher(ws.clone(), db_path.clone()).unwrap();
+    let conn = open_read_only(&db_path).unwrap();
+    edit_file(
+        &ws,
+        &db_path,
+        &conn,
+        "src/widget.h",
+        "old_value",
+        "new_value",
+        Occurrence::Only,
+    )
+    .unwrap();
+    drop(conn);
+
+    sleep(Duration::from_millis(700));
+    let conn = open_read_only(&db_path).unwrap();
+    assert_ne!(
+        get_file(&conn, "src/widget.h")
+            .unwrap()
+            .unwrap()
+            .content_hash,
+        original_hash
+    );
+    let revisions_after: i64 = conn
+        .query_row("SELECT COUNT(*) FROM extraction_revisions", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(revisions_after, revisions_before + 1);
 }

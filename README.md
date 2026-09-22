@@ -333,7 +333,13 @@ as `Page`), the files that read a singleton, and the signal handlers, each label
 `qmldir` module files and `.qmltypes` type descriptors are indexed. Qt JavaScript files
 parse, including the `.pragma library` and `.import` directives, so `edit_file` works on
 them. KDE test files under `autotests/` and files named `tst_*.qml` are hidden from
-search by default; `--include-tests` shows them. This needs julie-extract 3.3.1.
+search by default; `--include-tests` shows them.
+
+Current source builds use julie-extract 3.3.1. QML references retain inline component
+ownership, respect shadowed `id` names, and resolve `parent` and `this` from their
+enclosing object. QML `import` directives appear as structural facts. Qt JavaScript
+`.import` symbols preserve their exact spans, so body reads exclude trailing comments.
+`code-kb facts pragma --path src` lists `.pragma` facts from both QML and Qt JavaScript.
 
 A Qt C++ header indexes the same way. `file_skeleton` prints one `Q_PROPERTY(...)` row
 per declared property under its class, keeping the `READ`, `WRITE`, `NOTIFY`, and
@@ -347,14 +353,14 @@ emits no row, so `lookup_symbol` of a class name returns one row, at its definit
 declarations and the Qt C++ `Q_PROPERTY` facts together, each fact naming its class.
 Property facts expose their available Qt metadata, including `property_type`, accessors,
 and the optional `designable`, `scriptable`, `stored`, `user`, and `revision` attributes.
-Until upstream header updates preserve C++ language detection, `.h` refreshes and edits trigger
-a full workspace re-extraction.
+Until upstream header updates preserve C++ language detection, one batch of changed `.h`
+files triggers one full workspace re-extraction.
 
 First-class Qt support: QML, `qmldir`, `.qmltypes`, Qt JavaScript, and Qt C++ headers,
 validated on pinned corpus revisions; static reference results have documented limits;
 `.ui` and CMake files are not indexed.
 
-### Validated on
+### Historical 1.6.0 / Julie 3.3.0 measurements
 
 | Corpus | Pinned commit | QML files | C++ files |
 | :--- | :--- | ---: | ---: |
@@ -363,7 +369,8 @@ validated on pinned corpus revisions; static reference results have documented l
 | KDE plasma-workspace | `a45871a` | 222 | 1051 |
 | Quickshell examples | `c6d1236` | 14 | 0 |
 
-Measured with the branch binaries on Omarchy and Kirigami:
+These corpus revisions and examples were measured with code-kb 1.6.0 and julie-extract
+3.3.0. They are historical measurements, not 3.3.1 results.
 
 ```bash
 # Omarchy

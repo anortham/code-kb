@@ -1,7 +1,7 @@
 use code_kb_core::{
     Occurrence, Workspace, edit_file, file_skeleton_op, find_julie_extract_binary,
-    find_references_scoped, find_structural_facts_scoped, get_symbol_body_op, open_read_only,
-    safe_tempdir, scan_workspace, search_symbols_scoped,
+    find_references_scoped, find_structural_facts_scoped, fts_search_symbols_scoped,
+    get_symbol_body_op, open_read_only, safe_tempdir, scan_workspace, search_symbols_scoped,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -284,7 +284,12 @@ fn qt_property_facts_render_their_agent_useful_metadata() {
 fn qt_header_edits_validate_and_reindex_with_qt_macros() {
     let (repo, db_path) = scanned_header();
     let workspace = Workspace::new(repo.path().to_path_buf());
+    let locked = repo.path().join("src/locked.rs");
+    fs::write(&locked, "pub fn locked_symbol() {}\n").unwrap();
+    scan_workspace(&workspace, &db_path, true).unwrap();
     let conn = open_read_only(&db_path).unwrap();
+    #[cfg(unix)]
+    fs::set_permissions(&locked, std::os::unix::fs::PermissionsExt::from_mode(0o000)).unwrap();
 
     let result = edit_file(
         &workspace,
@@ -294,8 +299,10 @@ fn qt_header_edits_validate_and_reindex_with_qt_macros() {
         "m_index = 0",
         "m_index = 1",
         Occurrence::Only,
-    )
-    .expect("Qt macro header edit remains syntax-valid");
+    );
+    #[cfg(unix)]
+    fs::set_permissions(&locked, std::os::unix::fs::PermissionsExt::from_mode(0o644)).unwrap();
+    let result = result.expect("Qt macro header edit remains syntax-valid");
 
     assert!(result.syntax_checked, "{result:#?}");
     assert!(
@@ -311,6 +318,20 @@ fn qt_header_edits_validate_and_reindex_with_qt_macros() {
             .iter()
             .any(|symbol| symbol.kind == "property"),
         "edited Qt header lost its Q_PROPERTY symbols"
+    );
+    assert!(
+        fts_search_symbols_scoped(
+            &conn,
+            "ColumnViewAttached",
+            None,
+            Some(HEADER_PATH),
+            false,
+            10
+        )
+        .unwrap()
+        .iter()
+        .any(|symbol| symbol.symbol.kind == "class"),
+        "edited Qt header was not available through FTS search"
     );
 }
 

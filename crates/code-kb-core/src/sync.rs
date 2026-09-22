@@ -36,6 +36,7 @@ pub const EXTRACTION_LEVEL: &str = "facts";
 
 static CACHED_JULIE_BIN: std::sync::OnceLock<Option<(PathBuf, String)>> =
     std::sync::OnceLock::new();
+static HEADER_SCAN_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 /// Discovers the `julie-extract` binary and caches the result.
 ///
@@ -158,13 +159,15 @@ pub fn execute_julie_extract(args: &[&str]) -> Result<String, SyncError> {
     }
 }
 
+fn is_header_path(rel_path: &str) -> bool {
+    Path::new(rel_path)
+        .extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("h"))
+}
+
 /// Tier 1 & Incremental Update: updates one file, except headers force a scan for language detection.
 pub fn update_file(workspace: &Workspace, db_path: &Path, rel_path: &str) -> Result<(), SyncError> {
-    if db_path.is_file()
-        && Path::new(rel_path)
-            .extension()
-            .is_some_and(|extension| extension.eq_ignore_ascii_case("h"))
-    {
+    if db_path.is_file() && is_header_path(rel_path) {
         return scan_header_file(workspace, db_path, rel_path);
     }
 
@@ -183,18 +186,28 @@ fn scan_header_file(
     db_path: &Path,
     rel_path: &str,
 ) -> Result<(), SyncError> {
-    let root_str = workspace.canonical_root.to_string_lossy();
-    let db_str = db_path.to_string_lossy();
-    let own_pid = std::process::id().to_string();
-    let mut args = vec!["scan", "--root", &*root_str, "--db", &*db_str];
-    if cfg!(unix) {
-        args.extend(["--parent-pid", &own_pid]);
+    // ponytail: serializes header scans per process; use workspace-scoped locks if concurrent workspaces need throughput.
+    let _scan_lock = HEADER_SCAN_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if header_hash_matches_disk(workspace, db_path, rel_path)? {
+        return Ok(());
     }
-    args.push("--force");
+    // Julie 3.3.1 classifies `.h` files as C in `update`, while a full scan preserves C++ Qt facts.
+    scan_workspace(workspace, db_path, true)?;
 
-    // Julie 3.3.1 classifies `.h` files as C in `update`; force costs a full workspace re-extraction per header edit but handles same-size changes.
-    execute_julie_extract(&args)?;
+    if !header_hash_matches_disk(workspace, db_path, rel_path)? {
+        return Err(SyncError::TargetNotIndexed(rel_path.to_string()));
+    }
 
+    Ok(())
+}
+
+fn header_hash_matches_disk(
+    workspace: &Workspace,
+    db_path: &Path,
+    rel_path: &str,
+) -> Result<bool, SyncError> {
     let stored_hash = {
         let conn = crate::db::open_read_only(db_path)?;
         queries::get_file(&conn, rel_path)
@@ -203,14 +216,17 @@ fn scan_header_file(
                 _ => SyncError::TargetNotIndexed(rel_path.to_string()),
             })?
             .map(|file| file.content_hash)
-    }
-    .ok_or_else(|| SyncError::TargetNotIndexed(rel_path.to_string()))?;
-    let disk_bytes = std::fs::read(workspace.canonical_root.join(rel_path))?;
-    if !compute_content_hash_matches(&disk_bytes, &stored_hash) {
-        return Err(SyncError::TargetNotIndexed(rel_path.to_string()));
-    }
+    };
+    let Some(stored_hash) = stored_hash else {
+        return Ok(false);
+    };
+    let disk_bytes = match std::fs::read(workspace.canonical_root.join(rel_path)) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error.into()),
+    };
 
-    Ok(())
+    Ok(compute_content_hash_matches(&disk_bytes, &stored_hash))
 }
 
 /// Delete a file's extraction records from the database.
@@ -734,11 +750,12 @@ pub fn reconcile_offline_edits(
             report.deleted.len()
         );
 
-        if total_changes > 50 {
-            // Trigger bulk scan if large changes
-            scan_workspace(workspace, db_path, false)?;
+        let changed_paths = report.added.iter().chain(&report.modified);
+        let changed_headers = changed_paths.clone().any(|path| is_header_path(path));
+        if total_changes > 50 || changed_headers {
+            scan_workspace(workspace, db_path, changed_headers)?;
+            remember_skipped_files(workspace, db_path, conn, changed_paths)?;
         } else {
-            // Incremental single-file updates
             let mut updated: Vec<&String> = Vec::new();
             for added in &report.added {
                 match update_file(workspace, db_path, added) {

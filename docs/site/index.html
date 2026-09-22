@@ -24,6 +24,7 @@
     <div class="nav-links">
       <a href="#why">Why</a>
       <a href="#what">What it does</a>
+      <a href="#qt">Qt / QML</a>
       <a href="#compared">Compared</a>
       <a href="#steps">Steps</a>
       <a href="#tools">Tools</a>
@@ -185,13 +186,39 @@ get_symbol_context("search_symbols_scoped")</pre>
           </div>
           <div>
             <dt>Qt and QML</dt>
-            <dd>QML components index as an object tree, with <code>qmldir</code> modules, <code>.qmltypes</code> type descriptors, and Qt JavaScript files. A Qt C++ header indexes with one row per <code>Q_PROPERTY</code> and its signals as events. <code>.ui</code> designer files and CMake files are not indexed.</dd>
+            <dd><a href="#qt">QML components index as an object tree</a>, with <code>qmldir</code> modules, <code>.qmltypes</code> type descriptors, and Qt JavaScript files. A Qt C++ header indexes with one row per <code>Q_PROPERTY</code> and its signals as events.</dd>
           </div>
           <div>
             <dt>Native hooks</dt>
             <dd><code>code-kb hook SessionStart</code> prints routing instructions for the agent from the binary itself. No Node.js, Python, or shell in the path.</dd>
           </div>
         </dl>
+      </div>
+    </section>
+
+    <section id="qt" class="section">
+      <p class="margin-label">Qt / QML</p>
+      <div class="section-body">
+        <h2>Qt and QML</h2>
+        <p>Current source builds use julie-extract 3.3.1. QML skeletons keep nested object ownership. Reference lookup respects inline components, shadowed <code>id</code> names, and <code>parent</code> and <code>this</code> receiver scope.</p>
+        <dl class="features">
+          <div>
+            <dt>QML and Qt JavaScript</dt>
+            <dd><code>qmldir</code>, <code>.qmltypes</code>, QML imports, and pragmas are indexed. Qt JavaScript <code>.import</code> symbols preserve exact source spans, so body reads exclude trailing comments. <code>.pragma</code> directives produce structural facts.</dd>
+          </div>
+          <div>
+            <dt>Qt C++ headers</dt>
+            <dd><code>Q_PROPERTY</code> facts include their type, accessors, and optional <code>DESIGNABLE</code>, <code>SCRIPTABLE</code>, <code>STORED</code>, <code>USER</code>, and <code>REVISION</code> attributes. Signals, slots, invokables, and QML element declarations are indexed too.</dd>
+          </div>
+        </dl>
+        <div class="note">
+          <h3>Useful checks</h3>
+          <p><code>code-kb skeleton src/controls/Page.qml</code> shows the object tree. <code>code-kb refs Page --file src/controls/Page.qml</code> finds component usage. <code>code-kb facts property --path src/layouts/columnview.h</code> lists Qt property facts, and <code>code-kb facts pragma --path src</code> lists pragmas in QML and Qt JavaScript.</p>
+        </div>
+        <div class="note">
+          <h3>Current limits</h3>
+          <p><code>.ui</code> designer files and CMake files are not indexed. Signal handlers can still be candidates when the receiver is ambiguous. One batch of changed <code>.h</code> files temporarily triggers one full workspace re-extraction. The <a href="https://github.com/anortham/code-kb#qt-and-qml" target="_blank" rel="noopener">README</a> has the historical code-kb 1.6.0 / Julie 3.3.0 corpus measurements and details.</p>
+        </div>
       </div>
     </section>
 
