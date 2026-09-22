@@ -1,7 +1,6 @@
 use code_kb_core::{
     Workspace, compute_blast_radius_scoped, find_callee_signatures, find_julie_extract_binary,
-    find_references_scoped, get_symbol_by_name, open_read_only, open_read_write, safe_tempdir,
-    scan_workspace,
+    find_references_scoped, get_symbol_by_name, open_read_only, safe_tempdir, scan_workspace,
 };
 use std::fs;
 
@@ -337,25 +336,7 @@ const QML_BASE_TYPES: &[(&str, &str)] = &[
 ];
 
 fn repo_with_base_type_edges() -> (tempfile::TempDir, std::path::PathBuf) {
-    let (repo, db) = scanned_repo(QML_BASE_TYPES);
-    let conn = open_read_write(&db).unwrap();
-    conn.execute_batch(
-        "INSERT INTO reference_sites
-            (reference_site_id, file_id, path, language, is_exact, provenance)
-         SELECT 'rs_' || symbol_id, file_id, path, language, 0, 'spanless'
-         FROM symbols
-         WHERE kind = 'class' AND path != 'Ui/BarWidget.qml';
-         INSERT INTO pending_relationships
-            (pending_relationship_id, reference_site_id, from_symbol_id, file_id, path, kind,
-             target_display_name, target_terminal_name, target_namespace_json,
-             start_line, start_column, confidence)
-         SELECT 'pr_' || symbol_id, 'rs_' || symbol_id, symbol_id, file_id, path, 'extends',
-                'BarWidget', 'BarWidget', '[]', start_line, 0, 1.0
-         FROM symbols
-         WHERE kind = 'class' AND path != 'Ui/BarWidget.qml'",
-    )
-    .unwrap();
-    (repo, db)
+    scanned_repo(QML_BASE_TYPES)
 }
 
 #[test]
