@@ -338,8 +338,9 @@ search by default; `--include-tests` shows them. This needs julie-extract 3.3.0.
 A Qt C++ header indexes the same way. `file_skeleton` prints one `Q_PROPERTY(...)` row
 per declared property under its class, keeping the `READ`, `WRITE`, `NOTIFY`, and
 `MEMBER` accessors the macro names. A method declared in a `Q_SIGNALS:` section is an
-`event` row, a method in a `Q_SLOTS:` section carries `qt_slot`, and a `Q_INVOKABLE`
-method carries `qt_invokable`. A class records the QML element name it declares with
+`event` row, and the skeleton marks it `// event` before its line range because its C++
+signature reads like a method. A method in a `Q_SLOTS:` section carries `qt_slot`, and a
+`Q_INVOKABLE` method carries `qt_invokable`. A class records the QML element name it declares with
 `QML_ELEMENT` or `QML_NAMED_ELEMENT`. A forward declaration such as `class ColumnView;`
 emits no row, so `lookup_symbol` of a class name returns one row, at its definition.
 `find_structural_facts` takes a `property` alias that covers the QML property

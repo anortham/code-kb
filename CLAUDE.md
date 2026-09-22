@@ -123,7 +123,8 @@ MCP tool schema.**
   labelled `handler` when the receiver names the owner and `handler (candidate)` otherwise. Test
   paths include `/autotests/` directories and file names that start with `tst_`. A Qt C++
   header's `property` and `event` rows come from the extractor's macro pre-pass and render like
-  any other member.
+  any other member; a skeleton `event` row whose signature does not spell `signal` or `event`
+  carries `// event` before its line range.
 - Language-agnostic callee filtering: `find_references(direction="callees")` and `get_symbol_context`
   filter unresolved AST tokens against workspace symbols, eliminating external stdlib/runtime noise
   across all ~40 supported languages by default (`include_external: true` / `--include-external` restores them).

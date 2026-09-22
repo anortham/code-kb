@@ -78,6 +78,20 @@ fn sanitize_skeleton_sig<'a>(sig: &'a str, name: &'a str) -> &'a str {
     if trimmed.is_empty() { name } else { trimmed }
 }
 
+/// The kind word for a leaf row whose signature does not spell it. A C++ Qt signal is declared
+/// under a `Q_SIGNALS:` label, so its signature reads like a method; the `event` kind goes into
+/// the trailing comment instead.
+fn unspelled_kind(sym: &Symbol) -> &'static str {
+    if sym.kind != "event" {
+        return "";
+    }
+    let spelled = sym.signature.as_deref().is_some_and(|sig| {
+        sig.split_whitespace()
+            .any(|word| word == "signal" || word == "event")
+    });
+    if spelled { "" } else { "event " }
+}
+
 fn render_symbol_skeleton(
     out: &mut String,
     sym: &Symbol,
@@ -106,6 +120,7 @@ fn render_symbol_skeleton(
     }
 
     let span_str = format!("L{}-{}", sym.start_line, sym.end_line);
+    let leaf_note = format!("{}{span_str}", unspelled_kind(sym));
 
     let children = children_map.get(&Some(sym.symbol_id.clone()));
 
@@ -134,11 +149,11 @@ fn render_symbol_skeleton(
                     "{indent}{sig} {{ /* {count} lines hidden: L{b_start}-L{b_end} */ }}\n"
                 ));
             } else {
-                out.push_str(&format!("{indent}{sig}; // {span_str}\n"));
+                out.push_str(&format!("{indent}{sig}; // {leaf_note}\n"));
             }
         } else if let Some(ref raw_sig) = sym.signature {
             let sig = sanitize_skeleton_sig(raw_sig, &sym.name);
-            out.push_str(&format!("{indent}{sig}; // {span_str}\n"));
+            out.push_str(&format!("{indent}{sig}; // {leaf_note}\n"));
         } else {
             out.push_str(&format!(
                 "{indent}{} {sym_name}; // {span_str}\n",
@@ -1471,6 +1486,50 @@ mod tests {
              } // L1-3\n\
              \n\
              pub fn run() { /* 3 lines hidden: L6-L8 */ }\n"
+        );
+    }
+
+    #[test]
+    fn skeleton_marks_an_event_row_whose_signature_does_not_spell_it() {
+        let syms = vec![
+            skeleton_row(
+                "cls",
+                None,
+                "class",
+                "ColumnViewAttached",
+                "class ColumnViewAttached : public QObject",
+                (11, 52),
+                None,
+            ),
+            skeleton_row(
+                "sig",
+                Some("cls"),
+                "event",
+                "indexChanged",
+                "void indexChanged()",
+                (47, 47),
+                None,
+            ),
+            skeleton_row(
+                "qml",
+                None,
+                "event",
+                "clicked",
+                "signal clicked()",
+                (60, 60),
+                None,
+            ),
+        ];
+
+        assert_eq!(
+            format_file_skeleton("src/columnview.h", &syms, Some(60), 0),
+            "// File: src/columnview.h (Lines 1-60)\n\
+             \n\
+             class ColumnViewAttached : public QObject {\n\
+             \x20   void indexChanged(); // event L47-47\n\
+             } // L11-52\n\
+             \n\
+             signal clicked(); // L60-60\n"
         );
     }
 }

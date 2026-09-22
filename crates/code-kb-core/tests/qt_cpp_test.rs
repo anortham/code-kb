@@ -129,10 +129,11 @@ fn a_qt_header_skeleton_lists_a_signal_as_an_event_row() {
             .find(|s| s.kind == "event")
             .unwrap_or_else(|| panic!("no event symbol for {name}"));
         assert!(hit.parent_symbol_id.is_some(), "{name}");
-        assert!(
-            out.lines().any(|l| l.contains(name)),
-            "no skeleton row for {name} in:\n{out}"
-        );
+        let row = out
+            .lines()
+            .find(|l| l.contains(&format!("{name}(")))
+            .unwrap_or_else(|| panic!("no skeleton row for {name} in:\n{out}"));
+        assert!(row.contains("// event L"), "{row}");
     }
 }
 
