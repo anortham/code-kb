@@ -2,7 +2,7 @@
 
 > For agentic workers: use `razorback:subagent-driven-development` with `terra_worker` implementers. Use `razorback:executing-plans` only when delegation is unavailable or the user selects single-agent execution. The lead owns design decisions, review, and integration verification.
 
-**Status:** Implementation complete on `refactor/read-only-tools`; combined branch gate and measurement pending.
+**Status:** Implemented and locally verified on `refactor/read-only-tools` through `74baf19`. No push, merge, or release.
 
 **Goal:** Make impact limits explicit, use consistent test discovery, and let agents select an exact symbol through the existing read tools.
 
@@ -203,3 +203,19 @@ Core paths above are under `crates/code-kb-core/src/` unless marked `tests/`; `b
 ## Completion
 
 The lead checks all acceptance criteria against the final diff, runs the combined branch gate, records the RSS/output comparison, and reports any unrun Windows scope. Checkpoint before committing and include the checkpoint. Reconcile this worktree with the existing unmerged removal commit; do not leave related work on another branch. Report local source state and verification. Publishing, release preparation, and unrelated cleanup require a separate user request.
+
+## Verification record
+
+Source commit: `74baf19`; all checks below ran on its clean task worktree on 2026-09-22 UTC. The final documentation and memory commit changes no executable code.
+
+| Scope | Command or workload | Result |
+| --- | --- | --- |
+| Branch gate | `cargo test --workspace --locked --no-fail-fast` | 394 Rust tests passed |
+| Branch gate | `cargo clippy --workspace --all-targets --locked -- -D warnings` | Passed |
+| Branch gate | `cargo fmt --all -- --check`; `node --test tests/plugin/*.test.cjs`; `git diff --check`; three guidance-pair `cmp` checks | Passed; 17 plugin tests |
+| Build | `cargo build -p code-kb-cli --bin code-kb --release` | Passed |
+| Windows guest | Exact-ID SQLite test; `test_paths_equal`; `cargo check --workspace --locked` | Passed; seven path-identity tests. Build guard used `CODE_KB_ALLOW_MISSING_JULIE_EXTRACT=1` because the guest lacks the pinned extractor. |
+| Report-only memory | Same persistent MCP benchmark workload and final index, old vs new binary | Post-query RSS 16.47 vs 16.50 MB; no material retained increase. |
+| Report-only output | Same lookup and search benchmark queries, old vs new binary | Lookup 443 to 512 estimated tokens; search 2,109 to 2,486, reflecting full IDs. |
+
+The benchmark used a temporary copy of `scripts/benchmark_quality.py` with its removed `validate_syntax` target changed to the existing `sanitize_fts5_query` symbol. The repository script was not edited. Extractor-backed Windows integration was not run and remains part of release verification.
