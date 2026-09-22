@@ -2,10 +2,15 @@
 
 ## Status
 
-2026-09-21. Parts A (tasks 1 to 18) and B (B1 to B6, plus B2b and B3b)
-implemented on `feat/qt-first-class` (julie 3.2.0, not yet released) and
-`feat/v1.5-qt`; B7 waits for the julie 3.2.0 release assets; Part A tasks 19 to
-22 (Qt C++ macros) are not started.
+2026-09-22. The plan is complete. Part A tasks 1 to 18 shipped in julie-extract
+3.2.0 and tasks 19 to 22 (the Qt C++ macro pre-pass) shipped in julie-extract
+3.3.0. Part B shipped as code-kb v1.5.0 (B1 to B6, plus B2b, B3b, and B8 for the
+QML side) and code-kb v1.6.0 (B7, the `property` fact alias, the Qt C++
+regression tests, and the Qt C++ docs). Every Part C item passes, so the claim
+wording is now: "First-class Qt support: QML, `qmldir`, `.qmltypes`, Qt
+JavaScript, and Qt C++ headers, validated on pinned corpus revisions; static
+reference results have documented limits; `.ui` and CMake files are not
+indexed."
 
 Measured on the pinned corpora with the branch binaries (code-kb `28ce7c3`,
 julie-extract 3.2.0):
@@ -14,6 +19,15 @@ julie-extract 3.2.0):
 - `refs BarWidget --file shell/Ui/BarWidget.qml` in Omarchy: 12 `extends` rows.
 - `refs Color --file shell/Commons/Color.qml` in Omarchy: 53 files.
 - `refs Page --file src/controls/Page.qml` in Kirigami: 7 `extends` rows (four are inline components).
+
+Part C item 6 measured on Kirigami `ca7d636` with the v1.6.0 build and
+julie-extract 3.3.0, on `src/layouts/columnview.h`:
+
+- `skeleton src/layouts/columnview.h`: 231 lines, 38 `Q_PROPERTY(...)` rows, 0 parse-error banner lines.
+- `lookup ColumnView`: 1 `class ColumnView` row, at line 276; the forward declaration adds no row.
+- `facts property --path src/layouts/columnview.h`: one `cpp.qt_property.v1` fact per `Q_PROPERTY`, each naming its class.
+- `refs indexChanged --file src/layouts/columnview.h`: 0 rows; a declaration is not a use.
+- Whole checkout: 102 C++ files, 297 `property` rows, 297 facts, 12 files with a parse diagnostic (70 under 3.2.0).
 
 The "Status: draft" note below describes revision 2 at the time it was written.
 This section supersedes it.
@@ -387,9 +401,10 @@ Companion task list with file pointers:
 - **B6 Handler candidates.** `refs <signal>` labels handler rows whose
   receiver did not resolve as `candidate` in the output, so unowned
   `clicked` matches are visible but not claimed.
-- **B7 Pin bumps.** Pin julie-extract 3.2.0 (later 3.3.0) in
-  `scripts/julie-pins.json` with all six archive checksums; the version guard
-  rebuilds old indexes; the Windows guest runs the changed tests before push.
+- **B7 Pin bumps.** Done. julie-extract 3.2.0 pinned in code-kb v1.5.0 and 3.3.0
+  in v1.6.0, in `scripts/julie-pins.json` with all six archive checksums; the
+  version guard rebuilds old indexes; the Windows guest runs the changed tests
+  before push.
 - **B8 Docs and claim.** README gains a "Qt and QML" section listing exactly
   the bullets under "What is true today" plus the closed gaps, with the corpus
   commits and numbers; `docs/site/index.html` names QML, `qmldir`, `.qmltypes`,
@@ -418,10 +433,10 @@ cases and unchanged non-QML skeleton fixtures:
 7. `edit_file` succeeds on a `.pragma library` JavaScript file on Linux and
    Windows.
 
-Until item 6 lands, the honest wording is: "Expanded QML and Quickshell
-support, validated on pinned corpus revisions; Qt C++ headers are indexed with
-known macro gaps; static reference results have documented limits; `.ui` and
-CMake files are not indexed."
+Item 6 landed in code-kb v1.6.0 on julie-extract 3.3.0, so the claim wording is:
+"First-class Qt support: QML, `qmldir`, `.qmltypes`, Qt JavaScript, and Qt C++
+headers, validated on pinned corpus revisions; static reference results have
+documented limits; `.ui` and CMake files are not indexed."
 
 ## Release sequence
 

@@ -333,20 +333,30 @@ as `Page`), the files that read a singleton, and the signal handlers, each label
 `qmldir` module files and `.qmltypes` type descriptors are indexed. Qt JavaScript files
 parse, including the `.pragma library` and `.import` directives, so `edit_file` works on
 them. KDE test files under `autotests/` and files named `tst_*.qml` are hidden from
-search by default; `--include-tests` shows them. This needs julie-extract 3.2.0.
+search by default; `--include-tests` shows them. This needs julie-extract 3.3.0.
 
-Expanded QML and Quickshell support, validated on pinned corpus revisions; Qt C++ headers
-are indexed with known macro gaps; static reference results have documented limits; `.ui`
-and CMake files are not indexed.
+A Qt C++ header indexes the same way. `file_skeleton` prints one `Q_PROPERTY(...)` row
+per declared property under its class, keeping the `READ`, `WRITE`, `NOTIFY`, and
+`MEMBER` accessors the macro names. A method declared in a `Q_SIGNALS:` section is an
+`event` row, a method in a `Q_SLOTS:` section carries `qt_slot`, and a `Q_INVOKABLE`
+method carries `qt_invokable`. A class records the QML element name it declares with
+`QML_ELEMENT` or `QML_NAMED_ELEMENT`. A forward declaration such as `class ColumnView;`
+emits no row, so `lookup_symbol` of a class name returns one row, at its definition.
+`find_structural_facts` takes a `property` alias that covers the QML property
+declarations and the Qt C++ `Q_PROPERTY` facts together, each fact naming its class.
+
+First-class Qt support: QML, `qmldir`, `.qmltypes`, Qt JavaScript, and Qt C++ headers,
+validated on pinned corpus revisions; static reference results have documented limits;
+`.ui` and CMake files are not indexed.
 
 ### Validated on
 
-| Corpus | Pinned commit | QML files |
-| :--- | :--- | ---: |
-| Omarchy shell (Quickshell) | `49306774` | 106 |
-| KDE Kirigami | `ca7d636` | 225 |
-| KDE plasma-workspace | `a45871a` | 222 |
-| Quickshell examples | `c6d1236` | 14 |
+| Corpus | Pinned commit | QML files | C++ files |
+| :--- | :--- | ---: | ---: |
+| Omarchy shell (Quickshell) | `49306774` | 106 | 0 |
+| KDE Kirigami | `ca7d636` | 225 | 102 |
+| KDE plasma-workspace | `a45871a` | 222 | 1051 |
+| Quickshell examples | `c6d1236` | 14 | 0 |
 
 Measured with the branch binaries on Omarchy and Kirigami:
 
@@ -373,13 +383,31 @@ code-kb lookup SpeedDial
 # Kirigami
 code-kb refs Page --file src/controls/Page.qml --limit 200
 # 60 rows, of which 7 are `extends` rows (four of them inline components).
+
+# Kirigami, Qt C++
+code-kb skeleton src/layouts/columnview.h
+# 231 lines for a 785-line file, 38 `Q_PROPERTY(...)` rows, no parse-error banner.
+
+code-kb lookup ColumnView
+# 1 class row: `class ColumnView [src/layouts/columnview.h:276-783]`.
+# The forward declaration in the same file adds no second row.
+
+code-kb facts property --path src/layouts/columnview.h --limit 5
+# 5 of the file's 38 `cpp.qt_property.v1` facts, each naming the class that owns it
+# (`ScrollIntentionEvent`, `ColumnViewAttached`).
 ```
 
 ### Known limits
 
-- Qt C++ headers index, but the Qt macros still break parts of them: `Q_PROPERTY` yields
-  no property symbols, and `Q_SIGNALS:` sections mis-parse. A later extractor release
-  fixes this.
+- A project macro that the extractor does not know is not blanked before the parse, so it
+  can still cause a parse diagnostic. Diagnostics remain on both C++ corpora: 31 on
+  Kirigami and 298 on plasma-workspace, down 97% and 94% from julie-extract 3.2.0. None
+  of them is macro-shaped; a file-local `#define` used as a statement accounts for 12 of
+  Kirigami's 31.
+- `Q_DECLARE_FLAGS(Modes, Mode)` and a `Q_OBJECT_BINDABLE_PROPERTY(...)` member are
+  blanked as whole statements, so the typedef and the member emit no row.
+- A macro used inside a line, such as `Q_ARG(bool, true)` in a `QMetaObject::invokeMethod`
+  call, is left alone by design, because rewriting it would delete real arguments.
 - `.ui` designer files and CMake files are not indexed.
 - A QML module imported through an alias resolves to a workspace file only when the alias
   is not a Qt module. `QtQuick.*` and `QtQml.*` aliases never name a workspace symbol.

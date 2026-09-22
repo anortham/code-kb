@@ -121,7 +121,9 @@ MCP tool schema.**
   covers the same site. An import alias satisfies a pending receiver unless the import source
   starts with `Qt`. An `extends` row never resolves to its own component. A handler row is
   labelled `handler` when the receiver names the owner and `handler (candidate)` otherwise. Test
-  paths include `/autotests/` directories and file names that start with `tst_`.
+  paths include `/autotests/` directories and file names that start with `tst_`. A Qt C++
+  header's `property` and `event` rows come from the extractor's macro pre-pass and render like
+  any other member.
 - Language-agnostic callee filtering: `find_references(direction="callees")` and `get_symbol_context`
   filter unresolved AST tokens against workspace symbols, eliminating external stdlib/runtime noise
   across all ~40 supported languages by default (`include_external: true` / `--include-external` restores them).
