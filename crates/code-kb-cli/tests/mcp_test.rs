@@ -2637,13 +2637,23 @@ fn mcp_read_tool_handlers_validate_selectors_and_preserve_git_discovery() {
         &json!({"jsonrpc":"2.0","id":16,"method":"tools/call","params":{"name":"get_symbol_body","arguments":{"symbol_id":selected_id}}}),
     );
     assert_ne!(selected_body["result"]["isError"], true, "{selected_body}");
+    for arguments in [
+        json!({"symbol_name":"run_task","symbol_id":null}),
+        json!({"symbol_name":"run_task","symbol":"run_task"}),
+        json!({"symbol_id":selected_id,"symbol_name":null}),
+    ] {
+        let response = mcp_request(
+            &mut stdin,
+            &mut reader,
+            &json!({"jsonrpc":"2.0","id":17,"method":"tools/call","params":{"name":"get_symbol_body","arguments":arguments}}),
+        );
+        assert_ne!(response["result"]["isError"], true, "{response}");
+    }
 
     let invalid_selectors = [
         (json!({}), "exactly one non-empty"),
         (json!({"symbol_name":""}), "must not be empty"),
         (json!({"symbol_id":""}), "must not be empty"),
-        (json!({"symbol_name":null}), "must be a string"),
-        (json!({"symbol_id":null}), "must be a string"),
         (json!({"symbol_name":7}), "must be a string"),
         (
             json!({"symbol_name":"run_task","symbol_id":"s2"}),
@@ -2675,8 +2685,7 @@ fn mcp_read_tool_handlers_validate_selectors_and_preserve_git_discovery() {
 
     for (arguments, error_text) in [
         (json!({"symbol_id":""}), "must not be empty"),
-        (json!({"symbol_name":null}), "must be a string"),
-        (json!({"symbol_id":null}), "must be a string"),
+        (json!({"symbol_id":7}), "must be a string"),
         (
             json!({"symbol":"run_task","symbol_id":"s2"}),
             "exactly one of",
@@ -2749,6 +2758,24 @@ fn mcp_read_tool_handlers_validate_selectors_and_preserve_git_discovery() {
             .unwrap()
             .contains("src/workspace.rs")
     );
+    for arguments in [
+        json!({"symbol":null}),
+        json!({"symbol_id":null}),
+        json!({"symbol":null,"file":"src/workspace.rs"}),
+    ] {
+        let response = mcp_request(
+            &mut stdin,
+            &mut reader,
+            &json!({"jsonrpc":"2.0","id":request_id + 1,"method":"tools/call","params":{"name":"blast_radius","arguments":arguments}}),
+        );
+        assert_ne!(response["result"]["isError"], true, "{response}");
+        assert!(
+            response["result"]["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("src/workspace.rs")
+        );
+    }
 
     drop(stdin);
     let _ = child.wait();

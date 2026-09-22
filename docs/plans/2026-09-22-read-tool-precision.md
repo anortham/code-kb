@@ -2,7 +2,7 @@
 
 > For agentic workers: use `razorback:subagent-driven-development` with `terra_worker` implementers. Use `razorback:executing-plans` only when delegation is unavailable or the user selects single-agent execution. The lead owns design decisions, review, and integration verification.
 
-**Status:** Implemented and locally verified on `refactor/read-only-tools` through `74baf19`. No push, merge, or release.
+**Status:** Implemented and locally verified on `refactor/read-only-tools`. No push, merge, or release.
 
 **Goal:** Make impact limits explicit, use consistent test discovery, and let agents select an exact symbol through the existing read tools.
 
@@ -75,7 +75,7 @@ Lookup and search text include each result's complete `symbol_id` on its existin
 | `find_references` | `code-kb refs` | MCP `symbol_id`; CLI `--symbol-id` |
 | `blast_radius` | `code-kb blast-radius` / `impact` | MCP `symbol_id`; CLI `--symbol-id` |
 
-- Body, context, and references require exactly one name or ID. Their positional CLI name becomes optional only when `--symbol-id` is supplied. Reject both, neither, and empty selectors with useful argument errors. Enforce this in MCP schemas, handlers, and CLI parsing.
+- Body, context, and references require exactly one name or ID. Their positional CLI name becomes optional only when `--symbol-id` is supplied. Reject both, neither, and empty selectors with useful argument errors. MCP schemas advertise both optional string selectors and their exclusivity in descriptions; handlers and CLI parsing enforce it. Top-level `oneOf` and `minLength` are omitted because the Claude tool API rejects those schema constraints.
 - Blast radius allows one symbol name or ID, optionally with its file constraint; file-only and no-target git discovery stay intact. Reject a name plus ID. An empty ID is an error, not a request for git discovery.
 - An optional file with an ID is a consistency check against the selected symbol's file. It must not turn into a second blast-radius seed. Resolve existing paths canonically and reject mismatches. For this new ID mode the check names an actual file; existing name-mode path behavior stays intact.
 - Never pass IDs through name sanitization, prefix/fuzzy matching, or a name fallback. Unknown IDs report the bound workspace and direct the agent to run lookup/search again. Reuse central workspace/error-formatting logic rather than duplicating recovery strings in adapters.

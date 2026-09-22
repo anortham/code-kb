@@ -266,16 +266,14 @@ impl McpServer {
                     "properties": {
                         "symbol_name": {
                             "type": "string",
-                            "minLength": 1,
-                            "description": "Full or qualified symbol name."
+                            "description": "Full or qualified symbol name. Provide exactly one non-empty symbol_name or symbol_id."
                         },
-                        "symbol_id": { "type": "string", "minLength": 1, "description": "Exact current-index symbol identifier." },
+                        "symbol_id": { "type": "string", "description": "Exact current-index symbol identifier. Provide exactly one non-empty symbol_name or symbol_id." },
                         "file_path": {
                             "type": "string",
                             "description": "Optional file path to disambiguate identical symbol names."
                         }
-                    },
-                    "oneOf": [{"required": ["symbol_name"]}, {"required": ["symbol_id"]}]
+                    }
                 }),
             },
             Tool {
@@ -286,10 +284,9 @@ impl McpServer {
                     "properties": {
                         "symbol_name": {
                             "type": "string",
-                            "minLength": 1,
-                            "description": "Target symbol name."
+                            "description": "Target symbol name. Provide exactly one non-empty symbol_name or symbol_id."
                         },
-                        "symbol_id": { "type": "string", "minLength": 1, "description": "Exact current-index symbol identifier." },
+                        "symbol_id": { "type": "string", "description": "Exact current-index symbol identifier. Provide exactly one non-empty symbol_name or symbol_id." },
                         "file_path": {
                             "type": "string",
                             "description": "Optional file path to disambiguate identical symbol names."
@@ -298,8 +295,7 @@ impl McpServer {
                             "type": "boolean",
                             "description": "Include external stdlib/runtime calls in callee signatures (default: false)."
                         }
-                    },
-                    "oneOf": [{"required": ["symbol_name"]}, {"required": ["symbol_id"]}]
+                    }
                 }),
             },
             Tool {
@@ -310,10 +306,9 @@ impl McpServer {
                     "properties": {
                         "symbol_name": {
                             "type": "string",
-                            "minLength": 1,
-                            "description": "Target symbol name."
+                            "description": "Target symbol name. Provide exactly one non-empty symbol_name or symbol_id."
                         },
-                        "symbol_id": { "type": "string", "minLength": 1, "description": "Exact current-index symbol identifier." },
+                        "symbol_id": { "type": "string", "description": "Exact current-index symbol identifier. Provide exactly one non-empty symbol_name or symbol_id." },
                         "file_path": {
                             "type": "string",
                             "description": "Optional file path to disambiguate symbols with identical names across files."
@@ -333,8 +328,7 @@ impl McpServer {
                             "type": "boolean",
                             "description": "If true, includes external runtime/stdlib primitives in callees (default: false, only internal workspace symbols)."
                         }
-                    },
-                    "oneOf": [{"required": ["symbol_name"]}, {"required": ["symbol_id"]}]
+                    }
                 }),
             },
             Tool {
@@ -370,7 +364,7 @@ impl McpServer {
                             "type": "string",
                             "description": "Symbol name to seed the impact walk (aliases: symbol_name, name, target)."
                         },
-                        "symbol_id": { "type": "string", "minLength": 1, "description": "Exact current-index symbol identifier." },
+                        "symbol_id": { "type": "string", "description": "Exact current-index symbol identifier. Provide one non-empty symbol or symbol_id." },
                         "file": {
                             "type": "string",
                             "description": "File path to seed the impact walk (aliases: file_path, path)."
@@ -644,21 +638,25 @@ impl McpServer {
     }
 
     fn selector(arguments: &Value) -> Result<SymbolSelector, String> {
-        let selectors = ["symbol_name", "symbol", "name", "target", "symbol_id"]
+        let name = ["symbol_name", "symbol", "name", "target"]
             .into_iter()
-            .filter_map(|key| arguments.get(key).map(|value| (key, value)))
-            .collect::<Vec<_>>();
-        if selectors.is_empty() {
-            return Err("Specify exactly one non-empty symbol_name or symbol_id".to_string());
-        }
-        if selectors.len() != 1 {
-            return Err(
-                "Specify exactly one of symbol_name, symbol, name, target, or symbol_id"
-                    .to_string(),
-            );
-        }
-
-        let (key, value) = selectors[0];
+            .find_map(|key| {
+                arguments
+                    .get(key)
+                    .filter(|value| !value.is_null())
+                    .map(|value| (key, value))
+            });
+        let id = arguments.get("symbol_id").filter(|value| !value.is_null());
+        let (key, value) = match (name, id) {
+            (Some(_), Some(_)) => {
+                return Err("Specify exactly one of symbol_name or symbol_id".to_string());
+            }
+            (Some(name), None) => name,
+            (None, Some(id)) => ("symbol_id", id),
+            (None, None) => {
+                return Err("Specify exactly one non-empty symbol_name or symbol_id".to_string());
+            }
+        };
         let value = value
             .as_str()
             .ok_or_else(|| format!("{key} must be a string"))?;
@@ -1184,7 +1182,7 @@ impl McpServer {
             "blast_radius" | "impact" => {
                 let has_selector = ["symbol_name", "symbol", "name", "target", "symbol_id"]
                     .iter()
-                    .any(|key| arguments.get(*key).is_some());
+                    .any(|key| arguments.get(*key).is_some_and(|value| !value.is_null()));
                 let selector = if has_selector {
                     match Self::selector(arguments) {
                         Ok(selector) => Some(selector),
@@ -1383,24 +1381,46 @@ mod tests {
         assert!(
             matches!(McpServer::selector(&json!({"symbol_id": "id'quoted"})), Ok(SymbolSelector::Id(id)) if id == "id'quoted")
         );
+        assert!(
+            matches!(McpServer::selector(&json!({"symbol_name": "run", "symbol_id": null})), Ok(SymbolSelector::Name(name)) if name == "run")
+        );
+        assert!(
+            matches!(McpServer::selector(&json!({"symbol_name": "run", "symbol": "run"})), Ok(SymbolSelector::Name(name)) if name == "run")
+        );
         assert!(McpServer::selector(&json!({"symbol_id": ""})).is_err());
         assert!(McpServer::selector(&json!({"symbol_name": "run", "symbol_id": "id"})).is_err());
     }
 
     #[test]
-    fn selector_schemas_require_nonempty_names_and_ids() {
+    fn selector_schemas_use_compatible_object_shapes() {
         let tools = McpServer::tool_definitions();
+        for tool in &tools {
+            for combinator in ["oneOf", "anyOf", "allOf"] {
+                assert!(
+                    tool.input_schema.get(combinator).is_none(),
+                    "{} has a top-level {combinator}",
+                    tool.name
+                );
+            }
+        }
         for name in ["get_symbol_body", "get_symbol_context", "find_references"] {
             let schema = &tools
                 .iter()
                 .find(|tool| tool.name == name)
                 .unwrap()
                 .input_schema;
-            assert_eq!(
-                schema["properties"]["symbol_name"]["minLength"], 1,
-                "{name}"
-            );
-            assert_eq!(schema["properties"]["symbol_id"]["minLength"], 1, "{name}");
+            for selector in ["symbol_name", "symbol_id"] {
+                let property = &schema["properties"][selector];
+                assert_eq!(property["type"], "string", "{name}.{selector}");
+                assert!(property.get("minLength").is_none(), "{name}.{selector}");
+                assert!(
+                    property["description"]
+                        .as_str()
+                        .unwrap()
+                        .contains("exactly one"),
+                    "{name}.{selector}"
+                );
+            }
         }
     }
 
