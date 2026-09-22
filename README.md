@@ -4,7 +4,7 @@
 
 `code-kb` is a fast, lightweight code-intelligence engine and Model Context Protocol (MCP) server designed specifically for AI coding agents. 
 
-Backed by the rich AST fact tables produced by [`julie-extractors`](https://github.com/anortham/julie-extractors), `code-kb` provides progressive disclosure, semantic symbol navigation, and surgical context slicing—enabling agents to navigate, understand, and edit codebases with **80–90% fewer tokens** without burning context on full file reads or noisy text grep.
+Backed by the rich AST fact tables produced by [`julie-extractors`](https://github.com/anortham/julie-extractors), `code-kb` provides progressive disclosure, semantic symbol navigation, and surgical context slicing—enabling agents to navigate and understand codebases with **80–90% fewer tokens** without burning context on full file reads or noisy text grep. Agents edit with their native filesystem tools; code-kb automatically refreshes indexed files after filesystem changes.
 
 ---
 
@@ -17,7 +17,7 @@ Traditional AI coding agents burn massive amounts of context loading entire sour
 2. **File Skeletons (`file_skeleton`):** Inspect function signatures, types, traits, and docstrings with implementation bodies stripped.
 3. **Symbol Lookup & Discovery (`lookup_symbol` / `search_symbols`):** Instant exact/prefix identifier lookups and conceptual search over names, signatures, and docstrings; substrings inside identifiers are found (`sha256` finds `parseSha256Sidecar`).
 4. **Surgical Symbol Context (`get_symbol_context`):** In a single turn, fetch a target function's body along with its callee signatures, parameter types, and associated unit tests.
-5. **Single-Turn Edits (`edit_file` / `replace_symbol_body`):** Replace text in any file without reading it first, or replace a whole symbol body. Both validate the syntax with `julie-extract` for every language it parses, write atomically, and re-index immediately.
+5. **Fresh Indexes:** Filesystem edits automatically refresh indexed files, and target body and skeleton reads refresh their file before answering.
 
 ---
 
@@ -331,8 +331,8 @@ type as `extends` rows, the plain and qualified instantiations (`Kirigami.Page` 
 as `Page`), the files that read a singleton, and the signal handlers, each labelled
 `handler` when the receiver names the owner and `handler (candidate)` when it does not.
 `qmldir` module files and `.qmltypes` type descriptors are indexed. Qt JavaScript files
-parse, including the `.pragma library` and `.import` directives, so `edit_file` works on
-them. KDE test files under `autotests/` and files named `tst_*.qml` are hidden from
+parse, including the `.pragma library` and `.import` directives. KDE test files under
+`autotests/` and files named `tst_*.qml` are hidden from
 search by default; `--include-tests` shows them.
 
 Current source builds use julie-extract 3.3.1. QML references retain inline component
@@ -441,8 +441,6 @@ code-kb facts property --path src/layouts/columnview.h --limit 5
 | `find_references` | Callers or callees of a symbol, matched by name from AST call sites and ranked by same file, same directory, then receiver type; callers also include type usages and member accesses (filters external stdlib noise; qualify overloaded names). | `symbol_name` (req), `file_path` (opt), `direction` ("callers" \| "callees", def: callers), `include_external` (opt, def: false) | `symbol`, `name`, `file`, `path` |
 | `blast_radius` | Multi-hop reverse reachability (CTEs) & targeted test prediction. | `symbol` (opt), `file` (opt), `depth` (opt, def: 2), `limit` (opt) | `name`, `path`, `impact` |
 | `find_structural_facts` | Queries framework facts (routes, SQL queries, config keys, tables). Lists all categories when omitted. | `category` (opt), `path` (opt), `limit` (opt) | `cat`, `kind`, `type`, `file`, `file_path` |
-| `edit_file` | Replaces text in any file without reading it first. Finds `old_text` exactly, then ignoring indentation. Refuses a match that occurs more than once, overlapping matches included, unless `occurrence` is set, and names up to ten matching lines. | `file_path` (req), `old_text` (req), `new_text` (req), `occurrence` (opt, "only" \| "first" \| "last" \| "all", def: only) | `file`, `path`, `old`, `find`, `new`, `replace` |
-| `replace_symbol_body` | Atomically replaces a symbol's implementation; `julie-extract check` validates the syntax for every language it parses (about 40), other paths report validation skipped. | `symbol_name` (req), `file_path` (req), `new_body` (req), `expected_body_hash` (opt) | `symbol`, `file`, `body`, `code` |
 | `telemetry_summary` | Token savings with their coverage, call counts, and error rates from `~/.code-kb/telemetry.db`, across all workspaces or scoped to the current one. | `time_window` (opt, def: all), `workspace_only` (opt, def: false), `json` (opt) | `since`, `window` |
 
 ---
@@ -490,13 +488,6 @@ code-kb blast-radius
 code-kb facts
 code-kb facts config --path Cargo.toml
 code-kb facts route --limit 10
-
-# Atomically edit a symbol body with pre-flight syntax validation by julie-extract
-code-kb edit my_func --file src/lib.rs --body "{\n    println!(\"hello\");\n}"
-
-# Replace text in any file, without reading it first; --occurrence only|first|last|all
-code-kb edit-file src/lib.rs --old "let timeout = 5;" --new "let timeout = 30;"
-code-kb edit-file docs/guide.md --old "the old name" --new "the new name" --occurrence all
 
 # View active log file and recent diagnostic messages
 code-kb logs
@@ -585,7 +576,7 @@ claude --plugin-dir .
 
 - [**001: Architecture & Service Model**](docs/plans/001-architecture-and-service-model.md) — Multi-project workstation scope, Git worktree deduplication, and RAG vs. AST evaluation.
 - [**002: Workspace Scoping & MCP**](docs/plans/002-workspace-scoping-and-mcp.md) — 1:1 session binding, eliminating workspace registries and `workspace_id` friction.
-- [**003: Tool Catalog & Schema**](docs/plans/003-tool-catalog-and-schema.md) — The core read tools, token-minimized output formats, and `replace_symbol_body`.
+- [**003: Tool Catalog & Schema**](docs/plans/003-tool-catalog-and-schema.md) — Historical tool-catalog decisions and token-minimized output formats.
 - [**004: File Synchronization & Watchers**](docs/plans/004-file-synchronization-and-watchers.md) — 3-tier sync: tool-driven updates, JIT staleness guards, and debounced background watching.
 - [**005: Cold-Start Reconciliation**](docs/plans/005-startup-reconciliation.md) — Detecting and reconciling offline edits in under 50ms on startup.
 - [**006: Retrospective Lessons from Miller**](docs/plans/006-lessons-from-miller.md) — Analysis of calibration data, performance ledgers, and traps to avoid.

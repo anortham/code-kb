@@ -853,59 +853,6 @@ fn test_cli_facts_alias_limits_and_listing() {
 }
 
 #[test]
-fn test_cli_edit_atomic_replacement() {
-    let _extract_bin = code_kb_core::find_julie_extract_binary()
-        .expect("julie-extract binary must be present for tests");
-
-    let temp_dir = code_kb_core::safe_tempdir();
-    let root = temp_dir.path().to_path_buf();
-    let src_dir = root.join("src");
-    std::fs::create_dir_all(&src_dir).unwrap();
-    let content = "pub fn run_task() {\n    helper();\n}\n\nfn helper() {}\n";
-    std::fs::write(src_dir.join("workspace.rs"), content).unwrap();
-
-    // Scan the workspace first to initialize schema and artifact_metadata
-    let scan_output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
-        .env("TMPDIR", temp_dir.path())
-        .arg("--root")
-        .arg(&root)
-        .arg("scan")
-        .output()
-        .expect("Failed to execute scan");
-    assert!(
-        scan_output.status.success(),
-        "Scan failed: {}",
-        String::from_utf8_lossy(&scan_output.stderr)
-    );
-
-    let new_body = "{\n    // updated task body\n    let _x = 42;\n    helper();\n}";
-    let edit_output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
-        .env("TMPDIR", temp_dir.path())
-        .arg("--root")
-        .arg(&root)
-        .arg("edit")
-        .arg("run_task")
-        .arg("--file")
-        .arg("src/workspace.rs")
-        .arg("--body")
-        .arg(new_body)
-        .output()
-        .expect("Failed to execute edit");
-
-    assert!(
-        edit_output.status.success(),
-        "Edit command failed: {}",
-        String::from_utf8_lossy(&edit_output.stderr)
-    );
-    let stdout = String::from_utf8_lossy(&edit_output.stdout);
-    assert!(stdout.contains("Successfully replaced body") && stdout.contains("Bytes Written:"));
-
-    // Verify file content on disk
-    let disk_content = std::fs::read_to_string(root.join("src/workspace.rs")).unwrap();
-    assert!(disk_content.contains("let _x = 42;"));
-}
-
-#[test]
 fn test_cli_hook_session_start() {
     let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
         .arg("hook")
@@ -1259,30 +1206,6 @@ fn test_cli_argument_aliases() {
         .output()
         .unwrap();
     assert!(out.status.success(), "blast-radius --file-path failed");
-
-    // 4. --expected-body-hash on edit
-    let out = Command::new(env!("CARGO_BIN_EXE_code-kb"))
-        .arg("--root")
-        .arg(root)
-        .args([
-            "edit",
-            "helper",
-            "--file",
-            "src/workspace.rs",
-            "--body",
-            "fn helper() { println!(\"edited\"); }",
-            "--expected-body-hash",
-            "invalid_hash_123",
-        ])
-        .output()
-        .unwrap();
-    let stderr = String::from_utf8_lossy(&out.stderr);
-    // Should fail with hash mismatch, NOT with clap argument error "unexpected argument '--expected-body-hash'"
-    assert!(!out.status.success());
-    assert!(
-        stderr.contains("Hash mismatch") || stderr.contains("expected"),
-        "stderr was: {stderr}"
-    );
 }
 
 #[cfg(unix)]
@@ -1448,136 +1371,6 @@ fn test_cli_lookup_reports_a_broken_search_index() {
     assert!(!stdout.contains("No exact name match"), "stdout: {stdout}");
 }
 
-const EDIT_FILE_EXPECTED_TEXT: &str =
-    "Edited src/lib.rs: 1 replacement at line 2 (exact match). Syntax: checked. Touched: alpha.";
-
-#[test]
-fn test_cli_edit_file_round_trip_and_json() {
-    let _extract_bin = code_kb_core::find_julie_extract_binary()
-        .expect("julie-extract binary must be present for tests");
-
-    let temp_dir = code_kb_core::safe_tempdir();
-    let root = temp_dir.path().to_path_buf();
-    std::fs::create_dir_all(root.join("src")).unwrap();
-    std::fs::write(
-        root.join("src").join("lib.rs"),
-        "pub fn alpha() {\n    println!(\"start\");\n    println!(\"shared\");\n}\n\npub fn beta() {\n    println!(\"stop\");\n    println!(\"shared\");\n}\n",
-    )
-    .unwrap();
-
-    let scan = Command::new(env!("CARGO_BIN_EXE_code-kb"))
-        .env("TMPDIR", temp_dir.path())
-        .arg("--root")
-        .arg(&root)
-        .arg("scan")
-        .output()
-        .expect("Failed to execute scan");
-    assert!(
-        scan.status.success(),
-        "{}",
-        String::from_utf8_lossy(&scan.stderr)
-    );
-
-    let edit = Command::new(env!("CARGO_BIN_EXE_code-kb"))
-        .env("TMPDIR", temp_dir.path())
-        .arg("--root")
-        .arg(&root)
-        .arg("edit-file")
-        .arg("src/lib.rs")
-        .arg("--old")
-        .arg("println!(\"start\");")
-        .arg("--new")
-        .arg("println!(\"begin\");")
-        .output()
-        .expect("Failed to execute edit-file");
-    assert!(
-        edit.status.success(),
-        "{}",
-        String::from_utf8_lossy(&edit.stderr)
-    );
-    assert_eq!(
-        String::from_utf8_lossy(&edit.stdout).trim_end(),
-        EDIT_FILE_EXPECTED_TEXT
-    );
-    let on_disk = std::fs::read_to_string(root.join("src").join("lib.rs")).unwrap();
-    assert!(on_disk.contains("println!(\"begin\");"), "{on_disk}");
-
-    let json_edit = Command::new(env!("CARGO_BIN_EXE_code-kb"))
-        .env("TMPDIR", temp_dir.path())
-        .arg("--root")
-        .arg(&root)
-        .arg("--json")
-        .arg("edit-file")
-        .arg("src/lib.rs")
-        .arg("--old")
-        .arg("println!(\"shared\");")
-        .arg("--new")
-        .arg("eprintln!(\"shared\");")
-        .arg("--occurrence")
-        .arg("all")
-        .output()
-        .expect("Failed to execute edit-file with json");
-    assert!(
-        json_edit.status.success(),
-        "{}",
-        String::from_utf8_lossy(&json_edit.stderr)
-    );
-    let parsed: serde_json::Value = serde_json::from_slice(&json_edit.stdout).unwrap();
-    assert_eq!(parsed["file_path"], "src/lib.rs");
-    assert_eq!(parsed["replacements"], 2);
-    assert_eq!(parsed["first_line"], 3);
-    assert_eq!(parsed["match_tier"], "exact");
-    assert_eq!(parsed["syntax_checked"], true);
-    assert_eq!(
-        parsed["touched_symbols"],
-        serde_json::json!(["alpha", "beta"])
-    );
-}
-
-#[test]
-fn test_cli_edit_file_refuses_an_ambiguous_match() {
-    let _extract_bin = code_kb_core::find_julie_extract_binary()
-        .expect("julie-extract binary must be present for tests");
-
-    let temp_dir = code_kb_core::safe_tempdir();
-    let root = temp_dir.path().to_path_buf();
-    std::fs::create_dir_all(root.join("src")).unwrap();
-    std::fs::write(
-        root.join("src").join("lib.rs"),
-        "pub fn alpha() {\n    println!(\"start\");\n    println!(\"shared\");\n}\n\npub fn beta() {\n    println!(\"stop\");\n    println!(\"shared\");\n}\n",
-    )
-    .unwrap();
-
-    let scan = Command::new(env!("CARGO_BIN_EXE_code-kb"))
-        .env("TMPDIR", temp_dir.path())
-        .arg("--root")
-        .arg(&root)
-        .arg("scan")
-        .output()
-        .expect("Failed to execute scan");
-    assert!(
-        scan.status.success(),
-        "{}",
-        String::from_utf8_lossy(&scan.stderr)
-    );
-
-    let edit = Command::new(env!("CARGO_BIN_EXE_code-kb"))
-        .env("TMPDIR", temp_dir.path())
-        .arg("--root")
-        .arg(&root)
-        .arg("edit-file")
-        .arg("src/lib.rs")
-        .arg("--old")
-        .arg("println!(\"shared\");")
-        .arg("--new")
-        .arg("eprintln!(\"shared\");")
-        .output()
-        .expect("Failed to execute edit-file");
-    assert!(!edit.status.success());
-    let stderr = String::from_utf8_lossy(&edit.stderr);
-    assert!(stderr.contains("lines 3, 8"), "{stderr}");
-}
-
 #[test]
 fn test_guidance_docs_use_canonical_parameter_names() {
     let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -1604,12 +1397,35 @@ fn test_guidance_docs_use_canonical_parameter_names() {
 }
 
 #[test]
-fn test_routing_block_names_edit_file_and_stays_under_three_kilobytes() {
+fn test_routing_block_omits_edit_tools_and_stays_under_three_kilobytes() {
     let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let root = manifest_dir.parent().unwrap().parent().unwrap();
     let text = std::fs::read_to_string(root.join("hooks/code-kb-routing-block.md")).unwrap();
-    assert!(text.contains("edit_file("), "routing block omits edit_file");
+    assert!(
+        !text.contains("edit_file("),
+        "routing block still names edit_file"
+    );
+    assert!(
+        !text.contains("replace_symbol_body("),
+        "routing block still names replace_symbol_body"
+    );
     assert!(text.len() < 3072, "routing block is {} bytes", text.len());
+}
+
+#[test]
+fn test_cli_rejects_removed_edit_commands() {
+    for command in ["edit", "edit-file"] {
+        let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .arg(command)
+            .output()
+            .expect("failed to execute code-kb");
+        assert!(!output.status.success(), "{command} remains available");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("unrecognized subcommand"),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
 }
 
 #[test]

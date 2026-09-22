@@ -1,6 +1,6 @@
 use code_kb_core::{
-    Occurrence, Workspace, edit_file, find_julie_extract_binary, get_file, open_read_only,
-    safe_tempdir, scan_workspace, search_symbols, start_watcher,
+    Workspace, find_julie_extract_binary, get_file, open_read_only, safe_tempdir, scan_workspace,
+    search_symbols, start_watcher,
 };
 use std::fs;
 use std::thread::sleep;
@@ -283,7 +283,7 @@ fn test_watcher_refreshes_a_header_batch() {
 }
 
 #[test]
-fn test_watcher_leaves_a_header_edit_fresh() {
+fn test_watcher_refreshes_a_native_header_edit() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
     let temp_dir = safe_tempdir();
@@ -310,18 +310,7 @@ fn test_watcher_leaves_a_header_edit_fresh() {
         )
     };
     let _watcher = start_watcher(ws.clone(), db_path.clone()).unwrap();
-    let conn = open_read_only(&db_path).unwrap();
-    edit_file(
-        &ws,
-        &db_path,
-        &conn,
-        "src/widget.h",
-        "old_value",
-        "new_value",
-        Occurrence::Only,
-    )
-    .unwrap();
-    drop(conn);
+    fs::write(&header, "class Widget { public: int new_value = 0; };\n").unwrap();
 
     sleep(Duration::from_millis(700));
     let conn = open_read_only(&db_path).unwrap();

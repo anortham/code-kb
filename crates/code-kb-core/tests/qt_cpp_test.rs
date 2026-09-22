@@ -1,7 +1,7 @@
 use code_kb_core::{
-    Occurrence, Workspace, edit_file, file_skeleton_op, find_julie_extract_binary,
-    find_references_scoped, find_structural_facts_scoped, fts_search_symbols_scoped,
-    get_symbol_body_op, open_read_only, safe_tempdir, scan_workspace, search_symbols_scoped,
+    Workspace, file_skeleton_op, find_julie_extract_binary, find_references_scoped,
+    find_structural_facts_scoped, fts_search_symbols_scoped, get_file, get_symbol_body_op,
+    open_read_only, safe_tempdir, scan_workspace, search_symbols_scoped,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -281,37 +281,33 @@ fn qt_property_facts_render_their_agent_useful_metadata() {
 }
 
 #[test]
-fn qt_header_edits_validate_and_reindex_with_qt_macros() {
+fn qt_header_native_edits_refresh_qt_macros() {
     let (repo, db_path) = scanned_header();
     let workspace = Workspace::new(repo.path().to_path_buf());
+    let original_hash = {
+        let conn = open_read_only(&db_path).unwrap();
+        get_file(&conn, HEADER_PATH).unwrap().unwrap().content_hash
+    };
     let locked = repo.path().join("src/locked.rs");
     fs::write(&locked, "pub fn locked_symbol() {}\n").unwrap();
     scan_workspace(&workspace, &db_path, true).unwrap();
-    let conn = open_read_only(&db_path).unwrap();
-    #[cfg(unix)]
-    fs::set_permissions(&locked, std::os::unix::fs::PermissionsExt::from_mode(0o000)).unwrap();
-
-    let result = edit_file(
-        &workspace,
-        &db_path,
-        &conn,
-        HEADER_PATH,
-        "m_index = 0",
-        "m_index = 1",
-        Occurrence::Only,
-    );
-    #[cfg(unix)]
-    fs::set_permissions(&locked, std::os::unix::fs::PermissionsExt::from_mode(0o644)).unwrap();
-    let result = result.expect("Qt macro header edit remains syntax-valid");
-
-    assert!(result.syntax_checked, "{result:#?}");
+    let header = repo.path().join(HEADER_PATH);
+    fs::write(&header, COLUMNVIEW_H.replace("m_index = 0", "m_index = 1")).unwrap();
     assert!(
         fs::read_to_string(repo.path().join(HEADER_PATH))
             .unwrap()
             .contains("m_index = 1")
     );
-    drop(conn);
+    #[cfg(unix)]
+    fs::set_permissions(&locked, std::os::unix::fs::PermissionsExt::from_mode(0o000)).unwrap();
+    let _ = skeleton(&repo, &db_path);
+    #[cfg(unix)]
+    fs::set_permissions(&locked, std::os::unix::fs::PermissionsExt::from_mode(0o644)).unwrap();
     let conn = open_read_only(&db_path).unwrap();
+    assert_ne!(
+        get_file(&conn, HEADER_PATH).unwrap().unwrap().content_hash,
+        original_hash
+    );
     assert!(
         search_symbols_scoped(&conn, "index", None, Some(HEADER_PATH), false, 10)
             .unwrap()

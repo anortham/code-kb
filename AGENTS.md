@@ -64,30 +64,13 @@ MCP tool schema.**
   for name substrings. `ensure_fts_index` migrates both in one transaction, guarded by the `fts_rule`
   marker; a failed migration is reported by the first tool call and retried on the next start.
 
-### 3. Single-Turn Atomic Edits
-- Two edit tools share one write path (`commit_file_edit` in `edit.rs`): pre-flight syntax
-  validation through `julie-extract check` (code-kb bundles no tree-sitter grammars of its own),
-  concurrency verification, atomic file replacement, immediate SQLite re-indexing, and rollback
-  when the re-index fails. Both finish in a single turn.
-- `edit_file` (CLI: `code-kb edit-file`) replaces text in any file without reading it first.
-  It matches in two tiers and no more: exact substring, then line by line with each line trimmed,
-  so a different indentation still matches. There is no edit-distance matching. A match that
-  occurs more than once, overlapping matches included, is refused with up to ten matching line
-  numbers and a count of the rest unless `occurrence` is `first`, `last`, or `all`; `only` is
-  the default, and `all` replaces the non-overlapping matches. The result file is capped at the
-  same 8 MiB as the input, and only the first line of a failed edit's error reaches telemetry,
-  never the quoted file lines.
-- Until upstream header updates preserve C++ language detection, `.h` refreshes and edits trigger a content-aware workspace scan that only re-extracts changed files.
-- `replace_symbol_body` keeps the optional `body_hash` check and replaces a whole symbol body.
-- Do not implement two-step preview-and-confirm handshakes that waste agent turns.
-
-### 4. Token-Dense Progressive Disclosure
+### 3. Token-Dense Progressive Disclosure
 - Always return the most compact representation that answers the query.
 - Strip implementation bodies in `file_skeleton`.
 - Include only immediate callee signatures, related types, and test
   locations in `get_symbol_context`.
 
-### 5. Windows Compatibility
+### 4. Windows Compatibility
 - Windows is a first-class target. Every release ships a Windows binary.
 - Strip Windows verbatim prefixes (`\\?\C:\...`) using `dunce::simplified`.
 - Contract relative paths and JSON outputs must use explicit forward slashes `/`,
@@ -95,10 +78,9 @@ MCP tool schema.**
 - SQLite connections and file handles must be closed before file rename or deletion.
 - Verify path identity using canonical paths and `dunce::simplified`, not by raw case-sensitive string matching.
 
-### 6. Zero-Friction Tool Ergonomics
+### 5. Zero-Friction Tool Ergonomics
 - Tool handlers accept intuitive parameter aliases (`file`/`path` for `file_path`,
-  `symbol`/`name` for `symbol_name`, `body`/`code` for `new_body`, `q`/`name` for `query`,
-  `old`/`find` for `old_text`, `new`/`replace` for `new_text`).
+  `symbol`/`name` for `symbol_name`, `q`/`name` for `query`).
 - Optional parameters provide safe defaults (`direction` in `find_references` defaults to
   `"callers"`, `category` in `find_structural_facts` lists all categories with counts when omitted).
 - Scoped search: `lookup_symbol`, `search_symbols`, `find_references`, and `find_structural_facts` support an optional `path`/`file_path` filter.
@@ -134,8 +116,8 @@ MCP tool schema.**
 - Blast radius & test prediction: `blast_radius` (alias: `impact`, CLI: `code-kb blast-radius` / `impact`)
   computes multi-hop reverse reachability via SQLite recursive CTEs and predicts targeted tests to run.
   Auto-discovers uncommitted git changes when no target is passed.
-- Continuous testing boundary: Execution stays in native agent terminal commands (`cargo test`, `pytest`,
-  `npm test`), while `code-kb` predicts the minimal set of targeted test targets to run before/after edits.
+- Continuous testing and editing stay in native agent terminal commands. `code-kb` predicts the
+  targeted test targets to run before or after a change; filesystem changes automatically refresh indexed files.
 - Self-cleaning workspaces: Every repository and git worktree maintains its own isolated database at
   `<root>/.code-kb/artifact.db`, and `code-kb` writes a `.gitignore` with `*` inside that directory, so no project `.gitignore` edit is needed. Deleting a repository directory or running `git worktree remove`
   automatically cleans up the AST index database with no orphaned external state. Durable tool
@@ -143,6 +125,12 @@ MCP tool schema.**
 - Cross-platform agent hooks: `code-kb hook [SessionStart|SubagentStart|PreInvocation]` outputs agent routing instructions
   directly from the native binary without external runtime dependencies (Node.js, bash, python), formatting JSON
   natively for Claude Code/Cursor (`SessionStart`), Copilot, and Antigravity (`PreInvocation` injectSteps).
+
+### 6. Index Freshness
+- A debounced watcher refreshes filesystem changes, startup reconciles changes made while no server ran,
+  and body and skeleton reads refresh their target file before answering.
+- Until upstream header updates preserve C++ language detection, a batch of changed `.h` files triggers a
+  content-aware workspace scan that only re-extracts changed files.
 
 ### 7. Pinned Extractor & Bundled Distribution
 - `code-kb` pins the exact extractor version in `scripts/julie-pins.json` (currently `3.3.1`).

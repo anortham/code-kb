@@ -48,7 +48,7 @@
     </p>
     <div class="hero-actions">
       <a class="btn btn-primary" href="#install">Install code-kb</a>
-      <a class="btn btn-secondary" href="#tools">See the twelve tools</a>
+      <a class="btn btn-secondary" href="#tools">See the ten tools</a>
     </div>
     <p class="compat">
       Works with Claude Code, Grok CLI, Antigravity, Codex CLI, and Cursor. Ships binaries for Windows, Linux, and macOS.
@@ -173,8 +173,8 @@ get_symbol_context("search_symbols_scoped")</pre>
             <dd><code>blast_radius</code> walks the callers of a symbol across several hops with a recursive SQLite query and names the tests to run. With no target, it reads the uncommitted git changes.</dd>
           </div>
           <div>
-            <dt>Atomic edits</dt>
-            <dd><code>replace_symbol_body</code> validates the edited file through <code>julie-extract check</code> for every language the extractor parses, about 40; other paths report validation skipped. It then verifies a hash, writes the file, and re-indexes it in one turn.</dd>
+            <dt>Fresh indexes</dt>
+            <dd>Use native filesystem tools to edit. code-kb automatically refreshes indexed files after filesystem changes, and target body and skeleton reads refresh their file before answering.</dd>
           </div>
           <div>
             <dt>Token telemetry</dt>
@@ -305,7 +305,7 @@ get_symbol_context("search_symbols_scoped")</pre>
     <section id="steps" class="section">
       <p class="margin-label">Steps</p>
       <div class="section-body">
-        <h2>From a cold start to a verified edit</h2>
+        <h2>From a cold start to a verified change</h2>
         <p>The order an agent follows on a repository it has never seen. Each step costs less than the file read it replaces.</p>
         <ol class="steps">
           <li>
@@ -326,12 +326,7 @@ search_symbols("auth token validation")</pre>
             <pre>blast_radius(symbol="compute_hash")</pre>
           </li>
           <li>
-            <div><h3>Edit</h3><p>Syntax validation by <code>julie-extract</code> for about 40 languages; other paths report it skipped. Hash check, atomic write, re-index.</p></div>
-            <pre>replace_symbol_body(
-  symbol_name="calculate",
-  file_path="calc.rs",
-  new_body="{ a + b }"
-)</pre>
+            <div><h3>Edit</h3><p>Use the agent's native filesystem tools after reading the necessary context. code-kb automatically refreshes indexed files after filesystem changes.</p></div>
           </li>
           <li>
             <div><h3>Verify</h3><p>Run the predicted tests, then read the tool telemetry.</p></div>
@@ -345,7 +340,7 @@ code-kb stats</pre>
     <section id="tools" class="section">
       <p class="margin-label">Tools</p>
       <div class="section-body">
-        <h2>Twelve tools, each with a matching command</h2>
+        <h2>Ten tools, each with a matching command</h2>
         <p>Every MCP tool has a one-to-one CLI command, so you can check any answer from the terminal.</p>
         <div class="table-wrapper">
           <table class="tool-table">
@@ -367,8 +362,6 @@ code-kb stats</pre>
               <tr><td><code>find_references</code></td><td><code>code-kb refs &lt;symbol&gt;</code></td><td>Callers or callees, stdlib filtered</td><td><code>symbol_name</code>, <code>direction</code> (default <code>callers</code>)</td></tr>
               <tr><td><code>blast_radius</code></td><td><code>code-kb blast-radius [target]</code></td><td>Multi-hop callers and tests to run</td><td><code>symbol</code>, <code>file</code>; omitted target reads git changes</td></tr>
               <tr><td><code>find_structural_facts</code></td><td><code>code-kb facts [category]</code></td><td>Routes, queries, models, config keys</td><td>no category lists all</td></tr>
-              <tr><td><code>edit_file</code></td><td><code>code-kb edit-file &lt;file&gt;</code></td><td>Text replaced in place; refuses a match that occurs more than once</td><td><code>file_path</code>, <code>old_text</code>, <code>new_text</code>, <code>occurrence</code></td></tr>
-              <tr><td><code>replace_symbol_body</code></td><td><code>code-kb edit &lt;symbol&gt;</code></td><td>Atomic replacement; syntax validation for supported languages</td><td><code>symbol_name</code>, <code>file_path</code>, <code>new_body</code>, <code>expected_body_hash</code></td></tr>
               <tr><td><code>telemetry_summary</code></td><td><code>code-kb stats</code></td><td>Token savings, call counts, error rates</td><td><code>time_window</code>, <code>workspace_only</code></td></tr>
             </tbody>
           </table>

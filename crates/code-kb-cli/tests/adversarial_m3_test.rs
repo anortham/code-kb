@@ -281,39 +281,6 @@ fn test_adversarial_cli_path_variations_across_all_commands() {
             String::from_utf8_lossy(&out.stderr)
         );
     }
-
-    // 9. Atomic edit with backslash, mixed slash, dot traversal, and absolute paths
-    let edit_file_vars = [
-        r"src\workspace.rs",
-        r".\src/workspace.rs",
-        r"src/../src/workspace.rs",
-        &abs_file_str,
-        &inverted_abs_file,
-    ];
-    for (i, ef) in edit_file_vars.iter().enumerate() {
-        let new_body = format!("{{\n    // edit variation {}\n}}", i);
-        let out = Command::new(env!("CARGO_BIN_EXE_code-kb"))
-            .arg("--root")
-            .arg(root)
-            .arg("edit")
-            .arg("helper")
-            .arg("--file")
-            .arg(ef)
-            .arg("--body")
-            .arg(&new_body)
-            .output()
-            .unwrap_or_else(|e| panic!("Failed edit for '{ef}': {e}"));
-        assert!(
-            out.status.success(),
-            "edit failed for file path variation '{ef}':\nstderr: {}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-        let stdout = String::from_utf8_lossy(&out.stdout);
-        assert!(
-            stdout.contains("Successfully replaced body"),
-            "edit missing success message for '{ef}':\n{stdout}"
-        );
-    }
 }
 
 // ============================================================================
@@ -495,18 +462,6 @@ fn test_adversarial_cli_json_strict_forward_slash_across_all_commands() {
         ),
         (vec!["--json".into(), "facts".into()], false), // Category listing has no path fields
         (vec!["--json".into(), "facts".into(), "route".into()], true), // Facts query returns structural_facts and literals with paths
-        (
-            vec![
-                "--json".into(),
-                "edit".into(),
-                "helper".into(),
-                "--file".into(),
-                r"src\workspace.rs".into(),
-                "--body".into(),
-                "{\n    // json edit test\n}".into(),
-            ],
-            true,
-        ),
         (vec!["--json".into(), "stats".into()], false), // Stats output has counts, no paths
     ];
 

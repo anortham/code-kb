@@ -416,64 +416,6 @@ fn test_adversarial_mcp_dynamic_rebinding_drive_casing_and_interleaved_churn() {
         "Verbatim prefix argument with inverted casing failed: {verb_val:?}"
     );
 
-    // 4. Verify atomic edit works seamlessly with inverted drive casing
-    let new_body = "{\n    let x = a + b;\n    x\n}";
-    let edit_call = json!({
-        "jsonrpc": "2.0",
-        "id": 14,
-        "method": "tools/call",
-        "params": {
-            "name": "replace_symbol_body",
-            "arguments": {
-                "symbol_name": "compute_sum",
-                "file_path": inverted_abs_file,
-                "new_body": new_body
-            }
-        }
-    });
-    let mut edit_line = serde_json::to_string(&edit_call).unwrap();
-    edit_line.push('\n');
-    stdin.write_all(edit_line.as_bytes()).unwrap();
-    stdin.flush().unwrap();
-
-    let mut edit_resp = String::new();
-    reader.read_line(&mut edit_resp).unwrap();
-    let edit_val: Value = serde_json::from_str(&edit_resp).unwrap();
-    assert_eq!(edit_val["id"], 14);
-    assert_ne!(
-        edit_val["result"]["isError"], true,
-        "replace_symbol_body with inverted drive casing failed: {edit_val:?}"
-    );
-
-    // 5. Subsequent query with relative path reflects edited body immediately
-    let verify_call = json!({
-        "jsonrpc": "2.0",
-        "id": 15,
-        "method": "tools/call",
-        "params": {
-            "name": "get_symbol_body",
-            "arguments": {
-                "symbol": "compute_sum",
-                "file": "src/calc.rs"
-            }
-        }
-    });
-    let mut verify_line = serde_json::to_string(&verify_call).unwrap();
-    verify_line.push('\n');
-    stdin.write_all(verify_line.as_bytes()).unwrap();
-    stdin.flush().unwrap();
-
-    let mut verify_resp = String::new();
-    reader.read_line(&mut verify_resp).unwrap();
-    let verify_val: Value = serde_json::from_str(&verify_resp).unwrap();
-    assert_eq!(verify_val["id"], 15);
-    assert_ne!(verify_val["result"]["isError"], true);
-    let updated_text = verify_val["result"]["content"][0]["text"].as_str().unwrap();
-    assert!(
-        updated_text.contains("let x = a + b;"),
-        "Updated body not reflected: {updated_text}"
-    );
-
     drop(stdin);
     let _ = child.wait();
 }
@@ -671,8 +613,8 @@ fn test_adversarial_mcp_core_invariant_1_exhaustive_blacklist() {
 
     assert_eq!(
         tools.len(),
-        12,
-        "MCP server must advertise exactly 12 tools"
+        10,
+        "MCP server must advertise exactly 10 tools"
     );
 
     let forbidden_param_blacklist = [

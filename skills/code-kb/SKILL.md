@@ -1,6 +1,6 @@
 ---
 name: code-kb
-description: Use when exploring unfamiliar code, inspecting types or function signatures, finding symbols across the codebase, obtaining surgical context before modifying a function, replacing text in a file or a whole symbol body in one turn, or checking tool telemetry and token savings.
+description: Use when exploring unfamiliar code, inspecting types or function signatures, finding symbols across the codebase, obtaining surgical context before modifying a function, or checking tool telemetry and token savings.
 ---
 
 # code-kb: Token-Dense Code Intelligence
@@ -33,21 +33,15 @@ Before modifying or understanding a specific function/method:
 * Call `blast_radius(symbol="...")` or `blast_radius(file="...")` or `blast_radius()` (auto-detects uncommitted git changes) to calculate multi-hop transitive callers and pinpoint targeted tests to run before/after editing. (Tool alias: `impact`).
 * Call `find_structural_facts()` to list all detected framework categories, or `find_structural_facts(category="route")` to query specific routes, SQL queries, models, or config keys.
 
-### 4. Atomic Edits
-When changing a file:
-* Call `edit_file(file_path, old_text, new_text)` first. This is the default edit path for any text file, code or not. You do not read the file first.
-  1. It finds `old_text` exactly. If that fails, it matches again ignoring indentation.
-  2. It refuses a match that occurs more than once, overlapping matches included, and names up to ten matching lines. Add more context, or set `occurrence` to `first`, `last`, or `all` (`all` replaces the non-overlapping matches).
-  3. It validates code files through `julie-extract check`, writes the file atomically, and re-indexes SQLite AST facts in the same turn.
-* Call `replace_symbol_body(symbol_name, file_path, new_body, expected_body_hash)` when you hold a body hash and replace a whole function body.
-* Both tools report validation skipped for paths with no grammar, and both roll the file back when the re-index fails.
+### 4. Native Editing
+After using the smallest reading tool that supplies the needed context, edit through the agent's native filesystem tools. `code-kb` automatically refreshes indexed files after filesystem changes, so the index remains current without an edit tool.
 
 ## Telemetry & Diagnostics
 
 `code-kb` records lightweight invocation telemetry, token consumption, and token savings in `~/.code-kb/telemetry.db` across all sessions.
 
 ### Answering Token Savings and Tool Usage Inquiries
-When a user asks questions such as *"how many tokens has code-kb saved me this month?"*, *"what is my token efficiency this week?"*, or *"how often do symbol edits succeed?"*:
+When a user asks questions such as *"how many tokens has code-kb saved me this month?"* or *"what is my token efficiency this week?"*:
 * Call `telemetry_summary(time_window="month")` (valid windows: `"today"`, `"7d"`, `"30d"`, `"month"`, `"year"`, `"all"`; default is `"all"`).
 * Pass `workspace_only=true` if the user wants metrics scoped strictly to the current workspace instead of global history across all projects.
 * Report back the summarized numbers: total tool calls, successful vs failed calls, estimated tokens consumed, estimated tokens saved, and the net efficiency multiplier.
@@ -73,8 +67,7 @@ When diagnosing unexpected tool errors or when assisting a user with filing an i
 | Trace callers / callees | Text grep for call sites | `find_references(symbol_name, file_path?)` | `code-kb refs <symbol> [--file <f>] [--include-external]` |
 | Assess impact & find tests | Wide test suite runs | `blast_radius(symbol="...")` | `code-kb blast-radius [target]` |
 | Discover routes / models | Search string literals | `find_structural_facts(category="route")` | `code-kb facts [category]` |
-| Edit any text in a file | Read the file, then rewrite it | `edit_file(file_path, old_text, new_text)` | `code-kb edit-file <f> --old <t> --new <t> [--occurrence only\|first\|last\|all]` |
-| Edit implementation | Multi-line search/replace | `replace_symbol_body(...)` | `code-kb edit <symbol> --file <f> --body <b>` |
+| Edit a file | Read the needed context | Native agent filesystem tools | Native editor or patch tool |
 | Check token savings & usage | Guesswork, parsing logs | `telemetry_summary(time_window="month")` | `code-kb stats [--since <window>] [--workspace]` |
 | Generate diagnostic bug report | Manual system info triage | `telemetry_summary()` (for errors) | `code-kb bug-report [--title <title>]` |
 | Find literal text, error strings, comments | `search_symbols` (indexes symbols only) | none | `rg "exact text"` |
@@ -86,11 +79,6 @@ Use the canonical names from the MCP schema in tool calls. The aliases below are
 * `symbol_name`: accepts `symbol`, `name`.
 * `file_path`: accepts `file`, `path`.
 * `query`: accepts `name`, `q`, `symbol_name`, `symbol`.
-* `new_body`: accepts `body`, `code`, `content`.
-* `expected_body_hash`: accepts `body_hash`, `expected_hash`.
-* `old_text` in `edit_file`: accepts `old`, `find`.
-* `new_text` in `edit_file`: accepts `new`, `replace`.
-* `occurrence` in `edit_file`: optional, one of `only`, `first`, `last`, `all`; defaults to `only`.
 * `codebase_outline.path`: accepts `subpath`, `dir`.
 * `direction` in `find_references`: defaults to `"callers"`.
 * `include_external` in `find_references` & `get_symbol_context`: defaults to `false` (filters noise across all ~40 languages).

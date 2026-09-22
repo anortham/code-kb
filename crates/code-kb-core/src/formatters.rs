@@ -278,9 +278,8 @@ pub fn render_outline_tree(
 
 /// Format symbol body with metadata header, signature, and body content.
 pub fn format_symbol_body(symbol: &Symbol, body: &str) -> String {
-    let body_hash = crate::edit::hash_content(body);
     let mut out = format!(
-        "// {}:{}-{} ({}) body_hash={body_hash}\n",
+        "// {}:{}-{} ({})\n",
         symbol.path, symbol.start_line, symbol.end_line, symbol.name
     );
     if let Some(ref sig) = symbol.signature {
@@ -300,10 +299,8 @@ pub fn format_symbol_body(symbol: &Symbol, body: &str) -> String {
 pub fn format_context_slice(slice: &ContextSlice) -> String {
     let sym = &slice.target_symbol;
     let mut out = String::new();
-    let body_hash = crate::edit::hash_content(&slice.target_body);
-
     out.push_str(&format!(
-        "### Target: `{}` ({}:{}-{}) body_hash={body_hash}\n\n",
+        "### Target: `{}` ({}:{}-{})\n\n",
         sym.name, sym.path, sym.start_line, sym.end_line
     ));
 
@@ -587,53 +584,6 @@ fn qt_property_details(fact: &crate::models::StructuralFact) -> String {
         format!(", {key}: {value}")
     })
     .collect()
-}
-
-/// Format result of atomic symbol body replacement.
-pub fn format_replace_symbol_result(res: &crate::edit::EditResult) -> String {
-    let syntax_line = if res.syntax_checked {
-        "Syntax: Verified"
-    } else {
-        "Syntax: Skipped (grammar not available for file extension)"
-    };
-    format!(
-        "Successfully replaced body of `{}` in `{}`.\nOld Hash: {}\nNew Hash: {}\nBytes Written: {}\n{}",
-        res.symbol_name,
-        res.file_path,
-        res.old_body_hash,
-        res.new_body_hash,
-        res.bytes_written,
-        syntax_line
-    )
-}
-
-/// Formats a text edit result into one compact line.
-pub fn format_edit_file_result(res: &crate::edit::TextEditResult) -> String {
-    let tier = match res.match_tier {
-        crate::edit::MatchTier::Exact => "exact match",
-        crate::edit::MatchTier::Whitespace => "match with other indentation",
-    };
-    let syntax = if res.syntax_checked {
-        "checked"
-    } else {
-        "skipped"
-    };
-    let count = if res.replacements == 1 {
-        format!("1 replacement at line {}", res.first_line)
-    } else {
-        format!(
-            "{} replacements, first at line {}",
-            res.replacements, res.first_line
-        )
-    };
-    let mut out = format!(
-        "Edited {}: {count} ({tier}). Syntax: {syntax}.",
-        res.file_path
-    );
-    if !res.touched_symbols.is_empty() {
-        out.push_str(&format!(" Touched: {}.", res.touched_symbols.join(", ")));
-    }
-    out
 }
 
 /// Formats FTS5 conceptual search results into token-dense markdown.
@@ -1248,31 +1198,6 @@ mod tests {
         );
         assert!(formatted.contains("src/service.rs:\n"));
         assert!(formatted.contains("  - [depth 1] function `service_fn` [line 20]"));
-    }
-
-    #[test]
-    fn test_format_replace_symbol_result_shows_syntax_status() {
-        let res_checked = crate::edit::EditResult {
-            symbol_name: "my_fn".into(),
-            file_path: "src/lib.rs".into(),
-            old_body_hash: "aaa".into(),
-            new_body_hash: "bbb".into(),
-            bytes_written: 120,
-            syntax_checked: true,
-        };
-        let out_checked = format_replace_symbol_result(&res_checked);
-        assert!(out_checked.contains("Syntax: Verified"));
-
-        let res_skipped = crate::edit::EditResult {
-            symbol_name: "my_fn".into(),
-            file_path: "src/script.rb".into(),
-            old_body_hash: "aaa".into(),
-            new_body_hash: "bbb".into(),
-            bytes_written: 120,
-            syntax_checked: false,
-        };
-        let out_skipped = format_replace_symbol_result(&res_skipped);
-        assert!(out_skipped.contains("Syntax: Skipped (grammar not available for file extension)"));
     }
 
     fn sample_symbol(name: &str) -> Symbol {

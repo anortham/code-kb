@@ -1,12 +1,10 @@
 pub mod db;
-pub mod edit;
 pub mod formatters;
 pub mod models;
 pub mod ops;
 pub mod queries;
 pub mod slicer;
 pub mod sync;
-pub mod syntax;
 pub mod telemetry;
 pub mod watcher;
 pub mod workspace;
@@ -14,13 +12,9 @@ pub mod workspace;
 pub use db::{
     Connection, DbError, ensure_fts_index, ensure_fts_index_path, open_read_only, open_read_write,
 };
-pub use edit::{
-    EditError, EditResult, MatchTier, Occurrence, TextEditResult, edit_file, replace_symbol_body,
-};
 pub use formatters::{
-    format_blast_radius, format_context_slice, format_edit_file_result, format_fact_categories,
-    format_file_skeleton, format_find_symbol_results, format_references,
-    format_replace_symbol_result, format_search_results, format_structural_facts,
+    format_blast_radius, format_context_slice, format_fact_categories, format_file_skeleton,
+    format_find_symbol_results, format_references, format_search_results, format_structural_facts,
     format_symbol_body,
 };
 pub use models::{
@@ -48,7 +42,6 @@ pub use sync::{
     ensure_index_matches_extractor, find_julie_extract_binary, installed_extractor_version,
     reconcile_offline_edits, scan_workspace, update_file,
 };
-pub use syntax::{SyntaxError, validate_syntax};
 pub use telemetry::{
     BugReportBundle, IndexFacts, TelemetryErrorRecord, TelemetryFilter, TelemetrySummary,
     TimeWindow, ToolInvocation, ToolStat, format_telemetry_summary, generate_bug_report,
