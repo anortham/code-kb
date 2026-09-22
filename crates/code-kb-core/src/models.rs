@@ -73,6 +73,7 @@ pub struct StructuralFact {
     pub capture_name: String,
     pub node_kind: String,
     pub key: Option<String>,
+    pub metadata: Option<serde_json::Value>,
     pub containing_symbol_name: Option<String>,
     pub start_line: usize,
     pub end_line: usize,

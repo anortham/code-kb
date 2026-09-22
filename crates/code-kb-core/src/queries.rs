@@ -3076,7 +3076,7 @@ const COMPONENT_FAMILIES: &[&str] = &[".object_instantiation.", ".object_type."]
 
 const MODULE_FAMILIES: &[&str] = &[".module."];
 
-const PRAGMA_FAMILIES: &[&str] = &[".pragma."];
+const PRAGMA_FAMILIES: &[&str] = &[".pragma.", "javascript.qml_directive.v1"];
 
 const PROPERTY_FAMILIES: &[&str] = &[".property_declaration.", ".qt_property."];
 
@@ -3212,8 +3212,11 @@ pub fn find_structural_facts_scoped(
                          THEN substr(json_extract(sf.metadata_json, '$.key_path'), 3)
                          ELSE json_extract(sf.metadata_json, '$.key_path') END,
                     json_extract(sf.metadata_json, '$.key'),
-                    json_extract(sf.metadata_json, '$.normalized_route_template')
-                ) AS display_key
+                    json_extract(sf.metadata_json, '$.normalized_route_template'),
+                    CASE WHEN sf.pattern_id = 'cpp.qt_property.v1'
+                         THEN json_extract(sf.metadata_json, '$.name') END
+                ) AS display_key,
+                sf.metadata_json
          FROM structural_facts sf
          LEFT JOIN symbols s ON sf.containing_symbol_id = s.symbol_id
          WHERE (:cat IS NOT NULL AND {cat_clause})
@@ -3239,6 +3242,17 @@ pub fn find_structural_facts_scoped(
                 capture_name: row.get(4)?,
                 node_kind: row.get(5)?,
                 key: row.get(10)?,
+                metadata: row
+                    .get::<_, Option<String>>(11)?
+                    .map(|json| serde_json::from_str(&json))
+                    .transpose()
+                    .map_err(|err| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            11,
+                            rusqlite::types::Type::Text,
+                            Box::new(err),
+                        )
+                    })?,
                 containing_symbol_name: row.get(6)?,
                 start_line: row.get::<_, i64>(7)? as usize,
                 end_line: row.get::<_, i64>(8)? as usize,

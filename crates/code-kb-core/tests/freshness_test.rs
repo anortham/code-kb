@@ -1,7 +1,7 @@
 use code_kb_core::{
     Workspace, ensure_fresh_file, ensure_index_matches_extractor, find_julie_extract_binary,
-    get_symbol_by_name, installed_extractor_version, open_read_only, open_read_write,
-    reconcile_offline_edits, safe_tempdir, scan_workspace,
+    get_file, get_symbol_by_name, installed_extractor_version, open_read_only, open_read_write,
+    reconcile_offline_edits, safe_tempdir, scan_workspace, update_file,
 };
 use std::fs;
 #[cfg(unix)]
@@ -43,6 +43,62 @@ fn test_ensure_fresh_file_detects_equal_size_edit() {
         .unwrap()
         .expect("bar_fn should exist in db");
     assert_eq!(symbol.name, "bar_fn");
+}
+
+#[test]
+fn test_update_file_scans_headers_with_cpp_detection() {
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+    let repo = safe_tempdir();
+    let root = repo.path().to_path_buf();
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+    let header = src.join("widget.h");
+    fs::write(
+        &header,
+        "class Widget {\n    Q_OBJECT\n    Q_PROPERTY(int value READ value)\npublic:\n    int value() const { return m_value; }\nprivate:\n    int m_value = 0;\n};\n",
+    )
+    .unwrap();
+    fs::write(src.join("unchanged.rs"), "pub fn unchanged() {}\n").unwrap();
+
+    let workspace = Workspace::new(root);
+    let db = workspace.canonical_root.join("index.db");
+    scan_workspace(&workspace, &db, true).unwrap();
+    let (header_hash, unchanged_hash) = {
+        let conn = open_read_only(&db).unwrap();
+        let header = get_file(&conn, "src/widget.h").unwrap().unwrap();
+        assert_eq!(header.language, "cpp");
+        let unchanged_hash = get_file(&conn, "src/unchanged.rs")
+            .unwrap()
+            .unwrap()
+            .content_hash;
+        (header.content_hash, unchanged_hash)
+    };
+
+    fs::write(
+        &header,
+        "class Widget {\n    Q_OBJECT\n    Q_PROPERTY(int value READ value)\npublic:\n    int value() const { return m_value; }\nprivate:\n    int m_value = 1;\n};\n",
+    )
+    .unwrap();
+    update_file(&workspace, &db, "src/widget.h").unwrap();
+
+    let conn = open_read_only(&db).unwrap();
+    let header = get_file(&conn, "src/widget.h").unwrap().unwrap();
+    assert_eq!(header.language, "cpp");
+    assert_ne!(header.content_hash, header_hash);
+    assert_eq!(
+        get_file(&conn, "src/unchanged.rs")
+            .unwrap()
+            .unwrap()
+            .content_hash,
+        unchanged_hash
+    );
+    drop(conn);
+
+    assert!(matches!(
+        update_file(&workspace, &db, "src/missing.h"),
+        Err(code_kb_core::SyncError::TargetNotIndexed(path)) if path == "src/missing.h"
+    ));
 }
 
 #[test]

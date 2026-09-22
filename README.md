@@ -333,7 +333,7 @@ as `Page`), the files that read a singleton, and the signal handlers, each label
 `qmldir` module files and `.qmltypes` type descriptors are indexed. Qt JavaScript files
 parse, including the `.pragma library` and `.import` directives, so `edit_file` works on
 them. KDE test files under `autotests/` and files named `tst_*.qml` are hidden from
-search by default; `--include-tests` shows them. This needs julie-extract 3.3.0.
+search by default; `--include-tests` shows them. This needs julie-extract 3.3.1.
 
 A Qt C++ header indexes the same way. `file_skeleton` prints one `Q_PROPERTY(...)` row
 per declared property under its class, keeping the `READ`, `WRITE`, `NOTIFY`, and
@@ -345,6 +345,10 @@ signature reads like a method. A method in a `Q_SLOTS:` section carries `qt_slot
 emits no row, so `lookup_symbol` of a class name returns one row, at its definition.
 `find_structural_facts` takes a `property` alias that covers the QML property
 declarations and the Qt C++ `Q_PROPERTY` facts together, each fact naming its class.
+Property facts expose their available Qt metadata, including `property_type`, accessors,
+and the optional `designable`, `scriptable`, `stored`, `user`, and `revision` attributes.
+Until upstream header updates preserve C++ language detection, `.h` refreshes and edits trigger
+a full workspace re-extraction.
 
 First-class Qt support: QML, `qmldir`, `.qmltypes`, Qt JavaScript, and Qt C++ headers,
 validated on pinned corpus revisions; static reference results have documented limits;

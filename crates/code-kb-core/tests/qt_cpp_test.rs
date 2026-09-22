@@ -1,7 +1,7 @@
 use code_kb_core::{
-    Workspace, file_skeleton_op, find_julie_extract_binary, find_references_scoped,
-    find_structural_facts_scoped, open_read_only, safe_tempdir, scan_workspace,
-    search_symbols_scoped,
+    Occurrence, Workspace, edit_file, file_skeleton_op, find_julie_extract_binary,
+    find_references_scoped, find_structural_facts_scoped, get_symbol_body_op, open_read_only,
+    safe_tempdir, scan_workspace, search_symbols_scoped,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -22,7 +22,7 @@ class KIRIGAMI2_EXPORT ColumnViewAttached : public QObject
     QML_ELEMENT
     QML_ATTACHED(ColumnViewAttached)
 
-    Q_PROPERTY(int index READ index WRITE setIndex NOTIFY indexChanged FINAL)
+    Q_PROPERTY(int index READ index WRITE setIndex NOTIFY indexChanged DESIGNABLE false SCRIPTABLE true STORED false USER true REVISION 2 FINAL)
     Q_PROPERTY(ColumnView *view READ view NOTIFY viewChanged FINAL)
     Q_PROPERTY(QPointF origin
                MEMBER origin
@@ -57,6 +57,7 @@ Q_SIGNALS:
 
 private:
     int m_index = 0;
+    QObject *m_parent = Q_NULLPTR;
 };
 
 class KIRIGAMI2_EXPORT ScrollIntentionEvent : public QObject
@@ -231,6 +232,115 @@ fn the_property_alias_returns_one_scoped_fact_per_q_property() {
         ],
         "{facts:#?}"
     );
+
+    let index = facts
+        .iter()
+        .find(|fact| fact.key.as_deref() == Some("index"))
+        .expect("index Q_PROPERTY fact");
+    let metadata = index.metadata.as_ref().expect("property metadata");
+    for (key, expected) in [
+        ("designable", "false"),
+        ("scriptable", "true"),
+        ("stored", "false"),
+        ("user", "true"),
+        ("revision", "2"),
+    ] {
+        assert_eq!(
+            metadata.get(key).and_then(|value| value.as_str()),
+            Some(expected)
+        );
+    }
+    let delta = facts
+        .iter()
+        .find(|fact| fact.key.as_deref() == Some("delta"))
+        .expect("delta Q_PROPERTY fact");
+    let delta_metadata = delta.metadata.as_ref().expect("property metadata");
+    for key in ["designable", "scriptable", "stored", "user", "revision"] {
+        assert!(delta_metadata.get(key).is_none(), "{delta_metadata}");
+    }
+}
+
+#[test]
+fn qt_property_facts_render_their_agent_useful_metadata() {
+    let (_repo, db_path) = scanned_header();
+    let conn = open_read_only(&db_path).unwrap();
+
+    let facts = find_structural_facts_scoped(&conn, "property", Some(HEADER_PATH), 50).unwrap();
+    let output = code_kb_core::format_structural_facts(&facts, &[], "property", 50);
+
+    assert!(output.contains("property_type: int"), "{output}");
+    for detail in [
+        "designable: false",
+        "scriptable: true",
+        "stored: false",
+        "user: true",
+        "revision: 2",
+    ] {
+        assert!(output.contains(detail), "{output}");
+    }
+}
+
+#[test]
+fn qt_header_edits_validate_and_reindex_with_qt_macros() {
+    let (repo, db_path) = scanned_header();
+    let workspace = Workspace::new(repo.path().to_path_buf());
+    let conn = open_read_only(&db_path).unwrap();
+
+    let result = edit_file(
+        &workspace,
+        &db_path,
+        &conn,
+        HEADER_PATH,
+        "m_index = 0",
+        "m_index = 1",
+        Occurrence::Only,
+    )
+    .expect("Qt macro header edit remains syntax-valid");
+
+    assert!(result.syntax_checked, "{result:#?}");
+    assert!(
+        fs::read_to_string(repo.path().join(HEADER_PATH))
+            .unwrap()
+            .contains("m_index = 1")
+    );
+    drop(conn);
+    let conn = open_read_only(&db_path).unwrap();
+    assert!(
+        search_symbols_scoped(&conn, "index", None, Some(HEADER_PATH), false, 10)
+            .unwrap()
+            .iter()
+            .any(|symbol| symbol.kind == "property"),
+        "edited Qt header lost its Q_PROPERTY symbols"
+    );
+}
+
+#[test]
+fn javascript_qml_directives_exclude_trailing_comments_from_agent_facing_spans() {
+    let source = ".pragma library // helper module\n.import QtQml 2.15 as Qml // namespace\nfunction value() { return Qml; }\n";
+    let (repo, db_path) = scanned_repo(&[("src/helpers.js", source)]);
+    let workspace = Workspace::new(repo.path().to_path_buf());
+    let conn = open_read_only(&db_path).unwrap();
+
+    let import = search_symbols_scoped(&conn, "QtQml", None, Some("src/helpers.js"), false, 10)
+        .unwrap()
+        .into_iter()
+        .find(|symbol| symbol.kind == "import")
+        .expect("QML directive import");
+    assert_eq!(
+        import.signature.as_deref(),
+        Some(".import QtQml 2.15 as Qml")
+    );
+    assert_eq!(import.end_column, 25);
+    let (_, body) =
+        get_symbol_body_op(&workspace, &db_path, &conn, "QtQml", Some("src/helpers.js"))
+            .expect("QML directive import body");
+    assert_eq!(body, ".import QtQml 2.15 as Qml");
+
+    let facts = find_structural_facts_scoped(&conn, "pragma", Some("src/helpers.js"), 10).unwrap();
+    assert_eq!(facts.len(), 1, "{facts:#?}");
+    assert_eq!(facts[0].pattern_id, "javascript.qml_directive.v1");
+    assert_eq!(facts[0].start_line, 1);
+    assert_eq!(facts[0].end_line, 1);
 }
 
 #[test]

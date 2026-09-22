@@ -527,13 +527,14 @@ pub fn format_structural_facts(
     );
     for f in facts {
         let label = f.key.as_deref().unwrap_or(&f.capture_name);
+        let details = qt_property_details(f);
         let parent = f
             .containing_symbol_name
             .as_deref()
             .map(|p| format!(", in: {p}"))
             .unwrap_or_default();
         out.push_str(&format!(
-            "- {label} [{}:{}] (pattern: {}{parent})\n",
+            "- {label} [{}:{}] (pattern: {}{details}{parent})\n",
             f.path, f.start_line, f.pattern_id
         ));
     }
@@ -556,6 +557,36 @@ pub fn format_structural_facts(
         }
     }
     out
+}
+
+fn qt_property_details(fact: &crate::models::StructuralFact) -> String {
+    if fact.pattern_id != "cpp.qt_property.v1" {
+        return String::new();
+    }
+    let Some(metadata) = fact.metadata.as_ref() else {
+        return String::new();
+    };
+    [
+        "property_type",
+        "read",
+        "write",
+        "notify",
+        "designable",
+        "scriptable",
+        "stored",
+        "user",
+        "revision",
+    ]
+    .into_iter()
+    .filter_map(|key| metadata.get(key).map(|value| (key, value)))
+    .map(|(key, value)| {
+        let value = value
+            .as_str()
+            .map(str::to_owned)
+            .unwrap_or_else(|| value.to_string());
+        format!(", {key}: {value}")
+    })
+    .collect()
 }
 
 /// Format result of atomic symbol body replacement.
@@ -846,6 +877,7 @@ mod tests {
             capture_name: "key_value".into(),
             node_kind: "table".into(),
             key: key.map(str::to_string),
+            metadata: None,
             containing_symbol_name: None,
             start_line: 2,
             end_line: 2,
@@ -869,6 +901,26 @@ mod tests {
         assert!(
             without_key.contains("- key_value [.codex/config.toml:2] (pattern: toml.key_value.v1)")
         );
+    }
+
+    #[test]
+    fn format_structural_facts_renders_selected_qt_property_metadata() {
+        let mut fact = structural_fact(Some("index"));
+        fact.pattern_id = "cpp.qt_property.v1".into();
+        fact.metadata = Some(serde_json::json!({
+            "property_type": "int",
+            "designable": false,
+            "scriptable": true,
+            "stored": false,
+            "user": true,
+            "revision": 2,
+        }));
+
+        let output = format_structural_facts(&[fact], &[], "property", 30);
+
+        assert!(output.contains(
+            "property_type: int, designable: false, scriptable: true, stored: false, user: true, revision: 2"
+        ));
     }
 
     #[test]

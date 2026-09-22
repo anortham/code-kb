@@ -77,6 +77,7 @@ MCP tool schema.**
   the default, and `all` replaces the non-overlapping matches. The result file is capped at the
   same 8 MiB as the input, and only the first line of a failed edit's error reaches telemetry,
   never the quoted file lines.
+- Until upstream header updates preserve C++ language detection, `.h` refreshes and edits trigger a full workspace re-extraction.
 - `replace_symbol_body` keeps the optional `body_hash` check and replaces a whole symbol body.
 - Do not implement two-step preview-and-confirm handshakes that waste agent turns.
 
@@ -113,7 +114,9 @@ MCP tool schema.**
   `pragma`, `property`/`properties`), and each alias maps to the pattern-id families it names,
   never to a substring. An unknown category still falls back to a
   substring match, so raw pattern ids work. With no category the answer lists the aliases with
-  facts in this index before the raw pattern list. Facts and literals have separate limits, each
+  facts in this index before the raw pattern list. Qt C++ property facts expose available property
+  metadata, including optional `designable`, `scriptable`, `stored`, `user`, and `revision` attributes.
+  Facts and literals have separate limits, each
   with its own cap notice.
 - Search ranking: `search_symbols` admits rows from three branches (exact name, FTS5 word match, trigram name substring, so `sha256` finds `parseSha256Sidecar`), then a deterministic Rust rerank in `queries.rs` credits each query term once from its strongest field (name whole token 3, name stem 2, name substring 1, signature or docstring 1), weighted by the term's rarity across the index (a capped FTS5 match count per term), and adds the whole-name and all-words bonuses (the whole-name bonus is 100 for definition kinds and 60 for every other kind) and the kind, path, documentation, and test priors; `score` is that rerank score. Rows from test files are hidden by default: a path rule in `queries.rs` (`is_test_path` and its SQL mirror `test_path_predicate`) hides the whole file, not only the symbols `julie-extract` flags, and `is_test: true` / `--include-tests` shows them again. A `lookup_symbol` row whose name equals the query is shown either way. Equal scores break by name strength, the sum over query words of 3 for a whole-token name match, 2 for a stem match, 1 for a substring match, and 0 for none, then names that do not start with `_` before names that do; `--explain` reports the name strength as `name_strength`. `code-kb search --explain` prints the breakdown and the rerank timer; the MCP tool takes no `explain` parameter, and `--verbose` stays debug logging.
 - Reference rules: a member access whose receiver names a type-like target groups to one row per
@@ -142,7 +145,7 @@ MCP tool schema.**
   natively for Claude Code/Cursor (`SessionStart`), Copilot, and Antigravity (`PreInvocation` injectSteps).
 
 ### 7. Pinned Extractor & Bundled Distribution
-- `code-kb` pins the exact extractor version in `scripts/julie-pins.json` (currently `3.3.0`).
+- `code-kb` pins the exact extractor version in `scripts/julie-pins.json` (currently `3.3.1`).
 - Build guard: `crates/code-kb-cli/build.rs` verifies that `julie-extract` is restored and matches the pinned version. A missing or mismatched extractor fails the build immediately (bypassable for offline packaging via `CODE_KB_ALLOW_MISSING_JULIE_EXTRACT=1`).
 - Single-download distribution: Release archives ship `code-kb` and matching `julie-extract` pre-packaged side-by-side. Users download one archive and receive both binaries ready to execute.
 - Runtime discovery: `code-kb` checks `JULIE_EXTRACT_BIN`, next to its own executable (`current_exe().parent()`), `.tools/julie-extract`, and `PATH`. The first candidate whose version matches the pin wins; otherwise the first candidate found is used with a warning.

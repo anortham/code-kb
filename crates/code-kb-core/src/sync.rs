@@ -24,9 +24,11 @@ pub enum SyncError {
     DbInit(#[from] crate::db::DbError),
     #[error("workspace traversal failed: {0}")]
     Walk(#[from] ignore::Error),
+    #[error("extractor did not index the requested file: {0}")]
+    TargetNotIndexed(String),
 }
 
-pub const PINNED_JULIE_VERSION: &str = "3.3.0";
+pub const PINNED_JULIE_VERSION: &str = "3.3.1";
 
 /// Extraction level code-kb asks for on a new artifact: symbol core plus structural facts,
 /// without the identifier, literal, and source-region tables code-kb never reads.
@@ -156,14 +158,57 @@ pub fn execute_julie_extract(args: &[&str]) -> Result<String, SyncError> {
     }
 }
 
-/// Tier 1 & Incremental Update: updates a single file in the database.
+/// Tier 1 & Incremental Update: updates one file, except headers force a scan for language detection.
 pub fn update_file(workspace: &Workspace, db_path: &Path, rel_path: &str) -> Result<(), SyncError> {
+    if db_path.is_file()
+        && Path::new(rel_path)
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("h"))
+    {
+        return scan_header_file(workspace, db_path, rel_path);
+    }
+
     let root_str = workspace.canonical_root.to_string_lossy();
     let db_str = db_path.to_string_lossy();
 
     execute_julie_extract(&[
         "update", "--root", &root_str, "--db", &db_str, "--file", rel_path,
     ])?;
+
+    Ok(())
+}
+
+fn scan_header_file(
+    workspace: &Workspace,
+    db_path: &Path,
+    rel_path: &str,
+) -> Result<(), SyncError> {
+    let root_str = workspace.canonical_root.to_string_lossy();
+    let db_str = db_path.to_string_lossy();
+    let own_pid = std::process::id().to_string();
+    let mut args = vec!["scan", "--root", &*root_str, "--db", &*db_str];
+    if cfg!(unix) {
+        args.extend(["--parent-pid", &own_pid]);
+    }
+    args.push("--force");
+
+    // Julie 3.3.1 classifies `.h` files as C in `update`; force costs a full workspace re-extraction per header edit but handles same-size changes.
+    execute_julie_extract(&args)?;
+
+    let stored_hash = {
+        let conn = crate::db::open_read_only(db_path)?;
+        queries::get_file(&conn, rel_path)
+            .map_err(|error| match error {
+                queries::QueryError::Sqlite(error) => SyncError::Db(error),
+                _ => SyncError::TargetNotIndexed(rel_path.to_string()),
+            })?
+            .map(|file| file.content_hash)
+    }
+    .ok_or_else(|| SyncError::TargetNotIndexed(rel_path.to_string()))?;
+    let disk_bytes = std::fs::read(workspace.canonical_root.join(rel_path))?;
+    if !compute_content_hash_matches(&disk_bytes, &stored_hash) {
+        return Err(SyncError::TargetNotIndexed(rel_path.to_string()));
+    }
 
     Ok(())
 }
