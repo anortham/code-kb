@@ -13,16 +13,15 @@ julie-extract 3.2.0):
 - `skeleton shell/Ui/Button.qml` in Omarchy: 71 lines.
 - `refs BarWidget --file shell/Ui/BarWidget.qml` in Omarchy: 12 `extends` rows.
 - `refs Color --file shell/Commons/Color.qml` in Omarchy: 53 files.
-- `refs Page --file src/controls/Page.qml` in Kirigami: 3 `extends` rows.
+- `refs Page --file src/controls/Page.qml` in Kirigami: 7 `extends` rows (four are inline components).
 
 The "Status: draft" note below describes revision 2 at the time it was written.
 This section supersedes it.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use razorback:subagent-driven-development whenever delegation is available and permitted, including for one task; serialize dependent tasks. Use razorback:executing-plans only when delegation is unavailable or the user/session explicitly selected single-agent execution.
 
-Date: 2026-09-21. Status: draft, waiting for approval. Revision 2 after a Codex
-review the same day (see "Review record" at the end). Nothing in this plan is
-implemented yet.
+Date: 2026-09-21. Status: in execution, see the Status section above. Revision 2
+after a Codex review the same day (see "Review record" at the end).
 
 **Goal:** Make the claim "code-kb gives first-class support to Qt developers
 (KDE, Omarchy, Quickshell)" true and provable. Today the QML parser is solid and

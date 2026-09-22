@@ -357,8 +357,8 @@ code-kb skeleton shell/Ui/Button.qml
 # and HoverHandler hold their own children.
 
 code-kb refs BarWidget --file shell/Ui/BarWidget.qml --limit 200
-# 16 rows: 12 `extends` rows, one per component that extends BarWidget.
-# The other 4 rows are signal handlers, grouped one row per file.
+# 15 rows: 12 `extends` rows, one per component that extends BarWidget.
+# The other 3 rows are signal handlers, grouped one row per file.
 
 code-kb refs Color --file shell/Commons/Color.qml --limit 200
 # 53 rows, one per file that reads the Color singleton.
@@ -372,7 +372,7 @@ code-kb lookup SpeedDial
 
 # Kirigami
 code-kb refs Page --file src/controls/Page.qml --limit 200
-# 60 rows, of which 3 are `extends` rows.
+# 60 rows, of which 7 are `extends` rows (four of them inline components).
 ```
 
 ### Known limits
