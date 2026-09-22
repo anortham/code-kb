@@ -110,7 +110,7 @@ fn test_blast_radius_multi_hop_and_likely_tests() {
     // Formatted output verification
     let formatted = format_blast_radius(&result);
     assert!(formatted.contains("## Blast Radius & Test Impact (Symbol: base_calc)"));
-    assert!(formatted.contains("### Likely Tests to Run (1 found)"));
+    assert!(formatted.contains("### Likely Tests to Run (1 returned)"));
     assert!(formatted.contains(
         "tests/core_test.rs:\n  - `test_base_calc` [line 1] (transitive caller [depth 1])"
     ));
@@ -351,4 +351,120 @@ fn stem_matched_test_files_skip_documentation() {
         .map(|t| t.path.as_str())
         .collect();
     assert_eq!(paths, vec!["tests/ledger_test.rs"]);
+}
+
+#[test]
+fn blast_radius_reports_requested_limit_truncation_before_output_truncation() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+
+    conn.execute_batch(
+        "INSERT INTO files VALUES
+            ('f1', 'src/core.rs', 'rust', 'h1', 100, 10, 'now'),
+            ('f2', 'src/service.rs', 'rust', 'h2', 100, 10, 'now'),
+            ('f3', 'src/api.rs', 'rust', 'h3', 100, 10, 'now'),
+            ('f4', 'tests/core_test.rs', 'rust', 'h4', 100, 10, 'now'),
+            ('f5', 'tests/api_test.rs', 'rust', 'h5', 100, 10, 'now');
+        INSERT INTO symbols VALUES
+            ('s_base', 'f1', 'src/core.rs', 'rust', 'base_calc', 'function', NULL, NULL, NULL, NULL, 1, 0, 5, 0, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
+            ('s_service', 'f2', 'src/service.rs', 'rust', 'service_calc', 'function', NULL, NULL, NULL, NULL, 1, 0, 5, 0, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
+            ('s_api', 'f3', 'src/api.rs', 'rust', 'handle_request', 'function', NULL, NULL, NULL, NULL, 1, 0, 5, 0, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
+            ('s_test_one', 'f4', 'tests/core_test.rs', 'rust', 'test_base_calc', 'function', NULL, NULL, NULL, NULL, 1, 0, 5, 0, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1, 0),
+            ('s_test_two', 'f5', 'tests/api_test.rs', 'rust', 'test_handle_request', 'function', NULL, NULL, NULL, NULL, 1, 0, 5, 0, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1, 0);
+        INSERT INTO relationships VALUES
+            ('s_service', 's_base', 'calls', 'src/service.rs', 2, 0),
+            ('s_api', 's_service', 'calls', 'src/api.rs', 2, 0),
+            ('s_test_one', 's_base', 'calls', 'tests/core_test.rs', 2, 0),
+            ('s_test_two', 's_api', 'calls', 'tests/api_test.rs', 2, 0);",
+    )
+    .unwrap();
+
+    let limited = compute_blast_radius(&conn, &["base_calc"], &[], 3, 1).unwrap();
+    let limited_json = serde_json::to_value(&limited).unwrap();
+    assert_eq!(limited.likely_tests.len(), 1);
+    assert_eq!(limited.impacted_symbols.len(), 1);
+    assert_eq!(limited_json["likely_tests_truncated"], true);
+    assert_eq!(limited_json["impacted_symbols_truncated"], true);
+    let limited_text = format_blast_radius(&limited);
+    assert!(limited_text.contains("Likely Tests to Run (1 returned)"));
+    assert!(limited_text.contains("Requested limit"));
+
+    let exact_one = compute_blast_radius(&conn, &["base_calc"], &[], 1, 1).unwrap();
+    assert_eq!(exact_one.likely_tests.len(), 1);
+    assert_eq!(exact_one.impacted_symbols.len(), 1);
+    assert!(!exact_one.likely_tests_truncated);
+    assert!(!exact_one.impacted_symbols_truncated);
+
+    let exact = compute_blast_radius(&conn, &["base_calc"], &[], 3, 2).unwrap();
+    let exact_json = serde_json::to_value(&exact).unwrap();
+    assert_eq!(exact_json["likely_tests_truncated"], false);
+    assert_eq!(exact_json["impacted_symbols_truncated"], false);
+
+    let zero = compute_blast_radius(&conn, &["base_calc"], &[], 3, 0).unwrap();
+    let zero_text = format_blast_radius(&zero);
+    assert!(zero.likely_tests.is_empty());
+    assert!(zero.impacted_symbols.is_empty());
+    assert!(zero_text.contains("Likely Tests to Run (0 returned)"));
+    assert!(!zero_text.contains("No direct or stem-matched tests found"));
+}
+
+#[test]
+fn blast_radius_probes_traversal_and_test_file_ceilings() {
+    for (count, expected_ceiling) in [(200, false), (201, true)] {
+        let temp = safe_tempdir();
+        let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+        setup_test_db(&conn);
+        conn.execute(
+            "INSERT INTO files VALUES ('f1', 'src/core.rs', 'rust', 'h1', 100, 10, 'now')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO symbols VALUES ('root', 'f1', 'src/core.rs', 'rust', 'base_calc', 'function', NULL, NULL, NULL, NULL, 1, 0, 5, 0, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0)",
+            [],
+        )
+        .unwrap();
+        for index in 0..count {
+            let id = format!("s{index}");
+            conn.execute(
+                "INSERT INTO symbols VALUES (?1, 'f1', 'src/core.rs', 'rust', ?2, 'function', NULL, NULL, NULL, NULL, ?3, 0, 5, 0, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1, 0)",
+                rusqlite::params![id, format!("caller_{index}"), index + 2],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO relationships VALUES (?1, 'root', 'calls', 'src/core.rs', 2, 0)",
+                rusqlite::params![format!("s{index}")],
+            )
+            .unwrap();
+        }
+        let result = compute_blast_radius(&conn, &["base_calc"], &[], 1, 200).unwrap();
+        assert_eq!(result.traversal_ceiling_reached, expected_ceiling);
+        assert_eq!(result.likely_tests.len(), 200);
+        if expected_ceiling {
+            assert!(
+                format_blast_radius(&result)
+                    .contains("Traversal stopped at the 200-row discovery ceiling")
+            );
+        }
+    }
+
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+    conn.execute(
+        "INSERT INTO files VALUES ('seed', 'src/widget.rs', 'rust', 'h1', 100, 10, 'now')",
+        [],
+    )
+    .unwrap();
+    for index in 0..11 {
+        conn.execute(
+            "INSERT INTO files VALUES (?1, ?2, 'rust', 'h', 100, 10, 'now')",
+            rusqlite::params![format!("t{index}"), format!("tests/widget_test_{index}.rs")],
+        )
+        .unwrap();
+    }
+    let result = compute_blast_radius(&conn, &[], &["src/widget.rs"], 1, 20).unwrap();
+    assert_eq!(result.likely_tests.len(), 10);
+    assert!(result.test_file_ceiling_reached);
 }

@@ -27,7 +27,7 @@ impl Drop for ChildGuard {
 }
 
 #[test]
-fn test_mcp_stdio_handshake_and_tools() {
+fn test_mcp_blast_radius_stdio_handshake_and_tools() {
     let temp_dir = code_kb_core::safe_tempdir();
     let root = temp_dir.path().to_path_buf();
     let db_dir = root.join(".code-kb");
@@ -98,6 +98,21 @@ fn test_mcp_stdio_handshake_and_tools() {
             2, 4, 2, 20, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
             NULL, 0, 0
         )",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO symbols VALUES (
+            's3', 'f1', 'src/workspace.rs', 'rust', 'caller', 'function',
+            'fn caller()', NULL, NULL, NULL,
+            1, 0, 1, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+            NULL, 0, 0
+        )",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO relationships VALUES ('r1', 's3', 's1', 'calls', 'src/workspace.rs', 1, 0)",
         [],
     )
     .unwrap();
@@ -495,7 +510,8 @@ fn test_mcp_stdio_handshake_and_tools() {
         "params": {
             "name": "blast_radius",
             "arguments": {
-                "symbol": "Workspace"
+                "symbol": "Workspace",
+                "limit": 0
             }
         }
     });
@@ -511,6 +527,9 @@ fn test_mcp_stdio_handshake_and_tools() {
     assert_eq!(resp8["id"], 8);
     let blast_text = resp8["result"]["content"][0]["text"].as_str().unwrap();
     assert!(blast_text.contains("Blast Radius"));
+    assert!(blast_text.contains("Requested limit hid additional impacted symbols"));
+    assert!(blast_text.contains("Downstream Impact (0 returned)"));
+    assert!(!blast_text.contains("No downstream callers found within depth"));
 
     // 9. Test get_symbol_context via MCP with include_external: false
     let slice_req = json!({

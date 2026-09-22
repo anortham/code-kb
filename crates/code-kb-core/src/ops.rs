@@ -343,8 +343,6 @@ pub fn blast_radius_op(
     };
 
     let depth = if max_depth == 0 { 2 } else { max_depth.min(5) };
-    let row_limit = if limit == 0 { 20 } else { limit };
-
     let seed_paths_refs: Vec<&str> = seed_paths.iter().map(|s| s.as_str()).collect();
     let res = queries::compute_blast_radius_scoped(
         conn,
@@ -352,7 +350,7 @@ pub fn blast_radius_op(
         symbol_path_filter.as_deref(),
         &seed_paths_refs,
         depth,
-        row_limit,
+        limit,
     )?;
     Ok(res)
 }

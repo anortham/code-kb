@@ -670,11 +670,7 @@ fn explain_line(score: f64, e: &SearchExplain) -> String {
 
 /// Format blast radius and likely test targets into token-dense markdown.
 pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
-    if result.seed_type == "none"
-        || (result.seeds.is_empty()
-            && result.likely_tests.is_empty()
-            && result.impacted_symbols.is_empty())
-    {
+    if result.seed_type == "none" {
         return "No uncommitted changes detected in git working tree. Pass a 'symbol' or 'file' parameter to analyze blast radius.".to_string();
     }
 
@@ -692,15 +688,28 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
     const MAX_COMPACT_TESTS: usize = 20;
     const MAX_COMPACT_IMPACTED: usize = 50;
 
+    if result.likely_tests_truncated {
+        out.push_str("Requested limit hid additional likely tests; increase limit to reveal discovered rows.\n\n");
+    }
+    if result.impacted_symbols_truncated {
+        out.push_str("Requested limit hid additional impacted symbols; increase limit to reveal discovered rows.\n\n");
+    }
+    if result.traversal_ceiling_reached {
+        out.push_str("Traversal stopped at the 200-row discovery ceiling; narrow the target because increasing limit cannot raise this ceiling.\n\n");
+    }
+    if result.test_file_ceiling_reached {
+        out.push_str("Stem-matched test discovery stopped at ten files for a stem; narrow the target because increasing limit cannot raise this ceiling.\n\n");
+    }
+
     if !result.likely_tests.is_empty() {
         let total = result.likely_tests.len();
         if total > MAX_COMPACT_TESTS {
             out.push_str(&format!(
-                "### Likely Tests to Run ({} found - showing top {})\n",
+                "### Likely Tests to Run ({} returned - showing top {})\n",
                 total, MAX_COMPACT_TESTS
             ));
         } else {
-            out.push_str(&format!("### Likely Tests to Run ({} found)\n", total));
+            out.push_str(&format!("### Likely Tests to Run ({} returned)\n", total));
         }
 
         let mut tests_by_file: std::collections::BTreeMap<&str, Vec<&TestTarget>> =
@@ -727,13 +736,20 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
 
         if total > MAX_COMPACT_TESTS {
             out.push_str(&format!(
-                "... {} more likely tests; narrow the target. CLI --json shows the full returned list.\n",
+                "... {} more returned likely tests are hidden by the compact 20-row display. CLI --json shows the full returned list.\n",
                 total - MAX_COMPACT_TESTS
             ));
         }
         out.push('\n');
+    } else if result.likely_tests_truncated
+        || result.traversal_ceiling_reached
+        || result.test_file_ceiling_reached
+    {
+        out.push_str("### Likely Tests to Run (0 returned)\n\n");
     } else {
-        out.push_str("### Likely Tests to Run\nNo direct or stem-matched tests found.\n\n");
+        out.push_str(
+            "### Likely Tests to Run (0 returned)\nNo direct or stem-matched tests found.\n\n",
+        );
     }
 
     if !result.impacted_symbols.is_empty() {
@@ -748,11 +764,7 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
             }
         }
 
-        if result.traversal_ceiling_reached || total >= 200 {
-            out.push_str("### Downstream Impact (200+ symbols - traversal ceiling reached; increase depth/limit or narrow target)\n");
-        } else {
-            out.push_str(&format!("### Downstream Impact ({} symbols)\n", total));
-        }
+        out.push_str(&format!("### Downstream Impact ({} returned)\n", total));
 
         if visible.is_empty() && low_signal_count > 0 {
             let row_word = if low_signal_count == 1 {
@@ -791,7 +803,7 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
 
             if visible_total > MAX_COMPACT_IMPACTED {
                 out.push_str(&format!(
-                    "... {} more impacted symbols; narrow the target. CLI --json shows the full returned list.\n",
+                    "... {} more returned impacted symbols are hidden by the compact 50-row display. CLI --json shows the full returned list.\n",
                     visible_total - MAX_COMPACT_IMPACTED
                 ));
             }
@@ -806,8 +818,12 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
                 ));
             }
         }
+    } else if result.impacted_symbols_truncated || result.traversal_ceiling_reached {
+        out.push_str("### Downstream Impact (0 returned)\n");
     } else {
-        out.push_str("### Downstream Impact\nNo downstream callers found within depth.\n");
+        out.push_str(
+            "### Downstream Impact (0 returned)\nNo downstream callers found within depth.\n",
+        );
     }
 
     out
@@ -1126,11 +1142,14 @@ mod tests {
                 depth: 1,
             }],
             traversal_ceiling_reached: false,
+            likely_tests_truncated: false,
+            impacted_symbols_truncated: false,
+            test_file_ceiling_reached: false,
         };
 
         let formatted = format_blast_radius(&res);
         assert!(formatted.contains("## Blast Radius & Test Impact (Symbol: do_work)"));
-        assert!(formatted.contains("### Likely Tests to Run (1 found)"));
+        assert!(formatted.contains("### Likely Tests to Run (1 returned)"));
         assert!(formatted.contains(
             "tests/work_test.rs:\n  - `test_do_work` [line 15] (transitive caller [depth 1])"
         ));
@@ -1179,13 +1198,16 @@ mod tests {
             likely_tests,
             impacted_symbols,
             traversal_ceiling_reached: false,
+            likely_tests_truncated: false,
+            impacted_symbols_truncated: false,
+            test_file_ceiling_reached: false,
         };
 
         let formatted = format_blast_radius(&res);
 
-        assert!(formatted.contains("### Likely Tests to Run (25 found - showing top 20)"));
+        assert!(formatted.contains("### Likely Tests to Run (25 returned - showing top 20)"));
         assert!(formatted.contains(
-            "... 5 more likely tests; narrow the target. CLI --json shows the full returned list."
+            "... 5 more returned likely tests are hidden by the compact 20-row display. CLI --json shows the full returned list."
         ));
 
         assert!(formatted.contains("tests/test_1.rs:\n"));
@@ -1279,12 +1301,41 @@ mod tests {
             likely_tests: Vec::new(),
             impacted_symbols,
             traversal_ceiling_reached: true,
+            likely_tests_truncated: false,
+            impacted_symbols_truncated: false,
+            test_file_ceiling_reached: false,
         };
 
         let formatted = format_blast_radius(&res);
-        assert!(formatted.contains(
-            "### Downstream Impact (200+ symbols - traversal ceiling reached; increase depth/limit or narrow target)\n"
-        ));
+        assert!(formatted.contains("### Downstream Impact (200 returned)\n"));
+    }
+
+    #[test]
+    fn blast_radius_does_not_claim_no_results_after_discovery_ceiling() {
+        let res = BlastRadiusResult {
+            seed_type: "file".into(),
+            seeds: vec!["src/widget.rs".into()],
+            likely_tests: Vec::new(),
+            impacted_symbols: Vec::new(),
+            likely_tests_truncated: false,
+            impacted_symbols_truncated: false,
+            traversal_ceiling_reached: true,
+            test_file_ceiling_reached: true,
+        };
+
+        let formatted = format_blast_radius(&res);
+        assert!(formatted.contains("Likely Tests to Run (0 returned)"));
+        assert!(formatted.contains("Downstream Impact (0 returned)"));
+        assert!(!formatted.contains("No direct or stem-matched tests found"));
+        assert!(!formatted.contains("No downstream callers found within depth"));
+
+        let traversal_only = BlastRadiusResult {
+            traversal_ceiling_reached: true,
+            test_file_ceiling_reached: false,
+            ..res
+        };
+        let traversal_only_text = format_blast_radius(&traversal_only);
+        assert!(!traversal_only_text.contains("No direct or stem-matched tests found"));
     }
 
     fn skeleton_row(

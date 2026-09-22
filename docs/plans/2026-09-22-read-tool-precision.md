@@ -2,7 +2,7 @@
 
 > For agentic workers: use `razorback:subagent-driven-development` with `terra_worker` implementers. Use `razorback:executing-plans` only when delegation is unavailable or the user selects single-agent execution. The lead owns design decisions, review, and integration verification.
 
-**Status:** Plan for review. The owner approved these three improvements on 2026-09-22 and requested a plan; implementation has not started.
+**Status:** Approved for implementation on 2026-09-22. Task 1 complete; tasks 2 and 3 pending.
 
 **Goal:** Make impact limits explicit, use consistent test discovery, and let agents select an exact symbol through the existing read tools.
 
@@ -145,12 +145,12 @@ Core paths above are under `crates/code-kb-core/src/` unless marked `tests/`; `b
 **Focused checks:** `cargo test -p code-kb-core blast_radius`; `cargo test -p code-kb-cli --test cli_test blast_radius`; `cargo test -p code-kb-cli --test mcp_test blast_radius`. Name new interface regressions with `blast_radius` so these filters include them.
 
 **Acceptance criteria:**
-- [ ] A two-row result requested with limit one reports output truncation; an exact one-row result does not.
-- [ ] Omitted limit returns up to 20; explicit zero returns no rows with truthful metadata/text in both interfaces; 201 is rejected as an output limit.
-- [ ] Exactly 200 discovered traversal rows do not trigger the ceiling flag; a 201st row does, and it is not consumed into either list.
-- [ ] Test-only saturated walks show the traversal warning; per-stem saturation has its own accurate notice.
-- [ ] Compact text caps remain distinct from output/discovery caps; JSON retains the full returned lists and metadata.
-- [ ] Existing default ordering, depth behavior, file/git modes, and focused tests pass; commit follows lead review.
+- [x] A two-row result requested with limit one reports output truncation; an exact one-row result does not.
+- [x] Omitted limit returns up to 20; explicit zero returns no rows with truthful metadata/text in both interfaces; 201 is rejected as an output limit.
+- [x] Exactly 200 discovered traversal rows do not trigger the ceiling flag; a 201st row does, and it is not consumed into either list.
+- [x] Test-only saturated walks show the traversal warning; per-stem saturation has its own accurate notice.
+- [x] Compact text caps remain distinct from output/discovery caps; JSON retains the full returned lists and metadata.
+- [x] Existing default ordering, depth behavior, file/git modes, and focused tests pass; commit follows lead review.
 
 ### Task 2: Reuse the shared test-path rule in context
 

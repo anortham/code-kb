@@ -3565,7 +3565,10 @@ pub fn compute_blast_radius_scoped(
             seeds: Vec::new(),
             likely_tests: Vec::new(),
             impacted_symbols: Vec::new(),
+            likely_tests_truncated: false,
+            impacted_symbols_truncated: false,
             traversal_ceiling_reached: false,
+            test_file_ceiling_reached: false,
         });
     };
 
@@ -3607,6 +3610,7 @@ pub fn compute_blast_radius_scoped(
     params_vec.push(rusqlite::types::Value::Integer(max_depth as i64));
 
     let mut traversal_ceiling_reached = false;
+    let mut test_file_ceiling_reached = false;
 
     let has_relationships: bool = conn
         .query_row(
@@ -3693,7 +3697,7 @@ pub fn compute_blast_radius_scoped(
             GROUP BY s.symbol_id, s.name, s.kind, s.path, s.start_line, s.is_test, s.test_container
             HAVING MIN(iw.depth) > 0
             ORDER BY min_depth ASC, s.path ASC, s.name ASC
-            LIMIT 200"
+            LIMIT 201"
         );
 
         let mut stmt = conn.prepare(&sql)?;
@@ -3715,9 +3719,11 @@ pub fn compute_blast_radius_scoped(
             ))
         })?;
 
-        let mut row_count = 0;
-        for r in rows {
-            row_count += 1;
+        for (index, r) in rows.enumerate() {
+            if index == 200 {
+                traversal_ceiling_reached = true;
+                break;
+            }
             let (_sym_id, name, kind, raw_path, line, is_test, test_container, depth) = r?;
             let path = raw_path.replace('\\', "/");
             let is_test_target = is_test || test_container || is_test_path(&path);
@@ -3742,7 +3748,6 @@ pub fn compute_blast_radius_scoped(
                 });
             }
         }
-        traversal_ceiling_reached = row_count >= 200;
     }
 
     // 2. Discover stem-matched test files in the workspace
@@ -3783,13 +3788,18 @@ pub fn compute_blast_radius_scoped(
             "SELECT DISTINCT path FROM files
              WHERE (path LIKE '%test%' OR path LIKE '%spec%') AND path LIKE ?1 ESCAPE '\\'
                AND NOT {doc_file}
-             LIMIT 10"
+             ORDER BY path ASC
+             LIMIT 11"
         ))?;
         for stem in file_stems {
             let stem_pattern = format!("%{}%", escape_like(&stem));
             let t_rows =
                 test_files_stmt.query_map([stem_pattern], |row| row.get::<_, String>(0))?;
-            for p in t_rows.flatten() {
+            for (index, p) in t_rows.flatten().enumerate() {
+                if index == 10 {
+                    test_file_ceiling_reached = true;
+                    break;
+                }
                 let p = p.replace('\\', "/");
                 let key = format!("{}:1", p);
                 if seen_test_keys.insert(key) {
@@ -3804,7 +3814,8 @@ pub fn compute_blast_radius_scoped(
         }
     }
 
-    // Truncate to limit
+    let likely_tests_truncated = likely_tests.len() > limit;
+    let impacted_symbols_truncated = impacted_symbols.len() > limit;
     if likely_tests.len() > limit {
         likely_tests.truncate(limit);
     }
@@ -3817,7 +3828,10 @@ pub fn compute_blast_radius_scoped(
         seeds,
         likely_tests,
         impacted_symbols,
+        likely_tests_truncated,
+        impacted_symbols_truncated,
         traversal_ceiling_reached,
+        test_file_ceiling_reached,
     })
 }
 

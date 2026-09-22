@@ -511,6 +511,25 @@ fn test_cli_blast_radius_and_impact() {
 }
 
 #[test]
+fn test_cli_blast_radius_zero_limit_reports_metadata() {
+    let repo = setup_test_repo();
+    let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(repo.path())
+        .args(["--json", "blast-radius", "helper", "--limit", "0"])
+        .output()
+        .expect("Failed to execute blast-radius --json");
+
+    assert!(output.status.success());
+    let result: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(result["likely_tests"], serde_json::json!([]));
+    assert_eq!(result["impacted_symbols"], serde_json::json!([]));
+    assert_eq!(result["likely_tests_truncated"], false);
+    assert_eq!(result["impacted_symbols_truncated"], true);
+    assert!(result["test_file_ceiling_reached"].is_boolean());
+}
+
+#[test]
 fn test_cli_stats_and_telemetry() {
     let repo = setup_test_repo();
     let root = repo.path();
