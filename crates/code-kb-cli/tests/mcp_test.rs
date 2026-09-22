@@ -26,6 +26,20 @@ impl Drop for ChildGuard {
     }
 }
 
+fn mcp_request(
+    stdin: &mut std::process::ChildStdin,
+    reader: &mut BufReader<std::process::ChildStdout>,
+    request: &Value,
+) -> Value {
+    let mut line = serde_json::to_string(request).unwrap();
+    line.push('\n');
+    stdin.write_all(line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+    let mut response = String::new();
+    reader.read_line(&mut response).unwrap();
+    serde_json::from_str(&response).unwrap()
+}
+
 #[test]
 fn test_mcp_blast_radius_stdio_handshake_and_tools() {
     let temp_dir = code_kb_core::safe_tempdir();
@@ -36,7 +50,8 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
 
     let src_dir = root.join("src");
     std::fs::create_dir_all(&src_dir).unwrap();
-    let content = "pub struct Workspace {\n    pub root: String,\n}\n";
+    std::fs::write(src_dir.join("other.cpp"), "int other() { return 0; }\n").unwrap();
+    let content = "pub struct Workspace {\n    pub root: String,\n}\nstruct Parent { int run() { return 1; } int run(int) { return 2; } };\nint first() { Parent p; return p.run(); }\nint second() { Parent p; return p.run(2); }\n";
     std::fs::write(src_dir.join("workspace.rs"), content).unwrap();
     let bytes = content.len() as i64;
     let hash = format!("blake3:{}", blake3::hash(content.as_bytes()).to_hex());
@@ -81,6 +96,23 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
         rusqlite::params![hash, bytes],
     )
     .unwrap();
+    let parent_start = content.find("struct Parent").unwrap() as i64;
+    let first_run = content.find("int run() ").unwrap();
+    let second_run = content.find("int run(int)").unwrap();
+    for (id, start, body, line) in [
+        ("overload_zero", first_run, "{ return 1; }", 4_i64),
+        ("overload_one", second_run, "{ return 2; }", 4_i64),
+    ] {
+        let body_start = content[start..].find(body).unwrap() + start;
+        conn.execute(
+            "INSERT INTO symbols VALUES (?1, 'f1', 'src/workspace.rs', 'cpp', 'run', 'method', 'int run', NULL, 'pub', 'over_parent', ?2, 0, ?2, 0, ?3, ?4, ?2, 0, ?2, 0, ?3, ?4, NULL, NULL, 0, 0)",
+            rusqlite::params![id, line, body_start as i64, (body_start + body.len()) as i64],
+        ).unwrap();
+    }
+    conn.execute(
+        "INSERT INTO symbols VALUES ('over_parent', 'f1', 'src/workspace.rs', 'cpp', 'Parent', 'struct', 'struct Parent', NULL, 'pub', NULL, 4, 0, 4, 0, ?1, ?2, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0)",
+        rusqlite::params![parent_start, content.len() as i64],
+    ).unwrap();
     conn.execute(
         "INSERT INTO symbols VALUES (
             's1', 'f1', 'src/workspace.rs', 'rust', 'Workspace', 'struct',
@@ -91,6 +123,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
         rusqlite::params![bytes],
     )
     .unwrap();
+    conn.execute_batch("INSERT INTO symbols VALUES ('over_first', 'f1', 'src/workspace.rs', 'cpp', 'first', 'function', NULL, NULL, NULL, NULL, 5, 0, 5, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0), ('over_second', 'f1', 'src/workspace.rs', 'cpp', 'second', 'function', NULL, NULL, NULL, NULL, 6, 0, 6, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0); INSERT INTO relationships VALUES ('over-r1', 'over_first', 'overload_zero', 'calls', 'src/workspace.rs', 5, 0); INSERT INTO relationships VALUES ('over-r2', 'over_second', 'overload_one', 'calls', 'src/workspace.rs', 6, 0);").unwrap();
     conn.execute(
         "INSERT INTO symbols VALUES (
             's2', 'f1', 'src/workspace.rs', 'rust', 'root', 'field',
@@ -591,6 +624,126 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
     assert!(
         slice_text10.contains("println"),
         "Extended get_context_slice must contain external callee println"
+    );
+
+    let id_slice = mcp_request(
+        &mut stdin,
+        &mut reader,
+        &json!({"jsonrpc":"2.0","id":55,"method":"tools/call","params":{"name":"get_symbol_context","arguments":{"symbol_id":"s1","include_external":true}}}),
+    );
+    assert_ne!(id_slice["result"]["isError"], true, "{id_slice}");
+    assert!(
+        id_slice["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("println")
+    );
+    let id_references_default = mcp_request(
+        &mut stdin,
+        &mut reader,
+        &json!({"jsonrpc":"2.0","id":56,"method":"tools/call","params":{"name":"find_references","arguments":{"symbol_id":"s1","direction":"callees"}}}),
+    );
+    assert_ne!(id_references_default["result"]["isError"], true);
+    assert!(
+        !id_references_default["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("println")
+    );
+    let id_references_external = mcp_request(
+        &mut stdin,
+        &mut reader,
+        &json!({"jsonrpc":"2.0","id":57,"method":"tools/call","params":{"name":"find_references","arguments":{"symbol_id":"s1","direction":"callees","include_external":true}}}),
+    );
+    assert_ne!(id_references_external["result"]["isError"], true);
+    assert!(
+        id_references_external["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("println")
+    );
+
+    let mut overload_bodies = Vec::new();
+    let mut overload_contexts = Vec::new();
+    let mut overload_refs = Vec::new();
+    let mut overload_impacts = Vec::new();
+    for (id, symbol_id) in [(40, "overload_zero"), (41, "overload_one")] {
+        for (offset, tool) in [
+            (0, "get_symbol_body"),
+            (10, "get_symbol_context"),
+            (20, "find_references"),
+            (30, "blast_radius"),
+        ] {
+            let arguments = if tool == "blast_radius" {
+                json!({"symbol_id":symbol_id,"file_path":"src/workspace.rs"})
+            } else {
+                json!({"symbol_id":symbol_id})
+            };
+            let request = json!({"jsonrpc":"2.0","id":id + offset,"method":"tools/call","params":{"name":tool,"arguments":arguments}});
+            let mut line = serde_json::to_string(&request).unwrap();
+            line.push('\n');
+            stdin.write_all(line.as_bytes()).unwrap();
+            stdin.flush().unwrap();
+            let mut response = String::new();
+            reader.read_line(&mut response).unwrap();
+            let response: Value = serde_json::from_str(&response).unwrap();
+            assert_ne!(response["result"]["isError"], true, "{response}");
+            let text = response["result"]["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .to_string();
+            if tool == "get_symbol_body" {
+                overload_bodies.push(text);
+            } else if tool == "get_symbol_context" {
+                overload_contexts.push(text);
+            } else if tool == "find_references" {
+                overload_refs.push(text);
+            } else if tool == "blast_radius" {
+                overload_impacts.push(text);
+            }
+        }
+    }
+    assert_ne!(overload_bodies[0], overload_bodies[1]);
+    assert_ne!(overload_contexts[0], overload_contexts[1]);
+    assert!(overload_refs[0].contains("first") && !overload_refs[0].contains("second"));
+    assert!(overload_refs[1].contains("second") && !overload_refs[1].contains("first"));
+    assert!(overload_impacts[0].contains("first") && !overload_impacts[0].contains("second"));
+    assert!(overload_impacts[1].contains("second") && !overload_impacts[1].contains("first"));
+
+    let mismatch = mcp_request(
+        &mut stdin,
+        &mut reader,
+        &json!({"jsonrpc":"2.0","id":52,"method":"tools/call","params":{"name":"blast_radius","arguments":{"symbol_id":"overload_zero","file_path":"src/other.cpp"}}}),
+    );
+    assert_eq!(mismatch["result"]["isError"], true);
+    assert!(
+        mismatch["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("not requested file")
+    );
+
+    let exact_lookup = mcp_request(
+        &mut stdin,
+        &mut reader,
+        &json!({"jsonrpc":"2.0","id":53,"method":"tools/call","params":{"name":"lookup_symbol","arguments":{"query":"Workspace"}}}),
+    );
+    assert!(
+        exact_lookup["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("id=s1")
+    );
+    let exact_search = mcp_request(
+        &mut stdin,
+        &mut reader,
+        &json!({"jsonrpc":"2.0","id":54,"method":"tools/call","params":{"name":"search_symbols","arguments":{"query":"Workspace"}}}),
+    );
+    assert!(
+        exact_search["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("id=s1")
     );
 
     // 11. Test telemetry_summary via MCP with time_window: "month"
@@ -2398,6 +2551,204 @@ fn test_mcp_records_a_known_baseline_for_references_and_none_for_an_outline() {
     assert_eq!(outline_stat["saved_known_count"], 0, "{outline_stat}");
     assert_eq!(outline_stat["tokens_saved"], 0, "{outline_stat}");
     assert_eq!(summary["saved_known_calls"], 1, "{summary}");
+
+    drop(stdin);
+    let _ = child.wait();
+}
+
+#[test]
+fn mcp_read_tool_handlers_validate_selectors_and_preserve_git_discovery() {
+    let repo = code_kb_core::safe_tempdir();
+    let root = repo.path().to_path_buf();
+    let src = root.join("src");
+    let db_dir = root.join(".code-kb");
+    std::fs::create_dir_all(&src).unwrap();
+    std::fs::create_dir_all(&db_dir).unwrap();
+    std::fs::write(
+        src.join("workspace.rs"),
+        "pub fn run_task() { helper(); }\nfn helper() {}\n",
+    )
+    .unwrap();
+    let workspace = code_kb_core::Workspace::new(root.clone());
+    code_kb_core::scan_workspace(&workspace, &db_dir.join("artifact.db"), true).unwrap();
+    let mut child = ChildGuard(
+        Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+            .arg("serve")
+            .arg("--root")
+            .arg(&root)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap(),
+    );
+    let mut stdin = child.stdin.take().unwrap();
+    let stdout = child.stdout.take().unwrap();
+    let mut reader = BufReader::new(stdout);
+    let initialized = mcp_request(
+        &mut stdin,
+        &mut reader,
+        &json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": { "name": "selector-test", "version": "1.0" },
+                "rootUri": format!("file://{}", root.display())
+            }
+        }),
+    );
+    assert_eq!(initialized["id"], 1);
+
+    let lookup = mcp_request(
+        &mut stdin,
+        &mut reader,
+        &json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"lookup_symbol","arguments":{"query":"run_task"}}}),
+    );
+    assert_ne!(lookup["result"]["isError"], true, "{lookup}");
+    let lookup_text = lookup["result"]["content"][0]["text"].as_str().unwrap();
+    let selected_id = lookup_text
+        .lines()
+        .find_map(|line| line.split_once("id=").map(|(_, id)| id))
+        .unwrap_or_else(|| panic!("{lookup_text}"));
+    assert!(!selected_id.is_empty());
+    assert!(
+        lookup_text
+            .lines()
+            .any(|line| { line.starts_with("- ") && line.contains(&format!("id={selected_id}")) })
+    );
+    let search = mcp_request(
+        &mut stdin,
+        &mut reader,
+        &json!({"jsonrpc":"2.0","id":15,"method":"tools/call","params":{"name":"search_symbols","arguments":{"query":"run_task"}}}),
+    );
+    assert_ne!(search["result"]["isError"], true, "{search}");
+    assert!(
+        search["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains(&format!("id={selected_id}"))
+    );
+    let selected_body = mcp_request(
+        &mut stdin,
+        &mut reader,
+        &json!({"jsonrpc":"2.0","id":16,"method":"tools/call","params":{"name":"get_symbol_body","arguments":{"symbol_id":selected_id}}}),
+    );
+    assert_ne!(selected_body["result"]["isError"], true, "{selected_body}");
+
+    let invalid_selectors = [
+        (json!({}), "exactly one non-empty"),
+        (json!({"symbol_name":""}), "must not be empty"),
+        (json!({"symbol_id":""}), "must not be empty"),
+        (json!({"symbol_name":null}), "must be a string"),
+        (json!({"symbol_id":null}), "must be a string"),
+        (json!({"symbol_name":7}), "must be a string"),
+        (
+            json!({"symbol_name":"run_task","symbol_id":"s2"}),
+            "exactly one of",
+        ),
+        (
+            json!({"symbol":"run_task","symbol_id":"s2"}),
+            "exactly one of",
+        ),
+    ];
+    let mut request_id = 3;
+    for tool in ["get_symbol_body", "get_symbol_context", "find_references"] {
+        for (arguments, error_text) in &invalid_selectors {
+            let response = mcp_request(
+                &mut stdin,
+                &mut reader,
+                &json!({"jsonrpc":"2.0","id":request_id,"method":"tools/call","params":{"name":tool,"arguments":arguments.clone()}}),
+            );
+            assert_eq!(response["result"]["isError"], true, "{tool}: {response}");
+            assert!(
+                response["result"]["content"][0]["text"]
+                    .as_str()
+                    .unwrap()
+                    .contains(error_text)
+            );
+            request_id += 1;
+        }
+    }
+
+    for (arguments, error_text) in [
+        (json!({"symbol_id":""}), "must not be empty"),
+        (json!({"symbol_name":null}), "must be a string"),
+        (json!({"symbol_id":null}), "must be a string"),
+        (
+            json!({"symbol":"run_task","symbol_id":"s2"}),
+            "exactly one of",
+        ),
+    ] {
+        let response = mcp_request(
+            &mut stdin,
+            &mut reader,
+            &json!({"jsonrpc":"2.0","id":request_id,"method":"tools/call","params":{"name":"blast_radius","arguments":arguments}}),
+        );
+        assert_eq!(response["result"]["isError"], true, "{response}");
+        assert!(
+            response["result"]["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains(error_text)
+        );
+        request_id += 1;
+    }
+
+    std::fs::write(root.join(".code-kb/.gitignore"), "*\n").unwrap();
+    assert!(
+        Command::new("git")
+            .args(["init", "--quiet"])
+            .current_dir(&root)
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert!(
+        Command::new("git")
+            .args(["add", "-A"])
+            .current_dir(&root)
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert!(
+        Command::new("git")
+            .args([
+                "-c",
+                "user.name=code-kb test",
+                "-c",
+                "user.email=code-kb@example.invalid",
+                "commit",
+                "--quiet",
+                "-m",
+                "fixture",
+            ])
+            .current_dir(&root)
+            .status()
+            .unwrap()
+            .success()
+    );
+    std::fs::write(
+        root.join("src/workspace.rs"),
+        "pub struct Workspace { pub root: String }\npub fn changed() {}\n",
+    )
+    .unwrap();
+
+    let discovery = mcp_request(
+        &mut stdin,
+        &mut reader,
+        &json!({"jsonrpc":"2.0","id":request_id,"method":"tools/call","params":{"name":"blast_radius","arguments":{}}}),
+    );
+    assert_ne!(discovery["result"]["isError"], true, "{discovery}");
+    assert!(
+        discovery["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("src/workspace.rs")
+    );
 
     drop(stdin);
     let _ = child.wait();

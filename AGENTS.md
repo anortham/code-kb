@@ -84,6 +84,7 @@ MCP tool schema.**
 - Optional parameters provide safe defaults (`direction` in `find_references` defaults to
   `"callers"`, `category` in `find_structural_facts` lists all categories with counts when omitted).
 - Scoped search: `lookup_symbol`, `search_symbols`, `find_references`, and `find_structural_facts` support an optional `path`/`file_path` filter.
+- Lookup and search text include `id=<symbol_id>`. `get_symbol_body`, `get_symbol_context`, `find_references`, and `blast_radius` accept that current-index ID as `symbol_id` / `--symbol-id`; IDs are reselected after edits or rebuilds, and unresolved-call matching remains heuristic.
 - Recovery on a miss: every not-found path builds its text from `symbol_not_found_parts` or
   `file_not_found_parts` in `queries.rs`. The text names the bound workspace, then either
   `Did you mean one of:` with up to three candidates as `kind `name` (path:line)`, or

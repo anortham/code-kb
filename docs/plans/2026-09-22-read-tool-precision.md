@@ -2,7 +2,7 @@
 
 > For agentic workers: use `razorback:subagent-driven-development` with `terra_worker` implementers. Use `razorback:executing-plans` only when delegation is unavailable or the user selects single-agent execution. The lead owns design decisions, review, and integration verification.
 
-**Status:** Approved for implementation on 2026-09-22. Tasks 1 and 2 complete; task 3 pending.
+**Status:** Implementation complete on `refactor/read-only-tools`; combined branch gate and measurement pending.
 
 **Goal:** Make impact limits explicit, use consistent test discovery, and let agents select an exact symbol through the existing read tools.
 
@@ -189,16 +189,16 @@ Core paths above are under `crates/code-kb-core/src/` unless marked `tests/`; `b
 **Focused checks:** `cargo test -p code-kb-core --test disambiguation_test --test freshness_test --test blast_radius_test --test qt_cpp_test`; `cargo test -p code-kb-core find_references_for_symbol`; `cargo test -p code-kb-cli --test cli_test --test mcp_test --test adversarial_m2_server_test --test adversarial_m3_server_test`. Run exact new regression filters red/green before these target-wide checks.
 
 **Acceptance criteria:**
-- [ ] Lookup/search return complete reusable IDs without changing rank, count, or JSON identity layout.
-- [ ] Both same-parent overloads can be selected separately through body, context, references, and blast radius in CLI and MCP.
-- [ ] Resolved caller/callee edges and impact seeds remain isolated by ID; pending-edge behavior is covered and its heuristic limit is documented.
-- [ ] Matching file guards work, mismatches fail, and an ID plus file never expands impact to the whole file.
-- [ ] A deterministic resolver/helper regression checks the refreshed row against the normalized/absolute file guard and refuses a post-refresh mismatch before slicing or seeding. Do not rely on a timed filesystem race or add a production hook only for testing.
-- [ ] Missing, empty, and conflicting selectors fail consistently; IDs containing quotes are SQL-bound and cannot broaden selection.
-- [ ] A native edit that changes offsets either reloads the same surviving ID correctly or returns reselection guidance; a removed ID never falls back to a same-named sibling. Cover both a refresh-triggered disappearance and an already-missing ID.
-- [ ] Include-external, test symbols, qualified names, name/file selection, file-only impact, and zero-argument git discovery retain their behavior.
-- [ ] Windows/path-separator cases use the existing identity rules; IDs are not case-folded or path-normalized.
-- [ ] Ten tools remain, schemas expose no workspace parameters, all guidance pairs match, focused tests pass, and lead review precedes commit.
+- [x] Lookup/search return complete reusable IDs without changing rank, count, or JSON identity layout.
+- [x] Both same-parent overloads can be selected separately through body, context, references, and blast radius in CLI and MCP.
+- [x] Resolved caller/callee edges and impact seeds remain isolated by ID; pending-edge behavior is covered and its heuristic limit is documented.
+- [x] Matching file guards work, mismatches fail, and an ID plus file never expands impact to the whole file.
+- [x] A deterministic resolver/helper regression checks the refreshed row against the normalized/absolute file guard and refuses a post-refresh mismatch before slicing or seeding. Do not rely on a timed filesystem race or add a production hook only for testing.
+- [x] Missing, empty, and conflicting selectors fail consistently; IDs containing quotes are SQL-bound and cannot broaden selection.
+- [x] A native edit that changes offsets either reloads the same surviving ID correctly or returns reselection guidance; a removed ID never falls back to a same-named sibling. Cover both a refresh-triggered disappearance and an already-missing ID.
+- [x] Include-external, test symbols, qualified names, name/file selection, file-only impact, and zero-argument git discovery retain their behavior.
+- [x] Windows/path-separator cases use the existing identity rules; IDs are not case-folded or path-normalized.
+- [x] Ten tools remain, schemas expose no workspace parameters, all guidance pairs match, focused tests pass, and lead review precedes commit.
 
 ## Completion
 

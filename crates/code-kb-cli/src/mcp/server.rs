@@ -3,15 +3,17 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
 use code_kb_core::{
-    Connection, TelemetryFilter, TimeWindow, WatcherHandle, Workspace, WorkspaceError,
-    blast_radius_op, codebase_outline_op, create_index, ensure_fts_index_path,
-    ensure_index_matches_extractor, file_sizes_for_paths, file_skeleton_op, format_blast_radius,
-    format_context_slice, format_fact_categories, format_find_symbol_results, format_references,
-    format_search_results, format_structural_facts, format_symbol_body, format_telemetry_summary,
-    fts_search_symbols_scoped, get_context_slice_op, get_symbol_body_op, get_telemetry_summary,
-    installed_extractor_version, is_project_root, list_structural_fact_categories_scoped,
-    open_global_telemetry_db, open_read_only, reconcile_offline_edits, record_tool_call,
-    record_tool_call_conn, search_symbols_scoped, start_watcher,
+    Connection, SymbolSelector, TelemetryFilter, TimeWindow, WatcherHandle, Workspace,
+    WorkspaceError, blast_radius_selected_op, codebase_outline_op, create_index,
+    ensure_fts_index_path, ensure_index_matches_extractor, file_sizes_for_paths, file_skeleton_op,
+    find_references_for_symbol_ext, format_blast_radius, format_context_slice,
+    format_fact_categories, format_find_symbol_results, format_references, format_search_results,
+    format_structural_facts, format_symbol_body, format_telemetry_summary,
+    fts_search_symbols_scoped, get_context_slice_selected_op, get_symbol_body_selected_op,
+    get_telemetry_summary, installed_extractor_version, is_project_root,
+    list_structural_fact_categories_scoped, open_global_telemetry_db, open_read_only,
+    reconcile_offline_edits, record_tool_call, record_tool_call_conn, resolve_symbol_op,
+    search_symbols_scoped, start_watcher,
 };
 
 use super::protocol::{CallToolResult, JsonRpcRequest, JsonRpcResponse, Tool};
@@ -264,14 +266,16 @@ impl McpServer {
                     "properties": {
                         "symbol_name": {
                             "type": "string",
+                            "minLength": 1,
                             "description": "Full or qualified symbol name."
                         },
+                        "symbol_id": { "type": "string", "minLength": 1, "description": "Exact current-index symbol identifier." },
                         "file_path": {
                             "type": "string",
                             "description": "Optional file path to disambiguate identical symbol names."
                         }
                     },
-                    "required": ["symbol_name"]
+                    "oneOf": [{"required": ["symbol_name"]}, {"required": ["symbol_id"]}]
                 }),
             },
             Tool {
@@ -282,8 +286,10 @@ impl McpServer {
                     "properties": {
                         "symbol_name": {
                             "type": "string",
+                            "minLength": 1,
                             "description": "Target symbol name."
                         },
+                        "symbol_id": { "type": "string", "minLength": 1, "description": "Exact current-index symbol identifier." },
                         "file_path": {
                             "type": "string",
                             "description": "Optional file path to disambiguate identical symbol names."
@@ -293,7 +299,7 @@ impl McpServer {
                             "description": "Include external stdlib/runtime calls in callee signatures (default: false)."
                         }
                     },
-                    "required": ["symbol_name"]
+                    "oneOf": [{"required": ["symbol_name"]}, {"required": ["symbol_id"]}]
                 }),
             },
             Tool {
@@ -304,8 +310,10 @@ impl McpServer {
                     "properties": {
                         "symbol_name": {
                             "type": "string",
+                            "minLength": 1,
                             "description": "Target symbol name."
                         },
+                        "symbol_id": { "type": "string", "minLength": 1, "description": "Exact current-index symbol identifier." },
                         "file_path": {
                             "type": "string",
                             "description": "Optional file path to disambiguate symbols with identical names across files."
@@ -326,7 +334,7 @@ impl McpServer {
                             "description": "If true, includes external runtime/stdlib primitives in callees (default: false, only internal workspace symbols)."
                         }
                     },
-                    "required": ["symbol_name"]
+                    "oneOf": [{"required": ["symbol_name"]}, {"required": ["symbol_id"]}]
                 }),
             },
             Tool {
@@ -362,6 +370,7 @@ impl McpServer {
                             "type": "string",
                             "description": "Symbol name to seed the impact walk (aliases: symbol_name, name, target)."
                         },
+                        "symbol_id": { "type": "string", "minLength": 1, "description": "Exact current-index symbol identifier." },
                         "file": {
                             "type": "string",
                             "description": "File path to seed the impact walk (aliases: file_path, path)."
@@ -632,6 +641,40 @@ impl McpServer {
             }
         }
         s.to_string()
+    }
+
+    fn selector(arguments: &Value) -> Result<SymbolSelector, String> {
+        let selectors = ["symbol_name", "symbol", "name", "target", "symbol_id"]
+            .into_iter()
+            .filter_map(|key| arguments.get(key).map(|value| (key, value)))
+            .collect::<Vec<_>>();
+        if selectors.is_empty() {
+            return Err("Specify exactly one non-empty symbol_name or symbol_id".to_string());
+        }
+        if selectors.len() != 1 {
+            return Err(
+                "Specify exactly one of symbol_name, symbol, name, target, or symbol_id"
+                    .to_string(),
+            );
+        }
+
+        let (key, value) = selectors[0];
+        let value = value
+            .as_str()
+            .ok_or_else(|| format!("{key} must be a string"))?;
+        if value.is_empty() {
+            return Err(format!("{key} must not be empty"));
+        }
+        if key == "symbol_id" {
+            Ok(SymbolSelector::Id(value.to_string()))
+        } else {
+            let name = Self::sanitize_symbol_name(value);
+            if name.is_empty() {
+                Err(format!("{key} must not be empty"))
+            } else {
+                Ok(SymbolSelector::Name(name))
+            }
+        }
     }
 
     fn handle_call_tool_inner(&mut self, name: &str, arguments: &Value) -> CallToolResult {
@@ -925,29 +968,21 @@ impl McpServer {
                     .with_baseline_paths(baseline_paths)
             }
             "get_symbol_body" => {
-                let raw_name = match arguments
-                    .get("symbol_name")
-                    .or_else(|| arguments.get("symbol"))
-                    .or_else(|| arguments.get("name"))
-                    .and_then(|v| v.as_str())
-                {
-                    Some(n) => n,
-                    None => {
-                        return CallToolResult::error("Missing required parameter: symbol_name");
-                    }
+                let selector = match Self::selector(arguments) {
+                    Ok(selector) => selector,
+                    Err(error) => return CallToolResult::error(error),
                 };
-                let symbol_name = Self::sanitize_symbol_name(raw_name);
                 let file_path = arguments
                     .get("file_path")
                     .or_else(|| arguments.get("file"))
                     .or_else(|| arguments.get("path"))
                     .and_then(|v| v.as_str());
 
-                match get_symbol_body_op(
+                match get_symbol_body_selected_op(
                     &self.workspace,
                     &self.db_path,
                     &conn,
-                    &symbol_name,
+                    &selector,
                     file_path,
                 ) {
                     Ok((symbol, body)) => CallToolResult::text(format_symbol_body(&symbol, &body))
@@ -957,18 +992,10 @@ impl McpServer {
                 }
             }
             "get_symbol_context" => {
-                let raw_name = match arguments
-                    .get("symbol_name")
-                    .or_else(|| arguments.get("symbol"))
-                    .or_else(|| arguments.get("name"))
-                    .and_then(|v| v.as_str())
-                {
-                    Some(n) => n,
-                    None => {
-                        return CallToolResult::error("Missing required parameter: symbol_name");
-                    }
+                let selector = match Self::selector(arguments) {
+                    Ok(selector) => selector,
+                    Err(error) => return CallToolResult::error(error),
                 };
-                let symbol_name = Self::sanitize_symbol_name(raw_name);
                 let file_path = arguments
                     .get("file_path")
                     .or_else(|| arguments.get("file"))
@@ -979,11 +1006,11 @@ impl McpServer {
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false);
 
-                match get_context_slice_op(
+                match get_context_slice_selected_op(
                     &self.workspace,
                     &self.db_path,
                     &conn,
-                    &symbol_name,
+                    &selector,
                     file_path,
                     include_external,
                 ) {
@@ -997,25 +1024,15 @@ impl McpServer {
                 }
             }
             "find_references" => {
-                let raw_name = match arguments
-                    .get("symbol_name")
-                    .or_else(|| arguments.get("symbol"))
-                    .or_else(|| arguments.get("name"))
-                    .and_then(|v| v.as_str())
-                {
-                    Some(n) => n,
-                    None => {
-                        return CallToolResult::error("Missing required parameter: symbol_name");
-                    }
+                let selector = match Self::selector(arguments) {
+                    Ok(selector) => selector,
+                    Err(error) => return CallToolResult::error(error),
                 };
-                let symbol_name = Self::sanitize_symbol_name(raw_name);
                 let raw_file_path = arguments
                     .get("file_path")
                     .or_else(|| arguments.get("file"))
                     .or_else(|| arguments.get("path"))
                     .and_then(|v| v.as_str());
-                let rel_file_path = raw_file_path.map(|p| self.workspace.relativize_filter(p));
-                let file_path = rel_file_path.as_deref();
                 let direction = arguments
                     .get("direction")
                     .and_then(|v| v.as_str())
@@ -1029,21 +1046,49 @@ impl McpServer {
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false);
 
-                let refs = match code_kb_core::find_references_scoped(
-                    &conn,
-                    &symbol_name,
-                    direction,
-                    limit,
-                    include_external,
-                    file_path,
-                ) {
-                    Ok(r) => r,
-                    Err(e) => return CallToolResult::error(e.to_string()),
+                let (target, refs) = match selector {
+                    SymbolSelector::Name(name) => {
+                        let path = raw_file_path.map(|path| self.workspace.relativize_filter(path));
+                        match code_kb_core::find_references_scoped(
+                            &conn,
+                            &name,
+                            direction,
+                            limit,
+                            include_external,
+                            path.as_deref(),
+                        ) {
+                            Ok(refs) => (name, refs),
+                            Err(error) => return CallToolResult::error(error.to_string()),
+                        }
+                    }
+                    SymbolSelector::Id(id) => {
+                        let selected = match resolve_symbol_op(
+                            &self.workspace,
+                            &self.db_path,
+                            &conn,
+                            &SymbolSelector::Id(id),
+                            raw_file_path,
+                        ) {
+                            Ok(symbol) => symbol,
+                            Err(error) => return CallToolResult::error(error.to_string()),
+                        };
+                        match find_references_for_symbol_ext(
+                            &conn,
+                            &selected.name,
+                            direction,
+                            limit,
+                            &selected.symbol_id,
+                            include_external,
+                        ) {
+                            Ok(refs) => (selected.name, refs),
+                            Err(error) => return CallToolResult::error(error.to_string()),
+                        }
+                    }
                 };
 
                 let baseline_paths = refs.iter().map(|site| site.path.clone()).collect();
 
-                CallToolResult::text(format_references(&symbol_name, &refs, direction, limit))
+                CallToolResult::text(format_references(&target, &refs, direction, limit))
                     .with_logical_result_count(refs.len())
                     .with_baseline_paths(baseline_paths)
             }
@@ -1137,14 +1182,17 @@ impl McpServer {
                 }
             }
             "blast_radius" | "impact" => {
-                let raw_symbol = arguments
-                    .get("symbol")
-                    .or_else(|| arguments.get("symbol_name"))
-                    .or_else(|| arguments.get("name"))
-                    .or_else(|| arguments.get("target"))
-                    .and_then(|v| v.as_str());
-                let sanitized_symbol = raw_symbol.map(Self::sanitize_symbol_name);
-                let symbol = sanitized_symbol.as_deref();
+                let has_selector = ["symbol_name", "symbol", "name", "target", "symbol_id"]
+                    .iter()
+                    .any(|key| arguments.get(*key).is_some());
+                let selector = if has_selector {
+                    match Self::selector(arguments) {
+                        Ok(selector) => Some(selector),
+                        Err(error) => return CallToolResult::error(error),
+                    }
+                } else {
+                    None
+                };
                 let file = arguments
                     .get("file")
                     .or_else(|| arguments.get("file_path"))
@@ -1160,7 +1208,15 @@ impl McpServer {
                     Err(error) => return error,
                 };
 
-                match blast_radius_op(&self.workspace, &conn, symbol, file, depth, limit) {
+                match blast_radius_selected_op(
+                    &self.workspace,
+                    Some(&self.db_path),
+                    &conn,
+                    selector,
+                    file,
+                    depth,
+                    limit,
+                ) {
                     Ok(res) => {
                         let baseline_paths = res
                             .likely_tests
@@ -1322,6 +1378,32 @@ impl McpServer {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn selector_requires_one_nonempty_opaque_value() {
+        assert!(
+            matches!(McpServer::selector(&json!({"symbol_id": "id'quoted"})), Ok(SymbolSelector::Id(id)) if id == "id'quoted")
+        );
+        assert!(McpServer::selector(&json!({"symbol_id": ""})).is_err());
+        assert!(McpServer::selector(&json!({"symbol_name": "run", "symbol_id": "id"})).is_err());
+    }
+
+    #[test]
+    fn selector_schemas_require_nonempty_names_and_ids() {
+        let tools = McpServer::tool_definitions();
+        for name in ["get_symbol_body", "get_symbol_context", "find_references"] {
+            let schema = &tools
+                .iter()
+                .find(|tool| tool.name == name)
+                .unwrap()
+                .input_schema;
+            assert_eq!(
+                schema["properties"]["symbol_name"]["minLength"], 1,
+                "{name}"
+            );
+            assert_eq!(schema["properties"]["symbol_id"]["minLength"], 1, "{name}");
+        }
+    }
+
     use super::*;
 
     #[test]

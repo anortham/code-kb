@@ -2,6 +2,8 @@
 
 Reviewed 2026-09-22 against `ddd036d` and the local `refactor/read-only-tools` changes.
 
+> **Current status (2026-09-22):** The findings below describe the pre-implementation state. The approved read-tool precision plan implements exact `symbol_id` selection, truthful blast-radius limits, and consistent test-path discovery; see [the plan](plans/2026-09-22-read-tool-precision.md). The original findings remain as historical rationale.
+
 ## Verdict
 
 The 10 exposed MCP tools form a cohesive read-only code-intelligence toolkit. Keep their boundaries. The next investment should make target selection and result completeness consistent across tools. There is no evidence here that another write tool, a broad new feature, or merging existing tools would help more.
@@ -10,7 +12,7 @@ The 10 exposed MCP tools form a cohesive read-only code-intelligence toolkit. Ke
 | --- | --- | --- |
 | Orient and inspect interfaces | `codebase_outline`, `file_skeleton` | Useful progression from repository to file. |
 | Locate code | `lookup_symbol`, `search_symbols` | Known identifiers and unknown concepts deserve separate entry points. |
-| Read or prepare a native edit | `get_symbol_body`, `get_symbol_context` | A body alone is a cheaper, useful subset of the context bundle. Native filesystem tools perform the write; indexed files refresh automatically after filesystem changes. |
+| Read or prepare a native edit | `get_symbol_body`, `get_symbol_context` | Discovery exposes a current-index `symbol_id` for exact selection; a body alone is a cheaper, useful subset of the context bundle. Native filesystem tools perform the write; indexed files refresh automatically after filesystem changes. |
 | Trace dependencies and choose tests | `find_references`, `blast_radius` | Immediate relationships and multi-hop impact answer different questions. |
 | Inspect extracted patterns and literals | `find_structural_facts` | Path-scoped category aliases make framework facts accessible without another search tool. |
 | Inspect usage | `telemetry_summary` | Useful operational support, separate from code understanding. |

@@ -9,7 +9,13 @@ use crate::models::{BlastRadiusResult, ContextSlice, Symbol};
 use crate::queries::{self, QueryError};
 use crate::slicer::{self, SliceError};
 use crate::sync::{self, SyncError};
-use crate::workspace::{Workspace, WorkspaceError};
+use crate::workspace::{Workspace, WorkspaceError, paths_equal};
+
+#[derive(Debug, Clone)]
+pub enum SymbolSelector {
+    Name(String),
+    Id(String),
+}
 
 #[derive(Debug, Error)]
 pub enum OpError {
@@ -27,6 +33,14 @@ pub enum OpError {
     },
     #[error("Path '{0}' is a directory, not a file")]
     IsADirectory(String),
+    #[error(
+        "symbol_id '{id}' is no longer indexed in {workspace}; run lookup_symbol or search_symbols and select a current id"
+    )]
+    StaleSymbolId { id: String, workspace: String },
+    #[error("A database path is required to refresh a symbol_id selector")]
+    SymbolIdRequiresDatabasePath,
+    #[error("Selected symbol is in '{actual}', not requested file '{requested}'")]
+    FileGuardMismatch { requested: String, actual: String },
     #[error("Workspace error: {0}")]
     Workspace(#[from] WorkspaceError),
     #[error("Synchronization error: {0}")]
@@ -35,6 +49,88 @@ pub enum OpError {
     Query(#[from] QueryError),
     #[error("Slice error: {0}")]
     Slice(#[from] SliceError),
+}
+
+fn stale_symbol_id(conn: &Connection, id: &str) -> OpError {
+    OpError::StaleSymbolId {
+        id: id.to_string(),
+        workspace: queries::workspace_name(conn),
+    }
+}
+
+pub fn resolve_symbol_op(
+    workspace: &Workspace,
+    db_path: &Path,
+    conn: &Connection,
+    selector: &SymbolSelector,
+    file_path: Option<&str>,
+) -> Result<Symbol, OpError> {
+    let id_selector = matches!(selector, SymbolSelector::Id(_));
+    let guard = if let Some(file_path) = file_path {
+        let (absolute, rel) = workspace.resolve_path(Path::new(file_path))?;
+        if !absolute.exists() {
+            return Err(file_not_found(conn, &rel));
+        }
+        if absolute.is_dir() {
+            return Err(OpError::IsADirectory(rel));
+        }
+        if !id_selector {
+            sync::ensure_fresh_file(workspace, db_path, conn, &rel)?;
+        }
+        Some((absolute, rel))
+    } else {
+        None
+    };
+    let lookup = |conn: &Connection| match selector {
+        SymbolSelector::Name(name) => {
+            queries::get_symbol_by_name(conn, name, guard.as_ref().map(|(_, rel)| rel.as_str()))
+        }
+        SymbolSelector::Id(id) => queries::get_symbol_by_id(conn, id),
+    };
+    let initial = lookup(conn)?.ok_or_else(|| match selector {
+        SymbolSelector::Name(name) => {
+            symbol_not_found(conn, name, guard.as_ref().map(|(_, rel)| rel.as_str()))
+        }
+        SymbolSelector::Id(id) => stale_symbol_id(conn, id),
+    })?;
+    if !id_selector
+        && let Some((requested_abs, requested_rel)) = &guard
+        && !paths_equal(requested_abs, &workspace.canonical_root.join(&initial.path))
+    {
+        return Err(OpError::FileGuardMismatch {
+            requested: requested_rel.clone(),
+            actual: initial.path,
+        });
+    }
+    let refreshed = sync::ensure_fresh_file(workspace, db_path, conn, &initial.path)?;
+    let refreshed_symbol = if refreshed {
+        match selector {
+            SymbolSelector::Name(name) => {
+                queries::get_symbol_by_name_exact(conn, name, &initial.path)?
+            }
+            SymbolSelector::Id(id) => queries::get_symbol_by_id(conn, id)?,
+        }
+        .ok_or_else(|| match selector {
+            SymbolSelector::Name(name) => {
+                symbol_not_found(conn, name, guard.as_ref().map(|(_, rel)| rel.as_str()))
+            }
+            SymbolSelector::Id(id) => stale_symbol_id(conn, id),
+        })?
+    } else {
+        initial
+    };
+    if let Some((requested_abs, requested_rel)) = &guard
+        && !paths_equal(
+            requested_abs,
+            &workspace.canonical_root.join(&refreshed_symbol.path),
+        )
+    {
+        return Err(OpError::FileGuardMismatch {
+            requested: requested_rel.clone(),
+            actual: refreshed_symbol.path,
+        });
+    }
+    Ok(refreshed_symbol)
 }
 
 fn symbol_not_found(conn: &Connection, name: &str, path_filter: Option<&str>) -> OpError {
@@ -63,40 +159,23 @@ pub fn get_symbol_body_op(
     symbol_name: &str,
     file_path: Option<&str>,
 ) -> Result<(Symbol, String), OpError> {
-    // 1. If file_path is provided, resolve and refresh file BEFORE querying the symbol
-    let resolved_rel = if let Some(fp) = file_path {
-        let (effective_abs, rel) = workspace.resolve_path(Path::new(fp))?;
-        if !effective_abs.exists() {
-            return Err(file_not_found(conn, &rel));
-        }
-        if effective_abs.is_dir() {
-            return Err(OpError::IsADirectory(rel));
-        }
-        sync::ensure_fresh_file(workspace, db_path, conn, &rel)?;
-        Some(rel)
-    } else {
-        None
-    };
+    get_symbol_body_selected_op(
+        workspace,
+        db_path,
+        conn,
+        &SymbolSelector::Name(symbol_name.to_string()),
+        file_path,
+    )
+}
 
-    // 2. Query symbol from database
-    let initial_symbol =
-        queries::get_symbol_by_name(conn, symbol_name, resolved_rel.as_deref())?
-            .ok_or_else(|| symbol_not_found(conn, symbol_name, resolved_rel.as_deref()))?;
-
-    // 3. If file_path was not provided initially, refresh the file found from the symbol
-    let symbol = if resolved_rel.is_none() {
-        let was_refreshed =
-            sync::ensure_fresh_file(workspace, db_path, conn, &initial_symbol.path)?;
-        if was_refreshed {
-            // CRUCIAL: Reload symbol after re-indexing so we have fresh offsets!
-            queries::get_symbol_by_name_exact(conn, symbol_name, &initial_symbol.path)?
-                .ok_or_else(|| symbol_not_found(conn, symbol_name, resolved_rel.as_deref()))?
-        } else {
-            initial_symbol
-        }
-    } else {
-        initial_symbol
-    };
+pub fn get_symbol_body_selected_op(
+    workspace: &Workspace,
+    db_path: &Path,
+    conn: &Connection,
+    selector: &SymbolSelector,
+    file_path: Option<&str>,
+) -> Result<(Symbol, String), OpError> {
+    let symbol = resolve_symbol_op(workspace, db_path, conn, selector, file_path)?;
 
     let abs_file = workspace.canonical_root.join(&symbol.path);
     let body = slicer::slice_symbol_body(&abs_file, &symbol)?;
@@ -113,8 +192,26 @@ pub fn get_context_slice_op(
     file_path: Option<&str>,
     include_external: bool,
 ) -> Result<ContextSlice, OpError> {
+    get_context_slice_selected_op(
+        workspace,
+        db_path,
+        conn,
+        &SymbolSelector::Name(symbol_name.to_string()),
+        file_path,
+        include_external,
+    )
+}
+
+pub fn get_context_slice_selected_op(
+    workspace: &Workspace,
+    db_path: &Path,
+    conn: &Connection,
+    selector: &SymbolSelector,
+    file_path: Option<&str>,
+    include_external: bool,
+) -> Result<ContextSlice, OpError> {
     let (target_symbol, target_body) =
-        get_symbol_body_op(workspace, db_path, conn, symbol_name, file_path)?;
+        get_symbol_body_selected_op(workspace, db_path, conn, selector, file_path)?;
 
     let callee_signatures = queries::find_callee_signatures(
         conn,
@@ -293,6 +390,43 @@ pub fn blast_radius_op(
     max_depth: usize,
     limit: usize,
 ) -> Result<BlastRadiusResult, OpError> {
+    blast_radius_selected_op(
+        workspace,
+        None,
+        conn,
+        symbol.map(|s| SymbolSelector::Name(s.to_string())),
+        file,
+        max_depth,
+        limit,
+    )
+}
+
+pub fn blast_radius_selected_op(
+    workspace: &Workspace,
+    db_path: Option<&Path>,
+    conn: &Connection,
+    selector: Option<SymbolSelector>,
+    file: Option<&str>,
+    max_depth: usize,
+    limit: usize,
+) -> Result<BlastRadiusResult, OpError> {
+    if let Some(selector @ SymbolSelector::Id(_)) = selector.as_ref() {
+        let db_path = db_path.ok_or(OpError::SymbolIdRequiresDatabasePath)?;
+        let selected = resolve_symbol_op(workspace, db_path, conn, selector, file)?;
+        return Ok(queries::compute_blast_radius_scoped_with_ids(
+            conn,
+            &[],
+            &[&selected.symbol_id],
+            None,
+            &[],
+            if max_depth == 0 { 2 } else { max_depth.min(5) },
+            limit,
+        )?);
+    }
+    let symbol = selector.as_ref().and_then(|selector| match selector {
+        SymbolSelector::Name(name) => Some(name.as_str()),
+        SymbolSelector::Id(_) => None,
+    });
     let clean_symbol = symbol.and_then(|s| {
         let t = s.trim();
         if t.is_empty() { None } else { Some(t) }

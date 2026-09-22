@@ -1,4 +1,4 @@
-use rusqlite::{Connection, Row, ToSql, params};
+use rusqlite::{Connection, OptionalExtension, Row, ToSql, params};
 use rust_stemmers::{Algorithm, Stemmer};
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
@@ -1758,6 +1758,22 @@ pub fn get_symbol_by_name_exact(
     get_symbol_by_name_internal(conn, name, Some(exact_path), true)
 }
 
+/// Retrieve one indexed symbol by its exact current-index identifier.
+pub fn get_symbol_by_id(conn: &Connection, symbol_id: &str) -> Result<Option<Symbol>, QueryError> {
+    conn.query_row(
+        "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,
+                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,
+                start_byte, end_byte, body_start_line, body_start_column, body_end_line,
+                body_end_column, body_start_byte, body_end_byte, body_hash, semantic_group,
+                is_test, test_container
+         FROM symbols WHERE symbol_id = ?1",
+        [symbol_id],
+        map_symbol,
+    )
+    .optional()
+    .map_err(QueryError::from)
+}
+
 /// Split `Outer::Inner::run` or `Outer.Inner.run` into its ancestor segments, outermost first, and the terminal name.
 fn split_qualified_name(name: &str) -> (Vec<&str>, &str) {
     let separator = if name.contains("::") {
@@ -2249,7 +2265,25 @@ pub fn find_references_for_symbol(
     limit: usize,
     symbol_id: &str,
 ) -> Result<Vec<ReferenceSite>, QueryError> {
-    find_references_internal(conn, symbol_name, direction, limit, Some(symbol_id), false)
+    find_references_for_symbol_ext(conn, symbol_name, direction, limit, symbol_id, false)
+}
+
+pub fn find_references_for_symbol_ext(
+    conn: &Connection,
+    symbol_name: &str,
+    direction: &str,
+    limit: usize,
+    symbol_id: &str,
+    include_external: bool,
+) -> Result<Vec<ReferenceSite>, QueryError> {
+    find_references_internal(
+        conn,
+        symbol_name,
+        direction,
+        limit,
+        Some(symbol_id),
+        include_external,
+    )
 }
 
 /// SQL expression ranking a candidate path against the call site `p.path`:
@@ -3531,9 +3565,30 @@ pub fn compute_blast_radius_scoped(
     max_depth: usize,
     limit: usize,
 ) -> Result<BlastRadiusResult, QueryError> {
+    compute_blast_radius_scoped_with_ids(
+        conn,
+        seed_symbols,
+        &[],
+        symbol_path_filter,
+        seed_paths,
+        max_depth,
+        limit,
+    )
+}
+
+/// Compute blast radius with exact current-index IDs kept as traversal seeds.
+pub fn compute_blast_radius_scoped_with_ids(
+    conn: &Connection,
+    seed_symbols: &[&str],
+    seed_ids: &[&str],
+    symbol_path_filter: Option<&str>,
+    seed_paths: &[&str],
+    max_depth: usize,
+    limit: usize,
+) -> Result<BlastRadiusResult, QueryError> {
     validate_result_limit(limit)?;
     let max_depth = max_depth.min(5);
-    let resolved_seed_symbols = seed_symbols
+    let mut resolved_seed_symbols = seed_symbols
         .iter()
         .map(|name| {
             get_symbol_by_name(conn, name, symbol_path_filter)?.ok_or_else(|| {
@@ -3546,18 +3601,37 @@ pub fn compute_blast_radius_scoped(
             })
         })
         .collect::<Result<Vec<_>, _>>()?;
+    for id in seed_ids {
+        let symbol = get_symbol_by_id(conn, id)?.ok_or_else(|| {
+            let workspace = workspace_name(conn);
+            QueryError::SymbolNotFound {
+                name: format!("symbol id {id}"),
+                workspace,
+                hint: "Run lookup_symbol or search_symbols again and select a current id."
+                    .to_string(),
+            }
+        })?;
+        resolved_seed_symbols.push(symbol);
+    }
     let mut seeds = Vec::new();
-    let seed_type = if !seed_symbols.is_empty() && !seed_paths.is_empty() {
+    let seed_type = if (!seed_symbols.is_empty() || !seed_ids.is_empty()) && !seed_paths.is_empty()
+    {
         for s in seed_symbols {
             seeds.push(s.to_string());
+        }
+        for id in seed_ids {
+            seeds.push(id.to_string());
         }
         for p in seed_paths {
             seeds.push(p.to_string());
         }
         "mixed".to_string()
-    } else if !seed_symbols.is_empty() {
+    } else if !seed_symbols.is_empty() || !seed_ids.is_empty() {
         for s in seed_symbols {
             seeds.push(s.to_string());
+        }
+        for id in seed_ids {
+            seeds.push(id.to_string());
         }
         "symbol".to_string()
     } else if !seed_paths.is_empty() {

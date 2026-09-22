@@ -1,9 +1,9 @@
 use code_kb_core::{
     Workspace, ensure_fts_index, find_callee_signatures, find_julie_extract_binary,
     find_literals_scoped, find_references_scoped, find_structural_facts_scoped,
-    format_fact_categories, format_structural_facts, get_context_slice_op, get_symbol_by_name,
-    list_structural_fact_categories_scoped, open_read_only, open_read_write, safe_tempdir,
-    scan_workspace, search_symbols_scoped, suggest_file_paths, suggest_symbol_names,
+    format_fact_categories, format_structural_facts, get_context_slice_op, get_symbol_by_id,
+    get_symbol_by_name, list_structural_fact_categories_scoped, open_read_only, open_read_write,
+    safe_tempdir, scan_workspace, search_symbols_scoped, suggest_file_paths, suggest_symbol_names,
 };
 use std::fs;
 
@@ -632,6 +632,47 @@ fn find_references_scoped_disambiguates_multi_file_symbols() {
         find_references_scoped(&conn, "run", "callers", 10, false, Some("src/alpha.rs")).unwrap();
     assert_eq!(refs.len(), 1);
     assert_eq!(refs[0].from_symbol_name, "caller_alpha");
+}
+
+#[test]
+fn symbol_id_selects_the_exact_same_named_symbol() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+
+    conn.execute_batch(
+        "INSERT INTO symbols VALUES
+            ('first', 'f1', 'src/types.rs', 'rust', 'run', 'method', NULL, NULL, NULL, NULL, 1, 0, 1, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
+            ('second', 'f1', 'src/types.rs', 'rust', 'run', 'method', NULL, NULL, NULL, NULL, 2, 0, 2, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
+            ('quoted''id', 'f1', 'src/types.rs', 'rust', 'run', 'method', NULL, NULL, NULL, NULL, 3, 0, 3, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
+            ('back\\slash/id', 'f1', 'src/types.rs', 'rust', 'run', 'method', NULL, NULL, NULL, NULL, 4, 0, 4, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0);",
+    )
+    .unwrap();
+
+    assert_eq!(
+        get_symbol_by_id(&conn, "second")
+            .unwrap()
+            .unwrap()
+            .start_line,
+        2
+    );
+    assert_eq!(
+        get_symbol_by_id(&conn, "quoted'id")
+            .unwrap()
+            .unwrap()
+            .start_line,
+        3
+    );
+    assert_eq!(
+        get_symbol_by_id(&conn, "back\\slash/id")
+            .unwrap()
+            .unwrap()
+            .start_line,
+        4
+    );
+    assert!(get_symbol_by_id(&conn, "SECOND").unwrap().is_none());
+    assert!(get_symbol_by_id(&conn, "back/slash/id").unwrap().is_none());
+    assert!(get_symbol_by_id(&conn, "missing").unwrap().is_none());
 }
 
 #[test]

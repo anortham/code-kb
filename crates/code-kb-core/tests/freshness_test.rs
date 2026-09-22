@@ -1,7 +1,8 @@
 use code_kb_core::{
-    Workspace, ensure_fresh_file, ensure_index_matches_extractor, find_julie_extract_binary,
-    get_file, get_symbol_by_name, installed_extractor_version, open_read_only, open_read_write,
-    reconcile_offline_edits, safe_tempdir, scan_workspace, update_file,
+    OpError, SymbolSelector, Workspace, ensure_fresh_file, ensure_index_matches_extractor,
+    find_julie_extract_binary, get_file, get_symbol_by_id, get_symbol_by_name,
+    installed_extractor_version, open_read_only, open_read_write, reconcile_offline_edits,
+    resolve_symbol_op, safe_tempdir, scan_workspace, update_file,
 };
 use std::fs;
 #[cfg(unix)]
@@ -43,6 +44,190 @@ fn test_ensure_fresh_file_detects_equal_size_edit() {
         .unwrap()
         .expect("bar_fn should exist in db");
     assert_eq!(symbol.name, "bar_fn");
+}
+
+#[test]
+fn symbol_id_refreshes_or_requires_reselection_without_name_fallback() {
+    let _extract_bin = find_julie_extract_binary().unwrap();
+    let repo = safe_tempdir();
+    let source = repo.path().join("src");
+    fs::create_dir_all(&source).unwrap();
+    let file = source.join("target.rs");
+    fs::write(source.join("sibling.rs"), "pub fn same_name() { 9; }\n").unwrap();
+    fs::write(&file, "pub fn same_name() { 1; }\n").unwrap();
+    let workspace = Workspace::new(repo.path().to_path_buf());
+    let db = repo.path().join("index.db");
+    scan_workspace(&workspace, &db, true).unwrap();
+    let conn = open_read_only(&db).unwrap();
+    let id = get_symbol_by_name(&conn, "same_name", Some("src/target.rs"))
+        .unwrap()
+        .unwrap()
+        .symbol_id;
+    fs::write(&file, "pub fn same_name() { 2; }\n").unwrap();
+    let refreshed = resolve_symbol_op(
+        &workspace,
+        &db,
+        &conn,
+        &SymbolSelector::Id(id.clone()),
+        None,
+    )
+    .unwrap();
+    assert_eq!(refreshed.symbol_id, id);
+    fs::remove_file(&file).unwrap();
+    let missing_after_refresh =
+        resolve_symbol_op(&workspace, &db, &conn, &SymbolSelector::Id(id), None).unwrap_err();
+    assert!(matches!(
+        &missing_after_refresh,
+        OpError::StaleSymbolId { .. }
+    ));
+    assert!(
+        get_symbol_by_name(&conn, "same_name", Some("src/sibling.rs"))
+            .unwrap()
+            .is_some()
+    );
+    let refresh_message = missing_after_refresh.to_string();
+    assert!(refresh_message.contains("is no longer indexed"));
+    assert!(refresh_message.contains("run lookup_symbol or search_symbols"));
+    assert!(refresh_message.contains(repo.path().file_name().unwrap().to_str().unwrap()));
+    assert!(!refresh_message.contains("same_name"));
+    assert!(!refresh_message.contains("Did you mean one of"));
+    let already_missing = resolve_symbol_op(
+        &workspace,
+        &db,
+        &conn,
+        &SymbolSelector::Id("absent-id".to_string()),
+        None,
+    )
+    .unwrap_err();
+    let message = already_missing.to_string();
+    assert!(message.contains("symbol_id 'absent-id' is no longer indexed"));
+    assert!(message.contains("run lookup_symbol or search_symbols"));
+    assert!(message.contains(repo.path().file_name().unwrap().to_str().unwrap()));
+    assert!(!message.contains("Did you mean one of"));
+}
+
+#[test]
+fn symbol_id_refresh_reloads_offsets_after_native_edit() {
+    let _extract_bin = find_julie_extract_binary().unwrap();
+    let repo = safe_tempdir();
+    let source = repo.path().join("src");
+    fs::create_dir_all(&source).unwrap();
+    let file = source.join("target.rs");
+    fs::write(&file, "pub fn selected() { 1; }\n").unwrap();
+    let workspace = Workspace::new(repo.path().to_path_buf());
+    let db = repo.path().join("index.db");
+    scan_workspace(&workspace, &db, true).unwrap();
+    let conn = open_read_only(&db).unwrap();
+    let id = get_symbol_by_name(&conn, "selected", Some("src/target.rs"))
+        .unwrap()
+        .unwrap()
+        .symbol_id;
+    fs::write(&file, "// moved\npub fn selected() { 1; }\n").unwrap();
+
+    match resolve_symbol_op(
+        &workspace,
+        &db,
+        &conn,
+        &SymbolSelector::Id(id.clone()),
+        None,
+    ) {
+        Ok(refreshed) => {
+            assert_eq!(refreshed.symbol_id, id);
+            assert_eq!(refreshed.start_line, 2);
+        }
+        Err(error @ OpError::StaleSymbolId { .. }) => {
+            assert!(
+                error
+                    .to_string()
+                    .contains("run lookup_symbol or search_symbols")
+            );
+        }
+        Err(error) => panic!("unexpected result: {error}"),
+    }
+}
+
+#[test]
+fn symbol_id_file_guard_uses_workspace_path_identity() {
+    let _extract_bin = find_julie_extract_binary().unwrap();
+    let repo = safe_tempdir();
+    let source = repo.path().join("src");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(source.join("one.rs"), "pub fn first() {}\n").unwrap();
+    fs::write(source.join("two.rs"), "pub fn second() {}\n").unwrap();
+    let workspace = Workspace::new(repo.path().to_path_buf());
+    let db = repo.path().join("index.db");
+    scan_workspace(&workspace, &db, true).unwrap();
+    let conn = open_read_only(&db).unwrap();
+    let id = get_symbol_by_name(&conn, "first", None)
+        .unwrap()
+        .unwrap()
+        .symbol_id;
+    let absolute = source.join("one.rs");
+    assert!(
+        resolve_symbol_op(
+            &workspace,
+            &db,
+            &conn,
+            &SymbolSelector::Id(id.clone()),
+            absolute.to_str()
+        )
+        .is_ok()
+    );
+    assert!(
+        resolve_symbol_op(
+            &workspace,
+            &db,
+            &conn,
+            &SymbolSelector::Id(id.clone()),
+            Some("src\\one.rs")
+        )
+        .is_ok()
+    );
+    assert!(matches!(
+        resolve_symbol_op(
+            &workspace,
+            &db,
+            &conn,
+            &SymbolSelector::Id(id),
+            Some("src/two.rs")
+        ),
+        Err(OpError::FileGuardMismatch { .. })
+    ));
+}
+
+#[test]
+fn symbol_id_file_guard_refreshes_owner_before_rejecting_mismatch() {
+    let _extract_bin = find_julie_extract_binary().unwrap();
+    let repo = safe_tempdir();
+    let source = repo.path().join("src");
+    fs::create_dir_all(&source).unwrap();
+    let file = source.join("target.rs");
+    let guard = source.join("guard.rs");
+    fs::write(&file, "pub fn selected() { 1; }\n").unwrap();
+    fs::write(&guard, "pub fn guard() {}\n").unwrap();
+    let workspace = Workspace::new(repo.path().to_path_buf());
+    let db = repo.path().join("index.db");
+    scan_workspace(&workspace, &db, true).unwrap();
+    let conn = open_read_only(&db).unwrap();
+    let selected = get_symbol_by_name(&conn, "selected", Some("src/target.rs"))
+        .unwrap()
+        .unwrap();
+    let old_body_hash = selected.body_hash.unwrap();
+    fs::write(&file, "pub fn selected() { 2; }\n").unwrap();
+
+    let result = resolve_symbol_op(
+        &workspace,
+        &db,
+        &conn,
+        &SymbolSelector::Id(selected.symbol_id.clone()),
+        guard.to_str(),
+    );
+
+    assert!(matches!(result, Err(OpError::FileGuardMismatch { .. })));
+    let refreshed = get_symbol_by_id(&conn, &selected.symbol_id)
+        .unwrap()
+        .unwrap();
+    assert_ne!(refreshed.body_hash.as_deref(), Some(old_body_hash.as_str()));
 }
 
 #[test]

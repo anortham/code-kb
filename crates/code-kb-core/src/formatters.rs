@@ -425,8 +425,8 @@ pub fn format_find_symbol_results(
         for s in exact_matches {
             let sig = s.signature.as_deref().unwrap_or(&s.name);
             out.push_str(&format!(
-                "- {} `{}` [{}:{}-{}]\n",
-                s.kind, s.name, s.path, s.start_line, s.end_line
+                "- {} `{}` [{}:{}-{}] id={}\n",
+                s.kind, s.name, s.path, s.start_line, s.end_line, s.symbol_id
             ));
             out.push_str(&format!("  Signature: {sig}\n"));
             if let Some(doc) = &s.doc_comment {
@@ -449,8 +449,8 @@ pub fn format_find_symbol_results(
             let s = &r.symbol;
             let sig = s.signature.as_deref().unwrap_or(&s.name);
             out.push_str(&format!(
-                "- {} `{}` [{}:{}-{}] (score: {:.2})\n",
-                s.kind, s.name, s.path, s.start_line, s.end_line, r.score
+                "- {} `{}` [{}:{}-{}] (score: {:.2}) id={}\n",
+                s.kind, s.name, s.path, s.start_line, s.end_line, r.score, s.symbol_id
             ));
             out.push_str(&format!("  Signature: {sig}\n"));
             if let Some(snippet) = &r.snippet {
@@ -616,8 +616,8 @@ pub fn format_search_results(query: &str, results: &[SymbolSearchResult], limit:
         let s = &r.symbol;
         let sig = s.signature.as_deref().unwrap_or(&s.name);
         out.push_str(&format!(
-            "- {} `{}` [{}:{}-{}] (score: {:.2})\n",
-            s.kind, s.name, s.path, s.start_line, s.end_line, r.score
+            "- {} `{}` [{}:{}-{}] (score: {:.2}) id={}\n",
+            s.kind, s.name, s.path, s.start_line, s.end_line, r.score, s.symbol_id
         ));
         out.push_str(&format!("  Signature: {sig}\n"));
         if let Some(snippet) = &r.snippet {
@@ -1007,6 +1007,42 @@ mod tests {
         assert!(formatted.contains("Match: Parses [tokens] from stream."));
         assert!(!formatted.contains("explain"));
         assert!(!formatted.contains("rerank"));
+    }
+
+    #[test]
+    fn discovery_formatters_append_ids_to_metadata_rows() {
+        let exact = vec![sample_symbol("exact")];
+        let fallback = vec![SymbolSearchResult {
+            symbol: sample_symbol("fallback"),
+            score: 1.0,
+            snippet: None,
+            explain: None,
+        }];
+
+        let outputs = [
+            (
+                format_find_symbol_results("exact", &exact, &[], 20),
+                "id_exact",
+            ),
+            (
+                format_find_symbol_results("fallback query", &[], &fallback, 20),
+                "id_fallback",
+            ),
+            (
+                format_search_results("fallback", &fallback, 20),
+                "id_fallback",
+            ),
+        ];
+
+        for (formatted, id) in outputs {
+            assert!(
+                formatted
+                    .lines()
+                    .any(|line| line.starts_with("- ") && line.contains(&format!("id={id}"))),
+                "{formatted}"
+            );
+            assert!(!formatted.contains("\n  id="), "{formatted}");
+        }
     }
 
     #[test]

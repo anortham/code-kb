@@ -22,15 +22,18 @@ pub use models::{
     SearchExplain, StructuralFact, Symbol, SymbolSearchResult, TestTarget, TypeFact,
 };
 pub use ops::{
-    OpError, blast_radius_op, codebase_outline_op, file_skeleton_op, get_context_slice_op,
-    get_symbol_body_op,
+    OpError, SymbolSelector, blast_radius_op, blast_radius_selected_op, codebase_outline_op,
+    file_skeleton_op, get_context_slice_op, get_context_slice_selected_op, get_symbol_body_op,
+    get_symbol_body_selected_op, resolve_symbol_op,
 };
 pub use queries::{
-    QueryError, compute_blast_radius, compute_blast_radius_scoped, count_file_symbols,
-    file_sizes_for_paths, find_callee_signatures, find_literals, find_literals_scoped,
-    find_references, find_references_ext, find_references_for_symbol, find_references_scoped,
-    find_related_tests, find_structural_facts, find_structural_facts_scoped, find_type_facts,
-    fts_search_symbols_explained, fts_search_symbols_scoped, get_file, get_symbol_by_name,
+    QueryError, compute_blast_radius, compute_blast_radius_scoped,
+    compute_blast_radius_scoped_with_ids, count_file_symbols, file_sizes_for_paths,
+    find_callee_signatures, find_literals, find_literals_scoped, find_references,
+    find_references_ext, find_references_for_symbol, find_references_for_symbol_ext,
+    find_references_scoped, find_related_tests, find_structural_facts,
+    find_structural_facts_scoped, find_type_facts, fts_search_symbols_explained,
+    fts_search_symbols_scoped, get_file, get_symbol_by_id, get_symbol_by_name,
     get_symbol_by_name_exact, is_category_alias, is_test_path, list_structural_fact_categories,
     list_structural_fact_categories_scoped, load_file_symbols, load_scoped_outline_symbols,
     normalize_kind, sanitize_fts5_query, search_symbols, search_symbols_scoped, suggest_file_paths,

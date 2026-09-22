@@ -383,6 +383,60 @@ fn test_cli_body_and_slice() {
     let stdout = String::from_utf8_lossy(&body_output.stdout);
     assert!(stdout.contains("helper();"));
 
+    let lookup = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .args([
+            "--root",
+            root.to_str().unwrap(),
+            "--json",
+            "lookup",
+            "run_task",
+        ])
+        .output()
+        .unwrap();
+    let id = serde_json::from_slice::<serde_json::Value>(&lookup.stdout).unwrap()[0]["symbol_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let selected_body = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .args(["--root", root.to_str().unwrap(), "body", "--symbol-id", &id])
+        .output()
+        .unwrap();
+    assert!(selected_body.status.success());
+    assert!(String::from_utf8_lossy(&selected_body.stdout).contains("helper();"));
+    for command in [
+        vec!["context", "--symbol-id", &id],
+        vec!["refs", "--symbol-id", &id, "--direction", "callees"],
+        vec!["blast-radius", "--symbol-id", &id],
+    ] {
+        let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .arg("--root")
+            .arg(root)
+            .args(command)
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+    }
+
+    let conflict = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .args([
+            "--root",
+            root.to_str().unwrap(),
+            "body",
+            "run_task",
+            "--symbol-id",
+            &id,
+        ])
+        .output()
+        .unwrap();
+    assert!(!conflict.status.success());
+    assert!(String::from_utf8_lossy(&conflict.stderr).contains("exactly one"));
+    let empty_id = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .args(["--root", root.to_str().unwrap(), "body", "--symbol-id", ""])
+        .output()
+        .unwrap();
+    assert!(!empty_id.status.success());
+    assert!(String::from_utf8_lossy(&empty_id.stderr).contains("must not be empty"));
+
     // Test primary subcommand "context"
     let context_output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
         .arg("--root")
@@ -410,6 +464,255 @@ fn test_cli_body_and_slice() {
     let slice_stdout = String::from_utf8_lossy(&slice_output.stdout);
     assert!(slice_stdout.contains("Target: `run_task`"));
     assert!(slice_stdout.contains("helper"));
+}
+
+#[test]
+fn cli_read_tools_reject_missing_empty_and_conflicting_selectors() {
+    let repo = setup_test_repo();
+    let root = repo.path();
+    let cases: [(&str, &[&str], &str); 12] = [
+        ("body", &[], "exactly one non-empty"),
+        ("body", &[""], "must not be empty"),
+        ("body", &["--symbol-id", ""], "must not be empty"),
+        (
+            "body",
+            &["run_task", "--symbol-id", "opaque"],
+            "exactly one of",
+        ),
+        ("context", &[], "exactly one non-empty"),
+        ("context", &[""], "must not be empty"),
+        ("context", &["--symbol-id", ""], "must not be empty"),
+        (
+            "context",
+            &["run_task", "--symbol-id", "opaque"],
+            "exactly one of",
+        ),
+        ("refs", &[], "exactly one non-empty"),
+        ("refs", &[""], "must not be empty"),
+        ("refs", &["--symbol-id", ""], "must not be empty"),
+        (
+            "refs",
+            &["run_task", "--symbol-id", "opaque"],
+            "exactly one of",
+        ),
+    ];
+
+    for (tool, selector_args, error_text) in cases {
+        let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .arg("--root")
+            .arg(root)
+            .arg(tool)
+            .args(selector_args)
+            .output()
+            .unwrap();
+        assert!(!output.status.success(), "{tool} {selector_args:?}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains(error_text),
+            "{tool} {selector_args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+#[test]
+fn cli_blast_radius_rejects_empty_ids_and_keeps_git_discovery() {
+    let repo = setup_test_repo();
+    let root = repo.path();
+    std::fs::write(root.join(".code-kb/.gitignore"), "*\n").unwrap();
+    assert!(
+        Command::new("git")
+            .args(["init", "--quiet"])
+            .current_dir(root)
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert!(
+        Command::new("git")
+            .args(["add", "-A"])
+            .current_dir(root)
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert!(
+        Command::new("git")
+            .args([
+                "-c",
+                "user.name=code-kb test",
+                "-c",
+                "user.email=code-kb@example.invalid",
+                "commit",
+                "--quiet",
+                "-m",
+                "fixture",
+            ])
+            .current_dir(root)
+            .status()
+            .unwrap()
+            .success()
+    );
+    let source = root.join("src/workspace.rs");
+    std::fs::write(&source, "pub fn changed() {}\n").unwrap();
+
+    let discovery = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .arg("--json")
+        .arg("blast-radius")
+        .output()
+        .unwrap();
+    assert!(
+        discovery.status.success(),
+        "{}",
+        String::from_utf8_lossy(&discovery.stderr)
+    );
+    let result: serde_json::Value = serde_json::from_slice(&discovery.stdout).unwrap();
+    assert_eq!(result["seed_type"], "file");
+    assert_eq!(result["seeds"], serde_json::json!(["src/workspace.rs"]));
+
+    for (args, error_text) in [
+        (vec!["blast-radius", "--symbol-id", ""], "must not be empty"),
+        (
+            vec!["blast-radius", "run_task", "--symbol-id", "opaque"],
+            "only one",
+        ),
+    ] {
+        let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .arg("--root")
+            .arg(root)
+            .args(&args)
+            .output()
+            .unwrap();
+        assert!(!output.status.success(), "{args:?}");
+        assert!(String::from_utf8_lossy(&output.stderr).contains(error_text));
+    }
+}
+
+#[test]
+fn symbol_ids_select_same_parent_cpp_overloads_across_read_tools() {
+    let repo = code_kb_core::safe_tempdir();
+    let root = repo.path();
+    let src = root.join("src");
+    std::fs::create_dir_all(&src).unwrap();
+    std::fs::write(
+        src.join("overloads.cpp"),
+        "struct Parent { int run() { return 1; } int run(int) { return 2; } };\nint first() { Parent p; return p.run(); }\nint second() { Parent p; return p.run(2); }\n",
+    )
+    .unwrap();
+    std::fs::write(src.join("other.cpp"), "int other() { return 0; }\n").unwrap();
+    let bin = env!("CARGO_BIN_EXE_code-kb");
+    assert!(
+        Command::new(bin)
+            .args(["--root", root.to_str().unwrap(), "scan", "--force"])
+            .status()
+            .unwrap()
+            .success()
+    );
+    let lookup = Command::new(bin)
+        .args([
+            "--root",
+            root.to_str().unwrap(),
+            "--json",
+            "lookup",
+            "run",
+            "--include-tests",
+        ])
+        .output()
+        .unwrap();
+    assert!(lookup.status.success());
+    let rows: Vec<serde_json::Value> = serde_json::from_slice(&lookup.stdout).unwrap();
+    let ids: Vec<String> = rows
+        .iter()
+        .filter(|row| row["name"] == "run")
+        .map(|row| row["symbol_id"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(ids.len(), 2, "{rows:?}");
+    let conn = code_kb_core::open_read_write(&root.join(".code-kb/artifact.db")).unwrap();
+    conn.execute_batch(
+        "PRAGMA foreign_keys = OFF; DELETE FROM pending_relationships; DELETE FROM identifiers;",
+    )
+    .unwrap();
+    let first: String = conn
+        .query_row(
+            "SELECT symbol_id FROM symbols WHERE name = 'first'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let second: String = conn
+        .query_row(
+            "SELECT symbol_id FROM symbols WHERE name = 'second'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    conn.execute("INSERT INTO relationships (reference_site_id, file_id, from_symbol_id, to_symbol_id, kind, path, start_line, start_column, confidence) SELECT ?1, file_id, ?2, ?3, 'calls', 'src/overloads.cpp', 2, 0, 1.0 FROM symbols WHERE symbol_id = ?2", rusqlite::params!["resolved-first", first, ids[0]]).unwrap();
+    conn.execute("INSERT INTO relationships (reference_site_id, file_id, from_symbol_id, to_symbol_id, kind, path, start_line, start_column, confidence) SELECT ?1, file_id, ?2, ?3, 'calls', 'src/overloads.cpp', 3, 0, 1.0 FROM symbols WHERE symbol_id = ?2", rusqlite::params!["resolved-second", second, ids[1]]).unwrap();
+    drop(conn);
+    let bodies: Vec<String> = ids
+        .iter()
+        .map(|id| {
+            let output = Command::new(bin)
+                .args(["--root", root.to_str().unwrap(), "body", "--symbol-id", id])
+                .output()
+                .unwrap();
+            assert!(output.status.success());
+            String::from_utf8(output.stdout).unwrap()
+        })
+        .collect();
+    assert_ne!(bodies[0], bodies[1]);
+    let outputs: Vec<Vec<String>> = ["context", "refs", "blast-radius"]
+        .iter()
+        .map(|command| {
+            ids.iter()
+                .map(|id| {
+                    let output = Command::new(bin)
+                        .arg("--root")
+                        .arg(root)
+                        .args([*command, "--symbol-id", id])
+                        .output()
+                        .unwrap();
+                    assert!(
+                        output.status.success(),
+                        "{}",
+                        String::from_utf8_lossy(&output.stderr)
+                    );
+                    String::from_utf8(output.stdout).unwrap()
+                })
+                .collect()
+        })
+        .collect();
+    assert_ne!(outputs[0][0], outputs[0][1]);
+    assert!(outputs[1][0].contains("`first`") && outputs[1][0].contains("kind: calls"));
+    assert!(!outputs[1][0].contains("second"));
+    assert!(outputs[1][1].contains("`second`") && outputs[1][1].contains("kind: calls"));
+    assert!(!outputs[1][1].contains("first"));
+    assert!(outputs[2][0].contains("first"));
+    assert!(!outputs[2][0].contains("second"));
+    assert!(outputs[2][1].contains("second"));
+    assert!(!outputs[2][1].contains("first"));
+
+    let matching_file = src.join("overloads.cpp");
+    let guarded = Command::new(bin)
+        .args(["--root", root.to_str().unwrap(), "--json", "blast-radius"])
+        .args(["--symbol-id", &ids[0], "--file"])
+        .arg(&matching_file)
+        .output()
+        .unwrap();
+    assert!(guarded.status.success());
+    let guarded: serde_json::Value = serde_json::from_slice(&guarded.stdout).unwrap();
+    assert_eq!(guarded["seed_type"], "symbol");
+    assert_eq!(guarded["seeds"], serde_json::json!([ids[0]]));
+
+    let mismatched = Command::new(bin)
+        .args(["--root", root.to_str().unwrap(), "blast-radius"])
+        .args(["--symbol-id", &ids[0], "--file"])
+        .arg(src.join("other.cpp"))
+        .output()
+        .unwrap();
+    assert!(!mismatched.status.success());
+    assert!(String::from_utf8_lossy(&mismatched.stderr).contains("not requested file"));
 }
 
 #[test]

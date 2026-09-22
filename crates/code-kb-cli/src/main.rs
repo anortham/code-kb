@@ -2,12 +2,13 @@ use clap::{Args, Parser, Subcommand};
 use std::path::{Path, PathBuf};
 
 use code_kb_core::{
-    Workspace, codebase_outline_op, ensure_fresh_file, ensure_fts_index_path, file_skeleton_op,
-    format_context_slice, format_fact_categories, format_find_symbol_results, format_references,
-    format_search_results, format_structural_facts, format_symbol_body,
-    fts_search_symbols_explained, fts_search_symbols_scoped, get_context_slice_op,
-    get_symbol_body_op, list_structural_fact_categories_scoped, load_file_symbols, open_read_only,
-    queries, scan_workspace, search_symbols_scoped,
+    SymbolSelector, Workspace, blast_radius_selected_op, codebase_outline_op, ensure_fresh_file,
+    ensure_fts_index_path, file_skeleton_op, find_references_for_symbol_ext, format_context_slice,
+    format_fact_categories, format_find_symbol_results, format_references, format_search_results,
+    format_structural_facts, format_symbol_body, fts_search_symbols_explained,
+    fts_search_symbols_scoped, get_context_slice_selected_op, get_symbol_body_selected_op,
+    list_structural_fact_categories_scoped, load_file_symbols, open_read_only, queries,
+    resolve_symbol_op, scan_workspace, search_symbols_scoped,
 };
 
 mod logging;
@@ -21,6 +22,19 @@ fn parse_result_limit(raw: &str) -> Result<usize, String> {
         .map_err(|_| "limit must be a non-negative integer".to_string())?;
     code_kb_core::queries::validate_result_limit(limit).map_err(|error| error.to_string())?;
     Ok(limit)
+}
+
+fn symbol_selector(
+    symbol: Option<&String>,
+    symbol_id: Option<&String>,
+) -> anyhow::Result<SymbolSelector> {
+    match (symbol, symbol_id) {
+        (Some(_), Some(_)) => anyhow::bail!("Specify exactly one of symbol or --symbol-id"),
+        (Some(name), None) if !name.is_empty() => Ok(SymbolSelector::Name(name.to_string())),
+        (None, Some(id)) if !id.is_empty() => Ok(SymbolSelector::Id(id.to_string())),
+        (Some(_), None) | (None, Some(_)) => anyhow::bail!("Selectors must not be empty"),
+        (None, None) => anyhow::bail!("Specify exactly one non-empty symbol or --symbol-id"),
+    }
 }
 
 #[derive(Debug, Parser)]
@@ -152,7 +166,9 @@ pub struct SearchArgs {
 #[derive(Debug, Args)]
 pub struct BodyArgs {
     /// Full or qualified symbol name.
-    pub symbol: String,
+    pub symbol: Option<String>,
+    #[arg(long)]
+    pub symbol_id: Option<String>,
     /// Optional file path for disambiguation.
     #[arg(short = 'f', long, alias = "path", alias = "file-path")]
     pub file: Option<String>,
@@ -161,7 +177,9 @@ pub struct BodyArgs {
 #[derive(Debug, Args)]
 pub struct SliceArgs {
     /// Target symbol name.
-    pub symbol: String,
+    pub symbol: Option<String>,
+    #[arg(long)]
+    pub symbol_id: Option<String>,
     /// Optional file path for disambiguation.
     #[arg(short = 'f', long, alias = "path", alias = "file-path")]
     pub file: Option<String>,
@@ -175,7 +193,9 @@ pub type ContextArgs = SliceArgs;
 #[derive(Debug, Args)]
 pub struct RefsArgs {
     /// Target symbol name.
-    pub symbol: String,
+    pub symbol: Option<String>,
+    #[arg(long)]
+    pub symbol_id: Option<String>,
     /// Optional file path for disambiguation.
     #[arg(short = 'f', long, alias = "path", alias = "file-path")]
     pub file: Option<String>,
@@ -194,6 +214,8 @@ pub struct RefsArgs {
 pub struct BlastRadiusArgs {
     /// Optional symbol name to seed blast radius walk.
     pub symbol: Option<String>,
+    #[arg(long)]
+    pub symbol_id: Option<String>,
     /// Optional file path to seed blast radius walk.
     #[arg(long, short = 'f', alias = "path", alias = "file-path")]
     pub file: Option<String>,
@@ -593,11 +615,12 @@ fn main() -> anyhow::Result<()> {
             }
         }
         Command::Body(args) => {
-            let (symbol, body) = get_symbol_body_op(
+            let selector = symbol_selector(args.symbol.as_ref(), args.symbol_id.as_ref())?;
+            let (symbol, body) = get_symbol_body_selected_op(
                 &workspace,
                 &db_path,
                 &conn,
-                &args.symbol,
+                &selector,
                 args.file.as_deref(),
             )?;
 
@@ -608,11 +631,12 @@ fn main() -> anyhow::Result<()> {
             }
         }
         Command::Context(args) => {
-            let slice = get_context_slice_op(
+            let selector = symbol_selector(args.symbol.as_ref(), args.symbol_id.as_ref())?;
+            let slice = get_context_slice_selected_op(
                 &workspace,
                 &db_path,
                 &conn,
-                &args.symbol,
+                &selector,
                 args.file.as_deref(),
                 args.include_external,
             )?;
@@ -624,29 +648,67 @@ fn main() -> anyhow::Result<()> {
             }
         }
         Command::Refs(args) => {
-            let rel_file = args.file.as_deref().map(|p| workspace.relativize_filter(p));
-            let refs = code_kb_core::find_references_scoped(
-                &conn,
-                &args.symbol,
-                &args.direction,
-                args.limit,
-                args.include_external,
-                rel_file.as_deref(),
-            )?;
+            let selector = symbol_selector(args.symbol.as_ref(), args.symbol_id.as_ref())?;
+            let (target, refs) = match selector {
+                SymbolSelector::Name(name) => {
+                    let path = args
+                        .file
+                        .as_deref()
+                        .map(|path| workspace.relativize_filter(path));
+                    let refs = code_kb_core::find_references_scoped(
+                        &conn,
+                        &name,
+                        &args.direction,
+                        args.limit,
+                        args.include_external,
+                        path.as_deref(),
+                    )?;
+                    (name, refs)
+                }
+                SymbolSelector::Id(id) => {
+                    let selected = resolve_symbol_op(
+                        &workspace,
+                        &db_path,
+                        &conn,
+                        &SymbolSelector::Id(id),
+                        args.file.as_deref(),
+                    )?;
+                    let refs = find_references_for_symbol_ext(
+                        &conn,
+                        &selected.name,
+                        &args.direction,
+                        args.limit,
+                        &selected.symbol_id,
+                        args.include_external,
+                    )?;
+                    (selected.name, refs)
+                }
+            };
             if cli.json {
                 println!("{}", serde_json::to_string_pretty(&refs)?);
             } else {
                 println!(
                     "{}",
-                    format_references(&args.symbol, &refs, &args.direction, args.limit)
+                    format_references(&target, &refs, &args.direction, args.limit)
                 );
             }
         }
         Command::BlastRadius(args) | Command::Impact(args) => {
-            let result = code_kb_core::blast_radius_op(
+            if args.symbol.is_some() && args.symbol_id.is_some() {
+                anyhow::bail!("Specify only one of symbol or --symbol-id");
+            }
+            let selector = match (args.symbol.as_ref(), args.symbol_id.as_ref()) {
+                (None, None) => None,
+                _ => Some(symbol_selector(
+                    args.symbol.as_ref(),
+                    args.symbol_id.as_ref(),
+                )?),
+            };
+            let result = blast_radius_selected_op(
                 &workspace,
+                Some(&db_path),
                 &conn,
-                args.symbol.as_deref(),
+                selector,
                 args.file.as_deref(),
                 args.depth,
                 args.limit,

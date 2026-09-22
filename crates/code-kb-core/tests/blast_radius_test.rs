@@ -201,6 +201,58 @@ fn blast_radius_rejects_unknown_or_ambiguous_symbol_seeds() {
 }
 
 #[test]
+fn unknown_symbol_id_error_uses_reselection_guidance_without_name_candidates() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+
+    let error = code_kb_core::compute_blast_radius_scoped_with_ids(
+        &conn,
+        &[],
+        &["missing-id"],
+        None,
+        &[],
+        1,
+        20,
+    )
+    .unwrap_err()
+    .to_string();
+
+    assert!(error.contains("symbol id missing-id"));
+    assert!(error.contains("Run lookup_symbol or search_symbols again"));
+    assert!(!error.contains("Did you mean one of"));
+}
+
+#[test]
+fn blast_radius_symbol_id_requires_database_path_instead_of_git_discovery() {
+    let temp = safe_tempdir();
+    let workspace = code_kb_core::Workspace::new(temp.path().to_path_buf());
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+    conn.execute_batch(
+        "INSERT INTO symbols VALUES ('existing-id', 'f1', 'src/target.rs', 'rust', 'target', 'function', NULL, NULL, NULL, NULL, 1, 0, 1, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0);",
+    )
+    .unwrap();
+
+    let result = code_kb_core::blast_radius_selected_op(
+        &workspace,
+        None,
+        &conn,
+        Some(code_kb_core::SymbolSelector::Id("existing-id".to_string())),
+        None,
+        2,
+        20,
+    );
+
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("database path is required")
+    );
+}
+
+#[test]
 fn blast_radius_disambiguates_symbol_seed_using_seed_path() {
     let temp = safe_tempdir();
     let conn = open_read_write(&temp.path().join("index.db")).unwrap();
