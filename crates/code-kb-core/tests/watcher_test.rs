@@ -312,19 +312,23 @@ fn test_watcher_refreshes_a_native_header_edit() {
     let _watcher = start_watcher(ws.clone(), db_path.clone()).unwrap();
     fs::write(&header, "class Widget { public: int new_value = 0; };\n").unwrap();
 
-    sleep(Duration::from_millis(700));
-    let conn = open_read_only(&db_path).unwrap();
-    assert_ne!(
-        get_file(&conn, "src/widget.h")
+    for _ in 0..25 {
+        sleep(Duration::from_millis(200));
+        let conn = open_read_only(&db_path).unwrap();
+        let current_hash = get_file(&conn, "src/widget.h")
             .unwrap()
             .unwrap()
-            .content_hash,
-        original_hash
-    );
-    let revisions_after: i64 = conn
-        .query_row("SELECT COUNT(*) FROM extraction_revisions", [], |row| {
-            row.get(0)
-        })
-        .unwrap();
-    assert_eq!(revisions_after, revisions_before + 1);
+            .content_hash;
+        if current_hash != original_hash {
+            let revisions_after: i64 = conn
+                .query_row("SELECT COUNT(*) FROM extraction_revisions", [], |row| {
+                    row.get(0)
+                })
+                .unwrap();
+            assert_eq!(revisions_after, revisions_before + 1);
+            return;
+        }
+    }
+
+    panic!("Watcher did not refresh the native header edit");
 }
