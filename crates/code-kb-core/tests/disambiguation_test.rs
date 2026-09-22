@@ -986,7 +986,9 @@ fn qt_facts_fixture(conn: &rusqlite::Connection) {
             ('qf_obj', 'f1', 'ui/Button.qml', 'qml', 'qml.object_instantiation.v1', 'object', 'ui_object_definition', NULL, 4, 4, 1.0),
             ('qf_type', 'f2', 'ui/qmldir', 'qmldir', 'qmldir.object_type.v1', 'type', 'object_type', NULL, 2, 2, 1.0),
             ('qf_mod', 'f2', 'ui/qmldir', 'qmldir', 'qmldir.module.v1', 'module', 'module', NULL, 3, 3, 1.0),
-            ('qf_prag', 'f1', 'ui/Button.qml', 'qml', 'qml.pragma.v1', 'pragma', 'ui_pragma', NULL, 5, 5, 1.0);",
+            ('qf_prag', 'f1', 'ui/Button.qml', 'qml', 'qml.pragma.v1', 'pragma', 'ui_pragma', NULL, 5, 5, 1.0),
+            ('qf_qprop', 'f1', 'ui/Button.qml', 'qml', 'qml.property_declaration.v1', 'property', 'ui_property', NULL, 6, 6, 1.0),
+            ('qf_cprop', 'f3', 'src/layouts/button.h', 'cpp', 'cpp.qt_property.v1', 'property', 'field_declaration', NULL, 7, 7, 1.0);",
     )
     .unwrap();
 }
@@ -1016,6 +1018,14 @@ fn qt_fact_aliases_reach_their_pattern_families() {
         ("module", &["qmldir.module.v1"]),
         ("modules", &["qmldir.module.v1"]),
         ("pragma", &["qml.pragma.v1"]),
+        (
+            "property",
+            &["cpp.qt_property.v1", "qml.property_declaration.v1"],
+        ),
+        (
+            "properties",
+            &["cpp.qt_property.v1", "qml.property_declaration.v1"],
+        ),
     ];
 
     for (alias, patterns) in expected {
@@ -1038,6 +1048,12 @@ fn a_scoped_qt_fact_alias_keeps_its_path_filter() {
 
     assert_eq!(facts.len(), 1);
     assert_eq!(facts[0].pattern_id, "qmldir.import.v1");
+
+    let properties =
+        find_structural_facts_scoped(&conn, "property", Some("src/layouts"), 10).unwrap();
+
+    assert_eq!(properties.len(), 1);
+    assert_eq!(properties[0].pattern_id, "cpp.qt_property.v1");
 }
 
 #[test]
@@ -1061,6 +1077,7 @@ fn the_category_listing_names_the_qt_aliases() {
         "component (2 patterns, 2 facts)",
         "module (1 pattern, 1 fact)",
         "pragma (1 pattern, 1 fact)",
+        "property (2 patterns, 2 facts)",
     ] {
         assert!(alias_line.contains(alias), "{alias_line}");
     }

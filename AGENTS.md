@@ -110,8 +110,8 @@ MCP tool schema.**
 - Structural-fact categories: `CATEGORY_ALIASES` in `queries.rs` is the whole alias table
   (`sql`/`query`/`queries`, `route`/`routes`, `config`, `model`/`models`, `signal`/`signals`,
   `import`/`imports`, `binding`/`bindings`, `component`/`components`, `module`/`modules`,
-  `pragma`), and each alias maps to the pattern-id families it names, never to a substring.
-  An unknown category still falls back to a
+  `pragma`, `property`/`properties`), and each alias maps to the pattern-id families it names,
+  never to a substring. An unknown category still falls back to a
   substring match, so raw pattern ids work. With no category the answer lists the aliases with
   facts in this index before the raw pattern list. Facts and literals have separate limits, each
   with its own cap notice.

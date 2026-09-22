@@ -3078,6 +3078,8 @@ const MODULE_FAMILIES: &[&str] = &[".module."];
 
 const PRAGMA_FAMILIES: &[&str] = &[".pragma."];
 
+const PROPERTY_FAMILIES: &[&str] = &[".property_declaration.", ".qt_property."];
+
 /// Category aliases mapped to the pattern-id families they name.
 ///
 /// A rule that starts with a dot matches any pattern id that contains it, a rule that ends with a
@@ -3102,6 +3104,8 @@ pub const CATEGORY_ALIASES: &[(&str, &[&str])] = &[
     ("module", MODULE_FAMILIES),
     ("modules", MODULE_FAMILIES),
     ("pragma", PRAGMA_FAMILIES),
+    ("property", PROPERTY_FAMILIES),
+    ("properties", PROPERTY_FAMILIES),
 ];
 
 fn category_families(category: &str) -> Option<&'static [&'static str]> {
