@@ -214,8 +214,8 @@ Source commit: `74baf19`; all checks below ran on its clean task worktree on 202
 | Branch gate | `cargo clippy --workspace --all-targets --locked -- -D warnings` | Passed |
 | Branch gate | `cargo fmt --all -- --check`; `node --test tests/plugin/*.test.cjs`; `git diff --check`; three guidance-pair `cmp` checks | Passed; 17 plugin tests |
 | Build | `cargo build -p code-kb-cli --bin code-kb --release` | Passed |
-| Windows guest | Exact-ID SQLite test; `test_paths_equal`; `cargo check --workspace --locked` | Passed; seven path-identity tests. Build guard used `CODE_KB_ALLOW_MISSING_JULIE_EXTRACT=1` because the guest lacks the pinned extractor. |
+| Windows guest | `powershell -File scripts/restore-julie-extract.ps1`; `cargo test --workspace --locked`; `cargo check --workspace --locked` | Pinned `julie-extract` 3.3.1 installed with verified SHA-256; 388 Rust tests passed with the normal build guard; workspace check passed. |
 | Report-only memory | Same persistent MCP benchmark workload and final index, old vs new binary | Post-query RSS 16.47 vs 16.50 MB; no material retained increase. |
 | Report-only output | Same lookup and search benchmark queries, old vs new binary | Lookup 443 to 512 estimated tokens; search 2,109 to 2,486, reflecting full IDs. |
 
-The benchmark used a temporary copy of `scripts/benchmark_quality.py` with its removed `validate_syntax` target changed to the existing `sanitize_fts5_query` symbol. The repository script was not edited. Extractor-backed Windows integration was not run and remains part of release verification.
+The benchmark used a temporary copy of `scripts/benchmark_quality.py` with its removed `validate_syntax` target changed to the existing `sanitize_fts5_query` symbol. The repository script was not edited. The Windows suite used the guest's NTFS checkout at the same source commit.
