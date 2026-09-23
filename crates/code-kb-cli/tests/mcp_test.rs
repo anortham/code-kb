@@ -105,10 +105,64 @@ impl McpSession {
     fn call(&mut self, name: &str, arguments: Value) -> Value {
         self.request("tools/call", json!({"name": name, "arguments": arguments}))["result"].clone()
     }
+
+    fn finish(self) {
+        let Self {
+            _child: mut child,
+            stdin,
+            ..
+        } = self;
+        drop(stdin);
+        child.wait().unwrap();
+    }
 }
 
 fn result_text(result: &Value) -> &str {
     result["content"][0]["text"].as_str().unwrap()
+}
+
+fn launch_log(launch_root: &Path) -> String {
+    std::fs::read_dir(launch_root.join(".code-kb").join("logs"))
+        .unwrap()
+        .map(|entry| std::fs::read_to_string(entry.unwrap().path()).unwrap())
+        .collect()
+}
+
+fn cargo_project(source: &str) -> tempfile::TempDir {
+    let project = tempfile::tempdir().unwrap();
+    std::fs::write(
+        project.path().join("Cargo.toml"),
+        "[package]\nname = \"fixture\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    std::fs::create_dir_all(project.path().join("src")).unwrap();
+    std::fs::write(project.path().join("src").join("lib.rs"), source).unwrap();
+    project
+}
+
+#[cfg(unix)]
+fn extractor_wrapper(dir: &Path, scan_prelude: &str) -> PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    let real = code_kb_core::find_julie_extract_binary().expect("julie-extract is installed");
+    let wrapper = dir.join("julie-extract");
+    std::fs::write(
+        &wrapper,
+        format!(
+            "#!/bin/sh\nif [ \"$1\" = scan ]; then\n{scan_prelude}\nfi\nexec '{}' \"$@\"\n",
+            real.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while Command::new(&wrapper).arg("--version").output().is_err() {
+        assert!(
+            Instant::now() < deadline,
+            "the wrapper never became runnable"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    wrapper
 }
 
 fn canonical_root(dir: &Path) -> PathBuf {
@@ -1664,7 +1718,7 @@ fn fixture_repo(struct_name: &str) -> tempfile::TempDir {
 fn test_mcp_initialize_roots_are_ignored_and_file_uri_project_roots_resolve() {
     let repo = fixture_repo("Alpha");
     let root = repo.path();
-    let other = fixture_repo("Beta");
+    let bait = cargo_project("pub fn bait() {}\n");
     let root_str = root.to_string_lossy().replace('\\', "/");
     let three_slash_uri = format!("file:///{root_str}");
     let two_slash_uri = format!("file://{root_str}");
@@ -1693,7 +1747,7 @@ fn test_mcp_initialize_roots_are_ignored_and_file_uri_project_roots_resolve() {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {},
                 "clientInfo": { "name": "uri-test", "version": "1.0" },
-                "roots": [{ "uri": file_uri(other.path()) }]
+                "roots": [{ "uri": file_uri(bait.path()) }]
             }
         }),
     );
@@ -1720,6 +1774,7 @@ fn test_mcp_initialize_roots_are_ignored_and_file_uri_project_roots_resolve() {
             "{call_val}"
         );
     }
+    assert!(!bait.path().join(".code-kb").exists());
 
     drop(stdin);
     let _ = child.wait();
@@ -3013,7 +3068,8 @@ fn test_mcp_serve_launched_in_the_home_directory_does_not_index_it() {
     command
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
-        .env("CODE_KB_TELEMETRY_DIR", telemetry.path());
+        .env("CODE_KB_TELEMETRY_DIR", telemetry.path())
+        .env_remove("RUST_LOG");
     let mut session = McpSession::start(command);
 
     let result = session.call(
@@ -3024,6 +3080,11 @@ fn test_mcp_serve_launched_in_the_home_directory_does_not_index_it() {
         result_text(&result).contains("struct `Workspace` ["),
         "{result}"
     );
+    session.finish();
+
+    let log = launch_log(home.path());
+    assert!(log.contains("Startup index skipped"), "{log}");
+    assert!(!log.contains("running automatic initial scan"), "{log}");
     assert!(!home.path().join(".code-kb").join("artifact.db").exists());
 }
 
@@ -3261,4 +3322,226 @@ fn test_mcp_launch_root_indexed_during_the_session_is_reconciled_on_first_use() 
         result_text(&result).contains("function `added_after_the_scan` ["),
         "{result}"
     );
+}
+
+#[test]
+fn test_mcp_absolute_path_in_a_nested_worktree_is_refused_without_indexing_it() {
+    let main = fixture_repo("Alpha");
+    let worktree = main.path().join(".claude").join("worktrees").join("x");
+    std::fs::create_dir_all(worktree.join("src")).unwrap();
+    std::fs::write(
+        worktree.join(".git"),
+        "gitdir: /nonexistent/main/.git/worktrees/x\n",
+    )
+    .unwrap();
+    std::fs::write(
+        worktree.join("src").join("a.rs"),
+        "pub fn worktree_only() {}\n",
+    )
+    .unwrap();
+    let mut session = McpSession::start(serve_command(main.path()));
+    let nested = canonical_root(&worktree);
+    let root = canonical_root(main.path());
+    let worktree_file = worktree
+        .join("src")
+        .join("a.rs")
+        .to_string_lossy()
+        .to_string();
+    let worktree_src = worktree.join("src").to_string_lossy().to_string();
+
+    for (tool, path, arguments) in [
+        (
+            "file_skeleton",
+            &worktree_file,
+            json!({"project_root": main.path(), "file_path": worktree_file}),
+        ),
+        (
+            "lookup_symbol",
+            &worktree_src,
+            json!({"project_root": main.path(), "query": "worktree_only", "path": worktree_src}),
+        ),
+    ] {
+        let result = session.call(tool, arguments);
+        assert_eq!(result["isError"], true, "{tool}: {result}");
+        assert_eq!(
+            result_text(&result),
+            format!(
+                "Path '{path}' belongs to the nested project '{}', not to project_root '{}'. Pass '{}' as project_root.",
+                nested.display(),
+                root.display(),
+                nested.display()
+            ),
+            "{tool}"
+        );
+    }
+
+    let conn =
+        code_kb_core::open_read_only(&main.path().join(".code-kb").join("artifact.db")).unwrap();
+    let nested_rows: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM files WHERE path LIKE '.claude/%'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(nested_rows, 0);
+}
+
+#[test]
+fn test_mcp_file_written_after_an_unwaited_prepare_reaches_the_index() {
+    let launch = setup_test_repo();
+    let target = cargo_project("pub fn first_indexed() {}\n");
+    let mut command = serve_command(launch.path());
+    command.env("CODE_KB_INDEX_WAIT_MS", "0");
+    let mut session = McpSession::start(command);
+    let arguments = json!({"query": "written_later", "project_root": target.path()});
+
+    let first = session.call("lookup_symbol", arguments.clone());
+    assert!(result_text(&first).starts_with("Indexing "), "{first}");
+    let db = target.path().join(".code-kb").join("artifact.db");
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while !db.exists() {
+        assert!(Instant::now() < deadline, "the index was never created");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    std::thread::sleep(Duration::from_secs(3));
+    std::fs::write(
+        target.path().join("src").join("later.rs"),
+        "pub fn written_later() {}\n",
+    )
+    .unwrap();
+
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        let later = session.call("lookup_symbol", arguments.clone());
+        if result_text(&later).contains("function `written_later` [") {
+            break;
+        }
+        assert!(Instant::now() < deadline, "{later}");
+        std::thread::sleep(Duration::from_millis(200));
+    }
+}
+
+#[test]
+fn test_mcp_indexing_answer_records_no_token_savings() {
+    let launch = setup_test_repo();
+    let target =
+        cargo_project(&"// a long source line that makes the file a large baseline\n".repeat(200));
+    let telemetry = tempfile::tempdir().unwrap();
+    let mut command = serve_command(launch.path());
+    command
+        .env("CODE_KB_TELEMETRY_DIR", telemetry.path())
+        .env("CODE_KB_INDEX_WAIT_MS", "0");
+    let mut session = McpSession::start(command);
+
+    let result = session.call(
+        "file_skeleton",
+        json!({"project_root": target.path(), "file_path": "src/lib.rs"}),
+    );
+    assert!(result_text(&result).starts_with("Indexing "), "{result}");
+
+    let conn = code_kb_core::Connection::open(telemetry.path().join("telemetry.db")).unwrap();
+    let savings = conn
+        .query_row(
+            "SELECT est_tokens_saved, est_tokens_saved_known FROM tool_telemetry
+             WHERE tool = 'file_skeleton'",
+            [],
+            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
+        )
+        .unwrap();
+    assert_eq!(savings, (0, 0));
+}
+
+#[cfg(unix)]
+#[test]
+fn test_mcp_failed_initial_scan_is_retried_on_the_next_call() {
+    let launch = setup_test_repo();
+    let target = cargo_project("pub fn scanned_on_retry() {}\n");
+    let tools = tempfile::tempdir().unwrap();
+    let marker = tools.path().join("failed-once");
+    let wrapper = extractor_wrapper(
+        tools.path(),
+        &format!(
+            "if [ ! -e '{marker}' ]; then : > '{marker}'; echo 'simulated scan failure' >&2; exit 2; fi",
+            marker = marker.display()
+        ),
+    );
+    let mut command = serve_command(launch.path());
+    command
+        .env("JULIE_EXTRACT_BIN", &wrapper)
+        .env("CODE_KB_INDEX_WAIT_MS", "60000");
+    let mut session = McpSession::start(command);
+    let arguments = json!({"query": "scanned_on_retry", "project_root": target.path()});
+
+    let first = session.call("lookup_symbol", arguments.clone());
+    assert_eq!(first["isError"], true, "{first}");
+    let first_text = result_text(&first);
+    assert!(
+        first_text.starts_with(&format!(
+            "Initial scan of '{}' failed: ",
+            canonical_root(target.path()).display()
+        )),
+        "{first_text}"
+    );
+    assert!(
+        first_text.contains("simulated scan failure"),
+        "{first_text}"
+    );
+    assert!(
+        first_text.ends_with("; it will be retried on the next tool call."),
+        "{first_text}"
+    );
+
+    let deadline = Instant::now() + Duration::from_secs(60);
+    loop {
+        let later = session.call("lookup_symbol", arguments.clone());
+        if result_text(&later).contains("function `scanned_on_retry` [") {
+            break;
+        }
+        assert!(Instant::now() < deadline, "{later}");
+        std::thread::sleep(Duration::from_millis(200));
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn test_mcp_switching_back_reuses_the_running_prepare() {
+    let launch = setup_test_repo();
+    let target = cargo_project("pub fn slow_scan() {}\n");
+    let tools = tempfile::tempdir().unwrap();
+    let wrapper = extractor_wrapper(tools.path(), "sleep 1");
+    let mut command = serve_command(launch.path());
+    command
+        .env("JULIE_EXTRACT_BIN", &wrapper)
+        .env("CODE_KB_INDEX_WAIT_MS", "0")
+        .env_remove("RUST_LOG");
+    let mut session = McpSession::start(command);
+    let arguments = json!({"query": "slow_scan", "project_root": target.path()});
+
+    let first = session.call("lookup_symbol", arguments.clone());
+    assert!(result_text(&first).starts_with("Indexing "), "{first}");
+    session.call(
+        "lookup_symbol",
+        json!({"query": "Workspace", "project_root": launch.path()}),
+    );
+    let deadline = Instant::now() + Duration::from_secs(60);
+    loop {
+        let later = session.call("lookup_symbol", arguments.clone());
+        if result_text(&later).contains("function `slow_scan` [") {
+            break;
+        }
+        assert!(Instant::now() < deadline, "{later}");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    session.finish();
+
+    let target_root = canonical_root(target.path()).display().to_string();
+    let log = launch_log(launch.path());
+    let initial_scans = log
+        .lines()
+        .filter(|line| {
+            line.contains("running automatic initial scan") && line.contains(&target_root)
+        })
+        .count();
+    assert_eq!(initial_scans, 1, "{log}");
 }

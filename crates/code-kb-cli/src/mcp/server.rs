@@ -33,7 +33,7 @@ fn rendered_outline_entries(outline: &str) -> usize {
         .count()
 }
 
-type IndexPrepare = std::thread::JoinHandle<Result<(), String>>;
+type IndexPrepare = std::thread::JoinHandle<Result<Option<WatcherHandle>, String>>;
 
 pub struct McpServer {
     pub workspace: Workspace,
@@ -75,7 +75,14 @@ fn resolve_root(
     }
 }
 
-fn spawn_index_prepare(workspace: &Workspace, db_path: &Path) -> Option<IndexPrepare> {
+/// Prepares the index on a background thread. With `with_watcher`, the thread also starts
+/// the watcher once the index exists, before the offline reconcile, and returns it, so an
+/// edit made after the prepare reaches the index before any call joins the thread.
+fn spawn_index_prepare(
+    workspace: &Workspace,
+    db_path: &Path,
+    with_watcher: bool,
+) -> Option<IndexPrepare> {
     if !db_path.exists() && !is_project_root(&workspace.canonical_root) {
         return None;
     }
@@ -90,10 +97,13 @@ fn spawn_index_prepare(workspace: &Workspace, db_path: &Path) -> Option<IndexPre
             create_index(&ws, &db).map_err(|e| e.to_string())?;
         }
         ensure_fts_index_path(&db).map_err(|e| e.to_string())?;
+        let watcher = with_watcher
+            .then(|| start_watcher(ws.clone(), db.clone()).ok())
+            .flatten();
         if let Ok(conn) = open_read_only(&db) {
             let _ = reconcile_offline_edits(&ws, &db, &conn);
         }
-        Ok(())
+        Ok(watcher)
     }))
 }
 
@@ -139,12 +149,12 @@ impl McpServer {
                 ) {
                     tracing::warn!("Index version check failed: {e}");
                 }
-                let reconcile = spawn_index_prepare(&workspace, &db_path);
                 let watcher = if db_path.exists() {
                     start_watcher(workspace.clone(), db_path.clone()).ok()
                 } else {
                     None
                 };
+                let reconcile = spawn_index_prepare(&workspace, &db_path, watcher.is_none());
                 (reconcile, watcher, true)
             }
             Err(e) => {
@@ -172,15 +182,16 @@ impl McpServer {
     }
 
     /// Makes an already resolved root the active one and prepares its index, unless that
-    /// root is already active and prepared. Its watcher starts once its prepare finishes,
-    /// in `handle_call_tool_inner`.
+    /// root is already active and prepared. The prepare thread starts the root's watcher
+    /// once its index exists.
     fn switch_root(&mut self, workspace: Workspace) {
         if self.prepared && paths_equal(&self.workspace.canonical_root, &workspace.canonical_root) {
             return;
         }
         // ponytail: one watcher; alternating roots restart the watcher and the offline
-        // reconcile on each switch. Keep a small per-root cache only if telemetry shows
-        // agents alternate often.
+        // reconcile on each switch, and a parked prepare that finishes while its root is
+        // inactive holds that root's watcher until it is pruned or dropped. Keep a small
+        // per-root cache only if telemetry shows agents alternate often.
         let explicit_db = if paths_equal(&workspace.canonical_root, &self.launch_root) {
             self.explicit_db.as_deref()
         } else {
@@ -211,14 +222,15 @@ impl McpServer {
             .iter()
             .position(|(root, _)| paths_equal(root, &workspace.canonical_root))
             .map(|index| self.parked.swap_remove(index).1);
-        self.reconcile = parked.or_else(|| spawn_index_prepare(&workspace, &db_path));
+        self.reconcile = parked.or_else(|| spawn_index_prepare(&workspace, &db_path, true));
         self.prepared = true;
         self.workspace = workspace;
         self.db_path = db_path;
     }
 
     /// Resolves a call's `project_root` (or its silent aliases `workspace` and `root`) and
-    /// checks that every absolute path argument lies inside it.
+    /// checks that every absolute path argument lies inside it and outside any nested git
+    /// worktree, submodule, or indexed project.
     fn resolve_project_root(&self, arguments: &Value) -> Result<Workspace, String> {
         let input = ["project_root", "workspace", "root"]
             .into_iter()
@@ -231,15 +243,25 @@ impl McpServer {
             .map_err(|e| {
                 format!("{e}. Pass the absolute path of the project or git worktree you are working in as project_root.")
             })?;
+        let root = workspace.canonical_root.display();
         for key in ["path", "file_path", "file", "subpath", "dir"] {
-            if let Some(path) = arguments.get(key).and_then(Value::as_str)
-                && (path.starts_with("file://") || Path::new(path).is_absolute())
-                && let Err(WorkspaceError::PathOutsideWorkspace(..)) =
-                    workspace.resolve_path(Path::new(path))
+            let Some(path) = arguments.get(key).and_then(Value::as_str) else {
+                continue;
+            };
+            if !path.starts_with("file://") && !Path::new(path).is_absolute() {
+                continue;
+            }
+            if let Err(WorkspaceError::PathOutsideWorkspace(..)) =
+                workspace.resolve_path(Path::new(path))
             {
                 return Err(format!(
-                    "Path '{path}' is outside project_root '{}'. Pass a path inside project_root, or change project_root to the project that holds the path.",
-                    workspace.canonical_root.display()
+                    "Path '{path}' is outside project_root '{root}'. Pass a path inside project_root, or change project_root to the project that holds the path."
+                ));
+            }
+            if let Some(nested) = workspace.nested_project_root(Path::new(path)) {
+                let nested = nested.display();
+                return Err(format!(
+                    "Path '{path}' belongs to the nested project '{nested}', not to project_root '{root}'. Pass '{nested}' as project_root."
                 ));
             }
         }
@@ -527,6 +549,7 @@ impl McpServer {
             }
         };
         let duration_ms = start.elapsed().as_millis() as u64;
+        let answered_before_index_ready = self.reconcile.is_some();
 
         let (outcome, error_msg, bytes, est_tokens, est_tokens_saved, est_tokens_saved_known) =
             if res.is_error {
@@ -552,6 +575,7 @@ impl McpServer {
                     "ok"
                 };
                 let argument_file_size = match name {
+                    _ if answered_before_index_ready => None,
                     "file_skeleton" | "get_symbol_body" | "get_symbol_context" => arguments
                         .get("file_path")
                         .or_else(|| arguments.get("file"))
@@ -825,8 +849,17 @@ impl McpServer {
                     started.query_ms = Some(0);
                     return started;
                 }
-                let err = prepare.join().unwrap_or(Ok(())).err();
-                (Some(rec_start.elapsed().as_millis() as u64), err)
+                let prepared = prepare.join().unwrap_or(Ok(None));
+                let waited = Some(rec_start.elapsed().as_millis() as u64);
+                match prepared {
+                    Ok(watcher) => {
+                        if watcher.is_some() {
+                            self._watcher = watcher;
+                        }
+                        (waited, None)
+                    }
+                    Err(e) => (waited, Some(e)),
+                }
             }
             None => (Some(0), None),
         };
@@ -836,13 +869,15 @@ impl McpServer {
         }
 
         if !self.db_path.exists() {
+            self.reconcile = spawn_index_prepare(&self.workspace, &self.db_path, true);
             let msg = match prepare_error {
                 Some(e) => format!(
-                    "Initial scan of '{}' failed: {e}",
-                    self.workspace.canonical_root.display()
+                    "Initial scan of '{}' failed: {}; it will be retried on the next tool call.",
+                    self.workspace.canonical_root.display(),
+                    e.trim_end()
                 ),
                 None => format!(
-                    "No index exists for '{}'.",
+                    "No index exists for '{}'; it will be retried on the next tool call.",
                     self.workspace.canonical_root.display()
                 ),
             };
@@ -854,7 +889,8 @@ impl McpServer {
         }
 
         if let Some(e) = prepare_error {
-            self.reconcile = spawn_index_prepare(&self.workspace, &self.db_path);
+            self.reconcile =
+                spawn_index_prepare(&self.workspace, &self.db_path, self._watcher.is_none());
             let msg = format!(
                 "Index preparation of '{}' failed: {e}; it will be retried on the next tool call",
                 self.workspace.canonical_root.display()

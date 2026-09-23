@@ -145,10 +145,16 @@ fn test_adversarial_mcp_project_root_variants_answer_from_the_fixture_while_init
     let root = repo.path();
     let (other, _other_db_path, _other_code) =
         scanned_repo("pub fn compute_product(a: i32, b: i32) -> i32 {\n    a * b\n}\n");
+    let bait = tempfile::tempdir().unwrap();
+    fs::write(
+        bait.path().join("Cargo.toml"),
+        "[package]\nname = \"bait\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
 
-    for ((name, project_root, _), (_, _, other_initialize_params)) in project_root_variants(root)
+    for ((name, project_root, _), (_, _, bait_initialize_params)) in project_root_variants(root)
         .into_iter()
-        .zip(project_root_variants(other.path()))
+        .zip(project_root_variants(bait.path()))
     {
         let telem_dir = code_kb_core::safe_tempdir();
         let mut child = ChildGuard(
@@ -179,7 +185,7 @@ fn test_adversarial_mcp_project_root_variants_answer_from_the_fixture_while_init
             }
         });
 
-        if let Some(obj) = other_initialize_params.as_object() {
+        if let Some(obj) = bait_initialize_params.as_object() {
             for (k, v) in obj {
                 init_req["params"][k] = v.clone();
             }
@@ -255,6 +261,10 @@ fn test_adversarial_mcp_project_root_variants_answer_from_the_fixture_while_init
         assert!(
             skel_text.contains("pub fn compute_sum(a: i32, b: i32) -> i32"),
             "{name}: Expected the fixture's compute_sum in skeleton text, got: {skel_text}"
+        );
+        assert!(
+            !bait.path().join(".code-kb").exists(),
+            "{name}: initialize roots bound the bait folder"
         );
 
         drop(stdin);
