@@ -1,10 +1,10 @@
 # Autonomous Execution Report - Required `project_root` on every tool (issue #3, 2.1.0)
 
-**Status:** Awaiting publication approval
+**Status:** Complete — merged into main locally, not pushed
 **Plan:** docs/plans/2026-09-23-mcp-roots-worktree-binding.md
 **Branch:** feat/project-root (worktree `.claude/worktrees/project-root`, base `58b9468`)
-**PR:** not created — push and PR need approval
-**Publication authority:** local commit=authorized (user: "we're ready to start the plan"); push=missing (user CLAUDE.md: push needs approval); PR=missing (same source)
+**PR:** not created — the user chose a local merge
+**Publication authority:** local commit=authorized (user: "we're ready to start the plan"); local merge into main=authorized (user answer 2026-09-23: "Merge into main locally"); push=declined (same answer); PR=declined (same answer)
 **Duration:** about 2.5 h (2026-09-23; commits from 20:26 to 22:11 UTC, then acceptance runs)
 **Phases:** 1/1 complete
 **Tasks:** 4/4 complete, plus 4 review-fix rounds
@@ -73,8 +73,8 @@ Review rounds:
 - Total: 26 files, +2737/-820 (`git diff --stat 58b9468..87d4a25`)
 
 ## Source control
-- **Outstanding:** None — all commits ride on feat/project-root. The main checkout is clean and 1 commit ahead of origin (`58b9468`, the plan commit, not pushed; a PR from this branch carries it).
-- **Worktrees left in place:** `/home/murphy/source/code-kb/.claude/worktrees/project-root` (this branch, until the user chooses how to integrate it). The Task 4 agent worktree was removed after its cherry-pick. Grok's own session copy stays under `~/.grok/worktrees/kb-e2e-flask-base/` (Grok manages it).
+- **Outstanding:** None. main fast-forwards to this branch. main is then ahead of origin by the plan commit `58b9468` plus this branch; nothing is pushed.
+- **Worktrees:** `/home/murphy/source/code-kb/.claude/worktrees/project-root` and branch `feat/project-root` are removed after the merge. The Task 4 agent worktree was removed after its cherry-pick. Grok's own session copy stays under `~/.grok/worktrees/kb-e2e-flask-base/` (Grok manages it).
 
 ## Deferred notes (Minor)
 - Serve still creates `<launch root>/.code-kb/logs` when the launch root is not a project (older behavior; now more visible because GUI docs drop `--root`).
@@ -83,6 +83,6 @@ Review rounds:
 - Goldfish checkpoints written from a worktree record the main checkout's branch and path; each checkpoint here was corrected by hand.
 
 ## Next steps
-- Approve push of feat/project-root and a PR to main, or merge it locally.
+- Push main to origin (needs approval).
 - Release 2.1.0 per `docs/RELEASING.md` (version bump, release notes, tag): not done, needs approval.
 - After the release: `cargo build --release` in the main checkout and restart sessions, so the dev harnesses use the new binary.
