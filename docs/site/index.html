@@ -24,7 +24,7 @@
     <div class="nav-links">
       <a href="#why">Why</a>
       <a href="#what">What it does</a>
-      <a href="#qt">Qt / QML</a>
+      <a href="#languages">Languages</a>
       <a href="#compared">Compared</a>
       <a href="#steps">Steps</a>
       <a href="#tools">Tools</a>
@@ -43,7 +43,7 @@
       <span>80–98% fewer prompt tokens</span>
       <span>0–5 ms per query</span>
       <span>about 25 MB of memory</span>
-      <span>40+ languages</span>
+      <span>40 languages</span>
     </p>
     <div class="hero-actions">
       <a class="btn btn-primary" href="#install">Install code-kb</a>
@@ -183,8 +183,8 @@ get_symbol_context("search_symbols_scoped")</pre>
             <dd>Every release includes a Windows binary tested on NTFS. Results show paths with forward slashes on every platform.</dd>
           </div>
           <div>
-            <dt>Qt and QML</dt>
-            <dd><a href="#qt">Browse the structure of QML components</a>, including nested objects, module files, and Qt JavaScript. Qt C++ headers include properties and signals.</dd>
+            <dt>Structural facts</dt>
+            <dd><a href="#languages">Find routes, queries, config keys, and more</a> alongside symbols. See which categories are indexed in your repository.</dd>
           </div>
           <div>
             <dt>Agent hooks</dt>
@@ -194,28 +194,28 @@ get_symbol_context("search_symbols_scoped")</pre>
       </div>
     </section>
 
-    <section id="qt" class="section">
-      <p class="margin-label">Qt / QML</p>
+    <section id="languages" class="section">
+      <p class="margin-label">Languages</p>
       <div class="section-body">
-        <h2>Qt and QML</h2>
-        <p>Current source builds use julie-extract 3.3.1. QML file outlines show nested objects. Reference lookup handles inline components, reused <code>id</code> names, and <code>parent</code> and <code>this</code> references.</p>
+        <h2>40 supported languages</h2>
+        <p>The bundled <code>julie-extract</code> 3.3.1 indexes these languages and file formats. What it can extract varies by language.</p>
         <dl class="features">
           <div>
-            <dt>QML and Qt JavaScript</dt>
-            <dd>Search <code>qmldir</code>, <code>.qmltypes</code>, QML imports, and pragmas. Qt JavaScript <code>.import</code> results point to the exact code, without trailing comments.</dd>
+            <dt>Code and scripts</dt>
+            <dd>Bash, C, C++, C#, Dart, Elixir, Erlang, F#, GDScript, Go, Java, Kotlin, Lua, PHP, PowerShell, Python, R, Ruby, Rust, Scala, Swift, VB.NET, Zig.</dd>
           </div>
           <div>
-            <dt>Qt C++ headers</dt>
-            <dd><code>Q_PROPERTY</code> results include types, accessors, and optional attributes. You can also find signals, slots, invokables, and QML element declarations.</dd>
+            <dt>Web and UI</dt>
+            <dd>CSS, HTML, JavaScript, JSX, QML, qmldir, Razor, TSX, TypeScript, Vue.</dd>
+          </div>
+          <div>
+            <dt>Data and documents</dt>
+            <dd>JSON, Markdown, regex, SQL, TOML, XML, YAML.</dd>
           </div>
         </dl>
         <div class="note">
-          <h3>Useful checks</h3>
-          <p><code>code-kb skeleton src/controls/Page.qml</code> shows the object tree. <code>code-kb refs Page --file src/controls/Page.qml</code> finds component usage. <code>code-kb facts property --path src/layouts/columnview.h</code> lists Qt property facts, and <code>code-kb facts pragma --path src</code> lists pragmas in QML and Qt JavaScript.</p>
-        </div>
-        <div class="note">
-          <h3>Current limits</h3>
-          <p><code>.ui</code> designer files and CMake files are not indexed. A signal handler may appear as a possible match when its receiver is unclear. Changing several <code>.h</code> files can trigger a scan of the changed files. See the <a href="https://github.com/anortham/code-kb#qt-and-qml" target="_blank" rel="noopener">README</a> for earlier Qt measurements and details.</p>
+          <h3>Find more than names</h3>
+          <p>Structural facts are indexed details beyond symbol names. Examples include Express and FastAPI routes, SQL statements, TOML keys, and QML bindings. Run <code>code-kb facts</code> to see the categories found in your repository, or <code>code-kb facts route</code> to list routes. See the extractor's <a href="https://github.com/anortham/julie-extractors/blob/v3.3.1/README.md#supported-languages" target="_blank" rel="noopener">supported-language list</a> for more detail.</p>
         </div>
       </div>
     </section>
@@ -256,7 +256,7 @@ get_symbol_context("search_symbols_scoped")</pre>
               </tr>
               <tr>
                 <td>Calls outside the project</td>
-                <td class="kept">Common runtime calls filtered in 40+ languages</td>
+                <td class="kept">Common runtime calls filtered across 40 languages</td>
                 <td>Filter matches yourself</td>
               </tr>
               <tr>
