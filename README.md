@@ -451,7 +451,7 @@ git worktree you work in. The table does not repeat it. `path` and `file_path` a
 | `find_references` | Callers or callees of a symbol, matched by name from AST call sites and ranked by same file, same directory, then receiver type; callers also include type usages and member accesses (filters external stdlib noise; qualify overloaded names). | Exactly one `symbol_name` or current-index `symbol_id`; `file_path` (opt), `direction` ("callers" \| "callees", def: callers), `include_external` (opt, def: false) | `symbol`, `name`, `file`, `path` |
 | `blast_radius` | Multi-hop reverse reachability (CTEs) & targeted test prediction. | `symbol` or current-index `symbol_id` (opt), `file` (opt guard for an ID), `depth` (opt, def: 2), `limit` (opt) | `name`, `path`, `impact` |
 | `find_structural_facts` | Queries framework facts (routes, SQL queries, config keys, tables). Lists all categories when omitted. | `category` (opt), `path` (opt), `limit` (opt) | `cat`, `kind`, `type`, `file`, `file_path` |
-| `telemetry_summary` | Token savings with their coverage, call counts, and error rates from `~/.code-kb/telemetry.db`, across all workspaces or scoped to the current one. | `time_window` (opt, def: all), `workspace_only` (opt, def: false), `json` (opt) | `since`, `window` |
+| `telemetry_summary` | Token savings with their coverage, call counts, and error rates from `~/.code-kb/telemetry.db`, across all workspaces or scoped to the project of the most recent code-kb call. | `time_window` (opt, def: all), `workspace_only` (opt, def: false), `json` (opt) | `since`, `window` |
 
 ---
 
@@ -499,7 +499,8 @@ code-kb facts
 code-kb facts config --path Cargo.toml
 code-kb facts route --limit 10
 
-# View active log file and recent diagnostic messages
+# View active log file and recent diagnostic messages. Logs live in <project>/.code-kb/logs;
+# a server started outside a project logs to ~/.code-kb/logs.
 code-kb logs
 
 # Token savings, call counts, and error rates (alias: code-kb telemetry)

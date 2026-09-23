@@ -770,7 +770,8 @@ fn index_facts(workspace_root: &Path) -> Option<IndexFacts> {
 
 fn log_tail(workspace_root: &Path, lines: usize) -> Vec<String> {
     let mut tail: Vec<String> = Vec::new();
-    for path in crate::workspace::log_files_newest_first(workspace_root) {
+    for path in crate::workspace::log_files_newest_first(&crate::workspace::log_dir(workspace_root))
+    {
         if tail.len() >= lines {
             break;
         }

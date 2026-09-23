@@ -13,6 +13,8 @@ Pass `project_root`, the absolute path of the project or git worktree you work i
 
 `path` and `file_path` are relative to `project_root`, or absolute inside it. An absolute path outside `project_root` is an error. A path never switches the project.
 
+A project with no index gets one on the first call. The call waits up to 5 s. If the index is not ready, the answer is `Indexing <root> started; call again in a few seconds.` Make the same call again.
+
 ## 4-Phase Progressive Disclosure Workflow
 
 ### 1. Orientation (~200 tokens)
@@ -49,9 +51,9 @@ After using the smallest reading tool that supplies the needed context, edit thr
 ### Answering Token Savings and Tool Usage Inquiries
 When a user asks questions such as *"how many tokens has code-kb saved me this month?"* or *"what is my token efficiency this week?"*:
 * Call `telemetry_summary(time_window="month")` (valid windows: `"today"`, `"7d"`, `"30d"`, `"month"`, `"year"`, `"all"`; default is `"all"`).
-* Pass `workspace_only=true` if the user wants metrics scoped strictly to the current workspace instead of global history across all projects.
+* Pass `workspace_only=true` if the user wants metrics scoped to one project instead of global history across all projects. `telemetry_summary` takes no `project_root`, so the scope is the project of the most recent code-kb call.
 * Report back the summarized numbers: total tool calls, successful vs failed calls, estimated tokens consumed, estimated tokens saved, and the net efficiency multiplier.
-* Say what "saved" means: the size, in estimated tokens, of the files the answer points into, minus the tokens served. A skeleton, body, or context read is measured against its own file. A lookup, search, references, blast-radius, or facts answer is measured against the distinct files its rows name, at most 20 files. A call with no file to point at, such as an outline or a telemetry summary, records no baseline and is not counted as saved.
+* Say what "saved" means: the size, in estimated tokens, of the files the answer points into, minus the tokens served. A skeleton, body, or context read is measured against its own file. A lookup, search, references, blast-radius, or facts answer is measured against the distinct files its rows name, at most 20 files. A call with no file to point at, such as an outline or a telemetry summary, records no baseline and is not counted as saved. An `Indexing ... started` answer records no baseline either.
 * The summary states coverage beside the number: `Est. Tokens Saved: ~N (baseline known for K of M calls)`, and `~N (K/M)` per tool. Report the coverage with the number.
 
 ### Generating Bug Reports & Diagnosing Failures
@@ -90,9 +92,9 @@ Use the canonical names from the MCP schema in tool calls. The aliases below are
 * `direction` in `find_references`: defaults to `"callers"`.
 * `include_external` in `find_references` & `get_symbol_context`: defaults to `false` (filters runtime noise).
 * `blast_radius`: accepts `symbol`/`name`, `path`/`file`, `depth`/`max_depth`, `limit`. When target is omitted, automatically discovers uncommitted working-tree changes via git. Alias: `impact`.
-* `category` in `find_structural_facts`: optional (omitting lists all detected categories and counts). Normalized aliases: `config`, `route`/`routes`, `query`/`queries`/`sql`, `model`/`models`.
-* `path` in `lookup_symbol` / `search_symbols` / `find_structural_facts`: optional filter by directory or file path prefix, relative to `project_root`.
-* `file_path` in `find_references`: optional file path to disambiguate symbols with identical names across files, relative to `project_root`.
+* `category` in `find_structural_facts`: optional (omitting lists all detected categories and counts). Aliases: `sql`/`query`/`queries`, `route`/`routes`, `config`, `model`/`models`, `signal`/`signals`, `import`/`imports`, `binding`/`bindings`, `component`/`components`, `module`/`modules`, `pragma`, `property`/`properties`. Any other value matches pattern ids by substring.
+* `path` in `lookup_symbol` / `search_symbols` / `find_structural_facts`: optional filter by directory or file path prefix, relative to `project_root` or absolute inside it.
+* `file_path` in `get_symbol_body` / `get_symbol_context` / `find_references`: optional file path to disambiguate symbols with identical names across files, relative to `project_root` or absolute inside it.
 * `telemetry_summary`: takes no `project_root`. Accepts `time_window` (aliases: `since`, `window`; defaults to `"all"`), `workspace_only` (defaults to `false`), `json` (defaults to `false`).
 
 ## Core Invariants

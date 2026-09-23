@@ -6,18 +6,23 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, fmt};
 
-/// Returns the primary log directory for the given workspace root.
-pub fn get_log_dir(workspace_root: &Path) -> PathBuf {
-    code_kb_core::workspace::log_dir(workspace_root)
+/// Returns the log directory for a root: `<root>/.code-kb/logs` when the tools accept the
+/// root as a project, otherwise `logs` in the global telemetry directory, so a launch in a
+/// folder that is not a project leaves no files there.
+pub fn get_log_dir(root: &Path, explicit_db: Option<&Path>) -> PathBuf {
+    if crate::mcp::server::accepts_root(root, explicit_db) {
+        code_kb_core::workspace::log_dir(root)
+    } else {
+        code_kb_core::get_global_telemetry_dir().join("logs")
+    }
 }
 
-/// Initializes structured logging to `.code-kb/logs/code-kb.log` and optionally stderr.
+/// Initializes structured logging to `code-kb.log` in `log_dir` and optionally stderr.
 ///
 /// NOTE: When `is_serve` is true (MCP mode over stdio), all stdout logging is strictly
 /// suppressed to prevent protocol stream corruption.
-pub fn init_logging(workspace_root: &Path, is_serve: bool, verbose: bool) -> Option<WorkerGuard> {
-    let log_dir = get_log_dir(workspace_root);
-    if let Err(e) = fs::create_dir_all(&log_dir) {
+pub fn init_logging(log_dir: &Path, is_serve: bool, verbose: bool) -> Option<WorkerGuard> {
+    if let Err(e) = fs::create_dir_all(log_dir) {
         eprintln!(
             "Warning: Failed to create log directory '{}': {e}",
             log_dir.display()
@@ -25,7 +30,7 @@ pub fn init_logging(workspace_root: &Path, is_serve: bool, verbose: bool) -> Opt
         return None;
     }
 
-    if let Some(code_kb_dir) = log_dir.parent() {
+    if let Some(code_kb_dir) = log_dir.parent().filter(|dir| dir.ends_with(".code-kb")) {
         let gitignore = code_kb_dir.join(".gitignore");
         if let Err(e) = fs::OpenOptions::new()
             .write(true)
@@ -46,7 +51,7 @@ pub fn init_logging(workspace_root: &Path, is_serve: bool, verbose: bool) -> Opt
         .rotation(tracing_appender::rolling::Rotation::DAILY)
         .filename_prefix("code-kb.log")
         .max_log_files(7)
-        .build(&log_dir)
+        .build(log_dir)
     {
         Ok(appender) => appender,
         Err(e) => {

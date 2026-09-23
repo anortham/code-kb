@@ -60,6 +60,28 @@ pub struct McpServer {
 
 /// Resolves `input` like `Workspace::from_project_root`, except that a launch root with
 /// no project marker is accepted when `--db` names an existing file: that file is its index.
+/// True when a tool call naming `root` as `project_root` would be accepted from a server
+/// launched there with `explicit_db`.
+pub(crate) fn accepts_root(root: &Path, explicit_db: Option<&Path>) -> bool {
+    resolve_root(&root.to_string_lossy(), root, explicit_db).is_ok()
+}
+
+/// True for a listed tool, or its `impact` alias, whose schema requires `project_root`. An
+/// unknown name returns false so its answer is "Unknown tool", not a missing-root error.
+fn requires_project_root(name: &str) -> bool {
+    let name = if name == "impact" {
+        "blast_radius"
+    } else {
+        name
+    };
+    McpServer::tool_definitions().iter().any(|tool| {
+        tool.name == name
+            && tool.input_schema["required"]
+                .as_array()
+                .is_some_and(|required| required.contains(&json!("project_root")))
+    })
+}
+
 fn resolve_root(
     input: &str,
     launch_root: &Path,
@@ -295,7 +317,7 @@ impl McpServer {
                         },
                         "path": {
                             "type": "string",
-                            "description": "Optional file path or directory prefix to scope search (e.g. 'crates/code-kb-core')."
+                            "description": "Optional file path or directory prefix to scope search, relative to project_root or absolute inside it (e.g. 'crates/code-kb-core')."
                         },
                         "kind": {
                             "type": "string",
@@ -327,7 +349,7 @@ impl McpServer {
                         },
                         "path": {
                             "type": "string",
-                            "description": "Optional file path or directory prefix to scope search (e.g. 'crates/code-kb-core')."
+                            "description": "Optional file path or directory prefix to scope search, relative to project_root or absolute inside it (e.g. 'crates/code-kb-core')."
                         },
                         "kind": {
                             "type": "string",
@@ -360,7 +382,7 @@ impl McpServer {
                         "symbol_id": { "type": "string", "description": "Exact current-index symbol identifier. Provide exactly one non-empty symbol_name or symbol_id." },
                         "file_path": {
                             "type": "string",
-                            "description": "Optional file path to disambiguate identical symbol names."
+                            "description": "Optional file path to disambiguate identical symbol names, relative to project_root or absolute inside it."
                         }
                     }
                 }),
@@ -378,7 +400,7 @@ impl McpServer {
                         "symbol_id": { "type": "string", "description": "Exact current-index symbol identifier. Provide exactly one non-empty symbol_name or symbol_id." },
                         "file_path": {
                             "type": "string",
-                            "description": "Optional file path to disambiguate identical symbol names."
+                            "description": "Optional file path to disambiguate identical symbol names, relative to project_root or absolute inside it."
                         },
                         "include_external": {
                             "type": "boolean",
@@ -400,7 +422,7 @@ impl McpServer {
                         "symbol_id": { "type": "string", "description": "Exact current-index symbol identifier. Provide exactly one non-empty symbol_name or symbol_id." },
                         "file_path": {
                             "type": "string",
-                            "description": "Optional file path to disambiguate symbols with identical names across files."
+                            "description": "Optional file path to disambiguate symbols with identical names across files, relative to project_root or absolute inside it."
                         },
                         "direction": {
                             "type": "string",
@@ -432,7 +454,7 @@ impl McpServer {
                         },
                         "path": {
                             "type": "string",
-                            "description": "Optional file path or directory to filter structural facts."
+                            "description": "Optional file path or directory to filter structural facts, relative to project_root or absolute inside it."
                         },
                         "limit": {
                             "type": "integer",
@@ -445,7 +467,7 @@ impl McpServer {
             },
             Tool {
                 name: "blast_radius".to_string(),
-                description: "Predicts which downstream symbols are affected and which tests to run before or after edits. With NO arguments, it inspects uncommitted git changes and uses changed files to predict impact and likely tests. You can also pass symbol (or symbol_name) or file (or file_path).".to_string(),
+                description: "Predicts which downstream symbols are affected and which tests to run before or after edits. With no symbol, symbol_id, or file, it inspects uncommitted git changes and uses changed files to predict impact and likely tests. You can also pass symbol (or symbol_name) or file (or file_path).".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -456,7 +478,7 @@ impl McpServer {
                         "symbol_id": { "type": "string", "description": "Exact current-index symbol identifier. Provide one non-empty symbol or symbol_id." },
                         "file": {
                             "type": "string",
-                            "description": "File path to seed the impact walk (aliases: file_path, path)."
+                            "description": "File path to seed the impact walk, relative to project_root or absolute inside it (aliases: file_path, path)."
                         },
                         "depth": {
                             "type": "integer",
@@ -514,7 +536,7 @@ impl McpServer {
 
     pub fn handle_call_tool(&mut self, name: &str, arguments: &Value) -> CallToolResult {
         let start = std::time::Instant::now();
-        let resolved = (name != "telemetry_summary").then(|| self.resolve_project_root(arguments));
+        let resolved = requires_project_root(name).then(|| self.resolve_project_root(arguments));
         let (res, telemetry_root) = match resolved {
             Some(Err(message)) => {
                 tracing::warn!(tool = name, "MCP tool call refused: {message}");
@@ -849,14 +871,19 @@ impl McpServer {
         if !self.db_path.exists() {
             self._watcher = None;
             self.reconcile = spawn_index_prepare(&self.workspace, &self.db_path);
+            let next = if self.reconcile.is_some() {
+                "it will be retried on the next tool call."
+            } else {
+                "it will not be retried because the folder has no project marker and no index. Restore the --db file, or pass a project folder as project_root."
+            };
             let msg = match prepare_error {
                 Some(e) => format!(
-                    "Initial scan of '{}' failed: {}; it will be retried on the next tool call.",
+                    "Initial scan of '{}' failed: {}; {next}",
                     self.workspace.canonical_root.display(),
                     e.trim_end()
                 ),
                 None => format!(
-                    "No index exists for '{}'; it will be retried on the next tool call.",
+                    "No index exists for '{}'; {next}",
                     self.workspace.canonical_root.display()
                 ),
             };

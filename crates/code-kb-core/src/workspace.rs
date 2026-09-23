@@ -196,33 +196,32 @@ pub fn log_dir(workspace_root: &Path) -> PathBuf {
     workspace_root.join(".code-kb").join("logs")
 }
 
-/// The workspace's `code-kb.log.*` files, newest first by modification time. Other files in
+/// The `code-kb.log.*` files in `log_dir`, newest first by modification time. Other files in
 /// the log directory are ignored so a stray file never enters a bug report.
-pub fn log_files_newest_first(workspace_root: &Path) -> Vec<PathBuf> {
-    let mut files: Vec<(std::time::SystemTime, PathBuf)> =
-        std::fs::read_dir(log_dir(workspace_root))
-            .into_iter()
-            .flatten()
-            .flatten()
-            .filter(|entry| {
-                entry
-                    .file_name()
-                    .to_string_lossy()
-                    .starts_with("code-kb.log")
-            })
-            .filter(|entry| entry.path().is_file())
-            .filter_map(|entry| {
-                let modified = entry.metadata().ok()?.modified().ok()?;
-                Some((modified, entry.path()))
-            })
-            .collect();
+pub fn log_files_newest_first(log_dir: &Path) -> Vec<PathBuf> {
+    let mut files: Vec<(std::time::SystemTime, PathBuf)> = std::fs::read_dir(log_dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|entry| {
+            entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with("code-kb.log")
+        })
+        .filter(|entry| entry.path().is_file())
+        .filter_map(|entry| {
+            let modified = entry.metadata().ok()?.modified().ok()?;
+            Some((modified, entry.path()))
+        })
+        .collect();
     files.sort_by(|a, b| b.cmp(a));
     files.into_iter().map(|(_, path)| path).collect()
 }
 
 /// Most recently modified `code-kb.log.*` file, if any.
-pub fn latest_log_file(workspace_root: &Path) -> Option<PathBuf> {
-    log_files_newest_first(workspace_root).into_iter().next()
+pub fn latest_log_file(log_dir: &Path) -> Option<PathBuf> {
+    log_files_newest_first(log_dir).into_iter().next()
 }
 
 /// Strip Windows verbatim prefix (\\?\, \\?\UNC\) using dunce.

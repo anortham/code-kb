@@ -254,7 +254,7 @@ pub struct ScanArgs {
 
 #[derive(Debug, Args)]
 pub struct ServeArgs {
-    /// Workspace root directory.
+    /// Project whose index the server prepares at start. Each tool call names its own project_root.
     #[arg(long)]
     pub root: Option<PathBuf>,
 }
@@ -363,11 +363,14 @@ fn main() -> anyhow::Result<()> {
 
     // Discover workspace
     let ws_root = cli.root.as_deref();
-    let workspace = Workspace::discover(ws_root)?;
+    let workspace = match &cli.command {
+        Command::Serve(args) => Workspace::discover(args.root.as_deref().or(ws_root))?,
+        _ => Workspace::discover(ws_root)?,
+    };
 
-    // Initialize structured logging to .code-kb/logs/code-kb.log
     let is_serve = matches!(&cli.command, Command::Serve(_));
-    let _log_guard = logging::init_logging(&workspace.canonical_root, is_serve, cli.verbose);
+    let log_dir = logging::get_log_dir(&workspace.canonical_root, cli.db.as_deref());
+    let _log_guard = logging::init_logging(&log_dir, is_serve, cli.verbose);
     tracing::info!(
         root = %workspace.canonical_root.display(),
         command = ?std::env::args().collect::<Vec<_>>(),
@@ -455,10 +458,9 @@ fn main() -> anyhow::Result<()> {
 
     // Handle Logs command (does not require existing database)
     if let Command::Logs(args) = &cli.command {
-        let log_dir = logging::get_log_dir(&workspace.canonical_root);
         println!("Log directory: {}", log_dir.display());
 
-        match code_kb_core::workspace::latest_log_file(&workspace.canonical_root) {
+        match code_kb_core::workspace::latest_log_file(&log_dir) {
             Some(latest_file) => {
                 println!("Latest log file: {}\n", latest_file.display());
                 if let Ok(content) = std::fs::read_to_string(&latest_file) {
@@ -475,10 +477,8 @@ fn main() -> anyhow::Result<()> {
     }
 
     // Handle Serve command
-    if let Command::Serve(args) = &cli.command {
-        let root = args.root.as_deref().or(ws_root);
-        let ws = Workspace::discover(root)?;
-        let mut server = mcp::McpServer::new(ws, cli.db.as_deref())?;
+    if let Command::Serve(_) = &cli.command {
+        let mut server = mcp::McpServer::new(workspace, cli.db.as_deref())?;
         return server.run_stdio();
     }
 

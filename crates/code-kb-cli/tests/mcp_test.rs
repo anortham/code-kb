@@ -121,8 +121,13 @@ fn result_text(result: &Value) -> &str {
     result["content"][0]["text"].as_str().unwrap()
 }
 
-fn launch_log(launch_root: &Path) -> String {
-    std::fs::read_dir(launch_root.join(".code-kb").join("logs"))
+fn launch_log(root: &Path) -> String {
+    let logs = if root.join(".code-kb").is_dir() {
+        root.join(".code-kb").join("logs")
+    } else {
+        root.join("logs")
+    };
+    std::fs::read_dir(logs)
         .unwrap()
         .map(|entry| std::fs::read_to_string(entry.unwrap().path()).unwrap())
         .collect()
@@ -3082,10 +3087,10 @@ fn test_mcp_serve_launched_in_the_home_directory_does_not_index_it() {
     );
     session.finish();
 
-    let log = launch_log(home.path());
+    let log = launch_log(telemetry.path());
     assert!(log.contains("Startup index skipped"), "{log}");
     assert!(!log.contains("running automatic initial scan"), "{log}");
-    assert!(!home.path().join(".code-kb").join("artifact.db").exists());
+    assert!(!home.path().join(".code-kb").exists());
 }
 
 #[test]
@@ -3582,4 +3587,86 @@ fn test_mcp_switching_back_reuses_the_running_prepare() {
         })
         .count();
     assert_eq!(initial_scans, 1, "{log}");
+}
+
+#[test]
+fn test_mcp_serve_launched_in_a_folder_that_is_not_a_project_logs_to_the_global_folder() {
+    let app = tempfile::tempdir().unwrap();
+    let project = setup_test_repo();
+    let telemetry = tempfile::tempdir().unwrap();
+    let mut command = serve_command(app.path());
+    command
+        .env("CODE_KB_TELEMETRY_DIR", telemetry.path())
+        .env_remove("RUST_LOG");
+    let mut session = McpSession::start(command);
+
+    let result = session.call(
+        "lookup_symbol",
+        json!({"query": "Workspace", "project_root": project.path()}),
+    );
+    assert!(
+        result_text(&result).contains("struct `Workspace` ["),
+        "{result}"
+    );
+    session.finish();
+
+    assert!(!app.path().join(".code-kb").exists());
+    let log = std::fs::read_dir(telemetry.path().join("logs"))
+        .unwrap()
+        .map(|entry| std::fs::read_to_string(entry.unwrap().path()).unwrap())
+        .collect::<String>();
+    assert!(log.contains("Startup index skipped"), "{log}");
+}
+
+#[test]
+fn test_mcp_unknown_tool_without_project_root_is_reported_as_unknown() {
+    let launch = fixture_repo("Alpha");
+    let mut session = McpSession::start(serve_command(launch.path()));
+
+    let result = session.call("edit_file", json!({"file_path": "src/lib.rs"}));
+
+    assert_eq!(result["isError"], true, "{result}");
+    assert_eq!(result_text(&result), "Unknown tool: 'edit_file'");
+}
+
+#[cfg(unix)]
+#[test]
+fn test_mcp_failed_scan_of_a_markerless_root_does_not_promise_a_retry() {
+    use std::os::unix::fs::PermissionsExt;
+    let launch = tempfile::tempdir().unwrap();
+    let pin_dir = tempfile::tempdir().unwrap();
+    let pinned = pin_dir.path().join("pinned.db");
+    let real = code_kb_core::find_julie_extract_binary().expect("julie-extract is installed");
+    let wrapper = pin_dir.path().join("julie-extract");
+    std::fs::write(
+        &wrapper,
+        format!(
+            "#!/bin/sh\nif [ \"$1\" = --version ] && [ -f '{db}' ]; then sleep 1; rm -f '{db}'; fi\nif [ \"$1\" = scan ]; then exit 1; fi\nexec '{real}' \"$@\"\n",
+            db = pinned.display(),
+            real = real.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let source = fixture_repo("Alpha");
+    std::fs::copy(source.path().join(".code-kb").join("artifact.db"), &pinned).unwrap();
+    let mut command = serve_command(launch.path());
+    command
+        .arg("--db")
+        .arg(&pinned)
+        .env("JULIE_EXTRACT_BIN", &wrapper)
+        .env("CODE_KB_INDEX_WAIT_MS", "60000")
+        .env_remove("RUST_LOG");
+    let mut session = McpSession::start(command);
+
+    let result = session.call(
+        "lookup_symbol",
+        json!({"query": "Alpha", "project_root": launch.path()}),
+    );
+
+    let text = result_text(&result);
+    assert_eq!(result["isError"], true, "{result}");
+    assert!(text.contains("failed"), "{text}");
+    assert!(!text.contains("retried on the next tool call"), "{text}");
+    assert!(text.contains("will not be retried"), "{text}");
 }
