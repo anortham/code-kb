@@ -7,6 +7,12 @@ description: Use when exploring unfamiliar code, inspecting types or function si
 
 `code-kb` provides progressive disclosure, semantic symbol navigation, and surgical context slicing. Always prefer `code-kb` MCP tools over raw filesystem grep or full-file reads to save 80–90% of token consumption. For literal text (string literals, error messages, comments, config values) use `rg`; `code-kb` indexes symbol names, signatures, and docstrings, not file contents.
 
+## Required `project_root`
+
+Pass `project_root`, the absolute path of the project or git worktree you work in, on every tool call except `telemetry_summary`. Send the same value on every call. Change it when you move to a worktree or another project. For example: `lookup_symbol(project_root="/path/to/project", query="do_work")`. The calls below leave out `project_root` to stay short. The CLI takes the same value as the global `--root` flag, which defaults to the current directory.
+
+`path` and `file_path` are relative to `project_root`, or absolute inside it. An absolute path outside `project_root` is an error. A path never switches the project.
+
 ## 4-Phase Progressive Disclosure Workflow
 
 ### 1. Orientation (~200 tokens)
@@ -76,6 +82,7 @@ When diagnosing unexpected tool errors or when assisting a user with filing an i
 
 Use the canonical names from the MCP schema in tool calls. The aliases below are backend tolerance for hand-written calls; strict MCP clients can reject alias-only requests.
 
+* `project_root`: required by every tool except `telemetry_summary`. An absolute path or a `file://` URI. A subfolder resolves to the enclosing project.
 * `symbol_name`: accepts `symbol`, `name`.
 * `file_path`: accepts `file`, `path`.
 * `query`: accepts `name`, `q`, `symbol_name`, `symbol`.
@@ -84,13 +91,13 @@ Use the canonical names from the MCP schema in tool calls. The aliases below are
 * `include_external` in `find_references` & `get_symbol_context`: defaults to `false` (filters runtime noise).
 * `blast_radius`: accepts `symbol`/`name`, `path`/`file`, `depth`/`max_depth`, `limit`. When target is omitted, automatically discovers uncommitted working-tree changes via git. Alias: `impact`.
 * `category` in `find_structural_facts`: optional (omitting lists all detected categories and counts). Normalized aliases: `config`, `route`/`routes`, `query`/`queries`/`sql`, `model`/`models`.
-* `path` in `lookup_symbol` / `search_symbols` / `find_structural_facts`: optional filter by directory or file path prefix.
-* `file_path` in `find_references`: optional file path to disambiguate symbols with identical names across files.
-* `telemetry_summary`: accepts `time_window` (aliases: `since`, `window`; defaults to `"all"`), `workspace_only` (defaults to `false`), `json` (defaults to `false`).
+* `path` in `lookup_symbol` / `search_symbols` / `find_structural_facts`: optional filter by directory or file path prefix, relative to `project_root`.
+* `file_path` in `find_references`: optional file path to disambiguate symbols with identical names across files, relative to `project_root`.
+* `telemetry_summary`: takes no `project_root`. Accepts `time_window` (aliases: `since`, `window`; defaults to `"all"`), `workspace_only` (defaults to `false`), `json` (defaults to `false`).
 
 ## Core Invariants
 
-* **No Workspace Parameters:** Never supply or request `workspace`, `repo_path`, or `workspace_id`. The server binds to workspace root automatically.
+* **`project_root` on Every Call:** Pass the absolute path of the project or git worktree you work in as `project_root` on every call except `telemetry_summary`. Never supply `workspace`, `repo_path`, or `workspace_id`.
 * **Disambiguation:** If a symbol name is overloaded (e.g. `new`), supply `file_path` or qualified name (e.g. `Server::new` or `Alpha::create`).
 * **Zero Heap Footprint:** All queries stream directly from SQLite; retained memory is about 25 MB.
 * **Self-Cleaning Workspaces & Central Telemetry:** Each workspace or git worktree maintains its isolated database at `<root>/.code-kb/artifact.db`, cleaned automatically upon repo/worktree removal. Durable tool telemetry and token efficiency metrics persist centrally at `~/.code-kb/telemetry.db`.

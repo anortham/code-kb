@@ -4,12 +4,13 @@
 `code-kb` is active in this workspace. It provides instant AST-indexed symbol queries, skeletons, and surgical context slices backed by SQLite in WAL mode.
 
 **CRITICAL ROUTING RULES (Saves 80-90% context tokens):**
+- **DO** pass `project_root`, the absolute path of the project or git worktree you work in, on every code-kb call except `telemetry_summary`. Send the same value each time. Change it when you move to a worktree or another project.
 - **DO NOT** run `grep`, `rg`, `find`, `cat`, or `view_file` to search symbols or discover interfaces.
-- **DO NOT** supply `workspace`, `repo_path`, or `root_dir` parameters. Workspace binding starts from the configured root and can rebind from absolute paths, but a running MCP server cannot see host cwd changes. After entering a git worktree (e.g. Claude Code `EnterWorktree`), make the first code-kb call with an absolute path inside it, such as `file_skeleton(file_path="/worktree/path/to/file.rs")`; then unscoped lookups use that root. Binding is server-wide: use one server per concurrent root or include the target worktree's absolute path in calls.
 - **DO NOT** read an entire file when you only need a function, class, or type signature.
 - **DO** use `rg` for literal text: string literals, error messages, comments, and config values. `code-kb` indexes symbol names, signatures, and docstrings, not file contents.
 
 ### Quick Tool Routing:
+Every call below also takes `project_root`, for example `lookup_symbol(project_root="/path/to/project", query="symbol_name")`. `path` and `file_path` are relative to `project_root`, or absolute inside it.
 1. **Repo / Subsystem Orientation:** `codebase_outline(path, depth)` instead of `ls -R` or `find .`.
 2. **Module Interface:** `file_skeleton(file_path)` instead of reading the file. Bodies are stripped; signatures and types remain.
 3. **Symbol Definition:** `lookup_symbol(query="symbol_name", path="optional/dir")` for exact/prefix lookup.

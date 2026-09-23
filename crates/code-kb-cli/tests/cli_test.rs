@@ -267,7 +267,7 @@ fn mcp_search_names(root: &std::path::Path, query: &str) -> Vec<String> {
             "params": {"protocolVersion": "2024-11-05", "capabilities": {},
                        "clientInfo": {"name": "parity", "version": "1.0"}}}),
         serde_json::json!({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
-            "params": {"name": "search_symbols", "arguments": {"query": query}}}),
+            "params": {"name": "search_symbols", "arguments": {"query": query, "project_root": root}}}),
     ];
     let mut text = String::new();
     for request in requests {
@@ -1318,9 +1318,10 @@ fn test_cli_hook_session_start() {
         .as_str()
         .unwrap();
     assert!(ctx.contains("Code Intelligence: Always use `code-kb` MCP tools"));
-    assert!(ctx.contains("EnterWorktree"));
-    assert!(ctx.contains("absolute path inside it"));
-    assert!(ctx.contains("Binding is server-wide"));
+    assert!(ctx.contains("`project_root`"));
+    assert!(ctx.contains("except `telemetry_summary`"));
+    assert!(!ctx.contains("EnterWorktree"));
+    assert!(!ctx.contains("Binding is server-wide"));
 }
 
 #[test]

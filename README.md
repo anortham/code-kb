@@ -25,7 +25,7 @@ Traditional AI coding agents burn massive amounts of context loading entire sour
 
 - **Small Retained Memory:** Written in Rust, zero heavy runtimes (no web dashboard, no GPU models), retained process memory is about 25 MB. The plugin launcher is a small Node script that replaces itself with the native binary via `process.execve` on supported POSIX Node 22+ runtimes (or waits via `spawn` on Windows/older Node).
 - **Sub-5ms Query Latency:** Direct SQLite queries in WAL mode with zero in-memory heap bloat.
-- **Zero Workspace Parameters:** Pure semantic tool calling (`lookup_symbol(query="...")`). The agent is never burdened with `workspace_id`, `repo_path`, or path confusion.
+- **One `project_root` on Every Call:** Every tool except `telemetry_summary` takes `project_root`, the absolute path of the project or git worktree the agent works in (`lookup_symbol(project_root="/path/to/project", query="...")`). A root in every call cannot go stale, so a move to a worktree never answers from the old index.
 - **CLI-First Parity:** Every MCP tool has an exact 1:1 CLI command for instantaneous terminal verification and dogfooding.
 - **Continuous 3-Tier Sync:** Tool-driven updates, JIT staleness guards before reads, and a debounced background watcher with a Git storm circuit breaker.
 
@@ -163,39 +163,33 @@ binary yourself.
 
 Every harness runs the same command: `code-kb serve`. Hooks run `code-kb hook <Event>`.
 
-#### How code-kb Finds Your Workspace
+#### How code-kb Finds Your Project
 
-Tools never take a workspace parameter. The server binds a workspace in three steps, and each
-later step replaces the earlier one:
+Every tool except `telemetry_summary` takes a required `project_root`: the absolute path of the
+project or git worktree the agent works in. The agent sends the same value on every call. It
+changes the value when it moves to a worktree or another project. The routing hook and the skill
+tell the agent to do this.
 
-1. At start: `--root <path>` on the `serve` command, or, without it, the directory the process
-   starts in, searched upward for `.git` or a project marker.
-2. At handshake: the roots the host sends in the MCP `initialize` request, if any.
-3. At each tool call: an absolute path inside a repository in any `file_path`, `path`, or `file` argument.
+- A plain path or a `file://` URI is accepted. A relative value is an error.
+- A subfolder or a file inside the project resolves to the enclosing project.
+- `code-kb` refuses a filesystem root (`/`, `C:\`), the home directory, and a folder with no
+  project marker (`.git`, `Cargo.toml`, `package.json`, `go.mod`, `pyproject.toml`) and no
+  code-kb index. The error names the path and the reason, and `code-kb` creates nothing.
+- `path` and `file_path` are relative to `project_root`, or absolute inside it. An absolute path
+  outside `project_root` is an error. A path never switches the project.
+- A project with no index gets one on the first call. A git worktree copies its parent
+  repository's index; any other project runs a full scan. If the index is not ready in 5 s, the
+  answer is `Indexing <root> started; call again in a few seconds.`
 
-Terminal harnesses (Claude Code, Codex, AGY, Grok CLI, Copilot CLI, Pi, Swival, Zed) start the
-server in the project directory, so `code-kb serve` alone is enough.
+The server keeps one active index. A call for another project switches to that project's
+`<root>/.code-kb/artifact.db`.
 
-GUI apps (Cursor, Windsurf, the Antigravity IDE, Visual Studio, VS Code, Claude Desktop) start
-the server from their own install directory, not from your project. For these apps, put the MCP
-config inside the project and pass `--root` with the absolute path of the project:
+`--root` on the `serve` command is optional for every client, including GUI apps. It only names
+the startup pre-warm root: the server prepares that project's index at start. Without `--root`,
+the server pre-warms the directory the process starts in. `--db <file>` pins the index file of
+that launch root only.
 
-```json
-"args": ["serve", "--root", "/absolute/path/to/project"]
-```
-
-Without `--root`, the first tool call in a GUI app fails with
-`Database artifact not found ... configure code-kb with '--root <repo-path>'`. That error is the
-signal to add the flag. A tool call with an absolute path inside a repository also binds the
-server, so a session can recover, but `--root` removes the guesswork.
-
-When a host changes its session directory after MCP launch (for example, Claude Code
-`EnterWorktree`), the running server does not learn that change. Before making unscoped
-lookups in the worktree, make one code-kb call with an absolute path inside it, such as
-`file_skeleton(file_path="/absolute/worktree/path/to/file.rs")`. That call rebinds the
-server and later unscoped lookups use the worktree index. Binding is shared by all calls
-to a server; use a separate server for concurrent worktrees or include the intended
-worktree's absolute path in each call.
+The CLI takes the same value as the global `--root` flag, which defaults to the current directory.
 
 #### Claude Code (without the plugin)
 
@@ -218,15 +212,14 @@ args = ["serve"]
 agy mcp add code-kb code-kb serve
 ```
 
-Global config (`~/.gemini/config/mcp_config.json`) with `"eager": true`. The AGY CLI starts the
-server in the project directory. The Antigravity IDE starts it from its own install directory,
-so add `--root` when you use the IDE:
+Global config (`~/.gemini/config/mcp_config.json`) with `"eager": true`. The same config works
+for the AGY CLI and the Antigravity IDE:
 ```json
 {
   "mcpServers": {
     "code-kb": {
       "command": "code-kb",
-      "args": ["serve", "--root", "/absolute/path/to/project"],
+      "args": ["serve"],
       "disabled": false,
       "eager": true,
       "force_all_tools_eager": true
@@ -271,13 +264,13 @@ Project-level `.mcp.json`:
 
 #### Cursor
 
-In `.cursor/mcp.json` at the repository root. Cursor is a GUI app, so pass `--root`:
+In `.cursor/mcp.json` at the repository root:
 ```json
 {
   "mcpServers": {
     "code-kb": {
       "command": "code-kb",
-      "args": ["serve", "--root", "/absolute/path/to/project"]
+      "args": ["serve"]
     }
   }
 }
@@ -291,7 +284,7 @@ Add to `opencode.json` in the project:
   "mcpServers": {
     "code-kb": {
       "command": "code-kb",
-      "args": ["serve", "--root", "/absolute/path/to/project"]
+      "args": ["serve"]
     }
   }
 }
@@ -299,14 +292,15 @@ Add to `opencode.json` in the project:
 
 #### Claude Desktop
 
-Claude Desktop has one global config and no project directory, so `--root` pins one project.
+Claude Desktop has one global config. The agent passes `project_root` on each call, so one server
+works for every project.
 Add to `claude_desktop_config.json` (`%APPDATA%\Claude\claude_desktop_config.json` on Windows, `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
 ```json
 {
   "mcpServers": {
     "code-kb": {
       "command": "code-kb",
-      "args": ["serve", "--root", "/absolute/path/to/project"]
+      "args": ["serve"]
     }
   }
 }
@@ -314,14 +308,14 @@ Add to `claude_desktop_config.json` (`%APPDATA%\Claude\claude_desktop_config.jso
 
 #### Other GUI Apps (Windsurf, Visual Studio, VS Code)
 
-Use the app's project-level MCP config file and the same arguments:
-`["serve", "--root", "/absolute/path/to/project"]`. On Windows write the path with forward
-slashes, for example `C:/source/project`.
+Use the app's MCP config file and the same arguments: `["serve"]`. To pre-warm one project's
+index at start, add `"--root", "/absolute/path/to/project"`. On Windows write the path with
+forward slashes, for example `C:/source/project`.
 
 #### GitHub Copilot CLI & Terminal Agents
 
-Terminal harnesses (Copilot CLI, Pi, Swival, Zed) start the server in the project directory:
-configure the MCP server to run `code-kb serve` with no `--root`.
+For terminal harnesses (Copilot CLI, Pi, Swival, Zed), configure the MCP server to run
+`code-kb serve`.
 
 To remove a manual configuration, delete the `code-kb` entry from the harness config
 (`claude mcp remove code-kb`, `agy mcp remove code-kb`, or edit the file) and delete the
@@ -437,6 +431,10 @@ code-kb facts property --path src/layouts/columnview.h --limit 5
 ---
 
 ## MCP Tool Catalog
+
+Every tool except `telemetry_summary` requires `project_root`, the absolute path of the project or
+git worktree you work in. The table does not repeat it. `path` and `file_path` are relative to
+`project_root`, or absolute inside it.
 
 | Tool | Purpose | Key Parameters | Aliases |
 | :--- | :--- | :--- | :--- |
@@ -589,7 +587,7 @@ claude --plugin-dir .
 - [**005: Cold-Start Reconciliation**](docs/plans/005-startup-reconciliation.md) — Detecting and reconciling offline edits in under 50ms on startup.
 - [**006: Retrospective Lessons from Miller**](docs/plans/006-lessons-from-miller.md) — Analysis of calibration data, performance ledgers, and traps to avoid.
 - [**010: Master Implementation Plan**](docs/plans/010-master-implementation-plan.md) — The phased engineering roadmap from workspace scaffolding to release.
-- [**ADR 001: Zero Workspace Parameters**](docs/decisions/001-zero-workspace-parameters.md) — Decision record strictly forbidding workspace parameters in tool schemas.
+- [**ADR 001: Zero Workspace Parameters**](docs/decisions/001-zero-workspace-parameters.md) — The old rule against workspace parameters in tool schemas. The required `project_root` parameter replaced it in 2.1.0.
 - [**AGENTS.md Guidelines**](AGENTS.md) — Strict architectural invariants and rules for AI coding assistants working in this repository.
 
 ---

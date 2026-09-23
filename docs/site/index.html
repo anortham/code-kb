@@ -339,6 +339,7 @@ code-kb stats</pre>
       <div class="section-body">
         <h2>Ten tools, each with a matching command</h2>
         <p>Every MCP tool has a one-to-one CLI command, so you can check any answer from the terminal.</p>
+        <p>Every tool except <code>telemetry_summary</code> also requires <code>project_root</code>, the absolute path of the project or git worktree you work in. The CLI takes the same value as <code>--root</code>, which defaults to the current directory.</p>
         <div class="table-wrapper">
           <table class="tool-table">
             <thead>
@@ -371,7 +372,7 @@ code-kb stats</pre>
       <div class="section-body">
         <h2>Connect it to your agent</h2>
         <p>Choose your agent below for setup steps. The plugin needs Node.js 18 or newer. On first use, it downloads <code>code-kb</code> and the matching <code>julie-extract</code> for your platform.</p>
-        <p>You can also download the <a href="https://github.com/anortham/code-kb/releases/latest" target="_blank" rel="noopener">release archive</a>, put both binaries on <code>PATH</code>, and register the server yourself. GUI apps such as Cursor need <code>--root</code> set to the project path; terminal agents usually start in the project directory. See the <a href="https://github.com/anortham/code-kb#install" target="_blank" rel="noopener">README</a> for more setup options.</p>
+        <p>You can also download the <a href="https://github.com/anortham/code-kb/releases/latest" target="_blank" rel="noopener">release archive</a>, put both binaries on <code>PATH</code>, and register the server yourself. The same <code>code-kb serve</code> command works in GUI apps and terminal agents. <code>--root</code> is optional; it only prepares that project's index at start. See the <a href="https://github.com/anortham/code-kb#install" target="_blank" rel="noopener">README</a> for more setup options.</p>
 
         <div class="tabs" role="tablist" aria-label="Agent">
           <button role="tab" aria-selected="true" data-tab="claude">Claude Code</button>
@@ -441,13 +442,13 @@ grok plugin install /path/to/code-kb --trust</code></pre>
             <pre><code>agy mcp add code-kb code-kb serve</code></pre>
             <button class="copy-btn" type="button">Copy</button>
           </div>
-          <p class="panel-sub">Or in <code>~/.gemini/config/mcp_config.json</code> with eager tools. The AGY CLI starts the server in the project directory; the Antigravity IDE does not, so add <code>--root</code> for the IDE:</p>
+          <p class="panel-sub">Or in <code>~/.gemini/config/mcp_config.json</code> with eager tools. The same config works for the AGY CLI and the Antigravity IDE:</p>
           <div class="code-wrapper">
             <pre><code>{
   "mcpServers": {
     "code-kb": {
       "command": "code-kb",
-      "args": ["serve", "--root", "/absolute/path/to/project"],
+      "args": ["serve"],
       "disabled": false,
       "eager": true,
       "force_all_tools_eager": true
@@ -495,13 +496,13 @@ args = ["serve"]</code></pre>
         </div>
 
         <div class="tab-panel" id="tab-cursor" hidden>
-          <p class="panel-sub">Add this to <code>.cursor/mcp.json</code> in your repository. Set <code>--root</code> to the project's absolute path:</p>
+          <p class="panel-sub">Add this to <code>.cursor/mcp.json</code> in your repository:</p>
           <div class="code-wrapper">
             <pre><code>{
   "mcpServers": {
     "code-kb": {
       "command": "code-kb",
-      "args": ["serve", "--root", "/absolute/path/to/project"]
+      "args": ["serve"]
     }
   }
 }</code></pre>

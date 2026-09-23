@@ -22,44 +22,56 @@ symbol search, and surgical context slicing with minimal token consumption.
 
 ## Core Invariants
 
-### 1. Zero Workspace Parameters in Tool Schemas
-**NEVER expose `workspace`, `workspace_id`, `repo_path`, or `root_dir` in any
-MCP tool schema.**
+### 1. Required `project_root` on Every Tool
+**Every MCP tool except `telemetry_summary` requires `project_root`. No MCP tool
+schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
 
-- **Why:** Exposing a `workspace` parameter pollutes the LLM's prompt. Models feel
-  obligated to inject workspace paths into every tool call, causing context burn,
-  slash mismatches, and hallucinated paths. Previous projects (Miller, Goldfish)
-  suffered severe usability penalties from this anti-pattern.
-- **How Workspace Binding Actually Works:**
-  1. *Explicit `--root`:* `code-kb serve --root <path>` in the MCP config binds
-     that path. This is the documented path for GUI apps (Cursor, Windsurf, the
-     Antigravity IDE, Visual Studio, Claude Desktop), which start the server from
-     their own install directory. The config lives inside the project.
-  2. *Process CWD:* Terminal harnesses (Claude Code, Codex, AGY, Grok CLI) start
-     the server in the project directory, so `code-kb serve` alone binds it.
-  3. *MCP Protocol Handshake:* The server extracts roots from `initialize`
-     (`params.roots`, `rootUri`, `rootPath`, `workspaceFolders`).
-  4. *Path Inspection:* If an absolute path is passed in `file_path`, `path`, or
-     `file`, `code-kb` silently binds to the enclosing repository root.
-  5. *Host Working-Directory Changes:* A running MCP server does not learn when its
-     host session changes directories (for example, Claude Code `EnterWorktree`).
-     After entering a worktree, make the first code-kb call with an absolute path
-     inside it. Unscoped lookups then use that workspace. The binding is shared by
-     the server, so use one server per concurrently active worktree or include an
-     absolute path from the intended root with each call.
-  6. *Automatic Initial Scan:* If bound to a repository where `.code-kb/artifact.db`
-     does not exist yet, `code-kb` creates the index in the background at server
-     start, or before a CLI command answers, rather than returning an error
-     (`create_index`: a git worktree copies and reconciles its parent repository's
-     index, anything else runs a full scan). Files changed while no server ran are
-     reconciled at startup. The first tool call waits for that scan or
-     reconciliation and reports a failed scan; CLI commands reconcile before answering.
-  7. *Internal Compatibility:* If an unadvertised `workspace` argument is provided
-     internally, the backend accepts it silently, but **never** documents it in
-     `input_schema` or prompts for it in error messages.
-- **Enforcement:** `crates/code-kb-cli/tests/mcp_test.rs` validates that no tool in
-  `tools/list` exposes a `workspace` property. Any PR adding `workspace` to a tool
-  schema will fail CI.
+- `project_root` is the absolute path of the project or git worktree the agent works
+  in. The schema description is: "Absolute path of the project or git worktree you are
+  working in. Send the same value on every call. Change it when you move to a worktree
+  or another project."
+- **Why:**
+  - The agent always knows where it works. In fresh sessions, the first code-kb call
+    after the worktree step already passed an absolute worktree path.
+  - MCP roots cannot carry the answer. Codex and Grok send no roots, Antigravity sends
+    `[]`, and `grok -w` starts the server in the main checkout. MCP `2026-07-28`
+    deprecates roots and says to pass directories in tool parameters.
+  - A root held in server state goes stale (issue #3). A root in every call cannot go
+    stale inside the server.
+- **Resolution, once per call:**
+  - A plain path or a `file://` URI is accepted. A relative value is an error.
+  - A subfolder or a file inside the project resolves to the enclosing project. The walk
+    up stops at `.git`, a language marker, or an existing `.code-kb/artifact.db`.
+  - The server refuses a filesystem root (`/`, `C:\`), the home directory, and a folder
+    with no project marker (`.git`, `Cargo.toml`, `package.json`, `go.mod`,
+    `pyproject.toml`) and no code-kb index. The error names the path and the reason.
+    A refused call creates nothing.
+  - `workspace` and `root` are silent aliases of `project_root`. They never appear in a
+    schema or in an error message.
+  - The server never takes the root from the MCP `initialize` request.
+- **Path arguments:** `path` and `file_path` are relative to `project_root`, or absolute
+  inside it. An absolute `path` or `file_path` outside `project_root` is an error that
+  names both paths. Path arguments never switch the project.
+- **Active index:** The server keeps one active index. A call for another root switches
+  to that root's `<root>/.code-kb/artifact.db`. Each call names its own root, so a switch
+  never changes the answer to a later call.
+- **Startup pre-warm:** `code-kb serve --root <path>`, or the process directory when
+  `--root` is absent, is the startup pre-warm root. The server prepares that project's
+  index at start. `--root` is optional for every client, including GUI apps.
+  `--db <file>` pins the index file of the launch root only.
+- **Automatic index creation:** A root with no `.code-kb/artifact.db` gets an index at
+  startup or on the first call for it (`create_index`: a git worktree copies and
+  reconciles its parent repository's index, anything else runs a full scan). Files
+  changed while no server ran are reconciled at startup. A failed scan is an error that
+  names the root, never empty results. CLI commands reconcile before answering.
+- **Telemetry:** `workspace_root` records the call's resolved root. A refused call
+  records the launch root.
+- **CLI 1:1:** `project_root` maps to the global `--root` flag, which defaults to the
+  current directory.
+- **Enforcement:** The `tools/list` tests in `crates/code-kb-cli/tests/mcp_test.rs` and
+  the invariant tests in `crates/code-kb-cli/tests/adversarial_m2_server_test.rs` and
+  `crates/code-kb-cli/tests/adversarial_m3_server_test.rs` check every tool schema. A PR
+  that adds a banned name to a schema, or drops `project_root` from `required`, fails CI.
 
 ### 2. Zero In-Memory Heap Objects for Repositories
 - Do not hydrate repository symbol graphs or file lists into RAM.
@@ -87,9 +99,10 @@ MCP tool schema.**
 ### 5. Zero-Friction Tool Ergonomics
 - Tool handlers accept intuitive parameter aliases (`file`/`path` for `file_path`,
   `symbol`/`name` for `symbol_name`, `q`/`name` for `query`).
+- `workspace` and `root` are silent aliases of `project_root`. No schema names them.
 - Optional parameters provide safe defaults (`direction` in `find_references` defaults to
   `"callers"`, `category` in `find_structural_facts` lists all categories with counts when omitted).
-- Scoped search: `lookup_symbol`, `search_symbols`, `find_references`, and `find_structural_facts` support an optional `path`/`file_path` filter.
+- Scoped search: `lookup_symbol`, `search_symbols`, `find_references`, and `find_structural_facts` support an optional `path`/`file_path` filter. The filter is relative to `project_root`, or absolute inside it.
 - Lookup and search text include `id=<symbol_id>`. `get_symbol_body`, `get_symbol_context`, `find_references`, and `blast_radius` accept that current-index ID as `symbol_id` / `--symbol-id`; IDs are reselected after edits or rebuilds, and unresolved-call matching remains heuristic.
 - Recovery on a miss: every not-found path builds its text from `symbol_not_found_parts` or
   `file_not_found_parts` in `queries.rs`. The text names the bound workspace, then either
@@ -136,6 +149,10 @@ MCP tool schema.**
 ### 6. Index Freshness
 - A debounced watcher refreshes filesystem changes, startup reconciles changes made while no server ran,
   and body and skeleton reads refresh their target file before answering.
+- The server runs one watcher at a time. When a call switches roots, the watcher and the offline
+  reconcile restart for the new root.
+- A call waits up to 5 s for its root's index. If the index is not ready, the answer is
+  `Indexing <root> started; call again in a few seconds.` The next call for that root checks again.
 - Until upstream header updates preserve C++ language detection, a batch of changed `.h` files triggers a
   content-aware workspace scan that only re-extracts changed files.
 

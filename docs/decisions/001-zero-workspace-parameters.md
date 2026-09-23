@@ -1,5 +1,10 @@
 # ADR 001: Zero Workspace Parameters in Tool Schemas
 
+> **Superseded in 2.1.0** by the required `project_root` parameter. See
+> [the 2.1.0 plan](../plans/2026-09-23-mcp-roots-worktree-binding.md). A root held in server state
+> went stale when the agent moved to a git worktree (issue #3), and MCP roots cannot supply the
+> root, so every tool except `telemetry_summary` now takes the project path on each call.
+
 ## Status
 **Accepted & Enforced** (2026-09-12)
 
