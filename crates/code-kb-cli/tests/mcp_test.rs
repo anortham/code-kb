@@ -1,6 +1,8 @@
 use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Write};
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::time::{Duration, Instant};
 
 struct ChildGuard(Child);
 
@@ -38,6 +40,79 @@ fn mcp_request(
     let mut response = String::new();
     reader.read_line(&mut response).unwrap();
     serde_json::from_str(&response).unwrap()
+}
+
+const PROJECT_ROOT_DESCRIPTION: &str = "Absolute path of the project or git worktree you are working in. Send the same value on every call. Change it when you move to a worktree or another project.";
+const MISSING_PROJECT_ROOT: &str = "Missing required parameter: project_root. Pass the absolute path of the project or git worktree you are working in.";
+
+fn serve_command(launch_root: &Path) -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_code-kb"));
+    command
+        .env("CODE_KB_TELEMETRY_DIR", launch_root.join(".telemetry_test"))
+        .arg("serve")
+        .arg("--root")
+        .arg(launch_root);
+    command
+}
+
+struct McpSession {
+    _child: ChildGuard,
+    stdin: std::process::ChildStdin,
+    reader: BufReader<std::process::ChildStdout>,
+}
+
+impl McpSession {
+    fn start(mut command: Command) -> Self {
+        let mut child = ChildGuard(
+            command
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .spawn()
+                .expect("Failed to spawn code-kb serve"),
+        );
+        let mut stdin = child.stdin.take().unwrap();
+        let mut reader = BufReader::new(child.stdout.take().unwrap());
+        let initialized = mcp_request(
+            &mut stdin,
+            &mut reader,
+            &json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": { "name": "project-root-test", "version": "1.0" }
+                }
+            }),
+        );
+        assert_eq!(initialized["id"], 1);
+        Self {
+            _child: child,
+            stdin,
+            reader,
+        }
+    }
+
+    fn request(&mut self, method: &str, params: Value) -> Value {
+        mcp_request(
+            &mut self.stdin,
+            &mut self.reader,
+            &json!({"jsonrpc": "2.0", "id": 2, "method": method, "params": params}),
+        )
+    }
+
+    fn call(&mut self, name: &str, arguments: Value) -> Value {
+        self.request("tools/call", json!({"name": name, "arguments": arguments}))["result"].clone()
+    }
+}
+
+fn result_text(result: &Value) -> &str {
+    result["content"][0]["text"].as_str().unwrap()
+}
+
+fn canonical_root(dir: &Path) -> PathBuf {
+    code_kb_core::Workspace::new(dir.to_path_buf()).canonical_root
 }
 
 #[test]
@@ -216,7 +291,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
     assert!(
         resp["result"]["instructions"]
             .as_str()
-            .is_some_and(|instructions| !instructions.is_empty())
+            .is_some_and(|instructions| instructions.starts_with("Pass project_root, the absolute path of the project or git worktree you work in, on every call except telemetry_summary. For progressive code exploration,"))
     );
 
     // 2. Send tools/list
@@ -277,7 +352,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
             "jsonrpc": "2.0",
             "id": id,
             "method": "tools/call",
-            "params": { "name": name, "arguments": {} }
+            "params": { "name": name, "arguments": { "project_root": root } }
         });
         let mut line = serde_json::to_string(&request).unwrap();
         line.push('\n');
@@ -302,7 +377,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
         "method": "tools/call",
         "params": {
             "name": "lookup_symbol",
-            "arguments": {
+            "arguments": { "project_root": root,
                 "query": "Workspace",
                 "kind": "struct"
             }
@@ -330,7 +405,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
             "method": "tools/call",
             "params": {
                 "name": "lookup_symbol",
-                "arguments": { "query": "Workspace", "limit": limit }
+                "arguments": { "project_root": root, "query": "Workspace", "limit": limit }
             }
         });
         let mut line = serde_json::to_string(&request).unwrap();
@@ -356,7 +431,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
         "method": "tools/call",
         "params": {
             "name": "lookup_symbol",
-            "arguments": { "query": "Workspace::root", "limit": 0 }
+            "arguments": { "project_root": root, "query": "Workspace::root", "limit": 0 }
         }
     });
     let mut zero_limit_line = serde_json::to_string(&zero_limit_request).unwrap();
@@ -381,7 +456,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
         "method": "tools/call",
         "params": {
             "name": "lookup_symbol",
-            "arguments": { "query": "Workspace::root", "kind": "function" }
+            "arguments": { "project_root": root, "query": "Workspace::root", "kind": "function" }
         }
     });
     let mut filtered_lookup_line = serde_json::to_string(&filtered_lookup_request).unwrap();
@@ -410,7 +485,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
         "method": "tools/call",
         "params": {
             "name": "search_symbols",
-            "arguments": {
+            "arguments": { "project_root": root,
                 "query": "workspace discovery root"
             }
         }
@@ -436,7 +511,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
         "method": "tools/call",
         "params": {
             "name": "find_references",
-            "arguments": {
+            "arguments": { "project_root": root,
                 "symbol": "Workspace"
             }
         }
@@ -467,7 +542,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
         "method": "tools/call",
         "params": {
             "name": "find_structural_facts",
-            "arguments": {}
+            "arguments": { "project_root": root }
         }
     });
     let mut line6 = serde_json::to_string(&facts_req).unwrap();
@@ -491,7 +566,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
         "method": "tools/call",
         "params": {
             "name": "find_structural_facts",
-            "arguments": { "category": "route", "limit": 3 }
+            "arguments": { "project_root": root, "category": "route", "limit": 3 }
         }
     });
     let mut capped_facts_line = serde_json::to_string(&capped_facts_req).unwrap();
@@ -514,22 +589,22 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
         (
             80,
             "find_structural_facts",
-            json!({"category": "route", "limit": 0}),
+            json!({"project_root": root, "category": "route", "limit": 0}),
         ),
         (
             81,
             "lookup_symbol",
-            json!({"query": "Workspace", "limit": 0}),
+            json!({"project_root": root, "query": "Workspace", "limit": 0}),
         ),
         (
             82,
             "search_symbols",
-            json!({"query": "Workspace", "limit": 0}),
+            json!({"project_root": root, "query": "Workspace", "limit": 0}),
         ),
         (
             83,
             "find_references",
-            json!({"symbol_name": "Workspace", "limit": 0}),
+            json!({"project_root": root, "symbol_name": "Workspace", "limit": 0}),
         ),
     ] {
         let request = json!({
@@ -555,7 +630,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
         "method": "tools/call",
         "params": {
             "name": "file_skeleton",
-            "arguments": {
+            "arguments": { "project_root": root,
                 "file": "src/workspace.rs"
             }
         }
@@ -580,7 +655,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
         "method": "tools/call",
         "params": {
             "name": "blast_radius",
-            "arguments": {
+            "arguments": { "project_root": root,
                 "symbol": "Workspace",
                 "limit": 0
             }
@@ -609,7 +684,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
         "method": "tools/call",
         "params": {
             "name": "get_symbol_context",
-            "arguments": {
+            "arguments": { "project_root": root,
                 "symbol_name": "Workspace",
                 "include_external": false
             }
@@ -640,7 +715,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
         "method": "tools/call",
         "params": {
             "name": "get_symbol_context",
-            "arguments": {
+            "arguments": { "project_root": root,
                 "symbol_name": "Workspace",
                 "include_external": true
             }
@@ -667,7 +742,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
     let id_slice = mcp_request(
         &mut stdin,
         &mut reader,
-        &json!({"jsonrpc":"2.0","id":55,"method":"tools/call","params":{"name":"get_symbol_context","arguments":{"symbol_id":"s1","include_external":true}}}),
+        &json!({"jsonrpc":"2.0","id":55,"method":"tools/call","params":{"name":"get_symbol_context","arguments":{"project_root":root,"symbol_id":"s1","include_external":true}}}),
     );
     assert_ne!(id_slice["result"]["isError"], true, "{id_slice}");
     assert!(
@@ -679,7 +754,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
     let id_references_default = mcp_request(
         &mut stdin,
         &mut reader,
-        &json!({"jsonrpc":"2.0","id":56,"method":"tools/call","params":{"name":"find_references","arguments":{"symbol_id":"s1","direction":"callees"}}}),
+        &json!({"jsonrpc":"2.0","id":56,"method":"tools/call","params":{"name":"find_references","arguments":{"project_root":root,"symbol_id":"s1","direction":"callees"}}}),
     );
     assert_ne!(id_references_default["result"]["isError"], true);
     assert!(
@@ -691,7 +766,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
     let id_references_external = mcp_request(
         &mut stdin,
         &mut reader,
-        &json!({"jsonrpc":"2.0","id":57,"method":"tools/call","params":{"name":"find_references","arguments":{"symbol_id":"s1","direction":"callees","include_external":true}}}),
+        &json!({"jsonrpc":"2.0","id":57,"method":"tools/call","params":{"name":"find_references","arguments":{"project_root":root,"symbol_id":"s1","direction":"callees","include_external":true}}}),
     );
     assert_ne!(id_references_external["result"]["isError"], true);
     assert!(
@@ -713,9 +788,9 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
             (30, "blast_radius"),
         ] {
             let arguments = if tool == "blast_radius" {
-                json!({"symbol_id":symbol_id,"file_path":"src/workspace.rs"})
+                json!({"project_root":root,"symbol_id":symbol_id,"file_path":"src/workspace.rs"})
             } else {
-                json!({"symbol_id":symbol_id})
+                json!({"project_root":root,"symbol_id":symbol_id})
             };
             let request = json!({"jsonrpc":"2.0","id":id + offset,"method":"tools/call","params":{"name":tool,"arguments":arguments}});
             let mut line = serde_json::to_string(&request).unwrap();
@@ -751,7 +826,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
     let mismatch = mcp_request(
         &mut stdin,
         &mut reader,
-        &json!({"jsonrpc":"2.0","id":52,"method":"tools/call","params":{"name":"blast_radius","arguments":{"symbol_id":"overload_zero","file_path":"src/other.cpp"}}}),
+        &json!({"jsonrpc":"2.0","id":52,"method":"tools/call","params":{"name":"blast_radius","arguments":{"project_root":root,"symbol_id":"overload_zero","file_path":"src/other.cpp"}}}),
     );
     assert_eq!(mismatch["result"]["isError"], true);
     assert!(
@@ -764,7 +839,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
     let exact_lookup = mcp_request(
         &mut stdin,
         &mut reader,
-        &json!({"jsonrpc":"2.0","id":53,"method":"tools/call","params":{"name":"lookup_symbol","arguments":{"query":"Workspace"}}}),
+        &json!({"jsonrpc":"2.0","id":53,"method":"tools/call","params":{"name":"lookup_symbol","arguments":{"project_root":root,"query":"Workspace"}}}),
     );
     assert!(
         exact_lookup["result"]["content"][0]["text"]
@@ -775,7 +850,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
     let exact_search = mcp_request(
         &mut stdin,
         &mut reader,
-        &json!({"jsonrpc":"2.0","id":54,"method":"tools/call","params":{"name":"search_symbols","arguments":{"query":"Workspace"}}}),
+        &json!({"jsonrpc":"2.0","id":54,"method":"tools/call","params":{"name":"search_symbols","arguments":{"project_root":root,"query":"Workspace"}}}),
     );
     assert!(
         exact_search["result"]["content"][0]["text"]
@@ -839,7 +914,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
 }
 
 #[test]
-fn test_mcp_invalid_path_does_not_poison_session() {
+fn test_mcp_invalid_project_root_or_path_does_not_poison_later_calls() {
     let temp_dir = code_kb_core::safe_tempdir();
     let root = temp_dir.path().to_path_buf();
     let db_dir = root.join(".code-kb");
@@ -940,6 +1015,7 @@ fn test_mcp_invalid_path_does_not_poison_session() {
         "params": {
             "name": "file_skeleton",
             "arguments": {
+                "project_root": root,
                 "file": "/nonexistent_abs_path/nowhere/does_not_exist.rs"
             }
         }
@@ -954,6 +1030,24 @@ fn test_mcp_invalid_path_does_not_poison_session() {
     assert_eq!(resp2["id"], 2);
     assert!(resp2["result"]["isError"] == true || resp2["error"].is_object());
 
+    let invalid_root = mcp_request(
+        &mut stdin,
+        &mut reader,
+        &json!({
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {
+                "name": "file_skeleton",
+                "arguments": {
+                    "project_root": "/nonexistent_abs_path/nowhere",
+                    "file": "src/lib.rs"
+                }
+            }
+        }),
+    );
+    assert_eq!(invalid_root["result"]["isError"], true, "{invalid_root}");
+
     // 3. Subsequent call with valid relative path must STILL succeed (session not poisoned)
     let valid_call = json!({
         "jsonrpc": "2.0",
@@ -962,6 +1056,7 @@ fn test_mcp_invalid_path_does_not_poison_session() {
         "params": {
             "name": "file_skeleton",
             "arguments": {
+                "project_root": root,
                 "file": "src/lib.rs"
             }
         }
@@ -986,7 +1081,7 @@ fn test_mcp_invalid_path_does_not_poison_session() {
 }
 
 #[test]
-fn test_mcp_worktree_rebind() {
+fn test_mcp_project_root_switches_between_main_checkout_and_worktree() {
     let temp_dir = code_kb_core::safe_tempdir();
     let main_root = temp_dir.path().join("main_repo");
     let wt_root = main_root.join(".worktrees").join("feature-x");
@@ -1152,7 +1247,7 @@ fn test_mcp_worktree_rebind() {
         "method": "tools/call",
         "params": {
             "name": "lookup_symbol",
-            "arguments": { "query": "main_fn" }
+            "arguments": { "project_root": main_root, "query": "main_fn" }
         }
     });
     let mut line2 = serde_json::to_string(&main_call).unwrap();
@@ -1174,7 +1269,7 @@ fn test_mcp_worktree_rebind() {
         "method": "tools/call",
         "params": {
             "name": "file_skeleton",
-            "arguments": { "file_path": wt_file.to_string_lossy().to_string() }
+            "arguments": { "project_root": wt_root, "file_path": wt_file.to_string_lossy().to_string() }
         }
     });
     let mut line3 = serde_json::to_string(&wt_call).unwrap();
@@ -1201,7 +1296,7 @@ fn test_mcp_worktree_rebind() {
             "method": "tools/call",
             "params": {
                 "name": "lookup_symbol",
-                "arguments": { "query": "feature_fn" }
+                "arguments": { "project_root": wt_root, "query": "feature_fn" }
             }
         }),
     );
@@ -1220,7 +1315,7 @@ fn test_mcp_worktree_rebind() {
         "method": "tools/call",
         "params": {
             "name": "file_skeleton",
-            "arguments": { "file": main_file.to_string_lossy().to_string() }
+            "arguments": { "project_root": main_root, "file": main_file.to_string_lossy().to_string() }
         }
     });
     let mut line4 = serde_json::to_string(&back_call).unwrap();
@@ -1247,7 +1342,7 @@ fn test_mcp_worktree_rebind() {
             "method": "tools/call",
             "params": {
                 "name": "lookup_symbol",
-                "arguments": { "query": "main_fn" }
+                "arguments": { "project_root": main_root, "query": "main_fn" }
             }
         }),
     );
@@ -1258,6 +1353,31 @@ fn test_mcp_worktree_rebind() {
     assert!(main_text.starts_with("Found 1 symbols matching \"main_fn\":"));
     assert!(main_text.contains("- function `main_fn` [src/main.rs:1-1]"));
     assert!(!main_text.contains("feature_fn"));
+
+    let worktree_symbol_in_main = mcp_request(
+        &mut stdin,
+        &mut reader,
+        &json!({
+            "jsonrpc": "2.0",
+            "id": 7,
+            "method": "tools/call",
+            "params": {
+                "name": "lookup_symbol",
+                "arguments": { "project_root": main_root, "query": "feature_fn" }
+            }
+        }),
+    );
+    assert_ne!(
+        worktree_symbol_in_main["result"]["isError"], true,
+        "{worktree_symbol_in_main}"
+    );
+    assert!(
+        !worktree_symbol_in_main["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("function `feature_fn` ["),
+        "{worktree_symbol_in_main}"
+    );
 
     drop(stdin);
     let _ = child.wait();
@@ -1393,7 +1513,7 @@ fn test_mcp_worktree_auto_copy_fast_path() {
         "method": "tools/call",
         "params": {
             "name": "file_skeleton",
-            "arguments": { "file": wt_file.to_string_lossy().to_string() }
+            "arguments": { "project_root": wt_root, "file": wt_file.to_string_lossy().to_string() }
         }
     });
     let mut line2 = serde_json::to_string(&wt_call).unwrap();
@@ -1421,7 +1541,7 @@ fn test_mcp_worktree_auto_copy_fast_path() {
             "method": "tools/call",
             "params": {
                 "name": "lookup_symbol",
-                "arguments": { "query": "shared_fn" }
+                "arguments": { "project_root": wt_root, "query": "shared_fn" }
             }
         }),
     );
@@ -1456,6 +1576,10 @@ fn test_mcp_worktree_auto_copy_fast_path() {
 }
 
 fn setup_test_repo() -> tempfile::TempDir {
+    fixture_repo("Workspace")
+}
+
+fn fixture_repo(struct_name: &str) -> tempfile::TempDir {
     let temp_dir = code_kb_core::safe_tempdir();
     let root = temp_dir.path().to_path_buf();
     let db_dir = root.join(".code-kb");
@@ -1464,8 +1588,8 @@ fn setup_test_repo() -> tempfile::TempDir {
 
     let src_dir = root.join("src");
     std::fs::create_dir_all(&src_dir).unwrap();
-    let content = "pub struct Workspace {\n    pub root: String,\n}\n";
-    std::fs::write(src_dir.join("workspace.rs"), content).unwrap();
+    let content = format!("pub struct {struct_name} {{\n    pub root: String,\n}}\n");
+    std::fs::write(src_dir.join("workspace.rs"), &content).unwrap();
     let bytes = content.len() as i64;
     let hash = format!("blake3:{}", blake3::hash(content.as_bytes()).to_hex());
 
@@ -1512,12 +1636,17 @@ fn setup_test_repo() -> tempfile::TempDir {
     .unwrap();
     conn.execute(
         "INSERT INTO symbols VALUES (
-            's1', 'f1', 'src/workspace.rs', 'rust', 'Workspace', 'struct',
-            'pub struct Workspace', 'Workspace representation for code-kb workspace discovery root', 'pub', NULL,
+            's1', 'f1', 'src/workspace.rs', 'rust', ?2, 'struct',
+            ?3, ?4, 'pub', NULL,
             1, 0, 3, 1, 0, ?1, 1, 21, 3, 1, 21, ?1, 'b3:hash',
             NULL, 0, 0
         )",
-        rusqlite::params![bytes],
+        rusqlite::params![
+            bytes,
+            struct_name,
+            format!("pub struct {struct_name}"),
+            format!("{struct_name} representation for code-kb workspace discovery root")
+        ],
     )
     .unwrap();
     conn.execute(
@@ -1532,278 +1661,128 @@ fn setup_test_repo() -> tempfile::TempDir {
 }
 
 #[test]
-fn test_mcp_initialize_roots_file_uris() {
-    use std::io::BufRead;
-
-    let repo = setup_test_repo();
+fn test_mcp_initialize_roots_are_ignored_and_file_uri_project_roots_resolve() {
+    let repo = fixture_repo("Alpha");
     let root = repo.path();
+    let other = fixture_repo("Beta");
     let root_str = root.to_string_lossy().replace('\\', "/");
     let three_slash_uri = format!("file:///{root_str}");
     let two_slash_uri = format!("file://{root_str}");
 
-    // 1. Spawn without --root, initialize with params.roots containing file:///C:/...
-    {
-        let mut child = ChildGuard(
-            Command::new(env!("CARGO_BIN_EXE_code-kb"))
-                .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
-                .current_dir(root)
-                .arg("serve")
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .spawn()
-                .expect("Failed to spawn code-kb serve without --root"),
-        );
-        let mut stdin = child.stdin.take().expect("Failed to open stdin");
-        let stdout = child.stdout.take().expect("Failed to open stdout");
-        let mut reader = std::io::BufReader::new(stdout);
-
-        let init = json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": { "name": "uri-test", "version": "1.0" },
-                "roots": [{ "uri": three_slash_uri }]
-            }
-        });
-        let mut line = serde_json::to_string(&init).unwrap();
-        line.push('\n');
-        stdin.write_all(line.as_bytes()).unwrap();
-        stdin.flush().unwrap();
-
-        let mut init_resp = String::new();
-        reader.read_line(&mut init_resp).unwrap();
-        let resp: Value = serde_json::from_str(&init_resp).unwrap();
-        assert_eq!(resp["id"], 1);
-
-        let call = json!({
-            "jsonrpc": "2.0",
-            "id": 2,
-            "method": "tools/call",
-            "params": {
-                "name": "lookup_symbol",
-                "arguments": { "query": "Workspace" }
-            }
-        });
-        let mut call_line = serde_json::to_string(&call).unwrap();
-        call_line.push('\n');
-        stdin.write_all(call_line.as_bytes()).unwrap();
-        stdin.flush().unwrap();
-
-        let mut call_resp = String::new();
-        reader.read_line(&mut call_resp).unwrap();
-        let call_val: Value = serde_json::from_str(&call_resp).unwrap();
-        assert_eq!(call_val["id"], 2);
-        assert_ne!(call_val["result"]["isError"], true);
-        assert!(
-            call_val["result"]["content"][0]["text"]
-                .as_str()
-                .unwrap()
-                .contains("Workspace")
-        );
-
-        drop(stdin);
-        let _ = child.wait();
-    }
-
-    // 2. Spawn without --root, initialize with params.roots containing two-slash file://C:/...
-    {
-        let mut child = ChildGuard(
-            Command::new(env!("CARGO_BIN_EXE_code-kb"))
-                .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
-                .current_dir(root)
-                .arg("serve")
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .spawn()
-                .expect("Failed to spawn code-kb serve without --root"),
-        );
-        let mut stdin = child.stdin.take().expect("Failed to open stdin");
-        let stdout = child.stdout.take().expect("Failed to open stdout");
-        let mut reader = std::io::BufReader::new(stdout);
-
-        let init = json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": { "name": "uri-test", "version": "1.0" },
-                "roots": [{ "uri": two_slash_uri }]
-            }
-        });
-        let mut line = serde_json::to_string(&init).unwrap();
-        line.push('\n');
-        stdin.write_all(line.as_bytes()).unwrap();
-        stdin.flush().unwrap();
-
-        let mut init_resp = String::new();
-        reader.read_line(&mut init_resp).unwrap();
-        let resp: Value = serde_json::from_str(&init_resp).unwrap();
-        assert_eq!(resp["id"], 1);
-
-        let call = json!({
-            "jsonrpc": "2.0",
-            "id": 2,
-            "method": "tools/call",
-            "params": {
-                "name": "lookup_symbol",
-                "arguments": { "query": "Workspace" }
-            }
-        });
-        let mut call_line = serde_json::to_string(&call).unwrap();
-        call_line.push('\n');
-        stdin.write_all(call_line.as_bytes()).unwrap();
-        stdin.flush().unwrap();
-
-        let mut call_resp = String::new();
-        reader.read_line(&mut call_resp).unwrap();
-        let call_val: Value = serde_json::from_str(&call_resp).unwrap();
-        assert_eq!(call_val["id"], 2);
-        assert_ne!(call_val["result"]["isError"], true);
-        assert!(
-            call_val["result"]["content"][0]["text"]
-                .as_str()
-                .unwrap()
-                .contains("Workspace")
-        );
-
-        drop(stdin);
-        let _ = child.wait();
-    }
-}
-
-#[test]
-fn test_mcp_rebinding_drive_casing_insensitivity() {
-    use std::io::BufRead;
-
-    let repo = setup_test_repo();
-    let root = repo.path();
-
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
             .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+            .current_dir(root)
             .arg("serve")
-            .arg("--root")
-            .arg(root)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()
-            .expect("Failed to spawn code-kb serve"),
+            .expect("Failed to spawn code-kb serve without --root"),
     );
     let mut stdin = child.stdin.take().expect("Failed to open stdin");
-    let stdout = child.stdout.take().expect("Failed to open stdout");
-    let mut reader = std::io::BufReader::new(stdout);
+    let mut reader = BufReader::new(child.stdout.take().expect("Failed to open stdout"));
 
-    // 1. Initialize
-    let init_req = json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "initialize",
-        "params": {
-            "protocolVersion": "2024-11-05",
-            "capabilities": {},
-            "clientInfo": { "name": "casing-test", "version": "1.0" }
-        }
-    });
-    let mut line = serde_json::to_string(&init_req).unwrap();
-    line.push('\n');
-    stdin.write_all(line.as_bytes()).unwrap();
-    stdin.flush().unwrap();
-
-    let mut init_resp = String::new();
-    reader.read_line(&mut init_resp).unwrap();
-    let resp: Value = serde_json::from_str(&init_resp).unwrap();
-    assert_eq!(resp["id"], 1);
-
-    // 2. Prepare inverted drive letter path
-    let abs_file = root
-        .join("src")
-        .join("workspace.rs")
-        .to_string_lossy()
-        .to_string();
-    let inverted_abs_file = if abs_file.len() >= 2 && abs_file.as_bytes()[1] == b':' {
-        let first_char = abs_file.chars().next().unwrap();
-        let toggled = if first_char.is_ascii_uppercase() {
-            first_char.to_ascii_lowercase()
-        } else {
-            first_char.to_ascii_uppercase()
-        };
-        format!("{}{}", toggled, &abs_file[1..])
-    } else {
-        abs_file.clone()
-    };
-
-    // 3. Call file_skeleton with inverted absolute path
-    let call1 = json!({
-        "jsonrpc": "2.0",
-        "id": 2,
-        "method": "tools/call",
-        "params": {
-            "name": "file_skeleton",
-            "arguments": { "file": inverted_abs_file }
-        }
-    });
-    let mut call1_line = serde_json::to_string(&call1).unwrap();
-    call1_line.push('\n');
-    stdin.write_all(call1_line.as_bytes()).unwrap();
-    stdin.flush().unwrap();
-
-    let mut resp_line1 = String::new();
-    reader.read_line(&mut resp_line1).unwrap();
-    let resp1: Value = serde_json::from_str(&resp_line1).unwrap();
-    assert_eq!(resp1["id"], 2);
-    assert_ne!(
-        resp1["result"]["isError"], true,
-        "file_skeleton should not error on inverted drive casing: {resp1:?}"
-    );
-    assert!(
-        resp1["result"]["content"][0]["text"]
-            .as_str()
-            .unwrap()
-            .contains("pub struct Workspace"),
-        "file_skeleton should return symbol signatures"
-    );
-
-    // 4. Call get_symbol_body with inverted absolute path in file argument
-    let call2 = json!({
-        "jsonrpc": "2.0",
-        "id": 3,
-        "method": "tools/call",
-        "params": {
-            "name": "get_symbol_body",
-            "arguments": {
-                "symbol": "Workspace",
-                "file": inverted_abs_file
+    let initialized = mcp_request(
+        &mut stdin,
+        &mut reader,
+        &json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": { "name": "uri-test", "version": "1.0" },
+                "roots": [{ "uri": file_uri(other.path()) }]
             }
-        }
-    });
-    let mut call2_line = serde_json::to_string(&call2).unwrap();
-    call2_line.push('\n');
-    stdin.write_all(call2_line.as_bytes()).unwrap();
-    stdin.flush().unwrap();
+        }),
+    );
+    assert_eq!(initialized["id"], 1);
 
-    let mut resp_line2 = String::new();
-    reader.read_line(&mut resp_line2).unwrap();
-    let resp2: Value = serde_json::from_str(&resp_line2).unwrap();
-    assert_eq!(resp2["id"], 3);
-    assert_ne!(
-        resp2["result"]["isError"], true,
-        "get_symbol_body should not error on inverted drive casing: {resp2:?}"
-    );
-    assert!(
-        resp2["result"]["content"][0]["text"]
-            .as_str()
-            .unwrap()
-            .contains("pub struct Workspace"),
-        "get_symbol_body should return symbol body"
-    );
+    for (id, project_root) in [(2, three_slash_uri), (3, two_slash_uri)] {
+        let call_val = mcp_request(
+            &mut stdin,
+            &mut reader,
+            &json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "method": "tools/call",
+                "params": {
+                    "name": "lookup_symbol",
+                    "arguments": { "project_root": project_root, "query": "Alpha" }
+                }
+            }),
+        );
+        assert_eq!(call_val["id"], id);
+        assert_ne!(call_val["result"]["isError"], true, "{call_val}");
+        assert!(
+            result_text(&call_val["result"]).contains("struct `Alpha` ["),
+            "{call_val}"
+        );
+    }
 
     drop(stdin);
     let _ = child.wait();
+}
+
+#[test]
+fn test_mcp_project_root_drive_casing_and_trailing_slash_variants_reach_the_same_index() {
+    let repo = setup_test_repo();
+    let root = repo.path();
+    let launch = fixture_repo("Alpha");
+    let mut session = McpSession::start(serve_command(launch.path()));
+
+    let toggle_drive_letter = |path: String| -> String {
+        if path.len() >= 2 && path.as_bytes()[1] == b':' {
+            let first_char = path.chars().next().unwrap();
+            let toggled = if first_char.is_ascii_uppercase() {
+                first_char.to_ascii_lowercase()
+            } else {
+                first_char.to_ascii_uppercase()
+            };
+            format!("{}{}", toggled, &path[1..])
+        } else {
+            path
+        }
+    };
+    let inverted_root = toggle_drive_letter(root.to_string_lossy().to_string());
+    let trailing_slash_root = format!("{}/", root.display());
+    let inverted_abs_file = toggle_drive_letter(
+        root.join("src")
+            .join("workspace.rs")
+            .to_string_lossy()
+            .to_string(),
+    );
+
+    let skeleton = session.call(
+        "file_skeleton",
+        json!({ "project_root": inverted_root, "file": inverted_abs_file }),
+    );
+    assert_ne!(
+        skeleton["isError"], true,
+        "file_skeleton should not error on inverted drive casing: {skeleton:?}"
+    );
+    assert!(
+        result_text(&skeleton).contains("pub struct Workspace"),
+        "file_skeleton should return symbol signatures"
+    );
+
+    let body = session.call(
+        "get_symbol_body",
+        json!({
+            "project_root": trailing_slash_root,
+            "symbol": "Workspace",
+            "file": inverted_abs_file
+        }),
+    );
+    assert_ne!(
+        body["isError"], true,
+        "get_symbol_body should not error on a trailing slash or inverted drive casing: {body:?}"
+    );
+    assert!(
+        result_text(&body).contains("pub struct Workspace"),
+        "get_symbol_body should return symbol body"
+    );
 }
 
 #[test]
@@ -1821,6 +1800,7 @@ fn test_mcp_server_start_creates_missing_index() {
 
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_code-kb"));
     cmd.env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+        .env("CODE_KB_INDEX_WAIT_MS", "60000")
         .arg("serve")
         .arg("--root")
         .arg(root)
@@ -1867,7 +1847,7 @@ fn test_mcp_server_start_creates_missing_index() {
         "method": "tools/call",
         "params": {
             "name": "lookup_symbol",
-            "arguments": { "query": "unindexed_func" }
+            "arguments": { "project_root": root, "query": "unindexed_func" }
         }
     });
     let mut call_line = serde_json::to_string(&call_req).unwrap();
@@ -2104,6 +2084,7 @@ fn test_mcp_telemetry_summary_scoped_errors_no_cross_workspace_leak() {
         "params": {
             "name": "file_skeleton",
             "arguments": {
+                "project_root": root,
                 "file_path": "src/lib.rs"
             }
         }
@@ -2159,116 +2140,64 @@ fn test_mcp_telemetry_summary_scoped_errors_no_cross_workspace_leak() {
 }
 
 #[test]
-fn test_mcp_telemetry_summary_does_not_rebind_workspace() {
-    use std::io::BufRead;
-
+fn test_mcp_telemetry_summary_does_not_switch_the_active_root_or_create_an_index() {
     let repo1 = setup_test_repo();
     let root1 = repo1.path();
 
-    let repo2 = setup_test_repo();
+    let repo2 = tempfile::tempdir().unwrap();
     let root2 = repo2.path();
+    std::fs::write(
+        root2.join("Cargo.toml"),
+        "[package]\nname = \"unindexed\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    std::fs::create_dir_all(root2.join("src")).unwrap();
+    std::fs::write(root2.join("src").join("lib.rs"), "pub fn other() {}\n").unwrap();
 
     let telem_dir = code_kb_core::safe_tempdir();
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_code-kb"));
-    cmd.env("CODE_KB_TELEMETRY_DIR", telem_dir.path());
-    cmd.arg("serve")
-        .arg("--root")
-        .arg(root1)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit());
+    let mut command = serve_command(root1);
+    command.env("CODE_KB_TELEMETRY_DIR", telem_dir.path());
+    let mut session = McpSession::start(command);
 
-    let mut child = ChildGuard(cmd.spawn().expect("Failed to spawn code-kb serve"));
-    let mut stdin = child.stdin.take().expect("Failed to open stdin");
-    let stdout = child.stdout.take().expect("Failed to open stdout");
-    let mut reader = std::io::BufReader::new(stdout);
+    let lookup = session.call(
+        "lookup_symbol",
+        json!({ "project_root": root1, "query": "Workspace" }),
+    );
+    assert_ne!(lookup["isError"], true, "{lookup}");
 
-    // 1. Initialize
-    let init_req = json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "initialize",
-        "params": {
-            "protocolVersion": "2024-11-05",
-            "capabilities": {},
-            "clientInfo": { "name": "rebind-test", "version": "1.0" }
-        }
-    });
-    let mut init_line = serde_json::to_string(&init_req).unwrap();
-    init_line.push('\n');
-    stdin.write_all(init_line.as_bytes()).unwrap();
-    stdin.flush().unwrap();
+    let stats = session.call(
+        "telemetry_summary",
+        json!({
+            "project_root": root2,
+            "workspace": root2,
+            "file_path": root2.join("src").join("lib.rs")
+        }),
+    );
+    assert_ne!(stats["isError"], true, "{stats}");
 
-    let mut init_resp_line = String::new();
-    reader.read_line(&mut init_resp_line).unwrap();
+    let scoped = session.call(
+        "telemetry_summary",
+        json!({ "workspace_only": true, "json": true }),
+    );
+    let scoped_json: Value = serde_json::from_str(result_text(&scoped)).unwrap();
+    assert!(
+        scoped_json["tool_stats"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|stat| stat["tool"] == "lookup_symbol"),
+        "{scoped_json}"
+    );
+    assert!(!root2.join(".code-kb").exists());
 
-    // 2. Call telemetry_summary with unexpected path pointing to repo2
-    let stats_req = json!({
-        "jsonrpc": "2.0",
-        "id": 2,
-        "method": "tools/call",
-        "params": {
-            "name": "telemetry_summary",
-            "arguments": {
-                "workspace": root2.to_str().unwrap(),
-                "file_path": root2.join("src/lib.rs").to_str().unwrap()
-            }
-        }
-    });
-    let mut stats_line = serde_json::to_string(&stats_req).unwrap();
-    stats_line.push('\n');
-    stdin.write_all(stats_line.as_bytes()).unwrap();
-    stdin.flush().unwrap();
+    let outline = session.call("codebase_outline", json!({ "project_root": root1 }));
+    assert_ne!(outline["isError"], true, "{outline}");
 
-    let mut stats_resp_line = String::new();
-    reader.read_line(&mut stats_resp_line).unwrap();
-    let stats_resp: Value = serde_json::from_str(&stats_resp_line).unwrap();
-    assert_ne!(stats_resp["result"]["isError"], true);
-
-    // 3. Call codebase_outline: should still be bound to root1, NOT root2
-    let outline_req = json!({
-        "jsonrpc": "2.0",
-        "id": 3,
-        "method": "tools/call",
-        "params": {
-            "name": "codebase_outline",
-            "arguments": {}
-        }
-    });
-    let mut outline_line = serde_json::to_string(&outline_req).unwrap();
-    outline_line.push('\n');
-    stdin.write_all(outline_line.as_bytes()).unwrap();
-    stdin.flush().unwrap();
-
-    let mut outline_resp_line = String::new();
-    reader.read_line(&mut outline_resp_line).unwrap();
-    let outline_resp: Value = serde_json::from_str(&outline_resp_line).unwrap();
-    assert_ne!(outline_resp["result"]["isError"], true);
-
-    // 4. Call telemetry_summary with invalid time_window: should return error
-    let invalid_req = json!({
-        "jsonrpc": "2.0",
-        "id": 4,
-        "method": "tools/call",
-        "params": {
-            "name": "telemetry_summary",
-            "arguments": {
-                "time_window": "invalid_window_123"
-            }
-        }
-    });
-    let mut inv_line = serde_json::to_string(&invalid_req).unwrap();
-    inv_line.push('\n');
-    stdin.write_all(inv_line.as_bytes()).unwrap();
-    stdin.flush().unwrap();
-
-    let mut inv_resp_line = String::new();
-    reader.read_line(&mut inv_resp_line).unwrap();
-    let inv_resp: Value = serde_json::from_str(&inv_resp_line).unwrap();
-    assert_eq!(inv_resp["result"]["isError"], true);
-
-    drop(stdin);
-    let _ = child.wait();
+    let invalid = session.call(
+        "telemetry_summary",
+        json!({ "time_window": "invalid_window_123" }),
+    );
+    assert_eq!(invalid["isError"], true, "{invalid}");
 }
 
 #[test]
@@ -2320,7 +2249,7 @@ fn test_mcp_lookup_and_search_symbols_accept_symbol_name_and_symbol_aliases() {
         "method": "tools/call",
         "params": {
             "name": "lookup_symbol",
-            "arguments": {
+            "arguments": { "project_root": root,
                 "symbol_name": "Workspace"
             }
         }
@@ -2342,7 +2271,7 @@ fn test_mcp_lookup_and_search_symbols_accept_symbol_name_and_symbol_aliases() {
         "method": "tools/call",
         "params": {
             "name": "lookup_symbol",
-            "arguments": {
+            "arguments": { "project_root": root,
                 "symbol": "Workspace"
             }
         }
@@ -2364,7 +2293,7 @@ fn test_mcp_lookup_and_search_symbols_accept_symbol_name_and_symbol_aliases() {
         "method": "tools/call",
         "params": {
             "name": "search_symbols",
-            "arguments": {
+            "arguments": { "project_root": root,
                 "symbol_name": "Workspace"
             }
         }
@@ -2386,7 +2315,7 @@ fn test_mcp_lookup_and_search_symbols_accept_symbol_name_and_symbol_aliases() {
         "method": "tools/call",
         "params": {
             "name": "search_symbols",
-            "arguments": {
+            "arguments": { "project_root": root,
                 "symbol": "Workspace"
             }
         }
@@ -2424,6 +2353,7 @@ fn test_first_tool_call_sees_files_changed_while_no_server_ran() {
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
             .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+            .env("CODE_KB_INDEX_WAIT_MS", "60000")
             .arg("serve")
             .arg("--root")
             .arg(&root)
@@ -2450,7 +2380,7 @@ fn test_first_tool_call_sees_files_changed_while_no_server_ran() {
     }));
     let response = rpc(json!({
         "jsonrpc": "2.0", "id": 2, "method": "tools/call",
-        "params": {"name": "lookup_symbol", "arguments": {"query": "added_while_no_server_ran"}}
+        "params": {"name": "lookup_symbol", "arguments": {"project_root": root, "query": "added_while_no_server_ran"}}
     }));
 
     let text = response["result"]["content"][0]["text"].as_str().unwrap();
@@ -2498,7 +2428,7 @@ fn test_mcp_lookup_symbol_reports_a_broken_search_index() {
 
     let response = rpc(json!({
         "jsonrpc": "2.0", "id": 2, "method": "tools/call",
-        "params": {"name": "lookup_symbol", "arguments": {"query": "ZzzAbsentSymbol"}}
+        "params": {"name": "lookup_symbol", "arguments": {"project_root": root, "query": "ZzzAbsentSymbol"}}
     }));
     assert_eq!(response["result"]["isError"], true);
     let text = response["result"]["content"][0]["text"].as_str().unwrap();
@@ -2551,6 +2481,7 @@ fn test_mcp_records_a_known_baseline_for_references_and_none_for_an_outline() {
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
             .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+            .env("CODE_KB_INDEX_WAIT_MS", "60000")
             .arg("serve")
             .arg("--root")
             .arg(root)
@@ -2594,7 +2525,7 @@ fn test_mcp_records_a_known_baseline_for_references_and_none_for_an_outline() {
             "jsonrpc": "2.0",
             "id": 2,
             "method": "tools/call",
-            "params": { "name": "find_references", "arguments": { "symbol_name": "Alpha" } }
+            "params": { "name": "find_references", "arguments": { "project_root": root, "symbol_name": "Alpha" } }
         }),
     );
     assert_ne!(refs["result"]["isError"], true, "{refs}");
@@ -2605,7 +2536,7 @@ fn test_mcp_records_a_known_baseline_for_references_and_none_for_an_outline() {
             "jsonrpc": "2.0",
             "id": 3,
             "method": "tools/call",
-            "params": { "name": "codebase_outline", "arguments": {} }
+            "params": { "name": "codebase_outline", "arguments": { "project_root": root } }
         }),
     );
     assert_ne!(outline["result"]["isError"], true, "{outline}");
@@ -2700,7 +2631,7 @@ fn mcp_read_tool_handlers_validate_selectors_and_preserve_git_discovery() {
     let lookup = mcp_request(
         &mut stdin,
         &mut reader,
-        &json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"lookup_symbol","arguments":{"query":"run_task"}}}),
+        &json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"lookup_symbol","arguments":{"project_root":root,"query":"run_task"}}}),
     );
     assert_ne!(lookup["result"]["isError"], true, "{lookup}");
     let lookup_text = lookup["result"]["content"][0]["text"].as_str().unwrap();
@@ -2717,7 +2648,7 @@ fn mcp_read_tool_handlers_validate_selectors_and_preserve_git_discovery() {
     let search = mcp_request(
         &mut stdin,
         &mut reader,
-        &json!({"jsonrpc":"2.0","id":15,"method":"tools/call","params":{"name":"search_symbols","arguments":{"query":"run_task"}}}),
+        &json!({"jsonrpc":"2.0","id":15,"method":"tools/call","params":{"name":"search_symbols","arguments":{"project_root":root,"query":"run_task"}}}),
     );
     assert_ne!(search["result"]["isError"], true, "{search}");
     assert!(
@@ -2729,13 +2660,13 @@ fn mcp_read_tool_handlers_validate_selectors_and_preserve_git_discovery() {
     let selected_body = mcp_request(
         &mut stdin,
         &mut reader,
-        &json!({"jsonrpc":"2.0","id":16,"method":"tools/call","params":{"name":"get_symbol_body","arguments":{"symbol_id":selected_id}}}),
+        &json!({"jsonrpc":"2.0","id":16,"method":"tools/call","params":{"name":"get_symbol_body","arguments":{"project_root":root,"symbol_id":selected_id}}}),
     );
     assert_ne!(selected_body["result"]["isError"], true, "{selected_body}");
     for arguments in [
-        json!({"symbol_name":"run_task","symbol_id":null}),
-        json!({"symbol_name":"run_task","symbol":"run_task"}),
-        json!({"symbol_id":selected_id,"symbol_name":null}),
+        json!({"project_root":root,"symbol_name":"run_task","symbol_id":null}),
+        json!({"project_root":root,"symbol_name":"run_task","symbol":"run_task"}),
+        json!({"project_root":root,"symbol_id":selected_id,"symbol_name":null}),
     ] {
         let response = mcp_request(
             &mut stdin,
@@ -2746,16 +2677,25 @@ fn mcp_read_tool_handlers_validate_selectors_and_preserve_git_discovery() {
     }
 
     let invalid_selectors = [
-        (json!({}), "exactly one non-empty"),
-        (json!({"symbol_name":""}), "must not be empty"),
-        (json!({"symbol_id":""}), "must not be empty"),
-        (json!({"symbol_name":7}), "must be a string"),
+        (json!({"project_root":root}), "exactly one non-empty"),
         (
-            json!({"symbol_name":"run_task","symbol_id":"s2"}),
+            json!({"project_root":root,"symbol_name":""}),
+            "must not be empty",
+        ),
+        (
+            json!({"project_root":root,"symbol_id":""}),
+            "must not be empty",
+        ),
+        (
+            json!({"project_root":root,"symbol_name":7}),
+            "must be a string",
+        ),
+        (
+            json!({"project_root":root,"symbol_name":"run_task","symbol_id":"s2"}),
             "exactly one of",
         ),
         (
-            json!({"symbol":"run_task","symbol_id":"s2"}),
+            json!({"project_root":root,"symbol":"run_task","symbol_id":"s2"}),
             "exactly one of",
         ),
     ];
@@ -2779,10 +2719,16 @@ fn mcp_read_tool_handlers_validate_selectors_and_preserve_git_discovery() {
     }
 
     for (arguments, error_text) in [
-        (json!({"symbol_id":""}), "must not be empty"),
-        (json!({"symbol_id":7}), "must be a string"),
         (
-            json!({"symbol":"run_task","symbol_id":"s2"}),
+            json!({"project_root":root,"symbol_id":""}),
+            "must not be empty",
+        ),
+        (
+            json!({"project_root":root,"symbol_id":7}),
+            "must be a string",
+        ),
+        (
+            json!({"project_root":root,"symbol":"run_task","symbol_id":"s2"}),
             "exactly one of",
         ),
     ] {
@@ -2844,7 +2790,7 @@ fn mcp_read_tool_handlers_validate_selectors_and_preserve_git_discovery() {
     let discovery = mcp_request(
         &mut stdin,
         &mut reader,
-        &json!({"jsonrpc":"2.0","id":request_id,"method":"tools/call","params":{"name":"blast_radius","arguments":{}}}),
+        &json!({"jsonrpc":"2.0","id":request_id,"method":"tools/call","params":{"name":"blast_radius","arguments":{"project_root":root}}}),
     );
     assert_ne!(discovery["result"]["isError"], true, "{discovery}");
     assert!(
@@ -2854,9 +2800,9 @@ fn mcp_read_tool_handlers_validate_selectors_and_preserve_git_discovery() {
             .contains("src/workspace.rs")
     );
     for arguments in [
-        json!({"symbol":null}),
-        json!({"symbol_id":null}),
-        json!({"symbol":null,"file":"src/workspace.rs"}),
+        json!({"project_root":root,"symbol":null}),
+        json!({"project_root":root,"symbol_id":null}),
+        json!({"project_root":root,"symbol":null,"file":"src/workspace.rs"}),
     ] {
         let response = mcp_request(
             &mut stdin,
@@ -2874,4 +2820,353 @@ fn mcp_read_tool_handlers_validate_selectors_and_preserve_git_discovery() {
 
     drop(stdin);
     let _ = child.wait();
+}
+
+fn file_uri(dir: &Path) -> String {
+    let path = dir.to_string_lossy().replace('\\', "/");
+    if path.starts_with('/') {
+        format!("file://{path}")
+    } else {
+        format!("file:///{path}")
+    }
+}
+
+#[test]
+fn test_mcp_tools_list_requires_project_root_on_every_tool_except_telemetry_summary() {
+    let repo = setup_test_repo();
+    let mut session = McpSession::start(serve_command(repo.path()));
+
+    let listed = session.request("tools/list", json!({}));
+    let tools = listed["result"]["tools"].as_array().unwrap();
+    assert_eq!(tools.len(), 10);
+    for tool in tools {
+        let name = tool["name"].as_str().unwrap();
+        let schema = &tool["inputSchema"];
+        let required: Vec<&str> = schema["required"]
+            .as_array()
+            .map(|names| names.iter().filter_map(Value::as_str).collect())
+            .unwrap_or_default();
+        if name == "telemetry_summary" {
+            assert!(schema["properties"].get("project_root").is_none(), "{tool}");
+            assert!(!required.contains(&"project_root"), "{tool}");
+        } else {
+            assert_eq!(
+                schema["properties"]["project_root"]["type"], "string",
+                "{tool}"
+            );
+            assert_eq!(
+                schema["properties"]["project_root"]["description"], PROJECT_ROOT_DESCRIPTION,
+                "{tool}"
+            );
+            assert!(required.contains(&"project_root"), "{tool}");
+        }
+        for forbidden in ["workspace", "workspace_id", "repo_path", "root_dir"] {
+            assert!(
+                schema["properties"].get(forbidden).is_none(),
+                "{name} exposes {forbidden}"
+            );
+        }
+    }
+}
+
+#[test]
+fn test_mcp_call_without_project_root_asks_for_the_absolute_project_path() {
+    let repo = setup_test_repo();
+    let mut session = McpSession::start(serve_command(repo.path()));
+
+    for arguments in [
+        json!({"query": "Workspace"}),
+        json!({"query": "Workspace", "project_root": "  "}),
+    ] {
+        let result = session.call("lookup_symbol", arguments);
+        assert_eq!(result["isError"], true, "{result}");
+        assert_eq!(result_text(&result), MISSING_PROJECT_ROOT);
+    }
+}
+
+#[test]
+fn test_mcp_relative_project_root_is_an_error() {
+    let repo = setup_test_repo();
+    let mut session = McpSession::start(serve_command(repo.path()));
+
+    let result = session.call(
+        "lookup_symbol",
+        json!({"query": "Workspace", "project_root": "src"}),
+    );
+    assert_eq!(result["isError"], true, "{result}");
+    assert_eq!(
+        result_text(&result),
+        "project_root 'src' is a relative path. Pass the absolute path of the project or git worktree you are working in as project_root."
+    );
+}
+
+#[test]
+fn test_mcp_project_root_subfolder_answers_from_the_enclosing_project() {
+    let launch = fixture_repo("Alpha");
+    let target = fixture_repo("Beta");
+    let mut session = McpSession::start(serve_command(launch.path()));
+
+    let result = session.call(
+        "lookup_symbol",
+        json!({"query": "Beta", "project_root": target.path().join("src")}),
+    );
+    assert_ne!(result["isError"], true, "{result}");
+    assert!(result_text(&result).contains("struct `Beta` ["), "{result}");
+}
+
+#[test]
+fn test_mcp_file_uri_project_root_answers_from_that_project() {
+    let launch = fixture_repo("Alpha");
+    let target = fixture_repo("Beta");
+    let mut session = McpSession::start(serve_command(launch.path()));
+
+    let result = session.call(
+        "lookup_symbol",
+        json!({"query": "Beta", "project_root": file_uri(target.path())}),
+    );
+    assert_ne!(result["isError"], true, "{result}");
+    assert!(result_text(&result).contains("struct `Beta` ["), "{result}");
+}
+
+#[test]
+fn test_mcp_unindexed_project_root_starts_indexing_and_answers_later() {
+    let launch = setup_test_repo();
+    let target = tempfile::tempdir().unwrap();
+    std::fs::write(
+        target.path().join("Cargo.toml"),
+        "[package]\nname = \"fresh\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    std::fs::create_dir_all(target.path().join("src")).unwrap();
+    std::fs::write(
+        target.path().join("src").join("lib.rs"),
+        "pub fn freshly_indexed() {}\n",
+    )
+    .unwrap();
+    let mut command = serve_command(launch.path());
+    command.env("CODE_KB_INDEX_WAIT_MS", "0");
+    let mut session = McpSession::start(command);
+    let arguments = json!({"query": "freshly_indexed", "project_root": target.path()});
+
+    let first = session.call("lookup_symbol", arguments.clone());
+    assert_ne!(first["isError"], true, "{first}");
+    assert_eq!(
+        result_text(&first),
+        format!(
+            "Indexing {} started; call again in a few seconds.",
+            canonical_root(target.path()).display()
+        )
+    );
+
+    let deadline = Instant::now() + Duration::from_secs(60);
+    loop {
+        let later = session.call("lookup_symbol", arguments.clone());
+        if result_text(&later).contains("function `freshly_indexed` [") {
+            break;
+        }
+        assert!(Instant::now() < deadline, "{later}");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
+#[test]
+fn test_mcp_filesystem_root_project_root_is_refused() {
+    let launch = setup_test_repo();
+    let filesystem_root = launch.path().ancestors().last().unwrap().to_path_buf();
+    let mut session = McpSession::start(serve_command(launch.path()));
+
+    let result = session.call("codebase_outline", json!({"project_root": filesystem_root}));
+    assert_eq!(result["isError"], true, "{result}");
+    assert!(
+        result_text(&result).contains("is refused: it is a filesystem root"),
+        "{result}"
+    );
+}
+
+#[test]
+fn test_mcp_home_directory_project_root_is_refused_without_creating_an_index() {
+    let launch = setup_test_repo();
+    let home = tempfile::tempdir().unwrap();
+    std::fs::write(home.path().join("package.json"), "{}\n").unwrap();
+    let mut command = serve_command(launch.path());
+    command
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path());
+    let mut session = McpSession::start(command);
+
+    let result = session.call("codebase_outline", json!({"project_root": home.path()}));
+    assert_eq!(result["isError"], true, "{result}");
+    assert!(
+        result_text(&result).contains("is refused: it is the home directory"),
+        "{result}"
+    );
+    assert!(!home.path().join(".code-kb").exists());
+}
+
+#[test]
+fn test_mcp_serve_launched_in_the_home_directory_does_not_index_it() {
+    let home = tempfile::tempdir().unwrap();
+    std::fs::write(home.path().join("package.json"), "{}\n").unwrap();
+    let project = setup_test_repo();
+    let telemetry = tempfile::tempdir().unwrap();
+    let mut command = serve_command(home.path());
+    command
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("CODE_KB_TELEMETRY_DIR", telemetry.path());
+    let mut session = McpSession::start(command);
+
+    let result = session.call(
+        "lookup_symbol",
+        json!({"query": "Workspace", "project_root": project.path()}),
+    );
+    assert!(
+        result_text(&result).contains("struct `Workspace` ["),
+        "{result}"
+    );
+    assert!(!home.path().join(".code-kb").join("artifact.db").exists());
+}
+
+#[test]
+fn test_mcp_absolute_path_outside_project_root_is_an_error_that_changes_nothing() {
+    let launch = fixture_repo("Alpha");
+    let other = fixture_repo("Beta");
+    let mut session = McpSession::start(serve_command(launch.path()));
+    let outside = other
+        .path()
+        .join("src")
+        .join("workspace.rs")
+        .to_string_lossy()
+        .to_string();
+
+    let refused = session.call(
+        "file_skeleton",
+        json!({"file_path": outside, "project_root": launch.path()}),
+    );
+    assert_eq!(refused["isError"], true, "{refused}");
+    assert_eq!(
+        result_text(&refused),
+        format!(
+            "Path '{outside}' is outside project_root '{}'. Pass a path inside project_root, or change project_root to the project that holds the path.",
+            canonical_root(launch.path()).display()
+        )
+    );
+
+    let next = session.call(
+        "lookup_symbol",
+        json!({"query": "Alpha", "project_root": launch.path()}),
+    );
+    assert!(result_text(&next).contains("struct `Alpha` ["), "{next}");
+}
+
+#[test]
+fn test_mcp_pinned_db_serves_only_the_launch_root() {
+    let launch = fixture_repo("Alpha");
+    let other = fixture_repo("Beta");
+    let pin_dir = tempfile::tempdir().unwrap();
+    let pinned = pin_dir.path().join("pinned.db");
+    std::fs::copy(launch.path().join(".code-kb").join("artifact.db"), &pinned).unwrap();
+    let mut command = serve_command(launch.path());
+    command.arg("--db").arg(&pinned);
+    let mut session = McpSession::start(command);
+
+    let launch_answer = session.call(
+        "lookup_symbol",
+        json!({"query": "Alpha", "project_root": launch.path()}),
+    );
+    assert!(
+        result_text(&launch_answer).contains("struct `Alpha` ["),
+        "{launch_answer}"
+    );
+    let pinned_bytes = std::fs::read(&pinned).unwrap();
+
+    let other_answer = session.call(
+        "lookup_symbol",
+        json!({"query": "Beta", "project_root": other.path()}),
+    );
+    assert!(
+        result_text(&other_answer).contains("struct `Beta` ["),
+        "{other_answer}"
+    );
+    assert_eq!(std::fs::read(&pinned).unwrap(), pinned_bytes);
+}
+
+#[test]
+fn test_mcp_symbol_id_from_lookup_resolves_in_get_symbol_body_for_the_same_project_root() {
+    let launch = fixture_repo("Alpha");
+    let target = fixture_repo("Beta");
+    let mut session = McpSession::start(serve_command(launch.path()));
+
+    let lookup = session.call(
+        "lookup_symbol",
+        json!({"query": "Beta", "project_root": target.path()}),
+    );
+    let lookup_text = result_text(&lookup);
+    let symbol_id = lookup_text
+        .lines()
+        .find_map(|line| line.split_once("id=").map(|(_, id)| id.trim().to_string()))
+        .unwrap_or_else(|| panic!("{lookup_text}"));
+
+    let body = session.call(
+        "get_symbol_body",
+        json!({"symbol_id": symbol_id, "project_root": target.path()}),
+    );
+    assert_ne!(body["isError"], true, "{body}");
+    assert!(result_text(&body).contains("pub struct Beta"), "{body}");
+}
+
+#[test]
+fn test_mcp_telemetry_summary_needs_no_project_root() {
+    let repo = setup_test_repo();
+    let mut session = McpSession::start(serve_command(repo.path()));
+
+    let result = session.call("telemetry_summary", json!({}));
+    assert_ne!(result["isError"], true, "{result}");
+    assert!(
+        result_text(&result).contains("Telemetry Summary"),
+        "{result}"
+    );
+}
+
+#[test]
+fn test_mcp_telemetry_records_the_launch_root_for_a_refused_call_and_the_resolved_root_otherwise() {
+    let launch = fixture_repo("Alpha");
+    let target = fixture_repo("Beta");
+    let telemetry = tempfile::tempdir().unwrap();
+    let mut command = serve_command(launch.path());
+    command.env("CODE_KB_TELEMETRY_DIR", telemetry.path());
+    let mut session = McpSession::start(command);
+
+    session.call(
+        "lookup_symbol",
+        json!({"query": "Beta", "project_root": target.path()}),
+    );
+    session.call("lookup_symbol", json!({"query": "Beta"}));
+
+    let conn = code_kb_core::Connection::open(telemetry.path().join("telemetry.db")).unwrap();
+    let rows = conn
+        .prepare(
+            "SELECT outcome, workspace_root FROM tool_telemetry
+             WHERE tool = 'lookup_symbol' ORDER BY rowid",
+        )
+        .unwrap()
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    assert_eq!(
+        rows,
+        vec![
+            (
+                "ok".to_string(),
+                code_kb_core::to_forward_slash(&canonical_root(target.path()))
+            ),
+            (
+                "error".to_string(),
+                code_kb_core::to_forward_slash(&canonical_root(launch.path()))
+            ),
+        ]
+    );
 }

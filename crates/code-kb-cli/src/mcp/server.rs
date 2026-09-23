@@ -1,7 +1,9 @@
 use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
+use code_kb_core::workspace::paths_equal;
 use code_kb_core::{
     Connection, SymbolSelector, TelemetryFilter, TimeWindow, WatcherHandle, Workspace,
     WorkspaceError, blast_radius_selected_op, codebase_outline_op, create_index,
@@ -19,6 +21,7 @@ use code_kb_core::{
 use super::protocol::{CallToolResult, JsonRpcRequest, JsonRpcResponse, Tool};
 
 const ZERO_LIMIT_NOTICE: &str = "Result limit is 0; increase it to check for matches.";
+const PROJECT_ROOT_DESCRIPTION: &str = "Absolute path of the project or git worktree you are working in. Send the same value on every call. Change it when you move to a worktree or another project.";
 
 /// Counts the tree lines a `codebase_outline` answer renders, ignoring the root header
 /// and the bracketed notices that follow the tree.
@@ -30,28 +33,36 @@ fn rendered_outline_entries(outline: &str) -> usize {
         .count()
 }
 
+type IndexPrepare = std::thread::JoinHandle<Result<(), String>>;
+
 pub struct McpServer {
     pub workspace: Workspace,
     pub db_path: PathBuf,
     pub explicit_db: Option<PathBuf>,
     pub _watcher: Option<WatcherHandle>,
     pub telemetry_conn: Option<Connection>,
-    /// Startup index preparation: a full scan when the index is missing, otherwise a
-    /// reconciliation against files that changed while no server ran. The first tool
-    /// call waits for it so it never answers from a missing or stale index.
-    reconcile: Option<std::thread::JoinHandle<Result<(), String>>>,
+    /// Index preparation of the active root: a full scan when the index is missing,
+    /// otherwise a reconciliation against files that changed while no watcher ran. A tool
+    /// call waits a bounded time for it so it never answers from a missing or stale index.
+    reconcile: Option<IndexPrepare>,
+    /// The canonical root the server started with. `--db` pins only this root, and a
+    /// refused call records it in telemetry.
+    launch_root: PathBuf,
+    /// Prepares still running on roots the server left. A scan writes into `artifact.db`
+    /// in place, so a root that becomes active again reuses its running prepare.
+    parked: Vec<(PathBuf, IndexPrepare)>,
 }
 
-fn spawn_index_prepare(
-    workspace: &Workspace,
-    db_path: &Path,
-) -> Option<std::thread::JoinHandle<Result<(), String>>> {
+fn spawn_index_prepare(workspace: &Workspace, db_path: &Path) -> Option<IndexPrepare> {
     if !db_path.exists() && !is_project_root(&workspace.canonical_root) {
         return None;
     }
     let ws = workspace.clone();
     let db = db_path.to_path_buf();
     Some(std::thread::spawn(move || {
+        if let Err(e) = ensure_index_matches_extractor(&ws, &db, &installed_extractor_version()) {
+            tracing::warn!("Index version check failed: {e}");
+        }
         if !db.exists() {
             tracing::info!(ws = %ws.canonical_root.display(), "Database not found; running automatic initial scan");
             create_index(&ws, &db).map_err(|e| e.to_string())?;
@@ -93,78 +104,121 @@ impl McpServer {
                 .join("artifact.db")
         });
 
-        if let Err(e) =
-            ensure_index_matches_extractor(&workspace, &db_path, &installed_extractor_version())
-        {
-            tracing::warn!("Index version check failed: {e}");
-        }
-
-        let reconcile = spawn_index_prepare(&workspace, &db_path);
-
-        // Tier 3: Start background file watcher with debounce and git storm circuit breaker
-        let watcher = if db_path.exists() {
-            start_watcher(workspace.clone(), db_path.clone()).ok()
-        } else {
-            None
-        };
+        let (reconcile, watcher) =
+            match Workspace::from_project_root(&workspace.canonical_root.to_string_lossy()) {
+                Ok(_) => {
+                    if let Err(e) = ensure_index_matches_extractor(
+                        &workspace,
+                        &db_path,
+                        &installed_extractor_version(),
+                    ) {
+                        tracing::warn!("Index version check failed: {e}");
+                    }
+                    let reconcile = spawn_index_prepare(&workspace, &db_path);
+                    let watcher = if db_path.exists() {
+                        start_watcher(workspace.clone(), db_path.clone()).ok()
+                    } else {
+                        None
+                    };
+                    (reconcile, watcher)
+                }
+                Err(e) => {
+                    tracing::info!(
+                        root = %workspace.canonical_root.display(),
+                        "Startup index skipped: {e}"
+                    );
+                    (None, None)
+                }
+            };
 
         let telemetry_conn = open_global_telemetry_db().ok();
 
         Ok(Self {
+            launch_root: workspace.canonical_root.clone(),
             workspace,
             db_path,
             explicit_db: explicit_db.map(|p| p.to_path_buf()),
             _watcher: watcher,
             telemetry_conn,
             reconcile,
+            parked: Vec::new(),
         })
     }
 
-    pub fn bind_workspace(&mut self, path: &Path) -> Result<(), WorkspaceError> {
-        let ws = Workspace::discover(Some(path))?;
-        let db_path = ws
-            .locate_db(self.explicit_db.as_deref())
-            .unwrap_or_else(|_| ws.canonical_root.join(".code-kb").join("artifact.db"));
-
-        // Guard: only commit binding if target db exists OR target root has a repository marker
-        let is_valid = db_path.exists() || is_project_root(&ws.canonical_root);
-
-        if !is_valid {
-            return Err(WorkspaceError::ArtifactNotFound(db_path));
+    /// Makes an already resolved root the active one. Its watcher starts once its prepare
+    /// finishes, in `handle_call_tool_inner`.
+    fn switch_root(&mut self, workspace: Workspace) {
+        if paths_equal(&self.workspace.canonical_root, &workspace.canonical_root) {
+            return;
         }
-
+        // ponytail: one watcher; alternating roots restart the watcher and the offline
+        // reconcile on each switch. Keep a small per-root cache only if telemetry shows
+        // agents alternate often.
+        let explicit_db = if paths_equal(&workspace.canonical_root, &self.launch_root) {
+            self.explicit_db.as_deref()
+        } else {
+            None
+        };
+        let db_path = workspace.locate_db(explicit_db).unwrap_or_else(|_| {
+            workspace
+                .canonical_root
+                .join(".code-kb")
+                .join("artifact.db")
+        });
         tracing::info!(
-            workspace = %ws.canonical_root.display(),
+            workspace = %workspace.canonical_root.display(),
             db = %db_path.display(),
-            "Bound workspace dynamically"
+            "Switched project root"
         );
 
-        if !code_kb_core::workspace::paths_equal(&self.workspace.canonical_root, &ws.canonical_root)
-            || self._watcher.is_none()
+        self._watcher = None;
+        self.parked.retain(|(_, prepare)| !prepare.is_finished());
+        if let Some(prepare) = self.reconcile.take()
+            && !prepare.is_finished()
         {
-            if let Err(e) =
-                ensure_index_matches_extractor(&ws, &db_path, &installed_extractor_version())
-            {
-                tracing::warn!("Index version check failed: {e}");
-            }
-            self.reconcile = spawn_index_prepare(&ws, &db_path);
-            self._watcher = if db_path.exists() {
-                start_watcher(ws.clone(), db_path.clone()).ok()
-            } else {
-                None
-            };
+            self.parked
+                .push((self.workspace.canonical_root.clone(), prepare));
         }
-
-        if self.telemetry_conn.is_none() {
-            self.telemetry_conn = open_global_telemetry_db().ok();
-        }
-        self.workspace = ws;
+        let parked = self
+            .parked
+            .iter()
+            .position(|(root, _)| paths_equal(root, &workspace.canonical_root))
+            .map(|index| self.parked.swap_remove(index).1);
+        self.reconcile = parked.or_else(|| spawn_index_prepare(&workspace, &db_path));
+        self.workspace = workspace;
         self.db_path = db_path;
-        Ok(())
+    }
+
+    /// Resolves a call's `project_root` (or its silent aliases `workspace` and `root`) and
+    /// checks that every absolute path argument lies inside it.
+    fn resolve_project_root(arguments: &Value) -> Result<Workspace, String> {
+        let input = ["project_root", "workspace", "root"]
+            .into_iter()
+            .find_map(|key| arguments.get(key).and_then(Value::as_str))
+            .filter(|input| !input.trim().is_empty())
+            .ok_or_else(|| {
+                "Missing required parameter: project_root. Pass the absolute path of the project or git worktree you are working in.".to_string()
+            })?;
+        let workspace = Workspace::from_project_root(input).map_err(|e| {
+            format!("{e}. Pass the absolute path of the project or git worktree you are working in as project_root.")
+        })?;
+        for key in ["path", "file_path", "file", "subpath", "dir"] {
+            if let Some(path) = arguments.get(key).and_then(Value::as_str)
+                && (path.starts_with("file://") || Path::new(path).is_absolute())
+                && let Err(WorkspaceError::PathOutsideWorkspace(..)) =
+                    workspace.resolve_path(Path::new(path))
+            {
+                return Err(format!(
+                    "Path '{path}' is outside project_root '{}'. Pass a path inside project_root, or change project_root to the project that holds the path.",
+                    workspace.canonical_root.display()
+                ));
+            }
+        }
+        Ok(workspace)
     }
 
     pub fn tool_definitions() -> Vec<Tool> {
-        vec![
+        let mut tools = vec![
             Tool {
                 name: "codebase_outline".to_string(),
                 description: "Provides a top-level architectural orientation of the repository or sub-package in ~200 tokens. Start here when exploring unfamiliar code instead of running directory listings or reading files.".to_string(),
@@ -173,7 +227,7 @@ impl McpServer {
                     "properties": {
                         "path": {
                             "type": "string",
-                            "description": "Subdirectory to scope the outline to. Defaults to workspace root."
+                            "description": "Subdirectory to scope the outline to, relative to project_root. Defaults to project_root."
                         },
                         "depth": {
                             "type": "integer",
@@ -190,7 +244,7 @@ impl McpServer {
                     "properties": {
                         "file_path": {
                             "type": "string",
-                            "description": "File path relative to workspace root or absolute path."
+                            "description": "File path relative to project_root, or an absolute path inside it."
                         }
                     },
                     "required": ["file_path"]
@@ -396,7 +450,7 @@ impl McpServer {
                         },
                         "workspace_only": {
                             "type": "boolean",
-                            "description": "If true, scopes metrics to the currently bound workspace instead of all workspaces (default: false)."
+                            "description": "If true, scopes metrics to the project of the most recent tool call instead of all workspaces (default: false)."
                         },
                         "version": {
                             "type": "string",
@@ -409,12 +463,40 @@ impl McpServer {
                     }
                 }),
             },
-        ]
+        ];
+        for tool in tools
+            .iter_mut()
+            .filter(|tool| tool.name != "telemetry_summary")
+        {
+            let schema = &mut tool.input_schema;
+            schema["properties"]["project_root"] =
+                json!({ "type": "string", "description": PROJECT_ROOT_DESCRIPTION });
+            match schema["required"].as_array_mut() {
+                Some(required) => required.push(json!("project_root")),
+                None => schema["required"] = json!(["project_root"]),
+            }
+        }
+        tools
     }
 
     pub fn handle_call_tool(&mut self, name: &str, arguments: &Value) -> CallToolResult {
         let start = std::time::Instant::now();
-        let res = self.handle_call_tool_inner(name, arguments);
+        let resolved = (name != "telemetry_summary").then(|| Self::resolve_project_root(arguments));
+        let (res, telemetry_root) = match resolved {
+            Some(Err(message)) => {
+                tracing::warn!(tool = name, "MCP tool call refused: {message}");
+                (CallToolResult::error(message), self.launch_root.clone())
+            }
+            resolved => {
+                if let Some(Ok(workspace)) = resolved {
+                    self.switch_root(workspace);
+                }
+                (
+                    self.handle_call_tool_inner(name, arguments),
+                    self.workspace.canonical_root.clone(),
+                )
+            }
+        };
         let duration_ms = start.elapsed().as_millis() as u64;
 
         let (outcome, error_msg, bytes, est_tokens, est_tokens_saved, est_tokens_saved_known) =
@@ -502,9 +584,9 @@ impl McpServer {
         };
 
         if let Some(ref conn) = self.telemetry_conn {
-            record_tool_call_conn(conn, &self.workspace.canonical_root, &invocation);
+            record_tool_call_conn(conn, &telemetry_root, &invocation);
         } else {
-            record_tool_call(&self.workspace.canonical_root, &invocation);
+            record_tool_call(&telemetry_root, &invocation);
         }
 
         res
@@ -680,8 +762,8 @@ impl McpServer {
     fn handle_call_tool_inner(&mut self, name: &str, arguments: &Value) -> CallToolResult {
         tracing::info!(tool = name, args = %arguments, "MCP tool called");
 
-        // telemetry_summary must run before auto-scan and rebinding: it must never create
-        // artifact.db on an unindexed repository or switch the active workspace.
+        // telemetry_summary must run before the index wait: it must never create
+        // artifact.db on an unindexed repository.
         if name == "telemetry_summary" {
             let result = self.handle_telemetry_summary(arguments);
             if result.is_error {
@@ -692,46 +774,32 @@ impl McpServer {
             return result;
         }
 
-        // Dynamically bind workspace if passed explicitly or if candidate path points to a different workspace
-        if let Some(ws_str) = arguments.get("workspace").and_then(|v| v.as_str()) {
-            let _ = self.bind_workspace(Path::new(ws_str));
-        } else if let Some(candidate) = arguments
-            .get("file_path")
-            .or_else(|| arguments.get("path"))
-            .or_else(|| arguments.get("file"))
-            .and_then(|v| v.as_str())
-        {
-            let p = if candidate.starts_with("file://") {
-                code_kb_core::parse_file_uri(candidate)
-                    .unwrap_or_else(|| std::path::PathBuf::from(candidate))
-            } else {
-                std::path::PathBuf::from(candidate)
-            };
-            let abs_candidate = if p.is_absolute() {
-                code_kb_core::normalize_path(&p)
-            } else {
-                code_kb_core::normalize_path(&self.workspace.canonical_root.join(&p))
-            };
-
-            // Detect if this path belongs to another workspace or a nested git worktree
-            if let Ok(target_root) = Workspace::find_workspace_root(&abs_candidate) {
-                if !code_kb_core::workspace::paths_equal(
-                    &target_root,
-                    &self.workspace.canonical_root,
-                ) {
-                    let _ = self.bind_workspace(&target_root);
-                }
-            } else if !self.db_path.exists() && abs_candidate.exists() {
-                let _ = self.bind_workspace(&abs_candidate);
-            }
-        }
-
         let rec_start = std::time::Instant::now();
-        let (reconcile_ms, prepare_error) = if let Some(handle) = self.reconcile.take() {
-            let err = handle.join().unwrap_or(Ok(())).err();
-            (Some(rec_start.elapsed().as_millis() as u64), err)
-        } else {
-            (Some(0), None)
+        let (reconcile_ms, prepare_error) = match self.reconcile.take() {
+            Some(prepare) => {
+                let wait = Duration::from_millis(
+                    std::env::var("CODE_KB_INDEX_WAIT_MS")
+                        .ok()
+                        .and_then(|ms| ms.parse().ok())
+                        .unwrap_or(5000),
+                );
+                while !prepare.is_finished() && rec_start.elapsed() < wait {
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+                if !prepare.is_finished() {
+                    self.reconcile = Some(prepare);
+                    let mut started = CallToolResult::text(format!(
+                        "Indexing {} started; call again in a few seconds.",
+                        self.workspace.canonical_root.display()
+                    ));
+                    started.reconcile_ms = Some(rec_start.elapsed().as_millis() as u64);
+                    started.query_ms = Some(0);
+                    return started;
+                }
+                let err = prepare.join().unwrap_or(Ok(())).err();
+                (Some(rec_start.elapsed().as_millis() as u64), err)
+            }
+            None => (Some(0), None),
         };
 
         if self.db_path.exists() && self._watcher.is_none() {
@@ -745,8 +813,8 @@ impl McpServer {
                     self.workspace.canonical_root.display()
                 ),
                 None => format!(
-                    "Database artifact not found at '{}'. Please configure code-kb with '--root <repo-path>' in your MCP config or invoke a tool with a path inside a project repository.",
-                    self.db_path.display()
+                    "No index exists for '{}'.",
+                    self.workspace.canonical_root.display()
                 ),
             };
             tracing::error!("{}", msg);
@@ -1316,36 +1384,6 @@ impl McpServer {
         match request.method.as_str() {
             "initialize" => {
                 tracing::info!(params = ?request.params, "MCP initialize received");
-                if let Some(params) = &request.params {
-                    let mut candidate = None;
-                    if let Some(roots) = params.get("roots").and_then(|r| r.as_array())
-                        && let Some(u) = roots
-                            .first()
-                            .and_then(|r| r.get("uri"))
-                            .and_then(|u| u.as_str())
-                    {
-                        candidate = Some(u);
-                    } else if let Some(u) = params.get("rootUri").and_then(|u| u.as_str()) {
-                        candidate = Some(u);
-                    } else if let Some(u) = params.get("rootPath").and_then(|u| u.as_str()) {
-                        candidate = Some(u);
-                    } else if let Some(folders) =
-                        params.get("workspaceFolders").and_then(|f| f.as_array())
-                        && let Some(u) = folders
-                            .first()
-                            .and_then(|f| f.get("uri"))
-                            .and_then(|u| u.as_str())
-                    {
-                        candidate = Some(u);
-                    }
-
-                    if let Some(cand) = candidate
-                        && let Some(path) = code_kb_core::parse_file_uri(cand)
-                    {
-                        let _ = self.bind_workspace(&path);
-                    }
-                }
-
                 let init_result = json!({
                     "protocolVersion": "2024-11-05",
                     "capabilities": {
@@ -1357,7 +1395,7 @@ impl McpServer {
                         "name": "code-kb",
                         "version": env!("CARGO_PKG_VERSION")
                     },
-                    "instructions": "For progressive code exploration, start with codebase_outline (~200 tokens) for directory structure. Use file_skeleton to inspect interfaces without bodies. Use lookup_symbol for exact name lookups and search_symbols for natural-language concepts. Use get_symbol_context for surgical context before native file edits; use get_symbol_body only when the isolated implementation is needed. Trace callers/callees with find_references. Use blast_radius to assess downstream impact and predict which tests to run before or after changes."
+                    "instructions": "Pass project_root, the absolute path of the project or git worktree you work in, on every call except telemetry_summary. For progressive code exploration, start with codebase_outline (~200 tokens) for directory structure. Use file_skeleton to inspect interfaces without bodies. Use lookup_symbol for exact name lookups and search_symbols for natural-language concepts. Use get_symbol_context for surgical context before native file edits; use get_symbol_body only when the isolated implementation is needed. Trace callers/callees with find_references. Use blast_radius to assess downstream impact and predict which tests to run before or after changes."
                 });
                 Some(JsonRpcResponse::success(id, init_result))
             }
@@ -1479,22 +1517,31 @@ mod tests {
         code_kb_core::db::ensure_fts_index(&conn).unwrap();
         drop(conn);
 
+        let workspace = Workspace::new(root.to_path_buf());
         let mut server = McpServer {
-            workspace: Workspace::new(root.to_path_buf()),
+            launch_root: workspace.canonical_root.clone(),
+            workspace,
             db_path,
             explicit_db: None,
             _watcher: None,
             telemetry_conn: Some(code_kb_core::telemetry::open_telemetry_db_at(root).unwrap()),
             reconcile: None,
+            parked: Vec::new(),
         };
         assert!(
             !server
-                .handle_call_tool("lookup_symbol", &json!({"query": "needle"}))
+                .handle_call_tool(
+                    "lookup_symbol",
+                    &json!({"query": "needle", "project_root": root})
+                )
                 .is_error
         );
         assert!(
             !server
-                .handle_call_tool("lookup_symbol", &json!({"query": "absent"}))
+                .handle_call_tool(
+                    "lookup_symbol",
+                    &json!({"query": "absent", "project_root": root})
+                )
                 .is_error
         );
 
