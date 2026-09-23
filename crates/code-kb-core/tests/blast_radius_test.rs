@@ -145,6 +145,27 @@ fn test_blast_radius_op_file_seed_and_stem_matching() {
 }
 
 #[test]
+fn file_seed_finds_test_named_after_its_module() {
+    let temp = safe_tempdir();
+    let workspace = Workspace::new(temp.path().to_path_buf());
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+    conn.execute_batch(
+        "INSERT INTO files VALUES
+            ('f1', 'src/mcp/server.rs', 'rust', 'h1', 100, 10, 'now'),
+            ('f2', 'tests/mcp_test.rs', 'rust', 'h2', 100, 10, 'now'),
+            ('f3', 'tests/unrelated_test.rs', 'rust', 'h3', 100, 10, 'now');",
+    )
+    .unwrap();
+
+    let result =
+        blast_radius_op(&workspace, &conn, None, Some("src/mcp/server.rs"), 2, 20).unwrap();
+    assert_eq!(result.likely_tests.len(), 1);
+    assert_eq!(result.likely_tests[0].path, "tests/mcp_test.rs");
+    assert_eq!(result.likely_tests[0].reason, "module-matched test file");
+}
+
+#[test]
 fn qualified_blast_radius_seed_selects_only_its_parent_method() {
     let temp = safe_tempdir();
     let conn = open_read_write(&temp.path().join("index.db")).unwrap();

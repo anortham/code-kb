@@ -3830,24 +3830,29 @@ pub fn compute_blast_radius_scoped_with_ids(
         }
     }
 
-    // 2. Discover stem-matched test files in the workspace
-    let mut file_stems = Vec::new();
-    for p in seed_paths {
-        if let Some(stem) = std::path::Path::new(p).file_stem().and_then(|s| s.to_str())
-            && stem.len() >= 3
-            && !file_stems.contains(&stem.to_string())
-        {
-            file_stems.push(stem.to_string());
-        }
-    }
-    for symbol in &resolved_seed_symbols {
-        if let Some(stem) = std::path::Path::new(&symbol.path)
+    let mut test_name_terms = Vec::new();
+    for path in seed_paths.iter().copied().chain(
+        resolved_seed_symbols
+            .iter()
+            .map(|symbol| symbol.path.as_str()),
+    ) {
+        let mut parts = path.rsplit(['/', '\\']);
+        let file = parts.next().unwrap_or(path);
+        if let Some(stem) = std::path::Path::new(file)
             .file_stem()
             .and_then(|s| s.to_str())
             && stem.len() >= 3
-            && !file_stems.contains(&stem.to_string())
+            && !test_name_terms.iter().any(|(name, _)| name == stem)
         {
-            file_stems.push(stem.to_string());
+            test_name_terms.push((stem.to_string(), "stem-matched test file"));
+        }
+        let module = parts.next();
+        if parts.next() == Some("src")
+            && let Some(module) = module
+            && module.len() >= 3
+            && !test_name_terms.iter().any(|(name, _)| name == module)
+        {
+            test_name_terms.push((module.to_string(), "module-matched test file"));
         }
     }
 
@@ -3871,10 +3876,10 @@ pub fn compute_blast_radius_scoped_with_ids(
              ORDER BY path ASC
              LIMIT 11"
         ))?;
-        for stem in file_stems {
-            let stem_pattern = format!("%{}%", escape_like(&stem));
+        for (term, reason) in test_name_terms {
+            let term_pattern = format!("%{}%", escape_like(&term));
             let t_rows =
-                test_files_stmt.query_map([stem_pattern], |row| row.get::<_, String>(0))?;
+                test_files_stmt.query_map([term_pattern], |row| row.get::<_, String>(0))?;
             for (index, p) in t_rows.flatten().enumerate() {
                 if index == 10 {
                     test_file_ceiling_reached = true;
@@ -3887,7 +3892,7 @@ pub fn compute_blast_radius_scoped_with_ids(
                         name: p.clone(),
                         path: p,
                         line: 1,
-                        reason: "stem-matched test file".to_string(),
+                        reason: reason.to_string(),
                     });
                 }
             }
