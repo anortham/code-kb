@@ -3170,3 +3170,95 @@ fn test_mcp_telemetry_records_the_launch_root_for_a_refused_call_and_the_resolve
         ]
     );
 }
+
+fn markerless_folder(source: &str) -> tempfile::TempDir {
+    let folder = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(folder.path().join("src")).unwrap();
+    std::fs::write(folder.path().join("src").join("lib.rs"), source).unwrap();
+    folder
+}
+
+fn cli_scan(root: &Path, db: Option<&Path>, telemetry_dir: &Path) {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_code-kb"));
+    command
+        .env("CODE_KB_TELEMETRY_DIR", telemetry_dir)
+        .arg("--root")
+        .arg(root);
+    if let Some(db) = db {
+        command.arg("--db").arg(db);
+    }
+    let scanned = command.arg("scan").output().unwrap();
+    assert!(scanned.status.success(), "{scanned:?}");
+}
+
+#[test]
+fn test_mcp_pinned_db_is_the_index_of_a_markerless_launch_root() {
+    let folder = markerless_folder("pub fn pinned_only() {}\n");
+    let telemetry = tempfile::tempdir().unwrap();
+    let pin_dir = tempfile::tempdir().unwrap();
+    let pinned = pin_dir.path().join("pinned.db");
+    cli_scan(folder.path(), Some(&pinned), telemetry.path());
+    let mut command = serve_command(folder.path());
+    command
+        .env("CODE_KB_TELEMETRY_DIR", telemetry.path())
+        .arg("--db")
+        .arg(&pinned);
+    let mut session = McpSession::start(command);
+
+    let result = session.call(
+        "lookup_symbol",
+        json!({"query": "pinned_only", "project_root": folder.path()}),
+    );
+    assert_ne!(result["isError"], true, "{result}");
+    assert!(
+        result_text(&result).contains("function `pinned_only` ["),
+        "{result}"
+    );
+    assert!(!folder.path().join(".code-kb").join("artifact.db").exists());
+}
+
+#[test]
+fn test_mcp_markerless_launch_root_without_a_pinned_db_is_refused() {
+    let folder = markerless_folder("pub fn unpinned() {}\n");
+    let telemetry = tempfile::tempdir().unwrap();
+    let mut command = serve_command(folder.path());
+    command.env("CODE_KB_TELEMETRY_DIR", telemetry.path());
+    let mut session = McpSession::start(command);
+
+    let result = session.call(
+        "lookup_symbol",
+        json!({"query": "unpinned", "project_root": folder.path()}),
+    );
+    assert_eq!(result["isError"], true, "{result}");
+    assert!(
+        result_text(&result).contains(code_kb_core::workspace::NO_PROJECT_MARKER_REASON),
+        "{result}"
+    );
+}
+
+#[test]
+fn test_mcp_launch_root_indexed_during_the_session_is_reconciled_on_first_use() {
+    let folder = markerless_folder("pub fn indexed_by_cli() {}\n");
+    let telemetry = tempfile::tempdir().unwrap();
+    let mut command = serve_command(folder.path());
+    command
+        .env("CODE_KB_TELEMETRY_DIR", telemetry.path())
+        .env("CODE_KB_INDEX_WAIT_MS", "60000");
+    let mut session = McpSession::start(command);
+    cli_scan(folder.path(), None, telemetry.path());
+    std::fs::write(
+        folder.path().join("src").join("offline.rs"),
+        "pub fn added_after_the_scan() {}\n",
+    )
+    .unwrap();
+
+    let result = session.call(
+        "lookup_symbol",
+        json!({"query": "added_after_the_scan", "project_root": folder.path()}),
+    );
+    assert_ne!(result["isError"], true, "{result}");
+    assert!(
+        result_text(&result).contains("function `added_after_the_scan` ["),
+        "{result}"
+    );
+}

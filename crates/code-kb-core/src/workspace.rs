@@ -447,6 +447,9 @@ fn is_absolute_path(path: &Path) -> bool {
     path.is_absolute() || (cfg!(windows) && path.to_string_lossy().chars().nth(1) == Some(':'))
 }
 
+/// The `ProjectRootRefused` reason for a folder with no project marker and no index.
+pub const NO_PROJECT_MARKER_REASON: &str = "it has no project marker (.git, Cargo.toml, package.json, go.mod, pyproject.toml) and no code-kb index";
+
 /// True when `root` carries a repository or language project marker.
 pub fn is_project_root(root: &Path) -> bool {
     [
@@ -611,9 +614,7 @@ impl Workspace {
         {
             Some("it is the home directory")
         } else if !is_project_root(&root) && !root.join(".code-kb").join("artifact.db").exists() {
-            Some(
-                "it has no project marker (.git, Cargo.toml, package.json, go.mod, pyproject.toml) and no code-kb index",
-            )
+            Some(NO_PROJECT_MARKER_REASON)
         } else {
             None
         };

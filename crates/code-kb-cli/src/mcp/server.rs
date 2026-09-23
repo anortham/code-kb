@@ -3,7 +3,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use code_kb_core::workspace::paths_equal;
+use code_kb_core::workspace::{NO_PROJECT_MARKER_REASON, paths_equal};
 use code_kb_core::{
     Connection, SymbolSelector, TelemetryFilter, TimeWindow, WatcherHandle, Workspace,
     WorkspaceError, blast_radius_selected_op, codebase_outline_op, create_index,
@@ -51,6 +51,28 @@ pub struct McpServer {
     /// Prepares still running on roots the server left. A scan writes into `artifact.db`
     /// in place, so a root that becomes active again reuses its running prepare.
     parked: Vec<(PathBuf, IndexPrepare)>,
+    /// False while the active root has had no prepare, which happens when the startup
+    /// pre-warm is refused.
+    prepared: bool,
+}
+
+/// Resolves `input` like `Workspace::from_project_root`, except that a launch root with
+/// no project marker is accepted when `--db` names an existing file: that file is its index.
+fn resolve_root(
+    input: &str,
+    launch_root: &Path,
+    explicit_db: Option<&Path>,
+) -> Result<Workspace, WorkspaceError> {
+    match Workspace::from_project_root(input) {
+        Err(WorkspaceError::ProjectRootRefused { path, reason })
+            if reason == NO_PROJECT_MARKER_REASON
+                && paths_equal(&path, launch_root)
+                && explicit_db.is_some_and(Path::is_file) =>
+        {
+            Ok(Workspace::new(path))
+        }
+        resolved => resolved,
+    }
 }
 
 fn spawn_index_prepare(workspace: &Workspace, db_path: &Path) -> Option<IndexPrepare> {
@@ -104,32 +126,35 @@ impl McpServer {
                 .join("artifact.db")
         });
 
-        let (reconcile, watcher) =
-            match Workspace::from_project_root(&workspace.canonical_root.to_string_lossy()) {
-                Ok(_) => {
-                    if let Err(e) = ensure_index_matches_extractor(
-                        &workspace,
-                        &db_path,
-                        &installed_extractor_version(),
-                    ) {
-                        tracing::warn!("Index version check failed: {e}");
-                    }
-                    let reconcile = spawn_index_prepare(&workspace, &db_path);
-                    let watcher = if db_path.exists() {
-                        start_watcher(workspace.clone(), db_path.clone()).ok()
-                    } else {
-                        None
-                    };
-                    (reconcile, watcher)
+        let (reconcile, watcher, prepared) = match resolve_root(
+            &workspace.canonical_root.to_string_lossy(),
+            &workspace.canonical_root,
+            explicit_db,
+        ) {
+            Ok(_) => {
+                if let Err(e) = ensure_index_matches_extractor(
+                    &workspace,
+                    &db_path,
+                    &installed_extractor_version(),
+                ) {
+                    tracing::warn!("Index version check failed: {e}");
                 }
-                Err(e) => {
-                    tracing::info!(
-                        root = %workspace.canonical_root.display(),
-                        "Startup index skipped: {e}"
-                    );
-                    (None, None)
-                }
-            };
+                let reconcile = spawn_index_prepare(&workspace, &db_path);
+                let watcher = if db_path.exists() {
+                    start_watcher(workspace.clone(), db_path.clone()).ok()
+                } else {
+                    None
+                };
+                (reconcile, watcher, true)
+            }
+            Err(e) => {
+                tracing::info!(
+                    root = %workspace.canonical_root.display(),
+                    "Startup index skipped: {e}"
+                );
+                (None, None, false)
+            }
+        };
 
         let telemetry_conn = open_global_telemetry_db().ok();
 
@@ -142,13 +167,15 @@ impl McpServer {
             telemetry_conn,
             reconcile,
             parked: Vec::new(),
+            prepared,
         })
     }
 
-    /// Makes an already resolved root the active one. Its watcher starts once its prepare
-    /// finishes, in `handle_call_tool_inner`.
+    /// Makes an already resolved root the active one and prepares its index, unless that
+    /// root is already active and prepared. Its watcher starts once its prepare finishes,
+    /// in `handle_call_tool_inner`.
     fn switch_root(&mut self, workspace: Workspace) {
-        if paths_equal(&self.workspace.canonical_root, &workspace.canonical_root) {
+        if self.prepared && paths_equal(&self.workspace.canonical_root, &workspace.canonical_root) {
             return;
         }
         // ponytail: one watcher; alternating roots restart the watcher and the offline
@@ -168,7 +195,7 @@ impl McpServer {
         tracing::info!(
             workspace = %workspace.canonical_root.display(),
             db = %db_path.display(),
-            "Switched project root"
+            "Activated project root"
         );
 
         self._watcher = None;
@@ -185,13 +212,14 @@ impl McpServer {
             .position(|(root, _)| paths_equal(root, &workspace.canonical_root))
             .map(|index| self.parked.swap_remove(index).1);
         self.reconcile = parked.or_else(|| spawn_index_prepare(&workspace, &db_path));
+        self.prepared = true;
         self.workspace = workspace;
         self.db_path = db_path;
     }
 
     /// Resolves a call's `project_root` (or its silent aliases `workspace` and `root`) and
     /// checks that every absolute path argument lies inside it.
-    fn resolve_project_root(arguments: &Value) -> Result<Workspace, String> {
+    fn resolve_project_root(&self, arguments: &Value) -> Result<Workspace, String> {
         let input = ["project_root", "workspace", "root"]
             .into_iter()
             .find_map(|key| arguments.get(key).and_then(Value::as_str))
@@ -199,9 +227,10 @@ impl McpServer {
             .ok_or_else(|| {
                 "Missing required parameter: project_root. Pass the absolute path of the project or git worktree you are working in.".to_string()
             })?;
-        let workspace = Workspace::from_project_root(input).map_err(|e| {
-            format!("{e}. Pass the absolute path of the project or git worktree you are working in as project_root.")
-        })?;
+        let workspace = resolve_root(input, &self.launch_root, self.explicit_db.as_deref())
+            .map_err(|e| {
+                format!("{e}. Pass the absolute path of the project or git worktree you are working in as project_root.")
+            })?;
         for key in ["path", "file_path", "file", "subpath", "dir"] {
             if let Some(path) = arguments.get(key).and_then(Value::as_str)
                 && (path.starts_with("file://") || Path::new(path).is_absolute())
@@ -481,7 +510,7 @@ impl McpServer {
 
     pub fn handle_call_tool(&mut self, name: &str, arguments: &Value) -> CallToolResult {
         let start = std::time::Instant::now();
-        let resolved = (name != "telemetry_summary").then(|| Self::resolve_project_root(arguments));
+        let resolved = (name != "telemetry_summary").then(|| self.resolve_project_root(arguments));
         let (res, telemetry_root) = match resolved {
             Some(Err(message)) => {
                 tracing::warn!(tool = name, "MCP tool call refused: {message}");
@@ -1527,6 +1556,7 @@ mod tests {
             telemetry_conn: Some(code_kb_core::telemetry::open_telemetry_db_at(root).unwrap()),
             reconcile: None,
             parked: Vec::new(),
+            prepared: true,
         };
         assert!(
             !server
