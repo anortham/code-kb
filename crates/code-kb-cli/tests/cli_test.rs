@@ -971,6 +971,56 @@ fn test_cli_bug_report() {
 }
 
 #[test]
+fn test_cli_bug_report_ignores_unindexed_repo_and_preserves_existing_ignore() {
+    let repo = code_kb_core::safe_tempdir();
+    let root = repo.path();
+    assert!(
+        Command::new("git")
+            .args(["init", "--quiet"])
+            .current_dir(root)
+            .status()
+            .unwrap()
+            .success()
+    );
+    let telemetry = root.join(".telemetry_test");
+
+    let run_bug_report = || {
+        Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .env("CODE_KB_TELEMETRY_DIR", &telemetry)
+            .arg("--root")
+            .arg(root)
+            .arg("bug-report")
+            .arg("--json")
+            .output()
+            .expect("Failed to execute bug-report")
+    };
+
+    let report = run_bug_report();
+    assert!(report.status.success());
+    let gitignore = root.join(".code-kb").join(".gitignore");
+    assert_eq!(std::fs::read_to_string(&gitignore).unwrap(), "*\n");
+    assert!(root.join(".code-kb").join("logs").is_dir());
+    assert!(!root.join(".code-kb").join("artifact.db").exists());
+    let status = Command::new("git")
+        .args(["status", "--short"])
+        .current_dir(root)
+        .output()
+        .unwrap();
+    assert!(status.status.success());
+    let status = String::from_utf8_lossy(&status.stdout);
+    assert!(!status.contains(".code-kb"), "{status}");
+
+    std::fs::write(&gitignore, "custom ignore rules\n").unwrap();
+    let report = run_bug_report();
+    assert!(report.status.success());
+    assert_eq!(
+        std::fs::read_to_string(gitignore).unwrap(),
+        "custom ignore rules\n"
+    );
+    assert!(!root.join(".code-kb").join("artifact.db").exists());
+}
+
+#[test]
 fn test_cli_bug_report_json() {
     let repo = setup_test_repo();
     let root = repo.path();
@@ -1222,6 +1272,9 @@ fn test_cli_hook_session_start() {
         .as_str()
         .unwrap();
     assert!(ctx.contains("Code Intelligence: Always use `code-kb` MCP tools"));
+    assert!(ctx.contains("EnterWorktree"));
+    assert!(ctx.contains("absolute path inside it"));
+    assert!(ctx.contains("Binding is server-wide"));
 }
 
 #[test]

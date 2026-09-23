@@ -39,16 +39,22 @@ MCP tool schema.**
      the server in the project directory, so `code-kb serve` alone binds it.
   3. *MCP Protocol Handshake:* The server extracts roots from `initialize`
      (`params.roots`, `rootUri`, `rootPath`, `workspaceFolders`).
-  4. *Path Inspection:* If an absolute path is passed in `file_path` or `path`,
-     `code-kb` silently binds to the enclosing repository root.
-  5. *Automatic Initial Scan:* If bound to a repository where `.code-kb/artifact.db`
+  4. *Path Inspection:* If an absolute path is passed in `file_path`, `path`, or
+     `file`, `code-kb` silently binds to the enclosing repository root.
+  5. *Host Working-Directory Changes:* A running MCP server does not learn when its
+     host session changes directories (for example, Claude Code `EnterWorktree`).
+     After entering a worktree, make the first code-kb call with an absolute path
+     inside it. Unscoped lookups then use that workspace. The binding is shared by
+     the server, so use one server per concurrently active worktree or include an
+     absolute path from the intended root with each call.
+  6. *Automatic Initial Scan:* If bound to a repository where `.code-kb/artifact.db`
      does not exist yet, `code-kb` creates the index in the background at server
      start, or before a CLI command answers, rather than returning an error
      (`create_index`: a git worktree copies and reconciles its parent repository's
      index, anything else runs a full scan). Files changed while no server ran are
      reconciled at startup. The first tool call waits for that scan or
      reconciliation and reports a failed scan; CLI commands reconcile before answering.
-  6. *Internal Compatibility:* If an unadvertised `workspace` argument is provided
+  7. *Internal Compatibility:* If an unadvertised `workspace` argument is provided
      internally, the backend accepts it silently, but **never** documents it in
      `input_schema` or prompts for it in error messages.
 - **Enforcement:** `crates/code-kb-cli/tests/mcp_test.rs` validates that no tool in

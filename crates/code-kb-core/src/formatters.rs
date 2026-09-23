@@ -94,6 +94,19 @@ fn sanitize_skeleton_sig<'a>(sig: &'a str, sym: &'a Symbol) -> &'a str {
     }
 }
 
+fn signature_without_duplicate_body<'a>(signature: &'a str, body: &str) -> &'a str {
+    let body = body.trim();
+    if body.is_empty() {
+        return signature;
+    }
+
+    let trimmed_signature = signature.trim_end();
+    trimmed_signature
+        .strip_suffix(body)
+        .map(str::trim_end)
+        .unwrap_or(signature)
+}
+
 /// The kind word for a leaf row whose signature does not spell it. A C++ Qt signal is declared
 /// under a `Q_SIGNALS:` label, so its signature reads like a method; the `event` kind goes into
 /// the trailing comment instead.
@@ -142,7 +155,10 @@ fn render_symbol_skeleton(
 
     let spans_multiple_lines = sym.end_line > sym.start_line;
 
-    if is_container_kind(&sym.kind) && spans_multiple_lines && children.is_some() {
+    if is_container_kind(&sym.kind)
+        && children.is_some()
+        && (spans_multiple_lines || sym.kind == "enum")
+    {
         let raw_sig = sym.signature.as_deref().unwrap_or(&sym.name);
         let sig = sanitize_skeleton_sig(raw_sig, sym);
         out.push_str(&format!("{indent}{sig} {{\n"));
@@ -305,6 +321,7 @@ pub fn format_symbol_body(symbol: &Symbol, body: &str) -> String {
         symbol.path, symbol.start_line, symbol.end_line, symbol.name
     );
     if let Some(ref sig) = symbol.signature {
+        let sig = signature_without_duplicate_body(sig, body);
         out.push_str(sig);
         if !sig.ends_with('\n') {
             out.push('\n');
@@ -327,6 +344,7 @@ pub fn format_context_slice(slice: &ContextSlice) -> String {
     ));
 
     if let Some(ref sig) = sym.signature {
+        let sig = signature_without_duplicate_body(sig, &slice.target_body);
         out.push_str(&format!("Signature: `{sig}`\n\n"));
     }
 
@@ -986,6 +1004,35 @@ mod tests {
     }
 
     #[test]
+    fn format_symbol_body_does_not_repeat_expression_already_in_signature() {
+        let body = "=>\n        transport.SendAsync<OffboardingFormDto>(\n            HttpMethod.Get,\n            $\"ser/{id}\",\n            cancellationToken: cancellationToken)";
+        let mut symbol = sample_symbol("GetByIdAsync");
+        symbol.language = "csharp".into();
+        symbol.signature = Some(format!(
+            "public Task<OffboardingFormDto?> GetByIdAsync(\n        int id,\n        CancellationToken cancellationToken = default){body}"
+        ));
+
+        let formatted = format_symbol_body(&symbol, body);
+
+        assert_eq!(
+            formatted.matches("transport.SendAsync").count(),
+            1,
+            "{formatted}"
+        );
+    }
+
+    #[test]
+    fn format_symbol_body_preserves_unmatched_signature_whitespace() {
+        let mut symbol = sample_symbol("plain");
+        symbol.signature = Some("pub fn plain()  ".into());
+
+        assert_eq!(
+            format_symbol_body(&symbol, "return 1;"),
+            "// src/lib.rs:1-10 (plain)\npub fn plain()  \nreturn 1;\n"
+        );
+    }
+
+    #[test]
     fn test_format_search_results() {
         let results = vec![SymbolSearchResult {
             symbol: Symbol {
@@ -1322,6 +1369,25 @@ mod tests {
     }
 
     #[test]
+    fn format_context_slice_does_not_repeat_expression_already_in_signature() {
+        let body = "=>\n        transport.SendAsync<Response>(\n            HttpMethod.Get,\n            $\"items/{id}\",\n            cancellationToken: cancellationToken)";
+        let mut slice = sample_context_slice();
+        slice.target_symbol.language = "csharp".into();
+        slice.target_symbol.signature = Some(format!(
+            "public static Task<Response?> GetByIdAsync(\n        int id,\n        CancellationToken cancellationToken = default){body}"
+        ));
+        slice.target_body = body.into();
+
+        let formatted = format_context_slice(&slice);
+
+        assert_eq!(
+            formatted.matches("transport.SendAsync").count(),
+            1,
+            "{formatted}"
+        );
+    }
+
+    #[test]
     fn test_context_slice_shows_truncation_notice_when_caps_hit() {
         let mut slice = sample_context_slice();
         slice.callee_signatures = (1..=10).map(|i| format!("fn callee_{i}()")).collect();
@@ -1528,6 +1594,57 @@ mod tests {
              \n\
              rusqlite =; // L15-15\n"
         );
+    }
+
+    #[test]
+    fn skeleton_renders_members_of_a_single_line_enum() {
+        let mut syms = vec![
+            skeleton_row(
+                "mode",
+                None,
+                "enum",
+                "DispatchMode",
+                "public enum DispatchMode",
+                (21, 21),
+                None,
+            ),
+            skeleton_row(
+                "provision",
+                Some("mode"),
+                "enum_member",
+                "Provision",
+                "Provision",
+                (21, 21),
+                None,
+            ),
+            skeleton_row(
+                "deprovision",
+                Some("mode"),
+                "enum_member",
+                "Deprovision",
+                "Deprovision",
+                (21, 21),
+                None,
+            ),
+            skeleton_row(
+                "extension",
+                Some("mode"),
+                "enum_member",
+                "Extension",
+                "Extension",
+                (21, 21),
+                None,
+            ),
+        ];
+        for symbol in &mut syms {
+            symbol.language = "csharp".into();
+        }
+
+        let skeleton = format_file_skeleton("DispatchContext.cs", &syms, Some(21), 0);
+
+        for member in ["Provision", "Deprovision", "Extension"] {
+            assert!(skeleton.contains(member), "{skeleton}");
+        }
     }
 
     #[test]

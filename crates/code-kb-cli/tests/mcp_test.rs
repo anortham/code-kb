@@ -1163,12 +1163,9 @@ fn test_mcp_worktree_rebind() {
     reader.read_line(&mut resp_line2).unwrap();
     let resp2: Value = serde_json::from_str(&resp_line2).unwrap();
     assert_eq!(resp2["id"], 2);
-    assert!(
-        resp2["result"]["content"][0]["text"]
-            .as_str()
-            .unwrap()
-            .contains("main_fn")
-    );
+    let main_text = resp2["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(main_text.starts_with("Found 1 symbols matching \"main_fn\":"));
+    assert!(main_text.contains("- function `main_fn` [src/main.rs:1-1]"));
 
     // 3. Query file_skeleton with absolute path to file in worktree
     let wt_call = json!({
@@ -1177,7 +1174,7 @@ fn test_mcp_worktree_rebind() {
         "method": "tools/call",
         "params": {
             "name": "file_skeleton",
-            "arguments": { "file": wt_file.to_string_lossy().to_string() }
+            "arguments": { "file_path": wt_file.to_string_lossy().to_string() }
         }
     });
     let mut line3 = serde_json::to_string(&wt_call).unwrap();
@@ -1195,10 +1192,31 @@ fn test_mcp_worktree_rebind() {
             .contains("feature_fn")
     );
 
+    let worktree_lookup = mcp_request(
+        &mut stdin,
+        &mut reader,
+        &json!({
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {
+                "name": "lookup_symbol",
+                "arguments": { "query": "feature_fn" }
+            }
+        }),
+    );
+    assert_eq!(worktree_lookup["id"], 4);
+    let worktree_text = worktree_lookup["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap();
+    assert!(worktree_text.starts_with("Found 1 symbols matching \"feature_fn\":"));
+    assert!(worktree_text.contains("- function `feature_fn` [src/feature.rs:1-1]"));
+    assert!(!worktree_text.contains("main_fn"));
+
     // 4. Query file_skeleton with absolute path back to main repo
     let back_call = json!({
         "jsonrpc": "2.0",
-        "id": 4,
+        "id": 5,
         "method": "tools/call",
         "params": {
             "name": "file_skeleton",
@@ -1212,13 +1230,34 @@ fn test_mcp_worktree_rebind() {
     let mut resp_line4 = String::new();
     reader.read_line(&mut resp_line4).unwrap();
     let resp4: Value = serde_json::from_str(&resp_line4).unwrap();
-    assert_eq!(resp4["id"], 4);
+    assert_eq!(resp4["id"], 5);
     assert!(
         resp4["result"]["content"][0]["text"]
             .as_str()
             .unwrap()
             .contains("main_fn")
     );
+
+    let main_lookup = mcp_request(
+        &mut stdin,
+        &mut reader,
+        &json!({
+            "jsonrpc": "2.0",
+            "id": 6,
+            "method": "tools/call",
+            "params": {
+                "name": "lookup_symbol",
+                "arguments": { "query": "main_fn" }
+            }
+        }),
+    );
+    assert_eq!(main_lookup["id"], 6);
+    let main_text = main_lookup["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap();
+    assert!(main_text.starts_with("Found 1 symbols matching \"main_fn\":"));
+    assert!(main_text.contains("- function `main_fn` [src/main.rs:1-1]"));
+    assert!(!main_text.contains("feature_fn"));
 
     drop(stdin);
     let _ = child.wait();
@@ -1296,7 +1335,6 @@ fn test_mcp_worktree_auto_copy_fast_path() {
     code_kb_core::db::ensure_fts_index(&conn).unwrap();
     drop(conn);
 
-    // Set up worktree: .git file pointing to main gitdir, and identical file in src/, but NO .code-kb folder!
     std::fs::create_dir_all(wt_root.join("src")).unwrap();
     let gitdir_path = main_root.join(".git").join("worktrees").join("feature-y");
     std::fs::create_dir_all(&gitdir_path).unwrap();
@@ -1373,6 +1411,25 @@ fn test_mcp_worktree_auto_copy_fast_path() {
             .contains("shared_fn"),
         "Worktree query should succeed using copied parent DB"
     );
+
+    let lookup = mcp_request(
+        &mut stdin,
+        &mut reader,
+        &json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "lookup_symbol",
+                "arguments": { "query": "shared_fn" }
+            }
+        }),
+    );
+    assert_eq!(lookup["id"], 3);
+    assert_ne!(lookup["result"]["isError"], true, "{lookup}");
+    let lookup_text = lookup["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(lookup_text.starts_with("Found 1 symbols matching \"shared_fn\":"));
+    assert!(lookup_text.contains("- function `shared_fn` [src/main.rs:1-1]"));
 
     // Verify worktree DB was copied
     assert!(wt_db.exists(), "Worktree DB should now exist on disk");

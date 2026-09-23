@@ -5,7 +5,7 @@
 
 **CRITICAL ROUTING RULES (Saves 80-90% context tokens):**
 - **DO NOT** run `grep`, `rg`, `find`, `cat`, or `view_file` to search symbols or discover interfaces.
-- **DO NOT** supply `workspace`, `repo_path`, or `root_dir` parameters. Workspace binding is automatic.
+- **DO NOT** supply `workspace`, `repo_path`, or `root_dir` parameters. Workspace binding starts from the configured root and can rebind from absolute paths, but a running MCP server cannot see host cwd changes. After entering a git worktree (e.g. Claude Code `EnterWorktree`), make the first code-kb call with an absolute path inside it, such as `file_skeleton(file_path="/worktree/path/to/file.rs")`; then unscoped lookups use that root. Binding is server-wide: use one server per concurrent root or include the target worktree's absolute path in calls.
 - **DO NOT** read an entire file when you only need a function, class, or type signature.
 - **DO** use `rg` for literal text: string literals, error messages, comments, and config values. `code-kb` indexes symbol names, signatures, and docstrings, not file contents.
 

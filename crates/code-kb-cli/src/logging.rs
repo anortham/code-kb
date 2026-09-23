@@ -1,4 +1,5 @@
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::layer::SubscriberExt;
@@ -22,6 +23,22 @@ pub fn init_logging(workspace_root: &Path, is_serve: bool, verbose: bool) -> Opt
             log_dir.display()
         );
         return None;
+    }
+
+    if let Some(code_kb_dir) = log_dir.parent() {
+        let gitignore = code_kb_dir.join(".gitignore");
+        if let Err(e) = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&gitignore)
+            .and_then(|mut file| file.write_all(b"*\n"))
+            && e.kind() != std::io::ErrorKind::AlreadyExists
+        {
+            eprintln!(
+                "Warning: Failed to create ignore file '{}': {e}",
+                gitignore.display()
+            );
+        }
     }
 
     // Rolling daily log appender in .code-kb/logs/ capped at 7 files

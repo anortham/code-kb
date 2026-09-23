@@ -171,7 +171,7 @@ later step replaces the earlier one:
 1. At start: `--root <path>` on the `serve` command, or, without it, the directory the process
    starts in, searched upward for `.git` or a project marker.
 2. At handshake: the roots the host sends in the MCP `initialize` request, if any.
-3. At each tool call: an absolute path inside a repository in any `file_path` or `path` argument.
+3. At each tool call: an absolute path inside a repository in any `file_path`, `path`, or `file` argument.
 
 Terminal harnesses (Claude Code, Codex, AGY, Grok CLI, Copilot CLI, Pi, Swival, Zed) start the
 server in the project directory, so `code-kb serve` alone is enough.
@@ -188,6 +188,14 @@ Without `--root`, the first tool call in a GUI app fails with
 `Database artifact not found ... configure code-kb with '--root <repo-path>'`. That error is the
 signal to add the flag. A tool call with an absolute path inside a repository also binds the
 server, so a session can recover, but `--root` removes the guesswork.
+
+When a host changes its session directory after MCP launch (for example, Claude Code
+`EnterWorktree`), the running server does not learn that change. Before making unscoped
+lookups in the worktree, make one code-kb call with an absolute path inside it, such as
+`file_skeleton(file_path="/absolute/worktree/path/to/file.rs")`. That call rebinds the
+server and later unscoped lookups use the worktree index. Binding is shared by all calls
+to a server; use a separate server for concurrent worktrees or include the intended
+worktree's absolute path in each call.
 
 #### Claude Code (without the plugin)
 
