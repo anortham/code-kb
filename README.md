@@ -192,6 +192,8 @@ the server pre-warms the directory the process starts in. `--db <file>` pins the
 that launch root only.
 
 The CLI takes the same value as the global `--root` flag, which defaults to the current directory.
+It refuses a home directory or a filesystem root the same way the tools do. `code-kb scan` runs on
+any root you give it.
 
 #### Claude Code (without the plugin)
 

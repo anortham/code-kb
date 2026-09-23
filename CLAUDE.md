@@ -76,7 +76,9 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
 - **Telemetry:** `workspace_root` records the call's resolved root. A refused call
   records the launch root.
 - **CLI 1:1:** `project_root` maps to the global `--root` flag, which defaults to the
-  current directory.
+  current directory. The CLI refuses a home directory or a filesystem root the same way the
+  tools do, and creates a missing index only for a root the tools accept. `code-kb scan`
+  runs on any root you give it.
 - **Enforcement:** The `tools/list` tests in `crates/code-kb-cli/tests/mcp_test.rs` and
   the invariant tests in `crates/code-kb-cli/tests/adversarial_m2_server_test.rs` and
   `crates/code-kb-cli/tests/adversarial_m3_server_test.rs` check every tool schema. A PR
