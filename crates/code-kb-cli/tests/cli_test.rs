@@ -1797,6 +1797,30 @@ fn test_cli_query_builds_and_refreshes_the_index_without_scan() {
 }
 
 #[test]
+fn test_cli_query_in_a_markerless_folder_under_a_dotfiles_home_does_not_index_the_home() {
+    let home = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(home.path().join(".git")).unwrap();
+    let notes = home.path().join("notes");
+    std::fs::create_dir_all(&notes).unwrap();
+    std::fs::write(notes.join("todo.py"), "def remember():\n    pass\n").unwrap();
+    let telemetry = tempfile::tempdir().unwrap();
+
+    let out = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .current_dir(&notes)
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("CODE_KB_TELEMETRY_DIR", telemetry.path())
+        .args(["lookup", "remember"])
+        .output()
+        .unwrap();
+
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(!out.status.success(), "{stderr}");
+    assert!(stderr.contains("Run `code-kb scan` first"), "{stderr}");
+    assert!(!home.path().join(".code-kb").join("artifact.db").exists());
+}
+
+#[test]
 fn test_cli_lookup_reports_a_broken_search_index() {
     let repo = setup_test_repo();
     let root = repo.path();

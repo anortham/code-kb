@@ -442,6 +442,24 @@ fn trim_trailing_slash(p: &Path) -> PathBuf {
     p.to_path_buf()
 }
 
+/// The `HOME` and `USERPROFILE` values that are set and not empty.
+fn home_candidates() -> Vec<PathBuf> {
+    ["HOME", "USERPROFILE"]
+        .into_iter()
+        .filter_map(std::env::var_os)
+        .filter(|home| !home.is_empty())
+        .map(PathBuf::from)
+        .collect()
+}
+
+/// True when `folder` is one of `homes`, compared as canonical paths.
+fn is_home(folder: &Path, homes: &[PathBuf]) -> bool {
+    homes
+        .iter()
+        .filter_map(|home| dunce::canonicalize(home).ok())
+        .any(|home| paths_equal(&home, folder))
+}
+
 /// True for an absolute path, and on Windows also for an `X:` drive path.
 fn is_absolute_path(path: &Path) -> bool {
     path.is_absolute() || (cfg!(windows) && path.to_string_lossy().chars().nth(1) == Some(':'))
@@ -471,8 +489,33 @@ impl Workspace {
             None => std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
         };
 
-        let root = Self::find_workspace_root(&current)?;
+        let root = Self::find_root_with_homes(&current, &home_candidates())?;
         Ok(Self::new(root))
+    }
+
+    /// Finds the root like `find_workspace_root`. When that walk ends at one of `homes` or at a
+    /// filesystem root, returns the nearest folder below it with a project marker, if one exists.
+    fn find_root_with_homes(start: &Path, homes: &[PathBuf]) -> Result<PathBuf, WorkspaceError> {
+        let root = Self::find_workspace_root(start)?;
+        if root.parent().is_some() && !is_home(&root, homes) {
+            return Ok(root);
+        }
+        let Ok(start) = dunce::canonicalize(start) else {
+            return Ok(root);
+        };
+        let start = normalize_path(&start);
+        let folder = if start.is_file() {
+            start.parent().unwrap_or(&start)
+        } else {
+            &start
+        };
+        Ok(folder
+            .ancestors()
+            .take_while(|folder| {
+                strip_prefix_lossy(folder, &root).is_some_and(|rel| !rel.as_os_str().is_empty())
+            })
+            .find(|folder| is_project_root(folder))
+            .map_or(root.clone(), Path::to_path_buf))
     }
 
     /// Create workspace binding directly for a known root directory.
@@ -576,13 +619,7 @@ impl Workspace {
     /// Resolves the `project_root` of a tool call: an absolute path or `file://` URI of the
     /// project or git worktree, or of any folder or file inside it.
     pub fn from_project_root(input: &str) -> Result<Workspace, WorkspaceError> {
-        let homes: Vec<PathBuf> = ["HOME", "USERPROFILE"]
-            .into_iter()
-            .filter_map(std::env::var_os)
-            .filter(|home| !home.is_empty())
-            .map(PathBuf::from)
-            .collect();
-        Self::from_project_root_with_homes(input, &homes)
+        Self::from_project_root_with_homes(input, &home_candidates())
     }
 
     fn from_project_root_with_homes(
@@ -603,30 +640,11 @@ impl Workspace {
             Ok(canonical) => normalize_path(&canonical),
             Err(_) => return Err(WorkspaceError::ProjectRootNotFound(parsed)),
         };
-        let homes: Vec<PathBuf> = homes
-            .iter()
-            .filter_map(|home| dunce::canonicalize(home).ok())
-            .collect();
-        let is_home = |folder: &Path| homes.iter().any(|home| paths_equal(home, folder));
-        let root = Self::find_workspace_root(&canonical)?;
-        let root = if root.parent().is_none() || is_home(&root) {
-            let start = if canonical.is_file() {
-                canonical.parent().unwrap_or(&canonical)
-            } else {
-                &canonical
-            };
-            start
-                .ancestors()
-                .take_while(|folder| !paths_equal(folder, &root))
-                .find(|folder| is_project_root(folder))
-                .map_or(root.clone(), Path::to_path_buf)
-        } else {
-            root
-        };
+        let root = Self::find_root_with_homes(&canonical, homes)?;
 
         let refusal = if root.parent().is_none() {
             Some("it is a filesystem root")
-        } else if is_home(&root) {
+        } else if is_home(&root, homes) {
             Some("it is the home directory")
         } else if !is_project_root(&root) && !root.join(".code-kb").join("artifact.db").exists() {
             Some(NO_PROJECT_MARKER_REASON)
@@ -640,8 +658,7 @@ impl Workspace {
     }
 
     /// For an absolute path inside this workspace, returns the nearest folder from the path up to
-    /// the root (the root excluded) that holds `.git` or `.code-kb/artifact.db`: a nested project
-    /// such as a git worktree or submodule.
+    /// the root (the root excluded) that holds `.git`: a nested git worktree or submodule.
     pub fn nested_project_root(&self, path: &Path) -> Option<PathBuf> {
         let (abs, _) = self.resolve_path(path).ok()?;
         let start = if abs.is_dir() {
@@ -655,9 +672,7 @@ impl Workspace {
                 strip_prefix_lossy(folder, &self.canonical_root)
                     .is_some_and(|rel| !rel.as_os_str().is_empty())
             })
-            .find(|folder| {
-                folder.join(".git").exists() || folder.join(".code-kb").join("artifact.db").exists()
-            })?;
+            .find(|folder| folder.join(".git").exists())?;
         let canonical = dunce::canonicalize(nested).unwrap_or_else(|_| nested.to_path_buf());
         Some(normalize_path(&canonical))
     }
@@ -1459,7 +1474,7 @@ mod tests {
     }
 
     #[test]
-    fn nested_project_root_finds_a_folder_with_only_an_index() {
+    fn nested_project_root_ignores_a_folder_with_only_an_index() {
         let (_temp, ws) = repo_with_git();
         let indexed = ws.canonical_root.join("vendor").join("lib");
         std::fs::create_dir_all(indexed.join(".code-kb")).unwrap();
@@ -1467,8 +1482,27 @@ mod tests {
         let file = indexed.join("lib.c");
         std::fs::write(&file, "int x;\n").unwrap();
 
-        let nested = ws.nested_project_root(&file).unwrap();
+        assert_eq!(ws.nested_project_root(&file), None);
+    }
 
-        assert!(paths_equal(&nested, &indexed), "{}", nested.display());
+    #[test]
+    fn root_walk_under_a_dotfiles_home_takes_the_nearest_project_below_the_home() {
+        let temp = crate::safe_tempdir();
+        let home = temp.path().join("home");
+        std::fs::create_dir_all(home.join(".git")).unwrap();
+        let app = home.join("work").join("app");
+        std::fs::create_dir_all(app.join("src")).unwrap();
+        std::fs::write(app.join("Cargo.toml"), "[package]\n").unwrap();
+        let file = app.join("src").join("main.rs");
+        std::fs::write(&file, "fn main() {}\n").unwrap();
+        let notes = home.join("notes");
+        std::fs::create_dir_all(&notes).unwrap();
+        let homes = [home.clone()];
+
+        let from_file = Workspace::find_root_with_homes(&file, &homes).unwrap();
+        let from_notes = Workspace::find_root_with_homes(&notes, &homes).unwrap();
+
+        assert!(paths_equal(&from_file, &app), "{}", from_file.display());
+        assert!(paths_equal(&from_notes, &home), "{}", from_notes.display());
     }
 }

@@ -3089,6 +3089,44 @@ fn test_mcp_serve_launched_in_the_home_directory_does_not_index_it() {
 }
 
 #[test]
+fn test_mcp_serve_launched_in_a_project_under_a_dotfiles_home_prewarms_that_project() {
+    let home = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(home.path().join(".git")).unwrap();
+    let app = home.path().join("work").join("app");
+    std::fs::create_dir_all(app.join("src")).unwrap();
+    std::fs::write(
+        app.join("Cargo.toml"),
+        "[package]\nname = \"app\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    std::fs::write(app.join("src").join("lib.rs"), "pub struct DotfilesApp;\n").unwrap();
+    let telemetry = tempfile::tempdir().unwrap();
+    let mut command = serve_command(&app.join("src"));
+    command
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("CODE_KB_TELEMETRY_DIR", telemetry.path())
+        .env("CODE_KB_INDEX_WAIT_MS", "60000")
+        .env_remove("RUST_LOG");
+    let mut session = McpSession::start(command);
+
+    let result = session.call(
+        "lookup_symbol",
+        json!({"query": "DotfilesApp", "project_root": app}),
+    );
+    assert!(
+        result_text(&result).contains("struct `DotfilesApp` ["),
+        "{result}"
+    );
+    session.finish();
+
+    let log = launch_log(&app);
+    assert!(!log.contains("Startup index skipped"), "{log}");
+    assert!(log.contains("running automatic initial scan"), "{log}");
+    assert!(!home.path().join(".code-kb").join("artifact.db").exists());
+}
+
+#[test]
 fn test_mcp_absolute_path_outside_project_root_is_an_error_that_changes_nothing() {
     let launch = fixture_repo("Alpha");
     let other = fixture_repo("Beta");

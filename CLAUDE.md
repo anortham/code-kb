@@ -45,7 +45,10 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
     there is no such folder, the walk returns the nearest folder with a language marker
     (`Cargo.toml`, `package.json`, `go.mod`, `pyproject.toml`). When the folder it finds is
     the home directory or a filesystem root, the walk returns the nearest folder below it
-    with a project marker.
+    with a project marker. The walk stops at a folder with an excluded name, such as
+    `target`, `node_modules`, or `.claude`, and does not look above it. So a path under such
+    a folder resolves to the nearest folder with a marker up to that folder, or the server
+    refuses the call.
   - The server refuses a filesystem root (`/`, `C:\`), the home directory, and a folder
     with no project marker (`.git`, `Cargo.toml`, `package.json`, `go.mod`,
     `pyproject.toml`) and no code-kb index. The error names the path and the reason.

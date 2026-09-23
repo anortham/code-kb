@@ -501,7 +501,9 @@ fn main() -> anyhow::Result<()> {
         &code_kb_core::installed_extractor_version(),
     )?;
 
-    if !db_path.exists() && code_kb_core::is_project_root(&workspace.canonical_root) {
+    if !db_path.exists()
+        && Workspace::from_project_root(&workspace.canonical_root.to_string_lossy()).is_ok()
+    {
         eprintln!(
             "Index not found; scanning '{}' first.",
             workspace.canonical_root.display()

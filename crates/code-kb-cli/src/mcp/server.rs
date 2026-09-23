@@ -42,14 +42,16 @@ pub struct McpServer {
     pub _watcher: Option<WatcherHandle>,
     pub telemetry_conn: Option<Connection>,
     /// Index preparation of the active root: a full scan when the index is missing,
-    /// otherwise a reconciliation against files that changed while no watcher ran. A tool
-    /// call waits a bounded time for it so it never answers from a missing or stale index.
+    /// otherwise a reconciliation against files that changed while no watcher ran. It also
+    /// starts the root's watcher and hands it over when a call joins it. A tool call waits a
+    /// bounded time for it so it never answers from a missing or stale index.
     reconcile: Option<IndexPrepare>,
     /// The canonical root the server started with. `--db` pins only this root, and a
     /// refused call records it in telemetry.
     launch_root: PathBuf,
     /// Prepares still running on roots the server left. A scan writes into `artifact.db`
-    /// in place, so a root that becomes active again reuses its running prepare.
+    /// in place, so a root that becomes active again reuses its running prepare and the
+    /// watcher that prepare starts.
     parked: Vec<(PathBuf, IndexPrepare)>,
     /// False while the active root has had no prepare, which happens when the startup
     /// pre-warm is refused.
@@ -75,14 +77,11 @@ fn resolve_root(
     }
 }
 
-/// Prepares the index on a background thread. With `with_watcher`, the thread also starts
+/// Prepares the index on a background thread. The thread owns the root's watcher: it starts
 /// the watcher once the index exists, before the offline reconcile, and returns it, so an
-/// edit made after the prepare reaches the index before any call joins the thread.
-fn spawn_index_prepare(
-    workspace: &Workspace,
-    db_path: &Path,
-    with_watcher: bool,
-) -> Option<IndexPrepare> {
+/// edit made after the prepare reaches the index before any call joins the thread. Drop the
+/// previous watcher before the spawn so one root never has two watchers.
+fn spawn_index_prepare(workspace: &Workspace, db_path: &Path) -> Option<IndexPrepare> {
     if !db_path.exists() && !is_project_root(&workspace.canonical_root) {
         return None;
     }
@@ -97,9 +96,7 @@ fn spawn_index_prepare(
             create_index(&ws, &db).map_err(|e| e.to_string())?;
         }
         ensure_fts_index_path(&db).map_err(|e| e.to_string())?;
-        let watcher = with_watcher
-            .then(|| start_watcher(ws.clone(), db.clone()).ok())
-            .flatten();
+        let watcher = start_watcher(ws.clone(), db.clone()).ok();
         if let Ok(conn) = open_read_only(&db) {
             let _ = reconcile_offline_edits(&ws, &db, &conn);
         }
@@ -136,33 +133,18 @@ impl McpServer {
                 .join("artifact.db")
         });
 
-        let (reconcile, watcher, prepared) = match resolve_root(
+        let (reconcile, prepared) = match resolve_root(
             &workspace.canonical_root.to_string_lossy(),
             &workspace.canonical_root,
             explicit_db,
         ) {
-            Ok(_) => {
-                if let Err(e) = ensure_index_matches_extractor(
-                    &workspace,
-                    &db_path,
-                    &installed_extractor_version(),
-                ) {
-                    tracing::warn!("Index version check failed: {e}");
-                }
-                let watcher = if db_path.exists() {
-                    start_watcher(workspace.clone(), db_path.clone()).ok()
-                } else {
-                    None
-                };
-                let reconcile = spawn_index_prepare(&workspace, &db_path, watcher.is_none());
-                (reconcile, watcher, true)
-            }
+            Ok(_) => (spawn_index_prepare(&workspace, &db_path), true),
             Err(e) => {
                 tracing::info!(
                     root = %workspace.canonical_root.display(),
                     "Startup index skipped: {e}"
                 );
-                (None, None, false)
+                (None, false)
             }
         };
 
@@ -173,7 +155,7 @@ impl McpServer {
             workspace,
             db_path,
             explicit_db: explicit_db.map(|p| p.to_path_buf()),
-            _watcher: watcher,
+            _watcher: None,
             telemetry_conn,
             reconcile,
             parked: Vec::new(),
@@ -222,7 +204,7 @@ impl McpServer {
             .iter()
             .position(|(root, _)| paths_equal(root, &workspace.canonical_root))
             .map(|index| self.parked.swap_remove(index).1);
-        self.reconcile = parked.or_else(|| spawn_index_prepare(&workspace, &db_path, true));
+        self.reconcile = parked.or_else(|| spawn_index_prepare(&workspace, &db_path));
         self.prepared = true;
         self.workspace = workspace;
         self.db_path = db_path;
@@ -230,7 +212,7 @@ impl McpServer {
 
     /// Resolves a call's `project_root` (or its silent aliases `workspace` and `root`) and
     /// checks that every absolute path argument lies inside it and outside any nested git
-    /// worktree, submodule, or indexed project.
+    /// worktree or submodule.
     fn resolve_project_root(&self, arguments: &Value) -> Result<Workspace, String> {
         let input = ["project_root", "workspace", "root"]
             .into_iter()
@@ -864,12 +846,9 @@ impl McpServer {
             None => (Some(0), None),
         };
 
-        if self.db_path.exists() && self._watcher.is_none() {
-            self._watcher = start_watcher(self.workspace.clone(), self.db_path.clone()).ok();
-        }
-
         if !self.db_path.exists() {
-            self.reconcile = spawn_index_prepare(&self.workspace, &self.db_path, true);
+            self._watcher = None;
+            self.reconcile = spawn_index_prepare(&self.workspace, &self.db_path);
             let msg = match prepare_error {
                 Some(e) => format!(
                     "Initial scan of '{}' failed: {}; it will be retried on the next tool call.",
@@ -889,8 +868,8 @@ impl McpServer {
         }
 
         if let Some(e) = prepare_error {
-            self.reconcile =
-                spawn_index_prepare(&self.workspace, &self.db_path, self._watcher.is_none());
+            self._watcher = None;
+            self.reconcile = spawn_index_prepare(&self.workspace, &self.db_path);
             let msg = format!(
                 "Index preparation of '{}' failed: {e}; it will be retried on the next tool call",
                 self.workspace.canonical_root.display()
@@ -900,6 +879,10 @@ impl McpServer {
             err_res.reconcile_ms = reconcile_ms;
             err_res.query_ms = Some(0);
             return err_res;
+        }
+
+        if self._watcher.is_none() {
+            self._watcher = start_watcher(self.workspace.clone(), self.db_path.clone()).ok();
         }
 
         let conn = match open_read_only(&self.db_path) {
