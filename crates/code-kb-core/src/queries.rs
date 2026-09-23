@@ -2337,6 +2337,14 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                         WHERE receiver.name = p.target_receiver
                           AND receiver.path = p.path
                           AND receiver_type.resolved_type = {parent}.name
+                          AND NOT EXISTS (
+                              SELECT 1 FROM symbols shadow
+                              WHERE shadow.name = receiver.name
+                                AND shadow.path = receiver.path
+                                AND shadow.parent_symbol_id = p.from_symbol_id
+                                AND shadow.kind IN ('variable', 'parameter')
+                                AND shadow.symbol_id != receiver.symbol_id
+                          )
                     )
                 )
                 AND NOT EXISTS (

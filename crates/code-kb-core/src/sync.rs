@@ -28,7 +28,7 @@ pub enum SyncError {
     TargetNotIndexed(String),
 }
 
-pub const PINNED_JULIE_VERSION: &str = "3.3.1";
+pub const PINNED_JULIE_VERSION: &str = "3.5.0";
 
 /// Extraction level code-kb asks for on a new artifact: symbol core plus structural facts,
 /// without the identifier, literal, and source-region tables code-kb never reads.
@@ -193,7 +193,7 @@ fn scan_header_file(
     if header_hash_matches_disk(workspace, db_path, rel_path)? {
         return Ok(());
     }
-    // Julie 3.3.1 classifies `.h` files as C in `update`, while a content-aware scan preserves C++ Qt facts.
+    // Julie 3.5.0 classifies `.h` files as C in `update`, while a content-aware scan preserves C++ Qt facts.
     scan_workspace(workspace, db_path, false)?;
 
     if !header_hash_matches_disk(workspace, db_path, rel_path)? {

@@ -29,7 +29,7 @@ Before modifying or understanding a specific function/method:
   3. Parameter type definitions.
   4. Associated unit tests.
 * Discovery output includes `id=<symbol_id>`. Call `get_symbol_body(symbol_name, file_path)` or select that current-index ID with `symbol_id` / CLI `--symbol-id`.
-* Call `find_references(symbol_name, file_path?)` or `find_references(symbol_id)` (or `direction="callees"`) to check callers/callees. Exact selection preserves resolved edges; unresolved pending calls remain heuristic. Callee search excludes external stdlib/runtime tokens language-agnostically across all ~40 supported languages; pass `include_external=true` to view external runtime calls.
+* Call `find_references(symbol_name, file_path?)` or `find_references(symbol_id)` (or `direction="callees"`) to check callers/callees. Exact selection preserves resolved edges; unresolved pending calls remain heuristic. Callee search excludes external stdlib/runtime tokens across supported languages; pass `include_external=true` to view external runtime calls.
 * Call `blast_radius(symbol="...")`, `blast_radius(symbol_id="...")`, `blast_radius(file="...")`, or `blast_radius()` (auto-detects uncommitted git changes). An ID plus file checks identity and does not seed the whole file. IDs are reselected after edits or rebuilds. (Tool alias: `impact`).
 * Call `find_structural_facts()` to list all detected framework categories, or `find_structural_facts(category="route")` to query specific routes, SQL queries, models, or config keys.
 
@@ -81,7 +81,7 @@ Use the canonical names from the MCP schema in tool calls. The aliases below are
 * `query`: accepts `name`, `q`, `symbol_name`, `symbol`.
 * `codebase_outline.path`: accepts `subpath`, `dir`.
 * `direction` in `find_references`: defaults to `"callers"`.
-* `include_external` in `find_references` & `get_symbol_context`: defaults to `false` (filters noise across all ~40 languages).
+* `include_external` in `find_references` & `get_symbol_context`: defaults to `false` (filters runtime noise).
 * `blast_radius`: accepts `symbol`/`name`, `path`/`file`, `depth`/`max_depth`, `limit`. When target is omitted, automatically discovers uncommitted working-tree changes via git. Alias: `impact`.
 * `category` in `find_structural_facts`: optional (omitting lists all detected categories and counts). Normalized aliases: `config`, `route`/`routes`, `query`/`queries`/`sql`, `model`/`models`.
 * `path` in `lookup_symbol` / `search_symbols` / `find_structural_facts`: optional filter by directory or file path prefix.

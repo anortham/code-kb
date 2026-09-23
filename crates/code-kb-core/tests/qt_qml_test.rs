@@ -69,6 +69,13 @@ fn same_line_inline_handler_calls_its_own_component_helper() {
             |row| row.get(0),
         )
         .unwrap();
+    let handler_id: String = conn
+        .query_row(
+            "SELECT symbol_id FROM symbols WHERE path = 'src/Inline.qml' AND name = 'Component.onCompleted' AND parent_symbol_id = ?1",
+            [&detail_id],
+            |row| row.get(0),
+        )
+        .unwrap();
 
     let refs = find_references_scoped(
         &conn,
@@ -81,13 +88,13 @@ fn same_line_inline_handler_calls_its_own_component_helper() {
     .unwrap();
 
     assert_eq!(refs.len(), 1, "{refs:#?}");
-    assert_eq!(refs[0].from_symbol_id, detail_id);
-    assert_eq!(helper_parent, refs[0].from_symbol_id);
+    assert_eq!(refs[0].from_symbol_id, handler_id);
+    assert_eq!(helper_parent, detail_id);
     assert_eq!(refs[0].kind, "calls");
     let inline_extends: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM pending_relationships WHERE from_symbol_id = ?1 AND target_terminal_name = 'Item' AND kind = 'extends'",
-            [&refs[0].from_symbol_id],
+            [&detail_id],
             |row| row.get(0),
         )
         .unwrap();
@@ -127,6 +134,21 @@ fn shadowed_and_sibling_qml_calls_stay_unresolved() {
     let impact =
         compute_blast_radius_scoped(&conn, &["helper"], Some("src/Scope.qml"), &[], 2, 10).unwrap();
     assert!(impact.impacted_symbols.is_empty(), "{impact:#?}");
+}
+
+#[test]
+fn unshadowed_qml_id_resolves_its_own_helper() {
+    let (_repo, db) = scanned_repo(&[(
+        "src/Owner.qml",
+        "import QtQuick 2.15\nItem { id: root; function helper() {} function callOwner() { root.helper() } }\n",
+    )]);
+    let conn = open_read_only(&db).unwrap();
+
+    let refs = find_references_scoped(&conn, "helper", "callers", 10, false, Some("src/Owner.qml"))
+        .unwrap();
+
+    assert_eq!(refs.len(), 1, "{refs:#?}");
+    assert_eq!(refs[0].from_symbol_name, "callOwner");
 }
 
 #[test]

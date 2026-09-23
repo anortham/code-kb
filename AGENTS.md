@@ -113,7 +113,7 @@ MCP tool schema.**
   carries `// event` before its line range.
 - Language-agnostic callee filtering: `find_references(direction="callees")` and `get_symbol_context`
   filter unresolved AST tokens against workspace symbols, eliminating external stdlib/runtime noise
-  across all ~40 supported languages by default (`include_external: true` / `--include-external` restores them).
+  across supported languages by default (`include_external: true` / `--include-external` restores them).
 - Blast radius & test prediction: `blast_radius` (alias: `impact`, CLI: `code-kb blast-radius` / `impact`)
   computes multi-hop reverse reachability via SQLite recursive CTEs and predicts targeted tests to run.
   Auto-discovers uncommitted git changes when no target is passed.
@@ -134,7 +134,7 @@ MCP tool schema.**
   content-aware workspace scan that only re-extracts changed files.
 
 ### 7. Pinned Extractor & Bundled Distribution
-- `code-kb` pins the exact extractor version in `scripts/julie-pins.json` (currently `3.3.1`).
+- `code-kb` pins the exact extractor version in `scripts/julie-pins.json` (currently `3.5.0`).
 - Build guard: `crates/code-kb-cli/build.rs` verifies that `julie-extract` is restored and matches the pinned version. A missing or mismatched extractor fails the build immediately (bypassable for offline packaging via `CODE_KB_ALLOW_MISSING_JULIE_EXTRACT=1`).
 - Single-download distribution: Release archives ship `code-kb` and matching `julie-extract` pre-packaged side-by-side. Users download one archive and receive both binaries ready to execute.
 - Runtime discovery: `code-kb` checks `JULIE_EXTRACT_BIN`, next to its own executable (`current_exe().parent()`), `.tools/julie-extract`, and `PATH`. The first candidate whose version matches the pin wins; otherwise the first candidate found is used with a warning.
