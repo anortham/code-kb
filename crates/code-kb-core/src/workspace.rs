@@ -15,6 +15,12 @@ pub enum WorkspaceError {
     DiscoveryFailed(PathBuf),
     #[error("Database artifact not found at '{0}'")]
     ArtifactNotFound(PathBuf),
+    #[error("project_root '{0}' is a relative path")]
+    RelativeProjectRoot(PathBuf),
+    #[error("project_root '{0}' does not exist")]
+    ProjectRootNotFound(PathBuf),
+    #[error("project_root '{path}' is refused: {reason}")]
+    ProjectRootRefused { path: PathBuf, reason: &'static str },
 }
 
 /// Lexically clean a path by collapsing `.` and `..` components.
@@ -436,6 +442,11 @@ fn trim_trailing_slash(p: &Path) -> PathBuf {
     p.to_path_buf()
 }
 
+/// True for an absolute path, and on Windows also for an `X:` drive path.
+fn is_absolute_path(path: &Path) -> bool {
+    path.is_absolute() || (cfg!(windows) && path.to_string_lossy().chars().nth(1) == Some(':'))
+}
+
 /// True when `root` carries a repository or language project marker.
 pub fn is_project_root(root: &Path) -> bool {
     [
@@ -559,6 +570,59 @@ impl Workspace {
         Ok(normalize_path(&canon))
     }
 
+    /// Resolves the `project_root` of a tool call: an absolute path or `file://` URI of the
+    /// project or git worktree, or of any folder or file inside it.
+    pub fn from_project_root(input: &str) -> Result<Workspace, WorkspaceError> {
+        let homes: Vec<PathBuf> = ["HOME", "USERPROFILE"]
+            .into_iter()
+            .filter_map(std::env::var_os)
+            .filter(|home| !home.is_empty())
+            .map(PathBuf::from)
+            .collect();
+        Self::from_project_root_with_homes(input, &homes)
+    }
+
+    fn from_project_root_with_homes(
+        input: &str,
+        homes: &[PathBuf],
+    ) -> Result<Workspace, WorkspaceError> {
+        let input = input.trim();
+        let parsed = if input.starts_with("file://") {
+            parse_file_uri(input).unwrap_or_else(|| PathBuf::from(input))
+        } else {
+            PathBuf::from(input)
+        };
+        let parsed = normalize_path(&parsed);
+        if !is_absolute_path(&parsed) {
+            return Err(WorkspaceError::RelativeProjectRoot(parsed));
+        }
+        let canonical = match dunce::canonicalize(&parsed) {
+            Ok(canonical) => normalize_path(&canonical),
+            Err(_) => return Err(WorkspaceError::ProjectRootNotFound(parsed)),
+        };
+        let root = Self::find_workspace_root(&canonical)?;
+
+        let refusal = if root.parent().is_none() {
+            Some("it is a filesystem root")
+        } else if homes
+            .iter()
+            .filter_map(|home| dunce::canonicalize(home).ok())
+            .any(|home| paths_equal(&home, &root))
+        {
+            Some("it is the home directory")
+        } else if !is_project_root(&root) && !root.join(".code-kb").join("artifact.db").exists() {
+            Some(
+                "it has no project marker (.git, Cargo.toml, package.json, go.mod, pyproject.toml) and no code-kb index",
+            )
+        } else {
+            None
+        };
+        match refusal {
+            Some(reason) => Err(WorkspaceError::ProjectRootRefused { path: root, reason }),
+            None => Ok(Workspace::new(root)),
+        }
+    }
+
     /// Resolves an input path (relative, absolute, or file:// URI) to a canonical absolute path and relative path.
     pub fn resolve_path(&self, input: &Path) -> Result<(PathBuf, String), WorkspaceError> {
         let raw_str = input.to_string_lossy();
@@ -569,10 +633,7 @@ impl Workspace {
         };
         let path = normalize_path(&path);
 
-        let is_abs = path.is_absolute()
-            || (cfg!(windows) && (path.to_string_lossy().chars().nth(1) == Some(':')));
-
-        let joined = if is_abs {
+        let joined = if is_absolute_path(&path) {
             path
         } else {
             let rel_str = if cfg!(not(windows)) && path.to_string_lossy().contains('\\') {
@@ -1087,5 +1148,188 @@ mod tests {
             matches!(res, Err(WorkspaceError::PathOutsideWorkspace(..))),
             "Expected PathOutsideWorkspace, got: {res:?}"
         );
+    }
+
+    const NO_MARKER_REASON: &str = "it has no project marker (.git, Cargo.toml, package.json, go.mod, pyproject.toml) and no code-kb index";
+
+    fn project_root_refusal(input: &Path, homes: &[PathBuf]) -> (PathBuf, &'static str) {
+        match Workspace::from_project_root_with_homes(&input.to_string_lossy(), homes) {
+            Err(WorkspaceError::ProjectRootRefused { path, reason }) => (path, reason),
+            other => panic!("expected a refusal for {}, got {other:?}", input.display()),
+        }
+    }
+
+    fn resolved_project_root(input: &Path) -> PathBuf {
+        Workspace::from_project_root_with_homes(&input.to_string_lossy(), &[])
+            .unwrap()
+            .canonical_root
+    }
+
+    #[test]
+    fn project_root_relative_path_is_refused() {
+        for input in ["src/main.rs", "", "   "] {
+            let result = Workspace::from_project_root(input);
+            assert!(
+                matches!(result, Err(WorkspaceError::RelativeProjectRoot(_))),
+                "{input:?}: {result:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn project_root_missing_path_is_refused_as_not_found() {
+        let temp = crate::safe_tempdir();
+        let missing = temp.path().join("missing");
+
+        let result = Workspace::from_project_root(&missing.to_string_lossy());
+
+        assert!(
+            matches!(&result, Err(WorkspaceError::ProjectRootNotFound(path)) if paths_equal(path, &missing)),
+            "{result:?}"
+        );
+    }
+
+    #[test]
+    fn project_root_file_uri_resolves_to_the_project() {
+        let temp = crate::safe_tempdir();
+        let project = temp.path().join("project");
+        std::fs::create_dir_all(project.join(".git")).unwrap();
+        let uri = format!("file://{}", to_forward_slash(&project));
+
+        let ws = Workspace::from_project_root(&uri).unwrap();
+
+        assert!(
+            paths_equal(&ws.canonical_root, &project),
+            "{}",
+            ws.canonical_root.display()
+        );
+    }
+
+    #[test]
+    fn project_root_subfolder_resolves_to_the_enclosing_project() {
+        let temp = crate::safe_tempdir();
+        let project = temp.path().join("project");
+        std::fs::create_dir_all(project.join(".git")).unwrap();
+        let nested = project.join("src").join("deep");
+        std::fs::create_dir_all(&nested).unwrap();
+
+        let root = resolved_project_root(&nested);
+
+        assert!(paths_equal(&root, &project), "{}", root.display());
+    }
+
+    #[test]
+    fn project_root_file_resolves_to_the_enclosing_project() {
+        let temp = crate::safe_tempdir();
+        let project = temp.path().join("project");
+        std::fs::create_dir_all(project.join("src")).unwrap();
+        std::fs::write(project.join("Cargo.toml"), "[package]\n").unwrap();
+        let file = project.join("src").join("main.rs");
+        std::fs::write(&file, "fn main() {}\n").unwrap();
+
+        let root = resolved_project_root(&file);
+
+        assert!(paths_equal(&root, &project), "{}", root.display());
+    }
+
+    #[test]
+    fn project_root_git_worktree_nested_in_a_repo_resolves_to_itself() {
+        let temp = crate::safe_tempdir();
+        let outer = temp.path().join("outer");
+        std::fs::create_dir_all(outer.join(".git")).unwrap();
+        let worktree = outer.join("wt");
+        std::fs::create_dir_all(&worktree).unwrap();
+        std::fs::write(worktree.join(".git"), "gitdir: ../.git/worktrees/wt\n").unwrap();
+
+        let root = resolved_project_root(&worktree);
+
+        assert!(paths_equal(&root, &worktree), "{}", root.display());
+    }
+
+    #[test]
+    fn project_root_with_index_and_no_marker_is_accepted() {
+        let temp = crate::safe_tempdir();
+        let indexed = temp.path().join("indexed");
+        std::fs::create_dir_all(indexed.join(".code-kb")).unwrap();
+        std::fs::write(indexed.join(".code-kb").join("artifact.db"), b"").unwrap();
+
+        let root = resolved_project_root(&indexed);
+
+        assert!(paths_equal(&root, &indexed), "{}", root.display());
+    }
+
+    #[test]
+    fn project_root_without_marker_or_index_is_refused_and_left_untouched() {
+        let temp = crate::safe_tempdir();
+        let plain = temp.path().join("plain");
+        std::fs::create_dir_all(&plain).unwrap();
+
+        let (path, reason) = project_root_refusal(&plain, &[]);
+
+        assert_eq!(reason, NO_MARKER_REASON);
+        assert!(paths_equal(&path, &plain), "{}", path.display());
+        assert!(std::fs::read_dir(&plain).unwrap().next().is_none());
+    }
+
+    #[test]
+    fn project_root_refusal_message_names_the_path_and_reason() {
+        let temp = crate::safe_tempdir();
+        let plain = temp.path().join("plain");
+        std::fs::create_dir_all(&plain).unwrap();
+
+        let err =
+            Workspace::from_project_root_with_homes(&plain.to_string_lossy(), &[]).unwrap_err();
+        let WorkspaceError::ProjectRootRefused { path, .. } = &err else {
+            panic!("expected a refusal, got {err:?}");
+        };
+
+        assert_eq!(
+            err.to_string(),
+            format!(
+                "project_root '{}' is refused: {NO_MARKER_REASON}",
+                path.display()
+            )
+        );
+    }
+
+    #[test]
+    fn project_root_filesystem_root_is_refused() {
+        let temp = crate::safe_tempdir();
+        let fs_root = temp.path().ancestors().last().unwrap();
+
+        let (_, reason) = project_root_refusal(fs_root, &[]);
+
+        assert_eq!(reason, "it is a filesystem root");
+    }
+
+    #[test]
+    fn project_root_home_directory_is_refused_with_or_without_a_git_marker() {
+        let temp = crate::safe_tempdir();
+        let home = temp.path().join("home");
+        std::fs::create_dir_all(&home).unwrap();
+        let homes = [home.clone()];
+
+        let (bare_path, bare_reason) = project_root_refusal(&home, &homes);
+        std::fs::create_dir_all(home.join(".git")).unwrap();
+        let (git_path, git_reason) = project_root_refusal(&home, &homes);
+
+        assert_eq!(bare_reason, "it is the home directory");
+        assert!(paths_equal(&bare_path, &home), "{}", bare_path.display());
+        assert_eq!(git_reason, "it is the home directory");
+        assert!(paths_equal(&git_path, &home), "{}", git_path.display());
+    }
+
+    #[test]
+    fn project_root_folder_inside_a_dotfiles_home_is_refused_as_the_home() {
+        let temp = crate::safe_tempdir();
+        let home = temp.path().join("home");
+        std::fs::create_dir_all(home.join(".git")).unwrap();
+        let notes = home.join("notes");
+        std::fs::create_dir_all(&notes).unwrap();
+
+        let (path, reason) = project_root_refusal(&notes, std::slice::from_ref(&home));
+
+        assert_eq!(reason, "it is the home directory");
+        assert!(paths_equal(&path, &home), "{}", path.display());
     }
 }
