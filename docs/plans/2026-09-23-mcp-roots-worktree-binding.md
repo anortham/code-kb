@@ -1,17 +1,37 @@
-# Session root and cross-repository queries (issue #3)
+# Required `project_root` on every tool (issue #3, code-kb 2.1.0)
 
 ## Problem
 
 1. A running `code-kb serve` stays bound to the launch root after Claude Code `EnterWorktree`.
    Unscoped calls (`lookup_symbol`, `search_symbols`, `codebase_outline`, ...) answer from the
    launch-root index with no warning. Commit `1f3f87a` only documents a workaround.
-2. A user in project A asks the agent to explore project B (a sibling dependency such as
-   `julie-extractors`, or an unrelated repository). Today an absolute path rebinds the whole
-   server to B and the binding stays there: later unscoped calls, and calls from subagents that
-   share the server, answer from B. Results print B-relative paths with no root name.
-3. Existing bug: with `serve --db <file>`, `locate_db` always returns that file
-   (`workspace.rs` `locate_db`), so a path rebind runs `ensure_index_matches_extractor` and
-   `reconcile_offline_edits` for repository B against A's index file.
+2. A user in project A asks the agent to explore project B. Today an absolute path rebinds the
+   whole server to B, and later unscoped calls, and calls from subagents that share the server,
+   answer from B.
+3. With `serve --db <file>`, `locate_db` always returns that file, so a rebind to project B
+   reconciles B against A's index file.
+
+## Decision (user, 2026-09-23)
+
+Every tool except `telemetry_summary` takes a required `project_root`: the absolute path of the
+project or git worktree the agent works in. The server never picks the root from MCP roots, the
+process directory, or a path argument. This replaces core invariant 1 (no workspace parameter).
+
+Why:
+- The agent always knows where it works. In all 3 fresh sessions below, the first code-kb call
+  after the worktree step already passed an absolute worktree path.
+- MCP roots cannot carry the answer: Codex and Grok send none, Antigravity sends `[]`, and
+  `grok -w` starts the server in the main checkout.
+- A root chosen by server state goes stale (issue #3, Serena #1496, the Julie and Miller
+  history below). A root in every call cannot go stale inside the server.
+- MCP `2026-07-28` deprecates roots and says to pass directories in tool parameters.
+
+A separate parameter, not `path` or `file_path`: those already mean a file or a scope inside the
+project, and one name with one meaning in every tool is easier for an agent to copy from call to
+call.
+
+The earlier design (poll `roots/list` per call, per-call repository selection by absolute path)
+is dropped. The Codex run below shows that it breaks clients without roots.
 
 ## Evidence
 
@@ -36,6 +56,34 @@ MCP protocol `2026-07-28` deprecates roots (SEP-2577, merged 2026-05-15). They s
 for at least twelve months. The spec says existing implementations "SHOULD migrate to passing
 directories or files via tool parameters, resource URIs, or server configuration". In that
 revision a server gets roots through an `InputRequiredResult`, not a server-to-client request.
+
+### Probe of four clients (`scripts/mcp-probe.py`, 2026-09-23)
+
+| Client | Protocol offered | Roots | Server cwd with the client's own worktree start |
+| --- | --- | --- | --- |
+| Claude Code 2.1.280 | `2025-11-25` | `roots/list` follows `EnterWorktree` and `ExitWorktree`; no `list_changed` | `claude -w`: the worktree |
+| Codex 0.156.1 | `2025-06-18` | none; MCP server env is dropped | `codex --worktree`: the worktree, under `~/.codex/worktrees/<id>/<repo>` |
+| Grok 1.0.41 | `2025-11-25` | none | `grok -w`: the main checkout; only the shell runs in `~/.grok/worktrees/...` |
+| Antigravity (agy 1.2.9) | `server/discover` with `2026-07-28` first, then `initialize` `2025-11-25` | `roots/list` answers `[]`; `--add-dir` sends `list_changed` | no worktree start |
+
+- Grok reads a project `.grok/config.toml` only in a trusted folder.
+- Antigravity answered `[]` only on the `2025-11-25` fallback. Its roots over `2026-07-28` are
+  not probed yet.
+
+### Fresh agent sessions on code-kb 2.0.2 (Herdr, clone of flask, 2026-09-23)
+
+Task: "spike a feature in a new git worktree". No hint about code-kb or roots.
+
+- Claude, 2 runs: the razorback worktree skill chose `EnterWorktree`. The first code-kb call
+  passed an absolute path in the worktree, as the 2.0.2 routing block says. All calls
+  answered from the worktree. A follow-up question used `grep` only.
+- Codex, 1 run: `git worktree add` to a sibling folder, no `cd` for the server. The first call
+  was `codebase_outline(path=<worktree>)`, then `lookup_symbol("routes_command")` with no path and
+  `search_symbols(path="tests")`. All 9 calls answered from the worktree, only because 2.0.2
+  keeps the server on the last absolute-path root.
+
+Result: a root chosen from roots or from one path call breaks Codex; only the sticky 2.0.2
+behavior saved this run.
 
 ## Prior art
 
@@ -74,110 +122,91 @@ selector on every call.
 - Miller's central registry drifted to 56% dead rows, most of them removed worktrees. Per-repo
   `.code-kb/` avoids a registry.
 
-Rules taken from this: send `roots/list` only inside a tool call; empty or failed roots keep the
-current root; run the root safety check on every source (roots, paths, cwd); resolve the
-target root and database once per call; a missing or failed foreign index is a typed error,
-never empty results; answer from the existing index and reconcile after; no registry.
+Rules kept from this: run the root safety check on every call; resolve the root and index once
+per call; a missing or failed index is an error that names the root, never empty results; do not
+block long on a new index; no registry.
 
-## Found while researching: foreign repositories break the extractor choice
+## Done in 2.0.2
 
-A code-kb CLI call run from inside `~/source/miller` deleted Miller's index on 2026-09-23:
-
-- `julie_extract_candidates` (`sync.rs`) walks the current directory upward for
-  `.tools/julie-extract`, before `PATH`. When no candidate matches the pin, the first one wins.
-  From Miller's directory that was Miller's own extractor 2.42.0.
-- `ensure_index_matches_extractor` then deleted the index (`remove_artifact_files`) before
-  `scan_workspace` ran, and the scan failed (`--level facts` unknown to 2.42.0).
-
-Per-call cross-repository queries make this more likely. Required fixes: take `.tools/` only
-next to the code-kb executable, never from the current or target directory; never rebuild an
-index with an extractor older than the one that wrote it; build the replacement index in a
-temporary file and rename it only after the scan succeeds.
-
-No single consensus exists. The spec direction is directories in tool parameters or server
-configuration. code-kb already takes paths in every tool that needs a scope, so the design
-below uses those parameters and adds no `workspace` field.
+Commit `2d41604` fixed the foreign-extractor bug found during this research: `.tools/` is read
+only next to the code-kb executable, an older extractor never rebuilds a newer index, and a
+rebuild replaces the index only after its scan succeeds.
 
 ## Design
 
-### Session root
+1. **Schema.** Every tool except `telemetry_summary` gets `project_root` (string) in
+   `required`. Description: "Absolute path of the project or git worktree you are working in.
+   Send the same value on every call. Change it when you move to a worktree or another
+   project." `path` and `file_path` keep their meaning: relative to `project_root`, or absolute
+   inside it. `workspace` and `root` are accepted as silent aliases (invariant 5) and never
+   appear in a schema.
+2. **Resolution, once per call.** Accept a plain path or a `file://` URI. A relative value is an
+   error. Canonicalize it and walk up with `Workspace::find_workspace_root`, so a subfolder of
+   the project works. Refuse `/`, the home directory, and a folder where `is_project_root` is
+   false and no `.code-kb/artifact.db` exists. Every refusal names the path and the reason and
+   creates nothing.
+3. **Active index.** The server keeps one active root with the current `bind_workspace` state
+   (index path, watcher, prepare thread). A call whose root differs from the active root
+   switches with `bind_workspace`. Each call names its own root, so a switch never changes the
+   answer to a later call.
+   `ponytail:` one watcher; alternating roots restart the watcher and the offline reconcile on
+   each switch. Keep a small per-root cache only if telemetry shows agents alternate often.
+4. **Missing or stale index.** `bind_workspace` already starts `spawn_index_prepare` (a worktree
+   copies its parent index and reconciles; any other project runs a full scan). The call waits
+   up to 5 s, polling `JoinHandle::is_finished`. When the scan is not done, the call returns a
+   normal answer: "Indexing <root> started; call again in a few seconds." The next call for that
+   root checks again. A failed scan returns an error that names the root, never empty results.
+   Fallback if this confuses agents: a `manage_workspace` tool that indexes on request.
+5. **Paths outside the root.** An absolute `path` or `file_path` that is not inside
+   `project_root` is an error that names both paths. Path arguments never switch the root.
+6. **Delete.** Root binding from `initialize` (`roots`, `rootUri`, `rootPath`,
+   `workspaceFolders`), the path-inspection rebind at the top of `handle_call_tool_inner`, and
+   the "configure `--root`" not-found text. `--root` and the process directory stay only as the
+   startup pre-warm root and as the CLI default.
+7. **`--db`.** The pinned file belongs to the launch root only. Every other root uses its own
+   `.code-kb/artifact.db`. This fixes problem 3.
+8. **Telemetry.** `workspace_root` records the call's resolved root (already true after a
+   switch). A refused call records the launch root.
+9. **CLI 1:1.** `project_root` maps to the existing global `--root`, which defaults to the
+   current directory. No CLI change.
 
-The session root is the default for every call that has no absolute path. It comes from, in
-order: `--root` (pinned; roots are then ignored), `roots/list` when the client supports it,
-then the process directory.
+## Docs and invariants
 
-1. Record the client `roots` capability and the negotiated protocol version in `initialize`.
-   Poll only for versions that use server-to-client `roots/list` (up to `2025-11-25`).
-2. Move stdin reads to a reader thread that sends messages to the main loop over a channel.
-   Parse client responses (`result` or `error`, no `method`) instead of answering them with a
-   parse error. Use string ids with a `code-kb-` prefix for server requests.
-3. Before each `tools/call`, send `roots/list` and wait for the response with that id. Hold
-   other client requests that arrive during the wait and answer them in order afterwards. Apply
-   `notifications/cancelled` to a held call.
-4. Timeout (1 s) or error: stop polling for the rest of the process, keep the current session
-   root, and add one line to that answer naming the root used. Never block later calls again.
-5. Root choice: canonicalize each `file://` root. An empty list keeps the current root. A
-   root that fails the safety check in step 10 is ignored. One root: use it. Several: keep the current
-   session root while it is in the list, else take the first and name it in the answer.
-6. Call `bind_workspace` only when the canonical session root changes. Keep one watcher, on the
-   session root. Join or finish the old prepare thread before starting another.
-7. Treat `notifications/roots/list_changed` as a hint only.
+- AGENTS.md and CLAUDE.md (one commit, byte-for-byte): rewrite invariant 1 as "every tool
+  except `telemetry_summary` requires `project_root`; no schema exposes `workspace`,
+  `workspace_id`, `repo_path`, or `root_dir`", and drop its binding list. Update invariant 5
+  (scoped search and aliases) and invariant 6 (automatic initial scan) to match.
+- Server instructions, the `code-kb hook` routing block, `skills/code-kb/SKILL.md`, and README:
+  one rule, "pass the absolute path of the project or worktree you work in as `project_root` on
+  every call". Remove the `1f3f87a` worktree workaround text.
 
-### Per-call repository selection
+## Tests (`crates/code-kb-cli/tests/mcp_test.rs`, core unit tests in `workspace.rs`)
 
-8. An absolute path in `file_path`, `path`, or `file` (and the hidden `workspace` argument)
-   whose repository root differs from the session root answers that call from that
-   repository's own `.code-kb/artifact.db`. The session root, its watcher, and later calls
-   stay unchanged. Relative paths always resolve inside the session root.
-9. An answer from another root starts with one `root: <absolute path>` line. A `symbol_id`
-   resolves only in the database the call opened, so follow-up calls for that repository pass
-   an absolute path under it.
-10. Root safety check, for every source (roots, paths, cwd): refuse the filesystem root, the
-    home directory, temp and plugin-cache directories, paths with unexpanded `${...}`, and any
-    directory `is_project_root` rejects. First use of another root: a git worktree copies its
-    parent index; any other repository runs one full scan and the answer says so. Later calls
-    answer from the existing index at once and reconcile after. No watcher. A missing or
-    failed index returns a typed error that names the root, never empty results. Body and skeleton reads already refresh the file they read. Keep only a
-    short list of root paths, no open connections.
-11. With `--db`, the pinned file belongs to the session root only. Other roots use their own
-    index files. This fixes problem 3.
+- `tools/list`: every tool except `telemetry_summary` has `project_root` in `required`; no tool
+  exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.
+- A call without `project_root`, or with a relative one, returns an error that asks for the
+  absolute project path.
+- A subfolder as `project_root` answers from the enclosing project.
+- Main root, then worktree root, then main root: the worktree-only symbol is found only in the
+  worktree call.
+- A project with no index and a zero wait (test-only `CODE_KB_INDEX_WAIT_MS=0`) returns the
+  "Indexing ... started" answer; a later call answers from the new index.
+- `/` and the home directory are refused, and no `.code-kb` folder is created.
+- An absolute `file_path` outside `project_root` is an error that names both paths.
+- With `--db`, a call for another project leaves the pinned file unchanged.
+- A `symbol_id` from `lookup_symbol` resolves in `get_symbol_body` with the same `project_root`.
+- `telemetry_summary` works without `project_root`.
 
-Cost: one local round trip per tool call for roots clients. No schema change.
+## Acceptance test (black box)
 
-## Docs and invariant
-
-- Keep core invariant 1: no tool schema gains `workspace`, `root`, `project`, or `repo_path`.
-  Amend its binding list: session root from `--root`, `roots/list`, or the process directory;
-  an absolute path in an existing path argument selects a repository for that call only.
-- Fix the handshake text in README and AGENTS.md/CLAUDE.md: roots come from `roots/list`.
-- Replace the long routing-block rule from `1f3f87a` with one line: to query another
-  repository or a worktree the host does not report, pass an absolute path under it in
-  `path` or `file_path`; that call answers from that repository.
-
-## Tests (`crates/code-kb-cli/tests/mcp_test.rs`)
-
-- A roots client moves from the main root to a worktree root; an unscoped `lookup_symbol` for a
-  worktree-only symbol succeeds.
-- A client without roots receives no `roots/list` request.
-- A client that never answers gets a result after the timeout, one notice line, and no second
-  `roots/list`.
-- A request that arrives during the wait is answered in order; a cancelled held call is dropped.
-- `--root` pins the session root against a different client root.
-- A two-root list that contains the current root keeps it.
-- An absolute-path call into repository B does not change the next unscoped call's answer, and
-  its answer names B's root.
-- With `--db`, an absolute path into B leaves the pinned index unchanged.
-- An absolute path at `/` or the home directory builds no index.
-- A roots answer of `[]` keeps the current root.
-- A `.tools/julie-extract` in the current directory or the target repository is never chosen.
-- An index written by a newer extractor is not rebuilt by an older one, and a failed rebuild
-  leaves the old index in place.
+Same setup as the 2.0.2 baseline: `~/source/kb-e2e/flask-base`, fresh sessions in Herdr, same
+prompts, no hint about code-kb. Runs: Claude x2, Codex x1, Grok `-w` x1. Pass: every code-kb
+telemetry row after the worktree step has the worktree as `workspace_root`, and no call fails
+for a missing `project_root` after the first call. Reset the fixture to a clean `main` after
+each run.
 
 ## Out of scope
 
-- Roots through `InputRequiredResult` (protocol `2026-07-28`); add it when a client negotiates
-  that version.
-- Claude Code subagents with `isolation: worktree` share the parent's server (Claude Code docs:
-  subagents inherit the parent's MCP tools). Their roots follow the parent session, so they use
-  absolute paths under their worktree.
-- Two long-lived sessions on different repositories should run separate servers (`--root`).
+- A `manage_workspace` tool (the fallback in design step 4).
+- A watcher per root.
+- Roots through protocol `2026-07-28`; no longer needed.
