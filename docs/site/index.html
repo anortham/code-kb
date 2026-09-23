@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>code-kb — code intelligence for AI coding agents</title>
-  <meta name="description" content="code-kb is an MCP server that answers a coding agent's questions with the smallest slice of code that answers them: skeletons instead of files, one function instead of one module. 80–98% fewer tokens, 0–5 ms queries, about 25 MB of memory.">
+  <meta name="description" content="code-kb helps coding agents find the code they need: file outlines, function bodies, callers, and related tests. It runs as an MCP server or from the command line.">
   <meta name="theme-color" content="#f2f3ee">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%231b2320'/><text x='16' y='21' font-family='monospace' font-size='14' font-weight='bold' fill='%23f4e45a' text-anchor='middle'>kb</text></svg>">
   <meta property="og:title" content="code-kb — code intelligence for AI coding agents">
-  <meta property="og:description" content="code-kb is an MCP server that answers a coding agent's questions with the smallest slice of code that answers them. 80–98% fewer prompt tokens, 0–5 ms queries, about 25 MB of memory.">
+  <meta property="og:description" content="Find a function, see its context, and check what depends on it without reading the whole file.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://anortham.github.io/code-kb/">
   <meta name="twitter:card" content="summary">
@@ -36,9 +36,8 @@
   <header class="hero" id="top">
     <h1>Stop reading<br>whole files.</h1>
     <p class="lede">
-      code-kb is an MCP server that answers a coding agent's questions about a repository with the
-      smallest slice of code that answers them. Skeletons instead of files. One function instead of
-      one module. The callers that matter instead of a grep dump.
+      code-kb helps your coding agent find the part of a repository it needs: a file outline,
+      one function with nearby context, or the code that calls it.
     </p>
     <p class="spec-line">
       <span>80–98% fewer prompt tokens</span>
@@ -116,7 +115,7 @@ crates/code-kb-cli/src/main.rs
   - depth 2  fn main                                  line 278
 
 $ cargo test test_sanitize_fts5_query && cargo test test_fts_search_symbols_and_porter_stemming</pre>
-    <p class="demo-note">Real output from this repository. Token counts are bytes divided by four.</p>
+    <p class="demo-note">Example output from this repository. Token estimates use one token per four bytes.</p>
   </section>
 
   <main>
@@ -124,12 +123,11 @@ $ cargo test test_sanitize_fts5_query && cargo test test_fts_search_symbols_and_
     <section id="why" class="section">
       <p class="margin-label">Why</p>
       <div class="section-body">
-        <h2>Where the tokens go</h2>
+        <h2>Reading a whole file adds up</h2>
         <p>
-          An agent that wants one signature usually reads the whole file to get it. A 2,500-line
-          file costs about 26,000 tokens. Over a ten-turn session that adds up to more than the
-          context window holds, so the harness compacts the conversation and the agent forgets the
-          rules it was given.
+          Reading this 2,473-line file to find one function signature adds about 26,000 tokens
+          to the conversation. That leaves less room for the task and earlier decisions.
+          code-kb can show the signature or the function's context on its own.
         </p>
         <div class="ledger">
           <div class="ledger-col">
@@ -158,39 +156,39 @@ get_symbol_context("search_symbols_scoped")</pre>
     <section id="what" class="section">
       <p class="margin-label">What it does</p>
       <div class="section-body">
-        <h2>Eight capabilities for AI coding agents</h2>
+        <h2>What your agent can find</h2>
         <dl class="features">
           <div>
-            <dt>Skeletons</dt>
-            <dd><code>file_skeleton</code> returns every type, trait, signature, and docstring in a file with the bodies removed. <code>codebase_outline</code> does the same for a directory in about 200 tokens.</dd>
+            <dt>File outlines</dt>
+            <dd><code>file_skeleton</code> lists a file's types and function signatures without the implementation. <code>codebase_outline</code> gives a short directory overview.</dd>
           </div>
           <div>
-            <dt>Context slices</dt>
-            <dd><code>get_symbol_context</code> returns one function's body, the signatures of the functions it calls, its parameter types, and its tests. One call replaces four to six searches.</dd>
+            <dt>Function context</dt>
+            <dd><code>get_symbol_context</code> shows a function's code, the signatures of functions it calls, related types, and test locations.</dd>
           </div>
           <div>
-            <dt>Blast radius</dt>
-            <dd><code>blast_radius</code> walks the callers of a symbol across several hops with a recursive SQLite query and names the tests to run. With no target, it reads the uncommitted git changes.</dd>
+            <dt>Callers and tests</dt>
+            <dd><code>blast_radius</code> follows callers across the repository and suggests tests to run. With no target, it checks your uncommitted changes.</dd>
           </div>
           <div>
-            <dt>Fresh indexes</dt>
-            <dd>Use native filesystem tools to edit. code-kb automatically refreshes indexed files after filesystem changes, and target body and skeleton reads refresh their file before answering.</dd>
+            <dt>Up-to-date results</dt>
+            <dd>Edit files as usual. code-kb picks up changes automatically and refreshes a file before showing its body or outline.</dd>
           </div>
           <div>
-            <dt>Token telemetry</dt>
-            <dd><code>telemetry_summary</code> tracks tokens saved, call counts, and error rates across sessions in a central SQLite database. <code>code-kb stats</code> prints the report from the terminal.</dd>
+            <dt>Usage stats</dt>
+            <dd><code>telemetry_summary</code> tracks estimated tokens saved, tool calls, and errors across sessions. Run <code>code-kb stats</code> to see the report.</dd>
           </div>
           <div>
-            <dt>Windows first</dt>
-            <dd>Every release ships a Windows binary tested on NTFS. Paths use forward slashes, verbatim prefixes are stripped, and file handles close before any rename.</dd>
+            <dt>Windows support</dt>
+            <dd>Every release includes a Windows binary tested on NTFS. Results show paths with forward slashes on every platform.</dd>
           </div>
           <div>
             <dt>Qt and QML</dt>
-            <dd><a href="#qt">QML components index as an object tree</a>, with <code>qmldir</code> modules, <code>.qmltypes</code> type descriptors, and Qt JavaScript files. A Qt C++ header indexes with one row per <code>Q_PROPERTY</code> and its signals as events.</dd>
+            <dd><a href="#qt">Browse the structure of QML components</a>, including nested objects, module files, and Qt JavaScript. Qt C++ headers include properties and signals.</dd>
           </div>
           <div>
-            <dt>Native hooks</dt>
-            <dd><code>code-kb hook SessionStart</code> prints routing instructions for the agent from the binary itself. No Node.js, Python, or shell in the path.</dd>
+            <dt>Agent hooks</dt>
+            <dd><code>code-kb hook SessionStart</code> tells the agent when to use each tool. The hook runs from the binary without a script runtime.</dd>
           </div>
         </dl>
       </div>
@@ -200,15 +198,15 @@ get_symbol_context("search_symbols_scoped")</pre>
       <p class="margin-label">Qt / QML</p>
       <div class="section-body">
         <h2>Qt and QML</h2>
-        <p>Current source builds use julie-extract 3.3.1. QML skeletons keep nested object ownership. Reference lookup respects inline components, shadowed <code>id</code> names, and <code>parent</code> and <code>this</code> receiver scope.</p>
+        <p>Current source builds use julie-extract 3.3.1. QML file outlines show nested objects. Reference lookup handles inline components, reused <code>id</code> names, and <code>parent</code> and <code>this</code> references.</p>
         <dl class="features">
           <div>
             <dt>QML and Qt JavaScript</dt>
-            <dd><code>qmldir</code>, <code>.qmltypes</code>, QML imports, and pragmas are indexed. Qt JavaScript <code>.import</code> symbols preserve exact source spans, so body reads exclude trailing comments. <code>.pragma</code> directives produce structural facts.</dd>
+            <dd>Search <code>qmldir</code>, <code>.qmltypes</code>, QML imports, and pragmas. Qt JavaScript <code>.import</code> results point to the exact code, without trailing comments.</dd>
           </div>
           <div>
             <dt>Qt C++ headers</dt>
-            <dd><code>Q_PROPERTY</code> facts include their type, accessors, and optional <code>DESIGNABLE</code>, <code>SCRIPTABLE</code>, <code>STORED</code>, <code>USER</code>, and <code>REVISION</code> attributes. Signals, slots, invokables, and QML element declarations are indexed too.</dd>
+            <dd><code>Q_PROPERTY</code> results include types, accessors, and optional attributes. You can also find signals, slots, invokables, and QML element declarations.</dd>
           </div>
         </dl>
         <div class="note">
@@ -217,7 +215,7 @@ get_symbol_context("search_symbols_scoped")</pre>
         </div>
         <div class="note">
           <h3>Current limits</h3>
-          <p><code>.ui</code> designer files and CMake files are not indexed. Signal handlers can still be candidates when the receiver is ambiguous. One batch of changed <code>.h</code> files temporarily triggers a content-aware workspace scan that only re-extracts changed files. The <a href="https://github.com/anortham/code-kb#qt-and-qml" target="_blank" rel="noopener">README</a> has the historical code-kb 1.6.0 / Julie 3.3.0 corpus measurements and details.</p>
+          <p><code>.ui</code> designer files and CMake files are not indexed. A signal handler may appear as a possible match when its receiver is unclear. Changing several <code>.h</code> files can trigger a scan of the changed files. See the <a href="https://github.com/anortham/code-kb#qt-and-qml" target="_blank" rel="noopener">README</a> for earlier Qt measurements and details.</p>
         </div>
       </div>
     </section>
@@ -225,66 +223,66 @@ get_symbol_context("search_symbols_scoped")</pre>
     <section id="compared" class="section">
       <p class="margin-label">Compared</p>
       <div class="section-body">
-        <h2>code-kb against a bare agent</h2>
+        <h2>code-kb and manual file search</h2>
         <div class="table-wrapper">
           <table class="compare">
             <thead>
               <tr>
                 <th>Task</th>
                 <th class="kept">With code-kb</th>
-                <th>With grep, cat, and read</th>
+                <th>Reading and searching files</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td>Prompt tokens per lookup</td>
-                <td class="kept">85–98% fewer</td>
+                <td class="kept">85–98% fewer in measured examples</td>
                 <td>5,000–15,000 per file read</td>
               </tr>
               <tr>
                 <td>Find a signature</td>
                 <td class="kept"><code>file_skeleton</code>, bodies removed</td>
-                <td>Whole file in the prompt</td>
+                <td>Find and copy the relevant lines</td>
               </tr>
               <tr>
                 <td>Search by concept</td>
-                <td class="kept">BM25 full-text search in under 3 ms</td>
-                <td>Text grep that also matches comments, strings, and logs</td>
+                <td class="kept">Search indexed names and signatures</td>
+                <td>Search file text, including comments and logs</td>
               </tr>
               <tr>
                 <td>Prepare an edit</td>
                 <td class="kept"><code>get_symbol_context</code>, one call</td>
-                <td>Four to six searches across turns</td>
+                <td>Find the function and related code separately</td>
               </tr>
               <tr>
-                <td>Callee noise</td>
-                <td class="kept">Standard library calls filtered in 40+ languages</td>
-                <td>Every runtime call listed</td>
+                <td>Calls outside the project</td>
+                <td class="kept">Common runtime calls filtered in 40+ languages</td>
+                <td>Filter matches yourself</td>
               </tr>
               <tr>
                 <td>Predict which tests to run</td>
-                <td class="kept"><code>blast_radius</code>, recursive SQL</td>
-                <td>Guess, or run the whole suite</td>
+                <td class="kept"><code>blast_radius</code> suggests related tests</td>
+                <td>Find relevant tests yourself</td>
               </tr>
               <tr>
                 <td>Select an overloaded symbol</td>
-                <td class="kept">Use its current-index <code>symbol_id</code> for body, context, references, and impact</td>
-                <td>Guess from the name and file path</td>
+                <td class="kept">Choose the exact result by its <code>symbol_id</code></td>
+                <td>Narrow it down by name and file path</td>
               </tr>
               <tr>
                 <td>Query time</td>
                 <td class="kept">0–5 ms median</td>
-                <td>10–50 ms of disk reads, then the model reads it all</td>
+                <td>Depends on the file and search command</td>
               </tr>
               <tr>
                 <td>Memory held by the server</td>
                 <td class="kept">About 25 MB</td>
-                <td>None, paid for in prompt size instead</td>
+                <td>No server process</td>
               </tr>
               <tr>
                 <td>Context left for the task</td>
-                <td class="kept">Instructions survive the session</td>
-                <td>Compaction, forgotten constraints</td>
+                <td class="kept">Less file text added to the conversation</td>
+                <td>Full file reads use more of the conversation</td>
               </tr>
             </tbody>
           </table>
@@ -292,10 +290,9 @@ get_symbol_context("search_symbols_scoped")</pre>
         <aside class="note">
           <h3>About latency</h3>
           <p>
-            <code>code-kb stats</code> shows database queries take 0 to 5 milliseconds. A full agent turn takes
-            seconds, and almost all of that is the model thinking and the network. code-kb adds nothing
-            you can measure to a turn and removes most of the tokens from it. The engine comparison with
-            earlier designs is in the
+            <code>code-kb stats</code> reports query times. In our measurements, most queries took
+            0 to 5 milliseconds. Agent response times also depend on the model and network.
+            See the comparison with earlier designs in the
             <a href="https://github.com/anortham/code-kb/blob/main/docs/plans/011-miller-julie-comparative-analysis-and-lessons.md" target="_blank" rel="noopener">architecture notes</a>.
           </p>
         </aside>
@@ -305,8 +302,8 @@ get_symbol_context("search_symbols_scoped")</pre>
     <section id="steps" class="section">
       <p class="margin-label">Steps</p>
       <div class="section-body">
-        <h2>From a cold start to a verified change</h2>
-        <p>The order an agent follows on a repository it has never seen. Each step costs less than the file read it replaces.</p>
+        <h2>From first look to tested change</h2>
+        <p>Here's one way to use code-kb when you start work in an unfamiliar repository.</p>
         <ol class="steps">
           <li>
             <div><h3>Orient</h3><p>Directory tree and the main exports, about 200 tokens.</p></div>
@@ -326,10 +323,10 @@ search_symbols("auth token validation")</pre>
             <pre>blast_radius(symbol="compute_hash")</pre>
           </li>
           <li>
-            <div><h3>Edit</h3><p>Use the agent's native filesystem tools after reading the necessary context. code-kb automatically refreshes indexed files after filesystem changes.</p></div>
+            <div><h3>Edit</h3><p>Edit with your usual tools. code-kb picks up file changes automatically.</p></div>
           </li>
           <li>
-            <div><h3>Verify</h3><p>Run the predicted tests, then read the tool telemetry.</p></div>
+            <div><h3>Verify</h3><p>Run the suggested tests. Check usage with <code>code-kb stats</code>.</p></div>
             <pre>cargo test compute_hash
 code-kb stats</pre>
           </li>
@@ -373,7 +370,8 @@ code-kb stats</pre>
       <p class="margin-label">Install</p>
       <div class="section-body">
         <h2>Connect it to your agent</h2>
-        <p>Install the plugin for your agent. It needs Node.js 18 or newer; on first run it downloads the release archive for your platform, which holds <code>code-kb</code> and the matching <code>julie-extract</code> side by side. Or download the <a href="https://github.com/anortham/code-kb/releases/latest" target="_blank" rel="noopener">archive</a> yourself, put both binaries on <code>PATH</code>, and register the server by hand. GUI apps such as Cursor start the server from their own install directory, so their config passes <code>--root</code> with the project path; terminal agents need no flag. The <a href="https://github.com/anortham/code-kb#install" target="_blank" rel="noopener">README</a> has every harness.</p>
+        <p>Choose your agent below for setup steps. The plugin needs Node.js 18 or newer. On first use, it downloads <code>code-kb</code> and the matching <code>julie-extract</code> for your platform.</p>
+        <p>You can also download the <a href="https://github.com/anortham/code-kb/releases/latest" target="_blank" rel="noopener">release archive</a>, put both binaries on <code>PATH</code>, and register the server yourself. GUI apps such as Cursor need <code>--root</code> set to the project path; terminal agents usually start in the project directory. See the <a href="https://github.com/anortham/code-kb#install" target="_blank" rel="noopener">README</a> for more setup options.</p>
 
         <div class="tabs" role="tablist" aria-label="Agent">
           <button role="tab" aria-selected="true" data-tab="claude">Claude Code</button>
@@ -385,13 +383,13 @@ code-kb stats</pre>
         </div>
 
         <div class="tab-panel" id="tab-claude">
-          <p class="panel-sub">As a plugin, which also installs the skill and hooks (two separate prompts):</p>
+          <p class="panel-sub">Install the plugin, skill, and hooks with these two commands:</p>
           <div class="code-wrapper">
             <pre><code>/plugin marketplace add anortham/code-kb
 /plugin install code-kb@code-kb</code></pre>
             <button class="copy-btn" type="button">Copy</button>
           </div>
-          <p class="panel-sub">Or by hand, for every project on this machine:</p>
+          <p class="panel-sub">For manual setup across projects on this machine:</p>
           <div class="code-wrapper">
             <pre><code>claude mcp add --scope user code-kb -- code-kb serve</code></pre>
             <button class="copy-btn" type="button">Copy</button>
@@ -411,7 +409,7 @@ code-kb stats</pre>
         </div>
 
         <div class="tab-panel" id="tab-grok" hidden>
-          <p class="panel-sub">As a plugin, which also installs the skill and hooks:</p>
+          <p class="panel-sub">Install the plugin, skill, and hooks:</p>
           <div class="code-wrapper">
             <pre><code>grok plugin install anortham/code-kb --trust
 # or from a local checkout:
@@ -433,7 +431,7 @@ grok plugin install /path/to/code-kb --trust</code></pre>
         </div>
 
         <div class="tab-panel" id="tab-agy" hidden>
-          <p class="panel-sub">As a plugin, which also installs the skill and hook:</p>
+          <p class="panel-sub">Install the plugin, skill, and hook:</p>
           <div class="code-wrapper">
             <pre><code>agy plugin install https://github.com/anortham/code-kb</code></pre>
             <button class="copy-btn" type="button">Copy</button>
@@ -481,7 +479,7 @@ grok plugin install /path/to/code-kb --trust</code></pre>
         </div>
 
         <div class="tab-panel" id="tab-codex" hidden>
-          <p class="panel-sub">As a plugin, which also installs the skill and hooks:</p>
+          <p class="panel-sub">Install the plugin, skill, and hooks:</p>
           <div class="code-wrapper">
             <pre><code>codex plugin marketplace add anortham/code-kb
 codex plugin add code-kb@code-kb</code></pre>
@@ -497,7 +495,7 @@ args = ["serve"]</code></pre>
         </div>
 
         <div class="tab-panel" id="tab-cursor" hidden>
-          <p class="panel-sub">In <code>.cursor/mcp.json</code> at the repository root. Cursor and other GUI apps start the server from their install directory, so <code>--root</code> names the project:</p>
+          <p class="panel-sub">Add this to <code>.cursor/mcp.json</code> in your repository. Set <code>--root</code> to the project's absolute path:</p>
           <div class="code-wrapper">
             <pre><code>{
   "mcpServers": {
