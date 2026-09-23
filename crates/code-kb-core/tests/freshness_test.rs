@@ -947,6 +947,104 @@ fn test_index_written_by_the_installed_extractor_is_kept_even_when_it_is_not_the
     assert_eq!(version, "0.0.1");
 }
 
+fn scanned_calc_index(root: &std::path::Path, db_path: &std::path::Path) -> Workspace {
+    find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(
+        root.join("src").join("calc.rs"),
+        "pub fn foo_fn() -> i32 {\n    100\n}\n",
+    )
+    .unwrap();
+    let ws = Workspace::new(root.to_path_buf());
+    scan_workspace(&ws, db_path, true).expect("Scan failed");
+    ws
+}
+
+fn recorded_binary_version(db_path: &std::path::Path) -> String {
+    open_read_only(db_path)
+        .unwrap()
+        .query_row(
+            "SELECT value FROM artifact_metadata WHERE key = 'binary_version'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap()
+}
+
+#[test]
+fn test_index_written_by_a_newer_extractor_is_not_rebuilt_by_an_older_one() {
+    let temp_dir = safe_tempdir();
+    let root = temp_dir.path().to_path_buf();
+    let db_path = root.join(".code-kb").join("artifact.db");
+    let ws = scanned_calc_index(&root, &db_path);
+    {
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        conn.execute(
+            "UPDATE artifact_metadata SET value = '99.0.0' WHERE key = 'binary_version'",
+            [],
+        )
+        .unwrap();
+    }
+
+    assert!(
+        !ensure_index_matches_extractor(&ws, &db_path, &installed_extractor_version()).unwrap()
+    );
+
+    assert_eq!(recorded_binary_version(&db_path), "99.0.0");
+}
+
+#[test]
+fn test_file_rows_from_a_newer_extractor_block_a_rebuild_by_an_older_one() {
+    let temp_dir = safe_tempdir();
+    let root = temp_dir.path().to_path_buf();
+    let db_path = root.join(".code-kb").join("artifact.db");
+    let ws = scanned_calc_index(&root, &db_path);
+    let installed = installed_extractor_version();
+    {
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        conn.execute(
+            "UPDATE extraction_revisions SET binary_version = '99.0.0'",
+            [],
+        )
+        .unwrap();
+    }
+
+    assert!(!ensure_index_matches_extractor(&ws, &db_path, &installed).unwrap());
+
+    let newer_rows: i64 = open_read_only(&db_path)
+        .unwrap()
+        .query_row(
+            "SELECT COUNT(*) FROM extraction_revisions WHERE binary_version = '99.0.0'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert!(newer_rows > 0);
+}
+
+#[test]
+fn test_failed_rebuild_keeps_the_previous_index() {
+    let temp_dir = safe_tempdir();
+    let root = temp_dir.path().join("repo");
+    let db_path = temp_dir.path().join("index").join("artifact.db");
+    let ws = scanned_calc_index(&root, &db_path);
+    {
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        conn.execute(
+            "UPDATE artifact_metadata SET value = '0.0.1' WHERE key = 'binary_version'",
+            [],
+        )
+        .unwrap();
+    }
+    fs::remove_dir_all(&root).unwrap();
+
+    assert!(ensure_index_matches_extractor(&ws, &db_path, &installed_extractor_version()).is_err());
+
+    assert_eq!(recorded_binary_version(&db_path), "0.0.1");
+    let conn = open_read_only(&db_path).unwrap();
+    assert!(get_symbol_by_name(&conn, "foo_fn", None).unwrap().is_some());
+}
+
 #[test]
 fn test_scan_replaces_an_empty_artifact_file() {
     find_julie_extract_binary().expect("julie-extract binary must be present for tests");

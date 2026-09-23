@@ -97,23 +97,18 @@ fn julie_extract_candidates() -> Vec<PathBuf> {
         candidates.push(PathBuf::from(path_str));
     }
 
-    if let Some(parent) = std::env::current_exe()
+    // The current directory is never searched: it may be another repository with its own
+    // older `.tools/julie-extract`. A source build finds the checkout's `.tools` above `target/`.
+    if let Some(exe_dir) = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|d| d.to_path_buf()))
     {
-        candidates.push(parent.join(exe_name));
-        candidates.push(parent.join(".tools").join(exe_name));
-    }
-
-    if let Ok(cwd) = std::env::current_dir() {
-        let mut probe = cwd;
-        loop {
-            candidates.push(probe.join(".tools").join(exe_name));
-            match probe.parent() {
-                Some(parent) if parent != probe => probe = parent.to_path_buf(),
-                _ => break,
-            }
-        }
+        candidates.push(exe_dir.join(exe_name));
+        candidates.extend(
+            exe_dir
+                .ancestors()
+                .map(|dir| dir.join(".tools").join(exe_name)),
+        );
     }
 
     if let Ok(p) = which::which("julie-extract") {
@@ -294,8 +289,9 @@ pub fn scan_workspace(workspace: &Workspace, db_path: &Path, force: bool) -> Res
 }
 
 /// Rebuilds the index when it was written by a `julie-extract` other than the one in use or
-/// at another extraction level. Returns `true` when a rebuild ran. The old artifact is removed first because the
-/// extractor refuses to write into an artifact with an older schema.
+/// at another extraction level. Returns `true` when a rebuild ran. An index that a newer
+/// `julie-extract` wrote is kept, so an older binary never replaces it. The rebuild scans a
+/// fresh artifact because the extractor refuses to write into one with an older schema.
 pub fn ensure_index_matches_extractor(
     workspace: &Workspace,
     db_path: &Path,
@@ -323,6 +319,16 @@ pub fn ensure_index_matches_extractor(
     {
         return Ok(false);
     }
+    if let Some(newer) = newest_writer_version(db_path, &recorded)
+        .filter(|newest| version_is_older(extractor_version, newest))
+    {
+        warn!(
+            written_by = %newer,
+            installed = %extractor_version,
+            "Index was written by a newer julie-extract than the one in use; keeping it"
+        );
+        return Ok(false);
+    }
     info!(
         recorded = %recorded,
         installed = %extractor_version,
@@ -330,9 +336,61 @@ pub fn ensure_index_matches_extractor(
         wanted_level = %EXTRACTION_LEVEL,
         "Index holds rows from a different julie-extract version or level; rebuilding"
     );
-    remove_artifact_files(db_path)?;
-    scan_workspace(workspace, db_path, true)?;
+    rebuild_index(workspace, db_path)?;
     Ok(true)
+}
+
+/// Scans into a side file and swaps it in only after the scan succeeds, so a failed rebuild
+/// leaves the previous index in place.
+fn rebuild_index(workspace: &Workspace, db_path: &Path) -> Result<(), SyncError> {
+    let rebuilt = PathBuf::from(format!("{}.rebuild", db_path.display()));
+    remove_artifact_files(&rebuilt)?;
+    let scanned = scan_workspace(workspace, &rebuilt, true).and_then(|()| {
+        let conn = crate::db::open_read_write(&rebuilt)?;
+        crate::db::checkpoint_truncate(&conn)?;
+        Ok(())
+    });
+    if let Err(e) = scanned {
+        let _ = remove_artifact_files(&rebuilt);
+        return Err(e);
+    }
+    remove_artifact_files(db_path)?;
+    for suffix in ["-wal", "-shm"] {
+        let _ = std::fs::remove_file(format!("{}{suffix}", rebuilt.display()));
+    }
+    std::fs::rename(&rebuilt, db_path)?;
+    Ok(())
+}
+
+/// The newest `julie-extract` version recorded for the artifact or any of its file rows.
+fn newest_writer_version(db_path: &Path, recorded: &str) -> Option<String> {
+    let revisions: Vec<String> = crate::db::open_read_only(db_path)
+        .ok()
+        .and_then(|conn| {
+            let mut stmt = conn
+                .prepare("SELECT DISTINCT binary_version FROM extraction_revisions")
+                .ok()?;
+            let versions = stmt
+                .query_map([], |r| r.get(0))
+                .ok()?
+                .filter_map(Result::ok)
+                .collect();
+            Some(versions)
+        })
+        .unwrap_or_default();
+    std::iter::once(recorded.to_string())
+        .chain(revisions)
+        .filter(|version| parse_version(version).is_some())
+        .max_by_key(|version| parse_version(version))
+}
+
+fn parse_version(version: &str) -> Option<Vec<u64>> {
+    version.split('.').map(|part| part.parse().ok()).collect()
+}
+
+/// False when either version is not dotted numbers, so an unreadable version never blocks a rebuild.
+fn version_is_older(candidate: &str, than: &str) -> bool {
+    matches!((parse_version(candidate), parse_version(than)), (Some(a), Some(b)) if a < b)
 }
 
 /// A `julie-extract update` run by a newer binary stamps its version into `artifact_metadata`

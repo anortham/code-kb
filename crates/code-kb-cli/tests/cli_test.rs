@@ -1020,6 +1020,52 @@ fn test_cli_bug_report_ignores_unindexed_repo_and_preserves_existing_ignore() {
     assert!(!root.join(".code-kb").join("artifact.db").exists());
 }
 
+#[cfg(unix)]
+#[test]
+fn test_cli_never_runs_the_julie_extract_of_the_directory_it_starts_in() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let repo = tempfile::TempDir::new_in(std::env::temp_dir()).unwrap();
+    let root = repo.path();
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("src/lib.rs"), "pub fn own_fn() {}\n").unwrap();
+    let foreign_tools = root.join(".tools");
+    std::fs::create_dir_all(&foreign_tools).unwrap();
+    let marker = foreign_tools.join("ran");
+    let foreign_extractor = foreign_tools.join("julie-extract");
+    std::fs::write(
+        &foreign_extractor,
+        format!(
+            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'julie-extract 0.0.1'; exit 0; fi\ntouch '{}'\nexit 1\n",
+            marker.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&foreign_extractor, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .current_dir(root)
+        .env_remove("JULIE_EXTRACT_BIN")
+        .env("PATH", "/usr/bin:/bin")
+        .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+        .arg("--root")
+        .arg(root)
+        .arg("scan")
+        .output()
+        .unwrap();
+
+    assert!(
+        !marker.exists(),
+        "code-kb ran the extractor found in its working directory"
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(root.join(".code-kb/artifact.db").is_file());
+}
+
 #[test]
 fn test_cli_bug_report_json() {
     let repo = setup_test_repo();
