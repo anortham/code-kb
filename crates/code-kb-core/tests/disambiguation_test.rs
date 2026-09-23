@@ -226,7 +226,7 @@ fn file_scoped_csharp_namespace_keeps_its_class_and_members() {
     let path = dir.path().join("Worker.cs");
     fs::write(
         &path,
-        "namespace Example.Services;\n\npublic sealed class Worker\n{\n    public Worker() {}\n    public int Run(int value) { return value; }\n}\n",
+        "namespace Example.Services;\n\npublic sealed class Worker\n{\n    public Worker() {}\n    public int Run(int value) { return value; }\n    public string Format(int value) =>\n        $\"item/{value}\";\n    public string Label(string marker = \"a=>b\") => marker;\n}\n",
     )
     .unwrap();
     let workspace = Workspace::new(dir.path().to_path_buf());
@@ -244,6 +244,13 @@ fn file_scoped_csharp_namespace_keeps_its_class_and_members() {
     assert!(skeleton.contains("class Worker"), "{skeleton}");
     assert!(skeleton.contains("public Worker()"), "{skeleton}");
     assert!(skeleton.contains("Run(int value)"), "{skeleton}");
+    assert!(skeleton.contains("Format(int value)"), "{skeleton}");
+    assert!(
+        skeleton.contains("Label(string marker = \"a=>b\")"),
+        "{skeleton}"
+    );
+    assert!(!skeleton.contains("item/"), "{skeleton}");
+    assert!(!skeleton.contains(") =>"), "{skeleton}");
 }
 
 #[test]
