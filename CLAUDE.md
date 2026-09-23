@@ -58,8 +58,8 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   - The server never takes the root from the MCP `initialize` request.
 - **Path arguments:** `path` and `file_path` are relative to `project_root`, or absolute
   inside it. An absolute `path` or `file_path` outside `project_root` is an error that
-  names both paths. An absolute path inside a nested git worktree or submodule counts as
-  outside `project_root`. The error names that nested root. Path arguments never switch
+  names both paths. A relative or absolute path inside a nested git worktree or submodule
+  counts as outside `project_root`. The error names that nested root. Path arguments never switch
   the project.
 - **Active index:** The server keeps one active index. A call for another root switches
   to that root's `<root>/.code-kb/artifact.db`. Each call names its own root, so a switch
@@ -160,7 +160,8 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
 ### 6. Index Freshness
 - A debounced watcher refreshes filesystem changes, startup reconciles changes made while no server ran,
   and body and skeleton reads refresh their target file before answering.
-- The server runs one watcher at a time. When a call switches roots, the watcher and the offline
+- Only the active root keeps a watcher; a root the server switched away from loses its watcher by
+  the next call. When a call switches roots, the watcher and the offline
   reconcile restart for the new root.
 - A call waits up to 5 s for its root's index. If the index is not ready, the answer is
   `Indexing <root> started; call again in a few seconds.` The next call for that root checks again.

@@ -632,7 +632,7 @@ impl Workspace {
             PathBuf::from(input)
         };
         let parsed = normalize_path(&parsed);
-        if !is_absolute_path(&parsed) {
+        if !parsed.is_absolute() {
             return Err(WorkspaceError::RelativeProjectRoot(parsed));
         }
         let canonical = match dunce::canonicalize(&parsed) {
@@ -1216,6 +1216,18 @@ mod tests {
         Workspace::from_project_root_with_homes(&input.to_string_lossy(), &[])
             .unwrap()
             .canonical_root
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn project_root_drive_relative_path_is_refused() {
+        for input in ["C:src", "C:"] {
+            let result = Workspace::from_project_root(input);
+            assert!(
+                matches!(result, Err(WorkspaceError::RelativeProjectRoot(_))),
+                "{input:?}: {result:?}"
+            );
+        }
     }
 
     #[test]

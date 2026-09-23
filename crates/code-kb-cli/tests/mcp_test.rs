@@ -3368,7 +3368,7 @@ fn test_mcp_launch_root_indexed_during_the_session_is_reconciled_on_first_use() 
 }
 
 #[test]
-fn test_mcp_absolute_path_in_a_nested_worktree_is_refused_without_indexing_it() {
+fn test_mcp_path_in_a_nested_worktree_is_refused_without_indexing_it() {
     let main = fixture_repo("Alpha");
     let worktree = main.path().join(".claude").join("worktrees").join("x");
     std::fs::create_dir_all(worktree.join("src")).unwrap();
@@ -3391,12 +3391,18 @@ fn test_mcp_absolute_path_in_a_nested_worktree_is_refused_without_indexing_it() 
         .to_string_lossy()
         .to_string();
     let worktree_src = worktree.join("src").to_string_lossy().to_string();
+    let relative_file = ".claude/worktrees/x/src/a.rs".to_string();
 
     for (tool, path, arguments) in [
         (
             "file_skeleton",
             &worktree_file,
             json!({"project_root": main.path(), "file_path": worktree_file}),
+        ),
+        (
+            "file_skeleton",
+            &relative_file,
+            json!({"project_root": main.path(), "file_path": relative_file}),
         ),
         (
             "lookup_symbol",
@@ -3669,4 +3675,72 @@ fn test_mcp_failed_scan_of_a_markerless_root_does_not_promise_a_retry() {
     assert!(text.contains("failed"), "{text}");
     assert!(!text.contains("retried on the next tool call"), "{text}");
     assert!(text.contains("will not be retried"), "{text}");
+}
+
+#[cfg(unix)]
+#[test]
+fn test_mcp_parked_root_loses_its_watcher_at_the_next_call() {
+    let launch = setup_test_repo();
+    let target = cargo_project("pub fn slow_scan() {}\n");
+    let tools = tempfile::tempdir().unwrap();
+    let wrapper = extractor_wrapper(tools.path(), "sleep 1");
+    let mut command = serve_command(launch.path());
+    command
+        .env("JULIE_EXTRACT_BIN", &wrapper)
+        .env("CODE_KB_INDEX_WAIT_MS", "0")
+        .env_remove("RUST_LOG");
+    let mut session = McpSession::start(command);
+    let target_root = canonical_root(target.path()).display().to_string();
+    let launch_lookup = json!({"query": "Workspace", "project_root": launch.path()});
+
+    let first = session.call(
+        "lookup_symbol",
+        json!({"query": "slow_scan", "project_root": target.path()}),
+    );
+    assert!(result_text(&first).starts_with("Indexing "), "{first}");
+    session.call("lookup_symbol", launch_lookup.clone());
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while !launch_log(launch.path())
+        .lines()
+        .any(|line| line.contains("file watcher active") && line.contains(&target_root))
+    {
+        assert!(
+            Instant::now() < deadline,
+            "the parked prepare never started its watcher"
+        );
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    std::thread::sleep(Duration::from_millis(500));
+    session.call("lookup_symbol", launch_lookup);
+
+    std::fs::write(
+        target.path().join("src").join("lib.rs"),
+        "pub fn slow_scan() {}\npub fn added_while_parked() {}\n",
+    )
+    .unwrap();
+    std::thread::sleep(Duration::from_secs(4));
+    let conn =
+        code_kb_core::open_read_only(&target.path().join(".code-kb").join("artifact.db")).unwrap();
+    let indexed: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM symbols WHERE name = 'added_while_parked'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(indexed, 0);
+    drop(conn);
+
+    let deadline = Instant::now() + Duration::from_secs(60);
+    loop {
+        let later = session.call(
+            "lookup_symbol",
+            json!({"query": "added_while_parked", "project_root": target.path()}),
+        );
+        if result_text(&later).contains("function `added_while_parked` [") {
+            break;
+        }
+        assert!(Instant::now() < deadline, "{later}");
+        std::thread::sleep(Duration::from_millis(100));
+    }
 }

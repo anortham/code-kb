@@ -119,8 +119,15 @@ fn spawn_index_prepare(workspace: &Workspace, db_path: &Path) -> Option<IndexPre
         }
         ensure_fts_index_path(&db).map_err(|e| e.to_string())?;
         let watcher = start_watcher(ws.clone(), db.clone()).ok();
-        if let Ok(conn) = open_read_only(&db) {
-            let _ = reconcile_offline_edits(&ws, &db, &conn);
+        match open_read_only(&db) {
+            Ok(conn) => {
+                if let Err(e) = reconcile_offline_edits(&ws, &db, &conn) {
+                    tracing::warn!(ws = %ws.canonical_root.display(), "Offline reconcile failed: {e}");
+                }
+            }
+            Err(e) => {
+                tracing::warn!(ws = %ws.canonical_root.display(), "Offline reconcile skipped: {e}")
+            }
         }
         Ok(watcher)
     }))
@@ -193,9 +200,8 @@ impl McpServer {
             return;
         }
         // ponytail: one watcher; alternating roots restart the watcher and the offline
-        // reconcile on each switch, and a parked prepare that finishes while its root is
-        // inactive holds that root's watcher until it is pruned or dropped. Keep a small
-        // per-root cache only if telemetry shows agents alternate often.
+        // reconcile on each switch. Keep a small per-root cache only if telemetry shows
+        // agents alternate often.
         let explicit_db = if paths_equal(&workspace.canonical_root, &self.launch_root) {
             self.explicit_db.as_deref()
         } else {
@@ -214,7 +220,7 @@ impl McpServer {
         );
 
         self._watcher = None;
-        self.parked.retain(|(_, prepare)| !prepare.is_finished());
+        self.drop_finished_parked_prepares();
         if let Some(prepare) = self.reconcile.take()
             && !prepare.is_finished()
         {
@@ -232,9 +238,16 @@ impl McpServer {
         self.db_path = db_path;
     }
 
+    /// Drops each parked prepare that has finished, and with it the watcher it started for a
+    /// root that is no longer active. Switching back to that root runs a new prepare, whose
+    /// offline reconcile picks up edits made in between.
+    fn drop_finished_parked_prepares(&mut self) {
+        self.parked.retain(|(_, prepare)| !prepare.is_finished());
+    }
+
     /// Resolves a call's `project_root` (or its silent aliases `workspace` and `root`) and
-    /// checks that every absolute path argument lies inside it and outside any nested git
-    /// worktree or submodule.
+    /// checks that every path argument, relative or absolute, lies inside it and outside any
+    /// nested git worktree or submodule.
     fn resolve_project_root(&self, arguments: &Value) -> Result<Workspace, String> {
         let input = ["project_root", "workspace", "root"]
             .into_iter()
@@ -252,9 +265,6 @@ impl McpServer {
             let Some(path) = arguments.get(key).and_then(Value::as_str) else {
                 continue;
             };
-            if !path.starts_with("file://") && !Path::new(path).is_absolute() {
-                continue;
-            }
             if let Err(WorkspaceError::PathOutsideWorkspace(..)) =
                 workspace.resolve_path(Path::new(path))
             {
@@ -536,6 +546,7 @@ impl McpServer {
 
     pub fn handle_call_tool(&mut self, name: &str, arguments: &Value) -> CallToolResult {
         let start = std::time::Instant::now();
+        self.drop_finished_parked_prepares();
         let resolved = requires_project_root(name).then(|| self.resolve_project_root(arguments));
         let (res, telemetry_root) = match resolved {
             Some(Err(message)) => {

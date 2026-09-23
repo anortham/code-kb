@@ -176,8 +176,8 @@ tell the agent to do this.
   project marker (`.git`, `Cargo.toml`, `package.json`, `go.mod`, `pyproject.toml`) and no
   code-kb index. The error names the path and the reason, and `code-kb` creates nothing.
 - `path` and `file_path` are relative to `project_root`, or absolute inside it. An absolute path
-  outside `project_root` is an error. An absolute path inside a nested git worktree or submodule
-  counts as outside `project_root`. The error names that nested root. A path never switches the
+  outside `project_root` is an error. A relative or absolute path inside a nested git worktree or
+  submodule counts as outside `project_root`. The error names that nested root. A path never switches the
   project.
 - A project with no index gets one on the first call. A git worktree copies its parent
   repository's index; any other project runs a full scan. If the index is not ready in 5 s, the
