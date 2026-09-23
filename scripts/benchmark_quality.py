@@ -296,11 +296,12 @@ def measure_persistent_mcp(binary: str, cwd: str, iterations: int = 5) -> dict[s
             ("codebase_outline", {"depth": 2}),
             ("file_skeleton", {"file_path": "crates/code-kb-core/src/queries.rs"}),
             ("lookup_symbol", {"query": "search_symbols_scoped"}),
-            ("search_symbols", {"query": "syntax validation"}),
-            ("get_symbol_body", {"symbol_name": "validate_syntax"}),
+            ("search_symbols", {"query": "sanitize FTS5 query"}),
+            ("get_symbol_body", {"symbol_name": "sanitize_fts5_query"}),
             ("get_symbol_context", {"symbol_name": "search_symbols_scoped"}),
             ("find_references", {"symbol_name": "search_symbols_scoped"}),
             ("blast_radius", {"symbol": "find_callee_signatures"}),
+            ("find_structural_facts", {"category": "config", "limit": 10}),
             ("telemetry_summary", {}),
         ]
 
@@ -592,8 +593,8 @@ def main():
                 },
                 {
                     "name": "Conceptual FTS5 Search",
-                    "args": ["--json", "search", "syntax validation"],
-                    "target": "validate_syntax",
+                    "args": ["--json", "search", "sanitize FTS5 query"],
+                    "target": "sanitize_fts5_query",
                     "eval_fn": lambda items, tgt: next((idx + 1 for idx, it in enumerate(items) if it.get("symbol", {}).get("name") == tgt), None),
                 },
                 {

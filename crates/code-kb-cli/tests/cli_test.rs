@@ -750,6 +750,30 @@ fn test_cli_refs() {
 }
 
 #[test]
+fn test_cli_zero_limit_does_not_claim_no_matches() {
+    let repo = setup_test_repo();
+    let root = repo.path();
+
+    for args in [
+        ["lookup", "Workspace", "--limit", "0"],
+        ["search", "discovery", "--limit", "0"],
+        ["refs", "helper", "--limit", "0"],
+    ] {
+        let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .arg("--root")
+            .arg(root)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{args:?}");
+        let text = String::from_utf8_lossy(&output.stdout);
+        assert!(text.contains("limit is 0"), "{args:?}: {text}");
+        assert!(!text.contains("No symbols found"), "{args:?}: {text}");
+        assert!(!text.contains("(none)"), "{args:?}: {text}");
+    }
+}
+
+#[test]
 fn test_cli_refs_with_file_filter() {
     let repo = setup_test_repo();
     let root = repo.path();
@@ -1168,6 +1192,10 @@ fn test_cli_facts_alias_limits_and_listing() {
     let capped = run(&["facts", "sql", "--limit", "1"]);
     assert!(capped.contains("Matching literals"), "{capped}");
     assert_eq!(capped.matches("limit reached").count(), 2, "{capped}");
+
+    let zero = run(&["facts", "sql", "--limit", "0"]);
+    assert!(zero.contains("limit is 0"), "{zero}");
+    assert!(!zero.contains("No facts match"), "{zero}");
 
     let listing = run(&["facts"]);
     assert!(listing.starts_with("Aliases:"), "{listing}");

@@ -18,6 +18,8 @@ use code_kb_core::{
 
 use super::protocol::{CallToolResult, JsonRpcRequest, JsonRpcResponse, Tool};
 
+const ZERO_LIMIT_NOTICE: &str = "Result limit is 0; increase it to check for matches.";
+
 /// Counts the tree lines a `codebase_outline` answer renders, ignoring the root header
 /// and the bracketed notices that follow the tree.
 fn rendered_outline_entries(outline: &str) -> usize {
@@ -349,7 +351,7 @@ impl McpServer {
                             "type": "integer",
                             "minimum": 0,
                             "maximum": code_kb_core::queries::MAX_RESULT_LIMIT,
-                            "description": "Maximum combined facts and literals to return, 0-200 (default: 30)."
+                            "description": "Maximum facts and literals to return per section, 0-200 each (default: 30)."
                         }
                     }
                 }),
@@ -377,7 +379,7 @@ impl McpServer {
                             "type": "integer",
                             "minimum": 0,
                             "maximum": code_kb_core::queries::MAX_RESULT_LIMIT,
-                            "description": "Maximum visible test and impact rows, 0-200 (default: 20)."
+                            "description": "Maximum visible tests and impacted symbols per section, 0-200 each (default: 20)."
                         }
                     }
                 }),
@@ -903,14 +905,14 @@ impl McpServer {
                     .chain(fts_matches.iter().map(|hit| hit.symbol.path.clone()))
                     .collect();
 
-                CallToolResult::text(format_find_symbol_results(
-                    query,
-                    &exact_matches,
-                    &fts_matches,
-                    limit,
-                ))
-                .with_logical_result_count(exact_matches.len() + fts_matches.len())
-                .with_baseline_paths(baseline_paths)
+                let output = if limit == 0 {
+                    ZERO_LIMIT_NOTICE.to_string()
+                } else {
+                    format_find_symbol_results(query, &exact_matches, &fts_matches, limit)
+                };
+                CallToolResult::text(output)
+                    .with_logical_result_count(exact_matches.len() + fts_matches.len())
+                    .with_baseline_paths(baseline_paths)
             }
             "search_symbols" => {
                 let query = match arguments
@@ -961,7 +963,12 @@ impl McpServer {
 
                 let baseline_paths = matches.iter().map(|hit| hit.symbol.path.clone()).collect();
 
-                CallToolResult::text(format_search_results(query, &matches, limit))
+                let output = if limit == 0 {
+                    ZERO_LIMIT_NOTICE.to_string()
+                } else {
+                    format_search_results(query, &matches, limit)
+                };
+                CallToolResult::text(output)
                     .with_logical_result_count(matches.len())
                     .with_baseline_paths(baseline_paths)
             }
@@ -1086,7 +1093,12 @@ impl McpServer {
 
                 let baseline_paths = refs.iter().map(|site| site.path.clone()).collect();
 
-                CallToolResult::text(format_references(&target, &refs, direction, limit))
+                let output = if limit == 0 {
+                    ZERO_LIMIT_NOTICE.to_string()
+                } else {
+                    format_references(&target, &refs, direction, limit)
+                };
+                CallToolResult::text(output)
                     .with_logical_result_count(refs.len())
                     .with_baseline_paths(baseline_paths)
             }
@@ -1128,6 +1140,8 @@ impl McpServer {
                         );
                     }
                     CallToolResult::text(out).with_logical_result_count(categories.len())
+                } else if limit == 0 {
+                    CallToolResult::text(ZERO_LIMIT_NOTICE.to_string())
                 } else {
                     let facts = match code_kb_core::find_structural_facts_scoped(
                         &conn,

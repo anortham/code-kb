@@ -15,6 +15,7 @@ mod logging;
 mod mcp;
 
 static DEFAULT_ROUTING_BLOCK: &str = include_str!("routing-block.md");
+const ZERO_LIMIT_NOTICE: &str = "Result limit is 0; increase it to check for matches.";
 
 fn parse_result_limit(raw: &str) -> Result<usize, String> {
     let limit = raw
@@ -579,6 +580,8 @@ fn main() -> anyhow::Result<()> {
                 } else {
                     println!("{}", serde_json::to_string_pretty(&fts_matches)?);
                 }
+            } else if args.limit == 0 {
+                println!("{ZERO_LIMIT_NOTICE}");
             } else {
                 print!(
                     "{}",
@@ -607,6 +610,8 @@ fn main() -> anyhow::Result<()> {
 
             if cli.json {
                 println!("{}", serde_json::to_string_pretty(&matches)?);
+            } else if args.limit == 0 {
+                println!("{ZERO_LIMIT_NOTICE}");
             } else {
                 println!(
                     "{}",
@@ -686,6 +691,8 @@ fn main() -> anyhow::Result<()> {
             };
             if cli.json {
                 println!("{}", serde_json::to_string_pretty(&refs)?);
+            } else if args.limit == 0 {
+                println!("{ZERO_LIMIT_NOTICE}");
             } else {
                 println!(
                     "{}",
@@ -734,6 +741,8 @@ fn main() -> anyhow::Result<()> {
                         println!("\nRun `code-kb facts <category>` to view matching facts.");
                     }
                 }
+            } else if args.limit == 0 && !cli.json {
+                println!("{ZERO_LIMIT_NOTICE}");
             } else {
                 let facts = code_kb_core::find_structural_facts_scoped(
                     &conn,

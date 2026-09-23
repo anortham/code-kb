@@ -372,7 +372,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
     assert!(
         zero_limit_response["result"]["content"][0]["text"]
             .as_str()
-            .is_some_and(|text| text.contains("No symbols found"))
+            .is_some_and(|text| text.contains("limit is 0"))
     );
 
     let filtered_lookup_request = json!({
@@ -509,6 +509,44 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
         .unwrap();
     assert!(capped_facts_text.contains("Structural facts for 'route' (2 found):"));
     assert!(capped_facts_text.contains("Matching literals (2 found):"));
+
+    for (id, name, arguments) in [
+        (
+            80,
+            "find_structural_facts",
+            json!({"category": "route", "limit": 0}),
+        ),
+        (
+            81,
+            "lookup_symbol",
+            json!({"query": "Workspace", "limit": 0}),
+        ),
+        (
+            82,
+            "search_symbols",
+            json!({"query": "Workspace", "limit": 0}),
+        ),
+        (
+            83,
+            "find_references",
+            json!({"symbol_name": "Workspace", "limit": 0}),
+        ),
+    ] {
+        let request = json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": "tools/call",
+            "params": {"name": name, "arguments": arguments}
+        });
+        let response = mcp_request(&mut stdin, &mut reader, &request);
+        assert_eq!(response["id"], id);
+        assert_ne!(response["result"]["isError"], true, "{name}: {response}");
+        let text = response["result"]["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("limit is 0"), "{name}: {text}");
+        assert!(!text.contains("No symbols found"), "{name}: {text}");
+        assert!(!text.contains("No facts match"), "{name}: {text}");
+        assert!(!text.contains("(none)"), "{name}: {text}");
+    }
 
     // 7. Test file_skeleton with alias "file" instead of "file_path"
     let skeleton_req = json!({
