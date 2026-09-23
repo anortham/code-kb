@@ -137,7 +137,6 @@ fn render_symbol_skeleton(
         }
         out.push_str(&format!("{indent}}} // {span_str}\n\n"));
     } else {
-        // Leaf symbol or function/method
         if let Some(count) = sym.hidden_body_line_count() {
             let raw_sig = sym.signature.as_deref().unwrap_or(&sym.name);
             let sig = sanitize_skeleton_sig(raw_sig, &sym.name);
@@ -160,6 +159,13 @@ fn render_symbol_skeleton(
                 sym.kind,
                 sym_name = sym.name
             ));
+        }
+        if sym.kind == "namespace"
+            && let Some(child_list) = children
+        {
+            for child in child_list {
+                render_symbol_skeleton(out, child, children_map, indent_level);
+            }
         }
     }
 }

@@ -220,6 +220,33 @@ fn test_file_skeleton_exact_path_isolation() {
 }
 
 #[test]
+fn file_scoped_csharp_namespace_keeps_its_class_and_members() {
+    find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+    let dir = safe_tempdir();
+    let path = dir.path().join("Worker.cs");
+    fs::write(
+        &path,
+        "namespace Example.Services;\n\npublic sealed class Worker\n{\n    public Worker() {}\n    public int Run(int value) { return value; }\n}\n",
+    )
+    .unwrap();
+    let workspace = Workspace::new(dir.path().to_path_buf());
+    let db_path = dir.path().join(".code-kb/artifact.db");
+    scan_workspace(&workspace, &db_path, false).unwrap();
+    let conn = open_read_only(&db_path).unwrap();
+
+    let skeleton =
+        code_kb_core::file_skeleton_op(&workspace, &db_path, &conn, "Worker.cs").unwrap();
+
+    assert!(
+        skeleton.contains("namespace Example.Services;"),
+        "{skeleton}"
+    );
+    assert!(skeleton.contains("class Worker"), "{skeleton}");
+    assert!(skeleton.contains("public Worker()"), "{skeleton}");
+    assert!(skeleton.contains("Run(int value)"), "{skeleton}");
+}
+
+#[test]
 fn test_context_slice_qualified_method_uses_its_own_callees() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
