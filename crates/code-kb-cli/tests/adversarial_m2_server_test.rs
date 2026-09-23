@@ -4,6 +4,8 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
 
+const PROJECT_ROOT_DESCRIPTION: &str = "Absolute path of the project or git worktree you are working in. Send the same value on every call. Change it when you move to a worktree or another project.";
+
 struct ChildGuard(Child);
 
 impl std::ops::Deref for ChildGuard {
@@ -177,6 +179,7 @@ fn test_adversarial_worktree_fastpath_wal_flush_uncheckpointed_transactions() {
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
             .env("CODE_KB_TELEMETRY_DIR", main_root.join(".telemetry_test"))
+            .env("CODE_KB_INDEX_WAIT_MS", "60000")
             .arg("serve")
             .arg("--root")
             .arg(&main_root)
@@ -217,7 +220,10 @@ fn test_adversarial_worktree_fastpath_wal_flush_uncheckpointed_transactions() {
         "method": "tools/call",
         "params": {
             "name": "file_skeleton",
-            "arguments": { "file": wt_file.to_string_lossy().to_string() }
+            "arguments": {
+                "project_root": wt_root.to_string_lossy().to_string(),
+                "file": wt_file.to_string_lossy().to_string()
+            }
         }
     });
     let mut line2 = serde_json::to_string(&wt_call).unwrap();
@@ -345,6 +351,7 @@ fn test_adversarial_worktree_fastpath_with_active_parent_reader() {
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
             .env("CODE_KB_TELEMETRY_DIR", main_root.join(".telemetry_test"))
+            .env("CODE_KB_INDEX_WAIT_MS", "60000")
             .arg("serve")
             .arg("--root")
             .arg(&main_root)
@@ -383,7 +390,10 @@ fn test_adversarial_worktree_fastpath_with_active_parent_reader() {
         "method": "tools/call",
         "params": {
             "name": "file_skeleton",
-            "arguments": { "file": wt_file.to_string_lossy().to_string() }
+            "arguments": {
+                "project_root": wt_root.to_string_lossy().to_string(),
+                "file": wt_file.to_string_lossy().to_string()
+            }
         }
     });
     let mut line2 = serde_json::to_string(&wt_call).unwrap();
@@ -470,6 +480,7 @@ fn test_adversarial_worktree_relative_gitdir_resolution() {
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
             .env("CODE_KB_TELEMETRY_DIR", main_root.join(".telemetry_test"))
+            .env("CODE_KB_INDEX_WAIT_MS", "60000")
             .arg("serve")
             .arg("--root")
             .arg(&main_root)
@@ -508,7 +519,10 @@ fn test_adversarial_worktree_relative_gitdir_resolution() {
         "method": "tools/call",
         "params": {
             "name": "file_skeleton",
-            "arguments": { "file": wt_file.to_string_lossy().to_string() }
+            "arguments": {
+                "project_root": wt_root.to_string_lossy().to_string(),
+                "file": wt_file.to_string_lossy().to_string()
+            }
         }
     });
     let mut line2 = serde_json::to_string(&wt_call).unwrap();
@@ -753,7 +767,8 @@ fn test_adversarial_watcher_directory_deletion_like_escaping_matrix() {
 // ============================================================================
 
 #[test]
-fn test_adversarial_core_invariant_1_mcp_tool_schemas_strictly_zero_workspace_parameters() {
+fn test_adversarial_core_invariant_1_mcp_tool_schemas_have_no_workspace_parameter_and_require_project_root()
+ {
     let temp_dir = code_kb_core::safe_tempdir();
     let root = temp_dir.path().to_path_buf();
     let db_dir = root.join(".code-kb");
@@ -870,7 +885,30 @@ fn test_adversarial_core_invariant_1_mcp_tool_schemas_strictly_zero_workspace_pa
             }
         }
 
-        // 3. Check property descriptions: verify they do NOT ask the agent to supply a workspace path
+        let required: Vec<&str> = schema["required"]
+            .as_array()
+            .map(|names| names.iter().filter_map(Value::as_str).collect())
+            .unwrap_or_default();
+        if tool_name == "telemetry_summary" {
+            assert!(
+                props.get("project_root").is_none(),
+                "Tool '{tool_name}' must not list project_root"
+            );
+            assert!(
+                !required.contains(&"project_root"),
+                "Tool '{tool_name}' must not require project_root"
+            );
+        } else {
+            assert_eq!(
+                props["project_root"]["description"], PROJECT_ROOT_DESCRIPTION,
+                "Tool '{tool_name}' must list project_root with its contract description"
+            );
+            assert!(
+                required.contains(&"project_root"),
+                "Tool '{tool_name}' must require project_root"
+            );
+        }
+
         if let Some(props_obj) = props.as_object() {
             for (prop_name, prop_val) in props_obj {
                 if let Some(desc) = prop_val["description"].as_str() {
@@ -951,6 +989,7 @@ fn test_adversarial_worktree_parent_in_active_transaction_resilience() {
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
             .env("CODE_KB_TELEMETRY_DIR", main_root.join(".telemetry_test"))
+            .env("CODE_KB_INDEX_WAIT_MS", "60000")
             .arg("serve")
             .arg("--root")
             .arg(&main_root)
@@ -989,7 +1028,10 @@ fn test_adversarial_worktree_parent_in_active_transaction_resilience() {
         "method": "tools/call",
         "params": {
             "name": "file_skeleton",
-            "arguments": { "file": wt_file.to_string_lossy().to_string() }
+            "arguments": {
+                "project_root": wt_root.to_string_lossy().to_string(),
+                "file": wt_file.to_string_lossy().to_string()
+            }
         }
     });
     let mut line2 = serde_json::to_string(&wt_call).unwrap();
@@ -1003,6 +1045,14 @@ fn test_adversarial_worktree_parent_in_active_transaction_resilience() {
 
     // Server must respond cleanly without hang or crash
     assert!(resp2["result"]["content"][0]["text"].as_str().is_some());
+    assert_ne!(resp2["result"]["isError"], true, "{resp2}");
+    assert!(
+        resp2["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("pub fn tx_resilience_fn()"),
+        "The worktree call must answer from the worktree index: {resp2}"
+    );
 
     // Rollback active transaction and clean up
     drop(tx);

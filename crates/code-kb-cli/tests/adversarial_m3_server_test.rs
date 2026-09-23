@@ -1,8 +1,10 @@
 use serde_json::{Value, json};
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+
+const PROJECT_ROOT_DESCRIPTION: &str = "Absolute path of the project or git worktree you are working in. Send the same value on every call. Change it when you move to a worktree or another project.";
 
 struct ChildGuard(Child);
 
@@ -29,12 +31,15 @@ impl Drop for ChildGuard {
 }
 
 fn setup_fixture_repo() -> (tempfile::TempDir, PathBuf, String) {
+    scanned_repo("pub fn compute_sum(a: i32, b: i32) -> i32 {\n    a + b\n}\n")
+}
+
+fn scanned_repo(code: &str) -> (tempfile::TempDir, PathBuf, String) {
     let temp_dir = code_kb_core::safe_tempdir();
     let root = temp_dir.path().to_path_buf();
 
     let src_dir = root.join("src");
     fs::create_dir_all(&src_dir).unwrap();
-    let code = "pub fn compute_sum(a: i32, b: i32) -> i32 {\n    a + b\n}\n";
     let file_path = src_dir.join("calc.rs");
     fs::write(&file_path, code).unwrap();
 
@@ -69,102 +74,90 @@ fn toggle_drive_letter(path_str: &str) -> String {
     }
 }
 
-// ============================================================================
-// CHALLENGE 1: MCP initialize roots resolution stress matrix
-// ============================================================================
+fn percent_encode_last_segment(path: &str) -> String {
+    let (parent, last) = path.rsplit_once('/').unwrap();
+    let encoded: String = last.bytes().map(|byte| format!("%{byte:02X}")).collect();
+    format!("{parent}/{encoded}")
+}
 
-#[test]
-fn test_adversarial_mcp_initialize_roots_comprehensive_matrix() {
-    let (repo, _db_path, _code) = setup_fixture_repo();
-    let root = repo.path();
-    let root_fwd = root.to_string_lossy().replace('\\', "/");
+fn project_root_variants(root: &Path) -> Vec<(&'static str, String, Value)> {
+    let root_raw = root.to_string_lossy().to_string();
+    let root_fwd = root_raw.replace('\\', "/");
     let toggled_root_fwd = toggle_drive_letter(&root_fwd);
-
-    // Matrix of initialize variations to challenge:
-    let variations: Vec<(&str, Value)> = vec![
-        // 1. Standard 3-slash with uppercase/default drive
-        (
-            "three_slash_standard",
-            json!({
-                "roots": [{ "uri": format!("file:///{root_fwd}") }]
-            }),
-        ),
-        // 2. 3-slash with inverted drive casing (e.g. c: instead of C:)
+    let standard_uri = format!("file:///{root_fwd}");
+    [
+        ("three_slash_standard", standard_uri.clone()),
         (
             "three_slash_inverted_drive",
-            json!({
-                "roots": [{ "uri": format!("file:///{toggled_root_fwd}") }]
-            }),
+            format!("file:///{toggled_root_fwd}"),
         ),
-        // 3. Two-slash non-standard with uppercase drive
-        (
-            "two_slash_standard",
-            json!({
-                "roots": [{ "uri": format!("file://{root_fwd}") }]
-            }),
-        ),
-        // 4. Two-slash non-standard with inverted drive casing
+        ("two_slash_standard", format!("file://{root_fwd}")),
         (
             "two_slash_inverted_drive",
-            json!({
-                "roots": [{ "uri": format!("file://{toggled_root_fwd}") }]
-            }),
+            format!("file://{toggled_root_fwd}"),
         ),
-        // 5. 3-slash with trailing slash
+        ("three_slash_trailing_slash", format!("file:///{root_fwd}/")),
+        ("two_slash_trailing_slash", format!("file://{root_fwd}/")),
         (
-            "three_slash_trailing_slash",
-            json!({
-                "roots": [{ "uri": format!("file:///{root_fwd}/") }]
-            }),
+            "percent_encoded_segment",
+            format!("file://{}", percent_encode_last_segment(&root_fwd)),
         ),
-        // 6. Two-slash with trailing slash
-        (
-            "two_slash_trailing_slash",
-            json!({
-                "roots": [{ "uri": format!("file://{root_fwd}/") }]
-            }),
-        ),
-        // 7. params.rootUri
+    ]
+    .into_iter()
+    .map(|(name, uri)| {
+        let initialize_params = json!({ "roots": [{ "uri": uri }] });
+        (name, uri, initialize_params)
+    })
+    .chain([
         (
             "params_root_uri",
-            json!({
-                "rootUri": format!("file:///{root_fwd}")
-            }),
+            standard_uri.clone(),
+            json!({ "rootUri": standard_uri }),
         ),
-        // 8. params.workspaceFolders
         (
             "params_workspace_folders",
-            json!({
-                "workspaceFolders": [{ "uri": format!("file:///{root_fwd}"), "name": "ws" }]
-            }),
+            standard_uri.clone(),
+            json!({ "workspaceFolders": [{ "uri": standard_uri, "name": "ws" }] }),
         ),
-        // 9. params.rootPath with raw Windows path
         (
             "params_root_path_raw",
-            json!({
-                "rootPath": root.to_string_lossy().to_string()
-            }),
+            root_raw.clone(),
+            json!({ "rootPath": root_raw }),
         ),
-        // 10. Multiple roots in params.roots (first is valid target)
         (
             "multiple_roots_first_valid",
+            standard_uri.clone(),
             json!({
                 "roots": [
-                    { "uri": format!("file:///{root_fwd}") },
+                    { "uri": standard_uri },
                     { "uri": "file:///C:/nonexistent_secondary_root" }
                 ]
             }),
         ),
-    ];
+    ])
+    .collect()
+}
 
-    for (name, params_payload) in variations {
+#[test]
+fn test_adversarial_mcp_project_root_variants_answer_from_the_fixture_while_initialize_roots_are_ignored()
+ {
+    let (repo, _db_path, _code) = setup_fixture_repo();
+    let root = repo.path();
+    let (other, _other_db_path, _other_code) =
+        scanned_repo("pub fn compute_product(a: i32, b: i32) -> i32 {\n    a * b\n}\n");
+
+    for ((name, project_root, _), (_, _, other_initialize_params)) in project_root_variants(root)
+        .into_iter()
+        .zip(project_root_variants(other.path()))
+    {
         let telem_dir = code_kb_core::safe_tempdir();
-        // Spawn server with ZERO --root arguments in arbitrary CWD
         let mut child = ChildGuard(
             Command::new(env!("CARGO_BIN_EXE_code-kb"))
                 .env("CODE_KB_TELEMETRY_DIR", telem_dir.path())
-                .current_dir(root)
+                .env("CODE_KB_INDEX_WAIT_MS", "60000")
                 .arg("serve")
+                .arg("--root")
+                .arg(other.path())
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
                 .spawn()
@@ -186,7 +179,7 @@ fn test_adversarial_mcp_initialize_roots_comprehensive_matrix() {
             }
         });
 
-        if let Some(obj) = params_payload.as_object() {
+        if let Some(obj) = other_initialize_params.as_object() {
             for (k, v) in obj {
                 init_req["params"][k] = v.clone();
             }
@@ -207,14 +200,13 @@ fn test_adversarial_mcp_initialize_roots_comprehensive_matrix() {
             "{name}: Expected code-kb serverInfo"
         );
 
-        // Verify lookup_symbol resolves symbol seamlessly without --root argument
         let call_find = json!({
             "jsonrpc": "2.0",
             "id": 2,
             "method": "tools/call",
             "params": {
                 "name": "lookup_symbol",
-                "arguments": { "query": "compute_sum" }
+                "arguments": { "project_root": project_root, "query": "compute_sum" }
             }
         });
         let mut call_line = serde_json::to_string(&call_find).unwrap();
@@ -233,18 +225,17 @@ fn test_adversarial_mcp_initialize_roots_comprehensive_matrix() {
         );
         let text = call_val["result"]["content"][0]["text"].as_str().unwrap();
         assert!(
-            text.contains("compute_sum"),
-            "{name}: Expected compute_sum in result text, got: {text}"
+            text.contains("pub fn compute_sum(a: i32, b: i32) -> i32"),
+            "{name}: Expected the fixture's compute_sum in result text, got: {text}"
         );
 
-        // Verify file_skeleton with relative path resolves seamlessly
         let call_skel = json!({
             "jsonrpc": "2.0",
             "id": 3,
             "method": "tools/call",
             "params": {
                 "name": "file_skeleton",
-                "arguments": { "file_path": "src/calc.rs" }
+                "arguments": { "project_root": project_root, "file_path": "src/calc.rs" }
             }
         });
         let mut skel_line = serde_json::to_string(&call_skel).unwrap();
@@ -262,8 +253,8 @@ fn test_adversarial_mcp_initialize_roots_comprehensive_matrix() {
         );
         let skel_text = skel_val["result"]["content"][0]["text"].as_str().unwrap();
         assert!(
-            skel_text.contains("compute_sum"),
-            "{name}: Expected compute_sum in skeleton text, got: {skel_text}"
+            skel_text.contains("pub fn compute_sum(a: i32, b: i32) -> i32"),
+            "{name}: Expected the fixture's compute_sum in skeleton text, got: {skel_text}"
         );
 
         drop(stdin);
@@ -271,15 +262,13 @@ fn test_adversarial_mcp_initialize_roots_comprehensive_matrix() {
     }
 }
 
-// ============================================================================
-// CHALLENGE 2: Dynamic workspace rebinding and drive casing churn invariance
-// ============================================================================
-
 #[test]
 #[cfg(windows)]
-fn test_adversarial_mcp_dynamic_rebinding_drive_casing_and_interleaved_churn() {
-    let (repo, _db_path, _code) = setup_fixture_repo();
+fn test_adversarial_mcp_project_root_casing_slash_and_uri_churn_answers_from_one_index() {
+    let (repo, db_path, _code) = setup_fixture_repo();
     let root = repo.path();
+    let root_str = root.to_string_lossy().to_string();
+    let inverted_root = toggle_drive_letter(&root_str);
     let abs_file = root.join("src").join("calc.rs");
     let abs_file_str = abs_file.to_string_lossy().to_string();
     let inverted_abs_file = toggle_drive_letter(&abs_file_str);
@@ -289,9 +278,20 @@ fn test_adversarial_mcp_dynamic_rebinding_drive_casing_and_interleaved_churn() {
         "Test requires a drive-letter path on Windows (e.g. C: vs c:)"
     );
 
+    let project_roots = [
+        root_str.clone(),
+        inverted_root.clone(),
+        root_str.replace('\\', "/"),
+        format!("{inverted_root}\\"),
+        format!("file:///{}", inverted_root.replace('\\', "/")),
+        format!("file://{}/", root_str.replace('\\', "/")),
+    ];
+    let telemetry_dir = root.join(".telemetry_test");
+
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
-            .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+            .env("CODE_KB_TELEMETRY_DIR", &telemetry_dir)
+            .env("CODE_KB_INDEX_WAIT_MS", "60000")
             .arg("serve")
             .arg("--root")
             .arg(root)
@@ -305,7 +305,6 @@ fn test_adversarial_mcp_dynamic_rebinding_drive_casing_and_interleaved_churn() {
     let stdout = child.stdout.take().expect("Failed to open stdout");
     let mut reader = BufReader::new(stdout);
 
-    // Initialize
     let init_req = json!({
         "jsonrpc": "2.0",
         "id": 1,
@@ -323,7 +322,6 @@ fn test_adversarial_mcp_dynamic_rebinding_drive_casing_and_interleaved_churn() {
     let mut init_resp = String::new();
     reader.read_line(&mut init_resp).unwrap();
 
-    // 1. Stress: Rapidly interleave 10 tool calls alternating between original casing and inverted drive casing
     for i in 2..=11 {
         let use_inverted = i % 2 == 0;
         let file_arg = if use_inverted {
@@ -331,6 +329,7 @@ fn test_adversarial_mcp_dynamic_rebinding_drive_casing_and_interleaved_churn() {
         } else {
             &abs_file_str
         };
+        let project_root = &project_roots[(i - 2) % project_roots.len()];
 
         let call = json!({
             "jsonrpc": "2.0",
@@ -339,6 +338,7 @@ fn test_adversarial_mcp_dynamic_rebinding_drive_casing_and_interleaved_churn() {
             "params": {
                 "name": "get_symbol_body",
                 "arguments": {
+                    "project_root": project_root,
                     "symbol": "compute_sum",
                     "file": file_arg
                 }
@@ -356,16 +356,15 @@ fn test_adversarial_mcp_dynamic_rebinding_drive_casing_and_interleaved_churn() {
         assert_eq!(resp_val["id"], i);
         assert_ne!(
             resp_val["result"]["isError"], true,
-            "Iteration {i} (inverted={use_inverted}) failed with error: {resp_val:?}"
+            "Iteration {i} (inverted={use_inverted}, project_root={project_root}) failed with error: {resp_val:?}"
         );
         let text = resp_val["result"]["content"][0]["text"].as_str().unwrap();
         assert!(
             text.contains("compute_sum"),
-            "Iteration {i} failed to return body"
+            "Iteration {i} (project_root={project_root}) failed to return body"
         );
     }
 
-    // 2. Challenge with file:// URI tool arguments (both standard and inverted casing)
     let fwd_inverted = inverted_abs_file.replace('\\', "/");
     let uri_arg = format!("file:///{fwd_inverted}");
     let call_uri = json!({
@@ -374,7 +373,7 @@ fn test_adversarial_mcp_dynamic_rebinding_drive_casing_and_interleaved_churn() {
         "method": "tools/call",
         "params": {
             "name": "file_skeleton",
-            "arguments": { "file": uri_arg }
+            "arguments": { "project_root": &project_roots[4], "file": uri_arg }
         }
     });
     let mut uri_line = serde_json::to_string(&call_uri).unwrap();
@@ -391,7 +390,6 @@ fn test_adversarial_mcp_dynamic_rebinding_drive_casing_and_interleaved_churn() {
         "file:// URI argument with inverted casing failed: {uri_val:?}"
     );
 
-    // 3. Challenge with verbatim prefix: \\?\c:\...
     let verbatim_arg = format!(r"\\?\{inverted_abs_file}");
     let call_verb = json!({
         "jsonrpc": "2.0",
@@ -399,7 +397,7 @@ fn test_adversarial_mcp_dynamic_rebinding_drive_casing_and_interleaved_churn() {
         "method": "tools/call",
         "params": {
             "name": "file_skeleton",
-            "arguments": { "file": verbatim_arg }
+            "arguments": { "project_root": &inverted_root, "file": verbatim_arg }
         }
     });
     let mut verb_line = serde_json::to_string(&call_verb).unwrap();
@@ -418,6 +416,44 @@ fn test_adversarial_mcp_dynamic_rebinding_drive_casing_and_interleaved_churn() {
 
     drop(stdin);
     let _ = child.wait();
+
+    let conn = code_kb_core::Connection::open(telemetry_dir.join("telemetry.db")).unwrap();
+    let recorded_roots = conn
+        .prepare(
+            "SELECT workspace_root FROM tool_telemetry
+             WHERE tool IN ('get_symbol_body', 'file_skeleton') ORDER BY rowid",
+        )
+        .unwrap()
+        .query_map([], |row| row.get::<_, String>(0))
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    let fixture_root = code_kb_core::to_forward_slash(
+        &code_kb_core::Workspace::new(root.to_path_buf()).canonical_root,
+    );
+    assert_eq!(
+        recorded_roots,
+        vec![fixture_root; 12],
+        "every call must answer from the fixture index"
+    );
+
+    let mut dirs = vec![root.to_path_buf()];
+    let mut indexes = Vec::new();
+    while let Some(dir) = dirs.pop() {
+        for entry in fs::read_dir(&dir).unwrap().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                dirs.push(path);
+            } else if entry.file_name() == "artifact.db" {
+                indexes.push(path);
+            }
+        }
+    }
+    assert_eq!(
+        indexes,
+        vec![db_path],
+        "the churn must not create a second index"
+    );
 }
 
 // ============================================================================
@@ -552,13 +588,14 @@ fn test_adversarial_reconcile_offline_edits_seen_table_nocase_collation() {
 // ============================================================================
 
 #[test]
-fn test_adversarial_mcp_core_invariant_1_exhaustive_blacklist() {
+fn test_adversarial_mcp_schemas_have_no_blacklisted_workspace_parameter_and_require_project_root() {
     let (repo, _db_path, _code) = setup_fixture_repo();
     let root = repo.path();
 
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
             .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+            .env("CODE_KB_INDEX_WAIT_MS", "60000")
             .arg("serve")
             .arg("--root")
             .arg(root)
@@ -668,8 +705,40 @@ fn test_adversarial_mcp_core_invariant_1_exhaustive_blacklist() {
             }
         }
 
-        // Check descriptions: ensure no tool description instructs models to supply workspace paths
-        if let Some(desc) = tool["description"].as_str() {
+        let required: Vec<&str> = schema["required"]
+            .as_array()
+            .map(|names| names.iter().filter_map(Value::as_str).collect())
+            .unwrap_or_default();
+        if name == "telemetry_summary" {
+            assert!(
+                schema["properties"].get("project_root").is_none(),
+                "Tool '{name}' must not list project_root"
+            );
+            assert!(
+                !required.contains(&"project_root"),
+                "Tool '{name}' must not require project_root"
+            );
+        } else {
+            assert_eq!(
+                schema["properties"]["project_root"]["description"], PROJECT_ROOT_DESCRIPTION,
+                "Tool '{name}' must list project_root with its contract description"
+            );
+            assert!(
+                required.contains(&"project_root"),
+                "Tool '{name}' must require project_root"
+            );
+        }
+
+        let property_descriptions = schema["properties"]
+            .as_object()
+            .into_iter()
+            .flat_map(|props| props.values())
+            .filter_map(|prop| prop["description"].as_str());
+        for desc in tool["description"]
+            .as_str()
+            .into_iter()
+            .chain(property_descriptions)
+        {
             let desc_lower = desc.to_lowercase();
             assert!(
                 !desc_lower.contains("pass workspace")
@@ -680,8 +749,6 @@ fn test_adversarial_mcp_core_invariant_1_exhaustive_blacklist() {
         }
     }
 
-    // 3. Test Core Invariant #1 Internal Compatibility:
-    // If an unadvertised `workspace` argument is provided internally, the backend accepts it silently.
     let unadvertised_call = json!({
         "jsonrpc": "2.0",
         "id": 3,
@@ -705,11 +772,11 @@ fn test_adversarial_mcp_core_invariant_1_exhaustive_blacklist() {
     assert_eq!(unadv_val["id"], 3);
     assert_ne!(
         unadv_val["result"]["isError"], true,
-        "Unadvertised workspace parameter should be accepted silently: {unadv_val:?}"
+        "Unadvertised workspace parameter should act as the project_root alias: {unadv_val:?}"
     );
     let text = unadv_val["result"]["content"][0]["text"].as_str().unwrap();
     assert!(
-        text.contains("compute_sum"),
+        text.contains("pub fn compute_sum(a: i32, b: i32) -> i32"),
         "Unadvertised call must execute successfully"
     );
 
