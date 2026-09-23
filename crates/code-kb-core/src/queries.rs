@@ -3831,6 +3831,7 @@ pub fn compute_blast_radius_scoped_with_ids(
     }
 
     let mut test_name_terms = Vec::new();
+    let mut module_terms = Vec::new();
     for path in seed_paths.iter().copied().chain(
         resolved_seed_symbols
             .iter()
@@ -3850,11 +3851,20 @@ pub fn compute_blast_radius_scoped_with_ids(
         if parts.next() == Some("src")
             && let Some(module) = module
             && module.len() >= 3
+            && !["test", "tests", "spec", "specs", "bin", "lib"]
+                .iter()
+                .any(|generic| module.eq_ignore_ascii_case(generic))
             && !test_name_terms.iter().any(|(name, _)| name == module)
+            && !module_terms.iter().any(|name| name == module)
         {
-            test_name_terms.push((module.to_string(), "module-matched test file"));
+            module_terms.push(module.to_string());
         }
     }
+    test_name_terms.extend(
+        module_terms
+            .into_iter()
+            .map(|module| (module, "module-matched test file")),
+    );
 
     let has_files: bool = conn
         .query_row(
@@ -3876,15 +3886,52 @@ pub fn compute_blast_radius_scoped_with_ids(
              ORDER BY path ASC
              LIMIT 11"
         ))?;
+        let mut module_test_files_stmt = conn.prepare(&format!(
+            "SELECT DISTINCT path FROM files
+             WHERE (path LIKE '%test%' OR path LIKE '%spec%')
+               AND (path LIKE ?1 ESCAPE '\\' OR path LIKE ?2 ESCAPE '\\')
+               AND NOT {doc_file}
+             ORDER BY path ASC
+             LIMIT 201"
+        ))?;
         for (term, reason) in test_name_terms {
-            let term_pattern = format!("%{}%", escape_like(&term));
-            let t_rows =
-                test_files_stmt.query_map([term_pattern], |row| row.get::<_, String>(0))?;
-            for (index, p) in t_rows.flatten().enumerate() {
-                if index == 10 {
+            let module_match = reason == "module-matched test file";
+            let escaped_term = escape_like(&term);
+            let mut rows = if module_match {
+                module_test_files_stmt.query(rusqlite::params![
+                    format!("%/{escaped_term}%"),
+                    format!("%/test\\_{escaped_term}%")
+                ])?
+            } else {
+                test_files_stmt.query([format!("%{escaped_term}%")])?
+            };
+            let mut candidates = 0;
+            let mut matches = 0;
+            while let Some(row) = rows.next()? {
+                candidates += 1;
+                if candidates == 201 {
                     test_file_ceiling_reached = true;
                     break;
                 }
+                let p: String = row.get(0)?;
+                if module_match {
+                    let basename = p
+                        .rsplit(['/', '\\'])
+                        .next()
+                        .unwrap_or_default()
+                        .to_lowercase();
+                    let term = term.to_lowercase();
+                    if !basename.starts_with(&term)
+                        && !basename.starts_with(&format!("test_{term}"))
+                    {
+                        continue;
+                    }
+                }
+                if matches == 10 {
+                    test_file_ceiling_reached = true;
+                    break;
+                }
+                matches += 1;
                 let p = p.replace('\\', "/");
                 let key = format!("{}:1", p);
                 if seen_test_keys.insert(key) {

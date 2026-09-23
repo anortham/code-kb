@@ -166,6 +166,37 @@ fn file_seed_finds_test_named_after_its_module() {
 }
 
 #[test]
+fn file_seed_keeps_specific_tests_ahead_of_module_matches() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+    conn.execute_batch(
+        "INSERT INTO files VALUES
+            ('f1', 'crates/code-kb-cli/tests/unrelated_test.rs', 'rust', 'h1', 100, 10, 'now'),
+            ('f2', 'tests/cli_test.rs', 'rust', 'h2', 100, 10, 'now'),
+            ('f3', 'tests/target_test.rs', 'rust', 'h3', 100, 10, 'now'),
+            ('f4', 'tests/cli/unrelated_test.rs', 'rust', 'h4', 100, 10, 'now');",
+    )
+    .unwrap();
+
+    let seeds = [
+        "src/cli/first.rs",
+        "src/other/target.rs",
+        "src/test/unused.rs",
+    ];
+    let capped = compute_blast_radius(&conn, &[], &seeds, 2, 1).unwrap();
+    assert_eq!(capped.likely_tests[0].path, "tests/target_test.rs");
+
+    let full = compute_blast_radius(&conn, &[], &seeds, 2, 20).unwrap();
+    let paths: Vec<&str> = full
+        .likely_tests
+        .iter()
+        .map(|test| test.path.as_str())
+        .collect();
+    assert_eq!(paths, vec!["tests/target_test.rs", "tests/cli_test.rs"]);
+}
+
+#[test]
 fn qualified_blast_radius_seed_selects_only_its_parent_method() {
     let temp = safe_tempdir();
     let conn = open_read_write(&temp.path().join("index.db")).unwrap();

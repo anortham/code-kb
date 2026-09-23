@@ -698,7 +698,7 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
         out.push_str("Traversal stopped at the 200-row discovery ceiling; narrow the target because increasing limit cannot raise this ceiling.\n\n");
     }
     if result.test_file_ceiling_reached {
-        out.push_str("Stem-matched test discovery stopped at ten files for a stem; narrow the target because increasing limit cannot raise this ceiling.\n\n");
+        out.push_str("Name-matched test discovery hit its fixed ceiling; narrow the target because increasing limit cannot raise it.\n\n");
     }
 
     if !result.likely_tests.is_empty() {
@@ -748,7 +748,7 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
         out.push_str("### Likely Tests to Run (0 returned)\n\n");
     } else {
         out.push_str(
-            "### Likely Tests to Run (0 returned)\nNo direct or stem-matched tests found.\n\n",
+            "### Likely Tests to Run (0 returned)\nNo direct or name-matched tests found.\n\n",
         );
     }
 
@@ -1362,8 +1362,16 @@ mod tests {
         let formatted = format_blast_radius(&res);
         assert!(formatted.contains("Likely Tests to Run (0 returned)"));
         assert!(formatted.contains("Downstream Impact (0 returned)"));
-        assert!(!formatted.contains("No direct or stem-matched tests found"));
+        assert!(formatted.contains("Name-matched test discovery hit its fixed ceiling"));
+        assert!(!formatted.contains("No direct or name-matched tests found"));
         assert!(!formatted.contains("No downstream callers found within depth"));
+
+        let no_ceiling = BlastRadiusResult {
+            traversal_ceiling_reached: false,
+            test_file_ceiling_reached: false,
+            ..res.clone()
+        };
+        assert!(format_blast_radius(&no_ceiling).contains("No direct or name-matched tests found"));
 
         let traversal_only = BlastRadiusResult {
             traversal_ceiling_reached: true,
@@ -1371,7 +1379,7 @@ mod tests {
             ..res
         };
         let traversal_only_text = format_blast_radius(&traversal_only);
-        assert!(!traversal_only_text.contains("No direct or stem-matched tests found"));
+        assert!(!traversal_only_text.contains("No direct or name-matched tests found"));
     }
 
     fn skeleton_row(
