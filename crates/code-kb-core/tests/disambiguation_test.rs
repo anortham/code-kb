@@ -226,7 +226,20 @@ fn file_scoped_csharp_namespace_keeps_its_class_and_members() {
     let path = dir.path().join("Worker.cs");
     fs::write(
         &path,
-        "namespace Example.Services;\n\npublic sealed class Worker\n{\n    public Worker() {}\n    public int Run(int value) { return value; }\n    public string Format(int value) =>\n        $\"item/{value}\";\n    public string Label(string marker = \"a=>b\") => marker;\n}\n",
+        r#"namespace Example.Services;
+
+public sealed class Worker
+{
+    private readonly Func<int, int> _double = x => x * 2;
+    public Worker() {}
+    public int Run(int value) { return value; }
+    public string Format(int value) =>
+        $"item/{value}";
+    public string Label(string marker = "a=>b") => marker;
+    public string Path(string dir = @"C:\Temp\") => dir;
+    public char Quote(char value = '"') => value;
+}
+"#,
     )
     .unwrap();
     let workspace = Workspace::new(dir.path().to_path_buf());
@@ -249,8 +262,16 @@ fn file_scoped_csharp_namespace_keeps_its_class_and_members() {
         skeleton.contains("Label(string marker = \"a=>b\")"),
         "{skeleton}"
     );
+    assert!(
+        skeleton.contains(r#"Path(string dir = @"C:\Temp\")"#),
+        "{skeleton}"
+    );
+    assert!(skeleton.contains("Quote(char value"), "{skeleton}");
+    assert!(skeleton.contains("_double = x => x * 2"), "{skeleton}");
     assert!(!skeleton.contains("item/"), "{skeleton}");
     assert!(!skeleton.contains(") =>"), "{skeleton}");
+    assert!(!skeleton.contains("=> dir"), "{skeleton}");
+    assert!(!skeleton.contains("=> value"), "{skeleton}");
 }
 
 #[test]

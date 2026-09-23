@@ -68,40 +68,30 @@ fn is_skippable_kind(kind: &str) -> bool {
     matches!(kind, "variable" | "parameter" | "import")
 }
 
-fn sanitize_skeleton_sig<'a>(sig: &'a str, name: &'a str, language: &str) -> &'a str {
-    let mut cutoff = sig.len();
-    let mut in_string = false;
-    let mut escaped = false;
-    let mut parens = 0usize;
-    for (idx, ch) in sig.char_indices() {
-        if in_string {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == '"' {
-                in_string = false;
-            }
-            continue;
-        }
-        match ch {
-            '"' => in_string = true,
-            '(' => parens += 1,
-            ')' => parens = parens.saturating_sub(1),
-            '{' => {
-                cutoff = idx;
-                break;
-            }
-            '=' if language == "csharp" && parens == 0 && sig[idx..].starts_with("=>") => {
-                cutoff = idx;
-                break;
-            }
-            _ => {}
-        }
-    }
+fn sanitize_skeleton_sig<'a>(sig: &'a str, sym: &'a Symbol) -> &'a str {
+    let expression_arrow = if sym.language == "csharp"
+        && matches!(
+            sym.kind.as_str(),
+            "method" | "function" | "constructor" | "operator"
+        ) {
+        sig.match_indices("=>")
+            .find_map(|(idx, _)| sig[..idx].trim_end().ends_with(')').then_some(idx))
+    } else {
+        None
+    };
+    let cutoff = sig
+        .find('{')
+        .into_iter()
+        .chain(expression_arrow)
+        .min()
+        .unwrap_or(sig.len());
     let clean = sig[..cutoff].trim_end();
     let trimmed = clean.trim_end_matches(';').trim_end();
-    if trimmed.is_empty() { name } else { trimmed }
+    if trimmed.is_empty() {
+        &sym.name
+    } else {
+        trimmed
+    }
 }
 
 /// The kind word for a leaf row whose signature does not spell it. A C++ Qt signal is declared
@@ -154,7 +144,7 @@ fn render_symbol_skeleton(
 
     if is_container_kind(&sym.kind) && spans_multiple_lines && children.is_some() {
         let raw_sig = sym.signature.as_deref().unwrap_or(&sym.name);
-        let sig = sanitize_skeleton_sig(raw_sig, &sym.name, &sym.language);
+        let sig = sanitize_skeleton_sig(raw_sig, sym);
         out.push_str(&format!("{indent}{sig} {{\n"));
         if let Some(child_list) = children {
             for child in child_list {
@@ -165,7 +155,7 @@ fn render_symbol_skeleton(
     } else {
         if let Some(count) = sym.hidden_body_line_count() {
             let raw_sig = sym.signature.as_deref().unwrap_or(&sym.name);
-            let sig = sanitize_skeleton_sig(raw_sig, &sym.name, &sym.language);
+            let sig = sanitize_skeleton_sig(raw_sig, sym);
             let b_start = sym.body_start_line.unwrap_or(sym.start_line);
             let b_end = sym.body_end_line.unwrap_or(sym.end_line);
 
@@ -177,7 +167,7 @@ fn render_symbol_skeleton(
                 out.push_str(&format!("{indent}{sig}; // {leaf_note}\n"));
             }
         } else if let Some(ref raw_sig) = sym.signature {
-            let sig = sanitize_skeleton_sig(raw_sig, &sym.name, &sym.language);
+            let sig = sanitize_skeleton_sig(raw_sig, sym);
             out.push_str(&format!("{indent}{sig}; // {leaf_note}\n"));
         } else {
             out.push_str(&format!(
