@@ -603,15 +603,30 @@ impl Workspace {
             Ok(canonical) => normalize_path(&canonical),
             Err(_) => return Err(WorkspaceError::ProjectRootNotFound(parsed)),
         };
+        let homes: Vec<PathBuf> = homes
+            .iter()
+            .filter_map(|home| dunce::canonicalize(home).ok())
+            .collect();
+        let is_home = |folder: &Path| homes.iter().any(|home| paths_equal(home, folder));
         let root = Self::find_workspace_root(&canonical)?;
+        let root = if root.parent().is_none() || is_home(&root) {
+            let start = if canonical.is_file() {
+                canonical.parent().unwrap_or(&canonical)
+            } else {
+                &canonical
+            };
+            start
+                .ancestors()
+                .take_while(|folder| !paths_equal(folder, &root))
+                .find(|folder| is_project_root(folder))
+                .map_or(root.clone(), Path::to_path_buf)
+        } else {
+            root
+        };
 
         let refusal = if root.parent().is_none() {
             Some("it is a filesystem root")
-        } else if homes
-            .iter()
-            .filter_map(|home| dunce::canonicalize(home).ok())
-            .any(|home| paths_equal(&home, &root))
-        {
+        } else if is_home(&root) {
             Some("it is the home directory")
         } else if !is_project_root(&root) && !root.join(".code-kb").join("artifact.db").exists() {
             Some(NO_PROJECT_MARKER_REASON)
@@ -622,6 +637,29 @@ impl Workspace {
             Some(reason) => Err(WorkspaceError::ProjectRootRefused { path: root, reason }),
             None => Ok(Workspace::new(root)),
         }
+    }
+
+    /// For an absolute path inside this workspace, returns the nearest folder from the path up to
+    /// the root (the root excluded) that holds `.git` or `.code-kb/artifact.db`: a nested project
+    /// such as a git worktree or submodule.
+    pub fn nested_project_root(&self, path: &Path) -> Option<PathBuf> {
+        let (abs, _) = self.resolve_path(path).ok()?;
+        let start = if abs.is_dir() {
+            abs.as_path()
+        } else {
+            abs.parent()?
+        };
+        let nested = start
+            .ancestors()
+            .take_while(|folder| {
+                strip_prefix_lossy(folder, &self.canonical_root)
+                    .is_some_and(|rel| !rel.as_os_str().is_empty())
+            })
+            .find(|folder| {
+                folder.join(".git").exists() || folder.join(".code-kb").join("artifact.db").exists()
+            })?;
+        let canonical = dunce::canonicalize(nested).unwrap_or_else(|_| nested.to_path_buf());
+        Some(normalize_path(&canonical))
     }
 
     /// Resolves an input path (relative, absolute, or file:// URI) to a canonical absolute path and relative path.
@@ -1332,5 +1370,105 @@ mod tests {
 
         assert_eq!(reason, "it is the home directory");
         assert!(paths_equal(&path, &home), "{}", path.display());
+    }
+
+    #[test]
+    fn project_root_language_project_inside_a_dotfiles_home_resolves_to_that_project() {
+        let temp = crate::safe_tempdir();
+        let home = temp.path().join("home");
+        std::fs::create_dir_all(home.join(".git")).unwrap();
+        let app = home.join("work").join("app");
+        std::fs::create_dir_all(app.join("src")).unwrap();
+        std::fs::write(app.join("Cargo.toml"), "[package]\n").unwrap();
+        let homes = [home.clone()];
+
+        for input in [app.clone(), app.join("src")] {
+            let ws =
+                Workspace::from_project_root_with_homes(&input.to_string_lossy(), &homes).unwrap();
+            assert!(
+                paths_equal(&ws.canonical_root, &app),
+                "{}: {}",
+                input.display(),
+                ws.canonical_root.display()
+            );
+        }
+    }
+
+    fn repo_with_git() -> (tempfile::TempDir, Workspace) {
+        let temp = crate::safe_tempdir();
+        let repo = temp.path().join("repo");
+        std::fs::create_dir_all(repo.join(".git")).unwrap();
+        let ws = Workspace::new(repo);
+        (temp, ws)
+    }
+
+    #[test]
+    fn nested_project_root_finds_a_git_worktree_from_a_file_inside_it() {
+        let (_temp, ws) = repo_with_git();
+        let worktree = ws
+            .canonical_root
+            .join(".claude")
+            .join("worktrees")
+            .join("x");
+        std::fs::create_dir_all(worktree.join("src")).unwrap();
+        std::fs::write(worktree.join(".git"), "gitdir: ../../../.git/worktrees/x\n").unwrap();
+        let file = worktree.join("src").join("a.rs");
+        std::fs::write(&file, "fn a() {}\n").unwrap();
+
+        let nested = ws.nested_project_root(&file).unwrap();
+
+        assert!(paths_equal(&nested, &worktree), "{}", nested.display());
+    }
+
+    #[test]
+    fn nested_project_root_finds_a_git_worktree_from_its_own_folder() {
+        let (_temp, ws) = repo_with_git();
+        let worktree = ws
+            .canonical_root
+            .join(".claude")
+            .join("worktrees")
+            .join("x");
+        std::fs::create_dir_all(&worktree).unwrap();
+        std::fs::write(worktree.join(".git"), "gitdir: ../../../.git/worktrees/x\n").unwrap();
+
+        let nested = ws.nested_project_root(&worktree).unwrap();
+
+        assert!(paths_equal(&nested, &worktree), "{}", nested.display());
+    }
+
+    #[test]
+    fn nested_project_root_ignores_a_language_marker_member() {
+        let (_temp, ws) = repo_with_git();
+        let member = ws.canonical_root.join("crates").join("foo");
+        std::fs::create_dir_all(member.join("src")).unwrap();
+        std::fs::write(member.join("Cargo.toml"), "[package]\n").unwrap();
+        let file = member.join("src").join("lib.rs");
+        std::fs::write(&file, "pub fn foo() {}\n").unwrap();
+
+        assert_eq!(ws.nested_project_root(&file), None);
+    }
+
+    #[test]
+    fn nested_project_root_is_none_for_the_root_and_a_file_directly_in_it() {
+        let (_temp, ws) = repo_with_git();
+        let file = ws.canonical_root.join("main.rs");
+        std::fs::write(&file, "fn main() {}\n").unwrap();
+
+        assert_eq!(ws.nested_project_root(&file), None);
+        assert_eq!(ws.nested_project_root(&ws.canonical_root), None);
+    }
+
+    #[test]
+    fn nested_project_root_finds_a_folder_with_only_an_index() {
+        let (_temp, ws) = repo_with_git();
+        let indexed = ws.canonical_root.join("vendor").join("lib");
+        std::fs::create_dir_all(indexed.join(".code-kb")).unwrap();
+        std::fs::write(indexed.join(".code-kb").join("artifact.db"), b"").unwrap();
+        let file = indexed.join("lib.c");
+        std::fs::write(&file, "int x;\n").unwrap();
+
+        let nested = ws.nested_project_root(&file).unwrap();
+
+        assert!(paths_equal(&nested, &indexed), "{}", nested.display());
     }
 }

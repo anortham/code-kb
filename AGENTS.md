@@ -41,7 +41,11 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
 - **Resolution, once per call:**
   - A plain path or a `file://` URI is accepted. A relative value is an error.
   - A subfolder or a file inside the project resolves to the enclosing project. The walk
-    up stops at `.git`, a language marker, or an existing `.code-kb/artifact.db`.
+    up returns the nearest folder with `.git` or an existing `.code-kb/artifact.db`. When
+    there is no such folder, the walk returns the nearest folder with a language marker
+    (`Cargo.toml`, `package.json`, `go.mod`, `pyproject.toml`). When the folder it finds is
+    the home directory or a filesystem root, the walk returns the nearest folder below it
+    with a project marker.
   - The server refuses a filesystem root (`/`, `C:\`), the home directory, and a folder
     with no project marker (`.git`, `Cargo.toml`, `package.json`, `go.mod`,
     `pyproject.toml`) and no code-kb index. The error names the path and the reason.
@@ -51,7 +55,9 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   - The server never takes the root from the MCP `initialize` request.
 - **Path arguments:** `path` and `file_path` are relative to `project_root`, or absolute
   inside it. An absolute `path` or `file_path` outside `project_root` is an error that
-  names both paths. Path arguments never switch the project.
+  names both paths. An absolute path inside a nested git worktree or submodule counts as
+  outside `project_root`. The error names that nested root. Path arguments never switch
+  the project.
 - **Active index:** The server keeps one active index. A call for another root switches
   to that root's `<root>/.code-kb/artifact.db`. Each call names its own root, so a switch
   never changes the answer to a later call.
