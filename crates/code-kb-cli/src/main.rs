@@ -1,14 +1,15 @@
 use clap::{Args, Parser, Subcommand};
 use std::path::{Path, PathBuf};
 
+use code_kb_core::workspace::NO_PROJECT_MARKER_REASON;
 use code_kb_core::{
-    SymbolSelector, Workspace, blast_radius_selected_op, codebase_outline_op, ensure_fresh_file,
-    ensure_fts_index_path, file_skeleton_op, find_references_for_symbol_ext, format_context_slice,
-    format_fact_categories, format_find_symbol_results, format_references, format_search_results,
-    format_structural_facts, format_symbol_body, fts_search_symbols_explained,
-    fts_search_symbols_scoped, get_context_slice_selected_op, get_symbol_body_selected_op,
-    list_structural_fact_categories_scoped, load_file_symbols, open_read_only, queries,
-    resolve_symbol_op, scan_workspace, search_symbols_scoped,
+    SymbolSelector, Workspace, WorkspaceError, blast_radius_selected_op, codebase_outline_op,
+    ensure_fresh_file, ensure_fts_index_path, file_skeleton_op, find_references_for_symbol_ext,
+    format_context_slice, format_fact_categories, format_find_symbol_results, format_references,
+    format_search_results, format_structural_facts, format_symbol_body,
+    fts_search_symbols_explained, fts_search_symbols_scoped, get_context_slice_selected_op,
+    get_symbol_body_selected_op, list_structural_fact_categories_scoped, load_file_symbols,
+    open_read_only, queries, resolve_symbol_op, scan_workspace, search_symbols_scoped,
 };
 
 mod logging;
@@ -495,15 +496,22 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
+    let project_root = Workspace::from_project_root(&workspace.canonical_root.to_string_lossy());
+    if let Err(e) = &project_root
+        && let WorkspaceError::ProjectRootRefused { reason, .. } = e
+        && *reason != NO_PROJECT_MARKER_REASON
+    {
+        eprintln!("Error: {e}. Run the command inside a project or pass --root <project path>.");
+        std::process::exit(1);
+    }
+
     code_kb_core::ensure_index_matches_extractor(
         &workspace,
         &db_path,
         &code_kb_core::installed_extractor_version(),
     )?;
 
-    if !db_path.exists()
-        && Workspace::from_project_root(&workspace.canonical_root.to_string_lossy()).is_ok()
-    {
+    if !db_path.exists() && project_root.is_ok() {
         eprintln!(
             "Index not found; scanning '{}' first.",
             workspace.canonical_root.display()

@@ -1816,8 +1816,58 @@ fn test_cli_query_in_a_markerless_folder_under_a_dotfiles_home_does_not_index_th
 
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(!out.status.success(), "{stderr}");
-    assert!(stderr.contains("Run `code-kb scan` first"), "{stderr}");
+    assert!(stderr.contains(HOME_REFUSAL), "{stderr}");
     assert!(!home.path().join(".code-kb").join("artifact.db").exists());
+}
+
+const HOME_REFUSAL: &str = "is refused: it is the home directory. Run the command inside a project or pass --root <project path>.";
+
+#[test]
+fn test_cli_query_refuses_a_leftover_home_index_and_leaves_it_unchanged() {
+    let home = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(home.path().join(".git")).unwrap();
+    std::fs::write(
+        home.path().join("dotfiles.py"),
+        "def remember():\n    pass\n",
+    )
+    .unwrap();
+    let notes = home.path().join("notes");
+    std::fs::create_dir_all(&notes).unwrap();
+    let telemetry = tempfile::tempdir().unwrap();
+    let code_kb = || {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_code-kb"));
+        command
+            .env("HOME", home.path())
+            .env("USERPROFILE", home.path())
+            .env("CODE_KB_TELEMETRY_DIR", telemetry.path());
+        command
+    };
+    let scan = code_kb()
+        .arg("--root")
+        .arg(home.path())
+        .arg("scan")
+        .output()
+        .unwrap();
+    assert!(
+        scan.status.success(),
+        "{}",
+        String::from_utf8_lossy(&scan.stderr)
+    );
+    let index = home.path().join(".code-kb").join("artifact.db");
+    let before = std::fs::read(&index).unwrap();
+
+    let out = code_kb()
+        .arg("--root")
+        .arg(&notes)
+        .args(["lookup", "remember"])
+        .output()
+        .unwrap();
+
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(!out.status.success(), "{stderr}");
+    assert!(stderr.starts_with("Error: project_root '"), "{stderr}");
+    assert!(stderr.contains(HOME_REFUSAL), "{stderr}");
+    assert!(std::fs::read(&index).unwrap() == before);
 }
 
 #[test]
