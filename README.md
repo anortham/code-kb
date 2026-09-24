@@ -341,7 +341,7 @@ parse, including the `.pragma library` and `.import` directives. KDE test files 
 `autotests/` and files named `tst_*.qml` are hidden from
 search by default; `--include-tests` shows them.
 
-Current source builds use julie-extract 3.5.0. QML references retain inline component
+Current source builds use julie-extract 3.6.0. QML references retain inline component
 ownership, respect shadowed `id` names, and resolve `parent` and `this` from their
 enclosing object. QML `import` directives appear as structural facts. Qt JavaScript
 `.import` symbols preserve their exact spans, so body reads exclude trailing comments.

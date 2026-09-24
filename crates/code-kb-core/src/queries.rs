@@ -2164,7 +2164,23 @@ pub fn suggest_file_paths(conn: &Connection, rel_path: &str) -> Vec<String> {
             return found;
         }
     }
-    Vec::new()
+
+    let max_edits = (basename.chars().count() / 4).clamp(1, 2);
+    let mut near: Vec<(usize, String)> = Vec::new();
+    let _ = conn
+        .prepare(&format!("SELECT {path_expr} FROM files"))
+        .and_then(|mut stmt| {
+            for path in stmt.query_map([], |row| row.get::<_, String>(0))?.flatten() {
+                let name = path.rsplit('/').next().unwrap_or(&path).to_lowercase();
+                let edits = edit_distance(&name, &basename);
+                if edits <= max_edits {
+                    near.push((edits, path));
+                }
+            }
+            Ok(())
+        });
+    near.sort();
+    near.into_iter().take(3).map(|(_, path)| path).collect()
 }
 
 /// The workspace name and the recovery hint for a symbol that is not indexed.
@@ -3500,6 +3516,72 @@ pub fn find_type_facts(conn: &Connection, symbol_id: &str) -> Result<Vec<TypeFac
     Ok(results)
 }
 
+/// The workspace type definitions named by the type facts of `target` and of its parameters and
+/// locals, one per name, as `signature (path:line)`. A name with no type definition in the
+/// index, such as `Result` or `String`, is left out. Same-file definitions win, then shorter paths.
+pub fn find_related_types(
+    conn: &Connection,
+    target: &Symbol,
+    limit: usize,
+) -> Result<Vec<String>, QueryError> {
+    if !has_table(conn, "type_facts") {
+        return Ok(Vec::new());
+    }
+    let mut stmt = conn.prepare(
+        "SELECT d.name, d.kind, d.signature, d.path, d.start_line
+         FROM symbols d
+         WHERE d.kind IN ('struct', 'enum', 'trait', 'class', 'interface', 'type', 'union')
+           AND d.name IN (
+               SELECT t.resolved_type FROM type_facts t
+               JOIN symbols s ON s.symbol_id = t.symbol_id
+               WHERE s.symbol_id = ?1 OR s.parent_symbol_id = ?1
+           )
+         ORDER BY d.path = ?2 DESC, length(d.path), d.path, d.start_line",
+    )?;
+    let rows = stmt.query_map(params![target.symbol_id, target.path], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, Option<String>>(2)?,
+            row.get::<_, String>(3)?,
+            row.get::<_, i64>(4)?,
+        ))
+    })?;
+
+    let mut seen = std::collections::HashSet::new();
+    let mut types = Vec::new();
+    for row in rows {
+        let (name, kind, signature, path, line) = row?;
+        if types.len() >= limit {
+            break;
+        }
+        if !seen.insert(name.clone()) {
+            continue;
+        }
+        let signature = signature.unwrap_or_else(|| format!("{kind} {name}"));
+        types.push(format!(
+            "{} ({path}:{line})",
+            type_declaration_line(&signature)
+        ));
+    }
+    Ok(types)
+}
+
+/// A type signature without leading attributes, on one line of at most 120 characters.
+fn type_declaration_line(signature: &str) -> String {
+    let mut declaration = signature;
+    while declaration.starts_with("#[")
+        && let Some((_, rest)) = declaration.split_once("] ")
+    {
+        declaration = rest;
+    }
+    let line = declaration.split_whitespace().collect::<Vec<_>>().join(" ");
+    if line.chars().count() <= 120 {
+        return line;
+    }
+    line.chars().take(119).collect::<String>() + "…"
+}
+
 /// True when a repository-relative path looks like a test file. Directory rules and file-name
 /// rules are kept apart: a `test`, `tests`, `autotests`, or `__tests__` directory anywhere
 /// including the repository root, or a file name that starts with Qt's `tst_`, starts with
@@ -3988,6 +4070,27 @@ pub fn compute_blast_radius(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_type_declaration_drops_attributes_and_fits_on_one_short_line() {
+        assert_eq!(
+            super::type_declaration_line(
+                "#[derive(Debug)] #[serde(tag = \"t\")] pub struct Workspace"
+            ),
+            "pub struct Workspace"
+        );
+        let record = format!(
+            "public sealed record Node(\n{})",
+            "    string Id,\n".repeat(20)
+        );
+        let line = super::type_declaration_line(&record);
+        assert!(
+            line.starts_with("public sealed record Node( string Id, string Id,"),
+            "{line}"
+        );
+        assert_eq!(line.chars().count(), 120);
+        assert!(line.ends_with('…'));
+    }
+
     #[test]
     fn result_limit_rejects_values_above_the_shared_ceiling() {
         assert!(validate_result_limit(MAX_RESULT_LIMIT).is_ok());

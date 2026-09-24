@@ -324,6 +324,33 @@ fn test_context_slice_qualified_method_uses_its_own_callees() {
 }
 
 #[test]
+fn context_slice_types_are_the_workspace_types_of_the_parameters_with_their_signatures() {
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+
+    let temp_dir = safe_tempdir();
+    let root = temp_dir.path().to_path_buf();
+    let src_dir = root.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
+    fs::write(
+        src_dir.join("lib.rs"),
+        "pub struct Config { pub name: String }\n\
+         pub fn load(config: &Config, label: String) -> Result<usize, String> { Ok(label.len()) }\n",
+    )
+    .unwrap();
+
+    let workspace = Workspace::new(root.clone());
+    let db_path = root.join("test.db");
+    scan_workspace(&workspace, &db_path, true).expect("Scan failed");
+    let conn = open_read_only(&db_path).unwrap();
+
+    let slice = get_context_slice_op(&workspace, &db_path, &conn, "load", None, false)
+        .expect("context slice failed");
+
+    assert_eq!(slice.related_types, ["pub struct Config (src/lib.rs:1)"]);
+}
+
+#[test]
 fn test_get_symbol_by_name_not_crowded_out_by_imports() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
@@ -1060,6 +1087,23 @@ fn a_wrong_file_path_suggests_the_indexed_file_with_the_same_stem() {
     let found = suggest_file_paths(&conn, "crates/code-kb-cli/src/mcp/format.rs");
 
     assert_eq!(found, ["crates/code-kb-core/src/formatters.rs"]);
+}
+
+#[test]
+fn a_misspelled_file_name_suggests_the_indexed_file_within_two_edits() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+    conn.execute_batch(
+        "INSERT INTO files VALUES
+            ('f1', 'crates/code-kb-core/src/workspace.rs', 'rust', 'h1', 100, 10, 't'),
+            ('f2', 'crates/code-kb-core/src/sync.rs', 'rust', 'h2', 100, 10, 't');",
+    )
+    .unwrap();
+
+    let found = suggest_file_paths(&conn, "crates/code-kb-core/src/workspce.rs");
+
+    assert_eq!(found, ["crates/code-kb-core/src/workspace.rs"]);
 }
 
 #[test]

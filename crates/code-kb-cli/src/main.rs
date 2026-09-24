@@ -102,7 +102,7 @@ pub enum Command {
     BugReport(BugReportArgs),
     /// Start Model Context Protocol (MCP) server on stdio.
     Serve(ServeArgs),
-    /// Output agent lifecycle hook payload (SessionStart, SubagentStart).
+    /// Output agent lifecycle hook payload (SessionStart, SubagentStart, PreInvocation).
     Hook(HookArgs),
 }
 

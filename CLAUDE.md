@@ -120,7 +120,7 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   `Did you mean one of:` with up to three candidates as `kind `name` (path:line)`, or
   `No similar name is indexed; check the workspace and spelling.` Candidates come from the
   substring search first, then from `symbol_names_tri` trigram rows kept within an edit distance
-  of the query. File candidates match by basename, then by stem, then by the last two segments.
+  of the query. File candidates match by basename, then by stem, then by the last two segments, then by a basename within two edits.
 - Structural-fact categories: `CATEGORY_ALIASES` in `queries.rs` is the whole alias table
   (`sql`/`query`/`queries`, `route`/`routes`, `config`, `model`/`models`, `signal`/`signals`,
   `import`/`imports`, `binding`/`bindings`, `component`/`components`, `module`/`modules`,
@@ -169,7 +169,7 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   content-aware workspace scan that only re-extracts changed files.
 
 ### 7. Pinned Extractor & Bundled Distribution
-- `code-kb` pins the exact extractor version in `scripts/julie-pins.json` (currently `3.5.0`).
+- `code-kb` pins the exact extractor version in `scripts/julie-pins.json` (currently `3.6.0`).
 - Build guard: `crates/code-kb-cli/build.rs` verifies that `julie-extract` is restored and matches the pinned version. A missing or mismatched extractor fails the build immediately (bypassable for offline packaging via `CODE_KB_ALLOW_MISSING_JULIE_EXTRACT=1`).
 - Single-download distribution: Release archives ship `code-kb` and matching `julie-extract` pre-packaged side-by-side. Users download one archive and receive both binaries ready to execute.
 - Runtime discovery: `code-kb` checks `JULIE_EXTRACT_BIN`, next to its own executable (`current_exe().parent()`), `.tools/julie-extract` in that directory or any directory above it, and `PATH`. The current directory is never searched, so another repository's vendored extractor is never run. The first candidate whose version matches the pin wins; otherwise the first candidate found is used with a warning.
@@ -177,7 +177,7 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
 - New artifacts are built at the extractor's `facts` level (symbol core, structural facts, literals, and type-usage and member-access identifiers; no call or variable-reference identifiers and no source regions). `find_references(direction="callers")` reads those identifiers. The version guard also rebuilds an index recorded at another level.
 - Scans pass `--parent-pid` (Unix) so an extractor scan aborts when the `code-kb` process that started it dies.
 - Plugin distribution: every harness plugin (`.claude-plugin/plugin.json`, `.codex-plugin/plugin.json` with `.mcp.json`, root `plugin.json` with `mcp.json`, `mcp_config.json`, and `hooks.json` for Antigravity) starts the server and hooks through `bin/code-kb-launcher.cjs`. The launcher is a dependency-free Node script: on first run it downloads the release archive for the plugin's version from GitHub Releases into `~/.code-kb/dist/<version>/<target>/`, verifies the `.sha256` sidecar, unpacks it, and then executes `code-kb` with the given arguments. `CODE_KB_BIN` names a binary to run instead; a binary or symlink at `~/.code-kb/bin/code-kb` overrides the download in every harness (Codex clones plugins into a cache and drops the environment of MCP servers, so only a file can reach it); and a plugin installed from a source checkout runs that checkout's `target/release/code-kb` when it exists. With one of these, `cargo build --release` plus a session restart is the whole dev loop. No binaries are committed to git. `tests/plugin/*.test.cjs` (run with `node --test`) cover the launcher and keep every manifest on the launcher and on one version.
-- Release workflow: Documented step-by-step in `docs/RELEASING.md`; automated pre-flight check via `scripts/release-preflight.sh`. The launcher fetches by the version in `.claude-plugin/plugin.json`, so a version bump on `main` must be followed by its tag and release before users install from `main`.
+- Release workflow: Documented step-by-step in `docs/RELEASING.md`; automated pre-flight check via `scripts/release-preflight.sh`, which also requires a fresh PASS from `scripts/release-corpus-check.py` (the previous release against the candidate on the real projects in `scripts/release-corpus.txt`). The launcher fetches by the version in `.claude-plugin/plugin.json`, so a version bump on `main` must be followed by its tag and release before users install from `main`.
 
 ### 8. Dynamic MCP Discovery & Zero Ghost Compatibility
 - **An MCP server is an ephemeral, agent-facing discovery surface, not a frozen REST API.**

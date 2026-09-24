@@ -221,15 +221,7 @@ pub fn get_context_slice_selected_op(
         include_external,
     )?;
 
-    // Find related types
-    let mut related_types = Vec::new();
-    let types = queries::find_type_facts(conn, &target_symbol.symbol_id)?;
-    for t in types {
-        if !related_types.contains(&t.resolved_type) {
-            related_types.push(t.resolved_type);
-        }
-    }
-
+    let related_types = queries::find_related_types(conn, &target_symbol, 10)?;
     let related_tests = queries::find_related_tests(conn, &target_symbol, 5)?;
 
     Ok(ContextSlice {

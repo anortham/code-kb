@@ -400,6 +400,41 @@ fn cap_notice(shown: usize, limit: usize) -> String {
     format!("\n[Showing {shown} results (limit reached); {advice}.]\n")
 }
 
+/// The FTS match snippet on one line, or `None` when it only repeats the signature. The comment
+/// markers that open each doc-comment line (`//`, `///`, `//!`, `*`) are dropped when lines join.
+fn match_line(snippet: &str, signature: &str) -> Option<String> {
+    let line = snippet
+        .lines()
+        .enumerate()
+        .map(|(i, text)| match i {
+            0 => text.trim(),
+            _ => text.trim().trim_start_matches(['/', '*', '!']).trim(),
+        })
+        .flat_map(str::split_whitespace)
+        .collect::<Vec<_>>()
+        .join(" ");
+    let plain = |text: &str| {
+        text.split_whitespace()
+            .collect::<String>()
+            .replace(['[', ']'], "")
+    };
+    let matched = plain(line.trim_start_matches("...").trim_end_matches("..."));
+    (!line.is_empty() && !plain(signature).contains(&matched)).then_some(line)
+}
+
+/// A callee name on one line. An unresolved call chain longer than 60 characters that holds a
+/// call keeps only its last call, so a multi-line receiver expression never floods the list.
+fn callee_name(name: &str) -> String {
+    let line = name.split_whitespace().collect::<Vec<_>>().join(" ");
+    if line.chars().count() <= 60 || !line.contains('(') {
+        return line;
+    }
+    match line.rsplit_once('.') {
+        Some((_, last)) if !last.is_empty() => format!("….{last}"),
+        _ => line,
+    }
+}
+
 /// Format references list for callers/callees with optional limit footer.
 pub fn format_references(
     target_name: &str,
@@ -429,9 +464,9 @@ pub fn format_references(
             None => String::new(),
         };
         let other = if direction == "callers" {
-            &r.from_symbol_name
+            r.from_symbol_name.clone()
         } else {
-            &r.to_symbol_name
+            callee_name(&r.to_symbol_name)
         };
         let in_file = match r.occurrences {
             Some(n) => format!(", {n} in file"),
@@ -493,10 +528,8 @@ pub fn format_find_symbol_results(
                 s.kind, s.name, s.path, s.start_line, s.end_line, r.score, s.symbol_id
             ));
             out.push_str(&format!("  Signature: {sig}\n"));
-            if let Some(snippet) = &r.snippet {
-                let clean = snippet.replace('\r', "").trim().to_string();
-                let first = clean.lines().next().unwrap_or(&clean);
-                out.push_str(&format!("  Match: {first}\n"));
+            if let Some(line) = r.snippet.as_deref().and_then(|m| match_line(m, sig)) {
+                out.push_str(&format!("  Match: {line}\n"));
             } else if let Some(doc) = &s.doc_comment {
                 let first = doc.lines().next().unwrap_or("").trim();
                 if !first.is_empty() {
@@ -660,10 +693,8 @@ pub fn format_search_results(query: &str, results: &[SymbolSearchResult], limit:
             s.kind, s.name, s.path, s.start_line, s.end_line, r.score, s.symbol_id
         ));
         out.push_str(&format!("  Signature: {sig}\n"));
-        if let Some(snippet) = &r.snippet {
-            let clean_snip = snippet.replace('\r', "").trim().to_string();
-            let first_line = clean_snip.lines().next().unwrap_or(&clean_snip);
-            out.push_str(&format!("  Match: {first_line}\n"));
+        if let Some(line) = r.snippet.as_deref().and_then(|m| match_line(m, sig)) {
+            out.push_str(&format!("  Match: {line}\n"));
         } else if let Some(doc) = &s.doc_comment {
             let first_line = doc.lines().next().unwrap_or("").trim();
             if !first_line.is_empty() {
@@ -953,6 +984,48 @@ mod tests {
             single.contains("- `Button` [Ui/Button.qml:5] (kind: member_access)"),
             "{single}"
         );
+    }
+
+    #[test]
+    fn a_match_snippet_joins_its_lines_and_is_dropped_when_it_repeats_the_signature() {
+        assert_eq!(
+            match_line("...path up to\n the [root] (the [root] excluded)", "fn f()"),
+            Some("...path up to the [root] (the [root] excluded)".into())
+        );
+        assert_eq!(
+            match_line("// [HelpFunc] returns the\n// [function] set", "fn f()"),
+            Some("// [HelpFunc] returns the [function] set".into())
+        );
+        assert_eq!(
+            match_line(
+                "fn [index]_facts(workspace_[root]: &Path) -> Option<[IndexFacts]>",
+                "fn index_facts(workspace_root: &Path) -> Option<IndexFacts>"
+            ),
+            None
+        );
+        assert_eq!(
+            match_line(
+                "...[root]: &[PathBuf]) -> bool",
+                "fn f(root: &[PathBuf]) -> bool"
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn a_long_unresolved_call_chain_shows_only_its_last_call() {
+        assert_eq!(
+            callee_name(
+                "[\"a\", \"b\"]\n    .into_iter()\n    .find_map(|key| args.get(key)).ok_or_else"
+            ),
+            "….ok_or_else"
+        );
+        assert_eq!(
+            callee_name("workspace.resolve_path"),
+            "workspace.resolve_path"
+        );
+        let selector = "html.dash .header, html.dash .breadcrumbs, html.dash .navigation";
+        assert_eq!(callee_name(selector), selector);
     }
 
     #[test]
