@@ -497,7 +497,15 @@ pub fn format_find_symbol_results(
             "Found {} symbols matching \"{query}\":\n\n",
             exact_matches.len()
         );
-        for s in exact_matches {
+        let has_definition = exact_matches.iter().any(|s| s.kind != "import");
+        let imports: Vec<&Symbol> = exact_matches
+            .iter()
+            .filter(|s| has_definition && s.kind == "import")
+            .collect();
+        for s in exact_matches
+            .iter()
+            .filter(|s| !(has_definition && s.kind == "import"))
+        {
             let sig = s.signature.as_deref().unwrap_or(&s.name);
             out.push_str(&format!(
                 "- {} `{}` [{}:{}-{}] id={}\n",
@@ -510,6 +518,19 @@ pub fn format_find_symbol_results(
                     out.push_str(&format!("  Doc: {first}\n"));
                 }
             }
+        }
+        if !imports.is_empty() {
+            let shown = imports
+                .iter()
+                .take(3)
+                .map(|s| format!("{}:{}", s.path, s.start_line))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let more = if imports.len() > 3 { ", …" } else { "" };
+            out.push_str(&format!(
+                "- {} imports of `{query}`: {shown}{more} (find_references lists every use)\n",
+                imports.len()
+            ));
         }
         if exact_matches.len() >= limit {
             out.push_str(&cap_notice(exact_matches.len(), limit));
@@ -1149,6 +1170,46 @@ mod tests {
         assert!(formatted.contains("Match: Parses [tokens] from stream."));
         assert!(!formatted.contains("explain"));
         assert!(!formatted.contains("rerank"));
+    }
+
+    #[test]
+    fn exact_lookup_folds_import_rows_into_one_line_when_a_definition_exists() {
+        let class = Symbol {
+            kind: "class".into(),
+            path: "src/flask/app.py".into(),
+            ..sample_symbol("Flask")
+        };
+        let import = |path: &str, line: usize| Symbol {
+            kind: "import".into(),
+            path: path.into(),
+            start_line: line,
+            symbol_id: format!("id_{path}"),
+            ..sample_symbol("Flask")
+        };
+        let rows = vec![
+            class,
+            import("src/flask/cli.py", 34),
+            import("src/flask/ctx.py", 21),
+            import("tests/conftest.py", 6),
+            import("examples/app.py", 1),
+        ];
+
+        let folded = format_find_symbol_results("Flask", &rows, &[], 20);
+
+        assert!(
+            folded.contains("- class `Flask` [src/flask/app.py:"),
+            "{folded}"
+        );
+        assert!(
+            folded.contains(
+                "- 4 imports of `Flask`: src/flask/cli.py:34, src/flask/ctx.py:21, tests/conftest.py:6, … (find_references lists every use)"
+            ),
+            "{folded}"
+        );
+        assert!(!folded.contains("- import `Flask`"), "{folded}");
+
+        let imports_only = format_find_symbol_results("Flask", &rows[1..], &[], 20);
+        assert_eq!(imports_only.matches("- import `Flask`").count(), 4);
     }
 
     #[test]

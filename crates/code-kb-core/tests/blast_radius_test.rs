@@ -2,7 +2,8 @@ use rusqlite::Connection;
 
 use code_kb_core::{
     Workspace, blast_radius_op, compute_blast_radius, compute_blast_radius_scoped, find_references,
-    find_references_ext, format_blast_radius, open_read_write, safe_tempdir,
+    find_references_ext, find_related_tests, format_blast_radius, get_symbol_by_id,
+    open_read_write, safe_tempdir,
 };
 
 fn setup_test_db(conn: &Connection) {
@@ -142,6 +143,53 @@ fn test_blast_radius_op_file_seed_and_stem_matching() {
     assert_eq!(result.likely_tests.len(), 1);
     assert_eq!(result.likely_tests[0].path, "tests/test_auth.rs");
     assert_eq!(result.likely_tests[0].reason, "stem-matched test file");
+}
+
+#[test]
+fn related_tests_list_flagged_tests_before_helpers_in_the_same_test_file() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+    conn.execute_batch(
+        "INSERT INTO symbols VALUES
+            ('s_target', 'f1', 'command.go', 'go', 'ExecuteC', 'method', NULL, NULL, NULL, NULL, 10, 0, 20, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
+            ('s_helper', 'f2', 'command_test.go', 'go', 'executeCommandC', 'function', NULL, NULL, NULL, NULL, 48, 0, 55, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
+            ('s_test', 'f2', 'command_test.go', 'go', 'TestExecuteC', 'function', NULL, NULL, NULL, NULL, 159, 0, 170, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1, 0);
+        INSERT INTO relationships VALUES
+            ('s_helper', 's_target', 'calls', 'command_test.go', 50, 0),
+            ('s_test', 's_target', 'calls', 'command_test.go', 160, 0);",
+    )
+    .unwrap();
+    let target = get_symbol_by_id(&conn, "s_target").unwrap().unwrap();
+
+    let tests = find_related_tests(&conn, &target, 1).unwrap();
+
+    assert_eq!(tests[0].name, "TestExecuteC");
+}
+
+#[test]
+fn a_stem_matches_test_file_names_not_the_folders_above_them() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+    conn.execute_batch(
+        "INSERT INTO files VALUES
+            ('f1', 'src/flask/app.py', 'python', 'h1', 100, 10, 'now'),
+            ('f2', 'tests/test_app.py', 'python', 'h2', 100, 10, 'now'),
+            ('f3', 'tests/test_apps/.flaskenv', 'dotenv', 'h3', 100, 10, 'now'),
+            ('f4', 'tests/test_apps/blueprintapp/__init__.py', 'python', 'h4', 100, 10, 'now'),
+            ('f5', 'tests/test_apps/blueprintapp/static/css/test.css', 'css', 'h5', 100, 10, 'now');",
+    )
+    .unwrap();
+
+    let result = compute_blast_radius(&conn, &[], &["src/flask/app.py"], 1, 20).unwrap();
+
+    let paths: Vec<&str> = result
+        .likely_tests
+        .iter()
+        .map(|t| t.path.as_str())
+        .collect();
+    assert_eq!(paths, ["tests/test_app.py"]);
 }
 
 #[test]

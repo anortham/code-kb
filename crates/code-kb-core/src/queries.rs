@@ -1611,6 +1611,8 @@ pub fn find_related_tests(
             s.start_byte, s.end_byte, s.body_start_line, s.body_start_column, s.body_end_line,
             s.body_end_column, s.body_start_byte, s.body_end_byte, s.body_hash, s.semantic_group,
             s.is_test, s.test_container";
+    // Rows a scan writes can land in any order, so every query below needs a full ORDER BY.
+    const TEST_ORDER: &str = "s.is_test DESC, s.path, s.start_line, s.symbol_id";
     let is_test = format!(
         "(s.is_test = 1 OR s.test_container = 1 OR ({} AND s.kind NOT IN ({LOW_SIGNAL_KINDS_SQL})))",
         test_path_predicate("s")
@@ -1625,6 +1627,7 @@ pub fn find_related_tests(
      FROM symbols s
      JOIN relationships r ON r.from_symbol_id = s.symbol_id
      WHERE r.to_symbol_id = ?1 AND {is_test} AND {not_documentation}
+     ORDER BY {TEST_ORDER}
      LIMIT ?2"
     );
 
@@ -1655,6 +1658,7 @@ pub fn find_related_tests(
        AND {is_test}
        AND {not_documentation}
        AND {pred}
+     ORDER BY {TEST_ORDER}
      LIMIT ?2",
             pred = pending_target_predicate(conn, "s_target", "s_target_parent")
         );
@@ -1683,7 +1687,7 @@ pub fn find_related_tests(
      WHERE {is_test}
        AND {not_documentation}
        AND (s.name LIKE '%' || ?1 || '%' OR s.signature LIKE '%' || ?1 || '%')
-     ORDER BY (s.name LIKE '%' || ?1 || '%') DESC
+     ORDER BY (s.name LIKE '%' || ?1 || '%') DESC, {TEST_ORDER}
      LIMIT ?2"
     );
 
@@ -1718,6 +1722,7 @@ pub fn find_related_tests(
          FROM symbols_fts
          CROSS JOIN symbols s ON s.rowid = symbols_fts.rowid
          WHERE symbols_fts MATCH ?1 AND {is_test} AND {not_documentation}
+         ORDER BY {TEST_ORDER}
          LIMIT ?2"
         );
 
@@ -3969,9 +3974,12 @@ pub fn compute_blast_radius_scoped_with_ids(
             "EXISTS (SELECT 1 FROM symbols d WHERE d.path = files.path AND NOT {})",
             not_documentation(conn, "d")
         );
+        let slashed = "replace(path, '\\', '/')";
+        let file_name =
+            format!("replace({slashed}, rtrim({slashed}, replace({slashed}, '/', '')), '')");
         let mut test_files_stmt = conn.prepare(&format!(
             "SELECT DISTINCT path FROM files
-             WHERE (path LIKE '%test%' OR path LIKE '%spec%') AND path LIKE ?1 ESCAPE '\\'
+             WHERE (path LIKE '%test%' OR path LIKE '%spec%') AND {file_name} LIKE ?1 ESCAPE '\\'
                AND NOT {doc_file}
              ORDER BY path ASC
              LIMIT 11"
