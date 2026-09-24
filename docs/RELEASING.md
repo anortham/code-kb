@@ -60,6 +60,32 @@ Run the automated pre-flight script, or execute each check manually:
    ```bash
    cargo package -p code-kb-core
    ```
+6. **Real-Project Corpus Check (preflight step 9 requires it):**
+   Compare this build with the previous release on the real projects in
+   `scripts/release-corpus.txt` (Rust, Swift, Go, JS, TS, Python, Java, Kotlin, C#, Razor, C, C++,
+   Ruby, and the julie fixtures for the other languages). Run it after the version-bump commit,
+   because the report must be newer than `HEAD`.
+   ```bash
+   PREV=2.1.0   # the previous release
+   mkdir -p ~/.code-kb/search-eval/bin/v$PREV && cd ~/.code-kb/search-eval/bin/v$PREV
+   gh release download v$PREV -R anortham/code-kb -p '*x86_64-unknown-linux-gnu*' --clobber
+   sha256sum -c *.sha256 && tar xzf *.tar.gz && cd -
+   mkdir -p target/candidate
+   ln -sf "$PWD/target/release/code-kb" target/candidate/code-kb
+   ln -sf "$PWD/.tools/julie-extract" target/candidate/julie-extract   # the pinned extractor
+   scripts/release-corpus-check.py --old ~/.code-kb/search-eval/bin/v$PREV --new target/candidate
+   ```
+   The script fails on a failed scan, a symbol loss over 0.5%, a scan more than 1.5 times slower,
+   an old index the candidate does not bring up to date, or a tool call that worked before and now
+   errors or returns nothing. A PASS is not enough. Read `target/release-corpus/report.md`:
+   - Check each gained and lost call-edge sample against its source line. A gained edge that is not
+     a real call is a wrong caller in `find_references` and `blast_radius`. Fix it before release.
+   - Open the changed tool outputs. Each change must come from a change in this release.
+7. **Harness Dogfood Session:**
+   Run the candidate in real sessions before tagging. On a dev machine, `~/.code-kb/bin/code-kb`
+   points every harness at `target/release`. In Claude Code and in Codex, open a git worktree of
+   one corpus project that is not Rust. Call every tool once with that worktree as `project_root`.
+   Read each answer for wrong roots, empty results, or noisy output.
 
 ---
 
@@ -121,7 +147,7 @@ failures the Linux suite cannot see.
 ```bash
 git push origin main
 gh run watch --exit-status   # the CI run for the release commit
-./scripts/release-preflight.sh   # step 8 fails unless CI passed on HEAD
+./scripts/release-preflight.sh   # step 8 fails unless CI passed on HEAD; step 9 fails without a fresh corpus PASS
 ```
 
 Do not tag, and do not publish crates, while CI is red or still running.
@@ -181,6 +207,20 @@ tar -tzf code-kb-vX.Y.Z-x86_64-unknown-linux-gnu.tar.gz
 # ./README.md
 # ./LICENSE-MIT
 # ./LICENSE-APACHE
+```
+
+### Verify a Clean Plugin Install:
+Run the launcher the way a new user does: an empty cache, no override binary, and no source
+checkout next to it. It must download, verify, and run the new release before you publish to
+crates.io.
+```bash
+SMOKE=$(mktemp -d)
+mkdir -p "$SMOKE/plugin/bin" "$SMOKE/plugin/.claude-plugin"
+cp bin/code-kb-launcher.cjs "$SMOKE/plugin/bin/"
+cp .claude-plugin/plugin.json "$SMOKE/plugin/.claude-plugin/"
+env -u CODE_KB_BIN CODE_KB_HOME="$SMOKE/home" node "$SMOKE/plugin/bin/code-kb-launcher.cjs" --version
+env -u CODE_KB_BIN CODE_KB_HOME="$SMOKE/home" node "$SMOKE/plugin/bin/code-kb-launcher.cjs" \
+  --root target/release-corpus/corpus/cobra lookup Command --limit 1
 ```
 
 ---

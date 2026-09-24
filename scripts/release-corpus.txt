@@ -1,0 +1,18 @@
+# Real-project corpus for scripts/release-corpus-check.py.
+# Columns: name, git repository path (~ allowed), optional ref (default HEAD), optional subdirectory.
+# Each entry is exported with `git archive`, so the checked-out repositories are never touched.
+code-kb          ~/source/code-kb
+alamofire        ~/source/Alamofire
+cobra            ~/source/cobra
+express          ~/source/express
+flask            ~/source/flask
+gson             ~/source/gson
+jq               ~/source/jq
+miller           ~/source/miller
+moshi            ~/source/moshi
+newtonsoft-json  ~/source/Newtonsoft.Json
+nlohmann-json    ~/source/nlohmann-json
+radzen-blazor    ~/source/radzen-blazor
+sinatra          ~/source/sinatra
+zod              ~/source/zod
+julie-fixtures   ~/source/julie-extractors  main  fixtures

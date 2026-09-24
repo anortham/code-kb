@@ -227,6 +227,8 @@ class PersistentMcpClient:
         return elapsed_ms
 
     def call_tool(self, name: str, arguments: dict[str, Any]) -> tuple[dict[str, Any], float]:
+        if name != "telemetry_summary":
+            arguments = {"project_root": self.cwd, **arguments}
         start = time.perf_counter()
         req_id = self.next_id
         self.next_id += 1
