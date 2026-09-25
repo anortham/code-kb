@@ -3,7 +3,8 @@ use std::path::Path;
 use thiserror::Error;
 
 use crate::formatters::{
-    OutlineNode, add_path_to_outline, format_file_skeleton, render_outline_tree,
+    OutlineNode, add_path_to_outline, add_unsupported_to_outline, format_file_skeleton,
+    render_outline_tree,
 };
 use crate::models::{BlastRadiusResult, ContextSlice, Symbol};
 use crate::queries::{self, QueryError};
@@ -326,7 +327,11 @@ pub fn codebase_outline_op(
         true
     })?;
 
-    let unsupported = queries::count_unsupported_files(conn, norm.as_deref());
+    let mut unsupported = 0;
+    queries::for_each_unsupported_path(conn, &scope, |file_path| {
+        unsupported += 1;
+        add_unsupported_to_outline(&mut root_node, file_path, depth, norm_filter);
+    })?;
     if let Some(filter) = path_filter
         && files_found == 0
         && unsupported == 0
@@ -587,6 +592,8 @@ mod tests {
 
         let all = codebase_outline_op(&workspace, &conn, 2, None).unwrap();
         assert!(all.contains("2 unsupported files"));
+        assert!(all.contains("docs/ (1 unsupported file)"), "{all}");
+        assert!(all.contains("src/ (1 unsupported file)"), "{all}");
 
         let scoped = codebase_outline_op(&workspace, &conn, 2, Some("src")).unwrap();
         assert!(scoped.contains("1 unsupported file:"));

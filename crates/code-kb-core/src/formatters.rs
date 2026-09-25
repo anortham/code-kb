@@ -392,17 +392,13 @@ pub struct OutlineNode {
     pub hidden_files: usize,
     /// Indexed files in this directory with no function, class, or test to list.
     pub plain_files: Vec<String>,
+    /// Files under this directory that no extractor reads.
+    pub unsupported_files: usize,
 }
 
-/// Add a file path into the outline tree, bounded by max_depth.
-pub fn add_path_to_outline(
-    root_node: &mut OutlineNode,
-    file_path: &str,
-    symbols_by_file: &HashMap<String, Vec<Symbol>>,
-    counts: &HashMap<String, crate::queries::OutlineCounts>,
-    max_depth: usize,
-    norm_filter: &str,
-) {
+/// The path components of `file_path` below the outline's path filter, or `None` for a path
+/// outside it.
+fn outline_components(file_path: &str, norm_filter: &str) -> Option<Vec<String>> {
     let normalized = file_path.replace('\\', "/");
     let rel_path_str = if norm_filter.is_empty() {
         normalized.as_str()
@@ -417,19 +413,54 @@ pub fn add_path_to_outline(
     {
         &normalized[norm_filter.len() + 1..]
     } else {
-        return;
+        return None;
     };
 
     let path = Path::new(rel_path_str);
-    let components: Vec<&str> = path
+    let components: Vec<String> = path
         .components()
         .map(|c| c.as_os_str().to_str().unwrap_or(""))
         .filter(|s| !s.is_empty())
+        .map(str::to_string)
         .collect();
 
     if components.is_empty() {
-        return;
+        return None;
     }
+
+    Some(components)
+}
+
+/// Counts a file no extractor reads on the deepest folder the outline shows for it.
+pub fn add_unsupported_to_outline(
+    root_node: &mut OutlineNode,
+    file_path: &str,
+    max_depth: usize,
+    norm_filter: &str,
+) {
+    let Some(components) = outline_components(file_path, norm_filter) else {
+        return;
+    };
+    let mut curr = root_node;
+    for comp in components.iter().take(components.len() - 1).take(max_depth) {
+        curr = curr.subdirs.entry(comp.clone()).or_default();
+    }
+    curr.unsupported_files += 1;
+}
+
+/// Add a file path into the outline tree, bounded by max_depth.
+pub fn add_path_to_outline(
+    root_node: &mut OutlineNode,
+    file_path: &str,
+    symbols_by_file: &HashMap<String, Vec<Symbol>>,
+    counts: &HashMap<String, crate::queries::OutlineCounts>,
+    max_depth: usize,
+    norm_filter: &str,
+) {
+    let Some(components) = outline_components(file_path, norm_filter) else {
+        return;
+    };
+    let normalized = file_path.replace('\\', "/");
 
     let mut curr = root_node;
     let depth = components.len();
@@ -509,10 +540,11 @@ pub fn render_outline_tree(
         let branch = if is_last { "└── " } else { "├── " };
         let next_prefix = format!("{}{}", prefix, if is_last { "    " } else { "│   " });
 
-        let hidden = match sub.hidden_files {
-            0 => String::new(),
-            1 => " (1 indexed file)".to_string(),
-            n => format!(" ({n} indexed files)"),
+        let hidden = match (sub.hidden_files, sub.unsupported_files) {
+            (0, 0) => String::new(),
+            (0, m) => format!(" ({m} unsupported {})", plural(m, "file")),
+            (n, 0) => format!(" ({n} indexed {})", plural(n, "file")),
+            (n, m) => format!(" ({n} indexed {}, {m} unsupported)", plural(n, "file")),
         };
         out.push_str(&format!("{prefix}{branch}{name}/{hidden}\n"));
         render_outline_tree(out, sub, &next_prefix, depth + 1, max_depth);
