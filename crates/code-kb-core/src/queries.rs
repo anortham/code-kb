@@ -3281,7 +3281,9 @@ pub fn find_structural_facts_scoped(
                          THEN substr(json_extract(sf.metadata_json, '$.key_path'), 3)
                          ELSE json_extract(sf.metadata_json, '$.key_path') END,
                     json_extract(sf.metadata_json, '$.key'),
-                    json_extract(sf.metadata_json, '$.normalized_route_template'),
+                    CASE WHEN json_extract(sf.metadata_json, '$.normalized_route_template') IS NOT NULL
+                         THEN COALESCE(json_extract(sf.metadata_json, '$.verb') || ' ', '')
+                              || json_extract(sf.metadata_json, '$.normalized_route_template') END,
                     CASE WHEN sf.pattern_id = 'cpp.qt_property.v1'
                          THEN json_extract(sf.metadata_json, '$.name') END
                 ) AS display_key,
@@ -6189,7 +6191,7 @@ mod tests {
             INSERT INTO structural_facts VALUES
                 ('sf_toml', 'f1', 'Cargo.toml', 'toml', 'toml.key_value.v1', 'key_value', 'table', NULL, 1, 2, 1.0, '{\"key\":\"command\",\"key_path\":\"mcp_servers.code-kb.command\"}'),
                 ('sf_yaml', 'f6', '.github/workflows/ci.yml', 'yaml', 'yaml.key_value.v1', 'key_value', 'block_mapping_pair', NULL, 3, 3, 1.0, '{\"key\":\"name\",\"key_path\":\"$.on.name\"}'),
-                ('sf_route', 'f2', 'src/routes/api.rs', 'rust', 'axum.route.v1', 'get_users', 'function', NULL, 10, 20, 1.0, '{\"verb\":\"GET\",\"normalized_route_template\":\"/api/v1/users/:id\"}'),
+                ('sf_route', 'f2', 'src/routes/api.rs', 'rust', 'axum.route.v1', 'get_users', 'function', NULL, 10, 20, 1.0, '{\"verb\":\"GET\",\"route_template\":\"/api/v1/users/{id}\",\"normalized_route_template\":\"/api/v1/users/:id\"}'),
                 ('sf_sql', 'f3', 'src/db/queries.rs', 'rust', 'sql.select_query.v1', 'select_users', 'function', NULL, 30, 40, 1.0, NULL),
                 ('sf_model', 'f4', 'src/models/user.rs', 'rust', 'sql.table_definition.v1', 'User', 'struct', NULL, 50, 60, 1.0, NULL),
                 ('sf_css', 'f7', 'web/site.css', 'css', 'css.media_query.v1', 'media', 'media_statement', NULL, 1, 1, 1.0, NULL),
@@ -6220,7 +6222,7 @@ mod tests {
         let facts_route = find_structural_facts_scoped(&conn, "route", None, 10).unwrap();
         assert_eq!(facts_route.len(), 1);
         assert_eq!(facts_route[0].pattern_id, "axum.route.v1");
-        assert_eq!(facts_route[0].key.as_deref(), Some("/api/v1/users/:id"));
+        assert_eq!(facts_route[0].key.as_deref(), Some("GET /api/v1/users/:id"));
         let facts_routes = find_structural_facts_scoped(&conn, "routes", None, 10).unwrap();
         assert_eq!(facts_routes.len(), 1);
         let lits_route = find_literals_scoped(&conn, "route", None, 10).unwrap();

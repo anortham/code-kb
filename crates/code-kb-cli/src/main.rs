@@ -780,7 +780,10 @@ fn main() -> anyhow::Result<()> {
                 {
                     let categories =
                         list_structural_fact_categories_scoped(&conn, rel_path.as_deref())?;
-                    println!("No facts match '{cat}' in this repository.\n");
+                    println!(
+                        "{}\n",
+                        code_kb_core::no_facts_heading(cat, rel_path.as_deref())
+                    );
                     println!("{}", format_fact_categories(&categories));
                 } else {
                     print!(

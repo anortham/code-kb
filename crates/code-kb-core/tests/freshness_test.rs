@@ -1,8 +1,8 @@
 use code_kb_core::{
-    OpError, SymbolSelector, Workspace, ensure_fresh_file, ensure_index_matches_extractor,
-    find_julie_extract_binary, get_file, get_symbol_by_id, get_symbol_by_name,
-    installed_extractor_version, open_read_only, open_read_write, reconcile_offline_edits,
-    resolve_symbol_op, safe_tempdir, scan_workspace, update_file,
+    OpError, SymbolSelector, Workspace, create_index, ensure_fresh_file,
+    ensure_index_matches_extractor, find_julie_extract_binary, get_file, get_symbol_by_id,
+    get_symbol_by_name, installed_extractor_version, open_read_only, open_read_write,
+    reconcile_offline_edits, resolve_symbol_op, safe_tempdir, scan_workspace, update_file,
 };
 use std::fs;
 #[cfg(unix)]
@@ -864,6 +864,60 @@ fn test_reconcile_offline_edits_preserves_hidden_files() {
         sym_after.is_some(),
         "Symbol in hidden dir should still exist after reconciliation"
     );
+}
+
+#[test]
+fn a_worktree_index_copied_from_an_older_extractor_is_rebuilt() {
+    find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+    let temp_dir = safe_tempdir();
+    let main_root = temp_dir.path().join("main");
+    let wt_root = temp_dir.path().join("feature");
+    for root in [&main_root, &wt_root] {
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::write(
+            root.join("src").join("calc.rs"),
+            "pub fn foo_fn() -> i32 {\n    100\n}\n",
+        )
+        .unwrap();
+    }
+    fs::create_dir_all(main_root.join(".git").join("worktrees").join("feature")).unwrap();
+    fs::write(
+        wt_root.join(".git"),
+        format!(
+            "gitdir: {}\n",
+            main_root
+                .join(".git")
+                .join("worktrees")
+                .join("feature")
+                .display()
+        ),
+    )
+    .unwrap();
+    let main_db = main_root.join(".code-kb").join("artifact.db");
+    scan_workspace(&Workspace::new(main_root.clone()), &main_db, true).expect("Scan failed");
+    {
+        let conn = rusqlite::Connection::open(&main_db).unwrap();
+        conn.execute_batch(
+            "UPDATE artifact_metadata SET value = '0.0.1' WHERE key = 'binary_version';
+             UPDATE extraction_revisions SET binary_version = '0.0.1';",
+        )
+        .unwrap();
+    }
+
+    let wt_db = wt_root.join(".code-kb").join("artifact.db");
+    create_index(&Workspace::new(wt_root.clone()), &wt_db).unwrap();
+
+    let conn = open_read_only(&wt_db).unwrap();
+    let stale: i64 = conn
+        .query_row(
+            "SELECT count(*) FROM files f
+             JOIN extraction_revisions r ON r.revision_id = f.last_revision_id
+             WHERE r.binary_version != ?1",
+            [installed_extractor_version()],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(stale, 0);
 }
 
 #[test]

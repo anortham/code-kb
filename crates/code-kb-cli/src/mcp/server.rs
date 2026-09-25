@@ -1327,11 +1327,11 @@ impl McpServer {
                                 Err(e) => return CallToolResult::error(e.to_string()),
                             };
                         let out = format!(
-                            "No facts match '{category}' in this repository.\n\n{}",
+                            "{}\n\n{}",
+                            code_kb_core::no_facts_heading(category, path_filter),
                             format_fact_categories(&categories)
                         );
-                        return CallToolResult::text(out)
-                            .with_logical_result_count(categories.len());
+                        return CallToolResult::text(out).with_logical_result_count(0);
                     }
 
                     let baseline_paths = facts

@@ -624,13 +624,15 @@ mod tests {
         )
         .unwrap();
 
+        let tx = conn.unchecked_transaction().unwrap();
         for i in 1..=1005 {
-            conn.execute(
+            tx.execute(
                 "INSERT INTO files VALUES (?1, ?2, 'rust', 'hash', 10, 1, 'now')",
                 rusqlite::params![format!("f{i}"), format!("src/file_{i}.rs")],
             )
             .unwrap();
         }
+        tx.commit().unwrap();
 
         let outline = codebase_outline_op(&workspace, &conn, 2, None).unwrap();
         assert!(outline.contains("[Outline truncated: workspace contains over 1,000 files."));

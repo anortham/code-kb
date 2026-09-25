@@ -68,7 +68,28 @@ fn is_skippable_kind(kind: &str) -> bool {
     matches!(kind, "variable" | "parameter" | "import")
 }
 
-fn sanitize_skeleton_sig<'a>(sig: &'a str, sym: &'a Symbol) -> &'a str {
+/// A value row that assigns before any `{` keeps its first line, capped at 120 characters,
+/// because that `{` starts a value such as a dict literal, not a body.
+fn value_row_signature(sig: &str) -> Option<String> {
+    let first = sig.lines().next().unwrap_or(sig).trim_end();
+    let more = sig.trim_end().len() > first.len();
+    if first.chars().count() > 120 {
+        return Some(first.chars().take(119).collect::<String>() + "…");
+    }
+    more.then(|| format!("{first} …"))
+}
+
+fn sanitize_skeleton_sig<'a>(sig: &'a str, sym: &'a Symbol) -> std::borrow::Cow<'a, str> {
+    let assigns_before_brace = sig
+        .find('=')
+        .is_some_and(|eq| sig.find('{').is_none_or(|brace| eq < brace));
+    if matches!(
+        sym.kind.as_str(),
+        "variable" | "constant" | "property" | "field" | "enum_member"
+    ) && assigns_before_brace
+    {
+        return value_row_signature(sig).map_or(sig.into(), Into::into);
+    }
     let expression_arrow = if sym.language == "csharp"
         && matches!(
             sym.kind.as_str(),
@@ -88,9 +109,9 @@ fn sanitize_skeleton_sig<'a>(sig: &'a str, sym: &'a Symbol) -> &'a str {
     let clean = sig[..cutoff].trim_end();
     let trimmed = clean.trim_end_matches(';').trim_end();
     if trimmed.is_empty() {
-        &sym.name
+        sym.name.as_str().into()
     } else {
-        trimmed
+        trimmed.into()
     }
 }
 
@@ -127,7 +148,8 @@ fn render_symbol_skeleton(
     children_map: &HashMap<Option<String>, Vec<&Symbol>>,
     indent_level: usize,
 ) {
-    if is_skippable_kind(&sym.kind) {
+    let class_attribute = sym.kind == "variable" && indent_level > 0;
+    if is_skippable_kind(&sym.kind) && !class_attribute {
         return;
     }
 
@@ -207,6 +229,8 @@ fn render_symbol_skeleton(
 pub struct OutlineNode {
     pub files: BTreeMap<String, Vec<String>>, // file_name -> list of top symbol names with kinds
     pub subdirs: BTreeMap<String, OutlineNode>,
+    /// Files under this directory that lie below the depth limit.
+    pub hidden_files: usize,
 }
 
 /// Add a file path into the outline tree, bounded by max_depth.
@@ -250,8 +274,9 @@ pub fn add_path_to_outline(
 
     for (i, comp) in components.iter().enumerate() {
         if i == depth - 1 {
-            // Leaf file: only insert if it is within max_depth
-            if depth <= max_depth {
+            if depth > max_depth {
+                curr.hidden_files += 1;
+            } else {
                 let mut sym_tags = Vec::new();
                 if let Some(syms) = symbols_by_file.get(&normalized) {
                     for s in syms.iter().take(5) {
@@ -268,6 +293,7 @@ pub fn add_path_to_outline(
         } else if i < max_depth {
             curr = curr.subdirs.entry(comp.to_string()).or_default();
         } else {
+            curr.hidden_files += 1;
             break;
         }
     }
@@ -294,7 +320,12 @@ pub fn render_outline_tree(
         let branch = if is_last { "└── " } else { "├── " };
         let next_prefix = format!("{}{}", prefix, if is_last { "    " } else { "│   " });
 
-        out.push_str(&format!("{prefix}{branch}{name}/\n"));
+        let hidden = match sub.hidden_files {
+            0 => String::new(),
+            1 => " (1 file)".to_string(),
+            n => format!(" ({n} files)"),
+        };
+        out.push_str(&format!("{prefix}{branch}{name}/{hidden}\n"));
         render_outline_tree(out, sub, &next_prefix, depth + 1, max_depth);
     }
 
@@ -386,6 +417,10 @@ pub fn format_context_slice(slice: &ContextSlice) -> String {
             out.push_str("[Showing 5 tests (limit reached)]\n");
         }
         out.push('\n');
+    } else {
+        out.push_str(
+            "### Related Tests:\nNo test calls or names this symbol; blast_radius lists tests that reach it through callers.\n",
+        );
     }
 
     out
@@ -528,8 +563,13 @@ pub fn format_find_symbol_results(
                 .collect::<Vec<_>>()
                 .join(", ");
             let more = if imports.len() > 3 { ", …" } else { "" };
+            let capped = if exact_matches.len() >= limit {
+                "+"
+            } else {
+                ""
+            };
             out.push_str(&format!(
-                "- {} imports of `{query}`: {shown}{more} (find_references lists every use)\n",
+                "- {}{capped} imports of `{query}`: {shown}{more} (lookup_symbol with kind=\"import\" lists them)\n",
                 imports.len()
             ));
         }
@@ -569,6 +609,14 @@ pub fn format_find_symbol_results(
 }
 
 /// Format available structural fact & literal categories.
+/// The first line of a fact query that matched nothing; it names the path the query was limited to.
+pub fn no_facts_heading(category: &str, path_filter: Option<&str>) -> String {
+    match path_filter {
+        Some(path) => format!("No facts match '{category}' under `{path}`."),
+        None => format!("No facts match '{category}' in this repository."),
+    }
+}
+
 pub fn format_fact_categories(categories: &[(String, usize)]) -> String {
     if categories.is_empty() {
         return "No structural facts or literals indexed in this repository.".to_string();
@@ -1203,14 +1251,123 @@ mod tests {
         );
         assert!(
             folded.contains(
-                "- 4 imports of `Flask`: src/flask/cli.py:34, src/flask/ctx.py:21, tests/conftest.py:6, … (find_references lists every use)"
+                "- 4 imports of `Flask`: src/flask/cli.py:34, src/flask/ctx.py:21, tests/conftest.py:6, … (lookup_symbol with kind=\"import\" lists them)"
             ),
             "{folded}"
         );
         assert!(!folded.contains("- import `Flask`"), "{folded}");
 
+        let capped = format_find_symbol_results("Flask", &rows, &[], 5);
+        assert!(capped.contains("- 4+ imports of `Flask`"), "{capped}");
+
         let imports_only = format_find_symbol_results("Flask", &rows[1..], &[], 20);
         assert_eq!(imports_only.matches("- import `Flask`").count(), 4);
+    }
+
+    #[test]
+    fn skeleton_shows_class_attributes_with_one_line_values() {
+        let leaf = |name: &str, kind: &str, line: usize, sig: &str| Symbol {
+            kind: kind.into(),
+            language: "python".into(),
+            path: "app.py".into(),
+            parent_symbol_id: Some("id_App".into()),
+            start_line: line,
+            end_line: line,
+            body_start_line: None,
+            body_end_line: None,
+            signature: Some(sig.into()),
+            ..sample_symbol(name)
+        };
+        let class = Symbol {
+            kind: "class".into(),
+            language: "python".into(),
+            path: "app.py".into(),
+            start_line: 1,
+            end_line: 20,
+            body_start_line: None,
+            body_end_line: None,
+            signature: Some("class App".into()),
+            ..sample_symbol("App")
+        };
+        let module_variable = Symbol {
+            kind: "variable".into(),
+            language: "python".into(),
+            path: "app.py".into(),
+            start_line: 30,
+            end_line: 30,
+            signature: Some("app = App()".into()),
+            ..sample_symbol("app")
+        };
+        let symbols = vec![
+            class,
+            leaf(
+                "request_class",
+                "variable",
+                2,
+                "request_class: type[Request] = Request",
+            ),
+            leaf(
+                "default_config",
+                "variable",
+                3,
+                "default_config = ImmutableDict(\n    {\n        \"DEBUG\": None,\n    }\n)",
+            ),
+            leaf(
+                "blueprints",
+                "property",
+                5,
+                "self.blueprints: dict[str, Blueprint] = {}",
+            ),
+            module_variable,
+        ];
+
+        let out = format_file_skeleton("app.py", &symbols, None, 0);
+
+        assert!(
+            out.contains("    request_class: type[Request] = Request; // L2-2"),
+            "{out}"
+        );
+        assert!(
+            out.contains("    default_config = ImmutableDict( …; // L3-3"),
+            "{out}"
+        );
+        assert!(
+            out.contains("    self.blueprints: dict[str, Blueprint] = {}; // L5-5"),
+            "{out}"
+        );
+        assert!(!out.contains("app = App()"), "{out}");
+    }
+
+    #[test]
+    fn no_facts_heading_names_the_path_filter() {
+        assert_eq!(
+            no_facts_heading("config", Some("src/flask")),
+            "No facts match 'config' under `src/flask`."
+        );
+        assert_eq!(
+            no_facts_heading("config", None),
+            "No facts match 'config' in this repository."
+        );
+    }
+
+    #[test]
+    fn outline_counts_the_files_below_the_depth_limit() {
+        let mut root = OutlineNode::default();
+        let no_symbols = HashMap::new();
+        for path in [
+            "src/flask/app.py",
+            "src/flask/json/tag.py",
+            "src/flask/cli.py",
+            "tests/conftest.py",
+        ] {
+            add_path_to_outline(&mut root, path, &no_symbols, 2, "");
+        }
+
+        let mut out = String::new();
+        render_outline_tree(&mut out, &root, "", 0, 2);
+
+        assert!(out.contains("└── flask/ (3 files)"), "{out}");
+        assert!(!out.contains("tests/ ("), "{out}");
     }
 
     #[test]
@@ -1242,7 +1399,7 @@ mod tests {
         );
         assert!(
             out.contains(
-                "- 1 imports of `read`: src/Types.kt:18 (find_references lists every use)"
+                "- 1 imports of `read`: src/Types.kt:18 (lookup_symbol with kind=\"import\" lists them)"
             ),
             "{out}"
         );
@@ -1558,6 +1715,16 @@ mod tests {
     }
 
     #[test]
+    fn context_slice_says_when_no_test_was_found() {
+        let text = format_context_slice(&sample_context_slice());
+
+        assert!(
+            text.ends_with("### Related Tests:\nNo test calls or names this symbol; blast_radius lists tests that reach it through callers.\n"),
+            "{text}"
+        );
+    }
+
+    #[test]
     fn test_context_slice_shows_truncation_notice_when_caps_hit() {
         let mut slice = sample_context_slice();
         slice.callee_signatures = (1..=10).map(|i| format!("fn callee_{i}()")).collect();
@@ -1762,7 +1929,7 @@ mod tests {
             format_file_skeleton("Cargo.toml", &syms, Some(15), 0),
             "// File: Cargo.toml (Lines 1-15)\n\
              \n\
-             rusqlite =; // L15-15\n"
+             rusqlite = { workspace = true }; // L15-15\n"
         );
     }
 

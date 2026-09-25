@@ -534,11 +534,12 @@ fn extract_error_path(err: &ignore::Error) -> Option<&Path> {
 /// Streams disk checks and uses an in-memory SQLite index to eliminate repository-wide heap HashMaps.
 /// Creates a missing index. A git worktree copies its parent repository's index and
 /// reconciles it against the worktree files, which is much faster than a full scan;
-/// anything else runs a full scan.
+/// anything else runs a full scan. A copy that another `julie-extract` wrote is rebuilt.
 pub fn create_index(workspace: &Workspace, db_path: &Path) -> Result<(), SyncError> {
     if let Some(parent_db) = parent_repository_db(&workspace.canonical_root)
         && copy_parent_index(workspace, db_path, &parent_db)
     {
+        ensure_index_matches_extractor(workspace, db_path, &installed_extractor_version())?;
         return Ok(());
     }
     scan_workspace(workspace, db_path, false)
