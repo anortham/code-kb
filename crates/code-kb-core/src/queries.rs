@@ -1680,20 +1680,26 @@ pub fn find_related_tests(
         }
     }
 
+    let name = &target_symbol.name;
+    let dunder = name.len() > 4 && name.starts_with("__") && name.ends_with("__");
+    if dunder {
+        return Ok(tests);
+    }
+
     let remaining = limit - tests.len();
     let name_sql = format!(
         "SELECT {COLUMNS}
      FROM symbols s
      WHERE {is_test}
        AND {not_documentation}
-       AND (s.name LIKE '%' || ?1 || '%' OR s.signature LIKE '%' || ?1 || '%')
-     ORDER BY (s.name LIKE '%' || ?1 || '%') DESC, {TEST_ORDER}
+       AND (s.name LIKE ?1 ESCAPE '\\' OR s.signature LIKE ?1 ESCAPE '\\')
+     ORDER BY (s.name LIKE ?1 ESCAPE '\\') DESC, {TEST_ORDER}
      LIMIT ?2"
     );
 
     if let Ok(mut stmt) = conn.prepare(&name_sql)
         && let Ok(rows) = stmt.query_map(
-            params![target_symbol.name, (remaining * 2) as i64],
+            params![format!("%{}%", escape_like(name)), (remaining * 2) as i64],
             map_symbol,
         )
     {
@@ -4570,6 +4576,31 @@ mod tests {
             .collect();
 
         assert_eq!(names, vec!["isReady_reports_true"]);
+    }
+
+    #[test]
+    fn related_tests_match_underscores_literally_and_skip_dunder_names() {
+        let conn = search_fixture(
+            &[
+                code_row("c1", "src/app.py", "python", "wsgi_app", ""),
+                code_row("c2", "src/app.py", "python", "__init__", ""),
+                "('t1', 'f_t1', 'tests/test_app.py', 'python', 'test_wsgi_app', 'function', 'def test_wsgi_app()', NULL, NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_t1', NULL, 1, 0, 'code')".to_string(),
+                "('t2', 'f_t2', 'tests/test_app.py', 'python', 'test_wsgiXapp', 'function', 'def test_wsgiXapp()', NULL, NULL, NULL, 6, 0, 9, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_t2', NULL, 1, 0, 'code')".to_string(),
+                "('t3', 'f_t3', 'tests/test_views.py', 'python', 'test_init_once', 'function', 'def test_init_once()', NULL, NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_t3', NULL, 1, 0, 'code')".to_string(),
+            ]
+            .join(","),
+        );
+        let names = |name: &str| -> Vec<String> {
+            let target = get_symbol_by_name(&conn, name, None).unwrap().unwrap();
+            find_related_tests(&conn, &target, 5)
+                .unwrap()
+                .into_iter()
+                .map(|t| t.name)
+                .collect()
+        };
+
+        assert_eq!(names("wsgi_app"), vec!["test_wsgi_app"]);
+        assert!(names("__init__").is_empty());
     }
 
     #[test]
