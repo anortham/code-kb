@@ -583,6 +583,7 @@ mod tests {
             INSERT INTO files VALUES ('f1', 'src/lib.rs', 'rust', 'h', 0, 1, 'now', 'indexed');
             INSERT INTO files VALUES ('f2', 'src/blob.bin', 'unknown', 'h', 0, 1, 'now', 'unsupported');
             INSERT INTO files VALUES ('f3', 'docs/blob.bin', 'unknown', 'h', 0, 1, 'now', 'unsupported');
+            INSERT INTO files VALUES ('f4', 'src/assets/a.png', 'unknown', 'h', 0, 1, 'now', 'unsupported');
             INSERT INTO symbols VALUES (
                 's', 'f1', 'src/lib.rs', 'rust', 'root', 'function', 'pub fn root()', NULL,
                 'pub', NULL, 1, 0, 1, 16, 0, 16, 1, 0, 1, 16, 0, 16, NULL, NULL, 0, 0
@@ -591,12 +592,13 @@ mod tests {
         .unwrap();
 
         let all = codebase_outline_op(&workspace, &conn, 2, None).unwrap();
-        assert!(all.contains("2 unsupported files"));
+        assert!(all.contains("3 unsupported files"));
         assert!(all.contains("docs/ (1 unsupported file)"), "{all}");
-        assert!(all.contains("src/ (1 unsupported file)"), "{all}");
+        assert!(all.contains("src/ (2 unsupported files)"), "{all}");
+        assert!(!all.contains("assets/"), "{all}");
 
         let scoped = codebase_outline_op(&workspace, &conn, 2, Some("src")).unwrap();
-        assert!(scoped.contains("1 unsupported file:"));
+        assert!(scoped.contains("2 unsupported files:"), "{scoped}");
     }
 
     #[test]

@@ -431,7 +431,8 @@ fn outline_components(file_path: &str, norm_filter: &str) -> Option<Vec<String>>
     Some(components)
 }
 
-/// Counts a file no extractor reads on the deepest folder the outline shows for it.
+/// Counts a file no extractor reads on the deepest folder the outline already shows for it, or
+/// on its top-level folder. Call it after every indexed file is added.
 pub fn add_unsupported_to_outline(
     root_node: &mut OutlineNode,
     file_path: &str,
@@ -442,7 +443,15 @@ pub fn add_unsupported_to_outline(
         return;
     };
     let mut curr = root_node;
-    for comp in components.iter().take(components.len() - 1).take(max_depth) {
+    for (i, comp) in components
+        .iter()
+        .take(components.len() - 1)
+        .take(max_depth)
+        .enumerate()
+    {
+        if i > 0 && !curr.subdirs.contains_key(comp) {
+            break;
+        }
         curr = curr.subdirs.entry(comp.clone()).or_default();
     }
     curr.unsupported_files += 1;
