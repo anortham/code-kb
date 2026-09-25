@@ -874,7 +874,7 @@ fn other_names_line(query: &str, others: &[&Symbol]) -> String {
 fn doc_line_text(line: &str) -> &str {
     let mut text = line.trim();
     for marker in [
-        "///", "//!", "//", "/**", "/*!", "/*", "##", "#", "--", "*", "'''", "'",
+        "///", "//!", "//", "/**", "/*!", "/*", "##", "#'", "#", "--", "*", "'''", "'",
     ] {
         if let Some(rest) = text.strip_prefix(marker) {
             text = rest.trim_start();
@@ -1610,6 +1610,10 @@ mod tests {
         assert_eq!(
             doc_summary("# Given a +hash+ returns the settings\n# for the environment.").as_deref(),
             Some("Given a +hash+ returns the settings for the environment.")
+        );
+        assert_eq!(
+            doc_summary("#' A person record.").as_deref(),
+            Some("A person record.")
         );
         assert_eq!(doc_summary("  \n"), None);
         assert!(doc_summary(&"word ".repeat(60)).unwrap().ends_with('…'));
