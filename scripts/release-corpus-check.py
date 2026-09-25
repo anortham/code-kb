@@ -14,6 +14,7 @@ import argparse
 import difflib
 import os
 import random
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -152,6 +153,8 @@ def probes(db, name):
     calls = [["outline"], ["facts"]]
     calls += [["skeleton", path] for path in files]
     for symbol, path in rng.sample(candidates, min(8, len(candidates))):
+        if re.fullmatch(r"lambda_\d+", symbol):
+            continue  # a generated name holds its line, which extractor versions may count differently
         calls += [
             ["lookup", symbol],
             ["search", " ".join(symbol.replace("_", " ").split()[:3]) or symbol],
