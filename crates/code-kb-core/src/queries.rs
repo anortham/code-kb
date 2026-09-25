@@ -829,7 +829,8 @@ fn candidate_columns(conn: &Connection) -> String {
                 (s.language IN ({doc_langs}) OR NOT ({not_doc})) AS documentation,
                 (s.kind IN ('function', 'method')
                  AND EXISTS (SELECT 1 FROM symbols nest WHERE nest.symbol_id = s.parent_symbol_id
-                             AND nest.kind IN ('function', 'method', 'constructor'))) AS nested",
+                             AND nest.kind IN ('function', 'method', 'constructor')
+                             AND s.start_byte > nest.start_byte AND s.end_byte <= nest.end_byte)) AS nested",
         doc_langs = documentation_language_list(),
         not_doc = not_documentation(conn, "s")
     )
@@ -1681,7 +1682,7 @@ pub fn find_related_tests(
     target_symbol: &Symbol,
     limit: usize,
 ) -> Result<Vec<Symbol>, QueryError> {
-    if limit == 0 {
+    if limit == 0 || DOCUMENTATION_LANGUAGES.contains(&target_symbol.language.as_str()) {
         return Ok(Vec::new());
     }
 
@@ -1692,8 +1693,13 @@ pub fn find_related_tests(
             s.is_test, s.test_container";
     // Rows a scan writes can land in any order, so every query below needs a full ORDER BY.
     const TEST_ORDER: &str = "s.is_test DESC, s.path, s.start_line, s.symbol_id";
+    let not_setup = if has_column(conn, "symbols", "test_lifecycle") {
+        "COALESCE(s.test_lifecycle, 0) = 0"
+    } else {
+        "1 = 1"
+    };
     let is_test = format!(
-        "(s.is_test = 1 OR s.test_container = 1 OR ({} AND s.kind NOT IN ({LOW_SIGNAL_KINDS_SQL})))",
+        "((s.is_test = 1 OR s.test_container = 1 OR ({} AND s.kind IN ('function', 'method'))) AND {not_setup})",
         test_path_predicate("s")
     );
     let not_documentation = not_documentation(conn, "s");
@@ -1760,6 +1766,9 @@ pub fn find_related_tests(
     }
 
     // A test that reads or assigns the symbol (`app.wsgi_app = ...`) has no call edge.
+    let mut test_by_id = conn.prepare(&format!(
+        "SELECT {COLUMNS} FROM symbols s WHERE s.symbol_id = ?1 AND {is_test} AND {not_documentation}"
+    ))?;
     for site in find_references_for_symbol(
         conn,
         &target_symbol.name,
@@ -1770,8 +1779,9 @@ pub fn find_related_tests(
     .unwrap_or_default()
     {
         if !seen_ids.contains(&site.from_symbol_id)
-            && let Some(test) = get_symbol_by_id(conn, &site.from_symbol_id)?
-            && (test.is_test || test.test_container || is_test_path(&test.path))
+            && let Some(test) = test_by_id
+                .query_row(params![site.from_symbol_id], map_symbol)
+                .optional()?
         {
             seen_ids.insert(test.symbol_id.clone());
             tests.push(test);
@@ -1783,7 +1793,12 @@ pub fn find_related_tests(
 
     let name = &target_symbol.name;
     let dunder = name.len() > 4 && name.starts_with("__") && name.ends_with("__");
-    if dunder {
+    let definitions: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM symbols WHERE name = ?1 AND kind NOT IN ('import', 'export')",
+        params![name],
+        |row| row.get(0),
+    )?;
+    if dunder || definitions > 1 {
         return Ok(tests);
     }
 
@@ -2897,6 +2912,23 @@ fn find_references_internal(
                                                 JOIN symbols parent ON parent.symbol_id = target.parent_symbol_id
                                                 WHERE target.symbol_id = ?3)
                    ))
+                   AND NOT (i.kind = 'member_access' AND EXISTS (
+                       SELECT 1 FROM symbols target
+                       LEFT JOIN symbols scope ON scope.symbol_id = target.parent_symbol_id
+                       WHERE target.symbol_id = ?3
+                         AND (scope.kind IN ('function', 'method', 'constructor')
+                              OR (scope.symbol_id IS NULL
+                                  AND target.path != i.path
+                                  AND target.language IN ('javascript', 'typescript', 'tsx')
+                                  AND COALESCE(target.visibility, 'private') = 'private'))
+                   ))
+                   AND NOT (i.kind = 'member_access'
+                        AND json_valid(i.metadata_json)
+                        AND json_extract(i.metadata_json, '$.role') IS NOT 'signal_handler'
+                        AND json_extract(i.metadata_json, '$.receiver') GLOB '[A-Z]*'
+                        AND NOT EXISTS (SELECT 1 FROM symbols known
+                                        WHERE known.name = json_extract(i.metadata_json, '$.receiver')
+                                          AND known.kind NOT IN ('variable', 'parameter', 'method')))
                  ORDER BY i.path, i.start_line
                  LIMIT ?2",
             )?;
@@ -3162,7 +3194,7 @@ pub fn import_sites(
 }
 
 /// One row for each caller, target, kind, and line: `app.wsgi_app = Wrap(app.wsgi_app)` is one
-/// site with two occurrences, not two identical rows.
+/// site, not two identical rows.
 fn merge_same_site(sites: Vec<ReferenceSite>) -> Vec<ReferenceSite> {
     let mut merged: Vec<ReferenceSite> = Vec::with_capacity(sites.len());
     let mut index = HashMap::new();
@@ -3177,8 +3209,6 @@ fn merge_same_site(sites: Vec<ReferenceSite>) -> Vec<ReferenceSite> {
         match index.get(&key) {
             Some(&at) => {
                 let kept: &mut ReferenceSite = &mut merged[at];
-                kept.occurrences =
-                    Some(kept.occurrences.unwrap_or(1) + site.occurrences.unwrap_or(1));
                 kept.start_column = kept.start_column.min(site.start_column);
             }
             None => {

@@ -812,7 +812,7 @@ fn blast_radius_lists_the_tests_behind_a_fixture_that_takes_a_fixture_not_the_fi
 }
 
 #[test]
-fn two_accesses_on_one_line_are_one_reference_with_two_occurrences() {
+fn two_accesses_on_one_line_are_one_reference() {
     let (_repo, db_path) = scanned_repo(&[
         (
             "src/app.py",
@@ -832,7 +832,7 @@ fn two_accesses_on_one_line_are_one_reference_with_two_occurrences() {
         .filter(|r| r.from_symbol_name == "test_wrap")
         .collect();
     assert_eq!(wraps.len(), 1, "{refs:?}");
-    assert_eq!(wraps[0].occurrences, Some(2), "{refs:?}");
+    assert_eq!(wraps[0].occurrences, None, "{refs:?}");
 
     let target = code_kb_core::get_symbol_by_name(&conn, "wsgi_app", Some("src/app.py"))
         .unwrap()
@@ -897,4 +897,97 @@ fn import_sites_list_imports_whose_module_holds_the_definition() {
         paths,
         vec!["src/pkg/__init__.py", "src/pkg/cli.py", "tests/test_app.py"]
     );
+}
+
+#[test]
+fn a_member_access_on_an_unknown_type_or_to_a_private_module_function_is_not_a_reference() {
+    let (_repo, db_path) = scanned_repo(&[
+        (
+            "src/series.ts",
+            "export class Series {\n  contains(x: number): boolean {\n    return x > 0;\n  }\n}\n\nconst error = () => 1;\n\nexport function run(): number {\n  return error();\n}\n",
+        ),
+        (
+            "tests/series.test.ts",
+            "import { Series } from '../src/series';\n\ntest('reads', () => {\n  const s = new Series();\n  const a = Assert.contains;\n  const b = s.contains;\n  const c = parsed.error;\n});\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+    let lines = |name: &str| -> Vec<(String, Option<usize>)> {
+        find_references_scoped(&conn, name, "callers", 20, false, Some("src/series.ts"))
+            .unwrap()
+            .into_iter()
+            .map(|r| (r.path, r.start_line))
+            .collect()
+    };
+
+    let contains = lines("contains");
+    assert!(
+        contains.contains(&("tests/series.test.ts".to_string(), Some(6))),
+        "{contains:?}"
+    );
+    assert!(
+        !contains.contains(&("tests/series.test.ts".to_string(), Some(5))),
+        "{contains:?}"
+    );
+    assert_eq!(
+        lines("error"),
+        vec![("src/series.ts".to_string(), Some(10))]
+    );
+}
+
+#[test]
+fn related_tests_leave_out_setup_methods_helper_classes_ambiguous_names_and_documents() {
+    let (_repo, db_path) = scanned_repo(&[
+        (
+            "src/calc.py",
+            "class Calc:\n    def total(self):\n        return 1\n\n    def add(self):\n        return 2\n",
+        ),
+        ("src/other.py", "def add():\n    return 3\n"),
+        (
+            "docs/page.html",
+            "<html><body><form></form></body></html>\n",
+        ),
+        (
+            "tests/test_calc.py",
+            "import unittest\nfrom calc import Calc\n\n\nclass TotalHolder:\n    pass\n\n\nclass CalcTest(unittest.TestCase):\n    def setUp(self):\n        Calc().total()\n\n    def test_total(self):\n        pass\n\n\ndef test_add_twice():\n    pass\n\n\ndef test_form():\n    pass\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+    let related = |name: &str, path: &str| -> Vec<String> {
+        let target = code_kb_core::get_symbol_by_name(&conn, name, Some(path))
+            .unwrap()
+            .unwrap();
+        code_kb_core::find_related_tests(&conn, &target, 10)
+            .unwrap()
+            .into_iter()
+            .map(|t| t.name)
+            .collect()
+    };
+
+    assert_eq!(related("total", "src/calc.py"), vec!["test_total"]);
+    assert!(related("add", "src/calc.py").is_empty());
+    assert!(related("form", "docs/page.html").is_empty());
+}
+
+#[test]
+fn only_a_function_inside_the_body_of_another_function_counts_as_nested() {
+    let (_repo, db_path) = scanned_repo(&[(
+        "src/view.js",
+        "function View(name) {\n  this.name = name;\n}\n\nView.prototype.lookup = function lookup(name) {\n  return name;\n};\n\nfunction outer() {\n  function lookupLocal() {\n    return 1;\n  }\n  return lookupLocal();\n}\n",
+    )]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let rows =
+        code_kb_core::fts_search_symbols_explained(&conn, "lookup", None, None, false, 20, true)
+            .unwrap();
+    let nested = |name: &str| {
+        rows.iter()
+            .find(|r| r.symbol.name == name)
+            .and_then(|r| r.explain.as_ref())
+            .map(|e| e.nested)
+            .unwrap_or_else(|| panic!("{name} missing: {rows:?}"))
+    };
+
+    assert_eq!(nested("lookup"), 0.0);
+    assert!(nested("lookupLocal") < 0.0);
 }

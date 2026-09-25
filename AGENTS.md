@@ -147,7 +147,7 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   header's `property` and `event` rows come from the extractor's macro pre-pass and render like
   any other member; a skeleton `event` row whose signature does not spell `signal` or `event`
   carries `// event` before its line range. Rows from one caller to one name at the same path and
-  line merge into one row with the summed `occurrences`. A method call on a parameter or variable
+  line merge into one row. A method call on a parameter or variable
   named for a pytest fixture matches a method of the class that fixture builds, or of an ancestor.
   `find_references` for callers ends with one line that counts the files that import the target.
 - Language-agnostic callee filtering: `find_references(direction="callees")` and `get_symbol_context`

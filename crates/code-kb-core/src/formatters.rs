@@ -467,7 +467,9 @@ pub fn format_context_slice(slice: &ContextSlice) -> String {
 
     if let Some(ref sig) = sym.signature {
         let sig = signature_without_duplicate_body(sig, &slice.target_body);
-        out.push_str(&format!("Signature: `{sig}`\n\n"));
+        if !sig.trim().is_empty() {
+            out.push_str(&format!("Signature: `{sig}`\n\n"));
+        }
     }
 
     out.push_str(&format!("```{}\n", sym.language));
@@ -2123,6 +2125,18 @@ mod tests {
             1,
             "{formatted}"
         );
+    }
+
+    #[test]
+    fn context_slice_leaves_out_a_signature_that_the_body_already_holds() {
+        let mut slice = sample_context_slice();
+        slice.target_symbol.signature = Some("type Person = { Name: string; Age: int }".into());
+        slice.target_body = "type Person = { Name: string; Age: int }\n".into();
+
+        let text = format_context_slice(&slice);
+
+        assert!(!text.contains("Signature:"), "{text}");
+        assert_eq!(text.matches("type Person").count(), 1, "{text}");
     }
 
     #[test]

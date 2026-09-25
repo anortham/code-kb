@@ -46,6 +46,9 @@ run_session() {
   wt="$(mktemp -d)/dogfood-${harness}"
   git -C "${PROJECT}" worktree add --detach --quiet "${wt}"
   WORKTREES+=("${wt}")
+  # A worktree copies its parent's index, and a local julie build keeps the pinned version
+  # string, so only a forced scan makes the session read what this julie-extract writes.
+  target/release/code-kb scan --root "${wt}" --force >/dev/null
   local prompt="${OUT}/${harness}-prompt.md"
   sed "s#PROJECT_ROOT#${wt}#g" scripts/release-dogfood-prompt.md >"${prompt}"
   case "${harness}" in
