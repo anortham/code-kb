@@ -137,48 +137,132 @@ pub fn load_scoped_files(
     Ok(files)
 }
 
-/// Load up to `limit_per_file` symbols per file for scoped files, directly aggregated in SQLite.
-/// Files deeper than `depth` are filtered out in SQLite to keep memory strictly bounded.
+/// The most files one outline lists by name.
+pub const OUTLINE_FILE_CAP: usize = 1000;
+
+/// The path filter and depth of one outline, as SQL parameters.
+pub struct OutlineScope {
+    path: Option<String>,
+    path_bs: Option<String>,
+    prefix: Option<String>,
+    prefix_bs: Option<String>,
+    /// The most path separators a file the outline lists by name can have.
+    max_slashes: i64,
+}
+
+impl OutlineScope {
+    pub fn new(path_filter: Option<&str>, depth: usize) -> Self {
+        let path = path_filter
+            .map(|p| p.replace('\\', "/").trim_matches('/').to_string())
+            .filter(|p| !p.is_empty());
+        let path_bs = path.as_ref().map(|p| p.replace('/', "\\"));
+        let max_slashes = match &path {
+            None => depth.saturating_sub(1),
+            Some(p) => p.matches('/').count() + depth,
+        } as i64;
+        Self {
+            prefix: path.as_ref().map(|p| format!("{}/%", escape_like(p))),
+            prefix_bs: path_bs.as_ref().map(|p| format!("{}\\\\%", escape_like(p))),
+            path,
+            path_bs,
+            max_slashes,
+        }
+    }
+
+    /// True when the outline lists `path` by name instead of counting it in its folder.
+    pub fn lists(&self, path: &str) -> bool {
+        path.matches(['/', '\\']).count() as i64 <= self.max_slashes
+    }
+
+    fn params(&self) -> [(&'static str, &dyn ToSql); 5] {
+        [
+            (":path", &self.path),
+            (":path_bs", &self.path_bs),
+            (":path_prefix", &self.prefix),
+            (":path_prefix_bs", &self.prefix_bs),
+            (":max_slashes", &self.max_slashes),
+        ]
+    }
+}
+
+/// The `WHERE` terms for the files in an outline scope that have an extractor.
+fn outline_file_terms(conn: &Connection) -> String {
+    let supported = if has_column(conn, "files", "status") {
+        "COALESCE(status, '') != 'unsupported'"
+    } else {
+        "1 = 1"
+    };
+    format!(
+        "(:path IS NULL
+            OR path = :path COLLATE NOCASE
+            OR path = :path_bs COLLATE NOCASE
+            OR path LIKE :path_prefix ESCAPE '\\'
+            OR path LIKE :path_prefix_bs ESCAPE '\\')
+         AND {supported}"
+    )
+}
+
+/// The files an outline lists by name, in path order.
+fn outline_files_cte(conn: &Connection) -> String {
+    format!(
+        "outline_files AS (
+            SELECT path FROM files
+            WHERE {}
+              AND length(path) - length(replace(replace(path, '/', ''), '\\', '')) <= :max_slashes
+            ORDER BY path ASC
+            LIMIT {OUTLINE_FILE_CAP}
+        )",
+        outline_file_terms(conn)
+    )
+}
+
+/// Streams every file path in the outline scope that has an extractor, in path order.
+pub fn for_each_outline_path(
+    conn: &Connection,
+    scope: &OutlineScope,
+    mut visit: impl FnMut(String) -> bool,
+) -> Result<(), QueryError> {
+    let sql = format!(
+        "SELECT path FROM files WHERE {} ORDER BY path ASC",
+        outline_file_terms(conn)
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let params = scope.params();
+    let mut rows = stmt.query(&params[..4])?;
+    while let Some(row) = rows.next()? {
+        if !visit(row.get(0)?) {
+            break;
+        }
+    }
+    Ok(())
+}
+
+/// True when `alias` names a definition at the top of its file: no parent, or only a namespace,
+/// module, or package around it.
+fn outline_level(alias: &str) -> String {
+    format!(
+        "({alias}.parent_symbol_id IS NULL OR EXISTS (
+            SELECT 1 FROM symbols ns WHERE ns.symbol_id = {alias}.parent_symbol_id
+              AND ns.kind IN ('namespace', 'module', 'package')))"
+    )
+}
+
+const OUTLINE_KINDS: &str =
+    "('function', 'method', 'struct', 'enum', 'trait', 'class', 'interface', 'type')";
+
+/// Load up to `limit_per_file` top-level definitions for each file the outline lists by name.
+/// Files deeper than `depth` are filtered out in SQLite to keep memory strictly bounded. The
+/// unary `+` keeps the overload check on the name index: the parent index would walk every
+/// top-level symbol of the repository for each row.
 pub fn load_scoped_outline_symbols(
     conn: &Connection,
     path_filter: Option<&str>,
     depth: usize,
     limit_per_file: usize,
 ) -> Result<HashMap<String, Vec<Symbol>>, QueryError> {
-    let norm = path_filter
-        .map(|p| p.replace('\\', "/").trim_matches('/').to_string())
-        .filter(|p| !p.is_empty());
-    let norm_bs = norm.as_ref().map(|p| p.replace('/', "\\"));
-    let prefix = norm.as_ref().map(|path| format!("{}/%", escape_like(path)));
-    let prefix_bs = norm_bs
-        .as_ref()
-        .map(|path| format!("{}\\\\%", escape_like(path)));
-
-    let max_slashes = match &norm {
-        None => {
-            if depth > 0 {
-                (depth - 1) as i64
-            } else {
-                0
-            }
-        }
-        Some(f) => {
-            let filter_slashes = f.chars().filter(|&c| c == '/').count();
-            (filter_slashes + depth) as i64
-        }
-    };
-
-    let sql = "
-        WITH bounded_files AS (
-            SELECT path FROM files
-            WHERE (:path IS NULL
-               OR path = :path COLLATE NOCASE
-               OR path = :path_bs COLLATE NOCASE
-               OR path LIKE :path_prefix ESCAPE '\\'
-               OR path LIKE :path_prefix_bs ESCAPE '\\')
-            ORDER BY path ASC
-            LIMIT 1000
-        ),
+    let scope = OutlineScope::new(path_filter, depth);
+    let sql = format!(
+        "WITH {files},
         ranked AS (
             SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,
                    s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,
@@ -189,13 +273,13 @@ pub fn load_scoped_outline_symbols(
                        PARTITION BY s.path ORDER BY (s.is_test = 1 OR s.test_container = 1), s.start_line ASC
                    ) as rn
             FROM symbols s
-            JOIN bounded_files bf ON (s.path = bf.path COLLATE NOCASE OR replace(s.path, '\\', '/') = replace(bf.path, '\\', '/') COLLATE NOCASE)
-            WHERE (length(s.path) - length(replace(replace(s.path, '/', ''), '\\', '')) <= :max_slashes)
-              AND s.kind IN ('function', 'method', 'struct', 'enum', 'trait', 'class', 'interface', 'type')
-              AND s.parent_symbol_id IS NULL
+            JOIN outline_files bf ON s.path = bf.path
+            WHERE s.kind IN {OUTLINE_KINDS}
+              AND {top}
               AND NOT EXISTS (SELECT 1 FROM symbols overload
-                              WHERE overload.path = s.path AND overload.name = s.name
-                                AND overload.kind = s.kind AND overload.parent_symbol_id IS NULL
+                              WHERE +overload.path = s.path AND overload.name = s.name
+                                AND overload.kind = s.kind
+                                AND +overload.parent_symbol_id IS s.parent_symbol_id
                                 AND overload.start_line < s.start_line)
         )
         SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,
@@ -205,18 +289,16 @@ pub fn load_scoped_outline_symbols(
                is_test, test_container
         FROM ranked
         WHERE rn <= :limit
-        ORDER BY path ASC, start_line ASC
-    ";
+        ORDER BY path ASC, start_line ASC",
+        files = outline_files_cte(conn),
+        top = outline_level("s"),
+    );
 
-    let mut stmt = conn.prepare(sql)?;
-    let mut rows = stmt.query(rusqlite::named_params! {
-        ":path": norm.as_deref(),
-        ":path_bs": norm_bs.as_deref(),
-        ":path_prefix": prefix.as_deref(),
-        ":path_prefix_bs": prefix_bs.as_deref(),
-        ":max_slashes": max_slashes,
-        ":limit": limit_per_file as i64,
-    })?;
+    let mut stmt = conn.prepare(&sql)?;
+    let limit = limit_per_file as i64;
+    let mut params = scope.params().to_vec();
+    params.push((":limit", &limit));
+    let mut rows = stmt.query(&params[..])?;
 
     let mut symbols_by_file: HashMap<String, Vec<Symbol>> = HashMap::new();
     while let Some(row) = rows.next()? {
@@ -241,46 +323,43 @@ pub struct OutlineCounts {
     pub fixtures: usize,
 }
 
-/// For each file in the outline scope: its top-level definitions that are not tests, its tests,
-/// and its fixtures, so the outline can say how many names it left out.
+/// For each file the outline lists by name: its top-level definitions that are not tests, its
+/// tests, and its fixtures, so the outline can say how many names it left out.
 pub fn load_outline_counts(
     conn: &Connection,
     path_filter: Option<&str>,
+    depth: usize,
 ) -> Result<HashMap<String, OutlineCounts>, QueryError> {
-    let norm = path_filter
-        .map(|p| p.replace('\\', "/").trim_matches('/').to_string())
-        .filter(|p| !p.is_empty());
-    let prefix = norm.as_ref().map(|path| format!("{}/%", escape_like(path)));
+    let scope = OutlineScope::new(path_filter, depth);
     let lifecycle = if has_column(conn, "symbols", "test_lifecycle") {
-        "COALESCE(test_lifecycle, 0) != 0"
+        "COALESCE(s.test_lifecycle, 0) != 0"
     } else {
         "0"
     };
     let mut stmt = conn.prepare(&format!(
-        "SELECT replace(path, '\\', '/'),
-                COUNT(DISTINCT CASE WHEN parent_symbol_id IS NULL AND is_test = 0 AND test_container = 0
-                    AND kind IN ('function', 'method', 'struct', 'enum', 'trait', 'class', 'interface', 'type')
-                    THEN kind || ' ' || name END),
-                SUM(is_test = 1 AND NOT {lifecycle}),
-                SUM(is_test = 1 AND {lifecycle})
-         FROM symbols
-         WHERE :path IS NULL OR replace(path, '\\', '/') = :path COLLATE NOCASE
-            OR replace(path, '\\', '/') LIKE :prefix ESCAPE '\\'
-         GROUP BY replace(path, '\\', '/')"
+        "WITH {files}
+         SELECT replace(s.path, '\\', '/'),
+                COUNT(DISTINCT CASE WHEN {top} AND s.is_test = 0 AND s.test_container = 0
+                    AND s.kind IN {OUTLINE_KINDS}
+                    THEN s.kind || ' ' || s.name END),
+                SUM(s.is_test = 1 AND NOT {lifecycle}),
+                SUM(s.is_test = 1 AND {lifecycle})
+         FROM symbols s
+         JOIN outline_files bf ON s.path = bf.path
+         GROUP BY replace(s.path, '\\', '/')",
+        files = outline_files_cte(conn),
+        top = outline_level("s"),
     ))?;
-    let rows = stmt.query_map(
-        rusqlite::named_params! { ":path": norm.as_deref(), ":prefix": prefix.as_deref() },
-        |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                OutlineCounts {
-                    definitions: row.get::<_, i64>(1)? as usize,
-                    tests: row.get::<_, i64>(2)? as usize,
-                    fixtures: row.get::<_, i64>(3)? as usize,
-                },
-            ))
-        },
-    )?;
+    let rows = stmt.query_map(&scope.params()[..], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            OutlineCounts {
+                definitions: row.get::<_, i64>(1)? as usize,
+                tests: row.get::<_, i64>(2)? as usize,
+                fixtures: row.get::<_, i64>(3)? as usize,
+            },
+        ))
+    })?;
     Ok(rows.collect::<Result<_, _>>()?)
 }
 
@@ -484,6 +563,67 @@ pub fn search_symbols(
 /// The lookup statement. The exact-name bypass of the test filter is written as `+name` so
 /// SQLite cannot plan it as a multi-index OR, which scans every non-test row through the
 /// test-path predicate (about 8 ms on this repository's index against 1 ms).
+/// True when `alias` is an attribute row such as `self.debug = …` whose name a base class already
+/// defines with a value or a property. The row is a write to an inherited attribute, not a
+/// definition, so lookup, search, and skeletons leave it out. `CASE` keeps SQLite from walking
+/// the base classes of every row a search touches: it evaluates an `AND` with `EXISTS` eagerly.
+pub(crate) fn inherited_attribute_write(alias: &str) -> String {
+    format!(
+        "(CASE WHEN {alias}.kind = 'property' AND {alias}.parent_symbol_id IS NOT NULL
+          AND ({alias}.signature LIKE 'self.%' OR {alias}.signature LIKE 'this.%' OR {alias}.signature LIKE 'cls.%')
+          THEN EXISTS (
+            WITH RECURSIVE base(symbol_id, depth) AS (
+                SELECT {alias}.parent_symbol_id, 0
+                UNION
+                SELECT r.to_symbol_id, base.depth + 1
+                FROM relationships r JOIN base ON r.from_symbol_id = base.symbol_id
+                WHERE +r.kind = 'extends' AND base.depth < 8
+                UNION
+                SELECT c.symbol_id, base.depth + 1
+                FROM pending_relationships pe
+                JOIN base ON pe.from_symbol_id = base.symbol_id
+                JOIN symbols c ON c.name = pe.target_terminal_name
+                WHERE +pe.kind = 'extends' AND base.depth < 8
+                  AND c.kind IN ('class', 'interface', 'struct', 'trait', 'protocol')
+            )
+            SELECT 1 FROM base JOIN symbols inherited ON inherited.parent_symbol_id = base.symbol_id
+            WHERE base.depth > 0 AND inherited.name = {alias}.name
+              AND (inherited.kind NOT IN ('variable', 'field') OR inherited.signature LIKE '%=%'))
+          ELSE 0 END)"
+    )
+}
+
+/// ` AND NOT` [`inherited_attribute_write`] for the row `s`, or nothing for an index without
+/// relationship tables.
+fn inherited_write_exclusion(conn: &Connection) -> String {
+    if has_table(conn, "relationships") && has_table(conn, "pending_relationships") {
+        format!(" AND NOT {}", inherited_attribute_write("s"))
+    } else {
+        String::new()
+    }
+}
+
+/// The ids among `ids` that [`inherited_attribute_write`] leaves out. Callers check only the rows
+/// they return, because the check walks base classes and a common word touches thousands of rows.
+pub fn inherited_writes_among<'a>(
+    conn: &Connection,
+    ids: impl Iterator<Item = &'a str>,
+) -> Result<HashSet<String>, QueryError> {
+    if inherited_write_exclusion(conn).is_empty() {
+        return Ok(HashSet::new());
+    }
+    let ids = serde_json::to_string(&ids.collect::<Vec<_>>()).unwrap_or_default();
+    let mut stmt = conn.prepare(&format!(
+        "SELECT s.symbol_id FROM symbols s
+         WHERE s.symbol_id IN (SELECT value FROM json_each(?1)) AND {}",
+        inherited_attribute_write("s")
+    ))?;
+    let found = stmt
+        .query_map(params![ids], |row| row.get(0))?
+        .collect::<Result<_, _>>()?;
+    Ok(found)
+}
+
 fn search_symbols_sql(variables_wanted: bool, include_tests: bool, limit: usize) -> String {
     let mut sql = String::from(
         "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,
@@ -568,9 +708,13 @@ pub fn search_symbols_scoped(
             },
             map_symbol,
         )?
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<Symbol>, _>>()?;
 
-    Ok(rows)
+    let inherited = inherited_writes_among(conn, rows.iter().map(|s| s.symbol_id.as_str()))?;
+    Ok(rows
+        .into_iter()
+        .filter(|s| !inherited.contains(&s.symbol_id))
+        .collect())
 }
 
 /// Sanitizes a free-form user query into `(and_query, or_query)` formatted for SQLite FTS5.
@@ -817,11 +961,19 @@ pub(crate) struct Candidate {
     pub exact_name: bool,
     pub word_match: bool,
     pub name_match: bool,
+    /// Admitted as a member of a class that a query word names.
+    pub owner_match: bool,
     pub name_terms: Vec<String>,
     pub documentation: bool,
     /// A function or method declared inside another function or method.
     pub nested: bool,
+    /// The class or other type the row is a member of.
+    pub owner: Option<String>,
 }
+
+/// The kinds of symbol whose members search and lookup name as `Owner.member`.
+const OWNER_KINDS: &str =
+    "('class', 'struct', 'interface', 'trait', 'enum', 'record', 'object', 'protocol', 'union')";
 
 fn candidate_columns(conn: &Connection) -> String {
     format!(
@@ -835,7 +987,9 @@ fn candidate_columns(conn: &Connection) -> String {
                 (s.kind IN ('function', 'method')
                  AND EXISTS (SELECT 1 FROM symbols nest WHERE nest.symbol_id = s.parent_symbol_id
                              AND nest.kind IN ('function', 'method', 'constructor')
-                             AND s.start_byte > nest.start_byte AND s.end_byte <= nest.end_byte)) AS nested",
+                             AND s.start_byte > nest.start_byte AND s.end_byte <= nest.end_byte)) AS nested,
+                (SELECT o.name FROM symbols o WHERE o.symbol_id = s.parent_symbol_id
+                   AND o.kind IN {OWNER_KINDS}) AS owner_name",
         doc_langs = documentation_language_list(),
         not_doc = not_documentation(conn, "s")
     )
@@ -920,9 +1074,11 @@ pub(crate) fn collect_search_candidates(
             exact_name: false,
             word_match: false,
             name_match: false,
+            owner_match: false,
             name_terms,
             documentation: row.get::<_, Option<i64>>("documentation")? == Some(1),
             nested: row.get::<_, Option<i64>>("nested")? == Some(1),
+            owner: row.get("owner_name")?,
         };
         Ok((row.get("row_id")?, candidate))
     };
@@ -935,6 +1091,7 @@ pub(crate) fn collect_search_candidates(
             existing.exact_name |= incoming.exact_name;
             existing.word_match |= incoming.word_match;
             existing.name_match |= incoming.name_match;
+            existing.owner_match |= incoming.owner_match;
             if incoming.bm25.is_some() && existing.bm25.is_none() {
                 existing.bm25 = incoming.bm25;
                 existing.result = incoming.result;
@@ -979,6 +1136,45 @@ pub(crate) fn collect_search_candidates(
     for (rowid, mut candidate) in exact_rows {
         candidate.exact_name = true;
         admit(rowid, candidate);
+    }
+
+    let owner_sql = if has_trigram {
+        format!(
+            "SELECT {columns} FROM symbol_names_tri
+             CROSS JOIN symbols o ON o.rowid = symbol_names_tri.rowid
+             CROSS JOIN symbols s ON s.parent_symbol_id = o.symbol_id
+             WHERE symbol_names_tri MATCH :phrase AND length(o.name) = length(:word)
+               AND o.kind IN {OWNER_KINDS} {filters}
+             ORDER BY s.path ASC, s.start_line ASC LIMIT {name_cap}"
+        )
+    } else {
+        format!(
+            "SELECT {columns} FROM symbols o
+             CROSS JOIN symbols s ON s.parent_symbol_id = o.symbol_id
+             WHERE o.name = :word COLLATE NOCASE AND :phrase IS NOT NULL
+               AND o.kind IN {OWNER_KINDS} {filters}
+             ORDER BY s.path ASC, s.start_line ASC LIMIT {name_cap}"
+        )
+    };
+    let mut owner_stmt = conn.prepare(&owner_sql)?;
+    for word in rerank_words(query).iter().filter(|w| w.len() >= 3) {
+        let phrase = format!("\"{word}\"");
+        let owner_rows = owner_stmt
+            .query_map(
+                rusqlite::named_params! {
+                    ":word": word,
+                    ":phrase": phrase,
+                    ":kind": kind_val,
+                    ":path": path_val,
+                    ":path_like": path_like,
+                },
+                new_candidate,
+            )?
+            .collect::<Result<Vec<_>, _>>()?;
+        for (rowid, mut candidate) in owner_rows {
+            candidate.owner_match = true;
+            admit(rowid, candidate);
+        }
     }
 
     if searching_variables {
@@ -1105,6 +1301,13 @@ pub(crate) fn collect_search_candidates(
         }
     }
 
+    let inherited = inherited_writes_among(
+        conn,
+        candidates
+            .iter()
+            .map(|c| c.result.symbol.symbol_id.as_str()),
+    )?;
+    candidates.retain(|c| !inherited.contains(&c.result.symbol.symbol_id));
     Ok(candidates)
 }
 
@@ -1253,6 +1456,8 @@ const W_TEST_INTENT: f64 = 5.0;
 const W_TERMS: f64 = 52.0;
 const MAX_TERM_CREDIT: f64 = 3.0;
 const TEXT_CREDIT: f64 = 1.0;
+/// A word that names the class a member belongs to: `Flask init` means `Flask.__init__`.
+const OWNER_CREDIT: f64 = 3.0;
 const TEXT_HEAD_BYTES: usize = 400;
 
 /// Symbol kinds that define a body: the kinds a touched-symbol or ranking rule prefers over locals.
@@ -1279,6 +1484,9 @@ struct QueryWord {
 /// cover. The name carries a match strength per word, the others a plain hit.
 struct Hits {
     name: Vec<u8>,
+    /// The query word is the whole name of the class the row belongs to, or its stem. Counted
+    /// only when another word matches the row's own name, as in `Flask init`.
+    owner: Vec<bool>,
     signature: Vec<bool>,
     doc: Vec<bool>,
 }
@@ -1321,7 +1529,8 @@ fn document_frequency(stmt: &mut rusqlite::Statement<'_>, term: &str) -> Option<
 }
 
 /// The field that credits each query term and the credit it is worth: a name whole token 3,
-/// a name stem 2, a signature or doc hit `TEXT_CREDIT`, a name substring 1, nothing 0.
+/// a name stem 2, the owning class `OWNER_CREDIT`, a signature or doc hit `TEXT_CREDIT`, a name
+/// substring 1, nothing 0.
 fn term_credits(hits: &Hits, words: &[QueryWord]) -> Vec<(String, String, f64)> {
     words
         .iter()
@@ -1330,6 +1539,7 @@ fn term_credits(hits: &Hits, words: &[QueryWord]) -> Vec<(String, String, f64)> 
             let (field, credit) = match hits.name[i] {
                 3 => ("name", 3.0),
                 2 => ("name", 2.0),
+                _ if hits.owner[i] => ("owner", OWNER_CREDIT),
                 _ if hits.signature[i] => ("signature", TEXT_CREDIT),
                 _ if hits.doc[i] => ("doc", TEXT_CREDIT),
                 1 => ("name", 1.0),
@@ -1556,8 +1766,20 @@ fn rerank_with(
         .iter()
         .map(|candidate| {
             let symbol = &candidate.result.symbol;
+            let name = name_hits(&symbol.name, &words, &stemmer);
+            let named = name.iter().any(|strength| *strength > 0);
             Hits {
-                name: name_hits(&symbol.name, &words, &stemmer),
+                owner: match candidate.owner.as_deref().map(collapse) {
+                    Some(owner) if named => {
+                        let owner_stem = stemmer.stem(&owner);
+                        words
+                            .iter()
+                            .map(|w| owner == w.word || owner_stem == w.stem)
+                            .collect()
+                    }
+                    _ => vec![false; words.len()],
+                },
+                name,
                 signature: text_hits(
                     symbol
                         .signature
@@ -1609,6 +1831,7 @@ fn rerank_with(
                     (candidate.exact_name, "exact"),
                     (candidate.word_match, "word"),
                     (candidate.name_match, "name"),
+                    (candidate.owner_match, "owner"),
                 ]
                 .into_iter()
                 .filter(|(hit, _)| *hit)
@@ -2144,7 +2367,11 @@ fn get_symbol_by_name_internal(
         return Ok(Some(active_pool.into_iter().next().unwrap()));
     }
 
-    // Ambiguity detected
+    let mut outside_tests = active_pool.iter().filter(|s| !is_test_path(&s.path));
+    if let (Some(only), None) = (outside_tests.next(), outside_tests.next()) {
+        return Ok(Some(only.clone()));
+    }
+
     let mut candidate_list = String::new();
     for s in &active_pool {
         candidate_list.push_str(&format!(
@@ -2552,13 +2779,13 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                             UNION
                             SELECT r.to_symbol_id, built.depth + 1
                             FROM relationships r JOIN built ON r.from_symbol_id = built.symbol_id
-                            WHERE r.kind = 'extends' AND built.depth < 8
+                            WHERE +r.kind = 'extends' AND built.depth < 8
                             UNION
                             SELECT c.symbol_id, built.depth + 1
                             FROM pending_relationships pe
                             JOIN built ON pe.from_symbol_id = built.symbol_id
                             JOIN symbols c ON c.name = pe.target_terminal_name
-                            WHERE pe.kind = 'extends' AND built.depth < 8
+                            WHERE +pe.kind = 'extends' AND built.depth < 8
                               AND c.kind IN ('class', 'interface', 'struct', 'trait', 'protocol')
                         )
                         SELECT 1 FROM built WHERE built.symbol_id = {target}.parent_symbol_id
@@ -2587,13 +2814,13 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                                 UNION
                                 SELECT r.to_symbol_id, base.depth + 1
                                 FROM relationships r JOIN base ON r.from_symbol_id = base.symbol_id
-                                WHERE r.kind = 'extends' AND base.depth < 8
+                                WHERE +r.kind = 'extends' AND base.depth < 8
                                 UNION
                                 SELECT c.symbol_id, base.depth + 1
                                 FROM pending_relationships pe
                                 JOIN base ON pe.from_symbol_id = base.symbol_id
                                 JOIN symbols c ON c.name = pe.target_terminal_name
-                                WHERE pe.kind = 'extends' AND base.depth < 8
+                                WHERE +pe.kind = 'extends' AND base.depth < 8
                                   AND c.kind IN ('class', 'interface', 'struct', 'trait', 'protocol')
                             )
                             SELECT 1 FROM base
@@ -2792,6 +3019,7 @@ fn find_references_internal(
                 start_line: row.get::<_, Option<i64>>(5)?.map(|v| v as usize),
                 start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
                 occurrences: None,
+                target: None,
             })
         })?;
 
@@ -2833,6 +3061,7 @@ fn find_references_internal(
                                 start_line: Some(row.get::<_, i64>(5)? as usize),
                                 start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
                                 occurrences: None,
+                                target: None,
                             })
                         },
                     )?;
@@ -2874,6 +3103,7 @@ fn find_references_internal(
                                 start_line: Some(row.get::<_, i64>(5)? as usize),
                                 start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
                                 occurrences: None,
+                                target: None,
                             })
                         })?;
                     for r in p_rows {
@@ -2918,6 +3148,7 @@ fn find_references_internal(
                                 start_line: Some(row.get::<_, i64>(5)? as usize),
                                 start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
                                 occurrences: None,
+                                target: None,
                             })
                         })?;
 
@@ -3005,6 +3236,7 @@ fn find_references_internal(
                         start_line: row.get::<_, Option<i64>>(5)?.map(|v| v as usize),
                         start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
                         occurrences: None,
+                        target: None,
                     })
                 })?;
             for r in rows {
@@ -3048,6 +3280,7 @@ fn find_references_internal(
                         start_line: row.get::<_, Option<i64>>(5)?.map(|v| v as usize),
                         start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
                         occurrences: Some(row.get::<_, i64>(7)? as usize),
+                        target: None,
                     })
                 })?;
                 for r in rows {
@@ -3082,6 +3315,7 @@ fn find_references_internal(
                 start_line: row.get::<_, Option<i64>>(5)?.map(|v| v as usize),
                 start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
                 occurrences: None,
+                target: None,
             })
         })?;
 
@@ -3138,6 +3372,7 @@ fn find_references_internal(
                             start_line: Some(row.get::<_, i64>(5)? as usize),
                             start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
                             occurrences: None,
+                            target: None,
                         })
                     },
                 )?;
@@ -3187,6 +3422,7 @@ fn find_references_internal(
                             start_line: Some(row.get::<_, i64>(5)? as usize),
                             start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
                             occurrences: None,
+                            target: None,
                         })
                     },
                 )?;
@@ -3207,9 +3443,78 @@ fn find_references_internal(
                 .then(a.start_line.cmp(&b.start_line))
                 .then(a.start_column.cmp(&b.start_column))
         });
+        let mut sites = merge_same_site(results);
+        describe_callee_targets(conn, &mut sites)?;
+        return Ok(sites);
     }
 
     Ok(merge_same_site(results))
+}
+
+/// Names the definitions each callee site can reach: the resolved target, or the definitions a
+/// pending call matches. Several matches are listed, so a call to a common name stays clear.
+fn describe_callee_targets(
+    conn: &Connection,
+    sites: &mut [ReferenceSite],
+) -> Result<(), QueryError> {
+    let owner = "CASE WHEN par.kind IN ('class', 'struct', 'interface', 'trait', 'enum', 'record', 'object', 'protocol', 'union')
+                 THEN par.name || '.' ELSE '' END";
+    let pending = if has_pending_namespace_column(conn) {
+        format!(
+            "UNION
+             SELECT {owner} || s_to.name, replace(s_to.path, '\\', '/'), s_to.start_line
+             FROM pending_relationships p
+             JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
+             JOIN symbols s_to ON s_to.name = p.target_terminal_name
+             LEFT JOIN symbols par ON s_to.parent_symbol_id = par.symbol_id
+             LEFT JOIN symbols s_to_parent ON s_to.parent_symbol_id = s_to_parent.symbol_id
+             WHERE p.from_symbol_id = ?1 AND p.start_line = ?2
+               AND (p.target_terminal_name = ?3 OR p.target_display_name = ?3)
+               AND s_to.kind NOT IN ('import', 'variable', 'parameter', 'field', 'property', 'module', 'namespace')
+               AND {pred}",
+            pred = pending_target_predicate(conn, "s_to", "s_to_parent")
+        )
+    } else {
+        String::new()
+    };
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {owner} || s_to.name, replace(s_to.path, '\\', '/'), s_to.start_line
+         FROM relationships r
+         JOIN symbols s_to ON r.to_symbol_id = s_to.symbol_id
+         LEFT JOIN symbols par ON s_to.parent_symbol_id = par.symbol_id
+         WHERE r.from_symbol_id = ?1 AND r.start_line = ?2 AND s_to.name = ?3
+         {pending}
+         ORDER BY 2, 3
+         LIMIT 4"
+    ))?;
+    for site in sites.iter_mut() {
+        let Some(line) = site.start_line else {
+            continue;
+        };
+        let targets = stmt
+            .query_map(
+                params![site.from_symbol_id, line as i64, site.to_symbol_name],
+                |row| {
+                    Ok(format!(
+                        "`{}` ({}:{})",
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, i64>(2)?
+                    ))
+                },
+            )?
+            .collect::<Result<Vec<_>, _>>()?;
+        site.target = match targets.len() {
+            0 => None,
+            1 => targets.into_iter().next(),
+            2 | 3 => Some(format!("one of {}", targets.join(", "))),
+            _ => Some(format!(
+                "more than 3 definitions named `{}`",
+                site.to_symbol_name
+            )),
+        };
+    }
+    Ok(())
 }
 
 /// The import statements of the top-level definition `name` (under `path_filter` when given): an
@@ -3700,8 +4005,11 @@ pub fn find_structural_facts_scoped(
     let mut results = Vec::new();
     for r in rows {
         let mut fact = r?;
-        if let Some(route) = fact.metadata.as_ref().and_then(route_display) {
-            fact.key = Some(route);
+        let display = fact.metadata.as_ref().and_then(|metadata| {
+            route_display(metadata).or_else(|| mount_display(&fact.capture_name, metadata))
+        });
+        if let Some(display) = display {
+            fact.key = Some(display);
         }
         results.push(fact);
     }
@@ -3723,6 +4031,22 @@ fn route_display(metadata: &serde_json::Value) -> Option<String> {
         Some(verb) => format!("{verb} {template}"),
         None => template.to_string(),
     })
+}
+
+/// A router or blueprint mount with what it mounts and where: ``blueprint_registration `auth.bp` ``,
+/// ``router_mount `router` at /api``. The path includes any enclosing scope the extractor joined.
+fn mount_display(capture: &str, metadata: &serde_json::Value) -> Option<String> {
+    let text = |key: &str| metadata.get(key).and_then(|value| value.as_str());
+    if text("query_family") != Some("framework") {
+        return None;
+    }
+    let target = text("mount_target")?;
+    Some(
+        match text("normalized_mount_path").or_else(|| text("mount_path")) {
+            Some(path) => format!("{capture} `{target}` at {path}"),
+            None => format!("{capture} `{target}`"),
+        },
+    )
 }
 
 /// A route template with every parameter (`<int:id>`, `{id}`, `:id`) replaced by `*`.
@@ -4607,6 +4931,14 @@ pub fn compute_blast_radius_scoped_with_ids(
     }
 
     qualify_test_methods(conn, &mut likely_tests)?;
+    let whole_files: HashSet<String> = likely_tests
+        .iter()
+        .filter(|test| test.reason.ends_with("matched test file"))
+        .map(|test| test.path.clone())
+        .collect();
+    likely_tests.retain(|test| {
+        test.reason.ends_with("matched test file") || !whole_files.contains(&test.path)
+    });
     // Whole test files named for the target first, possible tests last, callers in between.
     likely_tests.sort_by_key(|test| {
         if test.reason.ends_with("matched test file") {
@@ -4948,6 +5280,7 @@ fn implicit_entry_tests(
     }
     let mut ranked: Vec<(usize, TestTarget)> = builders
         .into_iter()
+        .filter(|test| uses_a_client(conn, test))
         .filter_map(|test| {
             let (score, words) = shared_words(seed_words, &test);
             (score > 0).then(|| {
@@ -4957,7 +5290,7 @@ fn implicit_entry_tests(
                     .collect::<Vec<_>>()
                     .join(", ");
                 let reason = format!(
-                    "possible: {}, whose `__call__` reaches the target; shares {shared}",
+                    "possible: {}, and a test client calls its `__call__`, which reaches the target; shares {shared}",
                     test.reason
                 );
                 (score, TestTarget { reason, ..test })
@@ -4971,6 +5304,33 @@ fn implicit_entry_tests(
             .then_with(|| a.line.cmp(&b.line))
     });
     Ok(ranked.into_iter().map(|(_, test)| test).collect())
+}
+
+/// Whether `test` drives an app through a test client: it takes a parameter or holds a variable,
+/// or calls a function, method, class, or member of a receiver, whose name contains `client`. WSGI, ASGI, and Rack apps are called through
+/// such clients by convention (`app.test_client()`, `TestClient(app)`, a `client` fixture), and a
+/// test that only builds the app never reaches its `__call__`.
+fn uses_a_client(conn: &Connection, test: &TestTarget) -> bool {
+    conn.query_row(
+        "SELECT EXISTS (
+            SELECT 1 FROM symbols t
+            WHERE t.path = ?1 AND t.start_line = ?2 AND t.name = ?3
+              AND (EXISTS (SELECT 1 FROM symbols p
+                           WHERE p.parent_symbol_id = t.symbol_id
+                             AND p.kind IN ('parameter', 'variable')
+                             AND lower(p.name) LIKE '%client%')
+                   OR EXISTS (SELECT 1 FROM pending_relationships pr
+                              WHERE pr.from_symbol_id = t.symbol_id
+                                AND (lower(pr.target_terminal_name) LIKE '%client%'
+                                     OR lower(COALESCE(pr.target_receiver, '')) LIKE '%client%'))
+                   OR EXISTS (SELECT 1 FROM relationships r
+                              JOIN symbols callee ON callee.symbol_id = r.to_symbol_id
+                              WHERE r.from_symbol_id = t.symbol_id
+                                AND lower(callee.name) LIKE '%client%')))",
+        params![test.path, test.line as i64, test.name],
+        |row| row.get(0),
+    )
+    .unwrap_or(false)
 }
 
 /// Compute blast radius and likely tests for given seed symbols or seed file paths.
@@ -5005,6 +5365,36 @@ mod tests {
         );
         assert_eq!(line.chars().count(), 120);
         assert!(line.ends_with('…'));
+    }
+
+    #[test]
+    fn a_mount_names_what_it_mounts_and_where() {
+        let mount = |capture: &str, json: &str| {
+            super::mount_display(capture, &serde_json::from_str(json).unwrap())
+        };
+        assert_eq!(
+            mount(
+                "blueprint_registration",
+                r#"{"framework":"flask","mount_target":"auth.bp","query_family":"framework"}"#
+            )
+            .as_deref(),
+            Some("blueprint_registration `auth.bp`")
+        );
+        assert_eq!(
+            mount(
+                "mount",
+                r#"{"mount_path":"/jobs","mount_target":"Sidekiq::Web","normalized_mount_path":"/admin/jobs","query_family":"framework"}"#
+            )
+            .as_deref(),
+            Some("mount `Sidekiq::Web` at /admin/jobs")
+        );
+        assert_eq!(
+            mount(
+                "property",
+                r#"{"mount_target":"x","query_family":"metadata"}"#
+            ),
+            None
+        );
     }
 
     #[test]
@@ -5983,9 +6373,11 @@ mod tests {
             exact_name: false,
             word_match: false,
             name_match: false,
+            owner_match: false,
             name_terms: Vec::new(),
             documentation: false,
             nested: false,
+            owner: None,
         }
     }
 

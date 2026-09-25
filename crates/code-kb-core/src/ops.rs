@@ -269,7 +269,10 @@ pub fn file_skeleton_op(
     }
     sync::ensure_fresh_file(workspace, db_path, conn, &rel_path)?;
 
-    let symbols = queries::load_file_symbols(conn, &rel_path)?;
+    let mut symbols = queries::load_file_symbols(conn, &rel_path)?;
+    let inherited =
+        queries::inherited_writes_among(conn, symbols.iter().map(|s| s.symbol_id.as_str()))?;
+    symbols.retain(|symbol| !inherited.contains(&symbol.symbol_id));
     let file_meta = queries::get_file(conn, &rel_path)?;
     let line_count = file_meta.and_then(|m| m.line_count.map(|l| l as usize));
     let parse_errors = queries::count_parse_diagnostics(conn, &rel_path);
@@ -294,55 +297,34 @@ pub fn codebase_outline_op(
     let norm = path_filter
         .map(|p| p.replace('\\', "/").trim_matches('/').to_string())
         .filter(|p| !p.is_empty());
-    let norm_bs = norm.as_ref().map(|p| p.replace('/', "\\"));
-    let prefix = norm
-        .as_ref()
-        .map(|path| format!("{}/%", queries::escape_like(path)));
-    let prefix_bs = norm_bs
-        .as_ref()
-        .map(|path| format!("{}\\\\%", queries::escape_like(path)));
+    let scope = queries::OutlineScope::new(path_filter, depth);
+    let symbols_by_file = queries::load_scoped_outline_symbols(conn, path_filter, depth, 5)?;
+    let counts = queries::load_outline_counts(conn, path_filter, depth)?;
 
-    let supported = if queries::has_column(conn, "files", "status") {
-        "COALESCE(status, '') != 'unsupported'"
-    } else {
-        "1 = 1"
-    };
-    let mut stmt = conn
-        .prepare(&format!(
-            "SELECT path FROM files
-             WHERE (:path IS NULL
-                OR path = :path COLLATE NOCASE
-                OR path = :path_bs COLLATE NOCASE
-                OR path LIKE :path_prefix ESCAPE '\\'
-                OR path LIKE :path_prefix_bs ESCAPE '\\')
-               AND {supported}
-             ORDER BY path ASC
-             LIMIT 1001"
-        ))
-        .map_err(QueryError::Sqlite)?;
-
-    let mut rows = stmt
-        .query(rusqlite::named_params! {
-            ":path": norm.as_deref(),
-            ":path_bs": norm_bs.as_deref(),
-            ":path_prefix": prefix.as_deref(),
-            ":path_prefix_bs": prefix_bs.as_deref(),
-        })
-        .map_err(QueryError::Sqlite)?;
-
-    let mut file_paths = Vec::new();
+    let mut root_node = OutlineNode::default();
+    let norm_filter = norm.as_deref().unwrap_or_default();
     let mut files_found = 0;
+    let mut listed = 0;
     let mut truncated = false;
-
-    while let Some(row) = rows.next().map_err(QueryError::Sqlite)? {
+    queries::for_each_outline_path(conn, &scope, |file_path| {
         files_found += 1;
-        if files_found > 1000 {
-            truncated = true;
-            break;
+        if scope.lists(&file_path) {
+            listed += 1;
+            if listed > queries::OUTLINE_FILE_CAP {
+                truncated = true;
+                return false;
+            }
         }
-        let file_path: String = row.get(0).map_err(QueryError::Sqlite)?;
-        file_paths.push(file_path);
-    }
+        add_path_to_outline(
+            &mut root_node,
+            &file_path,
+            &symbols_by_file,
+            &counts,
+            depth,
+            norm_filter,
+        );
+        true
+    })?;
 
     let unsupported = queries::count_unsupported_files(conn, norm.as_deref());
     if let Some(filter) = path_filter
@@ -350,29 +332,6 @@ pub fn codebase_outline_op(
         && unsupported == 0
     {
         return Err(file_not_found(conn, filter));
-    }
-
-    let (symbols_by_file, counts) = if file_paths.is_empty() {
-        Default::default()
-    } else {
-        (
-            queries::load_scoped_outline_symbols(conn, path_filter, depth, 5)?,
-            queries::load_outline_counts(conn, path_filter)?,
-        )
-    };
-
-    let mut root_node = OutlineNode::default();
-    let norm_filter = norm.as_deref().unwrap_or_default();
-
-    for file_path in &file_paths {
-        add_path_to_outline(
-            &mut root_node,
-            file_path,
-            &symbols_by_file,
-            &counts,
-            depth,
-            norm_filter,
-        );
     }
 
     let display_root = if norm_filter.is_empty() {
@@ -678,6 +637,76 @@ mod tests {
             "{out}"
         );
         assert!(!out.contains("py.typed"), "{out}");
+    }
+
+    #[test]
+    fn codebase_outline_lists_namespaced_classes_past_deep_files_and_caps_each_subfolder() {
+        let temp = crate::safe_tempdir();
+        let workspace = Workspace::new(temp.path().to_path_buf());
+        let conn = Connection::open(temp.path().join("index.db")).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE files (
+                file_id TEXT, path TEXT, language TEXT, content_hash TEXT,
+                content_bytes INTEGER, line_count INTEGER, indexed_at TEXT, status TEXT
+            );
+            CREATE TABLE symbols (
+                symbol_id TEXT, file_id TEXT, path TEXT, language TEXT, name TEXT, kind TEXT,
+                signature TEXT, doc_comment TEXT, visibility TEXT, parent_symbol_id TEXT,
+                start_line INTEGER, start_column INTEGER, end_line INTEGER, end_column INTEGER,
+                start_byte INTEGER, end_byte INTEGER, body_start_line INTEGER,
+                body_start_column INTEGER, body_end_line INTEGER, body_end_column INTEGER,
+                body_start_byte INTEGER, body_end_byte INTEGER, body_hash TEXT,
+                semantic_group TEXT, is_test INTEGER, test_container INTEGER
+            );
+            INSERT INTO files VALUES ('z', 'z/Late.cs', 'csharp', 'h', 0, 9, 'now', 'indexed');
+            INSERT INTO symbols VALUES (
+                'ns', 'z', 'z/Late.cs', 'csharp', 'App', 'namespace', 'namespace App', NULL,
+                NULL, NULL, 1, 0, 9, 0, 0, 90, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0
+            );
+            INSERT INTO symbols VALUES (
+                'late', 'z', 'z/Late.cs', 'csharp', 'Late', 'class', 'class Late', NULL,
+                NULL, 'ns', 2, 0, 8, 0, 20, 80, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0
+            );",
+        )
+        .unwrap();
+        let tx = conn.unchecked_transaction().unwrap();
+        for i in 0..1005 {
+            tx.execute(
+                "INSERT INTO files VALUES (?1, ?2, 'rust', 'h', 0, 1, 'now', 'indexed')",
+                rusqlite::params![format!("d{i}"), format!("a/deep/x/file_{i}.rs")],
+            )
+            .unwrap();
+        }
+        for i in 10..55 {
+            let path = format!("m/mod_{i}.rs");
+            tx.execute(
+                "INSERT INTO files VALUES (?1, ?2, 'rust', 'h', 0, 1, 'now', 'indexed')",
+                rusqlite::params![format!("m{i}"), path],
+            )
+            .unwrap();
+            tx.execute(
+                "INSERT INTO symbols VALUES (?1, ?2, ?3, 'rust', ?4, 'function', 'fn f()', NULL,
+                 NULL, NULL, 1, 0, 1, 0, 0, 9, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0)",
+                rusqlite::params![format!("s{i}"), format!("m{i}"), path, format!("f{i}")],
+            )
+            .unwrap();
+        }
+        tx.commit().unwrap();
+
+        let out = codebase_outline_op(&workspace, &conn, 2, None).unwrap();
+
+        assert!(out.contains("deep/ (1005 indexed files)"), "{out}");
+        assert!(out.contains("Late.cs [class Late]"), "{out}");
+        assert!(out.contains("mod_49.rs [function f49]"), "{out}");
+        assert!(!out.contains("mod_50.rs"), "{out}");
+        assert!(
+            out.contains("(+5 more files with functions or classes; pass this folder as the path"),
+            "{out}"
+        );
+        assert!(!out.contains("truncated"), "{out}");
+
+        let scoped = codebase_outline_op(&workspace, &conn, 2, Some("m")).unwrap();
+        assert!(scoped.contains("mod_54.rs [function f54]"), "{scoped}");
     }
 
     #[test]

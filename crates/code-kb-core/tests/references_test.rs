@@ -1,6 +1,7 @@
 use code_kb_core::{
-    Workspace, compute_blast_radius, find_julie_extract_binary, find_references_scoped,
-    open_read_only, open_read_write, safe_tempdir, scan_workspace,
+    Workspace, compute_blast_radius, file_skeleton_op, find_julie_extract_binary,
+    find_references_scoped, fts_search_symbols_scoped, open_read_only, open_read_write,
+    safe_tempdir, scan_workspace, search_symbols_scoped,
 };
 use std::fs;
 
@@ -694,8 +695,8 @@ fn blast_radius_labels_a_test_class_setup_and_adds_the_tests_it_runs_before() {
             "namespace App;\n\npublic static class Store\n{\n    public static string PathFor(string root) => root;\n}\n",
         ),
         (
-            "tests/StoreTests.cs",
-            "using Xunit;\n\nnamespace App.Tests;\n\npublic sealed class StoreTests\n{\n    private readonly string path;\n\n    public StoreTests()\n    {\n        path = Store.PathFor(\"root\");\n    }\n\n    [Fact]\n    public void Opens()\n    {\n        Assert.NotNull(path);\n    }\n}\n",
+            "tests/PathTests.cs",
+            "using Xunit;\n\nnamespace App.Tests;\n\npublic sealed class PathTests\n{\n    private readonly string path;\n\n    public PathTests()\n    {\n        path = Store.PathFor(\"root\");\n    }\n\n    [Fact]\n    public void Opens()\n    {\n        Assert.NotNull(path);\n    }\n}\n",
         ),
     ]);
     let conn = open_read_only(&db_path).unwrap();
@@ -708,13 +709,13 @@ fn blast_radius_labels_a_test_class_setup_and_adds_the_tests_it_runs_before() {
         .map(|t| (t.name.as_str(), t.reason.as_str()))
         .collect();
     assert!(
-        reasons.contains(&("StoreTests::Opens", "setup `StoreTests` runs before it")),
+        reasons.contains(&("PathTests::Opens", "setup `PathTests` runs before it")),
         "{reasons:?}"
     );
     assert!(
         !reasons
             .iter()
-            .any(|(name, _)| *name == "StoreTests::StoreTests"),
+            .any(|(name, _)| *name == "PathTests::PathTests"),
         "{reasons:?}"
     );
 }
@@ -728,15 +729,15 @@ fn blast_radius_reaches_tests_that_build_a_class_whose_call_method_reaches_the_t
         ),
         (
             "tests/conftest.py",
-            "import pytest\nfrom web.app import App\n\n\n@pytest.fixture\ndef app():\n    return App()\n",
+            "import pytest\nfrom web.app import App\n\n\n@pytest.fixture\ndef app():\n    return App()\n\n\n@pytest.fixture\ndef client(app):\n    return app.test_client()\n",
         ),
         (
             "tests/test_user_error_handler.py",
-            "def test_user_error_is_handled(app):\n    assert app\n",
+            "def test_user_error_is_handled(app, client):\n    assert client.get('/')\n\n\ndef test_user_exception_logger_is_set(app):\n    assert app.logger\n",
         ),
         (
             "tests/test_views.py",
-            "from web.app import App\n\n\ndef test_view_renders():\n    assert App()\n\n\ndef test_exception_handling_renders():\n    assert App()\n",
+            "from web.app import App\n\n\ndef test_view_renders():\n    assert App().test_client()\n\n\ndef test_exception_handling_renders():\n    assert App().test_client().get('/')\n",
         ),
         (
             "tests/test_config.py",
@@ -761,15 +762,21 @@ fn blast_radius_reaches_tests_that_build_a_class_whose_call_method_reaches_the_t
     assert!(position("test_user_error_is_handled") < position("test_exception_handling_renders"));
     assert!(!names.contains(&"test_view_renders"), "{names:?}");
     assert!(!names.contains(&"test_config_loads"), "{names:?}");
+    assert!(
+        !names.contains(&"test_user_exception_logger_is_set"),
+        "{names:?}"
+    );
     let reason = &result.likely_tests[position("test_exception_handling_renders")].reason;
     assert!(
-        reason.starts_with("possible: builds `App`, whose `__call__` reaches the target; shares"),
+        reason.starts_with(
+            "possible: builds `App`, and a test client calls its `__call__`, which reaches the target; shares"
+        ),
         "{reason}"
     );
     let reason = &result.likely_tests[position("test_user_error_is_handled")].reason;
     assert!(
         reason.starts_with(
-            "possible: builds `App` through fixture `app`, whose `__call__` reaches the target; shares"
+            "possible: builds `App` through fixture `app`, and a test client calls its `__call__`, which reaches the target; shares"
         ),
         "{reason}"
     );
@@ -1103,4 +1110,95 @@ fn a_constructor_gets_the_tests_that_build_its_class_even_one_defined_in_the_tes
 
     let quiet = find_references_scoped(&conn, "Quiet", "callers", 20, false, None).unwrap();
     assert_eq!(caller_names(&quiet), vec!["test_local"]);
+}
+
+#[test]
+fn a_callee_row_names_the_definition_it_reaches_or_the_candidates() {
+    let (_repo, db_path) = scanned_repo(&[
+        ("src/a.py", "def helper():\n    return 1\n"),
+        ("src/b.py", "def helper():\n    return 2\n"),
+        (
+            "src/jobs.py",
+            "def drain():\n    return helper()\n\n\nclass Runner:\n    def run(self):\n        self.step()\n\n    def step(self):\n        return 3\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let drain = find_references_scoped(&conn, "drain", "callees", 20, false, None).unwrap();
+    let run = find_references_scoped(&conn, "run", "callees", 20, false, None).unwrap();
+
+    let helper = drain.iter().find(|r| r.to_symbol_name == "helper");
+    assert_eq!(
+        helper.and_then(|r| r.target.as_deref()),
+        Some("one of `helper` (src/a.py:1), `helper` (src/b.py:1)"),
+        "{drain:?}"
+    );
+    let step = run.iter().find(|r| r.to_symbol_name == "step");
+    assert_eq!(
+        step.and_then(|r| r.target.as_deref()),
+        Some("`Runner.step` (src/jobs.py:9)"),
+        "{run:?}"
+    );
+}
+
+#[test]
+fn a_subclass_write_to_an_attribute_its_base_defines_is_not_a_definition() {
+    let (repo, db_path) = scanned_repo(&[
+        (
+            "src/base.py",
+            "class Base:\n    label: str\n\n    def __init__(self):\n        self.ready = False\n\n    @property\n    def mode(self):\n        return 1\n",
+        ),
+        (
+            "src/app.py",
+            "from .base import Base\n\n\nclass App(Base):\n    def run(self):\n        self.ready = True\n        self.mode = 2\n        self.label = \"app\"\n        self.own = 3\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+    let workspace = Workspace::new(repo.path().to_path_buf());
+
+    let skeleton = file_skeleton_op(&workspace, &db_path, &conn, "src/app.py").unwrap();
+    let ready = search_symbols_scoped(&conn, "ready", None, None, false, 20).unwrap();
+    let mode = fts_search_symbols_scoped(&conn, "mode", None, None, false, 20).unwrap();
+
+    assert!(!skeleton.contains("self.ready"), "{skeleton}");
+    assert!(!skeleton.contains("self.mode"), "{skeleton}");
+    assert!(skeleton.contains("self.label"), "{skeleton}");
+    assert!(skeleton.contains("self.own"), "{skeleton}");
+    let paths: Vec<_> = ready.iter().map(|s| s.path.as_str()).collect();
+    assert_eq!(paths, ["src/base.py"]);
+    assert!(
+        mode.iter().all(|hit| hit.symbol.path == "src/base.py"),
+        "{mode:?}"
+    );
+}
+
+#[test]
+fn a_whole_test_file_row_replaces_the_rows_of_the_tests_inside_it() {
+    let (_repo, db_path) = scanned_repo(&[
+        ("src/store.py", "def path_for(root):\n    return root\n"),
+        (
+            "tests/test_store.py",
+            "from store import path_for\n\n\ndef test_path():\n    assert path_for('r')\n",
+        ),
+        (
+            "tests/test_other.py",
+            "from store import path_for\n\n\ndef test_other_path():\n    assert path_for('r')\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let result = compute_blast_radius(&conn, &["path_for"], &[], 2, 20).unwrap();
+
+    let rows: Vec<(&str, &str)> = result
+        .likely_tests
+        .iter()
+        .map(|t| (t.path.as_str(), t.name.as_str()))
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            ("tests/test_store.py", "tests/test_store.py"),
+            ("tests/test_other.py", "test_other_path"),
+        ]
+    );
 }

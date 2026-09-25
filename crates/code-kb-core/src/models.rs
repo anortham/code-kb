@@ -62,6 +62,9 @@ pub struct ReferenceSite {
     pub start_column: Option<usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub occurrences: Option<usize>,
+    /// For a callee: the definitions the call can reach, as `Owner.name` (path:line).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

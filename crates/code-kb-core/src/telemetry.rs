@@ -1029,7 +1029,7 @@ pub fn format_telemetry_summary(summary: &TelemetrySummary) -> String {
     };
 
     out.push_str(&format!(
-        "Scope: {} | Window: {} | Total Tool Calls: {} | Success Rate: {:.1}% | Empty Results: {} | Tokens Served: ~{} | Est. Tokens Saved: ~{} (baseline known for {} of {} calls; baseline = reading each file an answer names in full)\n\n",
+        "Scope: {} | Window: {} | Total Tool Calls: {} | Success Rate: {:.1}% | Empty Results: {} | Tokens Served: ~{} | Est. Tokens Saved: ~{} (baseline known for {} of {} calls; upper bound: baseline = reading each file an answer names in full)\n\n",
         summary.scope_description,
         summary.time_window,
         summary.total_calls,
@@ -1514,7 +1514,7 @@ mod tests {
 
         let formatted = format_telemetry_summary(&summary);
         assert!(
-            formatted.contains("Est. Tokens Saved: ~900 (baseline known for 1 of 3 calls; baseline = reading each file an answer names in full)"),
+            formatted.contains("Est. Tokens Saved: ~900 (baseline known for 1 of 3 calls; upper bound: baseline = reading each file an answer names in full)"),
             "{formatted}"
         );
         assert!(formatted.contains("~900 (1/2)"), "{formatted}");

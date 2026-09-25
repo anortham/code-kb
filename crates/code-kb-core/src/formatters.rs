@@ -90,7 +90,11 @@ fn value_row_signature(sig: &str) -> std::borrow::Cow<'_, str> {
     }
     let joined = one_line(sig);
     let Some(equals) = value_equals(&joined) else {
-        return joined.into();
+        if joined.chars().count() <= 120 {
+            return joined.into();
+        }
+        let cut: String = joined.chars().take(119).collect();
+        return format!("{}…", cut.trim_end()).into();
     };
     let (declaration, value) = joined.split_at(equals);
     let budget = 120usize.saturating_sub(declaration.chars().count()).max(40);
@@ -111,7 +115,7 @@ fn one_line(sig: &str) -> String {
                 .filter_map(|marker| line.find(marker))
                 .min()
                 .map_or(line, |at| &line[..at]);
-            code.trim()
+            code.trim().trim_end_matches('\\').trim_end()
         })
         .filter(|line| !line.is_empty())
         .collect::<Vec<_>>()
@@ -262,6 +266,32 @@ fn is_shown(sym: &Symbol, parent: Option<&Symbol>) -> bool {
     !is_skippable_kind(&sym.kind) || python_declaration
 }
 
+/// `; defines `a`, `b`` for the functions and classes declared inside a hidden body, so a view
+/// or wrapper defined in a factory stays visible. Lambdas are left out.
+fn nested_definitions(children: &[&Symbol]) -> String {
+    let names: Vec<String> = children
+        .iter()
+        .filter(|child| {
+            matches!(
+                child.kind.as_str(),
+                "function" | "method" | "class" | "struct"
+            )
+        })
+        .filter(|child| {
+            !child
+                .signature
+                .as_deref()
+                .is_some_and(|sig| sig.starts_with("lambda"))
+        })
+        .map(|child| format!("`{}`", child.name))
+        .collect();
+    match names.len() {
+        0 => String::new(),
+        1..=5 => format!("; defines {}", names.join(", ")),
+        n => format!("; defines {}, +{} more", names[..5].join(", "), n - 5),
+    }
+}
+
 fn render_symbol_skeleton(
     out: &mut String,
     sym: &Symbol,
@@ -326,8 +356,9 @@ fn render_symbol_skeleton(
             let b_end = sym.body_end_line.unwrap_or(sym.end_line);
 
             if count > 1 {
+                let defines = nested_definitions(children.map(Vec::as_slice).unwrap_or_default());
                 out.push_str(&format!(
-                    "{indent}{sig} {{ /* {count} lines hidden: L{b_start}-L{b_end} */ }}\n"
+                    "{indent}{sig} {{ /* {count} lines hidden: L{b_start}-L{b_end}{defines} */ }}\n"
                 ));
             } else {
                 out.push_str(&format!("{indent}{sig}; // {leaf_note}\n"));
@@ -445,6 +476,9 @@ pub fn add_path_to_outline(
     }
 }
 
+/// The most files with definitions a subfolder lists; the folder the outline starts at lists all.
+const FILES_LISTED_PER_FOLDER: usize = 40;
+
 pub fn render_outline_tree(
     out: &mut String,
     node: &OutlineNode,
@@ -456,8 +490,16 @@ pub fn render_outline_tree(
         return;
     }
 
-    let total_items =
-        node.subdirs.len() + node.files.len() + usize::from(!node.plain_files.is_empty());
+    let listed = if depth == 0 {
+        node.files.len()
+    } else {
+        node.files.len().min(FILES_LISTED_PER_FOLDER)
+    };
+    let more_files = node.files.len() - listed;
+    let total_items = node.subdirs.len()
+        + listed
+        + usize::from(more_files > 0)
+        + usize::from(!node.plain_files.is_empty());
     let mut index = 0;
 
     // Render subdirectories
@@ -477,7 +519,7 @@ pub fn render_outline_tree(
     }
 
     // Render files
-    for (file_name, syms) in &node.files {
+    for (file_name, syms) in node.files.iter().take(listed) {
         index += 1;
         let is_last = index == total_items;
         let branch = if is_last { "└── " } else { "├── " };
@@ -489,6 +531,19 @@ pub fn render_outline_tree(
         };
 
         out.push_str(&format!("{prefix}{branch}{file_name}{sym_suffix}\n"));
+    }
+
+    if more_files > 0 {
+        index += 1;
+        let branch = if index == total_items {
+            "└── "
+        } else {
+            "├── "
+        };
+        out.push_str(&format!(
+            "{prefix}{branch}(+{more_files} more {} with functions or classes; pass this folder as the path to list them)\n",
+            plural(more_files, "file")
+        ));
     }
 
     if !node.plain_files.is_empty() {
@@ -685,8 +740,12 @@ pub fn format_references(
             Some(n) => format!(", {n} in file"),
             None => String::new(),
         };
+        let target = match &r.target {
+            Some(target) if direction != "callers" => format!(" → {target}"),
+            _ => String::new(),
+        };
         out.push_str(&format!(
-            "- `{other}` [{}{line_info}] (kind: {}{in_file})\n",
+            "- `{other}` [{}{line_info}] (kind: {}{in_file}){target}\n",
             r.path, r.kind
         ));
     }
@@ -699,6 +758,44 @@ pub fn format_references(
 }
 
 /// Formats exact or FTS fallback symbol results with transparent header labeling.
+/// One line for the lookup rows whose name only starts with or contains the query, shown when
+/// some row is named exactly: each distinct name once, with its kind and count.
+fn other_names_line(query: &str, others: &[&Symbol]) -> String {
+    let mut groups: Vec<(String, &str, usize)> = Vec::new();
+    for s in others {
+        let kind = display_kind(s);
+        match groups
+            .iter_mut()
+            .find(|(name, k, _)| *name == s.name && *k == kind)
+        {
+            Some(group) => group.2 += 1,
+            None => groups.push((s.name.clone(), kind, 1)),
+        }
+    }
+    let listed: Vec<String> = groups
+        .iter()
+        .take(8)
+        .map(|(name, kind, count)| match count {
+            1 => format!("`{name}` ({kind})"),
+            n => format!("`{name}` ({kind}, {n}×)"),
+        })
+        .collect();
+    let more = match groups.len().saturating_sub(8) {
+        0 => String::new(),
+        n => format!(", +{n} more"),
+    };
+    format!(
+        "- {} other {} `{query}`: {}{more} (lookup_symbol with the full name shows one)\n",
+        others.len(),
+        if others.len() == 1 {
+            "row starts with or contains"
+        } else {
+            "rows start with or contain"
+        },
+        listed.join(", ")
+    )
+}
+
 pub fn format_find_symbol_results(
     query: &str,
     exact_matches: &[Symbol],
@@ -728,7 +825,12 @@ pub fn format_find_symbol_results(
                     || s.name.ends_with(&format!("::{query}")))
         };
         let imports: Vec<&Symbol> = exact_matches.iter().filter(|s| folds(s)).collect();
-        for s in exact_matches.iter().filter(|s| !folds(s)) {
+        let is_exact = |s: &Symbol| s.name == query || s.name.ends_with(&format!(".{query}"));
+        let (shown, others): (Vec<&Symbol>, Vec<&Symbol>) = exact_matches
+            .iter()
+            .filter(|s| !folds(s))
+            .partition(|s| named_exactly == 0 || is_exact(s));
+        for s in shown {
             let sig = s.signature.as_deref().unwrap_or(&s.name);
             out.push_str(&format!(
                 "- {} `{}` [{}:{}-{}] id={}\n",
@@ -761,9 +863,13 @@ pub fn format_find_symbol_results(
                 ""
             };
             out.push_str(&format!(
-                "- {}{capped} imports of `{query}`: {shown}{more} (lookup_symbol with kind=\"import\" lists them)\n",
-                imports.len()
+                "- {}{capped} {} of `{query}`: {shown}{more} (lookup_symbol with kind=\"import\" lists them)\n",
+                imports.len(),
+                plural(imports.len(), "import")
             ));
+        }
+        if !others.is_empty() {
+            out.push_str(&other_names_line(query, &others));
         }
         if exact_matches.len() >= limit {
             out.push_str(&cap_notice(exact_matches.len(), limit));
@@ -935,7 +1041,7 @@ pub fn format_structural_facts(
         .iter()
         .any(|f| f.pattern_id.starts_with("flask.route"))
     {
-        out.push_str("Routes as declared in the source. Flask also answers HEAD for GET, OPTIONS for every rule, and serves `/static/<path:filename>` unless the app turns it off.\n");
+        out.push_str("Routes as declared in the source. By default Flask also answers HEAD for GET and OPTIONS for every rule, and serves `/static/<path:filename>`; the app or a rule can turn these off.\n");
     }
     if !literals.is_empty() {
         out.push_str(&format!(
@@ -1155,7 +1261,7 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
             .iter()
             .any(|t| t.reason.starts_with("possible:"))
         {
-            out.push_str("`possible` rows reach the target only through a runtime call to `__call__`. The index picks them by shared name words and cannot see whether they send a call that reaches the target; run the whole suite for full coverage.\n");
+            out.push_str("`possible` rows build the class and use a test client, so they reach the target only through a runtime call to `__call__`. The index picks them by shared name words and cannot see whether they send a call that reaches the target; run the whole suite for full coverage.\n");
         }
         out.push('\n');
     } else if result.likely_tests_truncated
@@ -1308,6 +1414,7 @@ mod tests {
             start_line: Some(5),
             start_column: Some(4),
             occurrences,
+            target: None,
         };
 
         let grouped = format_references("Color", &[site(Some(6))], "callers", 30);
@@ -1692,6 +1799,22 @@ mod tests {
     }
 
     #[test]
+    fn a_multi_line_macro_row_drops_its_line_continuations_and_is_cut_to_one_line() {
+        let short = "#define PAIR(a, b)   \\\n    a,                \\\n    b";
+        assert_eq!(value_row_signature(short), "#define PAIR(a, b) a, b");
+
+        let long = format!(
+            "#define WIDE(x) \\\n{}",
+            "    x + x + x + x + x + x + x + x \\\n".repeat(8)
+        );
+        let row = value_row_signature(&long);
+        assert!(row.starts_with("#define WIDE(x) x + x"), "{row}");
+        assert!(row.ends_with('…'), "{row}");
+        assert!(!row.contains('\\'), "{row}");
+        assert!(row.chars().count() <= 120, "{row}");
+    }
+
+    #[test]
     fn skeleton_keeps_values_only_for_real_assignments() {
         let row =
             |name: &str, kind: &str, line: usize, sig: &str, body: Option<(usize, usize)>| Symbol {
@@ -1933,12 +2056,14 @@ mod tests {
         let out = format_find_symbol_results("read", &rows, &[], 20);
 
         assert!(
-            out.contains("- import `readline` [src/flask/cli.py:1034"),
+            out.contains(
+                "- 1 other row starts with or contains `read`: `readline` (import) (lookup_symbol"
+            ),
             "{out}"
         );
         assert!(
             out.contains(
-                "- 1 imports of `read`: src/Types.kt:18 (lookup_symbol with kind=\"import\" lists them)"
+                "- 1 import of `read`: src/Types.kt:18 (lookup_symbol with kind=\"import\" lists them)"
             ),
             "{out}"
         );
@@ -2551,6 +2676,49 @@ mod tests {
         for member in ["Provision", "Deprovision", "Extension"] {
             assert!(skeleton.contains(member), "{skeleton}");
         }
+    }
+
+    #[test]
+    fn a_hidden_body_names_the_functions_defined_inside_it_but_not_lambdas() {
+        let mut syms = vec![
+            skeleton_row(
+                "factory",
+                None,
+                "function",
+                "create_app",
+                "def create_app()",
+                (1, 9),
+                Some((2, 9)),
+            ),
+            skeleton_row(
+                "hello",
+                Some("factory"),
+                "function",
+                "hello",
+                "def hello()",
+                (4, 5),
+                Some((5, 5)),
+            ),
+            skeleton_row(
+                "lambda",
+                Some("factory"),
+                "function",
+                "lambda_7",
+                "lambda v: v",
+                (7, 7),
+                None,
+            ),
+        ];
+        for symbol in &mut syms {
+            symbol.language = "python".into();
+        }
+
+        let skeleton = format_file_skeleton("app.py", &syms, Some(9), 0);
+
+        assert!(
+            skeleton.contains("def create_app() { /* 8 lines hidden: L2-L9; defines `hello` */ }"),
+            "{skeleton}"
+        );
     }
 
     #[test]

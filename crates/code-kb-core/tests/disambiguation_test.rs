@@ -185,6 +185,29 @@ impl Beta {
 }
 
 #[test]
+fn a_name_defined_once_outside_the_tests_resolves_to_that_definition() {
+    let temp_dir = safe_tempdir();
+    let root = temp_dir.path().to_path_buf();
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::create_dir_all(root.join("tests")).unwrap();
+    fs::write(root.join("src/app.py"), "class Flask:\n    pass\n").unwrap();
+    fs::write(
+        root.join("tests/test_config.py"),
+        "def test_subclass():\n    class Flask:\n        pass\n",
+    )
+    .unwrap();
+    let db_path = root.join("test.db");
+    scan_workspace(&Workspace::new(root.clone()), &db_path, true).expect("Scan failed");
+    let conn = open_read_only(&db_path).unwrap();
+
+    let flask = get_symbol_by_name(&conn, "Flask", None)
+        .expect("Query failed")
+        .expect("Flask must be found");
+
+    assert_eq!(flask.path, "src/app.py");
+}
+
+#[test]
 fn test_file_skeleton_exact_path_isolation() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
@@ -473,7 +496,7 @@ fn context_slice_and_blast_radius_classify_unflagged_test_paths_the_same() {
     let tests_dir = root.join("tests");
     fs::create_dir_all(&tests_dir).unwrap();
     fs::write(
-        tests_dir.join("calc_test.rs"),
+        tests_dir.join("pricing_test.rs"),
         "#[test]\nfn test_calculate_price() {\n    assert_eq!(calculate_price(5), 10);\n}\n",
     )
     .unwrap();
@@ -526,7 +549,7 @@ fn context_slice_and_blast_radius_classify_unflagged_test_paths_the_same() {
         blast
             .likely_tests
             .iter()
-            .any(|test| test.name == "test_calculate_price" && test.path == "tests/calc_test.rs"),
+            .any(|test| test.name == "test_calculate_price" && test.path == "tests/pricing_test.rs"),
         "blast radius must classify the same test path, got: {:?}",
         blast.likely_tests
     );
