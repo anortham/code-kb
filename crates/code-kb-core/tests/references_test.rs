@@ -564,3 +564,133 @@ fn a_site_with_both_a_relationship_and_an_identifier_yields_one_row() {
         "{pending:?}"
     );
 }
+
+#[test]
+fn a_python_module_receiver_matches_its_package_and_a_local_class_shadows() {
+    let (_repo, db_path) = scanned_repo(&[
+        ("src/pkg/__init__.py", "from .app import App, make\n"),
+        (
+            "src/pkg/app.py",
+            "class App:\n    pass\n\n\ndef make():\n    return 1\n",
+        ),
+        (
+            "tests/test_app.py",
+            "import pkg\nfrom other import helpers\n\n\ndef test_module_call():\n    return pkg.App()\n\n\ndef test_local_class():\n    class App(pkg.App):\n        pass\n\n    return App()\n\n\ndef test_other_module():\n    return helpers.make()\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+    let callers = |name: &str| -> Vec<String> {
+        let refs =
+            find_references_scoped(&conn, name, "callers", 20, false, Some("src/pkg/app.py"))
+                .unwrap();
+        let calls: Vec<_> = refs.into_iter().filter(|r| r.kind == "calls").collect();
+        caller_names(&calls)
+    };
+
+    assert_eq!(callers("App"), vec!["test_module_call"]);
+    assert!(callers("make").is_empty());
+}
+
+#[test]
+fn a_self_call_reaches_a_method_inherited_from_a_base_in_another_file() {
+    let (_repo, db_path) = scanned_repo(&[
+        (
+            "src/base.py",
+            "class App:\n    def trap(self, e):\n        return False\n",
+        ),
+        (
+            "src/app.py",
+            "from base import App\n\n\nclass Flask(App):\n    def handle(self, e):\n        return self.trap(e)\n",
+        ),
+        (
+            "src/other.py",
+            "class Other:\n    def trap(self, e):\n        return True\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let callees =
+        find_references_scoped(&conn, "handle", "callees", 20, false, Some("src/app.py")).unwrap();
+    let callers =
+        find_references_scoped(&conn, "trap", "callers", 20, false, Some("src/base.py")).unwrap();
+    let other_callers =
+        find_references_scoped(&conn, "trap", "callers", 20, false, Some("src/other.py")).unwrap();
+
+    assert_eq!(
+        callees
+            .iter()
+            .map(|r| r.to_symbol_name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["trap"]
+    );
+    assert_eq!(caller_names(&callers), vec!["handle"]);
+    assert!(other_callers.is_empty(), "{other_callers:?}");
+}
+
+#[test]
+fn blast_radius_follows_a_fixture_to_the_tests_that_take_it() {
+    let (_repo, db_path) = scanned_repo(&[
+        ("src/web/app.py", "def report(e):\n    return str(e)\n"),
+        (
+            "tests/test_runner.py",
+            "import pytest\nfrom web.app import report\n\n\n@pytest.fixture\ndef invoke():\n    return report(None)\n\n\ndef test_invoke_path(invoke):\n    assert invoke\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let result = compute_blast_radius(&conn, &["report"], &[], 2, 20).unwrap();
+
+    let reasons: Vec<(&str, &str)> = result
+        .likely_tests
+        .iter()
+        .map(|t| (t.name.as_str(), t.reason.as_str()))
+        .collect();
+    assert!(
+        reasons.contains(&("invoke", "fixture (transitive caller [depth 1])")),
+        "{reasons:?}"
+    );
+    assert!(
+        reasons.contains(&("test_invoke_path", "uses fixture `invoke`")),
+        "{reasons:?}"
+    );
+}
+
+#[test]
+fn blast_radius_reaches_tests_that_build_a_class_whose_call_method_reaches_the_target() {
+    let (_repo, db_path) = scanned_repo(&[
+        (
+            "src/web/app.py",
+            "class App:\n    def __call__(self, environ):\n        return self.dispatch(environ)\n\n    def dispatch(self, environ):\n        return self.handle_user_exception(environ)\n\n    def handle_user_exception(self, e):\n        return e\n",
+        ),
+        (
+            "tests/conftest.py",
+            "import pytest\nfrom web.app import App\n\n\n@pytest.fixture\ndef app():\n    return App()\n",
+        ),
+        (
+            "tests/test_user_error_handler.py",
+            "def test_user_error_is_handled(app):\n    assert app\n",
+        ),
+        (
+            "tests/test_views.py",
+            "from web.app import App\n\n\ndef test_view_renders():\n    assert App()\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let result = compute_blast_radius(&conn, &["handle_user_exception"], &[], 3, 20).unwrap();
+
+    let names: Vec<&str> = result
+        .likely_tests
+        .iter()
+        .map(|t| t.name.as_str())
+        .collect();
+    let position = |name: &str| {
+        names
+            .iter()
+            .position(|n| *n == name)
+            .unwrap_or_else(|| panic!("{name} missing from {:?}", result.likely_tests))
+    };
+    assert!(position("test_user_error_is_handled") < position("test_view_renders"));
+    let reason = &result.likely_tests[position("test_view_renders")].reason;
+    assert_eq!(reason, "builds `App`, whose `__call__` reaches the target");
+}

@@ -826,9 +826,6 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
 
     out.push_str(&format!("## Blast Radius & Test Impact ({seed_label})\n\n"));
 
-    const MAX_COMPACT_TESTS: usize = 20;
-    const MAX_COMPACT_IMPACTED: usize = 50;
-
     if result.likely_tests_truncated {
         out.push_str("Requested limit hid additional likely tests; increase limit to reveal discovered rows.\n\n");
     }
@@ -844,19 +841,12 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
 
     if !result.likely_tests.is_empty() {
         let total = result.likely_tests.len();
-        if total > MAX_COMPACT_TESTS {
-            out.push_str(&format!(
-                "### Likely Tests to Run ({} returned - showing top {})\n",
-                total, MAX_COMPACT_TESTS
-            ));
-        } else {
-            out.push_str(&format!("### Likely Tests to Run ({} returned)\n", total));
-        }
+        out.push_str(&format!("### Likely Tests to Run ({} returned)\n", total));
 
         let mut tests_by_file: std::collections::BTreeMap<&str, Vec<&TestTarget>> =
             std::collections::BTreeMap::new();
         let mut file_order = Vec::new();
-        for t in result.likely_tests.iter().take(MAX_COMPACT_TESTS) {
+        for t in &result.likely_tests {
             if !tests_by_file.contains_key(t.path.as_str()) {
                 file_order.push(t.path.as_str());
             }
@@ -875,12 +865,6 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
             }
         }
 
-        if total > MAX_COMPACT_TESTS {
-            out.push_str(&format!(
-                "... {} more returned likely tests are hidden by the compact 20-row display. CLI --json shows the full returned list.\n",
-                total - MAX_COMPACT_TESTS
-            ));
-        }
         out.push('\n');
     } else if result.likely_tests_truncated
         || result.traversal_ceiling_reached
@@ -917,13 +901,10 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
                 "All impacted symbols are imports/modules; {low_signal_count} low-signal {row_word} hidden; available in CLI --json.\n"
             ));
         } else {
-            let visible_total = visible.len();
-            let showing_count = visible_total.min(MAX_COMPACT_IMPACTED);
-
             let mut syms_by_file: std::collections::BTreeMap<&str, Vec<&ImpactedSymbol>> =
                 std::collections::BTreeMap::new();
             let mut file_order = Vec::new();
-            for s in visible.iter().take(showing_count) {
+            for s in &visible {
                 if !syms_by_file.contains_key(s.path.as_str()) {
                     file_order.push(s.path.as_str());
                 }
@@ -942,12 +923,6 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
                 }
             }
 
-            if visible_total > MAX_COMPACT_IMPACTED {
-                out.push_str(&format!(
-                    "... {} more returned impacted symbols are hidden by the compact 50-row display. CLI --json shows the full returned list.\n",
-                    visible_total - MAX_COMPACT_IMPACTED
-                ));
-            }
             if low_signal_count > 0 {
                 let row_word = if low_signal_count == 1 {
                     "row (import/module)"
@@ -1589,7 +1564,7 @@ mod tests {
     }
 
     #[test]
-    fn test_format_blast_radius_grouped_and_capped() {
+    fn format_blast_radius_groups_every_returned_test_by_file() {
         let mut likely_tests = Vec::new();
         for i in 1..=25 {
             likely_tests.push(TestTarget {
@@ -1637,10 +1612,12 @@ mod tests {
 
         let formatted = format_blast_radius(&res);
 
-        assert!(formatted.contains("### Likely Tests to Run (25 returned - showing top 20)"));
-        assert!(formatted.contains(
-            "... 5 more returned likely tests are hidden by the compact 20-row display. CLI --json shows the full returned list."
-        ));
+        assert!(formatted.contains("### Likely Tests to Run (25 returned)"));
+        assert!(
+            formatted.contains("  - `test_25` [line 250]"),
+            "{formatted}"
+        );
+        assert!(!formatted.contains("hidden by the compact"));
 
         assert!(formatted.contains("tests/test_1.rs:\n"));
         assert!(formatted.contains("  - `test_"));

@@ -132,7 +132,12 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   Facts and literals have separate limits, each
   with its own cap notice.
 - Search ranking: `search_symbols` admits rows from three branches (exact name, FTS5 word match, trigram name substring, so `sha256` finds `parseSha256Sidecar`), then a deterministic Rust rerank in `queries.rs` credits each query term once from its strongest field (name whole token 3, name stem 2, name substring 1, signature or docstring 1), weighted by the term's rarity across the index (a capped FTS5 match count per term), and adds the whole-name and all-words bonuses (the whole-name bonus is 100 for definition kinds and 60 for every other kind) and the kind, path, documentation, and test priors; `score` is that rerank score. Rows from test files are hidden by default: a path rule in `queries.rs` (`is_test_path` and its SQL mirror `test_path_predicate`) hides the whole file, not only the symbols `julie-extract` flags, and `is_test: true` / `--include-tests` shows them again. A `lookup_symbol` row whose name equals the query is shown either way. When an exact lookup finds a definition, the import rows with the same name fold into one line with the count and the first three locations. Equal scores break by name strength, the sum over query words of 3 for a whole-token name match, 2 for a stem match, 1 for a substring match, and 0 for none, then names that do not start with `_` before names that do; `--explain` reports the name strength as `name_strength`. `code-kb search --explain` prints the breakdown and the rerank timer; the MCP tool takes no `explain` parameter, and `--verbose` stays debug logging.
-- Reference rules: a member access whose receiver names a type-like target groups to one row per
+- Reference rules: a pending call whose receiver names an import binding in the caller's file matches
+  a target whose path holds that module as a directory or file name (`flask.Flask(...)` matches
+  `src/flask/app.py`). A bare pending call never matches a definition in another file when the
+  caller's file defines that name at module level or inside the caller. A `self`, `this`, or `cls`
+  call matches a method of any ancestor class, through same-file and cross-file `extends` rows.
+  A member access whose receiver names a type-like target groups to one row per
   file with an `occurrences` count. An identifier row is dropped when a relationship row already
   covers the same site. An import alias satisfies a pending receiver unless the import source
   starts with `Qt`. An `extends` row never resolves to its own component. A handler row is
@@ -146,7 +151,12 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   across supported languages by default (`include_external: true` / `--include-external` restores them).
 - Blast radius & test prediction: `blast_radius` (alias: `impact`, CLI: `code-kb blast-radius` / `impact`)
   computes multi-hop reverse reachability via SQLite recursive CTEs and predicts targeted tests to run.
-  Auto-discovers uncommitted git changes when no target is passed. A stem-matched test file matches
+  Auto-discovers uncommitted git changes when no target is passed. A caller that julie flags as a
+  test fixture is labelled `fixture`, and the tests that take that fixture as a parameter follow it:
+  in its file, or under the directory of the `conftest.py` that defines it. When the walk reaches a
+  class's `__call__`, or one hop short of it, the tests that build that class, directly or through a
+  fixture, follow last, ranked by the words their names and file names share with the target. The
+  display shows every row the `limit` returned. A stem-matched test file matches
   the seed file's stem in its own file name, never in a folder name above it. A stem- or
   module-matched file counts only when it holds a test, when its file name split on `_`, `-`, and `.`
   has the word `test`, `tests`, `spec`, `specs`, or `tst`, or when the name ends in `Test`, `Tests`,

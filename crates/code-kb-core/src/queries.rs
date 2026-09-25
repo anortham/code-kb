@@ -2333,8 +2333,10 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
     let like_value = "replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_')";
     let closer_rank = call_site_proximity("closer.path");
     let target_rank = call_site_proximity(&format!("{target}.path"));
+    let dotted = "replace(module_path.value, '/', '.')";
+    let segment = format!("replace({dotted}, rtrim({dotted}, replace({dotted}, '.', '')), '')");
     let import_alias_receiver = if has_column(conn, "symbols", "metadata_json") {
-        "OR EXISTS (
+        format!("OR EXISTS (
                         SELECT 1 FROM symbols alias_import
                         WHERE alias_import.kind = 'import'
                           AND alias_import.path = p.path
@@ -2342,9 +2344,23 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                           AND (json_extract(alias_import.metadata_json, '$.alias') = p.target_receiver
                                OR json_extract(alias_import.metadata_json, '$.local_name') = p.target_receiver)
                           AND COALESCE(json_extract(alias_import.metadata_json, '$.source'), '') NOT LIKE 'Qt%'
-                    )"
+                    )
+                    OR EXISTS (
+                        SELECT 1 FROM symbols module_import
+                        CROSS JOIN json_each(json_array(
+                            json_extract(module_import.metadata_json, '$.importedName'),
+                            json_extract(module_import.metadata_json, '$.source')
+                        )) module_path
+                        WHERE module_import.kind = 'import'
+                          AND module_import.path = p.path
+                          AND module_import.name = p.target_receiver
+                          AND json_valid(module_import.metadata_json)
+                          AND {segment} != ''
+                          AND ({target_path} LIKE '%/' || {segment} || '/%'
+                               OR {target_path} LIKE '%/' || {segment} || '.%')
+                    )")
     } else {
-        ""
+        String::new()
     };
     format!(
         "(
@@ -2358,6 +2374,26 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                     OR (EXISTS (SELECT 1 FROM {ns} WHERE value = 'Self')
                         AND s_from.parent_symbol_id = {target}.parent_symbol_id)
                     OR (p.target_receiver IS NOT NULL AND p.target_receiver != '' AND {parent}.name = p.target_receiver)
+                    OR ((p.target_receiver IN ('self', 'this', 'cls', 'Self')
+                         OR EXISTS (SELECT 1 FROM {ns} WHERE value = 'Self'))
+                        AND EXISTS (
+                            WITH RECURSIVE base(symbol_id, depth) AS (
+                                SELECT s_from.parent_symbol_id, 0
+                                UNION
+                                SELECT r.to_symbol_id, base.depth + 1
+                                FROM relationships r JOIN base ON r.from_symbol_id = base.symbol_id
+                                WHERE r.kind = 'extends' AND base.depth < 8
+                                UNION
+                                SELECT c.symbol_id, base.depth + 1
+                                FROM pending_relationships pe
+                                JOIN base ON pe.from_symbol_id = base.symbol_id
+                                JOIN symbols c ON c.name = pe.target_terminal_name
+                                WHERE pe.kind = 'extends' AND base.depth < 8
+                                  AND c.kind IN ('class', 'interface', 'struct', 'trait', 'protocol')
+                            )
+                            SELECT 1 FROM base
+                            WHERE base.symbol_id = {target}.parent_symbol_id AND base.depth > 0
+                        ))
                     OR EXISTS (
                         SELECT 1 FROM symbols receiver
                         JOIN type_facts receiver_type ON receiver_type.symbol_id = receiver.symbol_id
@@ -2400,6 +2436,15 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                     {import_alias_receiver}
                 )
                 AND ({target}.parent_symbol_id IS NULL OR s_from.parent_symbol_id = {target}.parent_symbol_id)
+                AND (p.target_receiver IS NOT NULL AND p.target_receiver != '' OR NOT EXISTS (
+                    SELECT 1 FROM symbols shadow
+                    WHERE shadow.name = {target}.name
+                      AND shadow.path = p.path
+                      AND shadow.symbol_id != {target}.symbol_id
+                      AND shadow.symbol_id != p.from_symbol_id
+                      AND shadow.kind NOT IN ('import', 'module', 'namespace')
+                      AND (shadow.parent_symbol_id IS NULL OR shadow.parent_symbol_id = p.from_symbol_id)
+                ))
                 AND ({target}.parent_symbol_id IS NOT NULL OR NOT EXISTS (
                     SELECT 1 FROM symbols closer
                     WHERE closer.name = {target}.name
@@ -3858,6 +3903,17 @@ pub fn compute_blast_radius_scoped_with_ids(
         ));
     }
 
+    let lifecycle = if has_column(conn, "symbols", "test_lifecycle") {
+        "COALESCE(s.test_lifecycle, 0) != 0"
+    } else {
+        "0"
+    };
+    let mut fixtures = Vec::new();
+    let mut entry_classes = Vec::new();
+    let mut walked: Vec<String> = resolved_seed_symbols
+        .iter()
+        .map(|symbol| symbol.symbol_id.clone())
+        .collect();
     if !recursive_branches.is_empty() {
         let recursive_sql = recursive_branches.join("\n UNION \n");
         let not_documentation = not_documentation(conn, "s");
@@ -3872,7 +3928,8 @@ pub fn compute_blast_radius_scoped_with_ids(
 
                 {recursive_sql}
             )
-            SELECT s.symbol_id, s.name, s.kind, s.path, s.start_line, s.is_test, s.test_container, MIN(iw.depth) as min_depth
+            SELECT s.symbol_id, s.name, s.kind, s.path, s.start_line, s.is_test, s.test_container, MIN(iw.depth) as min_depth,
+                   {lifecycle} AS is_fixture, s.parent_symbol_id
             FROM impact_walk iw
             CROSS JOIN symbols s ON iw.symbol_id = s.symbol_id
             WHERE s.kind NOT IN ({LOW_SIGNAL_KINDS_SQL})
@@ -3899,6 +3956,8 @@ pub fn compute_blast_radius_scoped_with_ids(
                 row.get::<_, bool>(5)?,
                 row.get::<_, bool>(6)?,
                 row.get::<_, i64>(7)? as usize,
+                row.get::<_, bool>(8)?,
+                row.get::<_, Option<String>>(9)?,
             ))
         })?;
 
@@ -3907,18 +3966,41 @@ pub fn compute_blast_radius_scoped_with_ids(
                 traversal_ceiling_reached = true;
                 break;
             }
-            let (_sym_id, name, kind, raw_path, line, is_test, test_container, depth) = r?;
+            let (
+                sym_id,
+                name,
+                kind,
+                raw_path,
+                line,
+                is_test,
+                test_container,
+                depth,
+                is_fixture,
+                parent,
+            ) = r?;
+            walked.push(sym_id);
             let path = raw_path.replace('\\', "/");
             let is_test_target = is_test || test_container || is_test_path(&path);
+            if name == "__call__"
+                && let Some(parent) = parent
+            {
+                entry_classes.push(parent);
+            }
 
             if is_test_target {
                 let key = format!("{}:{}", path, line);
                 if seen_test_keys.insert(key) {
+                    let reason = if is_fixture {
+                        fixtures.push((name.clone(), path.clone()));
+                        format!("fixture (transitive caller [depth {depth}])")
+                    } else {
+                        format!("transitive caller [depth {depth}]")
+                    };
                     likely_tests.push(TestTarget {
                         name,
                         path,
                         line,
-                        reason: format!("transitive caller [depth {depth}]"),
+                        reason,
                     });
                 }
             } else {
@@ -3928,6 +4010,17 @@ pub fn compute_blast_radius_scoped_with_ids(
                     path,
                     line,
                     depth,
+                });
+            }
+        }
+    }
+
+    for (fixture, fixture_path) in &fixtures {
+        for test in fixture_users(conn, fixture, fixture_path)? {
+            if seen_test_keys.insert(format!("{}:{}", test.path, test.line)) {
+                likely_tests.push(TestTarget {
+                    reason: format!("uses fixture `{fixture}`"),
+                    ..test
                 });
             }
         }
@@ -4064,6 +4157,36 @@ pub fn compute_blast_radius_scoped_with_ids(
         }
     }
 
+    // A `__call__` one hop past the walk still makes its class an entry point: the runtime calls it.
+    if has_table(conn, "relationships") {
+        let mut entry_callers = conn.prepare(
+            "SELECT DISTINCT caller.parent_symbol_id
+         FROM relationships r
+         JOIN symbols caller ON caller.symbol_id = r.from_symbol_id
+         WHERE caller.name = '__call__' AND caller.parent_symbol_id IS NOT NULL
+           AND r.to_symbol_id IN (SELECT value FROM json_each(?1))",
+        )?;
+        let walked_json = serde_json::to_string(&walked).unwrap_or_else(|_| "[]".into());
+        for class_id in entry_callers.query_map([walked_json], |row| row.get::<_, String>(0))? {
+            let class_id = class_id?;
+            if !entry_classes.contains(&class_id) {
+                entry_classes.push(class_id);
+            }
+        }
+    }
+
+    let seed_words: Vec<String> = resolved_seed_symbols
+        .iter()
+        .flat_map(|symbol| name_words(&symbol.name))
+        .collect();
+    for class_id in entry_classes {
+        for test in implicit_entry_tests(conn, &class_id, &seed_words)? {
+            if seen_test_keys.insert(format!("{}:{}", test.path, test.line)) {
+                likely_tests.push(test);
+            }
+        }
+    }
+
     let likely_tests_truncated = likely_tests.len() > limit;
     let impacted_symbols_truncated = impacted_symbols.len() > limit;
     if likely_tests.len() > limit {
@@ -4083,6 +4206,153 @@ pub fn compute_blast_radius_scoped_with_ids(
         traversal_ceiling_reached,
         test_file_ceiling_reached,
     })
+}
+
+/// The test functions that take the fixture `name` as a parameter: in the fixture's own file,
+/// or anywhere under the directory of the `conftest.py` that defines it.
+fn fixture_users(
+    conn: &Connection,
+    name: &str,
+    fixture_path: &str,
+) -> Result<Vec<TestTarget>, QueryError> {
+    let scope = match fixture_path.rsplit_once('/') {
+        Some((dir, "conftest.py")) => format!("{}/%", escape_like(dir)),
+        None if fixture_path == "conftest.py" => "%".to_string(),
+        _ => escape_like(fixture_path),
+    };
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT t.name, t.path, t.start_line
+         FROM symbols parameter
+         JOIN symbols t ON t.symbol_id = parameter.parent_symbol_id
+         WHERE parameter.name = ?1
+           AND (parameter.kind = 'parameter'
+                OR (parameter.kind = 'variable' AND parameter.start_byte < t.body_start_byte))
+           AND t.is_test = 1
+           AND replace(t.path, '\\', '/') LIKE ?2 ESCAPE '\\'
+         ORDER BY t.path, t.start_line
+         LIMIT 2000",
+    )?;
+    // ponytail: the callers rank these rows by name, so the cap must hold a whole test suite's
+    // users of one fixture; raise it if a suite passes 2,000 users of a single fixture.
+    let rows = stmt.query_map(params![name, scope], |row| {
+        Ok(TestTarget {
+            name: row.get(0)?,
+            path: row.get::<_, String>(1)?.replace('\\', "/"),
+            line: row.get::<_, i64>(2)? as usize,
+            reason: String::new(),
+        })
+    })?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
+/// The lowercase words of an identifier split at `_`, `-`, and case changes, three letters or more.
+fn name_words(name: &str) -> Vec<String> {
+    let mut words = Vec::new();
+    let mut word = String::new();
+    let mut previous_lower = false;
+    for c in name.chars() {
+        if !c.is_alphanumeric() || (c.is_uppercase() && previous_lower) {
+            if word.len() >= 3 {
+                words.push(word.to_lowercase());
+            }
+            word.clear();
+        }
+        if c.is_alphanumeric() {
+            word.push(c);
+        }
+        previous_lower = c.is_lowercase();
+    }
+    if word.len() >= 3 {
+        words.push(word.to_lowercase());
+    }
+    words
+}
+
+/// How many `seed_words` the test's name shares plus how many its file name shares, so a test in
+/// a file named for the target ranks first. A word matches when one of the two is a prefix of the
+/// other, so `handle` matches `handler`.
+fn shared_words(seed_words: &[String], test: &TestTarget) -> usize {
+    let shared = |text: &str| {
+        let words = name_words(text);
+        seed_words
+            .iter()
+            .filter(|seed| {
+                words
+                    .iter()
+                    .any(|word| word.starts_with(seed.as_str()) || seed.starts_with(word.as_str()))
+            })
+            .count()
+    };
+    let file = test.path.rsplit('/').next().unwrap_or(&test.path);
+    shared(&test.name) + shared(file)
+}
+
+/// Tests that build the class `class_id`, whose `__call__` the impact walk reached, directly or
+/// through a fixture. They reach the target through the call the runtime makes, so no call edge
+/// links them. The tests that share the most words with the seed come first.
+fn implicit_entry_tests(
+    conn: &Connection,
+    class_id: &str,
+    seed_words: &[String],
+) -> Result<Vec<TestTarget>, QueryError> {
+    let Some(class) = get_symbol_by_id(conn, class_id)? else {
+        return Ok(Vec::new());
+    };
+    let reason = format!(
+        "builds `{}`, whose `__call__` reaches the target",
+        class.name
+    );
+    let lifecycle = if has_column(conn, "symbols", "test_lifecycle") {
+        "COALESCE(test_lifecycle, 0) != 0"
+    } else {
+        "0"
+    };
+    let mut builders = Vec::new();
+    for site in find_references_for_symbol(conn, &class.name, "callers", 200, class_id)? {
+        if site.kind != "calls" {
+            continue;
+        }
+        let Some(builder) = get_symbol_by_id(conn, &site.from_symbol_id)? else {
+            continue;
+        };
+        if !(builder.is_test || is_test_path(&builder.path)) {
+            continue;
+        }
+        let is_fixture: bool = conn
+            .query_row(
+                &format!("SELECT {lifecycle} FROM symbols WHERE symbol_id = ?1"),
+                [&builder.symbol_id],
+                |row| row.get(0),
+            )
+            .unwrap_or(false);
+        if is_fixture {
+            builders.extend(fixture_users(conn, &builder.name, &builder.path)?);
+        } else if builder.is_test {
+            builders.push(TestTarget {
+                name: builder.name,
+                path: builder.path,
+                line: builder.start_line,
+                reason: String::new(),
+            });
+        }
+    }
+    let mut ranked: Vec<(usize, TestTarget)> = builders
+        .into_iter()
+        .map(|test| (shared_words(seed_words, &test), test))
+        .collect();
+    ranked.sort_by(|(a_score, a), (b_score, b)| {
+        b_score
+            .cmp(a_score)
+            .then_with(|| a.path.cmp(&b.path))
+            .then_with(|| a.line.cmp(&b.line))
+    });
+    Ok(ranked
+        .into_iter()
+        .map(|(_, test)| TestTarget {
+            reason: reason.clone(),
+            ..test
+        })
+        .collect())
 }
 
 /// Compute blast radius and likely tests for given seed symbols or seed file paths.
