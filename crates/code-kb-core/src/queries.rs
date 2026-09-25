@@ -3977,9 +3977,20 @@ pub fn compute_blast_radius_scoped_with_ids(
         let slashed = "replace(path, '\\', '/')";
         let file_name =
             format!("replace({slashed}, rtrim({slashed}, replace({slashed}, '/', '')), '')");
+        let name_tokens =
+            format!("'_' || lower(replace(replace({file_name}, '-', '_'), '.', '_')) || '_'");
+        let names_or_holds_tests = format!(
+            "({name_tokens} LIKE '%\\_test\\_%' ESCAPE '\\' OR {name_tokens} LIKE '%\\_tests\\_%' ESCAPE '\\'
+              OR {name_tokens} LIKE '%\\_spec\\_%' ESCAPE '\\' OR {name_tokens} LIKE '%\\_specs\\_%' ESCAPE '\\'
+              OR {name_tokens} LIKE '%\\_tst\\_%' ESCAPE '\\'
+              OR {file_name} GLOB '*Test.*' OR {file_name} GLOB '*Tests.*'
+              OR {file_name} GLOB '*Spec.*' OR {file_name} GLOB '*Specs.*'
+              OR EXISTS (SELECT 1 FROM symbols t WHERE t.path = files.path AND t.is_test = 1))"
+        );
         let mut test_files_stmt = conn.prepare(&format!(
             "SELECT DISTINCT path FROM files
              WHERE (path LIKE '%test%' OR path LIKE '%spec%') AND {file_name} LIKE ?1 ESCAPE '\\'
+               AND {names_or_holds_tests}
                AND NOT {doc_file}
              ORDER BY path ASC
              LIMIT 11"
@@ -3988,6 +3999,7 @@ pub fn compute_blast_radius_scoped_with_ids(
             "SELECT DISTINCT path FROM files
              WHERE (path LIKE '%test%' OR path LIKE '%spec%')
                AND (path LIKE ?1 ESCAPE '\\' OR path LIKE ?2 ESCAPE '\\')
+               AND {names_or_holds_tests}
                AND NOT {doc_file}
              ORDER BY path ASC
              LIMIT 201"

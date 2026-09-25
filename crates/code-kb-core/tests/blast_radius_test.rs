@@ -193,6 +193,47 @@ fn a_stem_matches_test_file_names_not_the_folders_above_them() {
 }
 
 #[test]
+fn a_matched_file_counts_as_a_test_only_when_its_name_or_symbols_say_so() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+    conn.execute_batch(
+        "INSERT INTO files VALUES
+            ('f1', 'src/flask/app.py', 'python', 'h1', 100, 10, 'now'),
+            ('f2', 'tests/test_app.py', 'python', 'h2', 100, 10, 'now'),
+            ('f3', 'tests/test_apps/cliapp/app.py', 'python', 'h3', 100, 10, 'now'),
+            ('f4', 'tests/test_apps/cliapp/multiapp.py', 'python', 'h4', 100, 10, 'now'),
+            ('f5', 'test/fixtures/app.tmpl', 'text', 'h5', 100, 10, 'now'),
+            ('f6', 'test/app.render.js', 'javascript', 'h6', 100, 10, 'now'),
+            ('f7', 'tests/test_apps/cliapp/inner1/inner2/flask.py', 'python', 'h7', 100, 10, 'now'),
+            ('f8', 'tests/app_inspect.py', 'python', 'h8', 100, 10, 'now'),
+            ('f9', 'src/test/java/AppTest.java', 'java', 'h9', 100, 10, 'now'),
+            ('f10', 'spec/app_spec.rb', 'ruby', 'h10', 100, 10, 'now');
+        INSERT INTO symbols VALUES
+            ('s_app', 'f3', 'tests/test_apps/cliapp/app.py', 'python', 'testapp', 'variable', NULL, NULL, NULL, NULL, 1, 0, 1, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
+            ('s_render', 'f6', 'test/app.render.js', 'javascript', 'should render', 'function', NULL, NULL, NULL, NULL, 5, 0, 9, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1, 0);",
+    )
+    .unwrap();
+
+    let result = compute_blast_radius(&conn, &[], &["src/flask/app.py"], 1, 20).unwrap();
+
+    let paths: Vec<&str> = result
+        .likely_tests
+        .iter()
+        .map(|t| t.path.as_str())
+        .collect();
+    assert_eq!(
+        paths,
+        [
+            "spec/app_spec.rb",
+            "src/test/java/AppTest.java",
+            "test/app.render.js",
+            "tests/test_app.py"
+        ]
+    );
+}
+
+#[test]
 fn file_seed_finds_test_named_after_its_module() {
     let temp = safe_tempdir();
     let workspace = Workspace::new(temp.path().to_path_buf());

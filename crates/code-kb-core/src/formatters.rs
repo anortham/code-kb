@@ -498,14 +498,15 @@ pub fn format_find_symbol_results(
             exact_matches.len()
         );
         let has_definition = exact_matches.iter().any(|s| s.kind != "import");
-        let imports: Vec<&Symbol> = exact_matches
-            .iter()
-            .filter(|s| has_definition && s.kind == "import")
-            .collect();
-        for s in exact_matches
-            .iter()
-            .filter(|s| !(has_definition && s.kind == "import"))
-        {
+        let folds = |s: &Symbol| {
+            has_definition
+                && s.kind == "import"
+                && (s.name == query
+                    || s.name.ends_with(&format!(".{query}"))
+                    || s.name.ends_with(&format!("::{query}")))
+        };
+        let imports: Vec<&Symbol> = exact_matches.iter().filter(|s| folds(s)).collect();
+        for s in exact_matches.iter().filter(|s| !folds(s)) {
             let sig = s.signature.as_deref().unwrap_or(&s.name);
             out.push_str(&format!(
                 "- {} `{}` [{}:{}-{}] id={}\n",
@@ -1210,6 +1211,41 @@ mod tests {
 
         let imports_only = format_find_symbol_results("Flask", &rows[1..], &[], 20);
         assert_eq!(imports_only.matches("- import `Flask`").count(), 4);
+    }
+
+    #[test]
+    fn exact_lookup_folds_only_imports_named_exactly_like_the_query() {
+        let rows = vec![
+            Symbol {
+                kind: "function".into(),
+                ..sample_symbol("read")
+            },
+            Symbol {
+                kind: "import".into(),
+                path: "src/flask/cli.py".into(),
+                start_line: 1034,
+                ..sample_symbol("readline")
+            },
+            Symbol {
+                kind: "import".into(),
+                path: "src/Types.kt".into(),
+                start_line: 18,
+                ..sample_symbol("com.example.internal.read")
+            },
+        ];
+
+        let out = format_find_symbol_results("read", &rows, &[], 20);
+
+        assert!(
+            out.contains("- import `readline` [src/flask/cli.py:1034"),
+            "{out}"
+        );
+        assert!(
+            out.contains(
+                "- 1 imports of `read`: src/Types.kt:18 (find_references lists every use)"
+            ),
+            "{out}"
+        );
     }
 
     #[test]
