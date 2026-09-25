@@ -4686,7 +4686,8 @@ fn type_declaration_line(signature: &str) -> String {
 /// `.test.`, or `.spec.`, is exactly `test.rs` or `tests.rs`, or ends with the C# `Tests.cs`
 /// (case-sensitive, so `Contests.cs` is a production file).
 /// A name that reads like a test (`test_run`, `TestRoutes`, `runSpec`), for a symbol in a test file
-/// that julie did not flag: an app factory such as `create_app` in `tests/test_apps` is not a test.
+/// that julie did not flag and that is not in a test class: an app factory such as `create_app` in
+/// `tests/test_apps` is not a test, but a helper method of a test class leads to that class.
 fn names_a_test(name: &str) -> bool {
     let lowered = name.to_ascii_lowercase();
     lowered.starts_with("test")
@@ -5013,7 +5014,10 @@ pub fn compute_blast_radius_scoped_with_ids(
                 {recursive_sql}
             )
             SELECT s.symbol_id, s.name, s.kind, s.path, s.start_line, s.is_test, s.test_container, MIN(iw.depth) as min_depth,
-                   {lifecycle} AS is_fixture, s.parent_symbol_id
+                   {lifecycle} AS is_fixture, s.parent_symbol_id,
+                   EXISTS (SELECT 1 FROM symbols owner
+                           WHERE owner.symbol_id = s.parent_symbol_id
+                             AND COALESCE(owner.test_container, 0) != 0) AS in_test_class
             FROM impact_walk iw
             CROSS JOIN symbols s ON iw.symbol_id = s.symbol_id
             WHERE s.kind NOT IN ({LOW_SIGNAL_KINDS_SQL})
@@ -5042,6 +5046,7 @@ pub fn compute_blast_radius_scoped_with_ids(
                 row.get::<_, i64>(7)? as usize,
                 row.get::<_, bool>(8)?,
                 row.get::<_, Option<String>>(9)?,
+                row.get::<_, bool>(10)?,
             ))
         })?;
 
@@ -5061,13 +5066,14 @@ pub fn compute_blast_radius_scoped_with_ids(
                 depth,
                 is_fixture,
                 parent,
+                in_test_class,
             ) = r?;
             walked.push(sym_id);
             let path = raw_path.replace('\\', "/");
             let is_test_target = is_test
                 || test_container
                 || is_fixture
-                || (is_test_path(&path) && names_a_test(&name));
+                || (is_test_path(&path) && (in_test_class || names_a_test(&name)));
             if name == "__call__"
                 && let Some(parent) = &parent
             {

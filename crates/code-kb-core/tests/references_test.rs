@@ -999,7 +999,7 @@ fn blast_radius_lists_tests_through_a_constructor_last_and_skips_app_factories()
         ),
         (
             "tests/test_zz_run.py",
-            "from web.runner import run\n\n\ndef test_zz_invoke():\n    assert run()\n",
+            "from web.runner import run\n\n\ndef test_zz_invoke():\n    assert run()\n\n\nclass TestRun:\n    def helper(self):\n        return run()\n\n    def test_uses_helper(self):\n        assert self.helper()\n",
         ),
     ]);
     let conn = open_read_only(&db_path).unwrap();
@@ -1012,6 +1012,7 @@ fn blast_radius_lists_tests_through_a_constructor_last_and_skips_app_factories()
         .map(|t| t.name.as_str())
         .collect();
     assert!(!tests.contains(&"create_app"), "{tests:?}");
+    assert!(tests.contains(&"TestRun::helper"), "{tests:?}");
     let position = |name: &str| {
         tests
             .iter()
