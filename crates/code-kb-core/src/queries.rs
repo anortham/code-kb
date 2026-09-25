@@ -674,6 +674,21 @@ pub fn search_symbols_scoped(
         return Ok(Vec::new());
     }
     let norm_kind = kind_filter.map(normalize_kind);
+    if let Some(owner) = query
+        .strip_suffix("::")
+        .or_else(|| query.strip_suffix('.'))
+        .and_then(|owner| owner.rsplit(['.', ':']).next())
+        .filter(|owner| !owner.is_empty())
+    {
+        return owner_members(
+            conn,
+            owner,
+            norm_kind.as_deref(),
+            path_filter,
+            include_tests,
+            limit,
+        );
+    }
     if (query.contains("::") || query.contains('.'))
         && let Some(sym) = get_symbol_by_name(conn, query, path_filter)?
     {
@@ -694,7 +709,7 @@ pub fn search_symbols_scoped(
     let path_val = normalized_path.as_deref();
     let path_like = escaped_path.as_deref();
     let kind_val = norm_kind.as_deref();
-    let mut fetch = limit;
+    let mut fetch = 4 * limit;
     loop {
         let sql = search_symbols_sql(
             norm_kind.as_deref() == Some("variable"),
@@ -717,15 +732,100 @@ pub fn search_symbols_scoped(
             .collect::<Result<Vec<Symbol>, _>>()?;
         let fetched = rows.len();
         let inherited = inherited_writes_among(conn, rows.iter().map(|s| s.symbol_id.as_str()))?;
-        let kept: Vec<Symbol> = rows
+        let mut kept: Vec<Symbol> = rows
             .into_iter()
             .filter(|s| !inherited.contains(&s.symbol_id))
             .collect();
-        if kept.len() >= limit || fetched < fetch {
-            return Ok(kept.into_iter().take(limit).collect());
+        let has_definition = kept.iter().any(|s| s.kind != "import");
+        let mut counted = 0;
+        let past_limit = kept.iter().position(|s| {
+            if !folds_into_import_line(query, s, has_definition) {
+                counted += 1;
+            }
+            counted > limit
+        });
+        if let Some(cut) = past_limit {
+            kept.truncate(cut);
+            return Ok(kept);
+        }
+        if fetched < fetch || fetch >= 4 * MAX_RESULT_LIMIT {
+            return Ok(kept);
         }
         fetch *= 2;
     }
+}
+
+/// The members of the classes, modules, and namespaces named `owner`, in source order: what
+/// `lookup_symbol("App.")` lists.
+fn owner_members(
+    conn: &Connection,
+    owner: &str,
+    kind: Option<&str>,
+    path_filter: Option<&str>,
+    include_tests: bool,
+    limit: usize,
+) -> Result<Vec<Symbol>, QueryError> {
+    let path = path_filter.map(|p| {
+        p.replace('\\', "/")
+            .trim_start_matches("./")
+            .trim_matches('/')
+            .to_string()
+    });
+    let path_like = path.as_deref().map(escape_like);
+    let tests = if include_tests {
+        String::new()
+    } else {
+        format!(
+            " AND +s.is_test = 0 AND +s.test_container = 0 AND NOT {}",
+            test_path_predicate("s")
+        )
+    };
+    let sql = format!(
+        "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,
+                s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,
+                s.start_byte, s.end_byte, s.body_start_line, s.body_start_column, s.body_end_line,
+                s.body_end_column, s.body_start_byte, s.body_end_byte, s.body_hash, s.semantic_group,
+                s.is_test, s.test_container
+         FROM symbols o JOIN symbols s ON s.parent_symbol_id = o.symbol_id
+         WHERE o.name = :owner
+           AND o.kind IN ('class', 'struct', 'interface', 'trait', 'enum', 'record', 'object',
+                          'protocol', 'union', 'module', 'namespace')
+           AND s.kind NOT IN ('parameter', 'import')
+           AND (:kind IS NULL OR s.kind = :kind)
+           AND (:path IS NULL OR replace(s.path, '\\', '/') = :path COLLATE NOCASE
+                OR replace(s.path, '\\', '/') LIKE :path_like || '/%' ESCAPE '\\'
+                OR replace(s.path, '\\', '/') LIKE '%/' || :path_like ESCAPE '\\'){tests}
+         ORDER BY s.path, s.start_line
+         LIMIT {limit}"
+    );
+    let rows = conn
+        .prepare(&sql)?
+        .query_map(
+            rusqlite::named_params! {
+                ":owner": owner,
+                ":kind": kind,
+                ":path": path.as_deref(),
+                ":path_like": path_like.as_deref(),
+            },
+            map_symbol,
+        )?
+        .collect::<Result<Vec<Symbol>, _>>()?;
+    let inherited = inherited_writes_among(conn, rows.iter().map(|s| s.symbol_id.as_str()))?;
+    Ok(rows
+        .into_iter()
+        .filter(|s| !inherited.contains(&s.symbol_id))
+        .collect())
+}
+
+/// True when lookup shows `row` inside the one line that counts the imports of `query`, not as a
+/// row of its own: an import of that exact name, when some row is a definition. Such rows do not
+/// count toward the lookup limit.
+pub fn folds_into_import_line(query: &str, row: &Symbol, has_definition: bool) -> bool {
+    has_definition
+        && row.kind == "import"
+        && (row.name == query
+            || row.name.ends_with(&format!(".{query}"))
+            || row.name.ends_with(&format!("::{query}")))
 }
 
 /// Sanitizes a free-form user query into `(and_query, or_query)` formatted for SQLite FTS5.

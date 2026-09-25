@@ -1290,3 +1290,36 @@ fn lookup_fills_its_limit_after_leaving_out_inherited_writes() {
     let paths: Vec<_> = ready.iter().map(|s| s.path.as_str()).collect();
     assert_eq!(paths, ["src/base.py", "src/other.py"]);
 }
+
+#[test]
+fn folded_imports_do_not_use_up_the_lookup_limit() {
+    let (_repo, db_path) = scanned_repo(&[
+        ("src/app.py", "class Flask:\n    pass\n"),
+        ("src/a.py", "from app import Flask\n"),
+        ("src/b.py", "from app import Flask\n"),
+        ("src/c.py", "from app import Flask\n"),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let rows = search_symbols_scoped(&conn, "Flask", None, None, false, 1).unwrap();
+
+    let kinds: Vec<_> = rows.iter().map(|s| s.kind.as_str()).collect();
+    assert_eq!(kinds, ["class", "import", "import", "import"]);
+}
+
+#[test]
+fn a_lookup_ending_in_a_dot_lists_the_members_of_that_class_in_source_order() {
+    let (_repo, db_path) = scanned_repo(&[(
+        "src/app.py",
+        "class App:\n    def run(self):\n        pass\n\n    def config(self):\n        pass\n\n\nclass Other:\n    def run(self):\n        pass\n",
+    )]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let members = search_symbols_scoped(&conn, "App.", None, None, false, 20).unwrap();
+
+    let names: Vec<_> = members
+        .iter()
+        .map(|s| (s.name.as_str(), s.start_line))
+        .collect();
+    assert_eq!(names, [("run", 2), ("config", 5)]);
+}

@@ -73,6 +73,15 @@ fn display_kind(sym: &Symbol) -> &str {
         ("sql", "class") => "table",
         ("markdown", "module") => "section",
         ("markdown", "import") => "link",
+        (_, "property")
+            if sym.signature.as_deref().is_some_and(|sig| {
+                ["self.", "this.", "cls."]
+                    .iter()
+                    .any(|p| sig.starts_with(p))
+            }) =>
+        {
+            "attribute"
+        }
         (_, kind) => kind,
     }
 }
@@ -682,7 +691,7 @@ pub fn format_context_slice(slice: &ContextSlice) -> String {
         if slice.related_tests.len() >= 5 {
             out.push_str("[Showing 5 tests (limit reached)]\n");
         }
-        out.push('\n');
+        out.push_str("These tests call, use, or name this symbol; blast_radius also lists tests that reach it through callers.\n\n");
     } else {
         out.push_str(
             "### Related Tests:\nNo test calls, uses, or names this symbol; blast_radius lists tests that reach it through callers.\n",
@@ -868,18 +877,19 @@ pub fn format_find_symbol_results(
         } else {
             String::new()
         };
-        let mut out = format!(
-            "Found {} symbols matching \"{query}\"{exact_note}:\n\n",
-            exact_matches.len()
-        );
-        let has_definition = exact_matches.iter().any(|s| s.kind != "import");
-        let folds = |s: &Symbol| {
-            has_definition
-                && s.kind == "import"
-                && (s.name == query
-                    || s.name.ends_with(&format!(".{query}"))
-                    || s.name.ends_with(&format!("::{query}")))
+        let owner = query
+            .strip_suffix("::")
+            .or_else(|| query.strip_suffix('.'))
+            .filter(|owner| !owner.is_empty());
+        let mut out = match owner {
+            Some(owner) => format!("Found {} members of `{owner}`:\n\n", exact_matches.len()),
+            None => format!(
+                "Found {} symbols matching \"{query}\"{exact_note}:\n\n",
+                exact_matches.len()
+            ),
         };
+        let has_definition = exact_matches.iter().any(|s| s.kind != "import");
+        let folds = |s: &Symbol| crate::queries::folds_into_import_line(query, s, has_definition);
         let imports: Vec<&Symbol> = exact_matches.iter().filter(|s| folds(s)).collect();
         let is_exact = |s: &Symbol| s.name == query || s.name.ends_with(&format!(".{query}"));
         let (shown, others): (Vec<&Symbol>, Vec<&Symbol>) = exact_matches
@@ -916,7 +926,7 @@ pub fn format_find_symbol_results(
             let cut_inside_exact_names = exact_matches
                 .last()
                 .is_some_and(|s| s.name.eq_ignore_ascii_case(query) || folds(s));
-            let capped = if exact_matches.len() >= limit && cut_inside_exact_names {
+            let capped = if exact_matches.len() - imports.len() >= limit && cut_inside_exact_names {
                 "at least "
             } else {
                 ""
@@ -930,8 +940,8 @@ pub fn format_find_symbol_results(
         if !others.is_empty() {
             out.push_str(&other_names_line(query, &others));
         }
-        if exact_matches.len() >= limit {
-            out.push_str(&cap_notice(exact_matches.len(), limit));
+        if exact_matches.len() - imports.len() >= limit {
+            out.push_str(&cap_notice(exact_matches.len() - imports.len(), limit));
         }
         out
     } else if !fts_matches.is_empty() {
@@ -1672,7 +1682,7 @@ mod tests {
         );
         assert!(!folded.contains("- import `Flask`"), "{folded}");
 
-        let capped = format_find_symbol_results("Flask", &rows, &[], 5);
+        let capped = format_find_symbol_results("Flask", &rows, &[], 1);
         assert!(
             capped.contains("- at least 4 imports of `Flask`"),
             "{capped}"
@@ -2038,6 +2048,12 @@ mod tests {
         assert_eq!(display_kind(&row("sql", "class")), "table");
         assert_eq!(display_kind(&row("markdown", "module")), "section");
         assert_eq!(display_kind(&row("markdown", "import")), "link");
+        let attribute = Symbol {
+            kind: "property".into(),
+            signature: Some("self.extensions = {}".into()),
+            ..sample_symbol("extensions")
+        };
+        assert_eq!(display_kind(&attribute), "attribute");
         assert_eq!(display_kind(&row("python", "class")), "class");
     }
 
