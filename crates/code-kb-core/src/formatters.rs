@@ -692,10 +692,10 @@ pub fn format_context_slice(slice: &ContextSlice) -> String {
         if slice.related_tests.len() >= 5 {
             out.push_str("[Showing 5 tests (limit reached)]\n");
         }
-        out.push_str("These tests call, use, or name this symbol; blast_radius also lists tests that reach it through callers.\n\n");
+        out.push_str("These tests call, use, or name this symbol; blast_radius also lists tests that can reach it through callers.\n\n");
     } else {
         out.push_str(
-            "### Related Tests:\nNo test calls, uses, or names this symbol; blast_radius lists tests that reach it through callers.\n",
+            "### Related Tests:\nNo test calls, uses, or names this symbol; blast_radius lists tests that can reach it through callers.\n",
         );
     }
 
@@ -2501,7 +2501,7 @@ mod tests {
         let text = format_context_slice(&sample_context_slice());
 
         assert!(
-            text.ends_with("### Related Tests:\nNo test calls, uses, or names this symbol; blast_radius lists tests that reach it through callers.\n"),
+            text.ends_with("### Related Tests:\nNo test calls, uses, or names this symbol; blast_radius lists tests that can reach it through callers.\n"),
             "{text}"
         );
     }
