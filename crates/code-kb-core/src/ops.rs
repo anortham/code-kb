@@ -178,9 +178,29 @@ pub fn get_symbol_body_selected_op(
     let symbol = resolve_symbol_op(workspace, db_path, conn, selector, file_path)?;
 
     let abs_file = workspace.canonical_root.join(&symbol.path);
-    let body = slicer::slice_symbol_body(&abs_file, &symbol)?;
+    let start = decorated_start(conn, &symbol).unwrap_or(symbol.start_byte);
+    let source = slicer::slice_symbol_source(&abs_file, &symbol, start)?;
 
-    Ok((symbol, body))
+    Ok((symbol, source))
+}
+
+/// Where the decorators above a Python symbol begin: julie starts the symbol at its `def` or
+/// `class` line and records the decorated block as a `decorated_definition` fact.
+fn decorated_start(conn: &Connection, symbol: &Symbol) -> Option<usize> {
+    conn.query_row(
+        "SELECT MAX(start_byte) FROM structural_facts
+         WHERE path = ?1 AND pattern_id LIKE '%.decorated_definition.%'
+           AND end_byte = ?2 AND start_byte < ?3",
+        rusqlite::params![
+            symbol.path,
+            symbol.end_byte as i64,
+            symbol.start_byte as i64
+        ],
+        |row| row.get::<_, Option<i64>>(0),
+    )
+    .ok()
+    .flatten()
+    .map(|start| start as usize)
 }
 
 /// Retrieve a complete context slice for a symbol, guaranteeing fresh offsets.
@@ -324,10 +344,13 @@ pub fn codebase_outline_op(
         return Err(file_not_found(conn, filter));
     }
 
-    let symbols_by_file = if file_paths.is_empty() {
-        std::collections::HashMap::new()
+    let (symbols_by_file, counts) = if file_paths.is_empty() {
+        Default::default()
     } else {
-        queries::load_scoped_outline_symbols(conn, path_filter, depth, 5)?
+        (
+            queries::load_scoped_outline_symbols(conn, path_filter, depth, 5)?,
+            queries::load_outline_counts(conn, path_filter)?,
+        )
     };
 
     let mut root_node = OutlineNode::default();
@@ -338,6 +361,7 @@ pub fn codebase_outline_op(
             &mut root_node,
             file_path,
             &symbols_by_file,
+            &counts,
             depth,
             norm_filter,
         );

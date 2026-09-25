@@ -64,6 +64,19 @@ fn is_container_kind(kind: &str) -> bool {
     !is_skippable_kind(kind) && !hides_its_body
 }
 
+/// The kind word to show for a symbol. julie reuses code kinds for markup and data files: an
+/// HTML element and a SQL table are `class` rows, a Markdown heading a `module`, a Markdown
+/// link an `import`.
+fn display_kind(sym: &Symbol) -> &str {
+    match (sym.language.as_str(), sym.kind.as_str()) {
+        ("html", "class") => "element",
+        ("sql", "class") => "table",
+        ("markdown", "module") => "section",
+        ("markdown", "import") => "link",
+        (_, kind) => kind,
+    }
+}
+
 fn is_skippable_kind(kind: &str) -> bool {
     matches!(kind, "variable" | "parameter" | "import")
 }
@@ -173,6 +186,33 @@ fn unspelled_kind(sym: &Symbol) -> &'static str {
     if spelled { "" } else { "event " }
 }
 
+/// `in run(), ` for an attribute that a method other than `__init__` assigns, so the skeleton
+/// does not present it as a declaration of the class body.
+fn assigning_method(
+    sym: &Symbol,
+    parent: Option<&Symbol>,
+    children_map: &HashMap<Option<String>, Vec<&Symbol>>,
+) -> String {
+    if !sym
+        .signature
+        .as_deref()
+        .is_some_and(|sig| sig.starts_with("self."))
+    {
+        return String::new();
+    }
+    parent
+        .and_then(|parent| children_map.get(&Some(parent.symbol_id.clone())))
+        .and_then(|siblings| {
+            siblings.iter().find(|method| {
+                matches!(method.kind.as_str(), "method" | "function" | "constructor")
+                    && method.start_line <= sym.start_line
+                    && sym.end_line <= method.end_line
+            })
+        })
+        .filter(|method| method.name != "__init__")
+        .map_or_else(String::new, |method| format!("in {}(), ", method.name))
+}
+
 fn render_symbol_skeleton(
     out: &mut String,
     sym: &Symbol,
@@ -181,11 +221,11 @@ fn render_symbol_skeleton(
     indent_level: usize,
 ) {
     // julie gives other languages' block locals, markup elements, and data keys a `variable` row
-    // under a parent too; only a Python class body declares attributes that way.
-    let class_attribute = sym.kind == "variable"
+    // under a parent too; only a Python module or class body declares names that way.
+    let python_declaration = sym.kind == "variable"
         && sym.language == "python"
-        && parent.is_some_and(|parent| parent.kind == "class");
-    if is_skippable_kind(&sym.kind) && !class_attribute {
+        && parent.is_none_or(|parent| parent.kind == "class");
+    if is_skippable_kind(&sym.kind) && !python_declaration {
         return;
     }
 
@@ -207,7 +247,11 @@ fn render_symbol_skeleton(
     }
 
     let span_str = format!("L{}-{}", sym.start_line, sym.end_line);
-    let leaf_note = format!("{}{span_str}", unspelled_kind(sym));
+    let leaf_note = format!(
+        "{}{}{span_str}",
+        unspelled_kind(sym),
+        assigning_method(sym, parent, children_map)
+    );
 
     let children = children_map.get(&Some(sym.symbol_id.clone()));
 
@@ -250,7 +294,7 @@ fn render_symbol_skeleton(
         } else {
             out.push_str(&format!(
                 "{indent}{} {sym_name}; // {span_str}\n",
-                sym.kind,
+                display_kind(sym),
                 sym_name = sym.name
             ));
         }
@@ -278,6 +322,7 @@ pub fn add_path_to_outline(
     root_node: &mut OutlineNode,
     file_path: &str,
     symbols_by_file: &HashMap<String, Vec<Symbol>>,
+    counts: &HashMap<String, crate::queries::OutlineCounts>,
     max_depth: usize,
     norm_filter: &str,
 ) {
@@ -317,14 +362,27 @@ pub fn add_path_to_outline(
             if depth > max_depth {
                 curr.hidden_files += 1;
             } else {
-                let mut sym_tags = Vec::new();
-                if let Some(syms) = symbols_by_file.get(&normalized) {
-                    for s in syms.iter().take(5) {
-                        sym_tags.push(format!("{} {}", s.kind, s.name));
-                    }
-                    if syms.len() > 5 {
-                        sym_tags.push(format!("+{} more", syms.len() - 5));
-                    }
+                let mut sym_tags: Vec<String> = symbols_by_file
+                    .get(&normalized)
+                    .into_iter()
+                    .flatten()
+                    .filter(|s| !s.is_test && !s.test_container)
+                    .take(5)
+                    .map(|s| format!("{} {}", display_kind(s), s.name))
+                    .collect();
+                let count = counts.get(&normalized).copied().unwrap_or_default();
+                if count.definitions > sym_tags.len() {
+                    sym_tags.push(format!("+{} more", count.definitions - sym_tags.len()));
+                }
+                if count.tests > 0 {
+                    sym_tags.push(format!("{} {}", count.tests, plural(count.tests, "test")));
+                }
+                if count.fixtures > 0 {
+                    sym_tags.push(format!(
+                        "{} {}",
+                        count.fixtures,
+                        plural(count.fixtures, "fixture")
+                    ));
                 }
                 if !sym_tags.is_empty() {
                     curr.files.insert(comp.to_string(), sym_tags);
@@ -362,8 +420,8 @@ pub fn render_outline_tree(
 
         let hidden = match sub.hidden_files {
             0 => String::new(),
-            1 => " (1 file)".to_string(),
-            n => format!(" ({n} files)"),
+            1 => " (1 indexed file)".to_string(),
+            n => format!(" ({n} indexed files)"),
         };
         out.push_str(&format!("{prefix}{branch}{name}/{hidden}\n"));
         render_outline_tree(out, sub, &next_prefix, depth + 1, max_depth);
@@ -386,20 +444,13 @@ pub fn render_outline_tree(
 }
 
 /// Format symbol body with metadata header, signature, and body content.
-pub fn format_symbol_body(symbol: &Symbol, body: &str) -> String {
+/// A symbol's source as written, under a location comment.
+pub fn format_symbol_body(symbol: &Symbol, source: &str) -> String {
     let mut out = format!(
-        "// {}:{}-{} ({})\n",
+        "// {}:{}-{} ({})\n{source}",
         symbol.path, symbol.start_line, symbol.end_line, symbol.name
     );
-    if let Some(ref sig) = symbol.signature {
-        let sig = signature_without_duplicate_body(sig, body);
-        out.push_str(sig);
-        if !sig.ends_with('\n') {
-            out.push('\n');
-        }
-    }
-    out.push_str(body);
-    if !body.ends_with('\n') {
+    if !source.ends_with('\n') {
         out.push('\n');
     }
     out
@@ -459,7 +510,7 @@ pub fn format_context_slice(slice: &ContextSlice) -> String {
         out.push('\n');
     } else {
         out.push_str(
-            "### Related Tests:\nNo test calls or names this symbol; blast_radius lists tests that reach it through callers.\n",
+            "### Related Tests:\nNo test calls, uses, or names this symbol; blast_radius lists tests that reach it through callers.\n",
         );
     }
 
@@ -511,6 +562,29 @@ fn callee_name(name: &str) -> String {
 }
 
 /// Format references list for callers/callees with optional limit footer.
+/// One line for the import statements of a target: their count and the first three sites.
+pub fn format_import_summary(sites: &[(String, usize)]) -> String {
+    if sites.is_empty() {
+        return String::new();
+    }
+    let files: std::collections::BTreeSet<&str> =
+        sites.iter().map(|(path, _)| path.as_str()).collect();
+    let first: Vec<String> = sites
+        .iter()
+        .take(3)
+        .map(|(path, line)| format!("{path}:{line}"))
+        .collect();
+    let more = if sites.len() > 3 { ", …" } else { "" };
+    format!(
+        "Imported {} {} in {} {}: {}{more} (lookup_symbol with kind=\"import\" lists them)\n",
+        sites.len(),
+        plural(sites.len(), "time"),
+        files.len(),
+        plural(files.len(), "file"),
+        first.join(", ")
+    )
+}
+
 pub fn format_references(
     target_name: &str,
     refs: &[ReferenceSite],
@@ -585,7 +659,12 @@ pub fn format_find_symbol_results(
             let sig = s.signature.as_deref().unwrap_or(&s.name);
             out.push_str(&format!(
                 "- {} `{}` [{}:{}-{}] id={}\n",
-                s.kind, s.name, s.path, s.start_line, s.end_line, s.symbol_id
+                display_kind(s),
+                s.name,
+                s.path,
+                s.start_line,
+                s.end_line,
+                s.symbol_id
             ));
             out.push_str(&format!("  Signature: {sig}\n"));
             if let Some(doc) = &s.doc_comment {
@@ -627,7 +706,13 @@ pub fn format_find_symbol_results(
             let sig = s.signature.as_deref().unwrap_or(&s.name);
             out.push_str(&format!(
                 "- {} `{}` [{}:{}-{}] (score: {:.2}) id={}\n",
-                s.kind, s.name, s.path, s.start_line, s.end_line, r.score, s.symbol_id
+                display_kind(s),
+                s.name,
+                s.path,
+                s.start_line,
+                s.end_line,
+                r.score,
+                s.symbol_id
             ));
             out.push_str(&format!("  Signature: {sig}\n"));
             if let Some(line) = r.snippet.as_deref().and_then(|m| match_line(m, sig)) {
@@ -657,25 +742,50 @@ pub fn no_facts_heading(category: &str, path_filter: Option<&str>) -> String {
     }
 }
 
+/// The answer when a category matches no fact. A known alias gets only the alias summary, and
+/// `import` says where imports are, because most extractors record imports as symbols. Any other
+/// category lists every raw category, so the agent can pick one.
+pub fn format_no_facts(
+    category: &str,
+    path_filter: Option<&str>,
+    categories: &[(String, usize)],
+) -> String {
+    let mut out = format!("{}\n\n", no_facts_heading(category, path_filter));
+    if !crate::queries::is_category_alias(category) {
+        out.push_str(&format_fact_categories(categories));
+        return out;
+    }
+    if matches!(category.to_ascii_lowercase().as_str(), "import" | "imports") {
+        out.push_str("Most languages record imports as symbols: lookup_symbol with kind=\"import\" lists them.\n\n");
+    }
+    out.push_str(&alias_summary(categories));
+    out
+}
+
+fn alias_summary(categories: &[(String, usize)]) -> String {
+    let aliases = crate::queries::alias_fact_counts(categories);
+    if aliases.is_empty() {
+        return String::new();
+    }
+    let parts: Vec<String> = aliases
+        .iter()
+        .map(|(alias, patterns, facts)| {
+            format!(
+                "{alias} ({patterns} {}, {facts} {})",
+                plural(*patterns, "pattern"),
+                plural(*facts, "fact")
+            )
+        })
+        .collect();
+    format!("Aliases: {}\n\n", parts.join(", "))
+}
+
 pub fn format_fact_categories(categories: &[(String, usize)]) -> String {
     if categories.is_empty() {
         return "No structural facts or literals indexed in this repository.".to_string();
     }
     let mut out = String::new();
-    let aliases = crate::queries::alias_fact_counts(categories);
-    if !aliases.is_empty() {
-        let parts: Vec<String> = aliases
-            .iter()
-            .map(|(alias, patterns, facts)| {
-                format!(
-                    "{alias} ({patterns} {}, {facts} {})",
-                    plural(*patterns, "pattern"),
-                    plural(*facts, "fact")
-                )
-            })
-            .collect();
-        out.push_str(&format!("Aliases: {}\n\n", parts.join(", ")));
-    }
+    out.push_str(&alias_summary(categories));
     out.push_str(&format!(
         "Available structural fact & literal categories ({} found):\n\n",
         categories.len()
@@ -800,7 +910,13 @@ pub fn format_search_results(query: &str, results: &[SymbolSearchResult], limit:
         let sig = s.signature.as_deref().unwrap_or(&s.name);
         out.push_str(&format!(
             "- {} `{}` [{}:{}-{}] (score: {:.2}) id={}\n",
-            s.kind, s.name, s.path, s.start_line, s.end_line, r.score, s.symbol_id
+            display_kind(s),
+            s.name,
+            s.path,
+            s.start_line,
+            s.end_line,
+            r.score,
+            s.symbol_id
         ));
         out.push_str(&format!("  Signature: {sig}\n"));
         if let Some(line) = r.snippet.as_deref().and_then(|m| match_line(m, sig)) {
@@ -834,6 +950,9 @@ fn explain_line(score: f64, e: &SearchExplain) -> String {
     if e.test_intent != 0.0 {
         line.push_str(&format!(" + test {:.1}", e.test_intent));
     }
+    if e.nested != 0.0 {
+        line.push_str(&format!(" + nested {:.1}", e.nested));
+    }
     line.push_str(&format!(" [{}]", e.branches.join(",")));
     if let Some(bm25) = e.bm25 {
         line.push_str(&format!(" bm25 {bm25:.2}"));
@@ -866,11 +985,20 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
 
     out.push_str(&format!("## Blast Radius & Test Impact ({seed_label})\n\n"));
 
+    let more = if result.limit_at_maximum {
+        "limit is at its maximum, so narrow the target to a symbol or fewer files"
+    } else {
+        "increase limit to reveal discovered rows"
+    };
     if result.likely_tests_truncated {
-        out.push_str("Requested limit hid additional likely tests; increase limit to reveal discovered rows.\n\n");
+        out.push_str(&format!(
+            "Requested limit hid additional likely tests; {more}.\n\n"
+        ));
     }
     if result.impacted_symbols_truncated {
-        out.push_str("Requested limit hid additional impacted symbols; increase limit to reveal discovered rows.\n\n");
+        out.push_str(&format!(
+            "Requested limit hid additional impacted symbols; {more}.\n\n"
+        ));
     }
     if result.traversal_ceiling_reached {
         out.push_str("Traversal stopped at the 200-row discovery ceiling; narrow the target because increasing limit cannot raise this ceiling.\n\n");
@@ -1162,31 +1290,13 @@ mod tests {
     }
 
     #[test]
-    fn format_symbol_body_does_not_repeat_expression_already_in_signature() {
-        let body = "=>\n        transport.SendAsync<OffboardingFormDto>(\n            HttpMethod.Get,\n            $\"ser/{id}\",\n            cancellationToken: cancellationToken)";
-        let mut symbol = sample_symbol("GetByIdAsync");
-        symbol.language = "csharp".into();
-        symbol.signature = Some(format!(
-            "public Task<OffboardingFormDto?> GetByIdAsync(\n        int id,\n        CancellationToken cancellationToken = default){body}"
-        ));
-
-        let formatted = format_symbol_body(&symbol, body);
-
-        assert_eq!(
-            formatted.matches("transport.SendAsync").count(),
-            1,
-            "{formatted}"
-        );
-    }
-
-    #[test]
-    fn format_symbol_body_preserves_unmatched_signature_whitespace() {
+    fn format_symbol_body_prints_the_source_under_its_location() {
         let mut symbol = sample_symbol("plain");
-        symbol.signature = Some("pub fn plain()  ".into());
+        symbol.signature = Some("pub fn plain()".into());
 
         assert_eq!(
-            format_symbol_body(&symbol, "return 1;"),
-            "// src/lib.rs:1-10 (plain)\npub fn plain()  \nreturn 1;\n"
+            format_symbol_body(&symbol, "pub fn plain() {\n    1\n}"),
+            "// src/lib.rs:1-10 (plain)\npub fn plain() {\n    1\n}\n"
         );
     }
 
@@ -1280,7 +1390,7 @@ mod tests {
     }
 
     #[test]
-    fn skeleton_shows_class_attributes_with_one_line_values() {
+    fn skeleton_shows_python_class_and_module_variables_with_one_line_values() {
         let leaf = |name: &str, kind: &str, line: usize, sig: &str| Symbol {
             kind: kind.into(),
             language: "python".into(),
@@ -1310,6 +1420,8 @@ mod tests {
             path: "app.py".into(),
             start_line: 30,
             end_line: 30,
+            body_start_line: None,
+            body_end_line: None,
             signature: Some("app = App()".into()),
             ..sample_symbol("app")
         };
@@ -1350,7 +1462,47 @@ mod tests {
             out.contains("    self.blueprints: dict[str, Blueprint] = {}; // L5-5"),
             "{out}"
         );
-        assert!(!out.contains("app = App()"), "{out}");
+        assert!(out.contains("app = App(); // L30-30"), "{out}");
+    }
+
+    #[test]
+    fn skeleton_names_the_method_that_assigns_an_attribute_outside_init() {
+        let member = |name: &str, kind: &str, start: usize, end: usize, sig: &str| Symbol {
+            kind: kind.into(),
+            language: "python".into(),
+            parent_symbol_id: Some("id_Flask".into()),
+            start_line: start,
+            end_line: end,
+            body_start_line: None,
+            body_end_line: None,
+            signature: Some(sig.into()),
+            ..sample_symbol(name)
+        };
+        let class = Symbol {
+            kind: "class".into(),
+            language: "python".into(),
+            start_line: 1,
+            end_line: 30,
+            body_start_line: None,
+            body_end_line: None,
+            signature: Some("class Flask(App)".into()),
+            ..sample_symbol("Flask")
+        };
+        let symbols = vec![
+            class,
+            member("__init__", "method", 2, 10, "def __init__(self)"),
+            member("cli", "property", 3, 3, "self.cli = cli.AppGroup()"),
+            member("run", "method", 12, 20, "def run(self)"),
+            member("debug", "property", 14, 14, "self.debug = get_debug_flag()"),
+        ];
+
+        let out = format_file_skeleton("app.py", &symbols, None, 0);
+
+        assert!(out.contains("self.cli = cli.AppGroup(); // L3-3"), "{out}");
+        assert!(
+            out.contains("self.debug = get_debug_flag(); // in run(), L14-14"),
+            "{out}"
+        );
     }
 
     #[test]
@@ -1512,6 +1664,54 @@ mod tests {
     }
 
     #[test]
+    fn import_summary_counts_sites_and_files_and_lists_three() {
+        let sites = vec![
+            ("src/flask/__init__.py".to_string(), 2),
+            ("src/flask/cli.py".to_string(), 34),
+            ("src/flask/cli.py".to_string(), 45),
+            ("tests/conftest.py".to_string(), 6),
+        ];
+
+        assert_eq!(
+            format_import_summary(&sites),
+            "Imported 4 times in 3 files: src/flask/__init__.py:2, src/flask/cli.py:34, src/flask/cli.py:45, … (lookup_symbol with kind=\"import\" lists them)\n"
+        );
+        assert_eq!(format_import_summary(&[]), "");
+    }
+
+    #[test]
+    fn no_facts_for_an_alias_points_imports_at_lookup_and_skips_the_raw_list() {
+        let categories = vec![("flask.route.v1".to_string(), 3)];
+
+        let imports = format_no_facts("import", None, &categories);
+        let unknown = format_no_facts("widgets", None, &categories);
+
+        assert!(
+            imports.contains("lookup_symbol with kind=\"import\""),
+            "{imports}"
+        );
+        assert!(!imports.contains("`flask.route.v1`"), "{imports}");
+        assert!(
+            unknown.contains("`flask.route.v1` (3 occurrences)"),
+            "{unknown}"
+        );
+    }
+
+    #[test]
+    fn markup_and_data_rows_show_their_own_kind_words() {
+        let row = |language: &str, kind: &str| Symbol {
+            language: language.into(),
+            kind: kind.into(),
+            ..sample_symbol("x")
+        };
+        assert_eq!(display_kind(&row("html", "class")), "element");
+        assert_eq!(display_kind(&row("sql", "class")), "table");
+        assert_eq!(display_kind(&row("markdown", "module")), "section");
+        assert_eq!(display_kind(&row("markdown", "import")), "link");
+        assert_eq!(display_kind(&row("python", "class")), "class");
+    }
+
+    #[test]
     fn no_facts_heading_names_the_path_filter() {
         assert_eq!(
             no_facts_heading("config", Some("src/flask")),
@@ -1520,6 +1720,38 @@ mod tests {
         assert_eq!(
             no_facts_heading("config", None),
             "No facts match 'config' in this repository."
+        );
+    }
+
+    #[test]
+    fn outline_says_how_many_definitions_it_left_out_and_counts_tests() {
+        let mut root = OutlineNode::default();
+        let symbol = |name: &str, is_test: bool| Symbol {
+            kind: "function".into(),
+            path: "tests/test_basic.py".into(),
+            is_test,
+            ..sample_symbol(name)
+        };
+        let symbols = HashMap::from([(
+            "tests/test_basic.py".to_string(),
+            vec![symbol("helper", false), symbol("test_one", true)],
+        )]);
+        let counts = HashMap::from([(
+            "tests/test_basic.py".to_string(),
+            crate::queries::OutlineCounts {
+                definitions: 3,
+                tests: 90,
+                fixtures: 2,
+            },
+        )]);
+        add_path_to_outline(&mut root, "tests/test_basic.py", &symbols, &counts, 3, "");
+
+        let mut out = String::new();
+        render_outline_tree(&mut out, &root, "", 0, 3);
+
+        assert!(
+            out.contains("test_basic.py [function helper, +2 more, 90 tests, 2 fixtures]"),
+            "{out}"
         );
     }
 
@@ -1533,13 +1765,13 @@ mod tests {
             "src/flask/cli.py",
             "tests/conftest.py",
         ] {
-            add_path_to_outline(&mut root, path, &no_symbols, 2, "");
+            add_path_to_outline(&mut root, path, &no_symbols, &HashMap::new(), 2, "");
         }
 
         let mut out = String::new();
         render_outline_tree(&mut out, &root, "", 0, 2);
 
-        assert!(out.contains("└── flask/ (3 files)"), "{out}");
+        assert!(out.contains("└── flask/ (3 indexed files)"), "{out}");
         assert!(!out.contains("tests/ ("), "{out}");
     }
 
@@ -1627,6 +1859,7 @@ mod tests {
             path_role: -10.0,
             documentation: -200.0,
             test_intent: 5.0,
+            nested: 0.0,
             terms: vec![("sha".into(), "name".into(), 3.0)],
             word_weights: vec![("sha".into(), 2.6)],
             candidates: 1,
@@ -1678,6 +1911,7 @@ mod tests {
                 path_role: -10.0,
                 documentation: 0.0,
                 test_intent: 5.0,
+                nested: 0.0,
                 word_weights: vec![("sha".into(), 2.6), ("256".into(), 0.97)],
                 candidates: 37,
                 rerank_us: 180,
@@ -1750,6 +1984,7 @@ mod tests {
             likely_tests_truncated: false,
             impacted_symbols_truncated: false,
             test_file_ceiling_reached: false,
+            limit_at_maximum: false,
         };
 
         let formatted = format_blast_radius(&res);
@@ -1806,6 +2041,7 @@ mod tests {
             likely_tests_truncated: false,
             impacted_symbols_truncated: false,
             test_file_ceiling_reached: false,
+            limit_at_maximum: false,
         };
 
         let formatted = format_blast_radius(&res);
@@ -1894,7 +2130,7 @@ mod tests {
         let text = format_context_slice(&sample_context_slice());
 
         assert!(
-            text.ends_with("### Related Tests:\nNo test calls or names this symbol; blast_radius lists tests that reach it through callers.\n"),
+            text.ends_with("### Related Tests:\nNo test calls, uses, or names this symbol; blast_radius lists tests that reach it through callers.\n"),
             "{text}"
         );
     }
@@ -1940,6 +2176,7 @@ mod tests {
             likely_tests_truncated: false,
             impacted_symbols_truncated: false,
             test_file_ceiling_reached: false,
+            limit_at_maximum: false,
         };
 
         let formatted = format_blast_radius(&res);
@@ -1957,6 +2194,7 @@ mod tests {
             impacted_symbols_truncated: false,
             traversal_ceiling_reached: true,
             test_file_ceiling_reached: true,
+            limit_at_maximum: false,
         };
 
         let formatted = format_blast_radius(&res);
@@ -1969,6 +2207,7 @@ mod tests {
         let no_ceiling = BlastRadiusResult {
             traversal_ceiling_reached: false,
             test_file_ceiling_reached: false,
+            limit_at_maximum: false,
             ..res.clone()
         };
         assert!(format_blast_radius(&no_ceiling).contains("No direct or name-matched tests found"));
@@ -1976,6 +2215,7 @@ mod tests {
         let traversal_only = BlastRadiusResult {
             traversal_ceiling_reached: true,
             test_file_ceiling_reached: false,
+            limit_at_maximum: false,
             ..res
         };
         let traversal_only_text = format_blast_radius(&traversal_only);

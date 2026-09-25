@@ -664,7 +664,7 @@ fn main() -> anyhow::Result<()> {
         }
         Command::Refs(args) => {
             let selector = symbol_selector(args.symbol.as_ref(), args.symbol_id.as_ref())?;
-            let (target, refs) = match selector {
+            let (target, target_path, refs) = match selector {
                 SymbolSelector::Name(name) => {
                     let path = args
                         .file
@@ -678,7 +678,7 @@ fn main() -> anyhow::Result<()> {
                         args.include_external,
                         path.as_deref(),
                     )?;
-                    (name, refs)
+                    (name, path, refs)
                 }
                 SymbolSelector::Id(id) => {
                     let selected = resolve_symbol_op(
@@ -696,7 +696,7 @@ fn main() -> anyhow::Result<()> {
                         &selected.symbol_id,
                         args.include_external,
                     )?;
-                    (selected.name, refs)
+                    (selected.name, Some(selected.path), refs)
                 }
             };
             if cli.json {
@@ -704,10 +704,16 @@ fn main() -> anyhow::Result<()> {
             } else if args.limit == 0 {
                 println!("{ZERO_LIMIT_NOTICE}");
             } else {
-                println!(
+                print!(
                     "{}",
                     format_references(&target, &refs, &args.direction, args.limit)
                 );
+                if args.direction == "callers" {
+                    let imports =
+                        code_kb_core::import_sites(&conn, &target, target_path.as_deref())?;
+                    print!("{}", code_kb_core::format_import_summary(&imports));
+                }
+                println!();
             }
         }
         Command::BlastRadius(args) | Command::Impact(args) => {
@@ -781,10 +787,9 @@ fn main() -> anyhow::Result<()> {
                     let categories =
                         list_structural_fact_categories_scoped(&conn, rel_path.as_deref())?;
                     println!(
-                        "{}\n",
-                        code_kb_core::no_facts_heading(cat, rel_path.as_deref())
+                        "{}",
+                        code_kb_core::format_no_facts(cat, rel_path.as_deref(), &categories)
                     );
-                    println!("{}", format_fact_categories(&categories));
                 } else {
                     print!(
                         "{}",

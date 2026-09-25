@@ -51,10 +51,12 @@ impl TimeWindow {
 
     pub fn to_sqlite_condition(&self) -> Option<&'static str> {
         match self {
-            Self::Today => Some("timestamp >= datetime('now', 'localtime', 'start of day')"),
+            Self::Today => Some("timestamp >= datetime('now', 'localtime', 'start of day', 'utc')"),
             Self::Last7Days => Some("timestamp >= datetime('now', '-7 days')"),
             Self::Last30Days => Some("timestamp >= datetime('now', '-30 days')"),
-            Self::ThisMonth => Some("timestamp >= datetime('now', 'localtime', 'start of month')"),
+            Self::ThisMonth => {
+                Some("timestamp >= datetime('now', 'localtime', 'start of month', 'utc')")
+            }
             Self::LastYear => Some("timestamp >= datetime('now', '-365 days')"),
             Self::AllTime => None,
         }
@@ -1090,7 +1092,7 @@ pub fn format_telemetry_summary(summary: &TelemetrySummary) -> String {
         out.push_str("\n### Recent Errors\n");
         for err in &summary.recent_errors {
             out.push_str(&format!(
-                "- {} [`{}`]: {}\n",
+                "- {} UTC [`{}`]: {}\n",
                 err.timestamp, err.tool, err.error_message
             ));
         }

@@ -658,7 +658,7 @@ fn blast_radius_follows_a_fixture_to_the_tests_that_take_it() {
         ("src/web/app.py", "def report(e):\n    return str(e)\n"),
         (
             "tests/test_runner.py",
-            "import pytest\nfrom web.app import report\n\n\n@pytest.fixture\ndef invoke():\n    return report(None)\n\n\ndef test_invoke_path(invoke):\n    assert invoke\n",
+            "import pytest\nfrom web.app import report\n\n\n@pytest.fixture\ndef invoke():\n    return report(None)\n\n\ndef test_invoke_path(invoke):\n    assert invoke\n\n\nclass TestRoutes:\n    @pytest.fixture\n    def method_invoke(self):\n        return report(None)\n\n    def setup_method(self):\n        report(None)\n\n    def test_simple(self, method_invoke):\n        assert method_invoke\n",
         ),
     ]);
     let conn = open_read_only(&db_path).unwrap();
@@ -672,6 +672,20 @@ fn blast_radius_follows_a_fixture_to_the_tests_that_take_it() {
         .collect();
     assert!(
         reasons.contains(&("invoke", "fixture (transitive caller [depth 1])")),
+        "{reasons:?}"
+    );
+    assert!(
+        reasons.contains(&(
+            "TestRoutes::method_invoke",
+            "fixture (transitive caller [depth 1])"
+        )),
+        "{reasons:?}"
+    );
+    assert!(
+        reasons.contains(&(
+            "TestRoutes::setup_method",
+            "setup (transitive caller [depth 1])"
+        )),
         "{reasons:?}"
     );
     assert!(
@@ -702,11 +716,14 @@ fn blast_radius_labels_a_test_class_setup_and_adds_the_tests_it_runs_before() {
         .map(|t| (t.name.as_str(), t.reason.as_str()))
         .collect();
     assert!(
-        reasons.contains(&("StoreTests", "setup (transitive caller [depth 1])")),
+        reasons.contains(&(
+            "StoreTests::StoreTests",
+            "setup (transitive caller [depth 1])"
+        )),
         "{reasons:?}"
     );
     assert!(
-        reasons.contains(&("Opens", "setup `StoreTests` runs before it")),
+        reasons.contains(&("StoreTests::Opens", "setup `StoreTests` runs before it")),
         "{reasons:?}"
     );
 }
@@ -728,7 +745,11 @@ fn blast_radius_reaches_tests_that_build_a_class_whose_call_method_reaches_the_t
         ),
         (
             "tests/test_views.py",
-            "from web.app import App\n\n\ndef test_view_renders():\n    assert App()\n",
+            "from web.app import App\n\n\ndef test_view_renders():\n    assert App()\n\n\ndef test_exception_handling_renders():\n    assert App()\n",
+        ),
+        (
+            "tests/test_config.py",
+            "from web.app import App\n\n\ndef test_config_loads():\n    assert App()\n",
         ),
     ]);
     let conn = open_read_only(&db_path).unwrap();
@@ -746,8 +767,10 @@ fn blast_radius_reaches_tests_that_build_a_class_whose_call_method_reaches_the_t
             .position(|n| *n == name)
             .unwrap_or_else(|| panic!("{name} missing from {:?}", result.likely_tests))
     };
-    assert!(position("test_user_error_is_handled") < position("test_view_renders"));
-    let reason = &result.likely_tests[position("test_view_renders")].reason;
+    assert!(position("test_user_error_is_handled") < position("test_exception_handling_renders"));
+    assert!(!names.contains(&"test_view_renders"), "{names:?}");
+    assert!(!names.contains(&"test_config_loads"), "{names:?}");
+    let reason = &result.likely_tests[position("test_exception_handling_renders")].reason;
     assert_eq!(reason, "builds `App`, whose `__call__` reaches the target");
     let reason = &result.likely_tests[position("test_user_error_is_handled")].reason;
     assert_eq!(
@@ -779,11 +802,99 @@ fn blast_radius_lists_the_tests_behind_a_fixture_that_takes_a_fixture_not_the_fi
         .map(|t| (t.name.as_str(), t.reason.as_str()))
         .collect();
     assert!(
-        reasons.contains(&("test_runs", "uses fixture `invoke`")),
+        reasons.contains(&("TestRunner::test_runs", "uses fixture `invoke`")),
         "{reasons:?}"
     );
     assert!(
-        !reasons.iter().any(|(name, _)| *name == "runner"),
+        !reasons.iter().any(|(name, _)| name.ends_with("runner")),
         "{reasons:?}"
+    );
+}
+
+#[test]
+fn two_accesses_on_one_line_are_one_reference_with_two_occurrences() {
+    let (_repo, db_path) = scanned_repo(&[
+        (
+            "src/app.py",
+            "class App:\n    def wsgi_app(self, environ):\n        return environ\n",
+        ),
+        (
+            "tests/test_app.py",
+            "from app import App\n\n\ndef test_wrap(app: App):\n    app.wsgi_app = Wrap(app.wsgi_app)\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let refs = find_references_scoped(&conn, "wsgi_app", "callers", 20, false, None).unwrap();
+
+    let wraps: Vec<_> = refs
+        .iter()
+        .filter(|r| r.from_symbol_name == "test_wrap")
+        .collect();
+    assert_eq!(wraps.len(), 1, "{refs:?}");
+    assert_eq!(wraps[0].occurrences, Some(2), "{refs:?}");
+
+    let target = code_kb_core::get_symbol_by_name(&conn, "wsgi_app", Some("src/app.py"))
+        .unwrap()
+        .unwrap();
+    let related = code_kb_core::find_related_tests(&conn, &target, 5).unwrap();
+    assert!(related.iter().any(|t| t.name == "test_wrap"), "{related:?}");
+}
+
+#[test]
+fn a_receiver_named_for_a_fixture_calls_methods_of_the_class_the_fixture_builds() {
+    let (_repo, db_path) = scanned_repo(&[
+        (
+            "src/web/base.py",
+            "class Scaffold:\n    def route(self, rule):\n        return rule\n",
+        ),
+        (
+            "src/web/app.py",
+            "from web.base import Scaffold\n\n\nclass Flask(Scaffold):\n    def run(self):\n        return 1\n",
+        ),
+        (
+            "src/web/other.py",
+            "class Server:\n    def run(self):\n        return 2\n",
+        ),
+        (
+            "tests/conftest.py",
+            "import pytest\nfrom web.app import Flask\n\n\n@pytest.fixture\ndef app():\n    return Flask()\n",
+        ),
+        (
+            "tests/test_run.py",
+            "def test_run(app):\n    app.run()\n    app.route('/')\n\n\ndef test_other(server):\n    server.run()\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+    let callers = |name: &str, path: &str| -> Vec<String> {
+        let refs = find_references_scoped(&conn, name, "callers", 20, false, Some(path)).unwrap();
+        caller_names(&refs)
+    };
+
+    assert_eq!(callers("run", "src/web/app.py"), vec!["test_run"]);
+    assert_eq!(callers("route", "src/web/base.py"), vec!["test_run"]);
+    assert!(callers("run", "src/web/other.py").is_empty());
+}
+
+#[test]
+fn import_sites_list_imports_whose_module_holds_the_definition() {
+    let (_repo, db_path) = scanned_repo(&[
+        ("src/pkg/app.py", "class App:\n    pass\n"),
+        ("src/pkg/__init__.py", "from .app import App as App\n"),
+        ("tests/test_app.py", "from pkg.app import App\n"),
+        ("tests/test_other.py", "from other.widgets import App\n"),
+        (
+            "src/pkg/cli.py",
+            "def load():\n    from . import App\n    return App\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let sites = code_kb_core::import_sites(&conn, "App", Some("src/pkg/app.py")).unwrap();
+
+    let paths: Vec<&str> = sites.iter().map(|(path, _)| path.as_str()).collect();
+    assert_eq!(
+        paths,
+        vec!["src/pkg/__init__.py", "src/pkg/cli.py", "tests/test_app.py"]
     );
 }

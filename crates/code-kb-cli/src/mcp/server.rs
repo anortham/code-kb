@@ -286,7 +286,7 @@ impl McpServer {
         let mut tools = vec![
             Tool {
                 name: "codebase_outline".to_string(),
-                description: "Provides a top-level architectural orientation of the repository or sub-package in ~200 tokens. Start here when exploring unfamiliar code instead of running directory listings or reading files.".to_string(),
+                description: "Provides a top-level architectural orientation of the repository or sub-package in a few hundred tokens. Start here when exploring unfamiliar code instead of running directory listings or reading files.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -317,7 +317,7 @@ impl McpServer {
             },
             Tool {
                 name: "lookup_symbol".to_string(),
-                description: "Look up symbols by identifier. Use for exact names, qualified paths ('Type::method'), or identifier prefixes. Returns kind, path, and signature. Do NOT use for natural-language concepts or keywords; use search_symbols instead.".to_string(),
+                description: "Look up symbols by identifier. Use for exact names, qualified paths ('Type::method'), or identifier prefixes. Exact matches come first, then names that start with the query, then names that contain it. Returns kind, path, and signature. Do NOT use for natural-language concepts or keywords; use search_symbols instead.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -381,7 +381,7 @@ impl McpServer {
             },
             Tool {
                 name: "get_symbol_body".to_string(),
-                description: "Retrieves only the raw implementation body of a specific symbol. Use when you only need the implementation without dependency context. If preparing to edit a function, use get_symbol_context instead.".to_string(),
+                description: "Retrieves the source of one symbol as written, with its declaration and decorators. Use when you only need the implementation without dependency context. If preparing to edit a function, use get_symbol_context instead.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -575,7 +575,7 @@ impl McpServer {
                     .unwrap_or("error");
                 (
                     "error",
-                    Some(err_text.lines().next().unwrap_or("error")),
+                    Some(err_text),
                     err_text.len(),
                     err_text.len() / 4,
                     0,
@@ -1205,7 +1205,7 @@ impl McpServer {
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false);
 
-                let (target, refs) = match selector {
+                let (target, target_path, refs) = match selector {
                     SymbolSelector::Name(name) => {
                         let path = raw_file_path.map(|path| self.workspace.relativize_filter(path));
                         match code_kb_core::find_references_scoped(
@@ -1216,7 +1216,7 @@ impl McpServer {
                             include_external,
                             path.as_deref(),
                         ) {
-                            Ok(refs) => (name, refs),
+                            Ok(refs) => (name, path, refs),
                             Err(error) => return CallToolResult::error(error.to_string()),
                         }
                     }
@@ -1239,7 +1239,7 @@ impl McpServer {
                             &selected.symbol_id,
                             include_external,
                         ) {
-                            Ok(refs) => (selected.name, refs),
+                            Ok(refs) => (selected.name, Some(selected.path), refs),
                             Err(error) => return CallToolResult::error(error.to_string()),
                         }
                     }
@@ -1249,6 +1249,12 @@ impl McpServer {
 
                 let output = if limit == 0 {
                     ZERO_LIMIT_NOTICE.to_string()
+                } else if direction == "callers" {
+                    let imports =
+                        code_kb_core::import_sites(&conn, &target, target_path.as_deref())
+                            .unwrap_or_default();
+                    format_references(&target, &refs, direction, limit)
+                        + &code_kb_core::format_import_summary(&imports)
                 } else {
                     format_references(&target, &refs, direction, limit)
                 };
@@ -1326,11 +1332,7 @@ impl McpServer {
                                 Ok(c) => c,
                                 Err(e) => return CallToolResult::error(e.to_string()),
                             };
-                        let out = format!(
-                            "{}\n\n{}",
-                            code_kb_core::no_facts_heading(category, path_filter),
-                            format_fact_categories(&categories)
-                        );
+                        let out = code_kb_core::format_no_facts(category, path_filter, &categories);
                         return CallToolResult::text(out).with_logical_result_count(0);
                     }
 
@@ -1481,7 +1483,7 @@ impl McpServer {
                         "name": "code-kb",
                         "version": env!("CARGO_PKG_VERSION")
                     },
-                    "instructions": "Pass project_root, the absolute path of the project or git worktree you work in, on every call except telemetry_summary. For progressive code exploration, start with codebase_outline (~200 tokens) for directory structure. Use file_skeleton to inspect interfaces without bodies. Use lookup_symbol for exact name lookups and search_symbols for natural-language concepts. Use get_symbol_context for surgical context before native file edits; use get_symbol_body only when the isolated implementation is needed. Trace callers/callees with find_references. Use blast_radius to assess downstream impact and predict which tests to run before or after changes."
+                    "instructions": "Pass project_root, the absolute path of the project or git worktree you work in, on every call except telemetry_summary. For progressive code exploration, start with codebase_outline (a few hundred tokens) for directory structure. Use file_skeleton to inspect interfaces without bodies. Use lookup_symbol for exact name lookups and search_symbols for natural-language concepts. Use get_symbol_context for surgical context before native file edits; use get_symbol_body only when the isolated implementation is needed. Trace callers/callees with find_references. Use blast_radius to assess downstream impact and predict which tests to run before or after changes."
                 });
                 Some(JsonRpcResponse::success(id, init_result))
             }

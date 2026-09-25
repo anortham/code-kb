@@ -185,7 +185,9 @@ pub fn load_scoped_outline_symbols(
                    s.start_byte, s.end_byte, s.body_start_line, s.body_start_column, s.body_end_line,
                    s.body_end_column, s.body_start_byte, s.body_end_byte, s.body_hash, s.semantic_group,
                    s.is_test, s.test_container,
-                   ROW_NUMBER() OVER (PARTITION BY s.path ORDER BY s.start_line ASC) as rn
+                   ROW_NUMBER() OVER (
+                       PARTITION BY s.path ORDER BY (s.is_test = 1 OR s.test_container = 1), s.start_line ASC
+                   ) as rn
             FROM symbols s
             JOIN bounded_files bf ON (s.path = bf.path COLLATE NOCASE OR replace(s.path, '\\', '/') = replace(bf.path, '\\', '/') COLLATE NOCASE)
             WHERE (length(s.path) - length(replace(replace(s.path, '/', ''), '\\', '')) <= :max_slashes)
@@ -222,6 +224,59 @@ pub fn load_scoped_outline_symbols(
     }
 
     Ok(symbols_by_file)
+}
+
+/// How many names one outline row stands for.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct OutlineCounts {
+    /// Top-level definitions that are not tests.
+    pub definitions: usize,
+    /// Tests at any level, without setup and fixtures.
+    pub tests: usize,
+    /// Setup, teardown, and fixture members.
+    pub fixtures: usize,
+}
+
+/// For each file in the outline scope: its top-level definitions that are not tests, its tests,
+/// and its fixtures, so the outline can say how many names it left out.
+pub fn load_outline_counts(
+    conn: &Connection,
+    path_filter: Option<&str>,
+) -> Result<HashMap<String, OutlineCounts>, QueryError> {
+    let norm = path_filter
+        .map(|p| p.replace('\\', "/").trim_matches('/').to_string())
+        .filter(|p| !p.is_empty());
+    let prefix = norm.as_ref().map(|path| format!("{}/%", escape_like(path)));
+    let lifecycle = if has_column(conn, "symbols", "test_lifecycle") {
+        "COALESCE(test_lifecycle, 0) != 0"
+    } else {
+        "0"
+    };
+    let mut stmt = conn.prepare(&format!(
+        "SELECT replace(path, '\\', '/'),
+                SUM(parent_symbol_id IS NULL AND is_test = 0 AND test_container = 0
+                    AND kind IN ('function', 'method', 'struct', 'enum', 'trait', 'class', 'interface', 'type')),
+                SUM(is_test = 1 AND NOT {lifecycle}),
+                SUM(is_test = 1 AND {lifecycle})
+         FROM symbols
+         WHERE :path IS NULL OR replace(path, '\\', '/') = :path COLLATE NOCASE
+            OR replace(path, '\\', '/') LIKE :prefix ESCAPE '\\'
+         GROUP BY replace(path, '\\', '/')"
+    ))?;
+    let rows = stmt.query_map(
+        rusqlite::named_params! { ":path": norm.as_deref(), ":prefix": prefix.as_deref() },
+        |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                OutlineCounts {
+                    definitions: row.get::<_, i64>(1)? as usize,
+                    tests: row.get::<_, i64>(2)? as usize,
+                    fixtures: row.get::<_, i64>(3)? as usize,
+                },
+            ))
+        },
+    )?;
+    Ok(rows.collect::<Result<_, _>>()?)
 }
 
 /// The largest number of files one answer is measured against.
@@ -436,6 +491,7 @@ fn search_symbols_sql(variables_wanted: bool, include_tests: bool, limit: usize)
            AND (:kind IS NULL OR kind = :kind)
            AND (:path IS NULL OR replace(path, '\\', '/') = :path COLLATE NOCASE OR replace(path, '\\', '/') LIKE :path_like || '/%' ESCAPE '\\' OR replace(path, '\\', '/') LIKE '%/' || :path_like ESCAPE '\\')",
     );
+    sql.push_str(&document_link_exclusion());
 
     if !variables_wanted {
         sql.push_str(&format!(" AND NOT {}", local_variable_predicate("s")));
@@ -449,7 +505,7 @@ fn search_symbols_sql(variables_wanted: bool, include_tests: bool, limit: usize)
     }
 
     sql.push_str(
-        " ORDER BY (name = :query) DESC, (kind IN ('function', 'struct', 'class', 'trait', 'method', 'enum', 'interface', 'type')) DESC, length(name) ASC, path ASC LIMIT ",
+        " ORDER BY (name = :query) DESC, (name LIKE :prefix ESCAPE '\\') DESC, (kind IN ('function', 'struct', 'class', 'trait', 'method', 'enum', 'interface', 'type')) DESC, (COALESCE(signature, '') LIKE 'self.%') ASC, length(name) ASC, path ASC LIMIT ",
     );
     sql.push_str(&limit.to_string());
     sql
@@ -476,6 +532,7 @@ pub fn search_symbols_scoped(
     }
 
     let pattern = format!("%{}%", escape_like(query));
+    let prefix = format!("{}%", escape_like(query));
     let normalized_path = path_filter.map(|p| {
         p.replace('\\', "/")
             .trim_start_matches("./")
@@ -499,6 +556,7 @@ pub fn search_symbols_scoped(
             rusqlite::named_params! {
                 ":query": query,
                 ":pattern": pattern,
+                ":prefix": prefix,
                 ":kind": kind_val,
                 ":path": path_val,
                 ":path_like": path_like,
@@ -756,6 +814,8 @@ pub(crate) struct Candidate {
     pub name_match: bool,
     pub name_terms: Vec<String>,
     pub documentation: bool,
+    /// A function or method declared inside another function or method.
+    pub nested: bool,
 }
 
 fn candidate_columns(conn: &Connection) -> String {
@@ -766,9 +826,21 @@ fn candidate_columns(conn: &Connection) -> String {
                 s.body_start_line, s.body_start_column, s.body_end_line, s.body_end_column,
                 s.body_start_byte, s.body_end_byte, s.body_hash, s.semantic_group, s.is_test,
                 s.test_container,
-                (s.language IN ({doc_langs}) OR NOT ({not_doc})) AS documentation",
+                (s.language IN ({doc_langs}) OR NOT ({not_doc})) AS documentation,
+                (s.kind IN ('function', 'method')
+                 AND EXISTS (SELECT 1 FROM symbols nest WHERE nest.symbol_id = s.parent_symbol_id
+                             AND nest.kind IN ('function', 'method', 'constructor'))) AS nested",
         doc_langs = documentation_language_list(),
         not_doc = not_documentation(conn, "s")
+    )
+}
+
+/// julie records a Markdown or other documentation link as an `import` row; no lookup or search
+/// for code wants it.
+fn document_link_exclusion() -> String {
+    format!(
+        " AND NOT (s.kind = 'import' AND s.language IN ({}))",
+        documentation_language_list()
     )
 }
 
@@ -777,6 +849,7 @@ fn candidate_filters(searching_variables: bool, include_tests: bool) -> String {
         " AND (:kind IS NULL OR s.kind = :kind)
           AND (:path IS NULL OR replace(s.path, '\\', '/') = :path COLLATE NOCASE OR replace(s.path, '\\', '/') LIKE :path_like || '/%' ESCAPE '\\' OR replace(s.path, '\\', '/') LIKE '%/' || :path_like ESCAPE '\\')",
     );
+    sql.push_str(&document_link_exclusion());
     if !searching_variables {
         sql.push_str(&format!(" AND NOT {}", local_variable_predicate("s")));
     }
@@ -843,6 +916,7 @@ pub(crate) fn collect_search_candidates(
             name_match: false,
             name_terms,
             documentation: row.get::<_, Option<i64>>("documentation")? == Some(1),
+            nested: row.get::<_, Option<i64>>("nested")? == Some(1),
         };
         Ok((row.get("row_id")?, candidate))
     };
@@ -1091,6 +1165,7 @@ pub fn fts_search_symbols_explained(
                 AND (:kind IS NULL OR kind = :kind)
                 AND (:path IS NULL OR replace(path, '\\', '/') = :path COLLATE NOCASE OR replace(path, '\\', '/') LIKE :path_like || '/%' ESCAPE '\\' OR replace(path, '\\', '/') LIKE '%/' || :path_like ESCAPE '\\')",
         );
+        sql.push_str(&document_link_exclusion());
         sql.push_str(local_clause);
         if !include_tests {
             sql.push_str(" AND is_test = 0 AND test_container = 0");
@@ -1164,6 +1239,8 @@ const W_NAME_ALL_WORDS: f64 = 60.0;
 const W_KIND_DEFINITION: f64 = 4.0;
 const W_KIND_MEMBER: f64 = 0.0;
 const W_KIND_IMPORT: f64 = -50.0;
+/// A helper declared inside a function ranks below a module or class member of equal score.
+const W_NESTED: f64 = -2.0;
 const W_PATH_ROLE: f64 = -10.0;
 const W_DOCUMENTATION_ROW: f64 = -200.0;
 const W_TEST_INTENT: f64 = 5.0;
@@ -1555,6 +1632,7 @@ fn rerank_with(
                 } else {
                     0.0
                 },
+                nested: if candidate.nested { W_NESTED } else { 0.0 },
                 terms,
                 word_weights: word_weights.clone(),
                 candidates: 0,
@@ -1565,7 +1643,8 @@ fn rerank_with(
                 + explain.kind_prior
                 + explain.path_role
                 + explain.documentation
-                + explain.test_intent;
+                + explain.test_intent
+                + explain.nested;
             let snippet = branch_snippet(&candidate);
             let mut result = candidate.result;
             result.score = score;
@@ -1676,6 +1755,28 @@ pub fn find_related_tests(
                         return Ok(tests);
                     }
                 }
+            }
+        }
+    }
+
+    // A test that reads or assigns the symbol (`app.wsgi_app = ...`) has no call edge.
+    for site in find_references_for_symbol(
+        conn,
+        &target_symbol.name,
+        "callers",
+        MAX_RESULT_LIMIT,
+        &target_symbol.symbol_id,
+    )
+    .unwrap_or_default()
+    {
+        if !seen_ids.contains(&site.from_symbol_id)
+            && let Some(test) = get_symbol_by_id(conn, &site.from_symbol_id)?
+            && (test.is_test || test.test_container || is_test_path(&test.path))
+        {
+            seen_ids.insert(test.symbol_id.clone());
+            tests.push(test);
+            if tests.len() >= limit {
+                return Ok(tests);
             }
         }
     }
@@ -2362,6 +2463,43 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
     } else {
         String::new()
     };
+    // A pytest test gets its object from a fixture: `def test_run(app): app.run()`, where the
+    // fixture `app` builds `Flask(...)`. The receiver then names the class the fixture builds.
+    let fixture_receiver = if has_column(conn, "symbols", "test_lifecycle") {
+        format!(
+            "OR EXISTS (
+                        WITH RECURSIVE built(symbol_id, depth) AS (
+                            SELECT built_class.symbol_id, 0
+                            FROM symbols fixture
+                            JOIN pending_relationships fixture_call ON fixture_call.from_symbol_id = fixture.symbol_id
+                            JOIN symbols built_class ON built_class.name = fixture_call.target_terminal_name
+                            WHERE fixture.name = p.target_receiver
+                              AND fixture.test_lifecycle = 1
+                              AND built_class.kind = 'class'
+                              AND EXISTS (
+                                  SELECT 1 FROM symbols taken
+                                  WHERE taken.parent_symbol_id = p.from_symbol_id
+                                    AND taken.name = p.target_receiver
+                                    AND taken.kind IN ('parameter', 'variable')
+                              )
+                            UNION
+                            SELECT r.to_symbol_id, built.depth + 1
+                            FROM relationships r JOIN built ON r.from_symbol_id = built.symbol_id
+                            WHERE r.kind = 'extends' AND built.depth < 8
+                            UNION
+                            SELECT c.symbol_id, built.depth + 1
+                            FROM pending_relationships pe
+                            JOIN built ON pe.from_symbol_id = built.symbol_id
+                            JOIN symbols c ON c.name = pe.target_terminal_name
+                            WHERE pe.kind = 'extends' AND built.depth < 8
+                              AND c.kind IN ('class', 'interface', 'struct', 'trait', 'protocol')
+                        )
+                        SELECT 1 FROM built WHERE built.symbol_id = {target}.parent_symbol_id
+                    )"
+        )
+    } else {
+        String::new()
+    };
     format!(
         "(
             NOT (p.kind IS 'extends' AND p.from_symbol_id = {target}.symbol_id)
@@ -2409,6 +2547,7 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                                 AND shadow.symbol_id != receiver.symbol_id
                           )
                     )
+                    {fixture_receiver}
                 )
                 AND NOT EXISTS (
                     SELECT 1 FROM {ns}
@@ -2970,7 +3109,85 @@ fn find_references_internal(
         }
     }
 
-    Ok(results)
+    Ok(merge_same_site(results))
+}
+
+/// The import statements of the top-level definition `name` (under `path_filter` when given): an
+/// import row with that name whose source module names a folder or file on the definition's path.
+/// `find_references` lists calls and type uses, so these go in a summary line after them.
+pub fn import_sites(
+    conn: &Connection,
+    name: &str,
+    path_filter: Option<&str>,
+) -> Result<Vec<(String, usize)>, QueryError> {
+    if !has_column(conn, "symbols", "metadata_json") {
+        return Ok(Vec::new());
+    }
+    let dotted = "replace(module_path.value, '/', '.')";
+    let segment = format!("replace({dotted}, rtrim({dotted}, replace({dotted}, '.', '')), '')");
+    let target_path = "('/' || replace(target.path, '\\', '/'))";
+    // `from . import Flask`: a source of dots only names the importing file's package.
+    let dir = |path: &str| {
+        format!("rtrim(replace({path}, '\\', '/'), replace(replace({path}, '\\', '/'), '/', ''))")
+    };
+    let (import_dir, target_dir) = (dir("i.path"), dir("target.path"));
+    let mut stmt = conn.prepare(&format!(
+        "SELECT DISTINCT replace(i.path, '\\', '/'), i.start_line
+         FROM symbols target
+         JOIN symbols i ON i.name = target.name AND i.kind = 'import'
+         CROSS JOIN json_each(json_array(json_extract(i.metadata_json, '$.source'))) module_path
+         WHERE target.name = ?1
+           AND target.parent_symbol_id IS NULL
+           AND target.kind NOT IN ({LOW_SIGNAL_KINDS_SQL})
+           AND (?2 IS NULL OR replace(target.path, '\\', '/') = ?2
+                OR replace(target.path, '\\', '/') LIKE ?3 ESCAPE '\\')
+           AND json_valid(i.metadata_json)
+           AND i.language NOT IN ({docs})
+           AND (
+               {segment} != ''
+               AND ({target_path} GLOB '*/' || {segment} || '/*'
+                    OR {target_path} GLOB '*/' || {segment} || '.*')
+               OR module_path.value != '' AND replace(module_path.value, '.', '') = ''
+               AND substr({import_dir}, 1, length({target_dir})) = {target_dir}
+           )
+         ORDER BY 1, 2",
+        docs = documentation_language_list()
+    ))?;
+    let norm = path_filter.map(|p| p.replace('\\', "/").trim_matches('/').to_string());
+    let prefix = norm.as_ref().map(|p| format!("{}/%", escape_like(p)));
+    let rows = stmt.query_map(params![name, norm, prefix], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as usize))
+    })?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
+/// One row for each caller, target, kind, and line: `app.wsgi_app = Wrap(app.wsgi_app)` is one
+/// site with two occurrences, not two identical rows.
+fn merge_same_site(sites: Vec<ReferenceSite>) -> Vec<ReferenceSite> {
+    let mut merged: Vec<ReferenceSite> = Vec::with_capacity(sites.len());
+    let mut index = HashMap::new();
+    for site in sites {
+        let key = (
+            site.from_symbol_id.clone(),
+            site.to_symbol_name.clone(),
+            site.kind.clone(),
+            site.path.clone(),
+            site.start_line,
+        );
+        match index.get(&key) {
+            Some(&at) => {
+                let kept: &mut ReferenceSite = &mut merged[at];
+                kept.occurrences =
+                    Some(kept.occurrences.unwrap_or(1) + site.occurrences.unwrap_or(1));
+                kept.start_column = kept.start_column.min(site.start_column);
+            }
+            None => {
+                index.insert(key, merged.len());
+                merged.push(site);
+            }
+        }
+    }
+    merged
 }
 
 /// Resolve callee signatures directly in a single joined query, avoiding N+1 queries
@@ -3384,9 +3601,57 @@ pub fn find_structural_facts_scoped(
 
     let mut results = Vec::new();
     for r in rows {
-        results.push(r?);
+        let mut fact = r?;
+        if let Some(route) = fact.metadata.as_ref().and_then(route_display) {
+            fact.key = Some(route);
+        }
+        results.push(fact);
     }
     Ok(results)
+}
+
+/// A route as its source spells it, with its verb: `GET /<int:id>/update`, not the normalized
+/// `/:id/update`. The prefixed source template is used when the extractor joined a prefix;
+/// otherwise the raw template, unless the normalized one holds a prefix the raw one lacks.
+fn route_display(metadata: &serde_json::Value) -> Option<String> {
+    let text = |key: &str| metadata.get(key).and_then(|value| value.as_str());
+    let normalized = text("normalized_route_template")?;
+    let template = match (text("effective_route_template"), text("route_template")) {
+        (Some(effective), _) => effective,
+        (None, Some(raw)) if route_shape(raw) == route_shape(normalized) => raw,
+        _ => normalized,
+    };
+    Some(match text("verb") {
+        Some(verb) => format!("{verb} {template}"),
+        None => template.to_string(),
+    })
+}
+
+/// A route template with every parameter (`<int:id>`, `{id}`, `:id`) replaced by `*`.
+fn route_shape(template: &str) -> String {
+    let mut shape = String::new();
+    let mut chars = template.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '<' | '{' => {
+                let close = if c == '<' { '>' } else { '}' };
+                for inner in chars.by_ref() {
+                    if inner == close {
+                        break;
+                    }
+                }
+                shape.push('*');
+            }
+            ':' => {
+                while chars.peek().is_some_and(|next| *next != '/') {
+                    chars.next();
+                }
+                shape.push('*');
+            }
+            _ => shape.push(c),
+        }
+    }
+    shape
 }
 
 /// Find structural facts by category (e.g. route, query, model, config).
@@ -3796,6 +4061,7 @@ pub fn compute_blast_radius_scoped_with_ids(
             impacted_symbols_truncated: false,
             traversal_ceiling_reached: false,
             test_file_ceiling_reached: false,
+            limit_at_maximum: false,
         });
     };
 
@@ -3990,7 +4256,11 @@ pub fn compute_blast_radius_scoped_with_ids(
             if is_test_target {
                 let key = format!("{}:{}", path, line);
                 if seen_test_keys.insert(key) {
-                    let pytest_fixture = kind == "function" && path.ends_with(".py");
+                    let lowered = name.to_ascii_lowercase();
+                    let pytest_fixture = path.ends_with(".py")
+                        && !["setup", "teardown", "asyncsetup", "asyncteardown"]
+                            .iter()
+                            .any(|prefix| lowered.starts_with(prefix));
                     let reason = if is_fixture && pytest_fixture {
                         fixtures.push((name.clone(), path.clone()));
                         format!("fixture (transitive caller [depth {depth}])")
@@ -4111,7 +4381,7 @@ pub fn compute_blast_radius_scoped_with_ids(
                AND {names_or_holds_tests}
                AND NOT {doc_file}
              ORDER BY path ASC
-             LIMIT 11"
+             LIMIT 201"
         ))?;
         let mut module_test_files_stmt = conn.prepare(&format!(
             "SELECT DISTINCT path FROM files
@@ -4142,6 +4412,10 @@ pub fn compute_blast_radius_scoped_with_ids(
                     break;
                 }
                 let p: String = row.get(0)?;
+                let basename = p.rsplit(['/', '\\']).next().unwrap_or_default();
+                if !module_match && !has_word_run(&file_words(basename), &file_words(&term)) {
+                    continue;
+                }
                 if module_match {
                     let basename = p
                         .rsplit(['/', '\\'])
@@ -4204,6 +4478,7 @@ pub fn compute_blast_radius_scoped_with_ids(
         }
     }
 
+    qualify_test_methods(conn, &mut likely_tests)?;
     let likely_tests_truncated = likely_tests.len() > limit;
     let impacted_symbols_truncated = impacted_symbols.len() > limit;
     if likely_tests.len() > limit {
@@ -4222,7 +4497,31 @@ pub fn compute_blast_radius_scoped_with_ids(
         impacted_symbols_truncated,
         traversal_ceiling_reached,
         test_file_ceiling_reached,
+        limit_at_maximum: limit >= MAX_RESULT_LIMIT,
     })
+}
+
+/// Prefixes a test method with its class, as `TestRoutes::test_simple`, so the name selects the
+/// test the way pytest and most runners address it.
+fn qualify_test_methods(conn: &Connection, tests: &mut [TestTarget]) -> Result<(), QueryError> {
+    let mut stmt = conn.prepare(
+        "SELECT class.name FROM symbols t
+         JOIN symbols class ON class.symbol_id = t.parent_symbol_id
+         WHERE replace(t.path, '\\', '/') = ?1 AND t.start_line = ?2 AND t.name = ?3
+           AND class.kind = 'class'
+         LIMIT 1",
+    )?;
+    for test in tests.iter_mut().filter(|test| test.name != test.path) {
+        if let Some(class) = stmt
+            .query_row(params![test.path, test.line as i64, test.name], |row| {
+                row.get::<_, String>(0)
+            })
+            .optional()?
+        {
+            test.name = format!("{class}::{}", test.name);
+        }
+    }
+    Ok(())
 }
 
 /// The test functions that take the fixture `name` as a parameter: in the fixture's own file,
@@ -4311,6 +4610,31 @@ fn tests_in_class(conn: &Connection, class_id: &str) -> Result<Vec<TestTarget>, 
     Ok(rows.collect::<Result<_, _>>()?)
 }
 
+/// The lowercase words of a file name split at `_`, `-`, `.`, and case changes, of any length.
+fn file_words(name: &str) -> Vec<String> {
+    let mut words = Vec::new();
+    let mut word = String::new();
+    let mut previous_lower = false;
+    for c in name.chars() {
+        if (!c.is_alphanumeric() || (c.is_uppercase() && previous_lower)) && !word.is_empty() {
+            words.push(std::mem::take(&mut word).to_lowercase());
+        }
+        if c.is_alphanumeric() {
+            word.push(c);
+        }
+        previous_lower = c.is_lowercase() || c.is_ascii_digit();
+    }
+    if !word.is_empty() {
+        words.push(word.to_lowercase());
+    }
+    words
+}
+
+/// Whether `run` occurs in `words` as consecutive whole words.
+fn has_word_run(words: &[String], run: &[String]) -> bool {
+    !run.is_empty() && words.windows(run.len()).any(|window| window == run)
+}
+
 /// The lowercase words of an identifier split at `_`, `-`, and case changes, three letters or more.
 fn name_words(name: &str) -> Vec<String> {
     let mut words = Vec::new();
@@ -4336,16 +4660,22 @@ fn name_words(name: &str) -> Vec<String> {
 
 /// How many `seed_words` the test's name shares plus how many its file name shares, so a test in
 /// a file named for the target ranks first. A word matches when one of the two is a prefix of the
-/// other, so `handle` matches `handler`.
+/// other or they share five leading letters, so `handle` matches `handler` and `handling`.
+fn common_prefix_len(a: &str, b: &str) -> usize {
+    a.chars().zip(b.chars()).take_while(|(x, y)| x == y).count()
+}
+
 fn shared_words(seed_words: &[String], test: &TestTarget) -> usize {
     let shared = |text: &str| {
         let words = name_words(text);
         seed_words
             .iter()
             .filter(|seed| {
-                words
-                    .iter()
-                    .any(|word| word.starts_with(seed.as_str()) || seed.starts_with(word.as_str()))
+                words.iter().any(|word| {
+                    word.starts_with(seed.as_str())
+                        || seed.starts_with(word.as_str())
+                        || common_prefix_len(word, seed) >= 5
+                })
             })
             .count()
     };
@@ -4355,7 +4685,8 @@ fn shared_words(seed_words: &[String], test: &TestTarget) -> usize {
 
 /// Tests that build the class `class_id`, whose `__call__` the impact walk reached, directly or
 /// through a fixture. They reach the target through the call the runtime makes, so no call edge
-/// links them. The tests that share the most words with the seed come first.
+/// links them. Only tests whose name or file shares a word with the seed are kept, because most
+/// tests that build an application never reach a given handler; the most shared words come first.
 fn implicit_entry_tests(
     conn: &Connection,
     class_id: &str,
@@ -4422,7 +4753,11 @@ fn implicit_entry_tests(
             .then_with(|| a.path.cmp(&b.path))
             .then_with(|| a.line.cmp(&b.line))
     });
-    Ok(ranked.into_iter().map(|(_, test)| test).collect())
+    Ok(ranked
+        .into_iter()
+        .filter(|(score, _)| *score > 0)
+        .map(|(_, test)| test)
+        .collect())
 }
 
 /// Compute blast radius and likely tests for given seed symbols or seed file paths.
@@ -4457,6 +4792,43 @@ mod tests {
         );
         assert_eq!(line.chars().count(), 120);
         assert!(line.ends_with('…'));
+    }
+
+    #[test]
+    fn a_route_shows_its_source_template_and_keeps_a_joined_prefix() {
+        let route = |json: &str| super::route_display(&serde_json::from_str(json).unwrap());
+        assert_eq!(
+            route(
+                r#"{"verb":"GET","route_template":"/<int:id>/update","normalized_route_template":"/:id/update"}"#
+            ),
+            Some("GET /<int:id>/update".into())
+        );
+        assert_eq!(
+            route(
+                r#"{"verb":"POST","route_template":"/register","effective_route_template":"/auth/register","normalized_route_template":"/auth/register"}"#
+            ),
+            Some("POST /auth/register".into())
+        );
+        assert_eq!(
+            route(
+                r#"{"verb":"GET","route_template":"/users/{id}","normalized_route_template":"/api/v1/users/:id"}"#
+            ),
+            Some("GET /api/v1/users/:id".into())
+        );
+        assert_eq!(route(r#"{"key":"x"}"#), None);
+    }
+
+    #[test]
+    fn a_stem_matches_whole_words_of_a_test_file_name() {
+        let matches = |file: &str, stem: &str| {
+            super::has_word_run(&super::file_words(file), &super::file_words(stem))
+        };
+        assert!(matches("test_app.py", "app"));
+        assert!(matches("AppTest.java", "App"));
+        assert!(matches("test_user_error_handler.py", "user_error_handler"));
+        assert!(matches("widget_test_3.rs", "widget"));
+        assert!(!matches("test_appctx.py", "app"));
+        assert!(!matches("test_mapper.py", "app"));
     }
 
     #[test]
@@ -4593,6 +4965,78 @@ mod tests {
             "('{id}', 'f_{id}', 'docs/{id}.md', 'markdown', '{name}', 'module', '{name}', '{doc}', NULL, NULL,
               3, 0, 3, 1, 10, 40, NULL, NULL, NULL, NULL, NULL, NULL, 'h_{id}', NULL, 0, 0, 'documentation')"
         )
+    }
+
+    #[test]
+    fn lookup_and_search_skip_documentation_links_recorded_as_imports() {
+        let conn = search_fixture(
+            &[
+                "('i1', 'f_i1', 'src/app.py', 'python', 'Flask', 'import', 'from flask import Flask', NULL, NULL, NULL, 1, 0, 1, 20, 0, 20, NULL, NULL, NULL, NULL, NULL, NULL, 'h_i1', NULL, 0, 0, 'code')".to_string(),
+                "('i2', 'f_i2', 'README.md', 'markdown', 'Flask', 'import', '[Flask](https://flask.dev)', NULL, NULL, NULL, 1, 0, 1, 20, 0, 20, NULL, NULL, NULL, NULL, NULL, NULL, 'h_i2', NULL, 0, 0, 'documentation')".to_string(),
+            ]
+            .join(","),
+        );
+
+        let lookup: Vec<String> = search_symbols(&conn, "Flask", Some("import"), true, 10)
+            .unwrap()
+            .into_iter()
+            .map(|s| s.path)
+            .collect();
+        assert_eq!(lookup, vec!["src/app.py"]);
+        let search: Vec<String> =
+            fts_search_symbols_scoped(&conn, "Flask", Some("import"), None, true, 10)
+                .unwrap()
+                .into_iter()
+                .map(|r| r.symbol.path)
+                .collect();
+        assert_eq!(search, vec!["src/app.py"]);
+    }
+
+    #[test]
+    fn lookup_ranks_a_prefix_match_above_a_substring_match() {
+        let conn = search_fixture(
+            &[
+                code_row("c1", "tests/a.rs", "rust", "test_test_client", ""),
+                code_row("c2", "tests/b.rs", "rust", "test_client_open_environ", ""),
+            ]
+            .join(","),
+        );
+
+        let names: Vec<String> = search_symbols(&conn, "test_cli", None, true, 10)
+            .unwrap()
+            .into_iter()
+            .map(|s| s.name)
+            .collect();
+
+        assert_eq!(names, vec!["test_client_open_environ", "test_test_client"]);
+    }
+
+    #[test]
+    fn lookup_ranks_a_declared_property_above_a_self_assignment() {
+        let property = |id: &str, path: &str, signature: &str| {
+            format!(
+                "('{id}', 'f_{id}', '{path}', 'python', 'debug', 'property', '{signature}', NULL, NULL, NULL, 1, 0, 1, 20, 0, 20, NULL, NULL, NULL, NULL, NULL, NULL, 'h_{id}', NULL, 0, 0, 'code')"
+            )
+        };
+        let conn = search_fixture(
+            &[
+                property("p1", "src/flask/app.py", "self.debug = get_debug_flag()"),
+                property(
+                    "p2",
+                    "src/flask/sansio/app.py",
+                    "@property def debug(self) -> bool",
+                ),
+            ]
+            .join(","),
+        );
+
+        let paths: Vec<String> = search_symbols(&conn, "debug", None, false, 10)
+            .unwrap()
+            .into_iter()
+            .map(|s| s.path)
+            .collect();
+
+        assert_eq!(paths, vec!["src/flask/sansio/app.py", "src/flask/app.py"]);
     }
 
     fn search_names(conn: &Connection, query: &str) -> Vec<String> {
@@ -5306,6 +5750,7 @@ mod tests {
             name_match: false,
             name_terms: Vec::new(),
             documentation: false,
+            nested: false,
         }
     }
 
@@ -5816,6 +6261,18 @@ mod tests {
         assert_eq!(rows[1].1.documentation, W_DOCUMENTATION_ROW);
         assert_eq!(rows[1].1.name_tier, "whole");
         assert!(rows[1].0.score < 0.0);
+    }
+
+    #[test]
+    fn a_helper_nested_in_a_function_ranks_below_an_equal_module_function() {
+        let mut helper = plain_candidate("run_test", "function", "tests/test_basic.py");
+        helper.nested = true;
+        let module_function = plain_candidate("run_dotenv", "function", "tests/test_basic.py");
+
+        let rows = rerank_with(vec![helper, module_function], "run", true, None);
+
+        assert_eq!(rows[0].0.symbol.name, "run_dotenv");
+        assert_eq!(rows[1].1.nested, W_NESTED);
     }
 
     #[test]
@@ -6593,7 +7050,10 @@ mod tests {
         let facts_route = find_structural_facts_scoped(&conn, "route", None, 10).unwrap();
         assert_eq!(facts_route.len(), 1);
         assert_eq!(facts_route[0].pattern_id, "axum.route.v1");
-        assert_eq!(facts_route[0].key.as_deref(), Some("GET /api/v1/users/:id"));
+        assert_eq!(
+            facts_route[0].key.as_deref(),
+            Some("GET /api/v1/users/{id}")
+        );
         let facts_routes = find_structural_facts_scoped(&conn, "routes", None, 10).unwrap();
         assert_eq!(facts_routes.len(), 1);
         let lits_route = find_literals_scoped(&conn, "route", None, 10).unwrap();

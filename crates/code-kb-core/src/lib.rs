@@ -14,8 +14,8 @@ pub use db::{
 };
 pub use formatters::{
     format_blast_radius, format_context_slice, format_fact_categories, format_file_skeleton,
-    format_find_symbol_results, format_references, format_search_results, format_structural_facts,
-    format_symbol_body, no_facts_heading,
+    format_find_symbol_results, format_import_summary, format_no_facts, format_references,
+    format_search_results, format_structural_facts, format_symbol_body, no_facts_heading,
 };
 pub use models::{
     BlastRadiusResult, ContextSlice, FileFact, ImpactedSymbol, LiteralFact, ReferenceSite,
@@ -34,10 +34,10 @@ pub use queries::{
     find_references_scoped, find_related_tests, find_structural_facts,
     find_structural_facts_scoped, find_type_facts, fts_search_symbols_explained,
     fts_search_symbols_scoped, get_file, get_symbol_by_id, get_symbol_by_name,
-    get_symbol_by_name_exact, is_category_alias, is_test_path, list_structural_fact_categories,
-    list_structural_fact_categories_scoped, load_file_symbols, load_scoped_outline_symbols,
-    normalize_kind, sanitize_fts5_query, search_symbols, search_symbols_scoped, suggest_file_paths,
-    suggest_symbol_names, workspace_name,
+    get_symbol_by_name_exact, import_sites, is_category_alias, is_test_path,
+    list_structural_fact_categories, list_structural_fact_categories_scoped, load_file_symbols,
+    load_scoped_outline_symbols, normalize_kind, sanitize_fts5_query, search_symbols,
+    search_symbols_scoped, suggest_file_paths, suggest_symbol_names, workspace_name,
 };
 pub use slicer::{SliceError, slice_symbol, slice_symbol_body};
 pub use sync::{

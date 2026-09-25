@@ -74,6 +74,27 @@ pub fn slice_symbol(file_path: &Path, symbol: &Symbol) -> Result<String, SliceEr
     slice_lines(&bytes, symbol.start_line, symbol.end_line)
 }
 
+/// Slice the symbol's source as written, from `start_byte` (a decorator above the symbol, or the
+/// symbol's own start) to the symbol's end, starting at the beginning of that line.
+pub fn slice_symbol_source(
+    file_path: &Path,
+    symbol: &Symbol,
+    start_byte: usize,
+) -> Result<String, SliceError> {
+    let bytes =
+        fs::read(file_path).map_err(|e| SliceError::Io(file_path.display().to_string(), e))?;
+    if bytes.is_empty() {
+        return Err(SliceError::EmptyFile(file_path.display().to_string()));
+    }
+    if symbol.end_byte <= bytes.len() && start_byte < symbol.end_byte {
+        return Ok(
+            slice_bytes_safe(&bytes, indent_start(&bytes, start_byte), symbol.end_byte)?
+                .to_string(),
+        );
+    }
+    slice_lines(&bytes, symbol.start_line, symbol.end_line)
+}
+
 /// Slice only the symbol's implementation body from file on disk.
 pub fn slice_symbol_body(file_path: &Path, symbol: &Symbol) -> Result<String, SliceError> {
     let bytes =
@@ -87,7 +108,7 @@ pub fn slice_symbol_body(file_path: &Path, symbol: &Symbol) -> Result<String, Sl
     if let (Some(body_start), Some(body_end)) = (symbol.body_start_byte, symbol.body_end_byte)
         && body_end <= bytes.len()
         && body_start <= body_end
-        && let Ok(slice) = slice_bytes_safe(&bytes, body_start, body_end)
+        && let Ok(slice) = slice_bytes_safe(&bytes, indent_start(&bytes, body_start), body_end)
     {
         return Ok(slice.to_string());
     }
@@ -99,6 +120,23 @@ pub fn slice_symbol_body(file_path: &Path, symbol: &Symbol) -> Result<String, Sl
 
     // If no body defined, return entire symbol
     slice_symbol(file_path, symbol)
+}
+
+/// The start of `start`'s line when only indentation precedes it, so a body that begins on its
+/// own line (a Python block) keeps its first line's indentation like the lines after it.
+fn indent_start(bytes: &[u8], start: usize) -> usize {
+    let line_start = bytes[..start]
+        .iter()
+        .rposition(|&b| b == b'\n')
+        .map_or(0, |newline| newline + 1);
+    if bytes[line_start..start]
+        .iter()
+        .all(|&b| b == b' ' || b == b'\t')
+    {
+        line_start
+    } else {
+        start
+    }
 }
 
 /// Fallback 1-based line slicer
@@ -126,6 +164,16 @@ pub fn slice_lines(bytes: &[u8], start_line: usize, end_line: usize) -> Result<S
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_body_on_its_own_line_keeps_its_first_indentation() {
+        let source = b"def f():\n    x = 1\n    return x\n";
+        let body_start = 13;
+        assert_eq!(&source[body_start..body_start + 5], b"x = 1");
+        assert_eq!(indent_start(source, body_start), 9);
+        let brace = b"fn f() { 1 }";
+        assert_eq!(indent_start(brace, 7), 7);
+    }
 
     #[test]
     fn test_slice_bytes_safe() {

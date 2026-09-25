@@ -17,7 +17,7 @@ A project with no index gets one on the first call. The call waits up to 5 s. If
 
 ## 4-Phase Progressive Disclosure Workflow
 
-### 1. Orientation (~200 tokens)
+### 1. Orientation (a few hundred tokens)
 When entering a new repository, unfamiliar subsystem, or crate:
 * Call `codebase_outline(path="...", depth=2)` to inspect directories and primary exports.
 * **Never** run wide directory recursion or `ls -R`.

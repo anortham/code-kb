@@ -137,6 +137,8 @@ pub struct SearchExplain {
     pub path_role: f64,
     pub documentation: f64,
     pub test_intent: f64,
+    #[serde(default)]
+    pub nested: f64,
     pub word_weights: Vec<(String, f64)>,
     pub candidates: usize,
     pub rerank_us: u128,
@@ -153,6 +155,9 @@ pub struct BlastRadiusResult {
     #[serde(default)]
     pub traversal_ceiling_reached: bool,
     pub test_file_ceiling_reached: bool,
+    /// The request already used the largest `limit`, so a larger one cannot show more rows.
+    #[serde(default)]
+    pub limit_at_maximum: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

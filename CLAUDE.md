@@ -131,7 +131,7 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   metadata, including optional `designable`, `scriptable`, `stored`, `user`, and `revision` attributes.
   Facts and literals have separate limits, each
   with its own cap notice.
-- Search ranking: `search_symbols` admits rows from three branches (exact name, FTS5 word match, trigram name substring, so `sha256` finds `parseSha256Sidecar`), then a deterministic Rust rerank in `queries.rs` credits each query term once from its strongest field (name whole token 3, name stem 2, name substring 1, signature or docstring 1), weighted by the term's rarity across the index (a capped FTS5 match count per term), and adds the whole-name and all-words bonuses (the whole-name bonus is 100 for definition kinds and 60 for every other kind) and the kind, path, documentation, and test priors; `score` is that rerank score. Rows from test files are hidden by default: a path rule in `queries.rs` (`is_test_path` and its SQL mirror `test_path_predicate`) hides the whole file, not only the symbols `julie-extract` flags, and `is_test: true` / `--include-tests` shows them again. A `lookup_symbol` row whose name equals the query is shown either way. When an exact lookup finds a definition, the import rows with the same name fold into one line with the count and the first three locations. Equal scores break by name strength, the sum over query words of 3 for a whole-token name match, 2 for a stem match, 1 for a substring match, and 0 for none, then names that do not start with `_` before names that do; `--explain` reports the name strength as `name_strength`. `code-kb search --explain` prints the breakdown and the rerank timer; the MCP tool takes no `explain` parameter, and `--verbose` stays debug logging.
+- Search ranking: `search_symbols` admits rows from three branches (exact name, FTS5 word match, trigram name substring, so `sha256` finds `parseSha256Sidecar`), then a deterministic Rust rerank in `queries.rs` credits each query term once from its strongest field (name whole token 3, name stem 2, name substring 1, signature or docstring 1), weighted by the term's rarity across the index (a capped FTS5 match count per term), and adds the whole-name and all-words bonuses (the whole-name bonus is 100 for definition kinds and 60 for every other kind) and the kind, path, documentation, and test priors, and subtracts 2 for a function or method nested in a function, method, or constructor; `score` is that rerank score. `lookup_symbol` lists exact names first, then names that start with the query, then names that contain it, and a `self.` attribute row after the other rows of its rank. A documentation link (Markdown and other document languages) is never an import row in lookup or search. Test methods show as `Class::test_name`. Rows from test files are hidden by default: a path rule in `queries.rs` (`is_test_path` and its SQL mirror `test_path_predicate`) hides the whole file, not only the symbols `julie-extract` flags, and `is_test: true` / `--include-tests` shows them again. A `lookup_symbol` row whose name equals the query is shown either way. When an exact lookup finds a definition, the import rows with the same name fold into one line with the count and the first three locations. Equal scores break by name strength, the sum over query words of 3 for a whole-token name match, 2 for a stem match, 1 for a substring match, and 0 for none, then names that do not start with `_` before names that do; `--explain` reports the name strength as `name_strength`. `code-kb search --explain` prints the breakdown and the rerank timer; the MCP tool takes no `explain` parameter, and `--verbose` stays debug logging.
 - Reference rules: a pending call whose receiver names an import binding in the caller's file matches
   a target whose path holds that module as a directory or file name (`flask.Flask(...)` matches
   `src/flask/app.py`). A bare pending call never matches a definition in another file when the
@@ -146,7 +146,10 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   paths include `/autotests/` directories and file names that start with `tst_`. A Qt C++
   header's `property` and `event` rows come from the extractor's macro pre-pass and render like
   any other member; a skeleton `event` row whose signature does not spell `signal` or `event`
-  carries `// event` before its line range.
+  carries `// event` before its line range. Rows from one caller to one name at the same path and
+  line merge into one row with the summed `occurrences`. A method call on a parameter or variable
+  named for a pytest fixture matches a method of the class that fixture builds, or of an ancestor.
+  `find_references` for callers ends with one line that counts the files that import the target.
 - Language-agnostic callee filtering: `find_references(direction="callees")` and `get_symbol_context`
   filter unresolved AST tokens against workspace symbols, eliminating external stdlib/runtime noise
   across supported languages by default (`include_external: true` / `--include-external` restores them).
@@ -156,12 +159,13 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   test fixture is labelled `fixture`, and the tests that take that fixture as a parameter follow it:
   in its file, or under the directory of the `conftest.py` that defines it. A setup member in
   another test framework, such as an xUnit test-class constructor, is labelled `setup`, and the tests
-  of its class follow it. A fixture that takes
+  of its class follow it. A Python `setUp` or `tearDown` method is `setup`, not `fixture`. A fixture that takes
   that fixture is replaced by the tests that take it in turn. When the walk reaches a
   class's `__call__`, or one hop short of it, the tests that build that class, directly or through a
-  fixture, follow last, ranked by the words their names and file names share with the target. The
+  fixture, follow last, ranked by the words their names and file names share with the target;
+  a test that shares no word is left out, and two words match when they share five leading letters. The
   display shows every row the `limit` returned. A stem-matched test file matches
-  the seed file's stem in its own file name, never in a folder name above it. A stem- or
+  the seed file's stem as whole words of its own file name, never in a folder name above it. A stem- or
   module-matched file counts only when it holds a test, when its file name split on `_`, `-`, and `.`
   has the word `test`, `tests`, `spec`, `specs`, or `tst`, or when the name ends in `Test`, `Tests`,
   `Spec`, or `Specs` before the extension.
