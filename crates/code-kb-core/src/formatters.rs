@@ -330,9 +330,12 @@ fn render_symbol_skeleton(
 
     let indent = "    ".repeat(indent_level);
 
-    // Doc comment: cap at 3 lines to prevent dumping huge blocks
     if let Some(ref doc) = sym.doc_comment {
-        let lines: Vec<_> = doc.lines().collect();
+        let lines: Vec<_> = doc
+            .lines()
+            .map(doc_line_text)
+            .filter(|line| !line.is_empty())
+            .collect();
         let cap = 3;
         for line in lines.iter().take(cap) {
             out.push_str(&format!("{indent}/// {line}\n"));
@@ -862,17 +865,57 @@ fn other_names_line(query: &str, others: &[&Symbol]) -> String {
     )
 }
 
+/// A doc comment line without its comment marker (`///`, `/**`, ` * `, `#`, `--`) or a
+/// `<summary>` tag, which julie keeps in the raw comment text.
+fn doc_line_text(line: &str) -> &str {
+    let mut text = line.trim();
+    for marker in ["///", "//!", "//", "/**", "/*!", "/*", "##", "#", "--", "*"] {
+        if let Some(rest) = text.strip_prefix(marker) {
+            text = rest.trim_start();
+            break;
+        }
+    }
+    for tag in ["<summary>", "</summary>"] {
+        text = text.strip_prefix(tag).unwrap_or(text).trim_start();
+    }
+    for suffix in ["*/", "</summary>"] {
+        text = text.strip_suffix(suffix).unwrap_or(text).trim_end();
+    }
+    text
+}
+
+/// The byte index of the period that ends the first sentence: a `. ` outside parentheses and not
+/// before a lowercase word, so `(e.g. route)` and `e.g. route` do not end one.
+fn sentence_end(text: &str) -> Option<usize> {
+    let mut depth = 0usize;
+    for (index, c) in text.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth = depth.saturating_sub(1),
+            '.' if depth == 0 => {
+                let rest = &text[index + 1..];
+                if rest.starts_with(' ') && !rest[1..].starts_with(|next: char| next.is_lowercase())
+                {
+                    return Some(index);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
 /// The first sentence of a doc comment's first paragraph, on one line. A paragraph with no
 /// sentence end is cut at 200 characters with `…`.
 fn doc_summary(doc: &str) -> Option<String> {
     let paragraph = doc
         .lines()
-        .map(str::trim)
+        .map(doc_line_text)
         .skip_while(|line| line.is_empty())
         .take_while(|line| !line.is_empty())
         .collect::<Vec<_>>()
         .join(" ");
-    let summary = match paragraph.find(". ") {
+    let summary = match sentence_end(&paragraph) {
         Some(end) => paragraph[..=end].to_string(),
         None if paragraph.chars().count() > 200 => {
             format!("{}…", paragraph.chars().take(200).collect::<String>())
@@ -1542,6 +1585,26 @@ mod tests {
             doc_summary("\nCreate a runner\nfor tests\n\nMore.").as_deref(),
             Some("Create a runner for tests")
         );
+        assert_eq!(
+            doc_summary("Find facts by category (e.g. route, query). More.").as_deref(),
+            Some("Find facts by category (e.g. route, query).")
+        );
+        assert_eq!(
+            doc_summary("Use a name, e.g. foo. Then more.").as_deref(),
+            Some("Use a name, e.g. foo.")
+        );
+        assert_eq!(
+            doc_summary("/// <summary>\n/// Goes to previous page.\n/// </summary>").as_deref(),
+            Some("Goes to previous page.")
+        );
+        assert_eq!(
+            doc_summary("/**\n * Render the view.\n *\n * @param x\n */").as_deref(),
+            Some("Render the view.")
+        );
+        assert_eq!(
+            doc_summary("# Given a +hash+ returns the settings\n# for the environment.").as_deref(),
+            Some("Given a +hash+ returns the settings for the environment.")
+        );
         assert_eq!(doc_summary("  \n"), None);
         assert!(doc_summary(&"word ".repeat(60)).unwrap().ends_with('…'));
     }
@@ -1660,6 +1723,12 @@ mod tests {
 
         let skeleton = format_file_skeleton("src/lib.rs", &syms, Some(35), 0);
         assert!(skeleton.contains("/// Performs core work."));
+
+        let mut commented = syms.clone();
+        commented[0].doc_comment = Some("/**\n * Performs core work.\n */".into());
+        let skeleton = format_file_skeleton("src/lib.rs", &commented, Some(35), 0);
+        assert!(skeleton.contains("/// Performs core work.\n"), "{skeleton}");
+        assert!(!skeleton.contains("/// /**"), "{skeleton}");
         assert!(skeleton.contains("19 lines hidden: L11-L29"));
     }
 
