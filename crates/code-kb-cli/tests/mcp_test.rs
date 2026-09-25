@@ -732,7 +732,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
     assert_eq!(resp8["id"], 8);
     let blast_text = resp8["result"]["content"][0]["text"].as_str().unwrap();
     assert!(blast_text.contains("Blast Radius"));
-    assert!(blast_text.contains("Requested limit hid additional impacted symbols"));
+    assert!(blast_text.contains("impacted symbols; raise limit to see the rest"));
     assert!(blast_text.contains("Downstream Impact (0 returned)"));
     assert!(!blast_text.contains("No downstream callers found within depth"));
 

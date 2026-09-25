@@ -193,6 +193,10 @@ pub fn load_scoped_outline_symbols(
             WHERE (length(s.path) - length(replace(replace(s.path, '/', ''), '\\', '')) <= :max_slashes)
               AND s.kind IN ('function', 'method', 'struct', 'enum', 'trait', 'class', 'interface', 'type')
               AND s.parent_symbol_id IS NULL
+              AND NOT EXISTS (SELECT 1 FROM symbols overload
+                              WHERE overload.path = s.path AND overload.name = s.name
+                                AND overload.kind = s.kind AND overload.parent_symbol_id IS NULL
+                                AND overload.start_line < s.start_line)
         )
         SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,
                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,
@@ -229,7 +233,7 @@ pub fn load_scoped_outline_symbols(
 /// How many names one outline row stands for.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct OutlineCounts {
-    /// Top-level definitions that are not tests.
+    /// Distinct top-level definitions that are not tests; overloads count once.
     pub definitions: usize,
     /// Tests at any level, without setup and fixtures.
     pub tests: usize,
@@ -254,8 +258,9 @@ pub fn load_outline_counts(
     };
     let mut stmt = conn.prepare(&format!(
         "SELECT replace(path, '\\', '/'),
-                SUM(parent_symbol_id IS NULL AND is_test = 0 AND test_container = 0
-                    AND kind IN ('function', 'method', 'struct', 'enum', 'trait', 'class', 'interface', 'type')),
+                COUNT(DISTINCT CASE WHEN parent_symbol_id IS NULL AND is_test = 0 AND test_container = 0
+                    AND kind IN ('function', 'method', 'struct', 'enum', 'trait', 'class', 'interface', 'type')
+                    THEN kind || ' ' || name END),
                 SUM(is_test = 1 AND NOT {lifecycle}),
                 SUM(is_test = 1 AND {lifecycle})
          FROM symbols
@@ -1791,6 +1796,25 @@ pub fn find_related_tests(
         }
     }
 
+    // `Flask(...)` runs `Flask.__init__`, so the tests that build the class test its constructor.
+    if (target_symbol.kind == "constructor" || target_symbol.name == "__init__")
+        && tests.len() < limit
+        && let Some(class) = target_symbol
+            .parent_symbol_id
+            .as_deref()
+            .map(|id| get_symbol_by_id(conn, id))
+            .transpose()?
+            .flatten()
+            .filter(|class| class.kind == "class" || class.kind == "struct")
+    {
+        for test in find_related_tests(conn, &class, limit - tests.len())? {
+            if seen_ids.insert(test.symbol_id.clone()) {
+                tests.push(test);
+            }
+        }
+        return Ok(tests);
+    }
+
     let name = &target_symbol.name;
     let dunder = name.len() > 4 && name.starts_with("__") && name.ends_with("__");
     let definitions: i64 = conn.query_row(
@@ -1865,6 +1889,34 @@ pub fn find_related_tests(
     }
 
     Ok(tests)
+}
+
+/// Renames each row whose parent is a class or another code type to `Owner.name`, so a list of
+/// `__init__` rows says which class each one belongs to. For text output only: other tools take
+/// the qualified name, and JSON keeps the raw name.
+pub fn qualify_members<'a>(
+    conn: &Connection,
+    symbols: impl IntoIterator<Item = &'a mut Symbol>,
+) -> Result<(), QueryError> {
+    let mut stmt = conn.prepare(&format!(
+        "SELECT name FROM symbols
+         WHERE symbol_id = ?1
+           AND kind IN ('class', 'struct', 'interface', 'trait', 'enum', 'record', 'object', 'protocol', 'union')
+           AND language NOT IN ({})",
+        documentation_language_list()
+    ))?;
+    for symbol in symbols {
+        let Some(parent) = symbol.parent_symbol_id.as_deref() else {
+            continue;
+        };
+        if let Some(owner) = stmt
+            .query_row(params![parent], |row| row.get::<_, String>(0))
+            .optional()?
+        {
+            symbol.name = format!("{owner}.{}", symbol.name);
+        }
+    }
+    Ok(())
 }
 
 /// Find a specific symbol by name, with an optional path filter for disambiguation.
@@ -2527,7 +2579,7 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                     OR (EXISTS (SELECT 1 FROM {ns} WHERE value = 'Self')
                         AND s_from.parent_symbol_id = {target}.parent_symbol_id)
                     OR (p.target_receiver IS NOT NULL AND p.target_receiver != '' AND {parent}.name = p.target_receiver)
-                    OR ((p.target_receiver IN ('self', 'this', 'cls', 'Self')
+                    OR ((p.target_receiver IN ('self', 'this', 'cls', 'Self', 'super')
                          OR EXISTS (SELECT 1 FROM {ns} WHERE value = 'Self'))
                         AND EXISTS (
                             WITH RECURSIVE base(symbol_id, depth) AS (
@@ -2546,6 +2598,14 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                             )
                             SELECT 1 FROM base
                             WHERE base.symbol_id = {target}.parent_symbol_id AND base.depth > 0
+                              AND NOT EXISTS (
+                                  SELECT 1 FROM base closer
+                                  JOIN symbols nearer ON nearer.parent_symbol_id = closer.symbol_id
+                                  WHERE nearer.name = {target}.name
+                                    AND nearer.kind IN ('method', 'function', 'constructor', 'property')
+                                    AND closer.depth < base.depth
+                                    AND (closer.depth > 0 OR p.target_receiver IS NOT 'super')
+                              )
                         ))
                     OR EXISTS (
                         SELECT 1 FROM symbols receiver
@@ -2589,7 +2649,9 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                     OR p.target_receiver = ''
                     {import_alias_receiver}
                 )
-                AND ({target}.parent_symbol_id IS NULL OR s_from.parent_symbol_id = {target}.parent_symbol_id)
+                AND ({target}.parent_symbol_id IS NULL
+                     OR s_from.parent_symbol_id = {target}.parent_symbol_id
+                     OR {target}.parent_symbol_id = p.from_symbol_id)
                 AND (p.target_receiver IS NOT NULL AND p.target_receiver != '' OR {target}.path = p.path OR NOT EXISTS (
                     SELECT 1 FROM symbols shadow
                     WHERE shadow.name = {target}.name
@@ -2650,7 +2712,7 @@ fn not_documentation(conn: &Connection, alias: &str) -> String {
     }
 }
 
-fn has_column(conn: &Connection, table: &str, column: &str) -> bool {
+pub(crate) fn has_column(conn: &Connection, table: &str, column: &str) -> bool {
     conn.query_row(
         "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2",
         [table, column],
@@ -3139,6 +3201,12 @@ fn find_references_internal(
                 results.push(r);
             }
         }
+        results.sort_by(|a, b| {
+            a.path
+                .cmp(&b.path)
+                .then(a.start_line.cmp(&b.start_line))
+                .then(a.start_column.cmp(&b.start_column))
+        });
     }
 
     Ok(merge_same_site(results))
@@ -4092,6 +4160,8 @@ pub fn compute_blast_radius_scoped_with_ids(
             traversal_ceiling_reached: false,
             test_file_ceiling_reached: false,
             limit_at_maximum: false,
+            likely_tests_found: 0,
+            impacted_symbols_found: 0,
         });
     };
 
@@ -4291,16 +4361,21 @@ pub fn compute_blast_radius_scoped_with_ids(
                         && !["setup", "teardown", "asyncsetup", "asyncteardown"]
                             .iter()
                             .any(|prefix| lowered.starts_with(prefix));
+                    let caller = if depth == 1 {
+                        "direct caller".to_string()
+                    } else {
+                        format!("indirect caller [depth {depth}]")
+                    };
                     let reason = if is_fixture && pytest_fixture {
-                        fixtures.push((name.clone(), path.clone()));
-                        format!("fixture (transitive caller [depth {depth}])")
+                        fixtures.push((name.clone(), path.clone(), line));
+                        format!("fixture ({caller})")
                     } else if is_fixture {
                         if let Some(class_id) = parent {
-                            setups.push((name.clone(), class_id));
+                            setups.push((name.clone(), class_id, path.clone(), line));
                         }
-                        format!("setup (transitive caller [depth {depth}])")
+                        format!("setup ({caller})")
                     } else {
-                        format!("transitive caller [depth {depth}]")
+                        caller
                     };
                     likely_tests.push(TestTarget {
                         name,
@@ -4321,19 +4396,30 @@ pub fn compute_blast_radius_scoped_with_ids(
         }
     }
 
-    for (fixture, fixture_path) in &fixtures {
-        for test in fixture_users(conn, fixture, fixture_path)? {
+    // A fixture or setup member is not a test to run; the tests it serves stand in for it.
+    let mut replaced = HashSet::new();
+    for (fixture, fixture_path, line) in &fixtures {
+        let shown = fixture_name(conn, fixture, fixture_path);
+        let users = fixture_users(conn, fixture, fixture_path)?;
+        if !users.is_empty() {
+            replaced.insert((fixture_path.clone(), *line));
+        }
+        for test in users {
             if seen_test_keys.insert(format!("{}:{}", test.path, test.line)) {
                 likely_tests.push(TestTarget {
-                    reason: format!("uses fixture `{fixture}`"),
+                    reason: format!("uses fixture `{shown}`"),
                     ..test
                 });
             }
         }
     }
 
-    for (setup, class_id) in &setups {
-        for test in tests_in_class(conn, class_id)? {
+    for (setup, class_id, setup_path, line) in &setups {
+        let tests = tests_in_class(conn, class_id)?;
+        if !tests.is_empty() {
+            replaced.insert((setup_path.clone(), *line));
+        }
+        for test in tests {
             if seen_test_keys.insert(format!("{}:{}", test.path, test.line)) {
                 likely_tests.push(TestTarget {
                     reason: format!("setup `{setup}` runs before it"),
@@ -4342,6 +4428,7 @@ pub fn compute_blast_radius_scoped_with_ids(
             }
         }
     }
+    likely_tests.retain(|test| !replaced.contains(&(test.path.clone(), test.line)));
 
     let mut test_name_terms = Vec::new();
     let mut module_terms = Vec::new();
@@ -4496,10 +4583,21 @@ pub fn compute_blast_radius_scoped_with_ids(
         }
     }
 
-    let seed_words: Vec<String> = resolved_seed_symbols
-        .iter()
-        .flat_map(|symbol| name_words(&symbol.name))
-        .collect();
+    let mut seed_words: Vec<String> = Vec::new();
+    for symbol in &resolved_seed_symbols {
+        let callees =
+            find_references_for_symbol(conn, &symbol.name, "callees", 50, &symbol.symbol_id)
+                .unwrap_or_default();
+        for name in std::iter::once(symbol.name.as_str())
+            .chain(callees.iter().map(|site| site.to_symbol_name.as_str()))
+        {
+            for word in name_words(name) {
+                if !seed_words.contains(&word) && !GENERIC_NAME_WORDS.contains(&word.as_str()) {
+                    seed_words.push(word);
+                }
+            }
+        }
+    }
     for class_id in entry_classes {
         for test in implicit_entry_tests(conn, &class_id, &seed_words)? {
             if seen_test_keys.insert(format!("{}:{}", test.path, test.line)) {
@@ -4509,6 +4607,18 @@ pub fn compute_blast_radius_scoped_with_ids(
     }
 
     qualify_test_methods(conn, &mut likely_tests)?;
+    // Whole test files named for the target first, possible tests last, callers in between.
+    likely_tests.sort_by_key(|test| {
+        if test.reason.ends_with("matched test file") {
+            0
+        } else if test.reason.starts_with("possible:") {
+            2
+        } else {
+            1
+        }
+    });
+    let likely_tests_found = likely_tests.len();
+    let impacted_symbols_found = impacted_symbols.len();
     let likely_tests_truncated = likely_tests.len() > limit;
     let impacted_symbols_truncated = impacted_symbols.len() > limit;
     if likely_tests.len() > limit {
@@ -4528,6 +4638,8 @@ pub fn compute_blast_radius_scoped_with_ids(
         traversal_ceiling_reached,
         test_file_ceiling_reached,
         limit_at_maximum: limit >= MAX_RESULT_LIMIT,
+        likely_tests_found,
+        impacted_symbols_found,
     })
 }
 
@@ -4552,6 +4664,36 @@ fn qualify_test_methods(conn: &Connection, tests: &mut [TestTarget]) -> Result<(
         }
     }
     Ok(())
+}
+
+/// The name tests use for the fixture function `function` in `path`: the `name=` argument of its
+/// `@pytest.fixture(...)` decorator when it has one, else the function name.
+fn fixture_name(conn: &Connection, function: &str, path: &str) -> String {
+    let signature: Option<String> = conn
+        .query_row(
+            "SELECT signature FROM symbols
+             WHERE name = ?1 AND replace(path, '\\', '/') = ?2 AND signature LIKE '%fixture(%'
+             LIMIT 1",
+            params![function, path],
+            |row| row.get(0),
+        )
+        .optional()
+        .ok()
+        .flatten();
+    signature
+        .as_deref()
+        .and_then(declared_fixture_name)
+        .unwrap_or_else(|| function.to_string())
+}
+
+/// The `name=` argument of a `fixture(...)` decorator in `signature`.
+fn declared_fixture_name(signature: &str) -> Option<String> {
+    let args = &signature[signature.find("fixture(")? + "fixture(".len()..];
+    let args = &args[..args.find(')').unwrap_or(args.len())];
+    let value = args[args.find("name=")? + "name=".len()..].trim_start();
+    let quote = value.chars().next().filter(|c| *c == '"' || *c == '\'')?;
+    let end = value[1..].find(quote)?;
+    Some(value[1..1 + end].to_string())
 }
 
 /// The test functions that take the fixture `name` as a parameter: in the fixture's own file,
@@ -4585,10 +4727,11 @@ fn fixture_users(
     let mut listed = HashSet::new();
     let mut visited = HashSet::new();
     let mut pending = vec![(name.to_string(), fixture_path.to_string())];
-    while let Some((name, fixture_path)) = pending.pop() {
-        if !visited.insert((name.clone(), fixture_path.clone())) {
+    while let Some((function, fixture_path)) = pending.pop() {
+        if !visited.insert((function.clone(), fixture_path.clone())) {
             continue;
         }
+        let name = fixture_name(conn, &function, &fixture_path);
         let scope = match fixture_path.rsplit_once('/') {
             Some((dir, "conftest.py")) => format!("{}/%", escape_like(dir)),
             None if fixture_path == "conftest.py" => "%".to_string(),
@@ -4688,35 +4831,48 @@ fn name_words(name: &str) -> Vec<String> {
     words
 }
 
-/// How many `seed_words` the test's name shares plus how many its file name shares, so a test in
-/// a file named for the target ranks first. A word matches when one of the two is a prefix of the
-/// other or they share five leading letters, so `handle` matches `handler` and `handling`.
+/// Words too common in code names to link a test to a target.
+const GENERIC_NAME_WORDS: &[&str] = &[
+    "get", "set", "new", "the", "and", "for", "self", "init", "ensure", "sync", "find", "make",
+    "create", "load", "call", "add",
+];
+
+/// The number of leading characters two words share.
 fn common_prefix_len(a: &str, b: &str) -> usize {
     a.chars().zip(b.chars()).take_while(|(x, y)| x == y).count()
 }
 
-fn shared_words(seed_words: &[String], test: &TestTarget) -> usize {
-    let shared = |text: &str| {
-        let words = name_words(text);
-        seed_words
-            .iter()
-            .filter(|seed| {
-                words.iter().any(|word| {
-                    word.starts_with(seed.as_str())
-                        || seed.starts_with(word.as_str())
-                        || common_prefix_len(word, seed) >= 5
-                })
-            })
-            .count()
-    };
+/// The `seed_words` that the test's name or file name shares, with a count that credits the name
+/// and the file name separately, so a test in a file named for the target ranks first. A word
+/// matches when one of the two is a prefix of the other or they share five leading letters, so
+/// `handle` matches `handler` and `handling`.
+fn shared_words(seed_words: &[String], test: &TestTarget) -> (usize, Vec<String>) {
+    let mut found: Vec<String> = Vec::new();
+    let mut score = 0;
     let file = test.path.rsplit('/').next().unwrap_or(&test.path);
-    shared(&test.name) + shared(file)
+    for text in [test.name.as_str(), file] {
+        let words = name_words(text);
+        for seed in seed_words {
+            if words.iter().any(|word| {
+                word.starts_with(seed.as_str())
+                    || seed.starts_with(word.as_str())
+                    || common_prefix_len(word, seed) >= 5
+            }) {
+                score += 1;
+                if !found.contains(seed) {
+                    found.push(seed.clone());
+                }
+            }
+        }
+    }
+    (score, found)
 }
 
-/// Tests that build the class `class_id`, whose `__call__` the impact walk reached, directly or
-/// through a fixture. They reach the target through the call the runtime makes, so no call edge
-/// links them. Only tests whose name or file shares a word with the seed are kept, because most
-/// tests that build an application never reach a given handler; the most shared words come first.
+/// Tests that build the class `class_id`, whose `__call__` the impact walk reached, or a subclass
+/// of it, directly or through a fixture. The runtime makes that call, so no call edge links them,
+/// and the index cannot see whether a test sends a call that reaches the target: each row is a
+/// possible test. Only tests whose name or file shares a word with the seed or the code it calls
+/// are kept; the most shared words come first.
 fn implicit_entry_tests(
     conn: &Connection,
     class_id: &str,
@@ -4730,52 +4886,83 @@ fn implicit_entry_tests(
     } else {
         "0"
     };
+    let mut classes = vec![class];
+    let mut sites_by_class = Vec::new();
+    let mut next = 0;
+    while next < classes.len() && classes.len() <= 50 {
+        let built = classes[next].clone();
+        next += 1;
+        let sites =
+            find_references_for_symbol(conn, &built.name, "callers", 200, &built.symbol_id)?;
+        for site in sites.iter().filter(|site| site.kind == "extends") {
+            if !classes.iter().any(|c| c.symbol_id == site.from_symbol_id)
+                && let Some(subclass) = get_symbol_by_id(conn, &site.from_symbol_id)?
+            {
+                classes.push(subclass);
+            }
+        }
+        sites_by_class.push((built, sites));
+    }
     let mut builders = Vec::new();
-    for site in find_references_for_symbol(conn, &class.name, "callers", 200, class_id)? {
-        if site.kind != "calls" {
-            continue;
-        }
-        let Some(builder) = get_symbol_by_id(conn, &site.from_symbol_id)? else {
-            continue;
-        };
-        if !(builder.is_test || is_test_path(&builder.path)) {
-            continue;
-        }
-        let is_fixture: bool = conn
-            .query_row(
-                &format!("SELECT {lifecycle} FROM symbols WHERE symbol_id = ?1"),
-                [&builder.symbol_id],
-                |row| row.get(0),
-            )
-            .unwrap_or(false);
-        if is_fixture {
-            let reason = format!(
-                "uses fixture `{}`, which builds `{}`, whose `__call__` reaches the target",
-                builder.name, class.name
-            );
-            builders.extend(
-                fixture_users(conn, &builder.name, &builder.path)?
-                    .into_iter()
-                    .map(|test| TestTarget {
-                        reason: reason.clone(),
-                        ..test
-                    }),
-            );
-        } else if builder.is_test {
-            builders.push(TestTarget {
-                name: builder.name,
-                path: builder.path,
-                line: builder.start_line,
-                reason: format!(
-                    "builds `{}`, whose `__call__` reaches the target",
-                    class.name
-                ),
-            });
+    for (built, sites) in &sites_by_class {
+        for site in sites {
+            if site.kind != "calls" {
+                continue;
+            }
+            let Some(builder) = get_symbol_by_id(conn, &site.from_symbol_id)? else {
+                continue;
+            };
+            if !(builder.is_test || is_test_path(&builder.path)) {
+                continue;
+            }
+            let is_fixture: bool = conn
+                .query_row(
+                    &format!("SELECT {lifecycle} FROM symbols WHERE symbol_id = ?1"),
+                    [&builder.symbol_id],
+                    |row| row.get(0),
+                )
+                .unwrap_or(false);
+            if is_fixture {
+                let via = format!(
+                    "builds `{}` through fixture `{}`",
+                    built.name,
+                    fixture_name(conn, &builder.name, &builder.path)
+                );
+                builders.extend(
+                    fixture_users(conn, &builder.name, &builder.path)?
+                        .into_iter()
+                        .map(|test| TestTarget {
+                            reason: via.clone(),
+                            ..test
+                        }),
+                );
+            } else if builder.is_test {
+                builders.push(TestTarget {
+                    name: builder.name,
+                    path: builder.path,
+                    line: builder.start_line,
+                    reason: format!("builds `{}`", built.name),
+                });
+            }
         }
     }
     let mut ranked: Vec<(usize, TestTarget)> = builders
         .into_iter()
-        .map(|test| (shared_words(seed_words, &test), test))
+        .filter_map(|test| {
+            let (score, words) = shared_words(seed_words, &test);
+            (score > 0).then(|| {
+                let shared = words
+                    .iter()
+                    .map(|word| format!("`{word}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let reason = format!(
+                    "possible: {}, whose `__call__` reaches the target; shares {shared}",
+                    test.reason
+                );
+                (score, TestTarget { reason, ..test })
+            })
+        })
         .collect();
     ranked.sort_by(|(a_score, a), (b_score, b)| {
         b_score
@@ -4783,11 +4970,7 @@ fn implicit_entry_tests(
             .then_with(|| a.path.cmp(&b.path))
             .then_with(|| a.line.cmp(&b.line))
     });
-    Ok(ranked
-        .into_iter()
-        .filter(|(score, _)| *score > 0)
-        .map(|(_, test)| test)
-        .collect())
+    Ok(ranked.into_iter().map(|(_, test)| test).collect())
 }
 
 /// Compute blast radius and likely tests for given seed symbols or seed file paths.
@@ -4846,6 +5029,28 @@ mod tests {
             Some("GET /api/v1/users/:id".into())
         );
         assert_eq!(route(r#"{"key":"x"}"#), None);
+    }
+
+    #[test]
+    fn a_fixture_declared_with_a_name_is_used_by_that_name() {
+        assert_eq!(
+            super::declared_fixture_name("@pytest.fixture(name=\"async_app\") def _async_app()"),
+            Some("async_app".into())
+        );
+        assert_eq!(
+            super::declared_fixture_name(
+                "@pytest.fixture(scope='session', name='db') def make_db()"
+            ),
+            Some("db".into())
+        );
+        assert_eq!(
+            super::declared_fixture_name("@pytest.fixture def app()"),
+            None
+        );
+        assert_eq!(
+            super::declared_fixture_name("@pytest.fixture(params=[1]) def f(name='x')"),
+            None
+        );
     }
 
     #[test]

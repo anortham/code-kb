@@ -1248,7 +1248,7 @@ fn test_cli_facts_with_config_alias_and_path_filter() {
         .expect("Failed to execute facts discovery with path filter");
     assert!(output_cat_path.status.success());
     let stdout_cat = String::from_utf8_lossy(&output_cat_path.stdout);
-    assert!(stdout_cat.contains("`toml.key_value.v1` (1 occurrences)"));
+    assert!(stdout_cat.contains("`toml.key_value.v1` (1 fact)"));
 }
 
 #[test]

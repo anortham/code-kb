@@ -671,21 +671,13 @@ fn blast_radius_follows_a_fixture_to_the_tests_that_take_it() {
         .map(|t| (t.name.as_str(), t.reason.as_str()))
         .collect();
     assert!(
-        reasons.contains(&("invoke", "fixture (transitive caller [depth 1])")),
+        reasons.contains(&("TestRoutes::test_simple", "uses fixture `method_invoke`")),
         "{reasons:?}"
     );
     assert!(
-        reasons.contains(&(
-            "TestRoutes::method_invoke",
-            "fixture (transitive caller [depth 1])"
-        )),
-        "{reasons:?}"
-    );
-    assert!(
-        reasons.contains(&(
-            "TestRoutes::setup_method",
-            "setup (transitive caller [depth 1])"
-        )),
+        !reasons
+            .iter()
+            .any(|(_, reason)| reason.starts_with("fixture") || reason.starts_with("setup")),
         "{reasons:?}"
     );
     assert!(
@@ -716,14 +708,13 @@ fn blast_radius_labels_a_test_class_setup_and_adds_the_tests_it_runs_before() {
         .map(|t| (t.name.as_str(), t.reason.as_str()))
         .collect();
     assert!(
-        reasons.contains(&(
-            "StoreTests::StoreTests",
-            "setup (transitive caller [depth 1])"
-        )),
+        reasons.contains(&("StoreTests::Opens", "setup `StoreTests` runs before it")),
         "{reasons:?}"
     );
     assert!(
-        reasons.contains(&("StoreTests::Opens", "setup `StoreTests` runs before it")),
+        !reasons
+            .iter()
+            .any(|(name, _)| *name == "StoreTests::StoreTests"),
         "{reasons:?}"
     );
 }
@@ -771,11 +762,16 @@ fn blast_radius_reaches_tests_that_build_a_class_whose_call_method_reaches_the_t
     assert!(!names.contains(&"test_view_renders"), "{names:?}");
     assert!(!names.contains(&"test_config_loads"), "{names:?}");
     let reason = &result.likely_tests[position("test_exception_handling_renders")].reason;
-    assert_eq!(reason, "builds `App`, whose `__call__` reaches the target");
+    assert!(
+        reason.starts_with("possible: builds `App`, whose `__call__` reaches the target; shares"),
+        "{reason}"
+    );
     let reason = &result.likely_tests[position("test_user_error_is_handled")].reason;
-    assert_eq!(
-        reason,
-        "uses fixture `app`, which builds `App`, whose `__call__` reaches the target"
+    assert!(
+        reason.starts_with(
+            "possible: builds `App` through fixture `app`, whose `__call__` reaches the target; shares"
+        ),
+        "{reason}"
     );
 }
 
@@ -990,4 +986,121 @@ fn only_a_function_inside_the_body_of_another_function_counts_as_nested() {
 
     assert_eq!(nested("lookup"), 0.0);
     assert!(nested("lookupLocal") < 0.0);
+}
+
+#[test]
+fn qualify_members_names_the_class_of_a_member_but_not_of_a_document_heading() {
+    let (_repo, db_path) = scanned_repo(&[
+        (
+            "src/cli.py",
+            "class ScriptInfo:\n    def __init__(self):\n        pass\n\n\ndef main():\n    pass\n",
+        ),
+        ("docs/guide.md", "# Setup\n\n## Install\n\nText.\n"),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+    let mut rows: Vec<_> = ["__init__", "main", "Install"]
+        .iter()
+        .map(|name| {
+            code_kb_core::get_symbol_by_name(&conn, name, None)
+                .unwrap()
+                .unwrap()
+        })
+        .collect();
+
+    code_kb_core::qualify_members(&conn, rows.iter_mut()).unwrap();
+
+    let names: Vec<&str> = rows.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names, vec!["ScriptInfo.__init__", "main", "Install"]);
+}
+
+#[test]
+fn super_and_self_calls_reach_the_nearest_ancestor_that_defines_the_method() {
+    let (_repo, db_path) = scanned_repo(&[
+        (
+            "src/base.py",
+            "class Scaffold:\n    def __init__(self):\n        pass\n\n    def add_rule(self):\n        pass\n\n\nclass App(Scaffold):\n    def __init__(self):\n        super().__init__()\n\n    def add_rule(self):\n        pass\n",
+        ),
+        (
+            "src/app.py",
+            "from base import App\n\n\nclass Flask(App):\n    def __init__(self):\n        super().__init__()\n        self.add_rule()\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+    let lines = |class: &str, name: &str| -> Vec<(String, Option<usize>)> {
+        code_kb_core::find_references_for_symbol(
+            &conn,
+            name,
+            "callers",
+            20,
+            &member_of(&conn, class, name),
+        )
+        .unwrap()
+        .into_iter()
+        .map(|site| (site.path, site.start_line))
+        .collect()
+    };
+
+    assert_eq!(
+        lines("App", "add_rule"),
+        vec![("src/app.py".to_string(), Some(7))]
+    );
+    assert!(lines("Scaffold", "add_rule").is_empty());
+    assert_eq!(
+        lines("Scaffold", "__init__"),
+        vec![("src/base.py".to_string(), Some(11))]
+    );
+
+    let app_init = code_kb_core::find_references_for_symbol(
+        &conn,
+        "__init__",
+        "callers",
+        20,
+        &member_of(&conn, "App", "__init__"),
+    )
+    .unwrap();
+    assert_eq!(
+        app_init
+            .iter()
+            .map(|s| (s.path.as_str(), s.start_line))
+            .collect::<Vec<_>>(),
+        vec![("src/app.py", Some(6))]
+    );
+}
+
+fn member_of(conn: &rusqlite::Connection, class: &str, name: &str) -> String {
+    conn.query_row(
+        "SELECT m.symbol_id FROM symbols m JOIN symbols c ON c.symbol_id = m.parent_symbol_id
+         WHERE c.name = ?1 AND m.name = ?2",
+        [class, name],
+        |row| row.get(0),
+    )
+    .unwrap()
+}
+
+#[test]
+fn a_constructor_gets_the_tests_that_build_its_class_even_one_defined_in_the_test() {
+    let (_repo, db_path) = scanned_repo(&[
+        (
+            "src/app.py",
+            "class Flask:\n    def __init__(self, name):\n        self.name = name\n",
+        ),
+        (
+            "tests/test_app.py",
+            "from app import Flask\n\n\ndef test_builds():\n    Flask('x')\n\n\ndef test_local():\n    class Quiet(Flask):\n        pass\n\n    Quiet('y')\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+    let init = code_kb_core::get_symbol_by_id(&conn, &member_of(&conn, "Flask", "__init__"))
+        .unwrap()
+        .unwrap();
+
+    let related: Vec<String> = code_kb_core::find_related_tests(&conn, &init, 5)
+        .unwrap()
+        .into_iter()
+        .map(|t| t.name)
+        .collect();
+    assert_eq!(related, vec!["test_builds"]);
+
+    let quiet = find_references_scoped(&conn, "Quiet", "callers", 20, false, None).unwrap();
+    assert_eq!(caller_names(&quiet), vec!["test_local"]);
 }

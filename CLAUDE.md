@@ -131,7 +131,7 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   metadata, including optional `designable`, `scriptable`, `stored`, `user`, and `revision` attributes.
   Facts and literals have separate limits, each
   with its own cap notice.
-- Search ranking: `search_symbols` admits rows from three branches (exact name, FTS5 word match, trigram name substring, so `sha256` finds `parseSha256Sidecar`), then a deterministic Rust rerank in `queries.rs` credits each query term once from its strongest field (name whole token 3, name stem 2, name substring 1, signature or docstring 1), weighted by the term's rarity across the index (a capped FTS5 match count per term), and adds the whole-name and all-words bonuses (the whole-name bonus is 100 for definition kinds and 60 for every other kind) and the kind, path, documentation, and test priors, and subtracts 2 for a function or method nested in a function, method, or constructor; `score` is that rerank score. `lookup_symbol` lists exact names first, then names that start with the query, then names that contain it, and a `self.` attribute row after the other rows of its rank. A documentation link (Markdown and other document languages) is never an import row in lookup or search. Test methods show as `Class::test_name`. Rows from test files are hidden by default: a path rule in `queries.rs` (`is_test_path` and its SQL mirror `test_path_predicate`) hides the whole file, not only the symbols `julie-extract` flags, and `is_test: true` / `--include-tests` shows them again. A `lookup_symbol` row whose name equals the query is shown either way. When an exact lookup finds a definition, the import rows with the same name fold into one line with the count and the first three locations. Equal scores break by name strength, the sum over query words of 3 for a whole-token name match, 2 for a stem match, 1 for a substring match, and 0 for none, then names that do not start with `_` before names that do; `--explain` reports the name strength as `name_strength`. `code-kb search --explain` prints the breakdown and the rerank timer; the MCP tool takes no `explain` parameter, and `--verbose` stays debug logging.
+- Search ranking: `search_symbols` admits rows from three branches (exact name, FTS5 word match, trigram name substring, so `sha256` finds `parseSha256Sidecar`), then a deterministic Rust rerank in `queries.rs` credits each query term once from its strongest field (name whole token 3, name stem 2, name substring 1, signature or docstring 1), weighted by the term's rarity across the index (a capped FTS5 match count per term), and adds the whole-name and all-words bonuses (the whole-name bonus is 100 for definition kinds and 60 for every other kind) and the kind, path, documentation, and test priors, and subtracts 2 for a function or method nested in a function, method, or constructor; `score` is that rerank score. `lookup_symbol` lists exact names first, then names that start with the query, then names that contain it, and a `self.` attribute row after the other rows of its rank. A documentation link (Markdown and other document languages) is never an import row in lookup or search. In lookup and search text a member of a class or another code type shows as `Owner.name` (`ScriptInfo.__init__`), which the other tools accept as a name; JSON keeps the raw name. When some lookup rows only start with or contain the query, the header says how many are named exactly. `blast_radius` shows a test method as `Class::test_name`. Rows from test files are hidden by default: a path rule in `queries.rs` (`is_test_path` and its SQL mirror `test_path_predicate`) hides the whole file, not only the symbols `julie-extract` flags, and `is_test: true` / `--include-tests` shows them again. A `lookup_symbol` row whose name equals the query is shown either way. When an exact lookup finds a definition, the import rows with the same name fold into one line with the count and the first three locations. Equal scores break by name strength, the sum over query words of 3 for a whole-token name match, 2 for a stem match, 1 for a substring match, and 0 for none, then names that do not start with `_` before names that do; `--explain` reports the name strength as `name_strength`. `code-kb search --explain` prints the breakdown and the rerank timer; the MCP tool takes no `explain` parameter, and `--verbose` stays debug logging.
 - Reference rules: a pending call whose receiver names an import binding in the caller's file matches
   a target whose path holds that module as a directory or file name (`flask.Flask(...)` matches
   `src/flask/app.py`). A bare pending call never matches a definition in another file when the
@@ -149,22 +149,40 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   carries `// event` before its line range. Rows from one caller to one name at the same path and
   line merge into one row. A method call on a parameter or variable
   named for a pytest fixture matches a method of the class that fixture builds, or of an ancestor.
-  `find_references` for callers ends with one line that counts the files that import the target.
+  A `super` call matches a method of an ancestor, and a `self`, `this`, `cls`, or `super` call
+  matches only the nearest class in the chain that defines the name. A bare call matches a class
+  or function defined inside the caller. A member-access identifier never matches a function
+  nested in another function, a private JavaScript or TypeScript module-level name in another
+  file, or any target when its receiver is a capitalized name that no indexed type, module,
+  import, field, or property has (`Assert.Contains`); a QML signal handler is exempt. Callee rows
+  come in source order. `find_references` for callers ends with one line that counts the files
+  that import the target.
+- Related tests (`get_symbol_context`): callers from relationships, pending calls, and references
+  that are tests, test classes, or functions and methods in test files; never setup, teardown, or
+  fixture members, and none for a target in a document language. A constructor gets the related
+  tests of its class. The name and full-text stages run only when the target's name has one
+  definition in the index and is not a dunder name.
 - Language-agnostic callee filtering: `find_references(direction="callees")` and `get_symbol_context`
   filter unresolved AST tokens against workspace symbols, eliminating external stdlib/runtime noise
   across supported languages by default (`include_external: true` / `--include-external` restores them).
 - Blast radius & test prediction: `blast_radius` (alias: `impact`, CLI: `code-kb blast-radius` / `impact`)
   computes multi-hop reverse reachability via SQLite recursive CTEs and predicts targeted tests to run.
-  Auto-discovers uncommitted git changes when no target is passed. A caller that julie flags as a
-  test fixture is labelled `fixture`, and the tests that take that fixture as a parameter follow it:
-  in its file, or under the directory of the `conftest.py` that defines it. A setup member in
-  another test framework, such as an xUnit test-class constructor, is labelled `setup`, and the tests
-  of its class follow it. A Python `setUp` or `tearDown` method is `setup`, not `fixture`. A fixture that takes
-  that fixture is replaced by the tests that take it in turn. When the walk reaches a
-  class's `__call__`, or one hop short of it, the tests that build that class, directly or through a
-  fixture, follow last, ranked by the words their names and file names share with the target;
-  a test that shares no word is left out, and two words match when they share five leading letters. The
-  display shows every row the `limit` returned. A stem-matched test file matches
+  Auto-discovers uncommitted git changes when no target is passed. A caller at depth 1 is a
+  `direct caller`, a deeper one an `indirect caller [depth N]`. A caller that julie flags as a
+  pytest fixture is replaced by the tests that take it as a parameter, by the name in its
+  `@pytest.fixture(name=...)` when it has one: in its file, or under the directory of the
+  `conftest.py` that defines it. A fixture that takes that fixture is replaced by the tests that
+  take it in turn. A setup member in another test framework, such as an xUnit test-class
+  constructor or a Python `setUp` or `tearDown` method, is replaced by the tests of its class. A
+  fixture or setup member with no such tests stays, labelled `fixture` or `setup`. When the walk
+  reaches a class's `__call__`, or one hop short of it, the tests that build that class or a
+  subclass of it, directly or through a fixture, are `possible` rows: the runtime makes that call,
+  so the index cannot see whether a test reaches the target. They are kept only when their names
+  or file names share a word with the target or the functions it calls (two words match when one
+  starts the other or they share five leading letters; generic words such as `get` and `find` do
+  not count), ranked by the words they share, and each row names those words. Whole-file rows for
+  matched test files come first and `possible` rows last. When `limit` cuts a list, the answer
+  says how many rows it shows of how many it found. A stem-matched test file matches
   the seed file's stem as whole words of its own file name, never in a folder name above it. A stem- or
   module-matched file counts only when it holds a test, when its file name split on `_`, `-`, and `.`
   has the word `test`, `tests`, `spec`, `specs`, or `tst`, or when the name ends in `Test`, `Tests`,

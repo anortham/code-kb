@@ -158,6 +158,12 @@ pub struct BlastRadiusResult {
     /// The request already used the largest `limit`, so a larger one cannot show more rows.
     #[serde(default)]
     pub limit_at_maximum: bool,
+    /// Likely tests found before `limit` cut the list.
+    #[serde(default)]
+    pub likely_tests_found: usize,
+    /// Impacted symbols found before `limit` cut the list.
+    #[serde(default)]
+    pub impacted_symbols_found: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

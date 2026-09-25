@@ -9,7 +9,8 @@ use code_kb_core::{
     format_search_results, format_structural_facts, format_symbol_body,
     fts_search_symbols_explained, fts_search_symbols_scoped, get_context_slice_selected_op,
     get_symbol_body_selected_op, list_structural_fact_categories_scoped, load_file_symbols,
-    open_read_only, queries, resolve_symbol_op, scan_workspace, search_symbols_scoped,
+    open_read_only, qualify_members, queries, resolve_symbol_op, scan_workspace,
+    search_symbols_scoped,
 };
 
 mod logging;
@@ -593,14 +594,16 @@ fn main() -> anyhow::Result<()> {
             } else if args.limit == 0 {
                 println!("{ZERO_LIMIT_NOTICE}");
             } else {
+                let (mut exact_shown, mut fts_shown) = (exact_matches, fts_matches);
+                qualify_members(
+                    &conn,
+                    exact_shown
+                        .iter_mut()
+                        .chain(fts_shown.iter_mut().map(|hit| &mut hit.symbol)),
+                )?;
                 print!(
                     "{}",
-                    format_find_symbol_results(
-                        &args.query,
-                        &exact_matches,
-                        &fts_matches,
-                        args.limit
-                    )
+                    format_find_symbol_results(&args.query, &exact_shown, &fts_shown, args.limit)
                 );
             }
         }
@@ -623,10 +626,9 @@ fn main() -> anyhow::Result<()> {
             } else if args.limit == 0 {
                 println!("{ZERO_LIMIT_NOTICE}");
             } else {
-                println!(
-                    "{}",
-                    format_search_results(&args.query, &matches, args.limit)
-                );
+                let mut shown = matches;
+                qualify_members(&conn, shown.iter_mut().map(|hit| &mut hit.symbol))?;
+                println!("{}", format_search_results(&args.query, &shown, args.limit));
             }
         }
         Command::Body(args) => {

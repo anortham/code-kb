@@ -535,7 +535,7 @@ The report states that coverage beside the number, so you can see how much of th
 covers:
 
 ```text
-Est. Tokens Saved: ~<saved> (baseline known for <K> of <M> calls)
+Est. Tokens Saved: ~<saved> (baseline known for <K> of <M> calls; baseline = reading each file an answer names in full)
 ```
 
 Each tool row carries the same pair as `~N (K/M)`. Rows written before this measurement existed

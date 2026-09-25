@@ -112,9 +112,9 @@ fn test_blast_radius_multi_hop_and_likely_tests() {
     let formatted = format_blast_radius(&result);
     assert!(formatted.contains("## Blast Radius & Test Impact (Symbol: base_calc)"));
     assert!(formatted.contains("### Likely Tests to Run (1 returned)"));
-    assert!(formatted.contains(
-        "tests/core_test.rs:\n  - `test_base_calc` [line 1] (transitive caller [depth 1])"
-    ));
+    assert!(
+        formatted.contains("tests/core_test.rs:\n  - `test_base_calc` [line 1] (direct caller)")
+    );
     assert!(formatted.contains("src/service.rs:\n  - [depth 1] function `service_calc` [line 1]"));
     assert!(formatted.contains("src/api.rs:\n  - [depth 2] function `handle_request` [line 1]"));
 }
@@ -581,7 +581,7 @@ fn blast_radius_reports_requested_limit_truncation_before_output_truncation() {
     assert_eq!(limited_json["impacted_symbols_truncated"], true);
     let limited_text = format_blast_radius(&limited);
     assert!(limited_text.contains("Likely Tests to Run (1 returned)"));
-    assert!(limited_text.contains("Requested limit"));
+    assert!(limited_text.contains("Showing 1 of "));
 
     let exact_one = compute_blast_radius(&conn, &["base_calc"], &[], 1, 1).unwrap();
     assert_eq!(exact_one.likely_tests.len(), 1);

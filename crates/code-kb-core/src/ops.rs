@@ -302,17 +302,23 @@ pub fn codebase_outline_op(
         .as_ref()
         .map(|path| format!("{}\\\\%", queries::escape_like(path)));
 
+    let supported = if queries::has_column(conn, "files", "status") {
+        "COALESCE(status, '') != 'unsupported'"
+    } else {
+        "1 = 1"
+    };
     let mut stmt = conn
-        .prepare(
+        .prepare(&format!(
             "SELECT path FROM files
              WHERE (:path IS NULL
                 OR path = :path COLLATE NOCASE
                 OR path = :path_bs COLLATE NOCASE
                 OR path LIKE :path_prefix ESCAPE '\\'
                 OR path LIKE :path_prefix_bs ESCAPE '\\')
+               AND {supported}
              ORDER BY path ASC
-             LIMIT 1001",
-        )
+             LIMIT 1001"
+        ))
         .map_err(QueryError::Sqlite)?;
 
     let mut rows = stmt
@@ -338,8 +344,10 @@ pub fn codebase_outline_op(
         file_paths.push(file_path);
     }
 
+    let unsupported = queries::count_unsupported_files(conn, norm.as_deref());
     if let Some(filter) = path_filter
         && files_found == 0
+        && unsupported == 0
     {
         return Err(file_not_found(conn, filter));
     }
@@ -386,7 +394,6 @@ pub fn codebase_outline_op(
         out.push_str(msg);
     }
 
-    let unsupported = queries::count_unsupported_files(conn, norm.as_deref());
     if unsupported > 0 {
         let noun = if unsupported == 1 { "file" } else { "files" };
         out.push_str(&format!(
@@ -624,6 +631,53 @@ mod tests {
 
         let scoped = codebase_outline_op(&workspace, &conn, 2, Some("src")).unwrap();
         assert!(scoped.contains("1 unsupported file:"));
+    }
+
+    #[test]
+    fn codebase_outline_names_plain_files_and_shows_an_overload_once() {
+        let temp = crate::safe_tempdir();
+        let workspace = Workspace::new(temp.path().to_path_buf());
+        let conn = Connection::open(temp.path().join("index.db")).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE files (
+                file_id TEXT, path TEXT, language TEXT, content_hash TEXT,
+                content_bytes INTEGER, line_count INTEGER, indexed_at TEXT, status TEXT
+            );
+            CREATE TABLE symbols (
+                symbol_id TEXT, file_id TEXT, path TEXT, language TEXT, name TEXT, kind TEXT,
+                signature TEXT, doc_comment TEXT, visibility TEXT, parent_symbol_id TEXT,
+                start_line INTEGER, start_column INTEGER, end_line INTEGER, end_column INTEGER,
+                start_byte INTEGER, end_byte INTEGER, body_start_line INTEGER,
+                body_start_column INTEGER, body_end_line INTEGER, body_end_column INTEGER,
+                body_start_byte INTEGER, body_end_byte INTEGER, body_hash TEXT,
+                semantic_group TEXT, is_test INTEGER, test_container INTEGER
+            );
+            INSERT INTO files VALUES ('f1', 'src/helpers.py', 'python', 'h', 0, 9, 'now', 'indexed');
+            INSERT INTO files VALUES ('f2', 'src/signals.py', 'python', 'h', 0, 3, 'now', 'indexed');
+            INSERT INTO files VALUES ('f3', 'src/py.typed', 'unknown', 'h', 0, 0, 'now', 'unsupported');
+            INSERT INTO symbols VALUES (
+                'a', 'f1', 'src/helpers.py', 'python', 'stream', 'function', 'def stream()', NULL,
+                NULL, NULL, 1, 0, 2, 0, 0, 10, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0
+            );
+            INSERT INTO symbols VALUES (
+                'b', 'f1', 'src/helpers.py', 'python', 'stream', 'function', 'def stream(x)', NULL,
+                NULL, NULL, 4, 0, 5, 0, 11, 20, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0
+            );
+            INSERT INTO symbols VALUES (
+                'c', 'f2', 'src/signals.py', 'python', 'started', 'variable', 'started = Signal()',
+                NULL, NULL, NULL, 1, 0, 1, 0, 0, 18, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0
+            );",
+        )
+        .unwrap();
+
+        let out = codebase_outline_op(&workspace, &conn, 2, Some("src")).unwrap();
+
+        assert!(out.contains("helpers.py [function stream]\n"), "{out}");
+        assert!(
+            out.contains("(1 file without functions or classes: signals.py)"),
+            "{out}"
+        );
+        assert!(!out.contains("py.typed"), "{out}");
     }
 
     #[test]

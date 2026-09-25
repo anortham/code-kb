@@ -14,8 +14,8 @@ use code_kb_core::{
     fts_search_symbols_scoped, get_context_slice_selected_op, get_symbol_body_selected_op,
     get_telemetry_summary, installed_extractor_version, is_project_root,
     list_structural_fact_categories_scoped, open_global_telemetry_db, open_read_only,
-    reconcile_offline_edits, record_tool_call, record_tool_call_conn, resolve_symbol_op,
-    search_symbols_scoped, start_watcher,
+    qualify_members, reconcile_offline_edits, record_tool_call, record_tool_call_conn,
+    resolve_symbol_op, search_symbols_scoped, start_watcher,
 };
 
 use super::protocol::{CallToolResult, JsonRpcRequest, JsonRpcResponse, Tool};
@@ -1062,7 +1062,17 @@ impl McpServer {
                 let output = if limit == 0 {
                     ZERO_LIMIT_NOTICE.to_string()
                 } else {
-                    format_find_symbol_results(query, &exact_matches, &fts_matches, limit)
+                    let mut exact_shown = exact_matches.clone();
+                    let mut fts_shown = fts_matches.clone();
+                    if let Err(e) = qualify_members(
+                        &conn,
+                        exact_shown
+                            .iter_mut()
+                            .chain(fts_shown.iter_mut().map(|hit| &mut hit.symbol)),
+                    ) {
+                        return CallToolResult::error(e.to_string());
+                    }
+                    format_find_symbol_results(query, &exact_shown, &fts_shown, limit)
                 };
                 CallToolResult::text(output)
                     .with_logical_result_count(exact_matches.len() + fts_matches.len())
@@ -1120,7 +1130,13 @@ impl McpServer {
                 let output = if limit == 0 {
                     ZERO_LIMIT_NOTICE.to_string()
                 } else {
-                    format_search_results(query, &matches, limit)
+                    let mut shown = matches.clone();
+                    if let Err(e) =
+                        qualify_members(&conn, shown.iter_mut().map(|hit| &mut hit.symbol))
+                    {
+                        return CallToolResult::error(e.to_string());
+                    }
+                    format_search_results(query, &shown, limit)
                 };
                 CallToolResult::text(output)
                     .with_logical_result_count(matches.len())
