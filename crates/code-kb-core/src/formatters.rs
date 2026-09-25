@@ -66,8 +66,8 @@ fn is_container_kind(kind: &str) -> bool {
 
 /// The kind word to show for a symbol. julie reuses code kinds for markup and data files: an
 /// HTML element and a SQL table are `class` rows, a Markdown heading a `module`, a Markdown
-/// link an `import`.
-fn display_kind(sym: &Symbol) -> &str {
+/// link an `import`. `queries::KIND_FILTER` mirrors it in SQL.
+pub(crate) fn display_kind(sym: &Symbol) -> &str {
     match (sym.language.as_str(), sym.kind.as_str()) {
         ("html", "class") => "element",
         ("sql", "class") => "table",
@@ -851,7 +851,7 @@ fn other_names_line(query: &str, others: &[&Symbol]) -> String {
         n => format!(", +{n} more"),
     };
     format!(
-        "- {} other {} `{query}`: {}{more} (lookup_symbol with the full name shows one)\n",
+        "- {} other {} `{query}`, ignoring case: {}{more} (lookup_symbol with one of these names lists its rows)\n",
         others.len(),
         if others.len() == 1 {
             "row starts with or contains"
@@ -2153,7 +2153,7 @@ mod tests {
 
         assert!(
             out.contains(
-                "- 1 other row starts with or contains `read`: `readline` (import) (lookup_symbol"
+                "- 1 other row starts with or contains `read`, ignoring case: `readline` (import) (lookup_symbol"
             ),
             "{out}"
         );

@@ -630,7 +630,7 @@ pub fn inherited_writes_among<'a>(
 }
 
 fn search_symbols_sql(variables_wanted: bool, include_tests: bool, limit: usize) -> String {
-    let mut sql = String::from(
+    let mut sql = format!(
         "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,
                 visibility, parent_symbol_id, start_line, start_column, end_line, end_column,
                 start_byte, end_byte, body_start_line, body_start_column, body_end_line,
@@ -638,7 +638,7 @@ fn search_symbols_sql(variables_wanted: bool, include_tests: bool, limit: usize)
                 is_test, test_container
          FROM symbols s
          WHERE (name = :query OR name LIKE :pattern ESCAPE '\\')
-           AND (:kind IS NULL OR kind = :kind)
+           AND {KIND_FILTER}
            AND (:path IS NULL OR replace(path, '\\', '/') = :path COLLATE NOCASE OR replace(path, '\\', '/') LIKE :path_like || '/%' ESCAPE '\\' OR replace(path, '\\', '/') LIKE '%/' || :path_like ESCAPE '\\')",
     );
     sql.push_str(&document_link_exclusion());
@@ -692,7 +692,9 @@ pub fn search_symbols_scoped(
     if (query.contains("::") || query.contains('.'))
         && let Some(sym) = get_symbol_by_name(conn, query, path_filter)?
     {
-        let kind_matches = norm_kind.as_deref().is_none_or(|kind| sym.kind == kind);
+        let kind_matches = norm_kind
+            .as_deref()
+            .is_none_or(|kind| sym.kind == kind || crate::formatters::display_kind(&sym) == kind);
         return Ok(if kind_matches { vec![sym] } else { Vec::new() });
     }
 
@@ -755,6 +757,21 @@ pub fn search_symbols_scoped(
     }
 }
 
+const MEMBER_LIST_OWNER_KINDS: &str = "'class', 'struct', 'interface', 'trait', 'enum', 'record', 'object', \
+                           'protocol', 'union', 'module', 'namespace'";
+
+/// SQL predicate for the `:kind` filter over `symbols s`: the stored kind or the kind that
+/// `formatters::display_kind` shows, so a kind copied from the output always filters.
+const KIND_FILTER: &str = "(:kind IS NULL OR s.kind = :kind OR :kind = CASE
+      WHEN s.language = 'html' AND s.kind = 'class' THEN 'element'
+      WHEN s.language = 'sql' AND s.kind = 'class' THEN 'table'
+      WHEN s.language = 'markdown' AND s.kind = 'module' THEN 'section'
+      WHEN s.language = 'markdown' AND s.kind = 'import' THEN 'link'
+      WHEN s.kind = 'property' AND s.language <> 'fsharp'
+           AND (s.signature GLOB 'self.*' OR s.signature GLOB 'this.*' OR s.signature GLOB 'cls.*')
+        THEN 'attribute'
+    END)";
+
 /// The members of the classes, modules, and namespaces named `owner`, in source order: what
 /// `lookup_symbol("App.")` lists.
 fn owner_members(
@@ -780,6 +797,7 @@ fn owner_members(
             test_path_predicate("s")
         )
     };
+    let docs = documentation_language_list();
     let sql = format!(
         "SELECT s.symbol_id, s.file_id, s.path, s.language, s.name, s.kind, s.signature, s.doc_comment,
                 s.visibility, s.parent_symbol_id, s.start_line, s.start_column, s.end_line, s.end_column,
@@ -788,15 +806,16 @@ fn owner_members(
                 s.is_test, s.test_container
          FROM symbols o JOIN symbols s ON s.parent_symbol_id = o.symbol_id
          WHERE o.name = :owner
-           AND o.kind IN ('class', 'struct', 'interface', 'trait', 'enum', 'record', 'object',
-                          'protocol', 'union', 'module', 'namespace')
+           AND o.kind IN ({MEMBER_LIST_OWNER_KINDS})
+           AND (o.language NOT IN ({docs})
+                OR NOT EXISTS (SELECT 1 FROM symbols c WHERE c.name = :owner
+                                 AND c.kind IN ({MEMBER_LIST_OWNER_KINDS}) AND c.language NOT IN ({docs})))
            AND s.kind NOT IN ('parameter', 'import')
-           AND (:kind IS NULL OR s.kind = :kind)
+           AND {KIND_FILTER}
            AND (:path IS NULL OR replace(s.path, '\\', '/') = :path COLLATE NOCASE
                 OR replace(s.path, '\\', '/') LIKE :path_like || '/%' ESCAPE '\\'
                 OR replace(s.path, '\\', '/') LIKE '%/' || :path_like ESCAPE '\\'){tests}
-         ORDER BY s.path, s.start_line
-         LIMIT {limit}"
+         ORDER BY s.path, s.start_line"
     );
     let rows = conn
         .prepare(&sql)?
@@ -814,6 +833,7 @@ fn owner_members(
     Ok(rows
         .into_iter()
         .filter(|s| !inherited.contains(&s.symbol_id))
+        .take(limit)
         .collect())
 }
 
@@ -1116,8 +1136,8 @@ fn document_link_exclusion() -> String {
 }
 
 fn candidate_filters(searching_variables: bool, include_tests: bool) -> String {
-    let mut sql = String::from(
-        " AND (:kind IS NULL OR s.kind = :kind)
+    let mut sql = format!(
+        " AND {KIND_FILTER}
           AND (:path IS NULL OR replace(s.path, '\\', '/') = :path COLLATE NOCASE OR replace(s.path, '\\', '/') LIKE :path_like || '/%' ESCAPE '\\' OR replace(s.path, '\\', '/') LIKE '%/' || :path_like ESCAPE '\\')",
     );
     sql.push_str(&document_link_exclusion());
@@ -1474,7 +1494,7 @@ pub fn fts_search_symbols_explained(
 
     let name_search = |local_clause: &str| -> Result<Vec<SymbolSearchResult>, QueryError> {
         let pattern = format!("%{}%", escape_like(query));
-        let mut sql = String::from(
+        let mut sql = format!(
             "SELECT symbol_id, file_id, path, language, name, kind, signature, doc_comment,
                     visibility, parent_symbol_id, start_line, start_column, end_line, end_column,
                     start_byte, end_byte, body_start_line, body_start_column, body_end_line,
@@ -1482,7 +1502,7 @@ pub fn fts_search_symbols_explained(
                     is_test, test_container
               FROM symbols s
               WHERE (name = :query OR name LIKE :pattern ESCAPE '\\')
-                AND (:kind IS NULL OR kind = :kind)
+                AND {KIND_FILTER}
                 AND (:path IS NULL OR replace(path, '\\', '/') = :path COLLATE NOCASE OR replace(path, '\\', '/') LIKE :path_like || '/%' ESCAPE '\\' OR replace(path, '\\', '/') LIKE '%/' || :path_like ESCAPE '\\')",
         );
         sql.push_str(&document_link_exclusion());
@@ -5517,7 +5537,7 @@ fn implicit_entry_tests(
                     .collect::<Vec<_>>()
                     .join(", ");
                 let reason = format!(
-                    "possible: {}, and a test client calls its `__call__`, which reaches the target; shares {shared}",
+                    "possible: {}, and a test client calls its `__call__`, which can reach the target; shares {shared}",
                     test.reason
                 );
                 (score, TestTarget { reason, ..test })

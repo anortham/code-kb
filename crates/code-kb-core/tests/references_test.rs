@@ -769,14 +769,14 @@ fn blast_radius_reaches_tests_that_build_a_class_whose_call_method_reaches_the_t
     let reason = &result.likely_tests[position("test_exception_handling_renders")].reason;
     assert!(
         reason.starts_with(
-            "possible: builds `App`, and a test client calls its `__call__`, which reaches the target; shares"
+            "possible: builds `App`, and a test client calls its `__call__`, which can reach the target; shares"
         ),
         "{reason}"
     );
     let reason = &result.likely_tests[position("test_user_error_is_handled")].reason;
     assert!(
         reason.starts_with(
-            "possible: builds `App` through fixture `app`, and a test client calls its `__call__`, which reaches the target; shares"
+            "possible: builds `App` through fixture `app`, and a test client calls its `__call__`, which can reach the target; shares"
         ),
         "{reason}"
     );
@@ -1322,4 +1322,38 @@ fn a_lookup_ending_in_a_dot_lists_the_members_of_that_class_in_source_order() {
         .map(|s| (s.name.as_str(), s.start_line))
         .collect();
     assert_eq!(names, [("run", 2), ("config", 5)]);
+}
+
+#[test]
+fn a_member_lookup_skips_a_markdown_heading_with_the_class_name() {
+    let (_repo, db_path) = scanned_repo(&[
+        ("README.md", "# App\n\n## Install\n\nText.\n"),
+        (
+            "src/app.py",
+            "class App:\n    def run(self):\n        pass\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let members = search_symbols_scoped(&conn, "App.", None, None, false, 20).unwrap();
+
+    let names: Vec<_> = members.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names, ["run"]);
+}
+
+#[test]
+fn the_kind_filter_accepts_the_attribute_kind_that_lookup_shows() {
+    let (_repo, db_path) = scanned_repo(&[(
+        "src/app.py",
+        "class App:\n    def __init__(self):\n        self.cli = 1\n\n    def run(self):\n        pass\n",
+    )]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let members = search_symbols_scoped(&conn, "App.", Some("attribute"), None, false, 20).unwrap();
+    let exact =
+        search_symbols_scoped(&conn, "App.cli", Some("attribute"), None, false, 20).unwrap();
+
+    let names: Vec<_> = members.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names, ["cli"]);
+    assert_eq!(exact.len(), 1);
 }
