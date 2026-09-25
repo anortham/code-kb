@@ -1,0 +1,157 @@
+{
+  "version": 1,
+  "corpus": {
+    "repo": "code-kb",
+    "commit": "8e1b388639b45c5d423cc18db85fe6d11f5d8d8e",
+    "note": "The corpus is pinned to one commit and extracted with `git archive`. The source text must not change when the code-kb binary changes, or a score move could come from the corpus instead of the tool."
+  },
+  "tasks": [
+    {
+      "id": "T01-orient",
+      "question": "I am new to this repository. What are the top-level areas?",
+      "calls": [
+        {
+          "tool": "codebase_outline",
+          "arguments": { "depth": 2 },
+          "cli": "code-kb --root <corpus> outline --depth 2"
+        }
+      ]
+    },
+    {
+      "id": "T02-file-shape",
+      "question": "What does telemetry.rs define? Give me the signatures, not the bodies.",
+      "calls": [
+        {
+          "tool": "file_skeleton",
+          "arguments": { "file_path": "crates/code-kb-core/src/telemetry.rs" },
+          "cli": "code-kb --root <corpus> skeleton crates/code-kb-core/src/telemetry.rs"
+        }
+      ]
+    },
+    {
+      "id": "T03-find-and-read",
+      "question": "Which directory holds the telemetry database, and what is the rule that picks it?",
+      "calls": [
+        {
+          "tool": "lookup_symbol",
+          "arguments": { "query": "resolve_telemetry_dir" },
+          "cli": "code-kb --root <corpus> lookup resolve_telemetry_dir"
+        },
+        {
+          "tool": "get_symbol_body",
+          "arguments": { "symbol_name": "resolve_telemetry_dir" },
+          "cli": "code-kb --root <corpus> body resolve_telemetry_dir"
+        }
+      ]
+    },
+    {
+      "id": "T04-concept-to-context",
+      "question": "Which code decides that a file is a test file? Show me enough to change it safely.",
+      "calls": [
+        {
+          "tool": "search_symbols",
+          "arguments": { "query": "test path rule" },
+          "cli": "code-kb --root <corpus> search \"test path rule\""
+        },
+        {
+          "tool": "get_symbol_context",
+          "arguments": { "symbol_name": "is_test_path" },
+          "cli": "code-kb --root <corpus> context is_test_path"
+        }
+      ]
+    },
+    {
+      "id": "T05-callers",
+      "question": "I want to change record_tool_call_conn. Who calls it?",
+      "calls": [
+        {
+          "tool": "find_references",
+          "arguments": { "symbol_name": "record_tool_call_conn", "direction": "callers" },
+          "cli": "code-kb --root <corpus> refs record_tool_call_conn --direction callers"
+        }
+      ]
+    },
+    {
+      "id": "T06-callees",
+      "question": "What does get_telemetry_summary call?",
+      "calls": [
+        {
+          "tool": "find_references",
+          "arguments": { "symbol_name": "get_telemetry_summary", "direction": "callees" },
+          "cli": "code-kb --root <corpus> refs get_telemetry_summary --direction callees"
+        }
+      ]
+    },
+    {
+      "id": "T07-impact-and-tests",
+      "question": "I plan to change telemetry.rs. What breaks downstream, and which tests should I run?",
+      "calls": [
+        {
+          "tool": "blast_radius",
+          "arguments": { "file": "crates/code-kb-core/src/telemetry.rs" },
+          "cli": "code-kb --root <corpus> blast-radius --file crates/code-kb-core/src/telemetry.rs"
+        }
+      ]
+    },
+    {
+      "id": "T08-structural-facts",
+      "question": "What SQL does this repository run?",
+      "calls": [
+        {
+          "tool": "find_structural_facts",
+          "arguments": { "category": "sql", "limit": 20 },
+          "cli": "code-kb --root <corpus> facts --category sql --limit 20"
+        }
+      ]
+    },
+    {
+      "id": "T09-substring-search",
+      "question": "Where does code-kb build the full-text search index, and what does that code do?",
+      "calls": [
+        {
+          "tool": "search_symbols",
+          "arguments": { "query": "fts index" },
+          "cli": "code-kb --root <corpus> search \"fts index\""
+        },
+        {
+          "tool": "get_symbol_body",
+          "arguments": { "symbol_name": "ensure_fts_index" },
+          "cli": "code-kb --root <corpus> body ensure_fts_index"
+        }
+      ]
+    },
+    {
+      "id": "T10-narrow-read",
+      "question": "Show me only the body of format_telemetry_summary.",
+      "calls": [
+        {
+          "tool": "get_symbol_body",
+          "arguments": { "symbol_name": "format_telemetry_summary" },
+          "cli": "code-kb --root <corpus> body format_telemetry_summary"
+        }
+      ]
+    },
+    {
+      "id": "T11-waste-wrong-symbol",
+      "question": "WASTE TASK. The agent guesses a symbol name that does not exist (get_telemetry_stats). This task measures the cost of a miss, not a win.",
+      "calls": [
+        {
+          "tool": "lookup_symbol",
+          "arguments": { "query": "get_telemetry_stats" },
+          "cli": "code-kb --root <corpus> lookup get_telemetry_stats"
+        }
+      ]
+    },
+    {
+      "id": "T12-waste-wrong-file",
+      "question": "WASTE TASK. The agent guesses a file path that does not exist (crates/code-kb-core/src/config.rs). This task measures the cost of a miss, not a win.",
+      "calls": [
+        {
+          "tool": "file_skeleton",
+          "arguments": { "file_path": "crates/code-kb-core/src/config.rs" },
+          "cli": "code-kb --root <corpus> skeleton crates/code-kb-core/src/config.rs"
+        }
+      ]
+    }
+  ]
+}
