@@ -73,12 +73,13 @@ fn display_kind(sym: &Symbol) -> &str {
         ("sql", "class") => "table",
         ("markdown", "module") => "section",
         ("markdown", "import") => "link",
-        (_, "property")
-            if sym.signature.as_deref().is_some_and(|sig| {
-                ["self.", "this.", "cls."]
-                    .iter()
-                    .any(|p| sig.starts_with(p))
-            }) =>
+        (language, "property")
+            if language != "fsharp"
+                && sym.signature.as_deref().is_some_and(|sig| {
+                    ["self.", "this.", "cls."]
+                        .iter()
+                        .any(|p| sig.starts_with(p))
+                }) =>
         {
             "attribute"
         }
@@ -2054,6 +2055,12 @@ mod tests {
             ..sample_symbol("extensions")
         };
         assert_eq!(display_kind(&attribute), "attribute");
+        let fsharp_member = Symbol {
+            language: "fsharp".into(),
+            signature: Some("this.Total = decimal this.Qty * this.Price".into()),
+            ..attribute
+        };
+        assert_eq!(display_kind(&fsharp_member), "property");
         assert_eq!(display_kind(&row("python", "class")), "class");
     }
 
