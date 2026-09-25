@@ -43,6 +43,8 @@ function runReleaseGate(overrides = {}) {
         GITHUB_SHA: overrides.GITHUB_SHA || 'annotated-tag-object',
         MOCK_COMMIT: overrides.MOCK_COMMIT || 'peeled-commit',
         MOCK_CI_STATUS: overrides.MOCK_CI_STATUS || 'completed/success',
+        CI_WAIT_SECONDS: '0',
+        CI_POLL_SECONDS: '0',
         MOCK_CLAUDE_VERSION: overrides.MOCK_CLAUDE_VERSION || version,
         MOCK_CODEX_VERSION: overrides.MOCK_CODEX_VERSION || version,
         MOCK_MARKETPLACE_VERSION: overrides.MOCK_MARKETPLACE_VERSION || version,

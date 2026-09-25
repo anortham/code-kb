@@ -48,11 +48,20 @@ jobs:
             exit 1
           fi
           commit="$(git rev-parse "${GITHUB_SHA}^{commit}")"
-          ci_status="$(gh run list --workflow=ci.yml --commit "$commit" --limit 1 --json status,conclusion --jq '.[0] | "\(.status)/\(.conclusion)"')"
-          if [[ "$ci_status" != "completed/success" ]]; then
-            echo "CI for $commit is '$ci_status', not completed/success" >&2
-            exit 1
-          fi
+          # The version bump and its tag are pushed together, so CI on the commit may still run.
+          deadline=$(( SECONDS + ${CI_WAIT_SECONDS:-3600} ))
+          while :; do
+            ci_status="$(gh run list --workflow=ci.yml --commit "$commit" --limit 1 --json status,conclusion --jq '.[0] | "\(.status)/\(.conclusion)"')"
+            if [[ "$ci_status" == "completed/success" ]]; then
+              break
+            fi
+            if [[ "$ci_status" == completed/* || SECONDS -ge deadline ]]; then
+              echo "CI for $commit is '$ci_status', not completed/success" >&2
+              exit 1
+            fi
+            echo "CI for $commit is '$ci_status'; waiting"
+            sleep "${CI_POLL_SECONDS:-30}"
+          done
 
   build:
     name: Build ${{ matrix.target }}

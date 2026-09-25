@@ -63,8 +63,8 @@ Run the automated pre-flight script, or execute each check manually:
 6. **Real-Project Corpus Check (preflight step 9 requires it):**
    Compare this build with the previous release on the real projects in
    `scripts/release-corpus.txt` (Rust, Swift, Go, JS, TS, Python, Java, Kotlin, C#, Razor, C, C++,
-   Ruby, and the julie fixtures for the other languages). Run it after the version-bump commit,
-   because the report must be newer than `HEAD`.
+   Ruby, and the julie fixtures for the other languages). Run it on the local version-bump commit
+   (section 3), because the report must be newer than `HEAD` and name the new version.
    ```bash
    PREV=2.1.0   # the previous release
    mkdir -p ~/.code-kb/search-eval/bin/v$PREV && cd ~/.code-kb/search-eval/bin/v$PREV
@@ -81,29 +81,36 @@ Run the automated pre-flight script, or execute each check manually:
    - Check each gained and lost call-edge sample against its source line. A gained edge that is not
      a real call is a wrong caller in `find_references` and `blast_radius`. Fix it before release.
    - Open the changed tool outputs. Each change must come from a change in this release.
-7. **Harness Dogfood Round (preflight step 10 requires it):**
+7. **Harness Dogfood Round (preflight step 10 requires it): one round per release.**
    The corpus check finds only output that changed since the previous release, so a defect that
-   both releases share passes it. The dogfood round is the check that finds wrong answers.
-   Run the rounds before the version bump.
+   both releases share passes it. The dogfood round finds those wrong answers. Run exactly one
+   round, on the release candidate, before the version bump.
    ```bash
    scripts/release-dogfood.sh   # DOGFOOD_PROJECT defaults to ~/source/flask
    ```
    The script builds the local code and runs one Claude Code and one Codex session on detached
    worktrees of the project. The sessions use every tool and check each answer against the source.
    `code-kb` on `PATH` must be `target/release/code-kb`. The script writes
-   `target/release-dogfood/report.md`. Then:
-   - Check each defect from both answers against the source. List it in the report as `[open]`,
-     `[not a defect]` with the reason, or `[deferred: "<the user's words>"]`. Only the user defers
-     a defect.
-   - Fix every open defect, commit the fix, and run a new round. A round that finds a defect is
-     not a pass.
-   - Set `## Result: PASS` only when the round finds no open defect.
+   `target/release-dogfood/report.md`. Check each reported defect against the source, then list it
+   in the report as one of:
+   - `[fixed <commit>]`: the tool gave a wrong answer (a false statement, a wrong location, a
+     wrong count, a crash). Fix it before the tag, add a regression test, and rerun the exact call
+     from the report to confirm the new answer. A fix does not need a new round.
+   - `[gap]`: the answer is true but incomplete, a heuristic misses or over-includes, or the
+     session asks for a new feature. A gap does not block the release. List the gaps in the
+     release notes, and tell the user after the release.
+   - `[not a defect]` with the reason.
+   - `[deferred: "<the user's own words>"]`: a wrong answer the user chose to ship.
 
-   Preflight fails when code under `crates/` changed after the round's commit.
+   Set `## Result: PASS` when no line is `[open]`. Do not run a second round for the same
+   release: the sessions always find something new, so a second round only delays the release.
+   Preflight fails when the report is not `PASS`, lists an `[open]` defect, or tested a commit that
+   is not an ancestor of `HEAD`. Commits after the round are allowed.
 8. **New julie-extract version:** Do not tag it in `julie-extractors` first. Copy the local
    release build to `.tools/julie-extract`, set the version in `scripts/julie-pins.json` and
-   `PINNED_JULIE_VERSION`, and run the corpus check and the dogfood rounds on that code-kb build.
-   Tag julie only when both pass. Then restore the published binary with its checksums.
+   `PINNED_JULIE_VERSION`, and run the dogfood round on that code-kb build. Tag and publish julie
+   when the round has no `[open]` line. Then restore the published binary, set its checksums in
+   `scripts/julie-pins.json`, commit, and run the corpus check (step 6) on the version-bump commit.
 
 ---
 
@@ -127,8 +134,8 @@ When bumping to version `X.Y.Z` (e.g. `0.5.0`):
   "version": "X.Y.Z",
   ```
   The plugin launcher (`bin/code-kb-launcher.cjs`) downloads the release archive for this
-  version on first run. Push the tag and let the release finish soon after the bump lands on
-  `main`, because a plugin installed from `main` in between cannot download its binaries.
+  version on first run, so the bump must never reach `main` without its tag. Section 3.5 pushes
+  them together. A plugin that cannot download its version runs the newest cached version.
   A plugin installed from a source checkout with a `target/release/code-kb` build runs that
   build instead and never downloads, and so does any plugin on a machine with a binary at
   `~/.code-kb/bin/code-kb`.
@@ -152,43 +159,42 @@ Draft comprehensive markdown release notes at `docs/release-notes/vX.Y.Z.md`:
 - **Assets & Checksums:** Table of artifact archives and their SHA256 hashes.
 
 ### 4. Commit Version Bump & Release Notes
-Commit the bump only after the dogfood round passes. Keep it local until the corpus check passes,
-then push it and tag as soon as CI is green. Until the release exists, a plugin installed from
-`main` cannot download its binaries.
+Before the bump, push every code commit to `main` and wait for green CI on it:
+```bash
+git push origin main
+gh run watch --exit-status   # the CI run for that commit
+```
+Then commit the bump locally. It changes only the version files and the release notes below.
+Keep it local.
 ```bash
 git add Cargo.toml Cargo.lock crates/code-kb-cli/Cargo.toml .claude-plugin/plugin.json .codex-plugin/plugin.json .claude-plugin/marketplace.json plugin.json .github/workflows/release-binaries.yml docs/release-notes/vX.Y.Z.md
 git commit -m "chore: release vX.Y.Z"
 ```
 
-### 5. Push and Wait for Green CI
-The tag must point at a commit that GitHub CI has already passed on all three
-operating systems. Local runs do not replace this: the Windows job has caught
-failures the Linux suite cannot see.
-
+### 5. Preflight, Then Push the Bump and the Tag Together
+Run the corpus check (section 2, step 6) on the bump commit, then the preflight. Step 8 passes
+when the commit before the bump has green CI on `origin/main` and the bump changes only version
+files.
 ```bash
-git push origin main
-gh run watch --exit-status   # the CI run for the release commit
-./scripts/release-preflight.sh   # step 8 fails unless CI passed on HEAD; step 9 fails without a fresh corpus PASS
+./scripts/release-preflight.sh
+git tag -a vX.Y.Z -m "Release vX.Y.Z"
+git push --atomic origin main vX.Y.Z
 ```
-
-Do not tag, and do not publish crates, while CI is red or still running.
+`--atomic` pushes the bump and the tag together or not at all, so `main` never names a version
+that has no release in progress. The release workflow waits for CI on the tagged commit before
+it builds. Watch it to the end (section 5 below). If it fails, fix it on `main` at once:
+plugins installed from `main` meanwhile run their cached version or cannot start.
 
 ---
 
 ## 4. Triggering the GitHub Release
 
-Pushing a signed or annotated git tag `vX.Y.Z` automatically triggers `.github/workflows/release-binaries.yml`:
-
-```bash
-# 1. Create annotated tag (only after step 3.5: CI is green on this commit)
-git tag -a vX.Y.Z -m "Release vX.Y.Z"
-
-# 2. Push the tag to GitHub
-git push origin vX.Y.Z
-```
+The atomic push in section 3.5 pushes the tag `vX.Y.Z`, which triggers
+`.github/workflows/release-binaries.yml`.
 
 ### What GitHub Actions Does:
-1. Confirms the tag or dispatch version matches Cargo and every plugin manifest, and CI passed for the exact commit.
+1. Confirms the tag or dispatch version matches Cargo and every plugin manifest, then waits up to
+   60 minutes for CI to pass on the exact commit. It fails when CI fails or does not finish.
 2. Matrix builds binaries on `ubuntu-latest`, `ubuntu-24.04-arm`, `macos-latest`, `macos-15-intel`, `windows-latest`, and `windows-11-arm`.
 3. Downloads and verifies the pinned `julie-extract` binary matching `scripts/julie-pins.json`.
 4. Packages `code-kb`, `julie-extract`, `README.md`, `LICENSE-MIT`, and `LICENSE-APACHE`.

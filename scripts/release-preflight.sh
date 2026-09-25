@@ -120,28 +120,43 @@ else
   echo "win-test CLI not found on PATH (skipping local Windows test)."
 fi
 
-# 8. GitHub CI must have passed on the exact commit that will be tagged
-echo -n "[8/10] Checking GitHub CI for HEAD... "
+# 8. GitHub CI must have passed on the code being released. The version bump stays local until
+# `git push --atomic origin main vX.Y.Z`, so CI must pass on the commit before it, and the bump
+# may change only version files. A HEAD already on origin/main needs green CI itself.
+echo -n "[8/10] Checking GitHub CI... "
 HEAD_SHA=$(git rev-parse HEAD)
 if [[ -n "$(git status --porcelain)" ]]; then
   echo "FAIL"
-  echo "error: working tree is dirty; commit and push before tagging." >&2
+  echo "error: working tree is dirty; commit before tagging." >&2
   exit 1
 fi
-if ! git merge-base --is-ancestor "${HEAD_SHA}" "$(git rev-parse origin/main)" 2>/dev/null; then
-  echo "FAIL"
-  echo "error: HEAD ${HEAD_SHA} is not on origin/main; push it and let CI run first." >&2
-  exit 1
+VERSION_FILES='^(Cargo\.toml|Cargo\.lock|crates/code-kb-cli/Cargo\.toml|crates/code-kb-core/Cargo\.toml|\.claude-plugin/plugin\.json|\.claude-plugin/marketplace\.json|\.codex-plugin/plugin\.json|plugin\.json|\.github/workflows/release-binaries\.yml|docs/site/index\.html|docs/release-notes/.*)$'
+if git merge-base --is-ancestor "${HEAD_SHA}" "$(git rev-parse origin/main)" 2>/dev/null; then
+  CI_SHA="${HEAD_SHA}"
+else
+  CI_SHA=$(git rev-parse HEAD~1)
+  if ! git merge-base --is-ancestor "${CI_SHA}" "$(git rev-parse origin/main)" 2>/dev/null; then
+    echo "FAIL"
+    echo "error: ${CI_SHA:0:7}, the commit before the bump, is not on origin/main; push it and wait for CI." >&2
+    exit 1
+  fi
+  OTHER=$(git diff --name-only "${CI_SHA}" HEAD | grep -Ev "${VERSION_FILES}" || true)
+  if [[ -n "${OTHER}" ]]; then
+    echo "FAIL"
+    echo "error: HEAD is not on origin/main and changes more than version files:" >&2
+    echo "${OTHER}" | sed 's/^/       /' >&2
+    exit 1
+  fi
 fi
-CI_STATUS=$(gh run list --workflow=ci.yml --commit "${HEAD_SHA}" --limit 1 --json status,conclusion \
+CI_STATUS=$(gh run list --workflow=ci.yml --commit "${CI_SHA}" --limit 1 --json status,conclusion \
   -q '.[0] | "\(.status)/\(.conclusion)"' 2>/dev/null || echo "unavailable")
 if [[ "${CI_STATUS}" != "completed/success" ]]; then
   echo "FAIL"
-  echo "error: CI for ${HEAD_SHA} is '${CI_STATUS}', not 'completed/success'." >&2
+  echo "error: CI for ${CI_SHA} is '${CI_STATUS}', not 'completed/success'." >&2
   echo "       Wait for it (gh run watch) or fix it before tagging." >&2
   exit 1
 fi
-echo "OK (CI passed on ${HEAD_SHA:0:7})"
+echo "OK (CI passed on ${CI_SHA:0:7})"
 
 # 9. Real-project corpus check of this build against the previous release
 echo -n "[9/10] Checking the real-project corpus report... "
@@ -173,8 +188,6 @@ elif ! grep -q "julie-extract ${PIN_VER}$" "${DOGFOOD_REPORT}"; then
   DOGFOOD_ERROR="the round did not use julie-extract ${PIN_VER}"
 elif ! git merge-base --is-ancestor "${DOGFOOD_COMMIT}" HEAD 2>/dev/null; then
   DOGFOOD_ERROR="the round commit '${DOGFOOD_COMMIT}' is not an ancestor of HEAD"
-elif ! git diff --quiet "${DOGFOOD_COMMIT}" HEAD -- crates ':!crates/*/Cargo.toml'; then
-  DOGFOOD_ERROR="code changed after the round; run a new round"
 fi
 if [[ -n "${DOGFOOD_ERROR}" ]]; then
   echo "FAIL"
