@@ -149,8 +149,12 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   header's `property` and `event` rows come from the extractor's macro pre-pass and render like
   any other member; a skeleton `event` row whose signature does not spell `signal` or `event`
   carries `// event` before its line range. Rows from one caller to one name at the same path and
-  line merge into one row. A method call on a parameter or variable
-  named for a pytest fixture matches a method of the class that fixture builds, or of an ancestor.
+  line merge into one row. A method call on a local variable matches a method of the class
+  that the call assigned to it builds (`runner = app.test_cli_runner()`), or of an ancestor. A
+  call builds the class it names, or the class in its callee's return type. A method call on a
+  parameter or variable named for a pytest fixture in the test's file or in a `conftest.py` in its
+  folder or a folder above it matches the same way, through any call in that fixture. A `self`
+  call to a class attribute (`should_ignore_error: None = None`) is a callee of the caller.
   A `super` call matches a method of an ancestor, and a `self`, `this`, `cls`, or `super` call
   matches only the nearest class in the chain that defines the name. A bare call matches a class
   or function defined inside the caller. A member-access identifier never matches a function

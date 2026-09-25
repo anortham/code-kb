@@ -3003,25 +3003,61 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
     } else {
         String::new()
     };
-    // A pytest test gets its object from a fixture: `def test_run(app): app.run()`, where the
-    // fixture `app` builds `Flask(...)`. The receiver then names the class the fixture builds.
-    let fixture_receiver = if has_column(conn, "symbols", "test_lifecycle") {
-        format!(
-            "OR EXISTS (
-                        WITH RECURSIVE built(symbol_id, depth) AS (
-                            SELECT built_class.symbol_id, 0
+    // The receiver names a local variable or a pytest fixture that a call builds:
+    // `cli = app.test_cli_runner()`, or `def test_run(app)` with a fixture that returns
+    // `Flask(...)`. The call builds the class it names, or the class its callee declares as the
+    // return type, so the receiver names that class. A test sees the fixtures of its own file and
+    // of a `conftest.py` in its folder or a folder above it.
+    let fixture_calls = if has_column(conn, "symbols", "test_lifecycle") {
+        "UNION
+                            SELECT fixture_call.target_terminal_name
                             FROM symbols fixture
                             JOIN pending_relationships fixture_call ON fixture_call.from_symbol_id = fixture.symbol_id
-                            JOIN symbols built_class ON built_class.name = fixture_call.target_terminal_name
                             WHERE fixture.name = p.target_receiver
-                              AND fixture.test_lifecycle = 1
-                              AND built_class.kind = 'class'
-                              AND EXISTS (
-                                  SELECT 1 FROM symbols taken
-                                  WHERE taken.parent_symbol_id = p.from_symbol_id
-                                    AND taken.name = p.target_receiver
-                                    AND taken.kind IN ('parameter', 'variable')
-                              )
+                              AND fixture.kind IN ('function', 'method')
+                              AND +fixture.test_lifecycle = 1
+                              AND (fixture.path = p.path
+                                   OR fixture.path LIKE '%conftest.py'
+                                      AND substr(p.path, 1, length(fixture.path) - 11)
+                                          = substr(fixture.path, 1, length(fixture.path) - 11))"
+    } else {
+        ""
+    };
+    // The unary `+` keeps SQLite on the parent index: a name such as `conn` has thousands of rows.
+    let fixture_receiver = if has_column(conn, "symbols", "metadata_json") {
+        format!(
+            "OR CASE WHEN EXISTS (
+                        SELECT 1 FROM symbols taken
+                        WHERE taken.parent_symbol_id = p.from_symbol_id
+                          AND taken.name = p.target_receiver
+                          AND taken.kind IN ('parameter', 'variable')
+                    ) THEN EXISTS (
+                        WITH RECURSIVE builder_call(name) AS (
+                            SELECT assign_call.target_terminal_name
+                            FROM symbols assigned
+                            JOIN pending_relationships assign_call
+                              ON assign_call.from_symbol_id = p.from_symbol_id
+                             AND assign_call.start_line = assigned.start_line
+                             AND +assign_call.kind = 'calls'
+                            WHERE assigned.parent_symbol_id = p.from_symbol_id
+                              AND +assigned.name = p.target_receiver
+                              AND +assigned.kind = 'variable'
+                            {fixture_calls}
+                        ),
+                        built_name(name) AS (
+                            SELECT name FROM builder_call
+                            UNION
+                            SELECT json_extract(builder.metadata_json, '$.returnType')
+                            FROM builder_call
+                            JOIN symbols builder ON builder.name = builder_call.name
+                            WHERE builder.kind IN ('function', 'method')
+                              AND json_valid(builder.metadata_json)
+                        ),
+                        built(symbol_id, depth) AS (
+                            SELECT built_class.symbol_id, 0
+                            FROM built_name
+                            CROSS JOIN symbols built_class ON built_class.name = built_name.name
+                            WHERE built_class.kind = 'class'
                             UNION
                             SELECT r.to_symbol_id, built.depth + 1
                             FROM relationships r JOIN built ON r.from_symbol_id = built.symbol_id
@@ -3035,7 +3071,7 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                               AND c.kind IN ('class', 'interface', 'struct', 'trait', 'protocol')
                         )
                         SELECT 1 FROM built WHERE built.symbol_id = {target}.parent_symbol_id
-                    )"
+                    ) ELSE 0 END"
         )
     } else {
         String::new()
@@ -3071,7 +3107,8 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                                   AND c.kind IN ('class', 'interface', 'struct', 'trait', 'protocol')
                             )
                             SELECT 1 FROM base
-                            WHERE base.symbol_id = {target}.parent_symbol_id AND base.depth > 0
+                            WHERE base.symbol_id = {target}.parent_symbol_id
+                              AND (base.depth > 0 OR {target}.kind IN ('variable', 'field'))
                               AND NOT EXISTS (
                                   SELECT 1 FROM base closer
                                   JOIN symbols nearer ON nearer.parent_symbol_id = closer.symbol_id
@@ -3601,10 +3638,10 @@ fn find_references_internal(
                            SELECT 1 FROM symbols s_to
                            LEFT JOIN symbols s_to_parent ON s_to.parent_symbol_id = s_to_parent.symbol_id
                            WHERE s_to.name = p.target_terminal_name
-                             AND s_to.kind NOT IN ('import', 'variable', 'parameter', 'field', 'property', 'module', 'namespace')
+                             AND {kind}
                              AND {pred}
                        )
-                     LIMIT ?2", pred = pending_target_predicate(conn, "s_to", "s_to_parent"))
+                     LIMIT ?2", kind = callee_target_kind("s_to_parent"), pred = pending_target_predicate(conn, "s_to", "s_to_parent"))
                 };
                 let mut pending_stmt = conn.prepare(&sql)?;
                 let rows = pending_stmt.query_map(
@@ -3698,6 +3735,16 @@ fn find_references_internal(
     Ok(merge_same_site(results))
 }
 
+/// A pending call reaches a definition, or a class attribute that holds a callable:
+/// `self.should_ignore_error(error)` with `should_ignore_error: None = None` in the class.
+fn callee_target_kind(parent: &str) -> String {
+    format!(
+        "(s_to.kind NOT IN ('import', 'variable', 'parameter', 'field', 'property', 'module', 'namespace')
+         OR p.kind = 'calls' AND s_to.kind IN ('variable', 'field')
+            AND {parent}.kind IN ('class', 'struct', 'interface', 'trait', 'record', 'object', 'protocol'))"
+    )
+}
+
 /// Names the definitions each callee site can reach: the resolved target, or the definitions a
 /// pending call matches. Several matches are listed, so a call to a common name stays clear.
 fn describe_callee_targets(
@@ -3717,8 +3764,9 @@ fn describe_callee_targets(
              LEFT JOIN symbols s_to_parent ON s_to.parent_symbol_id = s_to_parent.symbol_id
              WHERE p.from_symbol_id = ?1 AND p.start_line = ?2
                AND (p.target_terminal_name = ?3 OR p.target_display_name = ?3)
-               AND s_to.kind NOT IN ('import', 'variable', 'parameter', 'field', 'property', 'module', 'namespace')
+               AND {kind}
                AND {pred}",
+            kind = callee_target_kind("s_to_parent"),
             pred = pending_target_predicate(conn, "s_to", "s_to_parent")
         )
     } else {
@@ -3895,9 +3943,9 @@ pub fn find_callee_signatures(
                  JOIN symbols s_to ON s_to.name = p.target_terminal_name
                  LEFT JOIN symbols s_parent ON s_to.parent_symbol_id = s_parent.symbol_id
                  WHERE s_from.name = ?1 AND p.from_symbol_id = ?2
-                   AND s_to.kind NOT IN ('import', 'variable', 'parameter', 'field', 'property', 'module', 'namespace')
+                   AND {kind}
                     AND {pred}
-                 LIMIT ?3", pred = pending_target_predicate(conn, "s_to", "s_parent")),
+                 LIMIT ?3", kind = callee_target_kind("s_parent"), pred = pending_target_predicate(conn, "s_to", "s_parent")),
             )?;
 
                 let rows =
@@ -3961,10 +4009,10 @@ pub fn find_callee_signatures(
                        SELECT 1 FROM symbols s_to
                        LEFT JOIN symbols s_parent ON s_to.parent_symbol_id = s_parent.symbol_id
                        WHERE s_to.name = p.target_terminal_name
-                         AND s_to.kind NOT IN ('import', 'variable', 'parameter', 'field', 'property', 'module', 'namespace')
+                         AND {kind}
                          AND {pred}
                    )
-                 LIMIT ?3", pred = pending_target_predicate(conn, "s_to", "s_parent")),
+                 LIMIT ?3", kind = callee_target_kind("s_parent"), pred = pending_target_predicate(conn, "s_to", "s_parent")),
             )?;
 
             let rows =

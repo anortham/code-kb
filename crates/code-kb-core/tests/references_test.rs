@@ -880,6 +880,63 @@ fn a_receiver_named_for_a_fixture_calls_methods_of_the_class_the_fixture_builds(
 }
 
 #[test]
+fn a_receiver_built_by_a_call_calls_methods_of_the_class_that_call_returns() {
+    let (_repo, db_path) = scanned_repo(&[
+        (
+            "src/web/testing.py",
+            "class CliRunner:\n    def invoke(self, args):\n        return args\n",
+        ),
+        (
+            "src/web/other.py",
+            "class Shell:\n    def invoke(self, args):\n        return args\n",
+        ),
+        (
+            "src/web/app.py",
+            "from web.testing import CliRunner\n\n\nclass Flask:\n    def test_cli_runner(self) -> CliRunner:\n        return CliRunner()\n",
+        ),
+        (
+            "tests/conftest.py",
+            "import pytest\n\n\n@pytest.fixture\ndef runner(app):\n    return app.test_cli_runner()\n",
+        ),
+        (
+            "examples/tests/conftest.py",
+            "import pytest\nfrom web.other import Shell\n\n\n@pytest.fixture\ndef runner():\n    return Shell()\n",
+        ),
+        (
+            "tests/test_cli.py",
+            "from web.testing import CliRunner\n\n\ndef test_local(app):\n    cli = app.test_cli_runner()\n    cli.invoke(['hello'])\n\n\ndef test_fixture(runner):\n    runner.invoke(['hello'])\n\n\ndef test_built(app):\n    made = CliRunner()\n    made.invoke(['hello'])\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+    let callers = |path: &str| -> Vec<String> {
+        let refs =
+            find_references_scoped(&conn, "invoke", "callers", 20, false, Some(path)).unwrap();
+        caller_names(&refs)
+    };
+
+    assert_eq!(
+        callers("src/web/testing.py"),
+        vec!["test_built", "test_fixture", "test_local"]
+    );
+    assert!(callers("src/web/other.py").is_empty());
+}
+
+#[test]
+fn callees_include_a_self_call_to_a_class_attribute() {
+    let (_repo, db_path) = scanned_repo(&[(
+        "src/web/app.py",
+        "class App:\n    should_ignore: None = None\n\n    def run(self, error):\n        limit = 3\n        if self.should_ignore(error):\n            return limit\n        return self.step()\n\n    def step(self):\n        return 1\n",
+    )]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let refs = find_references_scoped(&conn, "run", "callees", 20, false, None).unwrap();
+
+    let mut callees: Vec<&str> = refs.iter().map(|r| r.to_symbol_name.as_str()).collect();
+    callees.sort();
+    assert_eq!(callees, vec!["should_ignore", "step"]);
+}
+
+#[test]
 fn import_sites_list_imports_whose_module_holds_the_definition() {
     let (_repo, db_path) = scanned_repo(&[
         ("src/pkg/app.py", "class App:\n    pass\n"),
