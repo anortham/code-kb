@@ -157,6 +157,8 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   parameter or variable named for a pytest fixture in the test's file or in a `conftest.py` in its
   folder or a folder above it matches the same way, through any call in that fixture. A `self`
   call to a class attribute (`should_ignore_error: None = None`) is a callee of the caller.
+  The callers of a constructor include the calls that build its class (`Flask()` calls
+  `Flask.__init__`), and the `blast_radius` walk follows the same step.
   A `super` call matches a method of an ancestor, and a `self`, `this`, `cls`, or `super` call
   matches only the nearest class in the chain that defines the name. A bare call matches a class
   or function defined inside the caller. A member-access identifier never matches a function

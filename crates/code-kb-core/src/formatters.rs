@@ -862,6 +862,26 @@ fn other_names_line(query: &str, others: &[&Symbol]) -> String {
     )
 }
 
+/// The first sentence of a doc comment's first paragraph, on one line. A paragraph with no
+/// sentence end is cut at 200 characters with `…`.
+fn doc_summary(doc: &str) -> Option<String> {
+    let paragraph = doc
+        .lines()
+        .map(str::trim)
+        .skip_while(|line| line.is_empty())
+        .take_while(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    let summary = match paragraph.find(". ") {
+        Some(end) => paragraph[..=end].to_string(),
+        None if paragraph.chars().count() > 200 => {
+            format!("{}…", paragraph.chars().take(200).collect::<String>())
+        }
+        None => paragraph,
+    };
+    (!summary.is_empty()).then_some(summary)
+}
+
 pub fn format_find_symbol_results(
     query: &str,
     exact_matches: &[Symbol],
@@ -869,10 +889,9 @@ pub fn format_find_symbol_results(
     limit: usize,
 ) -> String {
     if !exact_matches.is_empty() {
-        let named_exactly = exact_matches
-            .iter()
-            .filter(|s| s.name == query || s.name.ends_with(&format!(".{query}")))
-            .count();
+        let dotted = query.replace("::", ".");
+        let is_exact = |s: &Symbol| s.name == dotted || s.name.ends_with(&format!(".{dotted}"));
+        let named_exactly = exact_matches.iter().filter(|s| is_exact(s)).count();
         let exact_note = if named_exactly < exact_matches.len() {
             format!(" ({named_exactly} named exactly `{query}`; the rest start with or contain it)")
         } else {
@@ -892,7 +911,6 @@ pub fn format_find_symbol_results(
         let has_definition = exact_matches.iter().any(|s| s.kind != "import");
         let folds = |s: &Symbol| crate::queries::folds_into_import_line(query, s, has_definition);
         let imports: Vec<&Symbol> = exact_matches.iter().filter(|s| folds(s)).collect();
-        let is_exact = |s: &Symbol| s.name == query || s.name.ends_with(&format!(".{query}"));
         let (shown, others): (Vec<&Symbol>, Vec<&Symbol>) = exact_matches
             .iter()
             .filter(|s| !folds(s))
@@ -909,11 +927,8 @@ pub fn format_find_symbol_results(
                 s.symbol_id
             ));
             out.push_str(&format!("  Signature: {sig}\n"));
-            if let Some(doc) = &s.doc_comment {
-                let first = doc.lines().next().unwrap_or("").trim();
-                if !first.is_empty() {
-                    out.push_str(&format!("  Doc: {first}\n"));
-                }
+            if let Some(doc) = s.doc_comment.as_deref().and_then(doc_summary) {
+                out.push_str(&format!("  Doc: {doc}\n"));
             }
         }
         if !imports.is_empty() {
@@ -966,11 +981,8 @@ pub fn format_find_symbol_results(
             out.push_str(&format!("  Signature: {sig}\n"));
             if let Some(line) = r.snippet.as_deref().and_then(|m| match_line(m, sig)) {
                 out.push_str(&format!("  Match: {line}\n"));
-            } else if let Some(doc) = &s.doc_comment {
-                let first = doc.lines().next().unwrap_or("").trim();
-                if !first.is_empty() {
-                    out.push_str(&format!("  Doc: {first}\n"));
-                }
+            } else if let Some(doc) = s.doc_comment.as_deref().and_then(doc_summary) {
+                out.push_str(&format!("  Doc: {doc}\n"));
             }
         }
         if fts_matches.len() >= limit {
@@ -1226,11 +1238,8 @@ pub fn format_search_results(query: &str, results: &[SymbolSearchResult], limit:
         out.push_str(&format!("  Signature: {sig}\n"));
         if let Some(line) = r.snippet.as_deref().and_then(|m| match_line(m, sig)) {
             out.push_str(&format!("  Match: {line}\n"));
-        } else if let Some(doc) = &s.doc_comment {
-            let first_line = doc.lines().next().unwrap_or("").trim();
-            if !first_line.is_empty() {
-                out.push_str(&format!("  Doc: {first_line}\n"));
-            }
+        } else if let Some(doc) = s.doc_comment.as_deref().and_then(doc_summary) {
+            out.push_str(&format!("  Doc: {doc}\n"));
         }
         if let Some(explain) = &r.explain {
             out.push_str(&format!("  explain: {}\n", explain_line(r.score, explain)));
@@ -1518,6 +1527,23 @@ mod tests {
             "{output}"
         );
         assert!(output.contains("(pattern: flask.route.v1)"), "{output}");
+    }
+
+    #[test]
+    fn doc_summary_ends_at_the_first_sentence_of_the_first_paragraph() {
+        assert_eq!(
+            doc_summary(
+                "The actual WSGI application. This is not implemented in\n:meth:`__call__`."
+            )
+            .as_deref(),
+            Some("The actual WSGI application.")
+        );
+        assert_eq!(
+            doc_summary("\nCreate a runner\nfor tests\n\nMore.").as_deref(),
+            Some("Create a runner for tests")
+        );
+        assert_eq!(doc_summary("  \n"), None);
+        assert!(doc_summary(&"word ".repeat(60)).unwrap().ends_with('…'));
     }
 
     #[test]
@@ -2173,6 +2199,15 @@ mod tests {
 
         assert!(out.contains("└── flask/ (3 indexed files)"), "{out}");
         assert!(!out.contains("tests/ ("), "{out}");
+    }
+
+    #[test]
+    fn a_lookup_qualified_with_double_colons_names_the_member_exactly() {
+        let rows = vec![sample_symbol("Flask.handle_user_exception")];
+
+        let out = format_find_symbol_results("Flask::handle_user_exception", &rows, &[], 20);
+
+        assert!(!out.contains("named exactly"), "{out}");
     }
 
     #[test]

@@ -937,6 +937,44 @@ fn callees_include_a_self_call_to_a_class_attribute() {
 }
 
 #[test]
+fn the_callers_of_a_constructor_are_the_calls_that_build_its_class() {
+    let (_repo, db_path) = scanned_repo(&[
+        (
+            "src/web/cli.py",
+            "class Group:\n    def __init__(self):\n        self.name = 'cli'\n",
+        ),
+        (
+            "src/web/app.py",
+            "from web.cli import Group\n\n\nclass Flask:\n    def __init__(self):\n        self.cli = Group()\n\n\ndef annotate(app: Flask) -> Flask:\n    return app\n",
+        ),
+        (
+            "tests/test_app.py",
+            "from web.app import Flask\n\n\ndef test_builds():\n    assert Flask()\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let refs = find_references_scoped(
+        &conn,
+        "Flask.__init__",
+        "callers",
+        20,
+        false,
+        Some("src/web/app.py"),
+    )
+    .unwrap();
+    assert_eq!(caller_names(&refs), vec!["test_builds"], "{refs:?}");
+
+    let result = compute_blast_radius(&conn, &["Group.__init__"], &[], 3, 20).unwrap();
+    let tests: Vec<&str> = result
+        .likely_tests
+        .iter()
+        .map(|t| t.name.as_str())
+        .collect();
+    assert!(tests.contains(&"test_builds"), "{tests:?}");
+}
+
+#[test]
 fn import_sites_list_imports_whose_module_holds_the_definition() {
     let (_repo, db_path) = scanned_repo(&[
         ("src/pkg/app.py", "class App:\n    pass\n"),

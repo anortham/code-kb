@@ -44,6 +44,9 @@ trap cleanup EXIT
 run_session() {
   local harness="$1" wt
   wt="$(mktemp -d)/dogfood-${harness}"
+  case "${wt}" in
+    "${REPO_ROOT}"/*) echo "error: ${wt} is inside ${REPO_ROOT}; the harness would load its .mcp.json. Set TMPDIR outside the repo." >&2; exit 1 ;;
+  esac
   git -C "${PROJECT}" worktree add --detach --quiet "${wt}"
   WORKTREES+=("${wt}")
   # A worktree copies its parent's index, and a local julie build keeps the pinned version

@@ -3274,6 +3274,64 @@ fn find_references_internal(
     symbol_id: Option<&str>,
     include_external: bool,
 ) -> Result<Vec<ReferenceSite>, QueryError> {
+    let mut sites = find_direct_references(
+        conn,
+        symbol_name,
+        direction,
+        limit,
+        symbol_id,
+        include_external,
+    )?;
+    let class = match symbol_id.filter(|_| direction == "callers") {
+        Some(id) => constructed_class(conn, id)?,
+        None => None,
+    };
+    if let Some((class_id, class_name)) = class.filter(|_| sites.len() < limit) {
+        let mut builds = find_direct_references(
+            conn,
+            &class_name,
+            "callers",
+            limit - sites.len(),
+            Some(&class_id),
+            include_external,
+        )?;
+        builds.retain(|site| site.kind == "calls");
+        sites.extend(builds);
+        sites.sort_by(|a, b| {
+            a.path
+                .cmp(&b.path)
+                .then(a.start_line.cmp(&b.start_line))
+                .then(a.start_column.cmp(&b.start_column))
+        });
+    }
+    Ok(sites)
+}
+
+/// The class a constructor builds, so the calls that build the class count as its callers.
+fn constructed_class(
+    conn: &Connection,
+    symbol_id: &str,
+) -> Result<Option<(String, String)>, QueryError> {
+    Ok(conn
+        .query_row(
+            "SELECT class.symbol_id, class.name
+             FROM symbols ctor JOIN symbols class ON class.symbol_id = ctor.parent_symbol_id
+             WHERE ctor.symbol_id = ?1 AND ctor.kind = 'constructor'
+               AND class.kind IN ('class', 'struct', 'record')",
+            params![symbol_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?)
+}
+
+fn find_direct_references(
+    conn: &Connection,
+    symbol_name: &str,
+    direction: &str,
+    limit: usize,
+    symbol_id: Option<&str>,
+    include_external: bool,
+) -> Result<Vec<ReferenceSite>, QueryError> {
     let mut results = Vec::new();
 
     if direction == "callers" {
@@ -4884,6 +4942,36 @@ pub fn compute_blast_radius_scoped_with_ids(
              WHERE iw.depth < ?{max_depth_idx}
                AND s_target.kind NOT IN ({LOW_SIGNAL_KINDS_SQL})
                {ns_condition}"
+        ));
+    }
+
+    // A constructor runs wherever its class is built: `Flask()` reaches `Flask.__init__`.
+    if has_relationships {
+        recursive_branches.push(format!(
+            "SELECT r.from_symbol_id, iw.depth + 1
+             FROM impact_walk iw
+             CROSS JOIN symbols ctor ON ctor.symbol_id = iw.symbol_id
+             JOIN relationships r ON r.to_symbol_id = ctor.parent_symbol_id
+             WHERE iw.depth < ?{max_depth_idx}
+               AND ctor.kind = 'constructor'
+               AND +r.kind = 'calls'"
+        ));
+    }
+    if has_pending && has_pending_namespace_column(conn) {
+        recursive_branches.push(format!(
+            "SELECT p.from_symbol_id, iw.depth + 1
+             FROM impact_walk iw
+             CROSS JOIN symbols ctor ON ctor.symbol_id = iw.symbol_id
+             CROSS JOIN symbols s_target ON s_target.symbol_id = ctor.parent_symbol_id
+             JOIN pending_relationships p ON p.target_terminal_name = s_target.name
+             LEFT JOIN symbols s_target_parent ON s_target.parent_symbol_id = s_target_parent.symbol_id
+             LEFT JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
+             WHERE iw.depth < ?{max_depth_idx}
+               AND ctor.kind = 'constructor'
+               AND s_target.kind IN ('class', 'struct', 'record')
+               AND +p.kind = 'calls'
+               AND {pred}",
+            pred = pending_target_predicate(conn, "s_target", "s_target_parent")
         ));
     }
 
