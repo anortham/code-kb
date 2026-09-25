@@ -3196,7 +3196,7 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
 
 /// SQL predicate excluding rows julie marked as documentation, or the always-true `1 = 1` when
 /// the column is absent, because a bare `1` in ORDER BY means the first result column in SQLite.
-const DOCUMENTATION_LANGUAGES: &[&str] = &[
+pub(crate) const DOCUMENTATION_LANGUAGES: &[&str] = &[
     "markdown", "yaml", "toml", "json", "html", "css", "xml", "ini", "text",
 ];
 

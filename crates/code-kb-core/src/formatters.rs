@@ -331,11 +331,15 @@ fn render_symbol_skeleton(
     let indent = "    ".repeat(indent_level);
 
     if let Some(ref doc) = sym.doc_comment {
-        let lines: Vec<_> = doc
-            .lines()
-            .map(doc_line_text)
-            .filter(|line| !line.is_empty())
-            .collect();
+        let document = crate::queries::DOCUMENTATION_LANGUAGES.contains(&sym.language.as_str());
+        let lines: Vec<_> = if document {
+            doc.lines().collect()
+        } else {
+            doc.lines()
+                .map(doc_line_text)
+                .filter(|line| !line.is_empty())
+                .collect()
+        };
         let cap = 3;
         for line in lines.iter().take(cap) {
             out.push_str(&format!("{indent}/// {line}\n"));
@@ -869,7 +873,9 @@ fn other_names_line(query: &str, others: &[&Symbol]) -> String {
 /// `<summary>` tag, which julie keeps in the raw comment text.
 fn doc_line_text(line: &str) -> &str {
     let mut text = line.trim();
-    for marker in ["///", "//!", "//", "/**", "/*!", "/*", "##", "#", "--", "*"] {
+    for marker in [
+        "///", "//!", "//", "/**", "/*!", "/*", "##", "#", "--", "*", "'''", "'",
+    ] {
         if let Some(rest) = text.strip_prefix(marker) {
             text = rest.trim_start();
             break;
