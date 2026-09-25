@@ -1222,6 +1222,10 @@ fn a_relative_typescript_import_with_a_js_extension_picks_the_file_it_names() {
             "export function joinValues(values: string[]): string {\n  return values.join(\", \");\n}\n",
         ),
         (
+            "src/v3/core/util.ts",
+            "export function joinValues(values: string[]): string {\n  return values.join(\"/\");\n}\n",
+        ),
+        (
             "src/v3/locales/en.ts",
             "import { util } from \"../helpers/util.js\";\n\nexport function enMessage(values: string[]): string {\n  return util.joinValues(values);\n}\n",
         ),
@@ -1239,4 +1243,50 @@ fn a_relative_typescript_import_with_a_js_extension_picks_the_file_it_names() {
 
     assert_eq!(callers("src/v4/core/util.ts"), vec!["ruMessage"]);
     assert_eq!(callers("src/v3/helpers/util.ts"), vec!["enMessage"]);
+    assert!(callers("src/v3/core/util.ts").is_empty());
+}
+
+#[test]
+fn an_attribute_write_stays_when_only_an_unrelated_class_of_the_base_name_defines_it() {
+    let (repo, db_path) = scanned_repo(&[
+        ("src/models/base.py", "class Base:\n    pass\n"),
+        (
+            "src/other/base.py",
+            "class Base:\n    def __init__(self):\n        self.ready = False\n",
+        ),
+        (
+            "src/app/app.py",
+            "from models.base import Base\n\n\nclass App(Base):\n    def run(self):\n        self.ready = True\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+    let workspace = Workspace::new(repo.path().to_path_buf());
+
+    let skeleton = file_skeleton_op(&workspace, &db_path, &conn, "src/app/app.py").unwrap();
+
+    assert!(skeleton.contains("self.ready"), "{skeleton}");
+}
+
+#[test]
+fn lookup_fills_its_limit_after_leaving_out_inherited_writes() {
+    let (_repo, db_path) = scanned_repo(&[
+        (
+            "src/base.py",
+            "class Base:\n    def __init__(self):\n        self.ready = False\n",
+        ),
+        (
+            "src/app.py",
+            "from .base import Base\n\n\nclass App(Base):\n    def run(self):\n        self.ready = True\n",
+        ),
+        (
+            "src/other.py",
+            "class Other:\n    def __init__(self):\n        self.ready = 1\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let ready = search_symbols_scoped(&conn, "ready", None, None, false, 2).unwrap();
+
+    let paths: Vec<_> = ready.iter().map(|s| s.path.as_str()).collect();
+    assert_eq!(paths, ["src/base.py", "src/other.py"]);
 }

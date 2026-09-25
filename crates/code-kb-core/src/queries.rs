@@ -561,10 +561,13 @@ pub fn search_symbols(
 /// SQLite cannot plan it as a multi-index OR, which scans every non-test row through the
 /// test-path predicate (about 8 ms on this repository's index against 1 ms).
 /// True when `alias` is an attribute row such as `self.debug = …` whose name a base class already
-/// defines with a value or a property. The row is a write to an inherited attribute, not a
+/// defines with a value or a property. A base class named by a pending `extends` row counts only
+/// when no class of that name is as close to the subclass's file, so an unclear base keeps the row. The row is a write to an inherited attribute, not a
 /// definition, so lookup, search, and skeletons leave it out. `CASE` keeps SQLite from walking
 /// the base classes of every row a search touches: it evaluates an `AND` with `EXISTS` eagerly.
 pub(crate) fn inherited_attribute_write(alias: &str) -> String {
+    let rival_rank = path_proximity("rival.path", "pe.path");
+    let base_rank = path_proximity("c.path", "pe.path");
     format!(
         "(CASE WHEN {alias}.kind = 'property' AND {alias}.parent_symbol_id IS NOT NULL
           AND ({alias}.signature LIKE 'self.%' OR {alias}.signature LIKE 'this.%' OR {alias}.signature LIKE 'cls.%')
@@ -582,6 +585,11 @@ pub(crate) fn inherited_attribute_write(alias: &str) -> String {
                 JOIN symbols c ON c.name = pe.target_terminal_name
                 WHERE +pe.kind = 'extends' AND base.depth < 8
                   AND c.kind IN ('class', 'interface', 'struct', 'trait', 'protocol')
+                  AND NOT EXISTS (
+                      SELECT 1 FROM symbols rival
+                      WHERE rival.name = c.name AND rival.symbol_id != c.symbol_id
+                        AND rival.kind IN ('class', 'interface', 'struct', 'trait', 'protocol')
+                        AND {rival_rank} >= {base_rank})
             )
             SELECT 1 FROM base JOIN symbols inherited ON inherited.parent_symbol_id = base.symbol_id
             WHERE base.depth > 0 AND inherited.name = {alias}.name
@@ -683,35 +691,41 @@ pub fn search_symbols_scoped(
     });
     let escaped_path = normalized_path.as_deref().map(escape_like);
 
-    let sql = search_symbols_sql(
-        norm_kind.as_deref() == Some("variable"),
-        include_tests,
-        limit,
-    );
-    let mut stmt = conn.prepare(&sql)?;
-
     let path_val = normalized_path.as_deref();
     let path_like = escaped_path.as_deref();
     let kind_val = norm_kind.as_deref();
-    let rows = stmt
-        .query_map(
-            rusqlite::named_params! {
-                ":query": query,
-                ":pattern": pattern,
-                ":prefix": prefix,
-                ":kind": kind_val,
-                ":path": path_val,
-                ":path_like": path_like,
-            },
-            map_symbol,
-        )?
-        .collect::<Result<Vec<Symbol>, _>>()?;
-
-    let inherited = inherited_writes_among(conn, rows.iter().map(|s| s.symbol_id.as_str()))?;
-    Ok(rows
-        .into_iter()
-        .filter(|s| !inherited.contains(&s.symbol_id))
-        .collect())
+    let mut fetch = limit;
+    loop {
+        let sql = search_symbols_sql(
+            norm_kind.as_deref() == Some("variable"),
+            include_tests,
+            fetch,
+        );
+        let rows = conn
+            .prepare(&sql)?
+            .query_map(
+                rusqlite::named_params! {
+                    ":query": query,
+                    ":pattern": pattern,
+                    ":prefix": prefix,
+                    ":kind": kind_val,
+                    ":path": path_val,
+                    ":path_like": path_like,
+                },
+                map_symbol,
+            )?
+            .collect::<Result<Vec<Symbol>, _>>()?;
+        let fetched = rows.len();
+        let inherited = inherited_writes_among(conn, rows.iter().map(|s| s.symbol_id.as_str()))?;
+        let kept: Vec<Symbol> = rows
+            .into_iter()
+            .filter(|s| !inherited.contains(&s.symbol_id))
+            .collect();
+        if kept.len() >= limit || fetched < fetch {
+            return Ok(kept.into_iter().take(limit).collect());
+        }
+        fetch *= 2;
+    }
 }
 
 /// Sanitizes a free-form user query into `(and_query, or_query)` formatted for SQLite FTS5.
@@ -2748,8 +2762,14 @@ pub fn find_references_for_symbol_ext(
 /// SQL expression ranking a candidate path against the call site `p.path`:
 /// 2 for the same file, 1 for the same directory, 0 otherwise.
 fn call_site_proximity(candidate_path: &str) -> String {
+    path_proximity(candidate_path, "p.path")
+}
+
+/// SQL expression ranking `candidate_path` against `site_path`: 2 for the same file, 1 for the
+/// same directory, 0 otherwise.
+fn path_proximity(candidate_path: &str, site_path: &str) -> String {
     let normalized = format!("replace({candidate_path}, '\\', '/')");
-    let call_site = "replace(p.path, '\\', '/')";
+    let call_site = format!("replace({site_path}, '\\', '/')");
     format!(
         "CASE WHEN {normalized} = {call_site} THEN 2
               WHEN rtrim({normalized}, replace({normalized}, '/', '')) = rtrim({call_site}, replace({call_site}, '/', '')) THEN 1
@@ -2757,31 +2777,50 @@ fn call_site_proximity(candidate_path: &str) -> String {
     )
 }
 
-/// SQL predicate that decides whether a pending call edge `p` (with caller `s_from`) points at
-/// the candidate definition `target` (whose parent symbol is joined as `parent`).
 /// True when the import source `value` is a relative file path (`../core/util.js`).
 fn is_relative_import_path(value: &str) -> String {
     format!("({value} LIKE '.%' AND instr({value}, '/') > 0)")
 }
 
-/// True when `target_path` is the file a relative import source names: its folders after the
-/// leading `./` and `../`, and its file name without a script extension, as the end of the path.
-fn relative_import_matches(value: &str, target_path: &str) -> String {
-    let dir = format!("rtrim({value}, replace({value}, '/', ''))");
-    let file = format!("replace({value}, {dir}, '')");
+/// True when `{target}` is the file the relative import source `value` names, resolved from the
+/// folder of the call site `p.path`: `../core/util.js` from `src/v4/locales/ru.ts` names
+/// `src/v4/core/util.ts`, `.js`, `.tsx`, and the other script files, or that folder's `index`.
+fn relative_import_matches(value: &str, target: &str) -> String {
     let stem = format!(
-        "CASE WHEN {file} GLOB '*.[jt]s' THEN substr({file}, 1, length({file}) - 3)
-              WHEN {file} GLOB '*.[mc][jt]s' OR {file} GLOB '*.[jt]sx'
-                   THEN substr({file}, 1, length({file}) - 4)
-              ELSE {file} END"
+        "CASE WHEN {value} GLOB '*.[jt]s' THEN substr({value}, 1, length({value}) - 3)
+              WHEN {value} GLOB '*.[mc][jt]s' OR {value} GLOB '*.[jt]sx'
+                   THEN substr({value}, 1, length({value}) - 4)
+              ELSE {value} END"
     );
-    let tail = format!("(ltrim({dir}, './') || {stem})");
+    let caller = "replace(p.path, '\\', '/')";
+    let parent_dir = "rtrim(substr(hop.dir, 1, length(hop.dir) - 1), replace(substr(hop.dir, 1, length(hop.dir) - 1), '/', ''))";
+    let files = ["ts", "tsx", "js", "jsx", "mjs", "cjs", "mts", "cts", "d.ts"]
+        .iter()
+        .flat_map(|ext| {
+            [
+                format!("hop.dir || hop.rest || '.{ext}'"),
+                format!("hop.dir || hop.rest || '/index.{ext}'"),
+            ]
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
     format!(
-        "({stem} != '' AND ({target_path} LIKE '%/' || {tail} || '.%'
-                           OR {target_path} LIKE '%/' || {tail} || '/index.%'))"
+        "EXISTS (
+            WITH RECURSIVE hop(dir, rest) AS (
+                SELECT rtrim({caller}, replace({caller}, '/', '')),
+                       CASE WHEN ({stem}) LIKE './%' THEN substr(({stem}), 3) ELSE ({stem}) END
+                UNION ALL
+                SELECT {parent_dir}, substr(hop.rest, 4) FROM hop WHERE hop.rest LIKE '../%'
+            )
+            SELECT 1 FROM hop
+            WHERE hop.rest NOT LIKE '../%' AND hop.rest != ''
+              AND replace({target}.path, '\\', '/') IN ({files})
+        )"
     )
 }
 
+/// SQL predicate that decides whether a pending call edge `p` (with caller `s_from`) points at
+/// the candidate definition `target` (whose parent symbol is joined as `parent`).
 fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> String {
     let ns = "json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END)";
     let target_path = format!("('/' || replace({target}.path, '\\', '/'))");
@@ -2791,7 +2830,7 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
     let dotted = "replace(module_path.value, '/', '.')";
     let segment = format!("replace({dotted}, rtrim({dotted}, replace({dotted}, '.', '')), '')");
     let relative = is_relative_import_path("import_source.value");
-    let relative_match = relative_import_matches("import_source.value", &target_path);
+    let relative_match = relative_import_matches("import_source.value", target);
     // `import { util } from "../helpers/util.js"`: `util.f()` reaches only that file's `util`.
     let receiver_import_elsewhere = if has_column(conn, "symbols", "metadata_json") {
         format!(
@@ -5402,7 +5441,7 @@ fn uses_a_client(conn: &Connection, test: &TestTarget) -> bool {
     conn.query_row(
         "SELECT EXISTS (
             SELECT 1 FROM symbols t
-            WHERE t.path = ?1 AND t.start_line = ?2 AND t.name = ?3
+            WHERE t.name = ?3 AND t.start_line = ?2 AND replace(t.path, '\\', '/') = ?1
               AND (EXISTS (SELECT 1 FROM symbols p
                            WHERE p.parent_symbol_id = t.symbol_id
                              AND p.kind IN ('parameter', 'variable')
@@ -5542,6 +5581,29 @@ mod tests {
         assert!(matches("widget_test_3.rs", "widget"));
         assert!(!matches("test_appctx.py", "app"));
         assert!(!matches("test_mapper.py", "app"));
+    }
+
+    #[test]
+    fn a_test_with_a_client_is_found_under_a_backslash_path() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE symbols (symbol_id TEXT, name TEXT, path TEXT, start_line INTEGER,
+                 parent_symbol_id TEXT, kind TEXT);
+             CREATE TABLE pending_relationships (from_symbol_id TEXT, target_terminal_name TEXT,
+                 target_receiver TEXT);
+             CREATE TABLE relationships (from_symbol_id TEXT, to_symbol_id TEXT);
+             INSERT INTO symbols VALUES ('t', 'test_user', 'tests\\test_user.py', 4, NULL, 'function');
+             INSERT INTO symbols VALUES ('c', 'client', 'tests\\test_user.py', 4, 't', 'parameter');",
+        )
+        .unwrap();
+        let test = crate::models::TestTarget {
+            name: "test_user".into(),
+            path: "tests/test_user.py".into(),
+            line: 4,
+            reason: String::new(),
+        };
+
+        assert!(super::uses_a_client(&conn, &test));
     }
 
     #[test]
