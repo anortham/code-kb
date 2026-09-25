@@ -212,3 +212,39 @@ test('a binary at <CODE_KB_HOME>/bin/code-kb overrides the download and the chec
   assert.equal(launcher.overrideBinary('code-kb', { CODE_KB_HOME: tempDir('code-kb-empty-home-') }), null);
 });
 
+
+test('ensureBinary leaves no empty version directory when the release is missing', { skip: process.platform === 'win32' }, async () => {
+  const platformInfo = launcher.detectPlatform('linux', 'x64');
+  const { server, origin } = await listenOn((request, response) => {
+    response.statusCode = 404;
+    response.end();
+  });
+  const cacheRoot = tempDir('code-kb-cache-');
+
+  try {
+    await assert.rejects(
+      () => launcher.ensureBinary({ version: '9.9.9', platformInfo, cacheRoot, baseUrl: origin }),
+      /HTTP 404/,
+    );
+    assert.deepEqual(fs.readdirSync(cacheRoot), []);
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test('newestCachedBinary picks the highest other cached version that has a binary', () => {
+  const platformInfo = launcher.detectPlatform('linux', 'x64');
+  const cacheRoot = tempDir('code-kb-cache-');
+  const binaryFor = (version) => path.join(cacheRoot, version, platformInfo.target, 'package', 'code-kb');
+  for (const version of ['2.1.0', '2.10.0', '2.9.1', '3.0.0']) {
+    fs.mkdirSync(path.dirname(binaryFor(version)), { recursive: true });
+    if (version !== '3.0.0') {
+      fs.writeFileSync(binaryFor(version), '');
+    }
+  }
+  fs.mkdirSync(path.join(cacheRoot, 'garbage'));
+
+  assert.equal(launcher.newestCachedBinary({ version: '2.2.1', platformInfo, cacheRoot }), binaryFor('2.10.0'));
+  assert.equal(launcher.newestCachedBinary({ version: '2.10.0', platformInfo, cacheRoot }), binaryFor('2.9.1'));
+  assert.equal(launcher.newestCachedBinary({ version: '2.2.1', platformInfo, cacheRoot: tempDir('code-kb-empty-') }), null);
+});

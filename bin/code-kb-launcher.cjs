@@ -260,7 +260,44 @@ async function ensureBinary({ version, platformInfo, cacheRoot = defaultCacheRoo
   } finally {
     fs.rmSync(stageDir, { recursive: true, force: true });
     fs.rmSync(downloadDir, { recursive: true, force: true });
+    removeIfEmpty(targetRoot);
+    removeIfEmpty(path.dirname(targetRoot));
   }
+}
+
+function removeIfEmpty(directory) {
+  try {
+    fs.rmdirSync(directory);
+  } catch {}
+}
+
+function compareVersions(left, right) {
+  const a = left.split(/[.-]/).map(Number);
+  const b = right.split(/[.-]/).map(Number);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const difference = (a[i] || 0) - (b[i] || 0);
+    if (difference) {
+      return difference;
+    }
+  }
+  return 0;
+}
+
+// Returns the newest cached code-kb binary other than `version`, or null. The launcher runs it when the
+// release for the plugin's version cannot be downloaded, such as a version bump pushed before its tag.
+function newestCachedBinary({ version, platformInfo, cacheRoot = defaultCacheRoot() }) {
+  let names;
+  try {
+    names = fs.readdirSync(cacheRoot);
+  } catch {
+    return null;
+  }
+  const cached = names
+    .filter((name) => name !== version && /^\d+(\.\d+)*$/.test(name))
+    .sort(compareVersions)
+    .reverse()
+    .map((name) => path.join(cacheRoot, name, platformInfo.target, 'package', platformInfo.binaryName));
+  return cached.find((candidate) => fs.existsSync(candidate)) || null;
 }
 
 function runBinary(binaryPath, args) {
@@ -310,10 +347,17 @@ async function main() {
   if (preferred) {
     return runBinary(preferred, args);
   }
-  const binaryPath = await ensureBinary({
-    version: process.env.CODE_KB_VERSION || readPluginVersion(pluginRoot),
-    platformInfo,
-  });
+  const version = process.env.CODE_KB_VERSION || readPluginVersion(pluginRoot);
+  let binaryPath;
+  try {
+    binaryPath = await ensureBinary({ version, platformInfo });
+  } catch (error) {
+    binaryPath = newestCachedBinary({ version, platformInfo });
+    if (!binaryPath) {
+      throw error;
+    }
+    log(`${error.message}; running the cached ${binaryPath} instead of code-kb ${version}`);
+  }
   return runBinary(binaryPath, args);
 }
 
@@ -323,6 +367,7 @@ module.exports = {
   detectPlatform,
   ensureBinary,
   localReleaseBuild,
+  newestCachedBinary,
   overrideBinary,
   parseSha256Sidecar,
   readPluginVersion,
