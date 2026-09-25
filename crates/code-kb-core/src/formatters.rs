@@ -1083,7 +1083,7 @@ pub fn format_structural_facts(
     );
     for f in facts {
         let label = f.key.as_deref().unwrap_or(&f.capture_name);
-        let details = qt_property_details(f);
+        let details = format!("{}{}", qt_property_details(f), flask_route_details(f));
         let api_style = f
             .metadata
             .as_ref()
@@ -1126,6 +1126,29 @@ pub fn format_structural_facts(
         }
         if limit > 0 && literals.len() >= limit {
             out.push_str(&cap_notice(literals.len(), limit));
+        }
+    }
+    out
+}
+
+/// The endpoint of a Flask route and the view of an `add_url_rule` call. A rule with no view, such
+/// as `add_url_rule("/", endpoint="index")`, only names an endpoint for `url_for`.
+fn flask_route_details(fact: &crate::models::StructuralFact) -> String {
+    if !fact.pattern_id.starts_with("flask.route") {
+        return String::new();
+    }
+    let Some(metadata) = fact.metadata.as_ref() else {
+        return String::new();
+    };
+    let text = |key: &str| metadata.get(key).and_then(|v| v.as_str());
+    let mut out = String::new();
+    if let Some(endpoint) = text("endpoint") {
+        out.push_str(&format!(", endpoint: {endpoint}"));
+    }
+    if text("api_style") == Some("call_routing") {
+        match text("view_target") {
+            Some(view) => out.push_str(&format!(", view: {view}")),
+            None => out.push_str(", no view function"),
         }
     }
     out
@@ -1471,6 +1494,30 @@ mod tests {
         assert!(output.contains(
             "property_type: int, designable: false, scriptable: true, stored: false, user: true, revision: 2"
         ));
+    }
+
+    #[test]
+    fn format_structural_facts_names_the_endpoint_and_view_of_a_flask_route() {
+        let route = |metadata| crate::models::StructuralFact {
+            pattern_id: "flask.route.v1".into(),
+            metadata: Some(metadata),
+            ..structural_fact(Some("GET /"))
+        };
+        let alias = route(serde_json::json!({"api_style": "call_routing", "endpoint": "index"}));
+        let rule = route(serde_json::json!({"api_style": "call_routing", "view_target": "ping"}));
+        let decorated = route(serde_json::json!({"api_style": "decorator_routing"}));
+
+        let output = format_structural_facts(&[alias, rule, decorated], &[], "route", 30);
+
+        assert!(
+            output.contains("(pattern: flask.route.v1, endpoint: index, no view function)"),
+            "{output}"
+        );
+        assert!(
+            output.contains("(pattern: flask.route.v1, view: ping)"),
+            "{output}"
+        );
+        assert!(output.contains("(pattern: flask.route.v1)"), "{output}");
     }
 
     #[test]
