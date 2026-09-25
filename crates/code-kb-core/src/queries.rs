@@ -2132,6 +2132,7 @@ pub fn qualify_members<'a>(
         if let Some(owner) = stmt
             .query_row(params![parent], |row| row.get::<_, String>(0))
             .optional()?
+            && !symbol.name.starts_with(&format!("{owner}."))
         {
             symbol.name = format!("{owner}.{}", symbol.name);
         }
@@ -2369,6 +2370,11 @@ fn get_symbol_by_name_internal(
         return Ok(Some(only.clone()));
     }
 
+    let mut outer = outer_definitions(conn, &active_pool)?;
+    if outer.len() == 1 {
+        return Ok(Some(outer.remove(0)));
+    }
+
     let mut candidate_list = String::new();
     for s in &active_pool {
         candidate_list.push_str(&format!(
@@ -2382,6 +2388,40 @@ fn get_symbol_by_name_internal(
         active_pool.len(),
         candidate_list,
     ))
+}
+
+/// The candidates left after dropping an `export` row that repeats a definition on its line and,
+/// when anything else remains, the locals of a function or method.
+fn outer_definitions(conn: &Connection, pool: &[Symbol]) -> Result<Vec<Symbol>, QueryError> {
+    let definitions: Vec<&Symbol> = pool
+        .iter()
+        .filter(|s| {
+            s.kind != "export"
+                || !pool.iter().any(|other| {
+                    other.kind != "export"
+                        && other.path == s.path
+                        && other.start_line == s.start_line
+                })
+        })
+        .collect();
+    let mut parent_kind = conn.prepare("SELECT kind FROM symbols WHERE symbol_id = ?1")?;
+    let mut outer = Vec::new();
+    for symbol in &definitions {
+        let kind = match &symbol.parent_symbol_id {
+            Some(parent) => parent_kind
+                .query_row([parent], |row| row.get::<_, String>(0))
+                .optional()?,
+            None => None,
+        };
+        if !matches!(kind.as_deref(), Some("function" | "method" | "constructor")) {
+            outer.push((*symbol).clone());
+        }
+    }
+    Ok(if outer.is_empty() {
+        definitions.into_iter().cloned().collect()
+    } else {
+        outer
+    })
 }
 
 /// The name of the repository this index was built for, for not-found messages.
@@ -2719,6 +2759,29 @@ fn call_site_proximity(candidate_path: &str) -> String {
 
 /// SQL predicate that decides whether a pending call edge `p` (with caller `s_from`) points at
 /// the candidate definition `target` (whose parent symbol is joined as `parent`).
+/// True when the import source `value` is a relative file path (`../core/util.js`).
+fn is_relative_import_path(value: &str) -> String {
+    format!("({value} LIKE '.%' AND instr({value}, '/') > 0)")
+}
+
+/// True when `target_path` is the file a relative import source names: its folders after the
+/// leading `./` and `../`, and its file name without a script extension, as the end of the path.
+fn relative_import_matches(value: &str, target_path: &str) -> String {
+    let dir = format!("rtrim({value}, replace({value}, '/', ''))");
+    let file = format!("replace({value}, {dir}, '')");
+    let stem = format!(
+        "CASE WHEN {file} GLOB '*.[jt]s' THEN substr({file}, 1, length({file}) - 3)
+              WHEN {file} GLOB '*.[mc][jt]s' OR {file} GLOB '*.[jt]sx'
+                   THEN substr({file}, 1, length({file}) - 4)
+              ELSE {file} END"
+    );
+    let tail = format!("(ltrim({dir}, './') || {stem})");
+    format!(
+        "({stem} != '' AND ({target_path} LIKE '%/' || {tail} || '.%'
+                           OR {target_path} LIKE '%/' || {tail} || '/index.%'))"
+    )
+}
+
 fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> String {
     let ns = "json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END)";
     let target_path = format!("('/' || replace({target}.path, '\\', '/'))");
@@ -2727,6 +2790,27 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
     let target_rank = call_site_proximity(&format!("{target}.path"));
     let dotted = "replace(module_path.value, '/', '.')";
     let segment = format!("replace({dotted}, rtrim({dotted}, replace({dotted}, '.', '')), '')");
+    let relative = is_relative_import_path("import_source.value");
+    let relative_match = relative_import_matches("import_source.value", &target_path);
+    // `import { util } from "../helpers/util.js"`: `util.f()` reaches only that file's `util`.
+    let receiver_import_elsewhere = if has_column(conn, "symbols", "metadata_json") {
+        format!(
+            "AND NOT EXISTS (
+                            SELECT 1 FROM symbols receiver_import
+                            CROSS JOIN json_each(json_array(
+                                json_extract(receiver_import.metadata_json, '$.source')
+                            )) import_source
+                            WHERE receiver_import.kind = 'import'
+                              AND receiver_import.path = p.path
+                              AND receiver_import.name = p.target_receiver
+                              AND json_valid(receiver_import.metadata_json)
+                              AND {relative}
+                              AND NOT {relative_match}
+                        )"
+        )
+    } else {
+        String::new()
+    };
     let import_alias_receiver = if has_column(conn, "symbols", "metadata_json") {
         format!("OR EXISTS (
                         SELECT 1 FROM symbols alias_import
@@ -2740,17 +2824,23 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                     OR EXISTS (
                         SELECT 1 FROM symbols module_import
                         CROSS JOIN json_each(json_array(
-                            json_extract(module_import.metadata_json, '$.importedName'),
                             json_extract(module_import.metadata_json, '$.source')
+                        )) import_source
+                        CROSS JOIN json_each(json_array(
+                            json_extract(module_import.metadata_json, '$.importedName'),
+                            import_source.value
                         )) module_path
                         WHERE module_import.kind = 'import'
                           AND module_import.path = p.path
                           AND module_import.name = p.target_receiver
                           AND json_valid(module_import.metadata_json)
-                          AND {segment} != ''
-                          AND ({target_path} LIKE '%/' || {segment} || '/%'
-                               OR {target_path} LIKE '%/' || {segment} || '.%')
-                    )")
+                          AND CASE WHEN {relative} THEN {relative_match}
+                              ELSE {segment} != ''
+                                   AND ({target_path} LIKE '%/' || {segment} || '/%'
+                                        OR {target_path} LIKE '%/' || {segment} || '.%')
+                              END
+                    )"
+        )
     } else {
         String::new()
     };
@@ -2802,7 +2892,8 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                     EXISTS (SELECT 1 FROM {ns} WHERE value = {parent}.name)
                     OR (EXISTS (SELECT 1 FROM {ns} WHERE value = 'Self')
                         AND s_from.parent_symbol_id = {target}.parent_symbol_id)
-                    OR (p.target_receiver IS NOT NULL AND p.target_receiver != '' AND {parent}.name = p.target_receiver)
+                    OR (p.target_receiver IS NOT NULL AND p.target_receiver != '' AND {parent}.name = p.target_receiver
+                        {receiver_import_elsewhere})
                     OR ((p.target_receiver IN ('self', 'this', 'cls', 'Self', 'super')
                          OR EXISTS (SELECT 1 FROM {ns} WHERE value = 'Self'))
                         AND EXISTS (

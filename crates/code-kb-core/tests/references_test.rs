@@ -1003,9 +1003,13 @@ fn qualify_members_names_the_class_of_a_member_but_not_of_a_document_heading() {
             "class ScriptInfo:\n    def __init__(self):\n        pass\n\n\ndef main():\n    pass\n",
         ),
         ("docs/guide.md", "# Setup\n\n## Install\n\nText.\n"),
+        (
+            "lib/cart.dart",
+            "class Cart {\n  final List<int> items;\n  const Cart.empty() : items = const [];\n}\n",
+        ),
     ]);
     let conn = open_read_only(&db_path).unwrap();
-    let mut rows: Vec<_> = ["__init__", "main", "Install"]
+    let mut rows: Vec<_> = ["__init__", "main", "Install", "Cart.empty"]
         .iter()
         .map(|name| {
             code_kb_core::get_symbol_by_name(&conn, name, None)
@@ -1017,7 +1021,10 @@ fn qualify_members_names_the_class_of_a_member_but_not_of_a_document_heading() {
     code_kb_core::qualify_members(&conn, rows.iter_mut()).unwrap();
 
     let names: Vec<&str> = rows.iter().map(|s| s.name.as_str()).collect();
-    assert_eq!(names, vec!["ScriptInfo.__init__", "main", "Install"]);
+    assert_eq!(
+        names,
+        vec!["ScriptInfo.__init__", "main", "Install", "Cart.empty"]
+    );
 }
 
 #[test]
@@ -1201,4 +1208,35 @@ fn a_whole_test_file_row_replaces_the_rows_of_the_tests_inside_it() {
             ("tests/test_other.py", "test_other_path"),
         ]
     );
+}
+
+#[test]
+fn a_relative_typescript_import_with_a_js_extension_picks_the_file_it_names() {
+    let (_repo, db_path) = scanned_repo(&[
+        (
+            "src/v3/helpers/util.ts",
+            "export namespace util {\n  export function joinValues(values: string[]): string {\n    return values.join(\"|\");\n  }\n}\n",
+        ),
+        (
+            "src/v4/core/util.ts",
+            "export function joinValues(values: string[]): string {\n  return values.join(\", \");\n}\n",
+        ),
+        (
+            "src/v3/locales/en.ts",
+            "import { util } from \"../helpers/util.js\";\n\nexport function enMessage(values: string[]): string {\n  return util.joinValues(values);\n}\n",
+        ),
+        (
+            "src/v4/locales/ru.ts",
+            "import * as util from \"../core/util.js\";\n\nexport function ruMessage(values: string[]): string {\n  return util.joinValues(values);\n}\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+    let callers = |file: &str| {
+        caller_names(
+            &find_references_scoped(&conn, "joinValues", "callers", 20, false, Some(file)).unwrap(),
+        )
+    };
+
+    assert_eq!(callers("src/v4/core/util.ts"), vec!["ruMessage"]);
+    assert_eq!(callers("src/v3/helpers/util.ts"), vec!["enMessage"]);
 }

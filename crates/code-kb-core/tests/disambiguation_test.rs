@@ -208,6 +208,28 @@ fn a_name_defined_once_outside_the_tests_resolves_to_that_definition() {
 }
 
 #[test]
+fn an_exported_constant_resolves_past_its_export_row_and_same_named_locals() {
+    let temp_dir = safe_tempdir();
+    let root = temp_dir.path().to_path_buf();
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(
+        root.join("src/parse.ts"),
+        "const _parse = (e: string) => (x: unknown) => x;\n\nexport const parse = _parse(\"real\");\n\nexport function make() {\n  const parse = _parse(\"local\");\n  return parse;\n}\n",
+    )
+    .unwrap();
+    let db_path = root.join("test.db");
+    scan_workspace(&Workspace::new(root.clone()), &db_path, true).expect("Scan failed");
+    let conn = open_read_only(&db_path).unwrap();
+
+    let parse = get_symbol_by_name(&conn, "parse", Some("src/parse.ts"))
+        .expect("parse must not be ambiguous")
+        .expect("parse must be found");
+
+    assert_eq!(parse.start_line, 3);
+    assert_ne!(parse.kind, "export");
+}
+
+#[test]
 fn test_file_skeleton_exact_path_isolation() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");

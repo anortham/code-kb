@@ -268,6 +268,15 @@ fn is_shown(sym: &Symbol, parent: Option<&Symbol>) -> bool {
 
 /// `; defines `a`, `b`` for the functions and classes declared inside a hidden body, so a view
 /// or wrapper defined in a factory stays visible. Lambdas are left out.
+/// C and C++ cannot define a function inside a function, so such a row comes from a macro the
+/// parser misread (`JSON_CATCH (...) { }`). Test sections such as doctest `SECTION` are real.
+fn is_misparsed_c_function(child: &Symbol) -> bool {
+    matches!(child.language.as_str(), "c" | "cpp")
+        && matches!(child.kind.as_str(), "function" | "method")
+        && !child.is_test
+        && !child.test_container
+}
+
 fn nested_definitions(children: &[&Symbol]) -> String {
     let names: Vec<String> = children
         .iter()
@@ -283,8 +292,14 @@ fn nested_definitions(children: &[&Symbol]) -> String {
                 .as_deref()
                 .is_some_and(|sig| sig.starts_with("lambda"))
         })
+        .filter(|child| !is_misparsed_c_function(child))
         .map(|child| format!("`{}`", child.name))
-        .collect();
+        .fold(Vec::new(), |mut names, name| {
+            if !names.contains(&name) {
+                names.push(name);
+            }
+            names
+        });
     match names.len() {
         0 => String::new(),
         1..=5 => format!("; defines {}", names.join(", ")),
@@ -898,13 +913,16 @@ pub fn format_find_symbol_results(
                 .collect::<Vec<_>>()
                 .join(", ");
             let more = if imports.len() > 3 { ", …" } else { "" };
-            let capped = if exact_matches.len() >= limit {
-                "+"
+            let cut_inside_exact_names = exact_matches
+                .last()
+                .is_some_and(|s| s.name.eq_ignore_ascii_case(query) || folds(s));
+            let capped = if exact_matches.len() >= limit && cut_inside_exact_names {
+                "at least "
             } else {
                 ""
             };
             out.push_str(&format!(
-                "- {}{capped} {} of `{query}`: {shown}{more} (lookup_symbol with kind=\"import\" lists them)\n",
+                "- {capped}{} {} of `{query}`: {shown}{more} (lookup_symbol with kind=\"import\" lists them)\n",
                 imports.len(),
                 plural(imports.len(), "import")
             ));
@@ -1655,7 +1673,21 @@ mod tests {
         assert!(!folded.contains("- import `Flask`"), "{folded}");
 
         let capped = format_find_symbol_results("Flask", &rows, &[], 5);
-        assert!(capped.contains("- 4+ imports of `Flask`"), "{capped}");
+        assert!(
+            capped.contains("- at least 4 imports of `Flask`"),
+            "{capped}"
+        );
+
+        let mut with_prefix_rows = rows.clone();
+        with_prefix_rows.push(Symbol {
+            kind: "class".into(),
+            ..sample_symbol("FlaskGroup")
+        });
+        let cut_after_exact = format_find_symbol_results("Flask", &with_prefix_rows, &[], 6);
+        assert!(
+            cut_after_exact.contains("- 4 imports of `Flask`"),
+            "{cut_after_exact}"
+        );
 
         let imports_only = format_find_symbol_results("Flask", &rows[1..], &[], 20);
         assert_eq!(imports_only.matches("- import `Flask`").count(), 4);
@@ -2760,6 +2792,15 @@ mod tests {
             skeleton.contains("def create_app() { /* 8 lines hidden: L2-L9; defines `hello` */ }"),
             "{skeleton}"
         );
+
+        for symbol in &mut syms {
+            symbol.language = "cpp".into();
+        }
+        let cpp = format_file_skeleton("app.cpp", &syms, Some(9), 0);
+        assert!(!cpp.contains("defines"), "{cpp}");
+        syms[1].test_container = true;
+        let cpp_section = format_file_skeleton("app.cpp", &syms, Some(9), 0);
+        assert!(cpp_section.contains("defines `hello`"), "{cpp_section}");
     }
 
     #[test]
