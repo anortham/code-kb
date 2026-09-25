@@ -975,6 +975,56 @@ fn the_callers_of_a_constructor_are_the_calls_that_build_its_class() {
 }
 
 #[test]
+fn blast_radius_lists_tests_through_a_constructor_last_and_skips_app_factories() {
+    let (_repo, db_path) = scanned_repo(&[
+        (
+            "src/web/cli.py",
+            "class Group:\n    def __init__(self):\n        self.name = 'cli'\n\n\ndef invoke_cli():\n    return 1\n",
+        ),
+        (
+            "src/web/app.py",
+            "from web.cli import Group\n\n\nclass Flask:\n    def __init__(self):\n        self.cli = Group()\n",
+        ),
+        (
+            "tests/test_app.py",
+            "from web.app import Flask\n\n\ndef test_builds():\n    assert Flask()\n",
+        ),
+        (
+            "tests/test_apps/factory.py",
+            "from web.app import Flask\n\n\ndef create_app():\n    return Flask()\n",
+        ),
+        (
+            "src/web/runner.py",
+            "from web.cli import invoke_cli\n\n\ndef run():\n    return invoke_cli()\n",
+        ),
+        (
+            "tests/test_zz_run.py",
+            "from web.runner import run\n\n\ndef test_zz_invoke():\n    assert run()\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let result = compute_blast_radius(&conn, &[], &["src/web/cli.py"], 2, 20).unwrap();
+
+    let tests: Vec<&str> = result
+        .likely_tests
+        .iter()
+        .map(|t| t.name.as_str())
+        .collect();
+    assert!(!tests.contains(&"create_app"), "{tests:?}");
+    let position = |name: &str| {
+        tests
+            .iter()
+            .position(|t| *t == name)
+            .unwrap_or_else(|| panic!("{name} missing: {tests:?}"))
+    };
+    assert!(
+        position("test_zz_invoke") < position("test_builds"),
+        "{tests:?}"
+    );
+}
+
+#[test]
 fn import_sites_list_imports_whose_module_holds_the_definition() {
     let (_repo, db_path) = scanned_repo(&[
         ("src/pkg/app.py", "class App:\n    pass\n"),

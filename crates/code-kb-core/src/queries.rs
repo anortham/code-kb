@@ -4685,6 +4685,16 @@ fn type_declaration_line(signature: &str) -> String {
 /// `test_` in Python or Ruby, contains `_test.`,
 /// `.test.`, or `.spec.`, is exactly `test.rs` or `tests.rs`, or ends with the C# `Tests.cs`
 /// (case-sensitive, so `Contests.cs` is a production file).
+/// A name that reads like a test (`test_run`, `TestRoutes`, `runSpec`), for a symbol in a test file
+/// that julie did not flag: an app factory such as `create_app` in `tests/test_apps` is not a test.
+fn names_a_test(name: &str) -> bool {
+    let lowered = name.to_ascii_lowercase();
+    lowered.starts_with("test")
+        || ["test", "tests", "spec", "specs"]
+            .iter()
+            .any(|suffix| lowered.ends_with(suffix))
+}
+
 pub fn is_test_path(path: &str) -> bool {
     let p = path.replace('\\', "/");
     let cut = p.rfind('/').map_or(0, |i| i + 1);
@@ -4906,7 +4916,7 @@ pub fn compute_blast_radius_scoped_with_ids(
 
     if has_relationships {
         recursive_branches.push(format!(
-            "SELECT r.from_symbol_id, iw.depth + 1
+            "SELECT r.from_symbol_id, iw.depth + 1, iw.via
              FROM relationships r
              JOIN impact_walk iw ON r.to_symbol_id = iw.symbol_id
              JOIN symbols s_from ON r.from_symbol_id = s_from.symbol_id
@@ -4934,7 +4944,7 @@ pub fn compute_blast_radius_scoped_with_ids(
         };
 
         recursive_branches.push(format!(
-            "SELECT p.from_symbol_id, iw.depth + 1
+            "SELECT p.from_symbol_id, iw.depth + 1, iw.via
              FROM pending_relationships p
              JOIN symbols s_target ON p.target_terminal_name = s_target.name
              JOIN impact_walk iw ON s_target.symbol_id = iw.symbol_id
@@ -4945,10 +4955,11 @@ pub fn compute_blast_radius_scoped_with_ids(
         ));
     }
 
-    // A constructor runs wherever its class is built: `Flask()` reaches `Flask.__init__`.
+    // A constructor runs wherever its class is built: `Flask()` reaches `Flask.__init__`. Rows
+    // reached only this way (`via` 1) sort last: nearly every test builds the app.
     if has_relationships {
         recursive_branches.push(format!(
-            "SELECT r.from_symbol_id, iw.depth + 1
+            "SELECT r.from_symbol_id, iw.depth + 1, 1
              FROM impact_walk iw
              CROSS JOIN symbols ctor ON ctor.symbol_id = iw.symbol_id
              JOIN relationships r ON r.to_symbol_id = ctor.parent_symbol_id
@@ -4959,7 +4970,7 @@ pub fn compute_blast_radius_scoped_with_ids(
     }
     if has_pending && has_pending_namespace_column(conn) {
         recursive_branches.push(format!(
-            "SELECT p.from_symbol_id, iw.depth + 1
+            "SELECT p.from_symbol_id, iw.depth + 1, 1
              FROM impact_walk iw
              CROSS JOIN symbols ctor ON ctor.symbol_id = iw.symbol_id
              CROSS JOIN symbols s_target ON s_target.symbol_id = ctor.parent_symbol_id
@@ -4991,8 +5002,8 @@ pub fn compute_blast_radius_scoped_with_ids(
         let recursive_sql = recursive_branches.join("\n UNION \n");
         let not_documentation = not_documentation(conn, "s");
         let sql = format!(
-            "WITH RECURSIVE impact_walk(symbol_id, depth) AS (
-                SELECT symbol_id, 0
+            "WITH RECURSIVE impact_walk(symbol_id, depth, via) AS (
+                SELECT symbol_id, 0, 0
                 FROM symbols
                 WHERE ({seed_condition})
                   AND kind NOT IN ({LOW_SIGNAL_KINDS_SQL})
@@ -5009,7 +5020,7 @@ pub fn compute_blast_radius_scoped_with_ids(
               AND {not_documentation}
             GROUP BY s.symbol_id, s.name, s.kind, s.path, s.start_line, s.is_test, s.test_container
             HAVING MIN(iw.depth) > 0
-            ORDER BY min_depth ASC, s.path ASC, s.name ASC
+            ORDER BY MIN(iw.via) ASC, min_depth ASC, s.path ASC, s.name ASC
             LIMIT 201"
         );
 
@@ -5053,7 +5064,10 @@ pub fn compute_blast_radius_scoped_with_ids(
             ) = r?;
             walked.push(sym_id);
             let path = raw_path.replace('\\', "/");
-            let is_test_target = is_test || test_container || is_test_path(&path);
+            let is_test_target = is_test
+                || test_container
+                || is_fixture
+                || (is_test_path(&path) && names_a_test(&name));
             if name == "__call__"
                 && let Some(parent) = &parent
             {

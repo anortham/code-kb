@@ -158,7 +158,10 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   folder or a folder above it matches the same way, through any call in that fixture. A `self`
   call to a class attribute (`should_ignore_error: None = None`) is a callee of the caller.
   The callers of a constructor include the calls that build its class (`Flask()` calls
-  `Flask.__init__`), and the `blast_radius` walk follows the same step.
+  `Flask.__init__`), and the `blast_radius` walk follows the same step. Rows it reaches only
+  through that step sort after the other rows. A symbol in a test file that julie does not flag
+  as a test or fixture counts as a test to run only when its name reads like one (`test_run`,
+  `RoutesTest`); an app factory such as `create_app` is an impacted symbol.
   A `super` call matches a method of an ancestor, and a `self`, `this`, `cls`, or `super` call
   matches only the nearest class in the chain that defines the name. A bare call matches a class
   or function defined inside the caller. A member-access identifier never matches a function
