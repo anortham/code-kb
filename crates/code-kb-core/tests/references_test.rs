@@ -592,6 +592,31 @@ fn a_python_module_receiver_matches_its_package_and_a_local_class_shadows() {
 }
 
 #[test]
+fn a_second_definition_in_the_callers_own_file_does_not_hide_the_target() {
+    let (_repo, db_path) = scanned_repo(&[
+        (
+            "src/twice.py",
+            "def get():\n    return 1\n\n\ndef get():\n    return 2\n\n\ndef use():\n    return get()\n",
+        ),
+        (
+            "src/issues.ts",
+            "export type Base = { code: string };\n\nexport interface Issue extends Base {\n  expected: string;\n}\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+    let callees = |name: &str, path: &str| -> Vec<String> {
+        find_references_scoped(&conn, name, "callees", 20, false, Some(path))
+            .unwrap()
+            .into_iter()
+            .map(|r| r.to_symbol_name)
+            .collect()
+    };
+
+    assert!(callees("use", "src/twice.py").contains(&"get".to_string()));
+    assert_eq!(callees("Issue", "src/issues.ts"), vec!["Base"]);
+}
+
+#[test]
 fn a_self_call_reaches_a_method_inherited_from_a_base_in_another_file() {
     let (_repo, db_path) = scanned_repo(&[
         (
@@ -656,6 +681,37 @@ fn blast_radius_follows_a_fixture_to_the_tests_that_take_it() {
 }
 
 #[test]
+fn blast_radius_labels_a_test_class_setup_and_adds_the_tests_it_runs_before() {
+    let (_repo, db_path) = scanned_repo(&[
+        (
+            "src/Store.cs",
+            "namespace App;\n\npublic static class Store\n{\n    public static string PathFor(string root) => root;\n}\n",
+        ),
+        (
+            "tests/StoreTests.cs",
+            "using Xunit;\n\nnamespace App.Tests;\n\npublic sealed class StoreTests\n{\n    private readonly string path;\n\n    public StoreTests()\n    {\n        path = Store.PathFor(\"root\");\n    }\n\n    [Fact]\n    public void Opens()\n    {\n        Assert.NotNull(path);\n    }\n}\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let result = compute_blast_radius(&conn, &["PathFor"], &[], 2, 20).unwrap();
+
+    let reasons: Vec<(&str, &str)> = result
+        .likely_tests
+        .iter()
+        .map(|t| (t.name.as_str(), t.reason.as_str()))
+        .collect();
+    assert!(
+        reasons.contains(&("StoreTests", "setup (transitive caller [depth 1])")),
+        "{reasons:?}"
+    );
+    assert!(
+        reasons.contains(&("Opens", "setup `StoreTests` runs before it")),
+        "{reasons:?}"
+    );
+}
+
+#[test]
 fn blast_radius_reaches_tests_that_build_a_class_whose_call_method_reaches_the_target() {
     let (_repo, db_path) = scanned_repo(&[
         (
@@ -693,4 +749,41 @@ fn blast_radius_reaches_tests_that_build_a_class_whose_call_method_reaches_the_t
     assert!(position("test_user_error_is_handled") < position("test_view_renders"));
     let reason = &result.likely_tests[position("test_view_renders")].reason;
     assert_eq!(reason, "builds `App`, whose `__call__` reaches the target");
+    let reason = &result.likely_tests[position("test_user_error_is_handled")].reason;
+    assert_eq!(
+        reason,
+        "uses fixture `app`, which builds `App`, whose `__call__` reaches the target"
+    );
+}
+
+#[test]
+fn blast_radius_lists_the_tests_behind_a_fixture_that_takes_a_fixture_not_the_fixture() {
+    let (_repo, db_path) = scanned_repo(&[
+        ("src/web/app.py", "def report(e):\n    return str(e)\n"),
+        (
+            "tests/conftest.py",
+            "import pytest\nfrom web.app import report\n\n\n@pytest.fixture\ndef invoke():\n    return report(None)\n",
+        ),
+        (
+            "tests/test_runner.py",
+            "import pytest\n\n\nclass TestRunner:\n    @pytest.fixture\n    def runner(self, invoke):\n        return invoke\n\n    def test_runs(self, runner):\n        assert runner\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let result = compute_blast_radius(&conn, &["report"], &[], 2, 20).unwrap();
+
+    let reasons: Vec<(&str, &str)> = result
+        .likely_tests
+        .iter()
+        .map(|t| (t.name.as_str(), t.reason.as_str()))
+        .collect();
+    assert!(
+        reasons.contains(&("test_runs", "uses fixture `invoke`")),
+        "{reasons:?}"
+    );
+    assert!(
+        !reasons.iter().any(|(name, _)| *name == "runner"),
+        "{reasons:?}"
+    );
 }

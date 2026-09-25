@@ -81,11 +81,29 @@ Run the automated pre-flight script, or execute each check manually:
    - Check each gained and lost call-edge sample against its source line. A gained edge that is not
      a real call is a wrong caller in `find_references` and `blast_radius`. Fix it before release.
    - Open the changed tool outputs. Each change must come from a change in this release.
-7. **Harness Dogfood Session:**
-   Run the candidate in real sessions before tagging. On a dev machine, `~/.code-kb/bin/code-kb`
-   points every harness at `target/release`. In Claude Code and in Codex, open a git worktree of
-   one corpus project that is not Rust. Call every tool once with that worktree as `project_root`.
-   Read each answer for wrong roots, empty results, or noisy output.
+7. **Harness Dogfood Round (preflight step 10 requires it):**
+   The corpus check finds only output that changed since the previous release, so a defect that
+   both releases share passes it. The dogfood round is the check that finds wrong answers.
+   Run the rounds before the version bump.
+   ```bash
+   scripts/release-dogfood.sh   # DOGFOOD_PROJECT defaults to ~/source/flask
+   ```
+   The script builds the local code and runs one Claude Code and one Codex session on detached
+   worktrees of the project. The sessions use every tool and check each answer against the source.
+   `code-kb` on `PATH` must be `target/release/code-kb`. The script writes
+   `target/release-dogfood/report.md`. Then:
+   - Check each defect from both answers against the source. List it in the report as `[open]`,
+     `[not a defect]` with the reason, or `[deferred: "<the user's words>"]`. Only the user defers
+     a defect.
+   - Fix every open defect, commit the fix, and run a new round. A round that finds a defect is
+     not a pass.
+   - Set `## Result: PASS` only when the round finds no open defect.
+
+   Preflight fails when code under `crates/` changed after the round's commit.
+8. **New julie-extract version:** Do not tag it in `julie-extractors` first. Copy the local
+   release build to `.tools/julie-extract`, set the version in `scripts/julie-pins.json` and
+   `PINNED_JULIE_VERSION`, and run the corpus check and the dogfood rounds on that code-kb build.
+   Tag julie only when both pass. Then restore the published binary with its checksums.
 
 ---
 
@@ -134,6 +152,9 @@ Draft comprehensive markdown release notes at `docs/release-notes/vX.Y.Z.md`:
 - **Assets & Checksums:** Table of artifact archives and their SHA256 hashes.
 
 ### 4. Commit Version Bump & Release Notes
+Commit the bump only after the dogfood round passes. Keep it local until the corpus check passes,
+then push it and tag as soon as CI is green. Until the release exists, a plugin installed from
+`main` cannot download its binaries.
 ```bash
 git add Cargo.toml Cargo.lock crates/code-kb-cli/Cargo.toml .claude-plugin/plugin.json .codex-plugin/plugin.json .claude-plugin/marketplace.json plugin.json .github/workflows/release-binaries.yml docs/release-notes/vX.Y.Z.md
 git commit -m "chore: release vX.Y.Z"

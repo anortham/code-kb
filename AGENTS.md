@@ -135,7 +135,8 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
 - Reference rules: a pending call whose receiver names an import binding in the caller's file matches
   a target whose path holds that module as a directory or file name (`flask.Flask(...)` matches
   `src/flask/app.py`). A bare pending call never matches a definition in another file when the
-  caller's file defines that name at module level or inside the caller. A `self`, `this`, or `cls`
+  caller's file defines that name at module level or inside the caller; an import or re-export
+  there does not count. A `self`, `this`, or `cls`
   call matches a method of any ancestor class, through same-file and cross-file `extends` rows.
   A member access whose receiver names a type-like target groups to one row per
   file with an `occurrences` count. An identifier row is dropped when a relationship row already
@@ -153,7 +154,10 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   computes multi-hop reverse reachability via SQLite recursive CTEs and predicts targeted tests to run.
   Auto-discovers uncommitted git changes when no target is passed. A caller that julie flags as a
   test fixture is labelled `fixture`, and the tests that take that fixture as a parameter follow it:
-  in its file, or under the directory of the `conftest.py` that defines it. When the walk reaches a
+  in its file, or under the directory of the `conftest.py` that defines it. A setup member in
+  another test framework, such as an xUnit test-class constructor, is labelled `setup`, and the tests
+  of its class follow it. A fixture that takes
+  that fixture is replaced by the tests that take it in turn. When the walk reaches a
   class's `__call__`, or one hop short of it, the tests that build that class, directly or through a
   fixture, follow last, ranked by the words their names and file names share with the target. The
   display shows every row the `limit` returned. A stem-matched test file matches
@@ -183,7 +187,7 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   content-aware workspace scan that only re-extracts changed files.
 
 ### 7. Pinned Extractor & Bundled Distribution
-- `code-kb` pins the exact extractor version in `scripts/julie-pins.json` (currently `3.6.1`).
+- `code-kb` pins the exact extractor version in `scripts/julie-pins.json` (currently `3.6.2`).
 - Build guard: `crates/code-kb-cli/build.rs` verifies that `julie-extract` is restored and matches the pinned version. A missing or mismatched extractor fails the build immediately (bypassable for offline packaging via `CODE_KB_ALLOW_MISSING_JULIE_EXTRACT=1`).
 - Single-download distribution: Release archives ship `code-kb` and matching `julie-extract` pre-packaged side-by-side. Users download one archive and receive both binaries ready to execute.
 - Runtime discovery: `code-kb` checks `JULIE_EXTRACT_BIN`, next to its own executable (`current_exe().parent()`), `.tools/julie-extract` in that directory or any directory above it, and `PATH`. The current directory is never searched, so another repository's vendored extractor is never run. The first candidate whose version matches the pin wins; otherwise the first candidate found is used with a warning.
@@ -191,7 +195,7 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
 - New artifacts are built at the extractor's `facts` level (symbol core, structural facts, literals, and type-usage and member-access identifiers; no call or variable-reference identifiers and no source regions). `find_references(direction="callers")` reads those identifiers. The version guard also rebuilds an index recorded at another level.
 - Scans pass `--parent-pid` (Unix) so an extractor scan aborts when the `code-kb` process that started it dies.
 - Plugin distribution: every harness plugin (`.claude-plugin/plugin.json`, `.codex-plugin/plugin.json` with `.mcp.json`, root `plugin.json` with `mcp.json`, `mcp_config.json`, and `hooks.json` for Antigravity) starts the server and hooks through `bin/code-kb-launcher.cjs`. The launcher is a dependency-free Node script: on first run it downloads the release archive for the plugin's version from GitHub Releases into `~/.code-kb/dist/<version>/<target>/`, verifies the `.sha256` sidecar, unpacks it, and then executes `code-kb` with the given arguments. `CODE_KB_BIN` names a binary to run instead; a binary or symlink at `~/.code-kb/bin/code-kb` overrides the download in every harness (Codex clones plugins into a cache and drops the environment of MCP servers, so only a file can reach it); and a plugin installed from a source checkout runs that checkout's `target/release/code-kb` when it exists. With one of these, `cargo build --release` plus a session restart is the whole dev loop. No binaries are committed to git. `tests/plugin/*.test.cjs` (run with `node --test`) cover the launcher and keep every manifest on the launcher and on one version.
-- Release workflow: Documented step-by-step in `docs/RELEASING.md`; automated pre-flight check via `scripts/release-preflight.sh`, which also requires a fresh PASS from `scripts/release-corpus-check.py` (the previous release against the candidate on the real projects in `scripts/release-corpus.txt`). The launcher fetches by the version in `.claude-plugin/plugin.json`, so a version bump on `main` must be followed by its tag and release before users install from `main`.
+- Release workflow: Documented step-by-step in `docs/RELEASING.md`; automated pre-flight check via `scripts/release-preflight.sh`, which also requires a fresh PASS from `scripts/release-corpus-check.py` (the previous release against the candidate on the real projects in `scripts/release-corpus.txt`) and a dogfood report from `scripts/release-dogfood.sh` with `## Result: PASS`, no `[open]` defect, and no code change after its commit. The corpus check finds only changed output; the dogfood round finds wrong answers. A found defect is fixed and followed by a new round; only the user defers a defect. A new julie-extract version is tagged only after a code-kb build with it passes both. The launcher fetches by the version in `.claude-plugin/plugin.json`, so a version bump on `main` must be followed by its tag and release before users install from `main`.
 
 ### 8. Dynamic MCP Discovery & Zero Ghost Compatibility
 - **An MCP server is an ephemeral, agent-facing discovery surface, not a frozen REST API.**

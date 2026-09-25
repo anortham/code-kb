@@ -2436,13 +2436,12 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                     {import_alias_receiver}
                 )
                 AND ({target}.parent_symbol_id IS NULL OR s_from.parent_symbol_id = {target}.parent_symbol_id)
-                AND (p.target_receiver IS NOT NULL AND p.target_receiver != '' OR NOT EXISTS (
+                AND (p.target_receiver IS NOT NULL AND p.target_receiver != '' OR {target}.path = p.path OR NOT EXISTS (
                     SELECT 1 FROM symbols shadow
                     WHERE shadow.name = {target}.name
                       AND shadow.path = p.path
-                      AND shadow.symbol_id != {target}.symbol_id
                       AND shadow.symbol_id != p.from_symbol_id
-                      AND shadow.kind NOT IN ('import', 'module', 'namespace')
+                      AND shadow.kind NOT IN ('import', 'export', 'module', 'namespace')
                       AND (shadow.parent_symbol_id IS NULL OR shadow.parent_symbol_id = p.from_symbol_id)
                 ))
                 AND ({target}.parent_symbol_id IS NOT NULL OR NOT EXISTS (
@@ -3909,6 +3908,7 @@ pub fn compute_blast_radius_scoped_with_ids(
         "0"
     };
     let mut fixtures = Vec::new();
+    let mut setups = Vec::new();
     let mut entry_classes = Vec::new();
     let mut walked: Vec<String> = resolved_seed_symbols
         .iter()
@@ -3982,17 +3982,23 @@ pub fn compute_blast_radius_scoped_with_ids(
             let path = raw_path.replace('\\', "/");
             let is_test_target = is_test || test_container || is_test_path(&path);
             if name == "__call__"
-                && let Some(parent) = parent
+                && let Some(parent) = &parent
             {
-                entry_classes.push(parent);
+                entry_classes.push(parent.clone());
             }
 
             if is_test_target {
                 let key = format!("{}:{}", path, line);
                 if seen_test_keys.insert(key) {
-                    let reason = if is_fixture {
+                    let pytest_fixture = kind == "function" && path.ends_with(".py");
+                    let reason = if is_fixture && pytest_fixture {
                         fixtures.push((name.clone(), path.clone()));
                         format!("fixture (transitive caller [depth {depth}])")
+                    } else if is_fixture {
+                        if let Some(class_id) = parent {
+                            setups.push((name.clone(), class_id));
+                        }
+                        format!("setup (transitive caller [depth {depth}])")
                     } else {
                         format!("transitive caller [depth {depth}]")
                     };
@@ -4020,6 +4026,17 @@ pub fn compute_blast_radius_scoped_with_ids(
             if seen_test_keys.insert(format!("{}:{}", test.path, test.line)) {
                 likely_tests.push(TestTarget {
                     reason: format!("uses fixture `{fixture}`"),
+                    ..test
+                });
+            }
+        }
+    }
+
+    for (setup, class_id) in &setups {
+        for test in tests_in_class(conn, class_id)? {
+            if seen_test_keys.insert(format!("{}:{}", test.path, test.line)) {
+                likely_tests.push(TestTarget {
+                    reason: format!("setup `{setup}` runs before it"),
                     ..test
                 });
             }
@@ -4209,19 +4226,20 @@ pub fn compute_blast_radius_scoped_with_ids(
 }
 
 /// The test functions that take the fixture `name` as a parameter: in the fixture's own file,
-/// or anywhere under the directory of the `conftest.py` that defines it.
+/// or anywhere under the directory of the `conftest.py` that defines it. A fixture that takes it
+/// is not a test, so its own users are listed in its place.
 fn fixture_users(
     conn: &Connection,
     name: &str,
     fixture_path: &str,
 ) -> Result<Vec<TestTarget>, QueryError> {
-    let scope = match fixture_path.rsplit_once('/') {
-        Some((dir, "conftest.py")) => format!("{}/%", escape_like(dir)),
-        None if fixture_path == "conftest.py" => "%".to_string(),
-        _ => escape_like(fixture_path),
+    let lifecycle = if has_column(conn, "symbols", "test_lifecycle") {
+        "COALESCE(t.test_lifecycle, 0) != 0"
+    } else {
+        "0"
     };
-    let mut stmt = conn.prepare(
-        "SELECT DISTINCT t.name, t.path, t.start_line
+    let mut stmt = conn.prepare(&format!(
+        "SELECT DISTINCT t.name, t.path, t.start_line, {lifecycle}
          FROM symbols parameter
          JOIN symbols t ON t.symbol_id = parameter.parent_symbol_id
          WHERE parameter.name = ?1
@@ -4230,11 +4248,59 @@ fn fixture_users(
            AND t.is_test = 1
            AND replace(t.path, '\\', '/') LIKE ?2 ESCAPE '\\'
          ORDER BY t.path, t.start_line
-         LIMIT 2000",
-    )?;
+         LIMIT 2000"
+    ))?;
     // ponytail: the callers rank these rows by name, so the cap must hold a whole test suite's
     // users of one fixture; raise it if a suite passes 2,000 users of a single fixture.
-    let rows = stmt.query_map(params![name, scope], |row| {
+    let mut users = Vec::new();
+    let mut listed = HashSet::new();
+    let mut visited = HashSet::new();
+    let mut pending = vec![(name.to_string(), fixture_path.to_string())];
+    while let Some((name, fixture_path)) = pending.pop() {
+        if !visited.insert((name.clone(), fixture_path.clone())) {
+            continue;
+        }
+        let scope = match fixture_path.rsplit_once('/') {
+            Some((dir, "conftest.py")) => format!("{}/%", escape_like(dir)),
+            None if fixture_path == "conftest.py" => "%".to_string(),
+            _ => escape_like(&fixture_path),
+        };
+        let rows = stmt.query_map(params![name, scope], |row| {
+            Ok((
+                TestTarget {
+                    name: row.get(0)?,
+                    path: row.get::<_, String>(1)?.replace('\\', "/"),
+                    line: row.get::<_, i64>(2)? as usize,
+                    reason: String::new(),
+                },
+                row.get::<_, bool>(3)?,
+            ))
+        })?;
+        for row in rows {
+            let (user, is_fixture) = row?;
+            if is_fixture {
+                pending.push((user.name, user.path));
+            } else if listed.insert((user.path.clone(), user.line)) {
+                users.push(user);
+            }
+        }
+    }
+    Ok(users)
+}
+
+/// The tests declared in the class `class_id`, without its setup and teardown members.
+fn tests_in_class(conn: &Connection, class_id: &str) -> Result<Vec<TestTarget>, QueryError> {
+    let not_lifecycle = if has_column(conn, "symbols", "test_lifecycle") {
+        "COALESCE(test_lifecycle, 0) = 0"
+    } else {
+        "1"
+    };
+    let mut stmt = conn.prepare(&format!(
+        "SELECT name, path, start_line FROM symbols
+         WHERE parent_symbol_id = ?1 AND is_test = 1 AND {not_lifecycle}
+         ORDER BY start_line"
+    ))?;
+    let rows = stmt.query_map([class_id], |row| {
         Ok(TestTarget {
             name: row.get(0)?,
             path: row.get::<_, String>(1)?.replace('\\', "/"),
@@ -4298,10 +4364,6 @@ fn implicit_entry_tests(
     let Some(class) = get_symbol_by_id(conn, class_id)? else {
         return Ok(Vec::new());
     };
-    let reason = format!(
-        "builds `{}`, whose `__call__` reaches the target",
-        class.name
-    );
     let lifecycle = if has_column(conn, "symbols", "test_lifecycle") {
         "COALESCE(test_lifecycle, 0) != 0"
     } else {
@@ -4326,13 +4388,27 @@ fn implicit_entry_tests(
             )
             .unwrap_or(false);
         if is_fixture {
-            builders.extend(fixture_users(conn, &builder.name, &builder.path)?);
+            let reason = format!(
+                "uses fixture `{}`, which builds `{}`, whose `__call__` reaches the target",
+                builder.name, class.name
+            );
+            builders.extend(
+                fixture_users(conn, &builder.name, &builder.path)?
+                    .into_iter()
+                    .map(|test| TestTarget {
+                        reason: reason.clone(),
+                        ..test
+                    }),
+            );
         } else if builder.is_test {
             builders.push(TestTarget {
                 name: builder.name,
                 path: builder.path,
                 line: builder.start_line,
-                reason: String::new(),
+                reason: format!(
+                    "builds `{}`, whose `__call__` reaches the target",
+                    class.name
+                ),
             });
         }
     }
@@ -4346,13 +4422,7 @@ fn implicit_entry_tests(
             .then_with(|| a.path.cmp(&b.path))
             .then_with(|| a.line.cmp(&b.line))
     });
-    Ok(ranked
-        .into_iter()
-        .map(|(_, test)| TestTarget {
-            reason: reason.clone(),
-            ..test
-        })
-        .collect())
+    Ok(ranked.into_iter().map(|(_, test)| test).collect())
 }
 
 /// Compute blast radius and likely tests for given seed symbols or seed file paths.

@@ -44,12 +44,12 @@ pub fn format_file_skeleton(
     // Render top-level symbols and their children
     if let Some(roots) = children_map.get(&None) {
         for root in roots {
-            render_symbol_skeleton(&mut out, root, &children_map, 0);
+            render_symbol_skeleton(&mut out, root, None, &children_map, 0);
         }
     } else {
         // If parent relationships are missing or flat, render all sorted by line
         for s in symbols {
-            render_symbol_skeleton(&mut out, s, &children_map, 0);
+            render_symbol_skeleton(&mut out, s, None, &children_map, 0);
         }
     }
 
@@ -68,28 +68,59 @@ fn is_skippable_kind(kind: &str) -> bool {
     matches!(kind, "variable" | "parameter" | "import")
 }
 
-/// A value row that assigns before any `{` keeps its first line, capped at 120 characters,
-/// because that `{` starts a value such as a dict literal, not a body.
-fn value_row_signature(sig: &str) -> Option<String> {
+/// A value row keeps its first line, capped at 120 characters, because a `{` after its `=`
+/// starts a value such as a dict literal, not a body.
+fn value_row_signature(sig: &str) -> std::borrow::Cow<'_, str> {
+    let sig = sig.trim_end().trim_end_matches(';').trim_end();
     let first = sig.lines().next().unwrap_or(sig).trim_end();
-    let more = sig.trim_end().len() > first.len();
     if first.chars().count() > 120 {
-        return Some(first.chars().take(119).collect::<String>() + "…");
+        return (first.chars().take(119).collect::<String>() + "…").into();
     }
-    more.then(|| format!("{first} …"))
+    if sig.len() > first.len() {
+        format!("{first} …").into()
+    } else {
+        first.into()
+    }
+}
+
+/// Whether `sig` assigns a value: an `=` outside brackets, before any `{`, that is not part of
+/// `==`, `=>`, `>=`, `^=`, or another operator.
+fn assigns_a_value(sig: &str) -> bool {
+    let bytes = sig.as_bytes();
+    let mut depth = 0usize;
+    for (i, &byte) in bytes.iter().enumerate() {
+        match byte {
+            b'(' | b'[' => depth += 1,
+            b')' | b']' => depth = depth.saturating_sub(1),
+            b'{' if depth == 0 => return false,
+            b'=' if depth == 0 => {
+                let before = i.checked_sub(1).map(|j| bytes[j]);
+                let after = bytes.get(i + 1).copied();
+                let operator_before = before.is_some_and(|b| b"<>!=^*~|$+-/%&:?".contains(&b));
+                let operator_after = after.is_some_and(|b| b == b'=' || b == b'>');
+                if !operator_before && !operator_after {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+    }
+    false
 }
 
 fn sanitize_skeleton_sig<'a>(sig: &'a str, sym: &'a Symbol) -> std::borrow::Cow<'a, str> {
-    let assigns_before_brace = sig
-        .find('=')
-        .is_some_and(|eq| sig.find('{').is_none_or(|brace| eq < brace));
     if matches!(
         sym.kind.as_str(),
         "variable" | "constant" | "property" | "field" | "enum_member"
-    ) && assigns_before_brace
+    ) && assigns_a_value(sig)
     {
-        return value_row_signature(sig).map_or(sig.into(), Into::into);
+        return value_row_signature(sig);
     }
+    container_signature(sig, sym)
+}
+
+/// The signature cut at its first `{`, which opens the body that the skeleton renders.
+fn container_signature<'a>(sig: &'a str, sym: &'a Symbol) -> std::borrow::Cow<'a, str> {
     let expression_arrow = if sym.language == "csharp"
         && matches!(
             sym.kind.as_str(),
@@ -145,10 +176,15 @@ fn unspelled_kind(sym: &Symbol) -> &'static str {
 fn render_symbol_skeleton(
     out: &mut String,
     sym: &Symbol,
+    parent: Option<&Symbol>,
     children_map: &HashMap<Option<String>, Vec<&Symbol>>,
     indent_level: usize,
 ) {
-    let class_attribute = sym.kind == "variable" && indent_level > 0;
+    // julie gives other languages' block locals, markup elements, and data keys a `variable` row
+    // under a parent too; only a Python class body declares attributes that way.
+    let class_attribute = sym.kind == "variable"
+        && sym.language == "python"
+        && parent.is_some_and(|parent| parent.kind == "class");
     if is_skippable_kind(&sym.kind) && !class_attribute {
         return;
     }
@@ -182,18 +218,22 @@ fn render_symbol_skeleton(
         && (spans_multiple_lines || sym.kind == "enum")
     {
         let raw_sig = sym.signature.as_deref().unwrap_or(&sym.name);
-        let sig = sanitize_skeleton_sig(raw_sig, sym);
+        let sig = container_signature(raw_sig, sym);
         out.push_str(&format!("{indent}{sig} {{\n"));
         if let Some(child_list) = children {
             for child in child_list {
-                render_symbol_skeleton(out, child, children_map, indent_level + 1);
+                render_symbol_skeleton(out, child, Some(sym), children_map, indent_level + 1);
             }
         }
         out.push_str(&format!("{indent}}} // {span_str}\n\n"));
     } else {
         if let Some(count) = sym.hidden_body_line_count() {
             let raw_sig = sym.signature.as_deref().unwrap_or(&sym.name);
-            let sig = sanitize_skeleton_sig(raw_sig, sym);
+            let sig = if count > 1 {
+                container_signature(raw_sig, sym)
+            } else {
+                sanitize_skeleton_sig(raw_sig, sym)
+            };
             let b_start = sym.body_start_line.unwrap_or(sym.start_line);
             let b_end = sym.body_end_line.unwrap_or(sym.end_line);
 
@@ -218,7 +258,7 @@ fn render_symbol_skeleton(
             && let Some(child_list) = children
         {
             for child in child_list {
-                render_symbol_skeleton(out, child, children_map, indent_level);
+                render_symbol_skeleton(out, child, Some(sym), children_map, indent_level);
             }
         }
     }
@@ -1311,6 +1351,164 @@ mod tests {
             "{out}"
         );
         assert!(!out.contains("app = App()"), "{out}");
+    }
+
+    #[test]
+    fn skeleton_hides_variables_that_are_not_python_class_attributes() {
+        let parent = |name: &str, kind: &str, language: &str| Symbol {
+            kind: kind.into(),
+            language: language.into(),
+            start_line: 1,
+            end_line: 20,
+            body_start_line: None,
+            body_end_line: None,
+            signature: Some(format!("{kind} {name}")),
+            ..sample_symbol(name)
+        };
+        let child = |name: &str, parent: &str, language: &str, sig: &str| Symbol {
+            kind: "variable".into(),
+            language: language.into(),
+            parent_symbol_id: Some(format!("id_{parent}")),
+            start_line: 2,
+            end_line: 2,
+            body_start_line: None,
+            body_end_line: None,
+            signature: Some(sig.into()),
+            ..sample_symbol(name)
+        };
+        let symbols = vec![
+            parent("Adapters", "class", "java"),
+            child(
+                "accessible",
+                "Adapters",
+                "java",
+                "boolean accessible = false",
+            ),
+            parent("body", "class", "html"),
+            child(
+                "img",
+                "body",
+                "html",
+                "<img class=\"carat\" src=\"carat.png\" alt>",
+            ),
+            parent("section", "module", "yaml"),
+            child("title", "section", "yaml", "title: Invoking jq"),
+        ];
+
+        let out = format_file_skeleton("mixed", &symbols, None, 0);
+
+        for hidden in ["accessible", "<img", "title:"] {
+            assert!(!out.contains(hidden), "{out}");
+        }
+    }
+
+    #[test]
+    fn skeleton_keeps_values_only_for_real_assignments() {
+        let row =
+            |name: &str, kind: &str, line: usize, sig: &str, body: Option<(usize, usize)>| Symbol {
+                kind: kind.into(),
+                start_line: line,
+                end_line: body.map_or(line, |(_, end)| end),
+                body_start_line: body.map(|(start, _)| start),
+                body_end_line: body.map(|(_, end)| end),
+                signature: Some(sig.into()),
+                ..sample_symbol(name)
+            };
+        let symbols = vec![
+            row(
+                "img",
+                "property",
+                1,
+                "[class^=rz-] img,[class^=rz-] svg { vertical-align:middle }",
+                None,
+            ),
+            row(
+                "Coordinates",
+                "property",
+                2,
+                "[JsonProperty(ItemConverterType = typeof(IntToFloatConverter))] public int[,,] Coordinates { get; set; }",
+                None,
+            ),
+            row(
+                "VERSION_CHECK",
+                "constant",
+                3,
+                "#define VERSION_CHECK(major,minor,patch) (_MSC_VER >= ((major * 100) + (minor)))\n",
+                None,
+            ),
+            row(
+                "TABLE",
+                "constant",
+                4,
+                "TABLE = {\n  '\"' => '%22',\n  '\\r' => '%0D',\n}.freeze",
+                Some((4, 8)),
+            ),
+            row(
+                "LIMIT",
+                "field",
+                10,
+                "private static final int LIMIT = 5;",
+                None,
+            ),
+        ];
+
+        let out = format_file_skeleton("mixed", &symbols, None, 0);
+
+        assert!(
+            out.contains("[class^=rz-] img,[class^=rz-] svg; // L1-1"),
+            "{out}"
+        );
+        assert!(out.contains("public int[,,] Coordinates; // L2-2"), "{out}");
+        assert!(
+            out.contains(
+                "#define VERSION_CHECK(major,minor,patch) (_MSC_VER >= ((major * 100) + (minor))); // L3-3\n"
+            ),
+            "{out}"
+        );
+        assert!(
+            out.contains("TABLE = { /* 5 lines hidden: L4-L8 */ }"),
+            "{out}"
+        );
+        assert!(
+            out.contains("private static final int LIMIT = 5; // L10-10"),
+            "{out}"
+        );
+    }
+
+    #[test]
+    fn skeleton_cuts_a_field_with_members_at_its_brace() {
+        let field = Symbol {
+            kind: "field".into(),
+            language: "java".into(),
+            start_line: 1,
+            end_line: 9,
+            body_start_line: None,
+            body_end_line: None,
+            signature: Some(
+                "public static final TypeAdapter<Class> CLASS = new TypeAdapter<Class>() {\n  @Override\n}"
+                    .into(),
+            ),
+            ..sample_symbol("CLASS")
+        };
+        let member = Symbol {
+            kind: "method".into(),
+            language: "java".into(),
+            parent_symbol_id: Some("id_CLASS".into()),
+            start_line: 2,
+            end_line: 4,
+            signature: Some("public void write(JsonWriter out, Class value)".into()),
+            ..sample_symbol("write")
+        };
+
+        let out = format_file_skeleton("TypeAdapters.java", &[field, member], None, 0);
+
+        assert!(
+            out.contains(
+                "public static final TypeAdapter<Class> CLASS = new TypeAdapter<Class>() {\n"
+            ),
+            "{out}"
+        );
+        assert!(!out.contains('…'), "{out}");
     }
 
     #[test]
