@@ -3,7 +3,7 @@ id: improve-retrieval-first-measure-task-savings-after
 title: Improve retrieval first, measure task savings afterward
 status: active
 created: 2026-09-26T23:16:22.894Z
-updated: 2026-09-26T23:16:22.894Z
+updated: 2026-09-26T23:40:46.301Z
 tags:
   - project-direction
   - retrieval-quality
@@ -27,4 +27,4 @@ Keep the AST/SQLite foundation and CLI/MCP parity. Focused correctness and perfo
 
 ## Status and reference
 
-Priority order approved; implementation has not started. See docs/reviews/2026-09-26-project-evaluation.md for evidence and acceptance criteria. The earlier recommendation to run the savings study first is superseded.
+Priority order approved. The first implementation plan is ready for approval at docs/plans/2026-09-26-receiver-reference-reliability.md in worktree .worktrees/receiver-reference-reliability, branch fix/receiver-reference-reliability. It covers receiver disambiguation, uncertainty labels and affected consumers, then performance diagnosis. Implementation has not started, and this slice does not complete priority 1. See docs/reviews/2026-09-26-project-evaluation.md for the full evidence and acceptance criteria. The earlier recommendation to run the savings study first is superseded.
