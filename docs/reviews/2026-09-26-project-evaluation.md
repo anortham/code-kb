@@ -6,9 +6,9 @@ reductions in individual retrieval responses compared with full-file reads. It
 does not establish an 80-90% reduction in total task tokens, billed usage, or
 context compactions.
 
-Keep the Rust, julie-extract, SQLite, and CLI/MCP foundation. Prioritize task
-measurement, bounded answers, and retrieval reliability before adding a vector
-runtime or a broader agent framework.
+Keep the Rust, julie-extract, SQLite, and CLI/MCP foundation. Improve retrieval
+reliability, bound answers, strengthen correctness checks, and trial file/content
+search, then measure complete-task savings.
 
 This evaluation inspected code-kb at `54f2c08852ec81fe063cb833bc8d3a87805af2ef`
 on `main`, initially clean, with no other worktrees. It also inspected clean
@@ -53,7 +53,56 @@ implemented by this report.
 
 ## Five improvements, in priority order
 
-1. **Measure complete tasks and correct the savings claims.** Reuse the existing
+1. **Make relationship inference easier to audit and faster on difficult cases.**
+   Existing `candidate`, `possible`, and traversal-cap notices are a good start.
+   Preserve the reason a relationship matched through resolved identity,
+   inferred type, receiver/name matching, fixture propagation, or runtime
+   prediction. Expose that reason where it changes confidence in a result.
+   Use the known receiver ambiguities and missed tests as concrete expected
+   edges and non-edges. Diagnose the recorded common-name latency cases with
+   query plans before adding more heuristics. Extract shared resolution rules
+   from the large query module as this work requires it.
+   **Acceptance:** measured precision and recall plus p95 on fixed difficult
+   cases, with no output/latency improvement achieved by silently dropping edges.
+
+2. **Bound skeleton and context output, with a way to continue.** A skeleton of
+   `queries.rs` returned 14,541 reference tokens in the fresh probe. The skeleton
+   schema accepts only a file path, and its formatter renders every symbol.
+   Context limits supporting rows but includes the entire target body. Existing
+   search/reference result limits and truncation notices are useful and should
+   be retained. Add an output budget or bounded view with explicit omitted counts
+   and continuation to these unbounded paths. Preserve an explicit complete-body
+   operation, so a budget never silently returns partial code as a full body.
+   Borrow Miller's budget discipline without adding its full task-planning layer.
+   **Acceptance:** a large-file fixture respects the budget, reports omissions,
+   and permits retrieval of every omitted symbol or body segment.
+
+3. **Make answer quality a repeatable gate.** Extend the existing search corpus,
+   adversarial tests, and release dogfood assets rather than building another
+   evaluation framework. Add fresh, held-out cases for candidate omissions,
+   wrong-target references, missing tests, ambiguous names, and concept queries
+   across languages. Score candidate recall separately from ranking; score both
+   expected and forbidden relationship matches. A corpus comparison that finds
+   changed output and a timing script cannot detect every confidently wrong or
+   incomplete answer. Maintain separate tuning and held-out data, refresh stale
+   labels against pinned snapshots, and preserve sealed acceptance data.
+   **Acceptance:** retrieval changes show correctness and cost on the same fixed
+   cases, including misses and negative examples. These cheap deterministic
+   checks complement the later agent-task experiment in item 5.
+
+4. **Test a separate file/content retrieval path before more ranking tweaks.**
+   Phoebe's most useful distinct result is ranking whole files alongside
+   definitions. Miller demonstrates fresh, bounded source chunks in SQLite FTS.
+   A narrow implementation could admit files using implementation text, comments,
+   and documentation when symbol names and docstrings miss the query. First test
+   those real misses against targeted native search. Keep file retrieval distinct
+   from exact symbol ranking: Phoebe's file fusion loses symbol top-1 hits. Preserve
+   AST extraction and current freshness checks.
+   **Acceptance:** gains on an untouched, file-oriented task set over both current
+   code-kb and native retrieval, with indexing, disk, memory, latency, and output
+   costs reported. Do not ship it on a development-set ranking gain alone.
+
+5. **Measure complete tasks and correct the savings claims.** Reuse the existing
    retrieval scripts and the Miller comparison protocol. Compare competent native
    retrieval, code-kb under current guidance, and code-kb with explicit native
    verification/fallback. Use identical repository snapshots, prompts, model,
@@ -72,56 +121,7 @@ implemented by this report.
    describe existing savings as full-file output compression and correct the
    unsupported README, skill, and routing claims.
 
-2. **Make relationship inference easier to audit and faster on difficult cases.**
-   Existing `candidate`, `possible`, and traversal-cap notices are a good start.
-   Preserve the reason a relationship matched through resolved identity,
-   inferred type, receiver/name matching, fixture propagation, or runtime
-   prediction. Expose that reason where it changes confidence in a result.
-   Use the known receiver ambiguities and missed tests as concrete expected
-   edges and non-edges. Diagnose the recorded common-name latency cases with
-   query plans before adding more heuristics. Extract shared resolution rules
-   from the large query module as this work requires it.
-   **Acceptance:** measured precision and recall plus p95 on fixed difficult
-   cases, with no output/latency improvement achieved by silently dropping edges.
-
-3. **Bound skeleton and context output, with a way to continue.** A skeleton of
-   `queries.rs` returned 14,541 reference tokens in the fresh probe. The skeleton
-   schema accepts only a file path, and its formatter renders every symbol.
-   Context limits supporting rows but includes the entire target body. Existing
-   search/reference result limits and truncation notices are useful and should
-   be retained. Add an output budget or bounded view with explicit omitted counts
-   and continuation to these unbounded paths. Preserve an explicit complete-body
-   operation, so a budget never silently returns partial code as a full body.
-   Borrow Miller's budget discipline without adding its full task-planning layer.
-   **Acceptance:** a large-file fixture respects the budget, reports omissions,
-   and permits retrieval of every omitted symbol or body segment.
-
-4. **Make answer quality a repeatable gate.** Extend the existing search corpus,
-   adversarial tests, and release dogfood assets rather than building another
-   evaluation framework. Add fresh, held-out cases for candidate omissions,
-   wrong-target references, missing tests, ambiguous names, and concept queries
-   across languages. Score candidate recall separately from ranking; score both
-   expected and forbidden relationship matches. A corpus comparison that finds
-   changed output and a timing script cannot detect every confidently wrong or
-   incomplete answer. Maintain separate tuning and held-out data, refresh stale
-   labels against pinned snapshots, and preserve sealed acceptance data.
-   **Acceptance:** retrieval changes show correctness and cost on the same fixed
-   cases, including misses and negative examples. These cheap deterministic
-   checks complement the agent-task experiment in item 1.
-
-5. **Test a separate file/content retrieval path before more ranking tweaks.**
-   Phoebe's most useful distinct result is ranking whole files alongside
-   definitions. Miller demonstrates fresh, bounded source chunks in SQLite FTS.
-   A narrow implementation could admit files using implementation text, comments,
-   and documentation when symbol names and docstrings miss the query. First test
-   those real misses against targeted native search. Keep file retrieval distinct
-   from exact symbol ranking: Phoebe's file fusion loses symbol top-1 hits. Preserve
-   AST extraction and current freshness checks.
-   **Acceptance:** gains on an untouched, file-oriented task set over both current
-   code-kb and native retrieval, with indexing, disk, memory, latency, and output
-   costs reported. Do not ship it on a development-set ranking gain alone.
-
-Item 1 largely executes the existing
+Item 5 follows the other four improvements and largely executes the existing
 [retrieval-value backlog](../plans/2026-09-23-retrieval-value-and-optional-routing.md).
 It does not need another planning system. Paid agent replays require a budget;
 this evaluation did not run them.
