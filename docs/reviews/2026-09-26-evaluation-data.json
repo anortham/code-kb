@@ -1,0 +1,516 @@
+{
+  "output_probe": {
+    "source_commit": "54f2c08852ec81fe063cb833bc8d3a87805af2ef",
+    "binary_version": "code-kb 2.2.2",
+    "binary_sha256": "e27a9ac693034d8c54e8155c1dbb0efe332cdf58e2660d33c30c48add8c1b043",
+    "reference_encoding": "cl100k_base",
+    "tiktoken_version": "0.14.0",
+    "method": "A selected 10-call output-size probe on the live checkout. No agent tasks, no answer-quality scoring, no claim that this encoding matches the active model. Source-slice counts assume line locations are already known and exclude native discovery costs. Context answers include evidence beyond their source file.",
+    "schema_json_tokens": 2275,
+    "tool_count": 10,
+    "routing_block_tokens": 617,
+    "rows": [
+      {
+        "case": "skeleton-small",
+        "tool": "file_skeleton",
+        "arguments": {
+          "file_path": "crates/code-kb-core/src/slicer.rs"
+        },
+        "source_lines": 191,
+        "source_tokens": 1613,
+        "response_tokens": 623,
+        "response_bytes": 2229,
+        "response_bytes_div_4": 557,
+        "full_file_reduction_pct": 61.38
+      },
+      {
+        "case": "skeleton-telemetry",
+        "tool": "file_skeleton",
+        "arguments": {
+          "file_path": "crates/code-kb-core/src/telemetry.rs"
+        },
+        "source_lines": 2214,
+        "source_tokens": 18481,
+        "response_tokens": 2594,
+        "response_bytes": 8870,
+        "response_bytes_div_4": 2217,
+        "full_file_reduction_pct": 85.96
+      },
+      {
+        "case": "skeleton-queries",
+        "tool": "file_skeleton",
+        "arguments": {
+          "file_path": "crates/code-kb-core/src/queries.rs"
+        },
+        "source_lines": 8726,
+        "source_tokens": 81114,
+        "response_tokens": 14541,
+        "response_bytes": 51949,
+        "response_bytes_div_4": 12987,
+        "full_file_reduction_pct": 82.07
+      },
+      {
+        "case": "skeleton-server",
+        "tool": "file_skeleton",
+        "arguments": {
+          "file_path": "crates/code-kb-cli/src/mcp/server.rs"
+        },
+        "source_lines": 1750,
+        "source_tokens": 14928,
+        "response_tokens": 1485,
+        "response_bytes": 5639,
+        "response_bytes_div_4": 1409,
+        "full_file_reduction_pct": 90.05
+      },
+      {
+        "case": "body-path",
+        "tool": "get_symbol_body",
+        "arguments": {
+          "symbol_name": "resolve_telemetry_dir",
+          "file_path": "crates/code-kb-core/src/telemetry.rs"
+        },
+        "source_lines": 2214,
+        "source_tokens": 18481,
+        "response_tokens": 219,
+        "response_bytes": 826,
+        "response_bytes_div_4": 206,
+        "full_file_reduction_pct": 98.81,
+        "body_source_line_range": [
+          151,
+          178
+        ],
+        "exact_source_slice_tokens": 197,
+        "source_slice_plus_5_lines_each_side_tokens": 286
+      },
+      {
+        "case": "body-request",
+        "tool": "get_symbol_body",
+        "arguments": {
+          "symbol_name": "handle_call_tool",
+          "file_path": "crates/code-kb-cli/src/mcp/server.rs"
+        },
+        "source_lines": 1750,
+        "source_tokens": 14928,
+        "response_tokens": 855,
+        "response_bytes": 4803,
+        "response_bytes_div_4": 1200,
+        "full_file_reduction_pct": 94.27,
+        "body_source_line_range": [
+          547,
+          661
+        ],
+        "exact_source_slice_tokens": 835,
+        "source_slice_plus_5_lines_each_side_tokens": 889
+      },
+      {
+        "case": "body-score",
+        "tool": "get_symbol_body",
+        "arguments": {
+          "symbol_name": "score_task",
+          "file_path": "scripts/retrieval_score.py"
+        },
+        "source_lines": 477,
+        "source_tokens": 5100,
+        "response_tokens": 332,
+        "response_bytes": 1204,
+        "response_bytes_div_4": 301,
+        "full_file_reduction_pct": 93.49,
+        "body_source_line_range": [
+          194,
+          214
+        ],
+        "exact_source_slice_tokens": 317,
+        "source_slice_plus_5_lines_each_side_tokens": 389
+      },
+      {
+        "case": "body-baseline",
+        "tool": "get_symbol_body",
+        "arguments": {
+          "symbol_name": "file_sizes_for_paths",
+          "file_path": "crates/code-kb-core/src/queries.rs"
+        },
+        "source_lines": 8726,
+        "source_tokens": 81114,
+        "response_tokens": 203,
+        "response_bytes": 754,
+        "response_bytes_div_4": 188,
+        "full_file_reduction_pct": 99.75,
+        "body_source_line_range": [
+          371,
+          390
+        ],
+        "exact_source_slice_tokens": 183,
+        "source_slice_plus_5_lines_each_side_tokens": 300
+      },
+      {
+        "case": "context-path",
+        "tool": "get_symbol_context",
+        "arguments": {
+          "symbol_name": "resolve_telemetry_dir",
+          "file_path": "crates/code-kb-core/src/telemetry.rs"
+        },
+        "source_lines": 2214,
+        "source_tokens": 18481,
+        "response_tokens": 321,
+        "response_bytes": 1228,
+        "response_bytes_div_4": 307,
+        "full_file_reduction_pct": 98.26
+      },
+      {
+        "case": "context-baseline",
+        "tool": "get_symbol_context",
+        "arguments": {
+          "symbol_name": "file_sizes_for_paths",
+          "file_path": "crates/code-kb-core/src/queries.rs"
+        },
+        "source_lines": 8726,
+        "source_tokens": 81114,
+        "response_tokens": 261,
+        "response_bytes": 989,
+        "response_bytes_div_4": 247,
+        "full_file_reduction_pct": 99.68
+      }
+    ]
+  },
+  "scripted_retrieval_benchmark": {
+    "meta": {
+      "binary": "/home/murphy/source/code-kb/target/release/code-kb",
+      "version": "code-kb 2.2.2",
+      "binary_sha256": "e27a9ac693034d8c54e8155c1dbb0efe332cdf58e2660d33c30c48add8c1b043",
+      "repo": "/home/murphy/source/code-kb",
+      "repo_head": "54f2c08852ec81fe063cb833bc8d3a87805af2ef",
+      "commit": "8e1b388639b45c5d423cc18db85fe6d11f5d8d8e",
+      "tasks_file": "/home/murphy/source/code-kb/scripts/retrieval_score_tasks.json",
+      "scan_seconds": 1.26,
+      "digest": "a4d1aa5cbcfce479"
+    },
+    "score": {
+      "tasks": [
+        {
+          "id": "T01-orient",
+          "question": "I am new to this repository. What are the top-level areas?",
+          "tools": [
+            "codebase_outline"
+          ],
+          "calls": 1,
+          "empty_calls": 0,
+          "error_calls": 0,
+          "tokens_returned": 605,
+          "tokens_saved": 0,
+          "saved_known_calls": 0,
+          "tokens_stable": true,
+          "tokens_per_pass": [
+            605,
+            605,
+            605,
+            605
+          ],
+          "p50_ms": 2.0,
+          "p95_ms": 2.0,
+          "max_ms": 2.0
+        },
+        {
+          "id": "T02-file-shape",
+          "question": "What does telemetry.rs define? Give me the signatures, not the bodies.",
+          "tools": [
+            "file_skeleton"
+          ],
+          "calls": 1,
+          "empty_calls": 0,
+          "error_calls": 0,
+          "tokens_returned": 2217,
+          "tokens_saved": 17628,
+          "saved_known_calls": 1,
+          "tokens_stable": true,
+          "tokens_per_pass": [
+            2217,
+            2217,
+            2217,
+            2217
+          ],
+          "p50_ms": 3.0,
+          "p95_ms": 3.0,
+          "max_ms": 3.0
+        },
+        {
+          "id": "T03-find-and-read",
+          "question": "Which directory holds the telemetry database, and what is the rule that picks it?",
+          "tools": [
+            "lookup_symbol",
+            "get_symbol_body"
+          ],
+          "calls": 2,
+          "empty_calls": 0,
+          "error_calls": 0,
+          "tokens_returned": 289,
+          "tokens_saved": 39401,
+          "saved_known_calls": 2,
+          "tokens_stable": true,
+          "tokens_per_pass": [
+            289,
+            289,
+            289,
+            289
+          ],
+          "p50_ms": 1.0,
+          "p95_ms": 2.0,
+          "max_ms": 2.0
+        },
+        {
+          "id": "T04-concept-to-context",
+          "question": "Which code decides that a file is a test file? Show me enough to change it safely.",
+          "tools": [
+            "search_symbols",
+            "get_symbol_context"
+          ],
+          "calls": 2,
+          "empty_calls": 0,
+          "error_calls": 0,
+          "tokens_returned": 1902,
+          "tokens_saved": 149165,
+          "saved_known_calls": 2,
+          "tokens_stable": true,
+          "tokens_per_pass": [
+            1902,
+            1902,
+            1902,
+            1902
+          ],
+          "p50_ms": 14.0,
+          "p95_ms": 19.0,
+          "max_ms": 19.0
+        },
+        {
+          "id": "T05-callers",
+          "question": "I want to change record_tool_call_conn. Who calls it?",
+          "tools": [
+            "find_references"
+          ],
+          "calls": 1,
+          "empty_calls": 0,
+          "error_calls": 0,
+          "tokens_returned": 527,
+          "tokens_saved": 39704,
+          "saved_known_calls": 1,
+          "tokens_stable": true,
+          "tokens_per_pass": [
+            527,
+            527,
+            527,
+            527
+          ],
+          "p50_ms": 2.0,
+          "p95_ms": 3.0,
+          "max_ms": 3.0
+        },
+        {
+          "id": "T06-callees",
+          "question": "What does get_telemetry_summary call?",
+          "tools": [
+            "find_references"
+          ],
+          "calls": 1,
+          "empty_calls": 0,
+          "error_calls": 0,
+          "tokens_returned": 242,
+          "tokens_saved": 19603,
+          "saved_known_calls": 1,
+          "tokens_stable": true,
+          "tokens_per_pass": [
+            242,
+            242,
+            242,
+            242
+          ],
+          "p50_ms": 3.0,
+          "p95_ms": 3.0,
+          "max_ms": 3.0
+        },
+        {
+          "id": "T07-impact-and-tests",
+          "question": "I plan to change telemetry.rs. What breaks downstream, and which tests should I run?",
+          "tools": [
+            "blast_radius"
+          ],
+          "calls": 1,
+          "empty_calls": 0,
+          "error_calls": 0,
+          "tokens_returned": 163,
+          "tokens_saved": 26456,
+          "saved_known_calls": 1,
+          "tokens_stable": true,
+          "tokens_per_pass": [
+            163,
+            163,
+            163,
+            163
+          ],
+          "p50_ms": 9.0,
+          "p95_ms": 10.0,
+          "max_ms": 10.0
+        },
+        {
+          "id": "T08-structural-facts",
+          "question": "What SQL does this repository run?",
+          "tools": [
+            "find_structural_facts"
+          ],
+          "calls": 1,
+          "empty_calls": 0,
+          "error_calls": 0,
+          "tokens_returned": 955,
+          "tokens_saved": 28346,
+          "saved_known_calls": 1,
+          "tokens_stable": true,
+          "tokens_per_pass": [
+            955,
+            955,
+            955,
+            955
+          ],
+          "p50_ms": 1.0,
+          "p95_ms": 1.0,
+          "max_ms": 1.0
+        },
+        {
+          "id": "T09-substring-search",
+          "question": "Where does code-kb build the full-text search index, and what does that code do?",
+          "tools": [
+            "search_symbols",
+            "get_symbol_body"
+          ],
+          "calls": 2,
+          "empty_calls": 0,
+          "error_calls": 0,
+          "tokens_returned": 2875,
+          "tokens_saved": 133422,
+          "saved_known_calls": 2,
+          "tokens_stable": true,
+          "tokens_per_pass": [
+            2875,
+            2875,
+            2875,
+            2875
+          ],
+          "p50_ms": 0.0,
+          "p95_ms": 14.0,
+          "max_ms": 14.0
+        },
+        {
+          "id": "T10-narrow-read",
+          "question": "Show me only the body of format_telemetry_summary.",
+          "tools": [
+            "get_symbol_body"
+          ],
+          "calls": 1,
+          "empty_calls": 0,
+          "error_calls": 0,
+          "tokens_returned": 823,
+          "tokens_saved": 19022,
+          "saved_known_calls": 1,
+          "tokens_stable": true,
+          "tokens_per_pass": [
+            823,
+            823,
+            823,
+            823
+          ],
+          "p50_ms": 0.0,
+          "p95_ms": 0.0,
+          "max_ms": 0.0
+        },
+        {
+          "id": "T11-waste-wrong-symbol",
+          "question": "WASTE TASK. The agent guesses a symbol name that does not exist (get_telemetry_stats). This task measures the cost of a miss, not a win.",
+          "tools": [
+            "lookup_symbol"
+          ],
+          "calls": 1,
+          "empty_calls": 0,
+          "error_calls": 0,
+          "tokens_returned": 1199,
+          "tokens_saved": 110231,
+          "saved_known_calls": 1,
+          "tokens_stable": true,
+          "tokens_per_pass": [
+            1199,
+            1199,
+            1199,
+            1199
+          ],
+          "p50_ms": 13.0,
+          "p95_ms": 13.0,
+          "max_ms": 13.0
+        },
+        {
+          "id": "T12-waste-wrong-file",
+          "question": "WASTE TASK. The agent guesses a file path that does not exist (crates/code-kb-core/src/config.rs). This task measures the cost of a miss, not a win.",
+          "tools": [
+            "file_skeleton"
+          ],
+          "calls": 1,
+          "empty_calls": 0,
+          "error_calls": 1,
+          "tokens_returned": 26,
+          "tokens_saved": 0,
+          "saved_known_calls": 0,
+          "tokens_stable": true,
+          "tokens_per_pass": [
+            26,
+            26,
+            26,
+            26
+          ],
+          "p50_ms": 1.0,
+          "p95_ms": 1.0,
+          "max_ms": 1.0
+        }
+      ],
+      "totals": {
+        "tasks": 12,
+        "calls_per_pass": 15,
+        "warmup_passes": 1,
+        "scored_passes": 3,
+        "scored_calls": 45,
+        "tokens_returned": 11823,
+        "tokens_saved": 582978,
+        "saved_known_calls": 13,
+        "empty_calls": 0,
+        "error_calls": 1,
+        "p50_ms": 2.0,
+        "p95_ms": 19.0,
+        "max_ms": 19.0,
+        "mean_ms": 5.56,
+        "tokens_unstable_tasks": [],
+        "tokens_per_task": 985.2,
+        "calls_per_task": 1.25,
+        "empty_share_pct": 0.0
+      }
+    },
+    "cross_check": {
+      "stats_total_calls": 60,
+      "stats_total_tokens": 47292,
+      "stats_empty_calls": 0,
+      "stats_error_calls": 4,
+      "rows_read": 60,
+      "agrees": true
+    }
+  },
+  "telemetry_before_evaluation": {
+    "cutoff_utc": "2026-09-26 20:35:00",
+    "note": "Excludes evaluation session calls after this cutoff. Synthetic/benchmark/real-agent calls are not distinguished by stored telemetry.",
+    "versions": [
+      {
+        "version": "2.2.2",
+        "calls": 90,
+        "served_estimated": 70539,
+        "baseline_known": 83,
+        "fullfile_upper_bound_estimated": 4373600,
+        "errors": 1,
+        "empty": 1,
+        "first": "2026-09-25 19:52:45",
+        "last": "2026-09-25 21:39:48"
+      }
+    ]
+  }
+}
