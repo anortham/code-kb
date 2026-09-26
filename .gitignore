@@ -24,6 +24,8 @@ worktrees/
 benchmark_report.json
 
 # Tooling
+.env
+__pycache__/
 .tools/
 .razorback/
 .agents/

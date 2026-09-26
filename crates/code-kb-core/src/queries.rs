@@ -1086,6 +1086,7 @@ fn text_tokens_into<'a>(text: &'a str, out: &mut Vec<&'a str>) {
 /// One admitted search row with the recall branches that reached it.
 /// `result.score` is the word-branch BM25 for word rows and `0.0` otherwise until the
 /// rerank replaces it.
+#[derive(Clone)]
 pub(crate) struct Candidate {
     pub result: SymbolSearchResult,
     pub bm25: Option<f64>,
@@ -1100,6 +1101,8 @@ pub(crate) struct Candidate {
     pub nested: bool,
     /// The class or other type the row is a member of.
     pub owner: Option<String>,
+    /// Weak context from a highly ranked code type; never substitutes for a member's own hit.
+    owner_context: Option<String>,
 }
 
 /// The kinds of symbol whose members search and lookup name as `Owner.member`.
@@ -1153,6 +1156,35 @@ fn candidate_filters(searching_variables: bool, include_tests: bool) -> String {
     sql
 }
 
+fn map_search_candidate(row: &Row, terms: &[String]) -> rusqlite::Result<(i64, Candidate)> {
+    let symbol = map_symbol(row)?;
+    let lower_name = symbol.name.to_lowercase();
+    let name_terms = terms
+        .iter()
+        .filter(|t| lower_name.contains(t.as_str()))
+        .cloned()
+        .collect();
+    let candidate = Candidate {
+        result: SymbolSearchResult {
+            symbol,
+            score: 0.0,
+            snippet: None,
+            explain: None,
+        },
+        bm25: None,
+        exact_name: false,
+        word_match: false,
+        name_match: false,
+        owner_match: false,
+        name_terms,
+        documentation: row.get::<_, Option<i64>>("documentation")? == Some(1),
+        nested: row.get::<_, Option<i64>>("nested")? == Some(1),
+        owner: row.get("owner_name")?,
+        owner_context: None,
+    };
+    Ok((row.get("row_id")?, candidate))
+}
+
 /// Runs the word, trigram-name, and exact-name branches with the same filters and merges
 /// them by `rowid`. The word branch admits the rows that match every query word first and
 /// then fills its cap with rows that match any word, so one full match never hides a
@@ -1186,33 +1218,7 @@ pub(crate) fn collect_search_candidates(
     let word_cap = (limit * 4).clamp(40, 160);
     let name_cap = (limit * 2).clamp(20, 40);
 
-    let new_candidate = |row: &Row| -> rusqlite::Result<(i64, Candidate)> {
-        let symbol = map_symbol(row)?;
-        let lower_name = symbol.name.to_lowercase();
-        let name_terms = terms
-            .iter()
-            .filter(|t| lower_name.contains(t.as_str()))
-            .cloned()
-            .collect();
-        let candidate = Candidate {
-            result: SymbolSearchResult {
-                symbol,
-                score: 0.0,
-                snippet: None,
-                explain: None,
-            },
-            bm25: None,
-            exact_name: false,
-            word_match: false,
-            name_match: false,
-            owner_match: false,
-            name_terms,
-            documentation: row.get::<_, Option<i64>>("documentation")? == Some(1),
-            nested: row.get::<_, Option<i64>>("nested")? == Some(1),
-            owner: row.get("owner_name")?,
-        };
-        Ok((row.get("row_id")?, candidate))
-    };
+    let new_candidate = |row: &Row| map_search_candidate(row, &terms);
 
     let mut candidates: Vec<Candidate> = Vec::new();
     let mut by_rowid: HashMap<i64, usize> = HashMap::new();
@@ -1442,6 +1448,112 @@ pub(crate) fn collect_search_candidates(
     Ok(candidates)
 }
 
+/// Follow only a few highly ranked code types, one level down. A member must still match
+/// the query itself; the owner's context can supply only weaker, otherwise missing terms.
+fn expand_ranked_owner_members(
+    conn: &Connection,
+    candidates: &mut Vec<Candidate>,
+    ranked: &[(SymbolSearchResult, SearchExplain)],
+    query: &str,
+    kind_filter: Option<&str>,
+    path_filter: Option<&str>,
+    include_tests: bool,
+) -> Result<bool, QueryError> {
+    // ponytail: First 3 code types in the top 20, at most 40 direct members each.
+    // Raise these ceilings only when a larger held-out evaluation validates the recall need.
+    let owners: Vec<_> = ranked
+        .iter()
+        .take(20)
+        .filter(|(result, explain)| {
+            explain.documentation == 0.0
+                && OWNER_KINDS.contains(&format!("'{}'", result.symbol.kind))
+        })
+        .take(3)
+        .map(|(result, _)| &result.symbol)
+        .collect();
+    if owners.is_empty() {
+        return Ok(false);
+    }
+    let normalized_path = path_filter.map(|p| {
+        p.replace('\\', "/")
+            .trim_start_matches("./")
+            .trim_matches('/')
+            .to_string()
+    });
+    let escaped_path = normalized_path.as_deref().map(escape_like);
+    let norm_kind = kind_filter.map(normalize_kind);
+    let columns = candidate_columns(conn);
+    let filters = candidate_filters(norm_kind.as_deref() == Some("variable"), include_tests);
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {columns} FROM symbols s WHERE s.parent_symbol_id = :owner {filters}
+         ORDER BY s.start_line, s.start_column, s.symbol_id LIMIT 40"
+    ))?;
+    let terms = trigram_name_terms(query);
+    let stemmer = Stemmer::create(Algorithm::English);
+    let words = stemmed_query_words(query, &stemmer);
+    let mut members = Vec::new();
+    for owner in owners {
+        let context = format!(
+            "{} {}",
+            owner.name,
+            head_bytes(owner.doc_comment.as_deref().unwrap_or(""), TEXT_HEAD_BYTES)
+        );
+        let rows = stmt.query_map(
+            rusqlite::named_params! {
+                ":owner": owner.symbol_id,
+                ":kind": norm_kind.as_deref(),
+                ":path": normalized_path.as_deref(),
+                ":path_like": escaped_path.as_deref(),
+            },
+            |row| map_search_candidate(row, &terms),
+        )?;
+        for row in rows {
+            let (_, mut member) = row?;
+            let symbol = &member.result.symbol;
+            let mut tokens = Vec::new();
+            let named = name_hits(&symbol.name, &words, &stemmer)
+                .iter()
+                .any(|hit| *hit > 0);
+            let text_match = [symbol.signature.as_deref(), symbol.doc_comment.as_deref()]
+                .into_iter()
+                .any(|text| {
+                    text_hits(
+                        text.map(|s| head_bytes(s, TEXT_HEAD_BYTES)),
+                        &words,
+                        &mut tokens,
+                    )
+                    .into_iter()
+                    .any(|hit| hit)
+                });
+            if named || text_match {
+                member.owner_context = Some(context.clone());
+                members.push(member);
+            }
+        }
+    }
+    let inherited = inherited_writes_among(
+        conn,
+        members.iter().map(|c| c.result.symbol.symbol_id.as_str()),
+    )?;
+    let mut changed = false;
+    for member in members {
+        let id = &member.result.symbol.symbol_id;
+        if inherited.contains(id) {
+            continue;
+        }
+        if let Some(existing) = candidates
+            .iter_mut()
+            .find(|c| c.result.symbol.symbol_id == *id)
+        {
+            existing.owner_context = member.owner_context;
+        } else {
+            candidates.push(member);
+        }
+        changed = true;
+    }
+    Ok(changed)
+}
+
 /// Conceptual full-text search with optional path scoping filter.
 pub fn fts_search_symbols_scoped(
     conn: &Connection,
@@ -1553,13 +1665,27 @@ pub fn fts_search_symbols_explained(
         return name_search(&local_clause);
     }
 
-    let candidates =
+    let mut candidates =
         collect_search_candidates(conn, query, kind_filter, path_filter, include_tests, limit)?;
-    let candidate_count = candidates.len();
     let started = std::time::Instant::now();
     let idf = idf_weights(conn, &rerank_words(query));
-    let ranked = rerank_with(candidates, query, include_tests, Some(&idf));
-    let rerank_us = started.elapsed().as_micros();
+    let mut ranked = rerank_with(candidates.clone(), query, include_tests, Some(&idf));
+    let mut rerank_us = started.elapsed().as_micros();
+    let mut candidate_count = candidates.len();
+    if expand_ranked_owner_members(
+        conn,
+        &mut candidates,
+        &ranked,
+        query,
+        kind_filter,
+        path_filter,
+        include_tests,
+    )? {
+        candidate_count = candidates.len();
+        let started = std::time::Instant::now();
+        ranked = rerank_with(candidates, query, include_tests, Some(&idf));
+        rerank_us += started.elapsed().as_micros();
+    }
     Ok(ranked
         .into_iter()
         .take(limit)
@@ -1589,6 +1715,7 @@ const MAX_TERM_CREDIT: f64 = 3.0;
 const TEXT_CREDIT: f64 = 1.0;
 /// A word that names the class a member belongs to: `Flask init` means `Flask.__init__`.
 const OWNER_CREDIT: f64 = 3.0;
+const OWNER_CONTEXT_CREDIT: f64 = 0.5;
 const TEXT_HEAD_BYTES: usize = 400;
 
 /// Symbol kinds that define a body: the kinds a touched-symbol or ranking rule prefers over locals.
@@ -1611,6 +1738,16 @@ struct QueryWord {
     stem: String,
 }
 
+fn stemmed_query_words(query: &str, stemmer: &Stemmer) -> Vec<QueryWord> {
+    rerank_words(query)
+        .into_iter()
+        .map(|word| QueryWord {
+            stem: stemmer.stem(&word).into_owned(),
+            word,
+        })
+        .collect()
+}
+
 /// Per-word hits of one candidate: which query words its name, signature, and capped doc
 /// cover. The name carries a match strength per word, the others a plain hit.
 struct Hits {
@@ -1620,6 +1757,7 @@ struct Hits {
     owner: Vec<bool>,
     signature: Vec<bool>,
     doc: Vec<bool>,
+    owner_context: Vec<bool>,
 }
 
 /// Symbols a query word may be counted in before it is called common: the count walks the
@@ -1661,7 +1799,7 @@ fn document_frequency(stmt: &mut rusqlite::Statement<'_>, term: &str) -> Option<
 
 /// The field that credits each query term and the credit it is worth: a name whole token 3,
 /// a name stem 2, the owning class `OWNER_CREDIT`, a signature or doc hit `TEXT_CREDIT`, a name
-/// substring 1, nothing 0.
+/// substring 1, weak owner context 0.5 for an otherwise unmatched term, nothing 0.
 fn term_credits(hits: &Hits, words: &[QueryWord]) -> Vec<(String, String, f64)> {
     words
         .iter()
@@ -1674,6 +1812,7 @@ fn term_credits(hits: &Hits, words: &[QueryWord]) -> Vec<(String, String, f64)> 
                 _ if hits.signature[i] => ("signature", TEXT_CREDIT),
                 _ if hits.doc[i] => ("doc", TEXT_CREDIT),
                 1 => ("name", 1.0),
+                _ if hits.owner_context[i] => ("owner_context", OWNER_CONTEXT_CREDIT),
                 _ => ("none", 0.0),
             };
             (w.word.clone(), field.to_string(), credit)
@@ -1879,13 +2018,7 @@ fn rerank_with(
     idf: Option<&[f64]>,
 ) -> Vec<(SymbolSearchResult, SearchExplain)> {
     let stemmer = Stemmer::create(Algorithm::English);
-    let words: Vec<QueryWord> = rerank_words(query)
-        .into_iter()
-        .map(|word| QueryWord {
-            stem: stemmer.stem(&word).into_owned(),
-            word,
-        })
-        .collect();
+    let words = stemmed_query_words(query, &stemmer);
     let collapsed_query = collapse(query);
     let test_intent = include_tests
         && words
@@ -1927,6 +2060,7 @@ fn rerank_with(
                     &words,
                     &mut tokens,
                 ),
+                owner_context: text_hits(candidate.owner_context.as_deref(), &words, &mut tokens),
             }
         })
         .collect();
@@ -1963,6 +2097,7 @@ fn rerank_with(
                     (candidate.word_match, "word"),
                     (candidate.name_match, "name"),
                     (candidate.owner_match, "owner"),
+                    (candidate.owner_context.is_some(), "owner_context"),
                 ]
                 .into_iter()
                 .filter(|(hit, _)| *hit)
@@ -6019,6 +6154,236 @@ mod tests {
     }
 
     #[test]
+    fn ranked_owner_context_recovers_members_and_enriches_existing_rows() {
+        let mut rows = vec![
+            code_row(
+                "planner",
+                "src/planner.rs",
+                "rust",
+                "EditPlanner",
+                "Plans edit operations for a function body",
+            ),
+            code_row(
+                "target",
+                "src/planner.rs",
+                "rust",
+                "ReplaceBodyImplementation",
+                "",
+            ),
+            code_row("existing", "src/planner.rs", "rust", "Body", ""),
+            code_row(
+                "unrelated",
+                "src/planner.rs",
+                "rust",
+                "SaveConfiguration",
+                "",
+            ),
+        ];
+        // Full-text and short-name hits exhaust both ordinary admission branches.
+        rows.extend((0..200).map(|i| {
+            code_row(
+                &format!("noise{i}"),
+                "src/noise.rs",
+                "rust",
+                &format!("body{i:03}"),
+                "edit planner body",
+            )
+        }));
+        let conn = search_fixture(&rows.join(","));
+        conn.execute_batch(
+            "UPDATE symbols SET kind = 'class' WHERE symbol_id = 'planner';
+             UPDATE symbols SET kind = 'method', parent_symbol_id = 'planner'
+             WHERE symbol_id IN ('target', 'existing', 'unrelated');",
+        )
+        .unwrap();
+        let ordinary =
+            collect_search_candidates(&conn, "edit planner body", None, None, false, 200).unwrap();
+        assert!(
+            !ordinary
+                .iter()
+                .any(|c| c.result.symbol.symbol_id == "target")
+        );
+        assert!(
+            ordinary
+                .iter()
+                .any(|c| c.result.symbol.symbol_id == "existing")
+        );
+        let found =
+            fts_search_symbols_explained(&conn, "edit planner body", None, None, false, 200, true)
+                .unwrap();
+        for id in ["target", "existing"] {
+            let members: Vec<_> = found.iter().filter(|r| r.symbol.symbol_id == id).collect();
+            assert_eq!(members.len(), 1);
+            let explain = members[0].explain.as_ref().unwrap();
+            assert!(explain.branches.iter().any(|b| b == "owner_context"));
+            for word in ["edit", "planner"] {
+                assert!(
+                    explain
+                        .terms
+                        .contains(&(word.into(), "owner_context".into(), 0.5))
+                );
+            }
+            assert!(explain.terms.contains(&("body".into(), "name".into(), 3.0)));
+        }
+        assert!(!found.iter().any(|r| r.symbol.symbol_id == "unrelated"));
+        for exact in ["EditPlanner", "Body"] {
+            assert_eq!(search_names(&conn, exact)[0], exact);
+        }
+        let scoped = fts_search_symbols_scoped(
+            &conn,
+            "edit planner body",
+            None,
+            Some("src/noise.rs"),
+            false,
+            200,
+        )
+        .unwrap();
+        assert!(scoped.iter().all(|r| r.symbol.path == "src/noise.rs"));
+        let methods =
+            fts_search_symbols_scoped(&conn, "edit planner body", Some("method"), None, false, 200)
+                .unwrap();
+        assert!(methods.iter().all(|r| r.symbol.kind == "method"));
+        // A method-only query has no owner types in its ordinary top twenty.
+        assert!(methods.iter().all(|r| r.explain.is_none()));
+    }
+
+    #[test]
+    fn ranked_owner_expansion_is_bounded_and_preserves_member_filters() {
+        let mut rows = Vec::new();
+        for owner in 0..4 {
+            rows.push(code_row(
+                &format!("o{owner}"),
+                "src/lib.rs",
+                "rust",
+                &format!("Planner{owner}"),
+                "body planner",
+            ));
+            for member in 0..41 {
+                rows.push(code_row(
+                    &format!("o{owner}m{member:02}"),
+                    "src/lib.rs",
+                    "rust",
+                    &format!("Body{member:02}"),
+                    "",
+                ));
+            }
+        }
+        rows.push(doc_row("docowner", "PlannerDocs", "body planner"));
+        rows.push(code_row(
+            "docchild",
+            "src/lib.rs",
+            "rust",
+            "BodyFromDocs",
+            "",
+        ));
+        rows.push(code_row(
+            "testchild",
+            "tests/lib.rs",
+            "rust",
+            "BodyTest",
+            "",
+        ));
+        rows.push(code_row(
+            "linkchild",
+            "docs/link.md",
+            "markdown",
+            "BodyLink",
+            "",
+        ));
+        rows.push(code_row(
+            "nestedchild",
+            "src/lib.rs",
+            "rust",
+            "BodyNested",
+            "",
+        ));
+        let conn = search_fixture(&rows.join(","));
+        for owner in 0..4 {
+            conn.execute(
+                "UPDATE symbols SET kind = 'class' WHERE symbol_id = ?1",
+                [format!("o{owner}")],
+            )
+            .unwrap();
+            conn.execute(
+                "UPDATE symbols SET kind = 'method', parent_symbol_id = ?1 WHERE symbol_id LIKE ?2",
+                params![format!("o{owner}"), format!("o{owner}m%")],
+            )
+            .unwrap();
+        }
+        conn.execute_batch(
+            "UPDATE symbols SET kind = 'class' WHERE symbol_id = 'docowner';
+             UPDATE symbols SET parent_symbol_id = 'docowner' WHERE symbol_id = 'docchild';
+             UPDATE symbols SET parent_symbol_id = 'o0' WHERE symbol_id IN ('testchild', 'linkchild');
+             UPDATE symbols SET kind = 'import' WHERE symbol_id = 'linkchild';
+             UPDATE symbols SET parent_symbol_id = 'o0m00' WHERE symbol_id = 'nestedchild';",
+        ).unwrap();
+        let mut candidates =
+            collect_search_candidates(&conn, "planner body", None, None, false, 200).unwrap();
+        // Isolate owner-driven admission so existing word/name hits cannot hide a cap failure.
+        candidates.retain(|c| c.result.symbol.parent_symbol_id.is_none());
+        let ranked = rerank_with(candidates.clone(), "planner body", false, None);
+        assert!(
+            expand_ranked_owner_members(
+                &conn,
+                &mut candidates,
+                &ranked,
+                "planner body",
+                None,
+                None,
+                false
+            )
+            .unwrap()
+        );
+        let expanded: Vec<_> = candidates
+            .iter()
+            .filter(|c| c.owner_context.is_some())
+            .collect();
+        assert_eq!(expanded.len(), 120);
+        for owner in 0..3 {
+            assert_eq!(
+                expanded
+                    .iter()
+                    .filter(|c| c.result.symbol.parent_symbol_id.as_deref()
+                        == Some(&format!("o{owner}")))
+                    .count(),
+                40
+            );
+            assert!(
+                !expanded
+                    .iter()
+                    .any(|c| c.result.symbol.symbol_id == format!("o{owner}m40"))
+            );
+        }
+        for excluded in ["docchild", "testchild", "linkchild", "nestedchild"] {
+            assert!(
+                !expanded
+                    .iter()
+                    .any(|c| c.result.symbol.symbol_id == excluded)
+            );
+        }
+        // Twenty ordinary non-type rows put a valid type outside the expansion window.
+        let mut late_ranked = rerank_with(
+            (0..20).map(|i| function(&format!("body{i}"))).collect(),
+            "body",
+            false,
+            None,
+        );
+        late_ranked.push(ranked[0].clone());
+        assert!(
+            !expand_ranked_owner_members(
+                &conn,
+                &mut Vec::new(),
+                &late_ranked,
+                "planner body",
+                None,
+                None,
+                false
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
     fn lookup_and_search_skip_documentation_links_recorded_as_imports() {
         let conn = search_fixture(
             &[
@@ -6804,6 +7169,7 @@ mod tests {
             documentation: false,
             nested: false,
             owner: None,
+            owner_context: None,
         }
     }
 
@@ -7072,13 +7438,7 @@ mod tests {
     fn name_coverage_accepts_token_runs_substrings_and_stems() {
         let strengths = |name: &str, query: &str| {
             let stemmer = Stemmer::create(Algorithm::English);
-            let words: Vec<QueryWord> = rerank_words(query)
-                .into_iter()
-                .map(|word| QueryWord {
-                    stem: stemmer.stem(&word).into_owned(),
-                    word,
-                })
-                .collect();
+            let words = stemmed_query_words(query, &stemmer);
             name_hits(name, &words, &stemmer)
         };
 
