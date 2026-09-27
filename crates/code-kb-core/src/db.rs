@@ -165,6 +165,30 @@ pub fn ensure_fts_index(conn: &Connection) -> Result<(), rusqlite::Error> {
         return Ok(());
     }
 
+    if conn.query_row(
+        "SELECT count(*) = 2 FROM pragma_table_info('type_facts')
+         WHERE name IN ('resolved_type', 'symbol_id')",
+        [],
+        |row| row.get::<_, bool>(0),
+    )? {
+        conn.execute_batch(
+            "CREATE INDEX IF NOT EXISTS idx_type_facts_resolved_symbol
+             ON type_facts(resolved_type, symbol_id);",
+        )?;
+    }
+
+    if conn.query_row(
+        "SELECT count(*) = 3 FROM pragma_table_info('pending_relationships')
+         WHERE name IN ('target_terminal_name', 'path', 'start_line')",
+        [],
+        |row| row.get::<_, bool>(0),
+    )? {
+        conn.execute_batch(
+            "CREATE INDEX IF NOT EXISTS idx_pending_name_site
+             ON pending_relationships(target_terminal_name, path, start_line);",
+        )?;
+    }
+
     if fts_index_is_ready(conn) {
         return Ok(());
     }
@@ -594,6 +618,57 @@ mod tests {
         assert!(trigram_names(&conn, "digest").is_empty());
         assert!(word_names(&conn, "digestBuffer").is_empty());
         assert_eq!(stored_fts_rule(&conn).as_deref(), Some(FTS_RULE));
+    }
+
+    #[test]
+    fn ready_search_indexes_gain_bounded_reference_lookups() {
+        let (_dir, conn) = symbols_db("reference-lookups.db");
+        ensure_fts_index(&conn).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE type_facts (symbol_id TEXT, resolved_type TEXT);
+             CREATE INDEX idx_type_facts_symbol ON type_facts(symbol_id);
+             WITH RECURSIVE n(value) AS (
+                 VALUES(1) UNION ALL SELECT value + 1 FROM n WHERE value < 2000
+             )
+             INSERT INTO type_facts SELECT 'noise-' || value, 'Other' FROM n;
+             INSERT INTO type_facts VALUES ('receiver', 'Selected');
+
+             CREATE TABLE pending_relationships (
+                 target_terminal_name TEXT, path TEXT, start_line INTEGER
+             );
+             CREATE INDEX idx_pending_terminal ON pending_relationships(target_terminal_name);
+             WITH RECURSIVE n(value) AS (
+                 VALUES(1) UNION ALL SELECT value + 1 FROM n WHERE value < 2000
+             )
+             INSERT INTO pending_relationships SELECT 'get', 'noise/' || value || '.py', 42 FROM n;
+             INSERT INTO pending_relationships VALUES ('get', 'main.py', 42);",
+        )
+        .unwrap();
+
+        ensure_fts_index(&conn).unwrap();
+        ensure_fts_index(&conn).unwrap();
+
+        for (sql, expected) in [
+            (
+                "SELECT symbol_id FROM type_facts WHERE resolved_type = 'Selected'",
+                "receiver",
+            ),
+            (
+                "SELECT target_terminal_name FROM pending_relationships
+                 WHERE target_terminal_name = 'get' AND path = 'main.py' AND start_line = 42",
+                "get",
+            ),
+        ] {
+            let mut statement = conn.prepare(sql).unwrap();
+            let rows = statement
+                .query_map([], |row| row.get::<_, String>(0))
+                .unwrap()
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+            assert_eq!(rows, [expected]);
+            let steps = statement.get_status(rusqlite::StatementStatus::VmStep);
+            assert!(steps < 100, "{steps} SQLite steps for {sql}");
+        }
     }
 
     fn exclude_locals_v1_layout(conn: &Connection) {

@@ -92,6 +92,10 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
 - The search index is two FTS5 tables over `symbols`: `symbols_fts` for words and `symbol_names_tri`
   for name substrings. `ensure_fts_index` migrates both in one transaction, guarded by the `fts_rule`
   marker; a failed migration is reported by the first tool call and retried on the next start.
+- Startup also creates `idx_type_facts_resolved_symbol` over `type_facts(resolved_type, symbol_id)`
+  and `idx_pending_name_site` over `pending_relationships(target_terminal_name, path, start_line)`.
+  These bound receiver-type and duplicate-reference lookups. Existing indexes gain them without
+  rebuilding FTS; SQLite maintains them during file updates.
 
 ### 3. Token-Dense Progressive Disclosure
 - Always return the most compact representation that answers the query.
