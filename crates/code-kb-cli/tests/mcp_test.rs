@@ -4,6 +4,44 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
+#[test]
+fn receiver_reference_labels_match_the_mcp_contract() {
+    let repo = code_kb_core::safe_tempdir();
+    let root = repo.path();
+    for (path, source) in [
+        (
+            "pyproject.toml",
+            "[project]\nname = 'receivers'\nversion = '0.1.0'\n",
+        ),
+        (
+            "runners.py",
+            "class Runner:\n    def invoke(self):\n        pass\n\nclass Shell:\n    def invoke(self):\n        pass\n",
+        ),
+        (
+            "client.py",
+            "from runners import Runner, Shell\n\ndef supported():\n    receiver = Runner()\n    return receiver.invoke\n\ndef wrong():\n    receiver = Shell()\n    return receiver.invoke\n\ndef unknown(receiver):\n    return receiver.invoke\n",
+        ),
+    ] {
+        std::fs::write(root.join(path), source).unwrap();
+    }
+    let mut session = McpSession::start(serve_command(root));
+    let result = session.call(
+        "find_references",
+        json!({"project_root": root, "symbol_name": "Runner.invoke"}),
+    );
+    assert_ne!(result["isError"], true, "{result}");
+    let text = result_text(&result);
+    assert!(
+        text.contains("`supported` [client.py:5] (kind: member_access)"),
+        "{text}"
+    );
+    assert!(
+        text.contains("`unknown` [client.py:12] (kind: member_access (candidate))"),
+        "{text}"
+    );
+    assert!(!text.contains("`wrong`"), "{text}");
+}
+
 struct ChildGuard(Child);
 
 impl std::ops::Deref for ChildGuard {

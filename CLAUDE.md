@@ -154,8 +154,10 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   line merge into one row. A method call on a local variable matches a method of the class
   that the call assigned to it builds (`runner = app.test_cli_runner()`), or of an ancestor. A
   call builds the class it names, or the class in its callee's return type. A method call on a
-  parameter or variable named for a pytest fixture in the test's file or in a `conftest.py` in its
-  folder or a folder above it matches the same way, through any call in that fixture. A `self`
+  parameter named for a pytest fixture in the test's file or in a `conftest.py` in its
+  folder or a folder above it matches the same way, through any call in that fixture. A local
+  variable with that name does not borrow the fixture's type. Builders and their returned classes
+  respect the importing module, and inherited methods use the nearest definition. A `self`
   call to a class attribute (`should_ignore_error: None = None`) is a callee of the caller.
   The callers of a constructor include the calls that build its class (`Flask()` calls
   `Flask.__init__`), and the `blast_radius` walk follows the same step. Rows it reaches only
@@ -171,11 +173,18 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   import, field, or property has (`Assert.Contains`); a QML signal handler is exempt. Callee rows
   come in source order. `find_references` for callers ends with one line that counts the files
   that import the target.
+  Ordinary member-access identifiers targeting callable class members use the same receiver
+  evidence as pending calls. A proven different receiver is omitted, including an imported base
+  instance used to query a subclass override. Supported rows retain `member_access`; unresolved
+  or conflicting evidence shows `member_access (candidate)` in text and JSON. Supported identifier
+  rows precede candidates, with filtering before the limit. Candidate-only identifiers add no
+  impact edges. Fields, properties, type usages, and QML handler rules keep their own behavior.
 - Related tests (`get_symbol_context`): callers from relationships, pending calls, and references
   that are tests, test classes, or functions and methods in test files; never setup, teardown, or
   fixture members, and none for a target in a document language. A constructor gets the related
   tests of its class. The name and full-text stages run only when the target's name has one
-  definition in the index and is not a dunder name.
+  definition in the index and is not a dunder name. `member_access (candidate)` rows do not enter
+  through the reference stage; independent name and full-text test suggestions still apply.
 - Language-agnostic callee filtering: `find_references(direction="callees")` and `get_symbol_context`
   filter unresolved AST tokens against workspace symbols, eliminating external stdlib/runtime noise
   across supported languages by default (`include_external: true` / `--include-external` restores them).

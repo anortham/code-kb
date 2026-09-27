@@ -2272,7 +2272,8 @@ pub fn find_related_tests(
     )
     .unwrap_or_default()
     {
-        if !seen_ids.contains(&site.from_symbol_id)
+        if site.kind != "member_access (candidate)"
+            && !seen_ids.contains(&site.from_symbol_id)
             && let Some(test) = test_by_id
                 .query_row(params![site.from_symbol_id], map_symbol)
                 .optional()?
@@ -3109,6 +3110,7 @@ fn receiver_builder_calls(conn: &Connection) -> String {
          WHERE assigned.parent_symbol_id = p.from_symbol_id
            AND +assigned.name = p.target_receiver
            AND +assigned.kind = 'variable'
+           AND assigned.start_line <= p.start_line
          {fixture_calls}"
     )
 }
@@ -3150,21 +3152,50 @@ fn receiver_definition_scope(target: &str, origin: &str) -> String {
 }
 
 fn member_receiver_match(conn: &Connection) -> String {
-    if !has_pending_namespace_column(conn) || !has_column(conn, "symbols", "metadata_json") {
-        return "0".to_string();
-    }
-    let matched = pending_target_predicate(conn, "candidate", "candidate_parent");
-    let builders = receiver_builder_calls(conn);
-    format!(
-        "CASE WHEN p.kind != 'member_access'
-                    OR json_extract(p.metadata_json, '$.role') IS 'signal_handler'
-                    OR NOT EXISTS (
+    let callable_member = "p.kind = 'member_access'
+                    AND CASE WHEN json_valid(p.metadata_json)
+                             THEN json_extract(p.metadata_json, '$.role') END IS NOT 'signal_handler'
+                    AND EXISTS (
                         SELECT 1 FROM symbols selected
                         JOIN symbols owner ON owner.symbol_id = selected.parent_symbol_id
                         WHERE selected.symbol_id = ?3
                           AND selected.kind IN ('method', 'function', 'constructor')
                           AND owner.kind IN ('class', 'struct', 'interface', 'trait', 'enum', 'protocol')
-                    ) THEN 1
+                    )";
+    if !has_pending_namespace_column(conn) || !has_column(conn, "symbols", "metadata_json") {
+        return format!("CASE WHEN {callable_member} THEN 0 ELSE 1 END");
+    }
+    let matched = pending_target_predicate(conn, "candidate", "candidate_parent");
+    let builders = receiver_builder_calls(conn);
+    let class_scope = receiver_definition_scope("receiver_class", "builder_call.path");
+    let builder_scope = receiver_definition_scope("builder", "builder_call.path");
+    let returned_scope = receiver_definition_scope("returned_class", "builder.path");
+    format!(
+        "CASE WHEN NOT ({callable_member}) THEN 1
+              WHEN (SELECT COUNT(*) FROM symbols binding
+                    WHERE binding.parent_symbol_id = p.from_symbol_id
+                      AND +binding.name = p.target_receiver
+                      AND +binding.kind IN ('variable', 'parameter')
+                      AND binding.start_line <= p.start_line) > 1 THEN 0
+              WHEN EXISTS (
+                  WITH builder_call(name, path) AS ({builders})
+                  SELECT 1 FROM builder_call
+                  WHERE (SELECT COUNT(*) FROM builder_call) > 1
+                    AND NOT EXISTS (
+                        SELECT 1 FROM symbols receiver_class
+                        WHERE receiver_class.name = builder_call.name AND receiver_class.kind = 'class'
+                          AND {class_scope}
+                    )
+                    AND NOT EXISTS (
+                        SELECT 1 FROM symbols builder
+                        JOIN symbols returned_class ON returned_class.name =
+                            CASE WHEN json_valid(builder.metadata_json)
+                                 THEN json_extract(builder.metadata_json, '$.returnType') END
+                        WHERE builder.name = builder_call.name AND builder.kind IN ('function', 'method')
+                          AND returned_class.kind = 'class'
+                          AND {builder_scope} AND {returned_scope}
+                    )
+              ) THEN 0
               ELSE (
                   SELECT CASE WHEN COUNT(*) > 1 THEN 0
                               WHEN MAX(candidate.symbol_id = ?3) = 1 THEN 1
@@ -3756,7 +3787,9 @@ fn find_direct_references(
                         p.start_line,
                         p.start_column,
                         {receiver_match} AS receiver_match
-                 FROM (SELECT identifiers.*, containing_symbol_id AS from_symbol_id,
+                 FROM (SELECT name, kind, path, start_line, start_column, containing_symbol_id,
+                              CASE WHEN json_valid(metadata_json) THEN metadata_json ELSE '{{}}' END AS metadata_json,
+                              containing_symbol_id AS from_symbol_id,
                               CASE WHEN json_valid(metadata_json) THEN json_extract(metadata_json, '$.receiver') END AS target_receiver,
                               '[]' AS target_namespace_json
                        FROM identifiers WHERE name = ?1) p
@@ -3796,17 +3829,21 @@ fn find_direct_references(
                                   AND target.language IN ('javascript', 'typescript', 'tsx')
                                   AND COALESCE(target.visibility, 'private') = 'private'))
                    ))
-                   AND NOT (p.kind = 'member_access'
+                   AND NOT COALESCE((p.kind = 'member_access'
                         AND json_valid(p.metadata_json)
                         AND json_extract(p.metadata_json, '$.role') IS NOT 'signal_handler'
                         AND json_extract(p.metadata_json, '$.receiver') GLOB '[A-Z]*'
                         AND NOT EXISTS (SELECT 1 FROM symbols known
                                         WHERE known.name = json_extract(p.metadata_json, '$.receiver')
-                                          AND known.kind NOT IN ('variable', 'parameter', 'method')))
+                                          AND known.kind NOT IN ('variable', 'parameter', 'method'))), 0)
                  )
-                 SELECT from_name, from_id, name, reference_kind, path, start_line, start_column
+                 SELECT from_name, from_id, name,
+                        CASE WHEN reference_kind = 'member_access' AND receiver_match = 0
+                             THEN 'member_access (candidate)' ELSE reference_kind END,
+                        path, start_line, MIN(start_column)
                  FROM classified WHERE receiver_match != -1
-                 ORDER BY path, start_line
+                 GROUP BY from_id, name, reference_kind, receiver_match, path, start_line
+                 ORDER BY receiver_match DESC, path, start_line
                  LIMIT ?2"
             ))?;
             let rows =

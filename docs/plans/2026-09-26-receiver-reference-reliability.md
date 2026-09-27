@@ -187,12 +187,12 @@ commit, status, and worktree inventory before each commit and final handoff.
 
 **Acceptance criteria:**
 
-- [ ] Unknown evidence is visible as `member_access (candidate)` in CLI and MCP results.
-- [ ] Supported identifier rows are not displaced by candidates or rejected rows at the limit.
-- [ ] No new duplicates, lost scope filters, or symbol-ID ambiguity occur.
-- [ ] Candidate-only evidence does not become a confirmed reference-based test association or impact edge.
-- [ ] Existing fields, type usages, QML handlers, constructor reachability, and external-callee behavior pass their regression checks.
-- [ ] Agent guidance matches byte-for-byte; the affected checks pass and the commit SHA is recorded.
+- [x] Unknown evidence is visible as `member_access (candidate)` in CLI and MCP results.
+- [x] Supported identifier rows are not displaced by candidates or rejected rows at the limit.
+- [x] No new duplicates, lost scope filters, or symbol-ID ambiguity occur.
+- [x] Candidate-only evidence does not become a confirmed reference-based test association or impact edge.
+- [x] Existing fields, type usages, QML handlers, constructor reachability, and external-callee behavior pass their regression checks.
+- [x] Agent guidance matches byte-for-byte; the affected checks pass and the commit SHA is recorded.
 
 ## Task 3: Measure and diagnose difficult queries
 
@@ -252,7 +252,9 @@ open for its remaining inference explanations and any diagnosed optimization.
 
 - The owner approved local execution. No external reviewer or publication authority was selected.
 - Baseline affected checks passed: 124 core tests and 90 CLI/MCP tests. Logs are under `target/receiver-reference-reliability/`.
-- Task 1 regressions failed with wrong caller rows before the fixes; its final reference/resolution scope passed 58 tests.
+- Task 1 landed locally as `c445c8840e69628da60f9e04a275c540bd5f6eac`. Regressions failed with wrong caller rows before the fixes; its final reference/resolution scope passed 58 tests.
 - Shared builder inference now respects local-variable shadowing, import modules, and nearest inherited overrides.
-- The extractor supplies no receiver metadata for a bare `super().invoke` member read. Task 1 verifies the supported `super().invoke()` call; Task 2 must retain a read without metadata as a candidate. This follows the unknown-evidence contract instead of inventing a receiver.
+- The extractor supplies no receiver metadata for a bare `super().invoke` member read. Task 1 verifies the supported `super().invoke()` call; Task 2 retains a read without metadata as a candidate. This follows the unknown-evidence contract instead of inventing a receiver.
+- Task 2's final affected checks passed 135 core tests and 92 CLI/MCP tests, plus both guidance-copy checks. The report's verification ledger records its source commit.
+- Read-only implementation review exposed future assignments influencing earlier reads and mixed known/unknown builders being treated as supported. Both were reproduced with failing assertions and fixed before the affected rerun. Multiple bindings remain conservative candidates; this slice adds no control-flow analysis.
 - Baseline Hermes name-only `get` and `execute` probes report ambiguity. Task 3 will retain those outcomes and add explicitly scoped probes in `agent/relay_runtime.py` and `agent/relay_tools.py`, without claiming they reproduce the unknown historical selections.

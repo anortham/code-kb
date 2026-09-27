@@ -115,6 +115,151 @@ fn member_access_uses_the_nearest_inherited_definition() {
 }
 
 #[test]
+fn unresolved_member_access_is_a_candidate() {
+    let (_repo, db) = scanned_repo(&[
+        (
+            "web/runners.py",
+            "class Runner:\n    def invoke(self):\n        pass\n\nclass Shell:\n    def invoke(self):\n        pass\n",
+        ),
+        (
+            "clients.py",
+            "from web.runners import Runner, Shell\nfrom external import make_runner\n\ndef unknown(value):\n    return value.invoke\n\ndef untyped():\n    value = make_runner()\n    return value.invoke\n\ndef rebound(flag):\n    if flag:\n        value = Runner()\n    else:\n        value = Shell()\n    return value.invoke\n\ndef mixed(flag):\n    if flag:\n        value = Runner()\n    else:\n        value = make_runner()\n    return value.invoke\n\ndef conditional(flag):\n    value = Runner() if flag else make_runner()\n    return value.invoke\n\ndef later(value):\n    saved = value.invoke\n    value = Shell()\n    return saved\n",
+        ),
+        (
+            "tests/conftest.py",
+            "import pytest\nfrom web.runners import Runner\nfrom external import make_runner\n\n@pytest.fixture\ndef mixed_runner(flag):\n    return Runner() if flag else make_runner()\n",
+        ),
+        (
+            "tests/test_flow.py",
+            "def test_mixed_fixture(mixed_runner):\n    return mixed_runner.invoke\n",
+        ),
+    ]);
+    let conn = open_read_only(&db).unwrap();
+    for target in ["Runner.invoke", "Shell.invoke"] {
+        let rows = find_references_scoped(&conn, target, "callers", 20, false, None).unwrap();
+        assert_eq!(
+            caller_names(&rows),
+            [
+                "conditional",
+                "later",
+                "mixed",
+                "rebound",
+                "test_mixed_fixture",
+                "unknown",
+                "untyped"
+            ]
+        );
+        assert!(
+            rows.iter()
+                .all(|row| row.kind == "member_access (candidate)"),
+            "{rows:?}"
+        );
+    }
+}
+
+#[test]
+fn supported_member_access_precedes_candidates_at_the_limit() {
+    let (_repo, db) = scanned_repo(&[
+        (
+            "web/runners.py",
+            "class Runner:\n    def invoke(self):\n        pass\n\nclass Shell:\n    def invoke(self):\n        pass\n",
+        ),
+        (
+            "a_unknown.py",
+            "def unknown(value):\n    return value.invoke\n",
+        ),
+        (
+            "b_wrong.py",
+            "from web.runners import Shell\n\ndef mismatch():\n    value = Shell()\n    return value.invoke\n",
+        ),
+        (
+            "z_supported.py",
+            "from web.runners import Runner\n\ndef known():\n    value = Runner()\n    return value.invoke, value.invoke\n",
+        ),
+    ]);
+    let conn = open_read_only(&db).unwrap();
+    let id = member_of(&conn, "Runner", "invoke");
+    let rows = find_references_scoped(
+        &conn,
+        "Runner.invoke",
+        "callers",
+        1,
+        false,
+        Some("web/runners.py"),
+    )
+    .unwrap();
+    assert_eq!(caller_names(&rows), ["known"]);
+    assert_eq!(rows[0].kind, "member_access");
+    let rows =
+        code_kb_core::find_references_for_symbol(&conn, "invoke", "callers", 2, &id).unwrap();
+    assert_eq!(
+        rows.iter()
+            .map(|row| row.from_symbol_name.as_str())
+            .collect::<Vec<_>>(),
+        ["known", "unknown"]
+    );
+    assert_eq!(rows[1].kind, "member_access (candidate)");
+    assert!(
+        find_references_scoped(&conn, "Runner.invoke", "callers", 0, false, None)
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
+fn member_access_with_missing_metadata_is_a_candidate() {
+    let (_repo, db) = scanned_repo(&[(
+        "runners.py",
+        "class Runner:\n    def invoke(self):\n        pass\n\nclass Child(Runner):\n    def read(self):\n        return super().invoke\n",
+    )]);
+    let conn = open_read_write(&db).unwrap();
+    for metadata in [None, Some("{")] {
+        conn.execute(
+            "UPDATE identifiers SET metadata_json = ?1 WHERE name = 'invoke'",
+            [metadata],
+        )
+        .unwrap();
+        let rows =
+            find_references_scoped(&conn, "Runner.invoke", "callers", 20, false, None).unwrap();
+        assert_eq!(caller_names(&rows), ["read"]);
+        assert_eq!(rows[0].kind, "member_access (candidate)");
+    }
+}
+
+#[test]
+fn a_call_is_not_duplicated_as_a_candidate_member_access() {
+    let (_repo, db) = scanned_repo(&[
+        (
+            "runner.py",
+            "class Runner:\n    def invoke(self):\n        pass\n",
+        ),
+        (
+            "client.py",
+            "from runner import Runner\n\ndef run():\n    value = Runner()\n    value.invoke()\n",
+        ),
+    ]);
+    let conn = open_read_only(&db).unwrap();
+    let rows = find_references_scoped(&conn, "Runner.invoke", "callers", 20, false, None).unwrap();
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    assert_eq!(rows[0].kind, "calls");
+    assert_eq!(rows[0].from_symbol_name, "run");
+}
+
+#[test]
+fn non_callable_member_access_keeps_its_kind_without_type_metadata() {
+    let (_repo, db) = scanned_repo(&[(
+        "counter.rs",
+        "struct Counter { value: i32 }\nfn read(counter: &Counter) -> i32 { counter.value }\n",
+    )]);
+    let conn = open_read_write(&db).unwrap();
+    conn.execute_batch("ALTER TABLE symbols RENAME COLUMN metadata_json TO legacy_metadata_json;")
+        .unwrap();
+    let rows = find_references_scoped(&conn, "value", "callers", 20, false, None).unwrap();
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    assert_eq!(rows[0].kind, "member_access");
+}
+
+#[test]
 fn find_references_reports_type_usages_of_a_struct() {
     let (_repo, db_path) = scanned_repo(&[
         (
