@@ -78,10 +78,12 @@ Sessions: ${ROUND}/claude.md, ${ROUND}/codex.md
 
 Check every defect that a session reports against the source. List each one here as:
 - [open] <defect>
+- [fixed <commit>] <defect>: a wrong answer, fixed with a regression test and a rerun of the call
+- [gap] <defect>: a true but incomplete answer, a heuristic miss, or a feature request
 - [not a defect] <defect>: <why the output is correct>
 - [deferred: "<the user's own words>"] <defect>
 
-A fixed defect needs a new round, because this report covers commit ${COMMIT:0:7} only.
+Run one round per release. A fix does not need a new round (docs/RELEASING.md, step 7).
 
 ## Result: PENDING
 EOF

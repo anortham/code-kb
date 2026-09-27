@@ -3074,6 +3074,15 @@ fn relative_import_matches(value: &str, target: &str) -> String {
     )
 }
 
+/// Languages where a bare call inside a class reaches the members of that class and its bases,
+/// as a call through `this` or `self` does.
+const NESTED_TYPE_KINDS: &str =
+    "'class', 'struct', 'interface', 'enum', 'record', 'trait', 'protocol'";
+
+const IMPLICIT_RECEIVER_LANGUAGES: &[&str] = &[
+    "java", "csharp", "kotlin", "swift", "cpp", "scala", "dart", "ruby", "vbnet",
+];
+
 /// SQL predicate that decides whether a pending call edge `p` (with caller `s_from`) points at
 /// the candidate definition `target` (whose parent symbol is joined as `parent`).
 fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> String {
@@ -3211,6 +3220,82 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
     } else {
         String::new()
     };
+    let rival_rank = path_proximity("rival.path", "pe.path");
+    let base_rank = path_proximity("c.path", "pe.path");
+    // A member of the caller's class chain, where the nearest class that defines the name wins.
+    // julie resolves most `this` calls to the caller's own class, but not one inside an ordinary
+    // JavaScript function, so a `this`, `self`, or `cls` call also matches a sibling member. A base
+    // class that a pending `extends` row names counts unless a class of that name is closer.
+    let inherited = format!(
+        "EXISTS (
+                            WITH RECURSIVE base(symbol_id, depth) AS (
+                                SELECT s_from.parent_symbol_id, 0
+                                UNION
+                                SELECT r.to_symbol_id, base.depth + 1
+                                FROM relationships r JOIN base ON r.from_symbol_id = base.symbol_id
+                                WHERE +r.kind = 'extends' AND base.depth < 8
+                                UNION
+                                SELECT c.symbol_id, base.depth + 1
+                                FROM pending_relationships pe
+                                JOIN base ON pe.from_symbol_id = base.symbol_id
+                                JOIN symbols c ON c.name = pe.target_terminal_name
+                                WHERE +pe.kind = 'extends' AND base.depth < 8
+                                  AND c.kind IN ('class', 'interface', 'struct', 'trait', 'protocol')
+                                  AND NOT EXISTS (
+                                      SELECT 1 FROM symbols rival
+                                      WHERE rival.name = c.name
+                                        AND rival.kind IN ('class', 'interface', 'struct', 'trait', 'protocol')
+                                        AND {rival_rank} > {base_rank})
+                            )
+                            SELECT 1 FROM base
+                            WHERE base.symbol_id = {target}.parent_symbol_id
+                              AND (base.depth > 0
+                                   OR {target}.kind IN ('variable', 'field')
+                                   OR p.target_receiver IN ('self', 'this', 'cls'))
+                              AND NOT EXISTS (
+                                  SELECT 1 FROM base closer
+                                  JOIN symbols nearer ON nearer.parent_symbol_id = closer.symbol_id
+                                  WHERE nearer.name = {target}.name
+                                    AND nearer.kind IN ('method', 'function', 'constructor', 'property')
+                                    AND closer.depth < base.depth
+                                    AND (closer.depth > 0 OR p.target_receiver IS NOT 'super')
+                              )
+                        )"
+    );
+    let implicit_receiver_languages = IMPLICIT_RECEIVER_LANGUAGES
+        .iter()
+        .map(|language| format!("'{language}'"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    // A definition in a scope that encloses the caller's parent, where the nearest scope that
+    // defines or imports the name wins. An enclosing class body contributes only its nested types, and only
+    // where a bare call reaches members; its methods are left to the class-chain rule, because
+    // julie parses macro calls in C++ test files as methods of made-up classes.
+    let enclosing = format!(
+        "EXISTS (
+            WITH RECURSIVE lexical(symbol_id, depth) AS (
+                SELECT s_from.parent_symbol_id, 1
+                UNION ALL
+                SELECT outer_scope.parent_symbol_id, lexical.depth + 1
+                FROM symbols outer_scope JOIN lexical ON outer_scope.symbol_id = lexical.symbol_id
+                WHERE outer_scope.parent_symbol_id IS NOT NULL AND lexical.depth < 32
+            )
+            SELECT 1 FROM lexical JOIN symbols scope ON scope.symbol_id = lexical.symbol_id
+            WHERE lexical.symbol_id = {target}.parent_symbol_id
+              AND lexical.depth > 1
+              AND (scope.kind NOT IN ({MEMBER_LIST_OWNER_KINDS})
+                   OR scope.kind IN ('module', 'namespace')
+                   OR {target}.kind IN ({NESTED_TYPE_KINDS})
+                      AND s_from.language IN ({implicit_receiver_languages}))
+              AND NOT EXISTS (
+                  SELECT 1 FROM lexical closer
+                  JOIN symbols nearer ON nearer.parent_symbol_id = closer.symbol_id
+                  WHERE closer.depth < lexical.depth
+                    AND nearer.name = {target}.name
+                    AND nearer.kind IN ({target}.kind, 'import')
+              )
+        )"
+    );
     format!(
         "(
             NOT (p.kind IS 'extends' AND p.from_symbol_id = {target}.symbol_id)
@@ -3226,33 +3311,7 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                         {receiver_import_elsewhere})
                     OR ((p.target_receiver IN ('self', 'this', 'cls', 'Self', 'super')
                          OR EXISTS (SELECT 1 FROM {ns} WHERE value = 'Self'))
-                        AND EXISTS (
-                            WITH RECURSIVE base(symbol_id, depth) AS (
-                                SELECT s_from.parent_symbol_id, 0
-                                UNION
-                                SELECT r.to_symbol_id, base.depth + 1
-                                FROM relationships r JOIN base ON r.from_symbol_id = base.symbol_id
-                                WHERE +r.kind = 'extends' AND base.depth < 8
-                                UNION
-                                SELECT c.symbol_id, base.depth + 1
-                                FROM pending_relationships pe
-                                JOIN base ON pe.from_symbol_id = base.symbol_id
-                                JOIN symbols c ON c.name = pe.target_terminal_name
-                                WHERE +pe.kind = 'extends' AND base.depth < 8
-                                  AND c.kind IN ('class', 'interface', 'struct', 'trait', 'protocol')
-                            )
-                            SELECT 1 FROM base
-                            WHERE base.symbol_id = {target}.parent_symbol_id
-                              AND (base.depth > 0 OR {target}.kind IN ('variable', 'field'))
-                              AND NOT EXISTS (
-                                  SELECT 1 FROM base closer
-                                  JOIN symbols nearer ON nearer.parent_symbol_id = closer.symbol_id
-                                  WHERE nearer.name = {target}.name
-                                    AND nearer.kind IN ('method', 'function', 'constructor', 'property')
-                                    AND closer.depth < base.depth
-                                    AND (closer.depth > 0 OR p.target_receiver IS NOT 'super')
-                              )
-                        ))
+                        AND {inherited})
                     OR EXISTS (
                         SELECT 1 FROM symbols receiver
                         JOIN type_facts receiver_type ON receiver_type.symbol_id = receiver.symbol_id
@@ -3297,7 +3356,20 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                 )
                 AND ({target}.parent_symbol_id IS NULL
                      OR s_from.parent_symbol_id = {target}.parent_symbol_id
-                     OR {target}.parent_symbol_id = p.from_symbol_id)
+                     OR {target}.parent_symbol_id = p.from_symbol_id
+                     OR CASE WHEN p.target_receiver IS NULL OR p.target_receiver = ''
+                        THEN {enclosing}
+                        ELSE 0 END
+                     OR CASE WHEN (p.target_receiver IS NULL OR p.target_receiver = '')
+                                  AND s_from.language IN ({implicit_receiver_languages})
+                        THEN {parent}.path = s_from.path
+                             AND {parent}.name = (
+                                 SELECT caller_owner.name FROM symbols caller_owner
+                                 WHERE caller_owner.symbol_id = s_from.parent_symbol_id
+                                   AND caller_owner.kind = {parent}.kind
+                             )
+                             OR {inherited}
+                        ELSE 0 END)
                 AND (p.target_receiver IS NOT NULL AND p.target_receiver != '' OR {target}.path = p.path OR NOT EXISTS (
                     SELECT 1 FROM symbols shadow
                     WHERE shadow.name = {target}.name

@@ -1,7 +1,7 @@
 use code_kb_core::{
     Workspace, compute_blast_radius, file_skeleton_op, find_julie_extract_binary,
-    find_references_scoped, fts_search_symbols_scoped, open_read_only, open_read_write,
-    safe_tempdir, scan_workspace, search_symbols_scoped,
+    find_references_for_symbol, find_references_scoped, fts_search_symbols_scoped, open_read_only,
+    open_read_write, safe_tempdir, scan_workspace, search_symbols_scoped,
 };
 use std::fs;
 
@@ -1502,4 +1502,237 @@ fn the_kind_filter_accepts_the_attribute_kind_that_lookup_shows() {
     let names: Vec<_> = members.iter().map(|s| s.name.as_str()).collect();
     assert_eq!(names, ["cli"]);
     assert_eq!(exact.len(), 1);
+}
+
+fn bare_callers(files: &[(&str, &str)], target: &str) -> Vec<String> {
+    let (_repo, db_path) = scanned_repo(files);
+    let conn = open_read_only(&db_path).unwrap();
+    let refs = find_references_scoped(&conn, target, "callers", 20, false, None).unwrap();
+    caller_names(&refs)
+}
+
+#[test]
+fn a_bare_java_call_reaches_a_method_the_caller_inherits_from_a_base_in_another_file() {
+    let callers = bare_callers(
+        &[
+            ("src/Base.java", "class Base {\n    void helper() {}\n}\n"),
+            (
+                "src/Child.java",
+                "class Child extends Base {\n    void run() {\n        helper();\n    }\n}\n",
+            ),
+        ],
+        "helper",
+    );
+
+    assert_eq!(callers, vec!["run"]);
+}
+
+#[test]
+fn a_bare_swift_call_reaches_a_method_the_test_class_inherits() {
+    let callers = bare_callers(
+        &[(
+            "Tests/CombineTests.swift",
+            "class CombineTestCase {\n    func store(_ body: () -> Void) {}\n}\n\nfinal class DataTests: CombineTestCase {\n    func testPublish() {\n        store {\n        }\n    }\n}\n",
+        )],
+        "store",
+    );
+
+    assert_eq!(callers, vec!["testPublish"]);
+}
+
+#[test]
+fn a_bare_csharp_call_reaches_a_method_in_another_part_of_a_partial_class() {
+    let callers = bare_callers(
+        &[(
+            "src/LinqBridge.cs",
+            "static partial class Enumerable\n{\n    private static void CheckNotNull(object source, string name) {}\n}\n\nstatic partial class Enumerable\n{\n    public static int Sum(object source)\n    {\n        CheckNotNull(source, \"source\");\n        return 0;\n    }\n}\n",
+        )],
+        "CheckNotNull",
+    );
+
+    assert_eq!(callers, vec!["Sum"]);
+}
+
+#[test]
+fn a_bare_cpp_call_in_a_struct_method_reaches_a_function_of_the_enclosing_namespace() {
+    let callers = bare_callers(
+        &[(
+            "src/doctest.h",
+            "namespace doctest {\nconst char* assertString(int at) { return \"\"; }\nstruct JUnitReporter {\n    void log_assert() {\n        assertString(1);\n    }\n};\n}\n",
+        )],
+        "assertString",
+    );
+
+    assert_eq!(callers, vec!["log_assert"]);
+}
+
+#[test]
+fn a_csharp_constructor_call_reaches_a_sibling_nested_class() {
+    let callers = bare_callers(
+        &[(
+            "src/Tests.cs",
+            "public class Tests\n{\n    public class RootSomethingElse {}\n\n    public class Something\n    {\n        public Something()\n        {\n            var other = new RootSomethingElse();\n        }\n    }\n}\n",
+        )],
+        "RootSomethingElse",
+    );
+
+    assert_eq!(callers, vec!["Something"]);
+}
+
+#[test]
+fn a_bare_python_call_never_reaches_a_method_of_a_base_class() {
+    let callers = bare_callers(
+        &[(
+            "src/app.py",
+            "class Base:\n    def helper(self):\n        pass\n\n\nclass Child(Base):\n    def run(self):\n        helper()\n",
+        )],
+        "helper",
+    );
+
+    assert!(callers.is_empty(), "got {callers:?}");
+}
+
+#[test]
+fn a_csharp_constructor_call_reaches_a_class_of_the_enclosing_namespace() {
+    let (_repo, db_path) = scanned_repo(&[(
+        "src/ConverterTests.cs",
+        "namespace Tests.Converters\n{\n    public class ConverterTests\n    {\n        public void ConverterDictionary()\n        {\n            var items = new ConverterDictionary<object>();\n        }\n    }\n\n    public class ConverterDictionary<T>\n    {\n    }\n}\n",
+    )]);
+    let conn = open_read_only(&db_path).unwrap();
+    let class_id: String = conn
+        .query_row(
+            "SELECT symbol_id FROM symbols WHERE name = 'ConverterDictionary' AND kind = 'class'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+
+    let refs =
+        find_references_for_symbol(&conn, "ConverterDictionary", "callers", 20, &class_id).unwrap();
+
+    assert!(
+        refs.iter().any(|r| r.kind == "instantiates"),
+        "got {refs:?}"
+    );
+}
+
+#[test]
+fn a_bare_call_in_a_nested_csharp_class_prefers_the_nearest_enclosing_definition() {
+    let callers = bare_callers(
+        &[(
+            "src/Outer.cs",
+            "public class Outer\n{\n    static void Log() {}\n\n    public class Middle\n    {\n        static void Log() {}\n\n        public class Inner\n        {\n            void Run()\n            {\n                Log();\n            }\n        }\n    }\n}\n",
+        )],
+        "Outer.Log",
+    );
+
+    assert!(callers.is_empty(), "got {callers:?}");
+}
+
+#[test]
+fn a_bare_python_call_in_a_nested_function_never_reaches_a_method_of_the_enclosing_class() {
+    let callers = bare_callers(
+        &[(
+            "src/app.py",
+            "class App:\n    def helper(self):\n        pass\n\n    def outer(self):\n        def inner():\n            helper()\n        inner()\n",
+        )],
+        "helper",
+    );
+
+    assert!(callers.is_empty(), "got {callers:?}");
+}
+
+#[test]
+fn a_this_call_in_an_object_literal_method_reaches_a_sibling_method() {
+    let callers = bare_callers(
+        &[(
+            "src/input.js",
+            "var Input = {\n  setInputValue: function (value) {\n    return value;\n  },\n  resetInputValue: function () {\n    this.setInputValue(1);\n  }\n};\n",
+        )],
+        "setInputValue",
+    );
+
+    assert_eq!(callers, vec!["resetInputValue"]);
+}
+
+#[test]
+fn a_super_call_never_reaches_a_method_of_the_callers_own_class() {
+    let callers = bare_callers(
+        &[(
+            "src/child.js",
+            "class Base {\n  run() {}\n}\n\nclass Child extends Base {\n  run() {\n    super.run();\n  }\n}\n",
+        )],
+        "Child.run",
+    );
+
+    assert!(callers.is_empty(), "got {callers:?}");
+}
+
+#[test]
+fn a_bare_ruby_call_follows_only_the_closest_base_class_of_that_name() {
+    let (_repo, db_path) = scanned_repo(&[
+        (
+            "lib/app/base.rb",
+            "module App\n  class Base\n    def options\n    end\n  end\nend\n",
+        ),
+        (
+            "lib/guard/base.rb",
+            "module Guard\n  class Base\n    def options\n    end\n  end\nend\n",
+        ),
+        (
+            "lib/guard/token.rb",
+            "module Guard\n  class Token < Base\n    def accepts\n      options\n    end\n  end\nend\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+    let options_in = |path: &str| -> Vec<String> {
+        let id: String = conn
+            .query_row(
+                "SELECT symbol_id FROM symbols WHERE name = 'options' AND path = ?1",
+                [path],
+                |row| row.get(0),
+            )
+            .unwrap();
+        caller_names(&find_references_for_symbol(&conn, "options", "callers", 20, &id).unwrap())
+    };
+
+    assert_eq!(options_in("lib/guard/base.rb"), vec!["accepts"]);
+    assert!(options_in("lib/app/base.rb").is_empty());
+}
+
+#[test]
+fn an_import_in_a_closer_scope_hides_a_definition_of_an_enclosing_scope() {
+    let callers = bare_callers(
+        &[(
+            "src/scopes.cpp",
+            "namespace outer {\nvoid helper() {}\nnamespace middle {\nusing tools::helper;\nstruct Inner {\n    void run() {\n        helper();\n    }\n};\n}\n}\n",
+        )],
+        "helper",
+    );
+
+    assert!(callers.is_empty(), "got {callers:?}");
+}
+
+#[test]
+fn a_csharp_constructor_call_reaches_a_class_of_the_enclosing_file_scoped_namespace() {
+    let (_repo, db_path) = scanned_repo(&[(
+        "src/ConverterTests.cs",
+        "namespace Tests.Converters;\n\npublic class ConverterTests\n{\n    public void ConverterDictionary()\n    {\n        var items = new ConverterDictionary<object>();\n    }\n}\n\npublic class ConverterDictionary<T>\n{\n}\n",
+    )]);
+    let conn = open_read_only(&db_path).unwrap();
+    let class_id: String = conn
+        .query_row(
+            "SELECT symbol_id FROM symbols WHERE name = 'ConverterDictionary' AND kind = 'class'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+
+    let refs =
+        find_references_for_symbol(&conn, "ConverterDictionary", "callers", 20, &class_id).unwrap();
+
+    assert!(
+        refs.iter().any(|r| r.kind == "instantiates"),
+        "got {refs:?}"
+    );
 }

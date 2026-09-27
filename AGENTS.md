@@ -141,7 +141,10 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   import matches a class or namespace member only in that file. A bare pending call never matches a definition in another file when the
   caller's file defines that name at module level or inside the caller; an import or re-export
   there does not count. A `self`, `this`, or `cls`
-  call matches a method of any ancestor class, through same-file and cross-file `extends` rows.
+  call matches a method of any ancestor class, through same-file and cross-file `extends` rows,
+  and a `self`, `this`, or `cls` call also matches a member of the caller's own class or object
+  literal. A base class that a pending `extends` row names counts unless a class of that name is
+  closer to the subclass's file.
   A member access whose receiver names a type-like target groups to one row per
   file with an `occurrences` count. An identifier row is dropped when a relationship row already
   covers the same site. An import alias satisfies a pending receiver unless the import source
@@ -165,7 +168,11 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   impacted symbol.
   A `super` call matches a method of an ancestor, and a `self`, `this`, `cls`, or `super` call
   matches only the nearest class in the chain that defines the name. A bare call matches a class
-  or function defined inside the caller. A member-access identifier never matches a function
+  or function defined inside the caller, and a definition in an enclosing function, namespace,
+  or module scope, where the nearest scope that defines or imports the name wins. In Java, C#, Kotlin, Swift, C++, Scala, Dart, Ruby,
+  and VB.NET a bare call also matches a method of the caller's class chain, where the nearest
+  class that defines the name wins, a method of another part of the caller's class in the same
+  file (a C# partial class), and a type nested in an enclosing class. A member-access identifier never matches a function
   nested in another function, a private JavaScript or TypeScript module-level name in another
   file, or any target when its receiver is a capitalized name that no indexed type, module,
   import, field, or property has (`Assert.Contains`); a QML signal handler is exempt. Callee rows
