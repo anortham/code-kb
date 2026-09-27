@@ -3293,6 +3293,7 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
     let builder_scope = receiver_definition_scope("builder", "builder_call.path");
     let built_scope = receiver_definition_scope("built_class", "built_name.path");
     let fixture_receiver = if has_column(conn, "symbols", "metadata_json") {
+        // CASE prevents scope checks for builders that cannot return an indexed class.
         format!(
             "OR CASE WHEN EXISTS (
                         SELECT 1 FROM symbols taken
@@ -3308,8 +3309,14 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                             FROM builder_call
                             JOIN symbols builder ON builder.name = builder_call.name
                             WHERE builder.kind IN ('function', 'method')
-                              AND json_valid(builder.metadata_json)
-                              AND {builder_scope}
+                              AND CASE WHEN json_valid(builder.metadata_json)
+                                        AND json_extract(builder.metadata_json, '$.returnType') IS NOT NULL
+                                        AND EXISTS (
+                                            SELECT 1 FROM symbols returned_class
+                                            WHERE returned_class.name = json_extract(builder.metadata_json, '$.returnType')
+                                              AND returned_class.kind = 'class'
+                                        )
+                                       THEN ({builder_scope}) ELSE 0 END
                         ),
                         built(symbol_id, depth) AS (
                             SELECT built_class.symbol_id, 0
