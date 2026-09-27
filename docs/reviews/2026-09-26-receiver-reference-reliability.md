@@ -1,5 +1,7 @@
 # Receiver reference reliability
 
+**Follow-up:** [Two lookup indexes reduce the 20-second query to 2 seconds](2026-09-27-reference-query-latency.md). The measurements and next-step hypotheses below describe the earlier correctness slice.
+
 The receiver fix removes the reproduced wrong matches and labels unresolved member references as candidates. It also adds latency. The difficult Hermes reference query takes **20.50 s median, 20.72 s p95**, against **18.52 s and 18.79 s** before the change. Performance work remains open.
 
 The [data file](2026-09-26-receiver-reference-reliability-data.json) contains every timing sample, first responses, correctness labels and results, memory readings, CPU/I/O samples, SQL, query plans, source identities, verification ledger, and exact diagnostic drivers. Measurements finished September 27 UTC, September 26 locally.
