@@ -189,6 +189,18 @@ pub fn ensure_fts_index(conn: &Connection) -> Result<(), rusqlite::Error> {
         )?;
     }
 
+    if conn.query_row(
+        "SELECT count(*) = 3 FROM pragma_table_info('symbols')
+         WHERE name IN ('path', 'name', 'kind')",
+        [],
+        |row| row.get::<_, bool>(0),
+    )? {
+        conn.execute_batch(
+            "CREATE INDEX IF NOT EXISTS idx_symbols_import_path_name
+             ON symbols(path, name) WHERE kind = 'import';",
+        )?;
+    }
+
     if fts_index_is_ready(conn) {
         return Ok(());
     }
@@ -666,6 +678,49 @@ mod tests {
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap();
             assert_eq!(rows, [expected]);
+            let steps = statement.get_status(rusqlite::StatementStatus::VmStep);
+            assert!(steps < 100, "{steps} SQLite steps for {sql}");
+        }
+    }
+
+    #[test]
+    fn ready_search_indexes_gain_bounded_import_lookups() {
+        let (_dir, conn) = symbols_db("import-lookups.db");
+        ensure_fts_index(&conn).unwrap();
+        conn.execute_batch(
+            "DROP INDEX IF EXISTS idx_symbols_import_path_name;
+             CREATE INDEX idx_symbols_path ON symbols(path);
+             CREATE INDEX idx_symbols_name_kind ON symbols(name, kind);
+             WITH RECURSIVE n(value) AS (
+                 VALUES(1) UNION ALL SELECT value + 1 FROM n WHERE value < 2000
+             )
+             INSERT INTO symbols(symbol_id, path, name, kind)
+             SELECT 'local-' || value, 'main.py', 'other_' || value, 'function' FROM n;
+             WITH RECURSIVE n(value) AS (
+                 VALUES(1) UNION ALL SELECT value + 1 FROM n WHERE value < 2000
+             )
+             INSERT INTO symbols(symbol_id, path, name, kind)
+             SELECT 'import-' || value, 'noise/' || value || '.py', 'Factory', 'import' FROM n;
+             INSERT INTO symbols(symbol_id, path, name, kind)
+             VALUES ('selected-import', 'main.py', 'Factory', 'import');",
+        )
+        .unwrap();
+
+        ensure_fts_index(&conn).unwrap();
+        ensure_fts_index(&conn).unwrap();
+
+        for sql in [
+            "SELECT name FROM symbols WHERE kind = 'import' AND path = 'main.py'",
+            "SELECT name FROM symbols
+             WHERE kind = 'import' AND path = 'main.py' AND name = 'Factory'",
+        ] {
+            let mut statement = conn.prepare(sql).unwrap();
+            let rows = statement
+                .query_map([], |row| row.get::<_, String>(0))
+                .unwrap()
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+            assert_eq!(rows, ["Factory"]);
             let steps = statement.get_status(rusqlite::StatementStatus::VmStep);
             assert!(steps < 100, "{steps} SQLite steps for {sql}");
         }
