@@ -1,5 +1,7 @@
 # Reference query latency follow-up
 
+The subsequent [partial import index follow-up](2026-09-27-impact-query-latency.md) reduces impact further, to 3.80 s median in its paired run. The measurements below describe the preceding two-index change.
+
 Two SQLite indexes reduce the difficult Hermes reference query from **20.08 s to 2.04 s median**, a **9.87× speedup**. The same change reduces the impact query from **8.17 s to 6.15 s**. All returned results are identical across the five measured workloads.
 
 The [data file](2026-09-27-reference-query-latency-data.json) retains every sample, first response, output hash, process counter, memory reading, query plan, verification command, and the exact drivers. This follows the [receiver correctness and initial diagnosis](2026-09-26-receiver-reference-reliability.md); its candidate is this comparison's baseline.
