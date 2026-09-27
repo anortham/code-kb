@@ -231,13 +231,13 @@ This is an evidence task. It does not require a fabricated failing test or an op
 
 **Acceptance criteria:**
 
-- [ ] Baseline and candidate use the same declared corpus content, extractor, workload, and measurement procedure.
-- [ ] Readiness responses cannot enter query timings; request deadlines and percentile calculation are recorded.
-- [ ] The report distinguishes historical observations from new measurements and records ambiguous target selection.
-- [ ] Correctness, timing samples, result counts, and live retained memory are available together.
-- [ ] A query-plan diagnosis or a documented failure to reproduce supports the next performance step.
-- [ ] Temporary instrumentation is removed; branch verification and remaining gaps are recorded honestly.
-- [ ] Report, data, plan status, and consequential memory are committed locally; nothing is pushed or released.
+- [x] Baseline and candidate use the same declared corpus content, extractor, workload, and measurement procedure.
+- [x] Readiness responses cannot enter query timings; request deadlines and percentile calculation are recorded.
+- [x] The report distinguishes historical observations from new measurements and records ambiguous target selection.
+- [x] Correctness, timing samples, result counts, and live retained memory are available together.
+- [x] A query-plan diagnosis or a documented failure to reproduce supports the next performance step.
+- [x] Temporary instrumentation is removed; branch verification and remaining gaps are recorded honestly.
+- [x] Report, data, plan status, and consequential memory are committed locally; nothing is pushed or released.
 
 ## Definition of done
 
@@ -260,3 +260,8 @@ open for its remaining inference explanations and any diagnosed optimization.
 - Task 2 landed as `ba2f890478e13ef539269c1764de19351e3d1dba`; 545 Rust tests, 19 plugin tests, formatting, Clippy, and Windows's 135 affected core plus two new protocol tests passed on that source.
 - Task 3's first SQL profile exposed an introduced regression: scoped Hermes `get` rose from 18.08 s to 48.88 s. Module-scope checks were evaluated for builders with unusable return types. A captured-query experiment using a lazy `CASE` gate reduced its pending-call stage from 44.17 s to 17.05 s with identical rows. This small correction is required by the regression check; the broader performance work remains diagnosis only. Affected tests passed after applying it; final verification and paired results follow.
 - Baseline Hermes name-only `get` and `execute` probes report ambiguity. Task 3 will retain those outcomes and add explicitly scoped probes in `agent/relay_runtime.py` and `agent/relay_tools.py`, without claiming they reproduce the unknown historical selections.
+- Task 3 is complete. [The report](../reviews/2026-09-26-receiver-reference-reliability.md) and its data file record verified source `f804a790b86fd715207a52feb6c52f1d704db010`, exact drivers, corpus identities, all 280 outcomes, SQL plans, and the verification ledger. Final source passed 545 Rust tests, 19 plugin tests, and Windows/NTFS's 135 affected core plus two protocol tests, formatting, Clippy, and guidance comparisons.
+- The labeled regression set keeps all 15 required rows, removes all 14 formerly returned forbidden rows, and labels all 14 unresolved rows. These are regression fixtures, not a project-wide precision estimate.
+- The 20-sample paired medians are 18.52→20.50 s for scoped Hermes references and 6.17→8.27 s for blast on `run_agent.py`. Correctness improves at a measured latency cost. The dominant direct SQL stages are pending matching at 15.81 s and member identifiers at 4.07 s. Reusing builder/origin/ancestor facts inside the query is the next justified experiment; this plan does not claim that optimization is complete.
+- The owner flagged 20 seconds as too slow and requested disk-I/O and CPU measurements. Three warm requests per arm use about 99.7% of one logical core, read zero bytes from storage, and perform about 10.5 million read system calls returning 40.1 GiB in the candidate. Peak RSS near 278 MiB is mostly the existing 256 MiB database mapping; retained memory is reported separately. The report includes the samples and their limits.
+- Final read-only evidence review checked metrics, embedded driver hashes, and claim scope without finding additional actionable issues. Only docs and memory changed after the verified production source. Priority 1 remains open for performance work and additional inference explanations; the complete-task token/context study remains priority 5.

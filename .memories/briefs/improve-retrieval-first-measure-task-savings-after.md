@@ -3,7 +3,7 @@ id: improve-retrieval-first-measure-task-savings-after
 title: Improve retrieval first, measure task savings afterward
 status: active
 created: 2026-09-26T23:16:22.894Z
-updated: 2026-09-27T00:06:24.667Z
+updated: 2026-09-27T01:21:06.173Z
 tags:
   - project-direction
   - retrieval-quality
@@ -23,8 +23,12 @@ The owner accepted the five improvement areas in the September 26 evaluation and
 
 ## Constraints
 
-Keep the AST/SQLite foundation and CLI/MCP parity. Focused correctness and performance verification still belongs with each improvement. Moving the broader savings study last does not postpone those checks. Paid model replays still require an explicit budget.
+Keep the AST/SQLite foundation and CLI/MCP parity. Focused correctness and performance verification belongs with each improvement. Moving the broader savings study last does not postpone those checks. Paid model replays require an explicit budget.
 
-## Status and reference
+## Status and evidence
 
-The owner approved docs/plans/2026-09-26-receiver-reference-reliability.md. Execution is active in .worktrees/receiver-reference-reliability on fix/receiver-reference-reliability. Receiver mismatch regressions are fixed and focused tests pass; candidate labels, consumer checks, and performance diagnosis follow. This slice does not complete priority 1. See docs/reviews/2026-09-26-project-evaluation.md for the full evidence and acceptance criteria. The earlier recommendation to run the savings study first is superseded.
+The approved receiver-reference slice is implemented and verified locally on fix/receiver-reference-reliability in .worktrees/receiver-reference-reliability. Verified source f804a790 fixes proven receiver mismatches and labels unresolved member references as candidates. Labeled regression cases retain all 15 required rows, remove all 14 formerly returned forbidden rows, and label all 14 unresolved rows. Linux 545 Rust + 19 plugin tests and Windows/NTFS 135 affected core + 2 protocol tests pass.
+
+Priority 1 remains open. Paired frozen-corpus measurements show scoped Hermes references at 18.52 s baseline versus 20.50 s candidate median; blast on run_agent.py is 6.17 s versus 8.27 s. The owner explicitly flagged 20 seconds as too slow and asked for CPU/disk evidence. Three warm CPU/I/O samples per arm show about one saturated core, zero storage reads, and about 40 GiB of repeated cached-read traffic per query. Final SQL diagnosis assigns 15.81 s to pending-call checks and 4.07 s to identifier checks. The next justified experiment is reusing builder/import/ancestor facts within each SQL query while preserving receiver semantics. No optimization speedup or complete-task token/context savings has been established.
+
+See docs/reviews/2026-09-26-receiver-reference-reliability.md and its data JSON for this slice, and docs/reviews/2026-09-26-project-evaluation.md for the broader evaluation. Local publication authority remains absent. The earlier recommendation to run the savings study first is superseded.
