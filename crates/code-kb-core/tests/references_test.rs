@@ -20,6 +20,101 @@ fn scanned_repo(files: &[(&str, &str)]) -> (tempfile::TempDir, std::path::PathBu
 }
 
 #[test]
+fn member_access_rejects_a_different_receiver() {
+    let (_repo, db) = scanned_repo(&[
+        (
+            "web/runners.py",
+            "class Runner:\n    def invoke(self):\n        pass\n\nclass Shell:\n    def invoke(self):\n        pass\n",
+        ),
+        (
+            "web/builders.py",
+            "from web.runners import Runner, Shell\n\ndef make_runner() -> Runner:\n    return Runner()\n\ndef make_shell() -> Shell:\n    return Shell()\n",
+        ),
+        (
+            "tests/conftest.py",
+            "import pytest\nfrom web.runners import Runner\n\n@pytest.fixture\ndef runner():\n    return Runner()\n",
+        ),
+        (
+            "other/tests/conftest.py",
+            "import pytest\nfrom web.runners import Shell\n\n@pytest.fixture\ndef runner():\n    return Shell()\n",
+        ),
+        (
+            "tests/test_cli.py",
+            "from web.builders import make_runner, make_shell\n\ndef test_local():\n    runner = make_runner()\n    return runner.invoke\n\ndef test_fixture(runner):\n    return runner.invoke\n\ndef test_wrong():\n    runner = make_shell()\n    return runner.invoke\n",
+        ),
+        (
+            "other/tests/test_cli.py",
+            "def test_other_fixture(runner):\n    return runner.invoke\n",
+        ),
+    ]);
+    let conn = open_read_only(&db).unwrap();
+    let callers = |name| {
+        let rows = find_references_scoped(&conn, name, "callers", 20, false, None).unwrap();
+        assert!(
+            rows.iter().all(|row| row.kind == "member_access"),
+            "{rows:?}"
+        );
+        caller_names(&rows)
+    };
+
+    assert_eq!(callers("Runner.invoke"), ["test_fixture", "test_local"]);
+    assert_eq!(
+        callers("Shell.invoke"),
+        ["test_other_fixture", "test_wrong"]
+    );
+}
+
+#[test]
+fn a_base_instance_does_not_reference_a_subclass_override() {
+    let (_repo, db) = scanned_repo(&[
+        (
+            "web/testing.py",
+            "from click.testing import CliRunner\n\nclass FlaskCliRunner(CliRunner):\n    def invoke(self):\n        pass\n",
+        ),
+        (
+            "tests/conftest.py",
+            "import pytest\nfrom click.testing import CliRunner\nfrom web.testing import FlaskCliRunner\n\n@pytest.fixture\ndef runner():\n    return CliRunner()\n\n@pytest.fixture\ndef flask_runner():\n    return FlaskCliRunner()\n",
+        ),
+        (
+            "tests/test_cli.py",
+            "from click.testing import CliRunner\nfrom web.testing import FlaskCliRunner\n\ndef test_base_fixture(runner):\n    return runner.invoke\n\ndef test_subclass_fixture(flask_runner):\n    return flask_runner.invoke\n\ndef test_base_local():\n    runner = CliRunner()\n    return runner.invoke\n\ndef test_subclass_local():\n    runner = FlaskCliRunner()\n    return runner.invoke\n",
+        ),
+    ]);
+    let conn = open_read_only(&db).unwrap();
+    let rows =
+        find_references_scoped(&conn, "FlaskCliRunner.invoke", "callers", 20, false, None).unwrap();
+
+    assert_eq!(
+        caller_names(&rows),
+        ["test_subclass_fixture", "test_subclass_local"]
+    );
+}
+
+#[test]
+fn member_access_uses_the_nearest_inherited_definition() {
+    let (_repo, db) = scanned_repo(&[
+        (
+            "web/runners.py",
+            "class Base:\n    def invoke(self):\n        pass\n\nclass Middle(Base):\n    def invoke(self):\n        pass\n\n    def read_own(self):\n        return self.invoke\n\nclass Leaf(Middle):\n    def read_inherited(self):\n        return self.invoke\n\n    def read_super(self):\n        return super().invoke()\n",
+        ),
+        (
+            "clients.py",
+            "from web.runners import Base, Leaf\n\ndef read_base():\n    runner = Base()\n    return runner.invoke\n\ndef read_leaf():\n    runner = Leaf()\n    return runner.invoke\n",
+        ),
+    ]);
+    let conn = open_read_only(&db).unwrap();
+    let base = find_references_scoped(&conn, "Base.invoke", "callers", 20, false, None).unwrap();
+    let middle =
+        find_references_scoped(&conn, "Middle.invoke", "callers", 20, false, None).unwrap();
+
+    assert_eq!(caller_names(&base), ["read_base"]);
+    assert_eq!(
+        caller_names(&middle),
+        ["read_inherited", "read_leaf", "read_own", "read_super"]
+    );
+}
+
+#[test]
 fn find_references_reports_type_usages_of_a_struct() {
     let (_repo, db_path) = scanned_repo(&[
         (

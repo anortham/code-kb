@@ -18,8 +18,8 @@
 - Branch: `fix/receiver-reference-reliability`.
 - Baseline: `7ceb734be947aced7cedf1ea179fbce3c9987c88`.
 - Planning started with this worktree clean. The main checkout was also clean.
-- `implementation_authority`: pending. The owner requested this plan, not execution.
-- `local_commit_authority`: authorized for this plan and memory artifacts; implementation commits follow approval of the plan.
+- `implementation_authority`: authorized by the owner's "approved" response to this plan.
+- `local_commit_authority`: authorized for implementation, verification, documentation, and memory artifacts within this plan.
 - `push_authority`, `pr_authority`, and release authority: missing. Do not publish as part of local execution.
 - External reviewer choice for execution: `none`, unless the approval message selects one.
 
@@ -158,11 +158,11 @@ commit, status, and worktree inventory before each commit and final handoff.
 
 **Acceptance criteria:**
 
-- [ ] The baseline demonstrates the reported wrong-receiver behavior through a failing assertion.
-- [ ] Local, fixture, typed, and inherited supported references survive; proven mismatches disappear.
-- [ ] Imported base instances do not reference subclass overrides, including the Flask-shaped case.
-- [ ] Scope and module identity prevent cross-matching unrelated same-name classes or fixtures.
-- [ ] The focused tests pass and the commit SHA is recorded.
+- [x] The baseline demonstrates the reported wrong-receiver behavior through a failing assertion.
+- [x] Local, fixture, typed, and inherited supported references survive; proven mismatches disappear.
+- [x] Imported base instances do not reference subclass overrides, including the Flask-shaped case.
+- [x] Scope and module identity prevent cross-matching unrelated same-name classes or fixtures.
+- [x] The focused tests pass and the commit SHA is recorded.
 
 ## Task 2: Expose uncertainty and verify consumers
 
@@ -247,3 +247,12 @@ consumers obey the contract. The report gives measured correctness and latency
 for this slice and identifies the next justified performance action. The plan's
 checks are complete or name a genuine environmental blocker. Priority 1 remains
 open for its remaining inference explanations and any diagnosed optimization.
+
+## Execution notes
+
+- The owner approved local execution. No external reviewer or publication authority was selected.
+- Baseline affected checks passed: 124 core tests and 90 CLI/MCP tests. Logs are under `target/receiver-reference-reliability/`.
+- Task 1 regressions failed with wrong caller rows before the fixes; its final reference/resolution scope passed 58 tests.
+- Shared builder inference now respects local-variable shadowing, import modules, and nearest inherited overrides.
+- The extractor supplies no receiver metadata for a bare `super().invoke` member read. Task 1 verifies the supported `super().invoke()` call; Task 2 must retain a read without metadata as a candidate. This follows the unknown-evidence contract instead of inventing a receiver.
+- Baseline Hermes name-only `get` and `execute` probes report ambiguity. Task 3 will retain those outcomes and add explicitly scoped probes in `agent/relay_runtime.py` and `agent/relay_tools.py`, without claiming they reproduce the unknown historical selections.

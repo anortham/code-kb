@@ -3074,6 +3074,126 @@ fn relative_import_matches(value: &str, target: &str) -> String {
     )
 }
 
+fn receiver_builder_calls(conn: &Connection) -> String {
+    let fixture_calls = if has_column(conn, "symbols", "test_lifecycle") {
+        "UNION
+         SELECT fixture_call.target_terminal_name, fixture.path
+         FROM symbols fixture
+         JOIN pending_relationships fixture_call ON fixture_call.from_symbol_id = fixture.symbol_id
+         WHERE fixture.name = p.target_receiver
+           AND fixture.kind IN ('function', 'method')
+           AND +fixture.test_lifecycle = 1
+           AND EXISTS (
+               SELECT 1 FROM symbols parameter
+               WHERE parameter.parent_symbol_id = p.from_symbol_id
+                 AND +parameter.name = p.target_receiver
+                 AND (parameter.kind = 'parameter'
+                      OR json_valid(parameter.metadata_json)
+                         AND json_extract(parameter.metadata_json, '$.role') = 'parameter')
+           )
+           AND (fixture.path = p.path
+                OR fixture.path LIKE '%conftest.py'
+                   AND substr(p.path, 1, length(fixture.path) - 11)
+                       = substr(fixture.path, 1, length(fixture.path) - 11))"
+    } else {
+        ""
+    };
+    // Unary `+` keeps SQLite on the parent index for common receiver names.
+    format!(
+        "SELECT assign_call.target_terminal_name, assign_call.path
+         FROM symbols assigned
+         JOIN pending_relationships assign_call
+           ON assign_call.from_symbol_id = p.from_symbol_id
+          AND assign_call.start_line = assigned.start_line
+          AND +assign_call.kind = 'calls'
+         WHERE assigned.parent_symbol_id = p.from_symbol_id
+           AND +assigned.name = p.target_receiver
+           AND +assigned.kind = 'variable'
+         {fixture_calls}"
+    )
+}
+
+fn receiver_definition_scope(target: &str, origin: &str) -> String {
+    let source = "json_extract(binding.metadata_json, '$.source')";
+    let relative = is_relative_import_path(source);
+    let relative_match = relative_import_matches(source, target).replace("p.path", origin);
+    let caller = format!("replace({origin}, '\\', '/')");
+    let parent_dir = "rtrim(substr(hop.dir, 1, length(hop.dir) - 1), replace(substr(hop.dir, 1, length(hop.dir) - 1), '/', ''))";
+    format!(
+        "({target}.path = {origin} OR NOT EXISTS (
+            SELECT 1 FROM symbols local
+            WHERE local.name = {target}.name AND local.path = {origin}
+              AND local.kind = {target}.kind
+         )) AND NOT EXISTS (
+            SELECT 1 FROM symbols binding
+            WHERE binding.name = {target}.name AND binding.path = {origin}
+              AND binding.kind = 'import' AND json_valid(binding.metadata_json)
+              AND COALESCE({source}, '') != ''
+              AND NOT CASE WHEN {relative} THEN {relative_match}
+                  WHEN {source} LIKE '.%' THEN EXISTS (
+                      WITH RECURSIVE hop(dir, rest) AS (
+                          SELECT rtrim({caller}, replace({caller}, '/', '')), substr({source}, 2)
+                          UNION ALL
+                          SELECT {parent_dir}, substr(hop.rest, 2) FROM hop WHERE hop.rest LIKE '.%'
+                      )
+                      SELECT 1 FROM hop WHERE hop.rest NOT LIKE '.%'
+                        AND replace({target}.path, '\\', '/') IN (
+                            hop.dir || replace(hop.rest, '.', '/') || '.py',
+                            hop.dir || replace(hop.rest, '.', '/') || '/__init__.py'
+                        )
+                  )
+                  ELSE instr('/' || replace({target}.path, '\\', '/'), '/' || replace({source}, '.', '/') || '.') > 0
+                    OR instr('/' || replace({target}.path, '\\', '/'), '/' || replace({source}, '.', '/') || '/') > 0
+                  END
+         )"
+    )
+}
+
+fn member_receiver_match(conn: &Connection) -> String {
+    if !has_pending_namespace_column(conn) || !has_column(conn, "symbols", "metadata_json") {
+        return "0".to_string();
+    }
+    let matched = pending_target_predicate(conn, "candidate", "candidate_parent");
+    let builders = receiver_builder_calls(conn);
+    format!(
+        "CASE WHEN p.kind != 'member_access'
+                    OR json_extract(p.metadata_json, '$.role') IS 'signal_handler'
+                    OR NOT EXISTS (
+                        SELECT 1 FROM symbols selected
+                        JOIN symbols owner ON owner.symbol_id = selected.parent_symbol_id
+                        WHERE selected.symbol_id = ?3
+                          AND selected.kind IN ('method', 'function', 'constructor')
+                          AND owner.kind IN ('class', 'struct', 'interface', 'trait', 'enum', 'protocol')
+                    ) THEN 1
+              ELSE (
+                  SELECT CASE WHEN COUNT(*) > 1 THEN 0
+                              WHEN MAX(candidate.symbol_id = ?3) = 1 THEN 1
+                              WHEN COUNT(*) = 1 THEN -1
+                              WHEN EXISTS (
+                                  WITH builder_call(name, path) AS ({builders})
+                                  SELECT 1 FROM builder_call
+                                  JOIN symbols imported ON imported.name = builder_call.name
+                                    AND imported.path = builder_call.path AND imported.kind = 'import'
+                                  JOIN symbols selected ON selected.symbol_id = ?3
+                                  JOIN pending_relationships base ON base.from_symbol_id = selected.parent_symbol_id
+                                    AND base.kind = 'extends' AND base.target_terminal_name = builder_call.name
+                                  JOIN symbols base_import ON base_import.name = base.target_terminal_name
+                                    AND base_import.path = base.path AND base_import.kind = 'import'
+                                  WHERE json_valid(imported.metadata_json) AND json_valid(base_import.metadata_json)
+                                    AND json_extract(imported.metadata_json, '$.source')
+                                        = json_extract(base_import.metadata_json, '$.source')
+                              ) THEN -1
+                              ELSE 0 END
+                  FROM symbols candidate
+                  JOIN symbols candidate_parent ON candidate_parent.symbol_id = candidate.parent_symbol_id
+                  WHERE candidate.name = p.name
+                    AND candidate.kind IN ('method', 'function', 'constructor')
+                    AND candidate_parent.kind IN ('class', 'struct', 'interface', 'trait', 'enum', 'protocol')
+                    AND {matched}
+              ) END"
+    )
+}
+
 /// SQL predicate that decides whether a pending call edge `p` (with caller `s_from`) points at
 /// the candidate definition `target` (whose parent symbol is joined as `parent`).
 fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> String {
@@ -3138,27 +3258,9 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
     } else {
         String::new()
     };
-    // The receiver names a local variable or a pytest fixture that a call builds:
-    // `cli = app.test_cli_runner()`, or `def test_run(app)` with a fixture that returns
-    // `Flask(...)`. The call builds the class it names, or the class its callee declares as the
-    // return type, so the receiver names that class. A test sees the fixtures of its own file and
-    // of a `conftest.py` in its folder or a folder above it.
-    let fixture_calls = if has_column(conn, "symbols", "test_lifecycle") {
-        "UNION
-                            SELECT fixture_call.target_terminal_name
-                            FROM symbols fixture
-                            JOIN pending_relationships fixture_call ON fixture_call.from_symbol_id = fixture.symbol_id
-                            WHERE fixture.name = p.target_receiver
-                              AND fixture.kind IN ('function', 'method')
-                              AND +fixture.test_lifecycle = 1
-                              AND (fixture.path = p.path
-                                   OR fixture.path LIKE '%conftest.py'
-                                      AND substr(p.path, 1, length(fixture.path) - 11)
-                                          = substr(fixture.path, 1, length(fixture.path) - 11))"
-    } else {
-        ""
-    };
-    // The unary `+` keeps SQLite on the parent index: a name such as `conn` has thousands of rows.
+    let builder_calls = receiver_builder_calls(conn);
+    let builder_scope = receiver_definition_scope("builder", "builder_call.path");
+    let built_scope = receiver_definition_scope("built_class", "built_name.path");
     let fixture_receiver = if has_column(conn, "symbols", "metadata_json") {
         format!(
             "OR CASE WHEN EXISTS (
@@ -3167,32 +3269,22 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                           AND taken.name = p.target_receiver
                           AND taken.kind IN ('parameter', 'variable')
                     ) THEN EXISTS (
-                        WITH RECURSIVE builder_call(name) AS (
-                            SELECT assign_call.target_terminal_name
-                            FROM symbols assigned
-                            JOIN pending_relationships assign_call
-                              ON assign_call.from_symbol_id = p.from_symbol_id
-                             AND assign_call.start_line = assigned.start_line
-                             AND +assign_call.kind = 'calls'
-                            WHERE assigned.parent_symbol_id = p.from_symbol_id
-                              AND +assigned.name = p.target_receiver
-                              AND +assigned.kind = 'variable'
-                            {fixture_calls}
-                        ),
-                        built_name(name) AS (
-                            SELECT name FROM builder_call
+                        WITH RECURSIVE builder_call(name, path) AS ({builder_calls}),
+                        built_name(name, path) AS (
+                            SELECT name, path FROM builder_call
                             UNION
-                            SELECT json_extract(builder.metadata_json, '$.returnType')
+                            SELECT json_extract(builder.metadata_json, '$.returnType'), builder.path
                             FROM builder_call
                             JOIN symbols builder ON builder.name = builder_call.name
                             WHERE builder.kind IN ('function', 'method')
                               AND json_valid(builder.metadata_json)
+                              AND {builder_scope}
                         ),
                         built(symbol_id, depth) AS (
                             SELECT built_class.symbol_id, 0
                             FROM built_name
                             CROSS JOIN symbols built_class ON built_class.name = built_name.name
-                            WHERE built_class.kind = 'class'
+                            WHERE built_class.kind = 'class' AND {built_scope}
                             UNION
                             SELECT r.to_symbol_id, built.depth + 1
                             FROM relationships r JOIN built ON r.from_symbol_id = built.symbol_id
@@ -3206,6 +3298,13 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                               AND c.kind IN ('class', 'interface', 'struct', 'trait', 'protocol')
                         )
                         SELECT 1 FROM built WHERE built.symbol_id = {target}.parent_symbol_id
+                          AND NOT EXISTS (
+                              SELECT 1 FROM built closer
+                              JOIN symbols nearer ON nearer.parent_symbol_id = closer.symbol_id
+                              WHERE nearer.name = {target}.name
+                                AND nearer.kind IN ('method', 'function', 'constructor', 'property')
+                                AND closer.depth < built.depth
+                          )
                     ) ELSE 0 END"
         )
     } else {
@@ -3243,7 +3342,7 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                             )
                             SELECT 1 FROM base
                             WHERE base.symbol_id = {target}.parent_symbol_id
-                              AND (base.depth > 0 OR {target}.kind IN ('variable', 'field'))
+                              AND (base.depth > 0 OR p.target_receiver IS NOT 'super')
                               AND NOT EXISTS (
                                   SELECT 1 FROM base closer
                                   JOIN symbols nearer ON nearer.parent_symbol_id = closer.symbol_id
@@ -3638,70 +3737,78 @@ fn find_direct_references(
 
         if results.len() < limit && has_table(conn, "identifiers") {
             let remaining = limit - results.len();
-            let mut ident_stmt = conn.prepare(
-                "SELECT COALESCE(s.name, ''),
-                        COALESCE(i.containing_symbol_id, ''),
-                        i.name,
-                        CASE WHEN json_valid(i.metadata_json)
-                                  AND json_extract(i.metadata_json, '$.role') = 'signal_handler'
-                             THEN CASE WHEN json_extract(i.metadata_json, '$.receiver') = (
+            let receiver_match = member_receiver_match(conn);
+            let mut ident_stmt = conn.prepare(&format!(
+                "WITH classified AS MATERIALIZED (SELECT COALESCE(s_from.name, '') AS from_name,
+                        COALESCE(p.containing_symbol_id, '') AS from_id,
+                        p.name,
+                        CASE WHEN json_valid(p.metadata_json)
+                                  AND json_extract(p.metadata_json, '$.role') = 'signal_handler'
+                             THEN CASE WHEN json_extract(p.metadata_json, '$.receiver') = (
                                       SELECT CASE WHEN t.kind IN ('class', 'struct', 'enum', 'interface', 'trait', 'module', 'namespace')
                                                   THEN t.name ELSE tp.name END
                                       FROM symbols t
                                       LEFT JOIN symbols tp ON tp.symbol_id = t.parent_symbol_id
                                       WHERE t.symbol_id = ?3)
                                   THEN 'handler' ELSE 'handler (candidate)' END
-                             ELSE i.kind END,
-                        i.path,
-                        i.start_line,
-                        i.start_column
-                 FROM identifiers i
-                 LEFT JOIN symbols s ON i.containing_symbol_id = s.symbol_id
-                 WHERE i.name = ?1 AND i.kind IN ('type_usage', 'member_access')
-                   AND COALESCE(s.kind, '') != 'import'
+                             ELSE p.kind END AS reference_kind,
+                        p.path,
+                        p.start_line,
+                        p.start_column,
+                        {receiver_match} AS receiver_match
+                 FROM (SELECT identifiers.*, containing_symbol_id AS from_symbol_id,
+                              CASE WHEN json_valid(metadata_json) THEN json_extract(metadata_json, '$.receiver') END AS target_receiver,
+                              '[]' AS target_namespace_json
+                       FROM identifiers WHERE name = ?1) p
+                 LEFT JOIN symbols s_from ON p.containing_symbol_id = s_from.symbol_id
+                 WHERE p.name = ?1 AND p.kind IN ('type_usage', 'member_access')
+                   AND COALESCE(s_from.kind, '') != 'import'
                    AND NOT EXISTS (
                        SELECT 1 FROM relationships covered
                        JOIN symbols covered_to ON covered.to_symbol_id = covered_to.symbol_id
-                       WHERE covered_to.name = i.name
-                         AND covered.path = i.path
-                         AND covered.start_line = i.start_line
+                       WHERE covered_to.name = p.name
+                         AND covered.path = p.path
+                         AND covered.start_line = p.start_line
                          AND (?3 IS NULL OR covered.to_symbol_id = ?3)
                    )
                    AND NOT EXISTS (
                        SELECT 1 FROM pending_relationships covered
-                       WHERE covered.target_terminal_name = i.name
-                         AND covered.path = i.path
-                         AND covered.start_line = i.start_line
+                       WHERE covered.target_terminal_name = p.name
+                         AND covered.path = p.path
+                         AND covered.start_line = p.start_line
                    )
                    AND (?3 IS NULL OR NOT EXISTS (
                        SELECT 1 FROM symbols owner
                        JOIN symbols member ON member.parent_symbol_id = owner.symbol_id
-                       WHERE owner.name = CASE WHEN json_valid(i.metadata_json) THEN json_extract(i.metadata_json, '$.receiver') END
-                         AND member.name = i.name
+                       WHERE owner.name = CASE WHEN json_valid(p.metadata_json) THEN json_extract(p.metadata_json, '$.receiver') END
+                         AND member.name = p.name
                          AND owner.name IS NOT (SELECT parent.name FROM symbols target
                                                 JOIN symbols parent ON parent.symbol_id = target.parent_symbol_id
                                                 WHERE target.symbol_id = ?3)
                    ))
-                   AND NOT (i.kind = 'member_access' AND EXISTS (
+                   AND NOT (p.kind = 'member_access' AND EXISTS (
                        SELECT 1 FROM symbols target
                        LEFT JOIN symbols scope ON scope.symbol_id = target.parent_symbol_id
                        WHERE target.symbol_id = ?3
                          AND (scope.kind IN ('function', 'method', 'constructor')
                               OR (scope.symbol_id IS NULL
-                                  AND target.path != i.path
+                                  AND target.path != p.path
                                   AND target.language IN ('javascript', 'typescript', 'tsx')
                                   AND COALESCE(target.visibility, 'private') = 'private'))
                    ))
-                   AND NOT (i.kind = 'member_access'
-                        AND json_valid(i.metadata_json)
-                        AND json_extract(i.metadata_json, '$.role') IS NOT 'signal_handler'
-                        AND json_extract(i.metadata_json, '$.receiver') GLOB '[A-Z]*'
+                   AND NOT (p.kind = 'member_access'
+                        AND json_valid(p.metadata_json)
+                        AND json_extract(p.metadata_json, '$.role') IS NOT 'signal_handler'
+                        AND json_extract(p.metadata_json, '$.receiver') GLOB '[A-Z]*'
                         AND NOT EXISTS (SELECT 1 FROM symbols known
-                                        WHERE known.name = json_extract(i.metadata_json, '$.receiver')
+                                        WHERE known.name = json_extract(p.metadata_json, '$.receiver')
                                           AND known.kind NOT IN ('variable', 'parameter', 'method')))
-                 ORDER BY i.path, i.start_line
-                 LIMIT ?2",
-            )?;
+                 )
+                 SELECT from_name, from_id, name, reference_kind, path, start_line, start_column
+                 FROM classified WHERE receiver_match != -1
+                 ORDER BY path, start_line
+                 LIMIT ?2"
+            ))?;
             let rows =
                 ident_stmt.query_map(params![symbol_name, remaining as i64, symbol_id], |row| {
                     Ok(ReferenceSite {
