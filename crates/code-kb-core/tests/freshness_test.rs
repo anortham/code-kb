@@ -1274,3 +1274,60 @@ fn test_scan_workspace_keeps_the_index_when_one_file_cannot_be_read() {
             .is_none()
     );
 }
+
+#[test]
+fn an_index_from_another_extractor_build_is_rebuilt_when_the_extractor_refuses_an_update() {
+    let _extract_bin = find_julie_extract_binary().unwrap();
+    let repo = safe_tempdir();
+    let file = repo.path().join("lib.rs");
+    fs::write(&file, "pub fn first_fn() {}\n").unwrap();
+    let workspace = Workspace::new(repo.path().to_path_buf());
+    let db = repo.path().join("index.db");
+    scan_workspace(&workspace, &db, true).unwrap();
+    open_read_write(&db)
+        .unwrap()
+        .execute(
+            "UPDATE artifact_metadata SET value = 'sha256:other-build' \
+             WHERE key = 'capability_snapshot_fingerprint'",
+            [],
+        )
+        .unwrap();
+    fs::write(&file, "pub fn first_fn() {}\npub fn second_fn() {}\n").unwrap();
+    let conn = open_read_only(&db).unwrap();
+
+    update_file(&workspace, &db, "lib.rs").unwrap();
+
+    assert!(
+        get_symbol_by_name(&conn, "second_fn", Some("lib.rs"))
+            .unwrap()
+            .is_some()
+    );
+}
+
+#[test]
+fn an_index_from_another_extractor_build_is_rebuilt_when_the_extractor_refuses_a_scan() {
+    let _extract_bin = find_julie_extract_binary().unwrap();
+    let repo = safe_tempdir();
+    fs::write(repo.path().join("lib.rs"), "pub fn first_fn() {}\n").unwrap();
+    let workspace = Workspace::new(repo.path().to_path_buf());
+    let db = repo.path().join("index.db");
+    scan_workspace(&workspace, &db, true).unwrap();
+    open_read_write(&db)
+        .unwrap()
+        .execute(
+            "UPDATE artifact_metadata SET value = 'sha256:other-build' \
+             WHERE key = 'capability_snapshot_fingerprint'",
+            [],
+        )
+        .unwrap();
+    fs::write(repo.path().join("more.rs"), "pub fn second_fn() {}\n").unwrap();
+    let conn = open_read_only(&db).unwrap();
+
+    scan_workspace(&workspace, &db, false).unwrap();
+
+    assert!(
+        get_symbol_by_name(&conn, "second_fn", Some("more.rs"))
+            .unwrap()
+            .is_some()
+    );
+}

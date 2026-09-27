@@ -28,7 +28,7 @@ pub enum SyncError {
     TargetNotIndexed(String),
 }
 
-pub const PINNED_JULIE_VERSION: &str = "3.6.3";
+pub const PINNED_JULIE_VERSION: &str = "3.7.0";
 
 /// Extraction level code-kb asks for on a new artifact: symbol core plus structural facts,
 /// without the identifier, literal, and source-region tables code-kb never reads.
@@ -169,11 +169,34 @@ pub fn update_file(workspace: &Workspace, db_path: &Path, rel_path: &str) -> Res
     let root_str = workspace.canonical_root.to_string_lossy();
     let db_str = db_path.to_string_lossy();
 
-    execute_julie_extract(&[
-        "update", "--root", &root_str, "--db", &db_str, "--file", rel_path,
-    ])?;
+    write_incrementally(
+        workspace,
+        db_path,
+        &[
+            "update", "--root", &root_str, "--db", &db_str, "--file", rel_path,
+        ],
+    )
+}
 
-    Ok(())
+/// Runs an extractor write into the existing index. julie-extract refuses one when another
+/// extractor build wrote the index (`fingerprint_mismatch`), so the whole index is rescanned in
+/// place instead. A forced scan commits atomically, so open readers never see a swapped file.
+fn write_incrementally(
+    workspace: &Workspace,
+    db_path: &Path,
+    args: &[&str],
+) -> Result<(), SyncError> {
+    match execute_julie_extract(args) {
+        Err(SyncError::ExtractionFailed(_, stderr)) if is_fingerprint_mismatch(&stderr) => {
+            warn!("Index was written by another julie-extract build; rescanning it");
+            scan_workspace(workspace, db_path, true)
+        }
+        result => result.map(drop),
+    }
+}
+
+fn is_fingerprint_mismatch(stderr: &str) -> bool {
+    stderr.contains("fingerprint_mismatch")
 }
 
 fn scan_header_file(
@@ -229,11 +252,13 @@ pub fn delete_file(workspace: &Workspace, db_path: &Path, rel_path: &str) -> Res
     let root_str = workspace.canonical_root.to_string_lossy();
     let db_str = db_path.to_string_lossy();
 
-    execute_julie_extract(&[
-        "delete", "--root", &root_str, "--db", &db_str, "--file", rel_path,
-    ])?;
-
-    Ok(())
+    write_incrementally(
+        workspace,
+        db_path,
+        &[
+            "delete", "--root", &root_str, "--db", &db_str, "--file", rel_path,
+        ],
+    )
 }
 
 /// Initial or full scan to build/refresh the database.
@@ -269,6 +294,12 @@ pub fn scan_workspace(workspace: &Workspace, db_path: &Path, force: bool) -> Res
             warn!("Extractor cannot read the existing artifact; rebuilding from scratch");
             remove_artifact_files(db_path)?;
             execute_julie_extract(&scan_args(true))?;
+        }
+        Err(SyncError::ExtractionFailed(_, stderr))
+            if is_fingerprint_mismatch(&stderr) && !force && db_path.exists() =>
+        {
+            warn!("Index was written by another julie-extract build; rescanning it");
+            return scan_workspace(workspace, db_path, true);
         }
         Err(SyncError::ExtractionFailed(1, stderr))
             if stderr.starts_with("partial") && db_path.exists() =>
