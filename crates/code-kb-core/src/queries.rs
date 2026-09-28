@@ -3086,9 +3086,32 @@ const IMPLICIT_RECEIVER_LANGUAGES: &[&str] = &[
 ];
 
 fn receiver_builder_calls(conn: &Connection) -> String {
+    // Same-file calls resolve into `relationships`; cross-file calls remain pending. Keep the
+    // resolved symbol ID so same-named builders in different lexical scopes do not collapse.
+    let resolved_calls = if has_column(conn, "relationships", "from_symbol_id")
+        && has_column(conn, "relationships", "to_symbol_id")
+        && has_column(conn, "relationships", "kind")
+        && has_column(conn, "relationships", "path")
+        && has_column(conn, "relationships", "start_line")
+    {
+        "UNION
+         SELECT resolved_builder.name, assign_call.path, resolved_builder.symbol_id
+         FROM symbols assigned
+         JOIN relationships assign_call
+           ON assign_call.from_symbol_id = p.from_symbol_id
+          AND assign_call.start_line = assigned.start_line
+          AND +assign_call.kind = 'calls'
+         JOIN symbols resolved_builder ON resolved_builder.symbol_id = assign_call.to_symbol_id
+         WHERE assigned.parent_symbol_id = p.from_symbol_id
+           AND +assigned.name = p.target_receiver
+           AND +assigned.kind = 'variable'
+           AND assigned.start_line <= p.start_line"
+    } else {
+        ""
+    };
     let fixture_calls = if has_column(conn, "symbols", "test_lifecycle") {
         "UNION
-         SELECT fixture_call.target_terminal_name, fixture.path
+         SELECT fixture_call.target_terminal_name, fixture.path, NULL
          FROM symbols fixture
          JOIN pending_relationships fixture_call ON fixture_call.from_symbol_id = fixture.symbol_id
          WHERE fixture.name = p.target_receiver
@@ -3111,7 +3134,7 @@ fn receiver_builder_calls(conn: &Connection) -> String {
     };
     // Unary `+` keeps SQLite on the parent index for common receiver names.
     format!(
-        "SELECT assign_call.target_terminal_name, assign_call.path
+        "SELECT assign_call.target_terminal_name, assign_call.path, NULL
          FROM symbols assigned
          JOIN pending_relationships assign_call
            ON assign_call.from_symbol_id = p.from_symbol_id
@@ -3121,7 +3144,16 @@ fn receiver_builder_calls(conn: &Connection) -> String {
            AND +assigned.name = p.target_receiver
            AND +assigned.kind = 'variable'
            AND assigned.start_line <= p.start_line
+         {resolved_calls}
          {fixture_calls}"
+    )
+}
+
+fn builder_return_type_sql(builder: &str) -> String {
+    format!(
+        "CASE WHEN json_valid({builder}.metadata_json)
+              THEN COALESCE(NULLIF(json_extract({builder}.metadata_json, '$.returnType'), ''),
+                            json_extract({builder}.metadata_json, '$.inferredReturnType')) END"
     )
 }
 
@@ -3188,6 +3220,7 @@ fn member_receiver_match(conn: &Connection) -> String {
     }
     let matched = pending_target_predicate(conn, "candidate", "candidate_parent");
     let builders = receiver_builder_calls(conn);
+    let builder_return_type = builder_return_type_sql("builder");
     let class_scope = receiver_definition_scope("receiver_class", "builder_call.path");
     let builder_scope = receiver_definition_scope("builder", "builder_call.path");
     let returned_scope = receiver_definition_scope("returned_class", "builder.path");
@@ -3201,22 +3234,24 @@ fn member_receiver_match(conn: &Connection) -> String {
                       AND +binding.kind IN ('variable', 'parameter')
                       AND binding.start_line <= p.start_line) > 1 THEN 0
               WHEN EXISTS (
-                  WITH builder_call(name, path) AS ({builders})
+                  WITH builder_call(name, path, resolved_symbol_id) AS ({builders})
                   SELECT 1 FROM builder_call
                   WHERE (SELECT COUNT(*) FROM builder_call) > 1
                     AND NOT EXISTS (
                         SELECT 1 FROM symbols receiver_class
                         WHERE receiver_class.name = builder_call.name AND receiver_class.kind = 'class'
-                          AND {class_scope}
+                          AND (receiver_class.symbol_id = builder_call.resolved_symbol_id
+                               OR builder_call.resolved_symbol_id IS NULL AND {class_scope})
                     )
                     AND NOT EXISTS (
                         SELECT 1 FROM symbols builder
                         JOIN symbols returned_class ON returned_class.name =
-                            CASE WHEN json_valid(builder.metadata_json)
-                                 THEN json_extract(builder.metadata_json, '$.returnType') END
+                            {builder_return_type}
                         WHERE builder.name = builder_call.name AND builder.kind IN ('function', 'method')
+                          AND (builder.symbol_id = builder_call.resolved_symbol_id
+                               OR builder_call.resolved_symbol_id IS NULL AND {builder_scope})
                           AND returned_class.kind = 'class'
-                          AND {builder_scope} AND {returned_scope}
+                          AND {returned_scope}
                     )
               ) THEN 0
               ELSE (
@@ -3224,7 +3259,7 @@ fn member_receiver_match(conn: &Connection) -> String {
                               WHEN MAX(candidate.symbol_id = ?3) = 1 THEN 1
                               WHEN COUNT(*) = 1 THEN -1
                               WHEN EXISTS (
-                                  WITH builder_call(name, path) AS ({builders})
+                                  WITH builder_call(name, path, resolved_symbol_id) AS ({builders})
                                   SELECT 1 FROM builder_call
                                   JOIN symbols imported ON imported.name = builder_call.name
                                     AND imported.path = builder_call.path AND imported.kind = 'import'
@@ -3313,7 +3348,15 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
         String::new()
     };
     let builder_calls = receiver_builder_calls(conn);
+    let builder_return_type = builder_return_type_sql("builder");
+    // Type facts retain only the terminal type name; constrain them to the imported definition.
+    let receiver_type_scope = if has_column(conn, "symbols", "metadata_json") {
+        receiver_definition_scope(parent, "p.path")
+    } else {
+        "1 = 1".to_string()
+    };
     let builder_scope = receiver_definition_scope("builder", "builder_call.path");
+    let returned_class_scope = receiver_definition_scope("returned_class", "builder.path");
     let built_scope = receiver_definition_scope("built_class", "built_name.path");
     let fixture_receiver = if has_column(conn, "symbols", "metadata_json") {
         // CASE prevents scope checks for builders that cannot return an indexed class.
@@ -3324,28 +3367,26 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                           AND taken.name = p.target_receiver
                           AND taken.kind IN ('parameter', 'variable')
                     ) THEN EXISTS (
-                        WITH RECURSIVE builder_call(name, path) AS ({builder_calls}),
-                        built_name(name, path) AS (
-                            SELECT name, path FROM builder_call
+                        WITH RECURSIVE builder_call(name, path, resolved_symbol_id) AS ({builder_calls}),
+                        built_name(name, path, resolved_symbol_id) AS (
+                            SELECT name, path, resolved_symbol_id FROM builder_call
                             UNION
-                            SELECT json_extract(builder.metadata_json, '$.returnType'), builder.path
+                            SELECT returned_class.name, builder.path, returned_class.symbol_id
                             FROM builder_call
-                            JOIN symbols builder ON builder.name = builder_call.name
-                            WHERE builder.kind IN ('function', 'method')
-                              AND CASE WHEN json_valid(builder.metadata_json)
-                                        AND json_extract(builder.metadata_json, '$.returnType') IS NOT NULL
-                                        AND EXISTS (
-                                            SELECT 1 FROM symbols returned_class
-                                            WHERE returned_class.name = json_extract(builder.metadata_json, '$.returnType')
-                                              AND returned_class.kind = 'class'
-                                        )
-                                       THEN ({builder_scope}) ELSE 0 END
+                            JOIN symbols builder ON builder.kind IN ('function', 'method')
+                              AND (builder.symbol_id = builder_call.resolved_symbol_id
+                                   OR builder_call.resolved_symbol_id IS NULL
+                                      AND builder.name = builder_call.name AND {builder_scope})
+                            JOIN symbols returned_class ON returned_class.name = {builder_return_type}
+                              AND returned_class.kind = 'class' AND {returned_class_scope}
                         ),
                         built(symbol_id, depth) AS (
                             SELECT built_class.symbol_id, 0
                             FROM built_name
                             CROSS JOIN symbols built_class ON built_class.name = built_name.name
                             WHERE built_class.kind = 'class' AND {built_scope}
+                              AND (built_name.resolved_symbol_id IS NULL
+                                   OR built_class.symbol_id = built_name.resolved_symbol_id)
                             UNION
                             SELECT r.to_symbol_id, built.depth + 1
                             FROM relationships r JOIN built ON r.from_symbol_id = built.symbol_id
@@ -3471,6 +3512,7 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                         WHERE receiver.name = p.target_receiver
                           AND receiver.path = p.path
                           AND receiver_type.resolved_type = {parent}.name
+                          AND {receiver_type_scope}
                           AND NOT EXISTS (
                               SELECT 1 FROM symbols shadow
                               WHERE shadow.name = receiver.name
