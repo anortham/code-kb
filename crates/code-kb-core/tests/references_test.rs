@@ -66,6 +66,88 @@ fn member_access_rejects_a_different_receiver() {
 }
 
 #[test]
+fn resolved_same_file_builder_calls_disambiguate_annotated_receivers() {
+    let (_repo, db) = scanned_repo(&[
+        (
+            "pkg/server.py",
+            "class Server:\n    def ctx(self):\n        pass\n",
+        ),
+        (
+            "other/server.py",
+            "class Server:\n    def ctx(self):\n        pass\n",
+        ),
+        (
+            "pkg/cli.py",
+            "from pkg.server import Server\n\ndef load() -> Server:\n    return Server()\n\ndef run():\n    app = load()\n    app.ctx()\n",
+        ),
+    ]);
+    let conn = open_read_only(&db).unwrap();
+
+    let package_server = find_references_scoped(
+        &conn,
+        "Server.ctx",
+        "callers",
+        20,
+        false,
+        Some("pkg/server.py"),
+    )
+    .unwrap();
+    let rival_server = find_references_scoped(
+        &conn,
+        "Server.ctx",
+        "callers",
+        20,
+        false,
+        Some("other/server.py"),
+    )
+    .unwrap();
+
+    assert_eq!(caller_names(&package_server), ["run"]);
+    assert!(rival_server.is_empty(), "{rival_server:?}");
+}
+
+#[test]
+fn inferred_same_file_builder_returns_disambiguate_flask_receivers() {
+    let (_repo, db) = scanned_repo(&[
+        (
+            "pkg/flask.py",
+            "class Flask:\n    def test_client(self):\n        pass\n",
+        ),
+        (
+            "other/flask.py",
+            "class Flask:\n    def test_client(self):\n        pass\n",
+        ),
+        (
+            "pkg/app.py",
+            "from pkg.flask import Flask\n\ndef create_app():\n    app = Flask()\n    return app\n\ndef run():\n    app = create_app()\n    app.test_client()\n",
+        ),
+    ]);
+    let conn = open_read_only(&db).unwrap();
+
+    let package_flask = find_references_scoped(
+        &conn,
+        "Flask.test_client",
+        "callers",
+        20,
+        false,
+        Some("pkg/flask.py"),
+    )
+    .unwrap();
+    let rival_flask = find_references_scoped(
+        &conn,
+        "Flask.test_client",
+        "callers",
+        20,
+        false,
+        Some("other/flask.py"),
+    )
+    .unwrap();
+
+    assert_eq!(caller_names(&package_flask), ["run"]);
+    assert!(rival_flask.is_empty(), "{rival_flask:?}");
+}
+
+#[test]
 fn a_relative_package_import_keeps_the_class_that_a_builder_returns() {
     let (_repo, db) = scanned_repo(&[
         (
