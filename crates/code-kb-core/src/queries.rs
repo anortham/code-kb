@@ -5520,6 +5520,8 @@ pub fn compute_blast_radius_scoped_with_ids(
     let mut fixtures = Vec::new();
     let mut setups = Vec::new();
     let mut entry_classes = Vec::new();
+    let mut constructor_only_test_keys = HashSet::new();
+    let mut non_constructor_test_keys = HashSet::new();
     let mut walked: Vec<String> = resolved_seed_symbols
         .iter()
         .map(|symbol| symbol.symbol_id.clone())
@@ -5538,7 +5540,8 @@ pub fn compute_blast_radius_scoped_with_ids(
 
                 {recursive_sql}
             )
-            SELECT s.symbol_id, s.name, s.kind, s.path, s.start_line, s.is_test, s.test_container, MIN(iw.depth) as min_depth,
+            SELECT s.symbol_id, s.name, s.kind, s.path, s.start_line, s.is_test, s.test_container,
+                   MIN(iw.depth) as min_depth, MIN(iw.via) as min_via,
                    {lifecycle} AS is_fixture, s.parent_symbol_id,
                    EXISTS (SELECT 1 FROM symbols owner
                            WHERE owner.symbol_id = s.parent_symbol_id
@@ -5570,11 +5573,12 @@ pub fn compute_blast_radius_scoped_with_ids(
                 row.get::<_, bool>(5)?,
                 row.get::<_, bool>(6)?,
                 row.get::<_, i64>(7)? as usize,
-                row.get::<_, bool>(8)?,
-                row.get::<_, Option<String>>(9)?,
-                row.get::<_, bool>(10)?,
-                row.get::<_, String>(11)?,
-                row.get::<_, Option<String>>(12)?,
+                row.get::<_, i64>(8)? as usize,
+                row.get::<_, bool>(9)?,
+                row.get::<_, Option<String>>(10)?,
+                row.get::<_, bool>(11)?,
+                row.get::<_, String>(12)?,
+                row.get::<_, Option<String>>(13)?,
             ))
         })?;
 
@@ -5592,6 +5596,7 @@ pub fn compute_blast_radius_scoped_with_ids(
                 is_test,
                 test_container,
                 depth,
+                min_via,
                 is_fixture,
                 parent,
                 in_test_class,
@@ -5604,6 +5609,7 @@ pub fn compute_blast_radius_scoped_with_ids(
                 || test_container
                 || is_fixture
                 || (is_test_path(&path) && (in_test_class || names_a_test(&name)));
+            let constructor_only = min_via > 0;
             if name == "__call__"
                 && let Some(parent) = &parent
             {
@@ -5612,6 +5618,12 @@ pub fn compute_blast_radius_scoped_with_ids(
 
             if is_test_target {
                 let key = format!("{}:{}", path, line);
+                let test_key = (path.clone(), line);
+                if constructor_only {
+                    constructor_only_test_keys.insert(test_key);
+                } else {
+                    non_constructor_test_keys.insert(test_key);
+                }
                 if seen_test_keys.insert(key) {
                     let lowered = name.to_ascii_lowercase();
                     let pytest_fixture = path.ends_with(".py")
@@ -5624,11 +5636,17 @@ pub fn compute_blast_radius_scoped_with_ids(
                         format!("indirect caller [depth {depth}]")
                     };
                     let reason = if is_fixture && pytest_fixture {
-                        fixtures.push((name.clone(), path.clone(), line));
+                        fixtures.push((name.clone(), path.clone(), line, constructor_only));
                         format!("fixture ({caller})")
                     } else if is_fixture {
                         if let Some(class_id) = parent {
-                            setups.push((name.clone(), class_id, path.clone(), line));
+                            setups.push((
+                                name.clone(),
+                                class_id,
+                                path.clone(),
+                                line,
+                                constructor_only,
+                            ));
                         }
                         format!("setup ({caller})")
                     } else {
@@ -5667,13 +5685,19 @@ pub fn compute_blast_radius_scoped_with_ids(
 
     // A fixture or setup member is not a test to run; the tests it serves stand in for it.
     let mut replaced = HashSet::new();
-    for (fixture, fixture_path, line) in &fixtures {
+    for (fixture, fixture_path, line, constructor_only) in &fixtures {
         let shown = fixture_name(conn, fixture, fixture_path);
         let users = fixture_users(conn, fixture, fixture_path)?;
         if !users.is_empty() {
             replaced.insert((fixture_path.clone(), *line));
         }
         for test in users {
+            let test_key = (test.path.clone(), test.line);
+            if *constructor_only {
+                constructor_only_test_keys.insert(test_key);
+            } else {
+                non_constructor_test_keys.insert(test_key);
+            }
             if seen_test_keys.insert(format!("{}:{}", test.path, test.line)) {
                 likely_tests.push(TestTarget {
                     reason: format!("uses fixture `{shown}`"),
@@ -5683,12 +5707,18 @@ pub fn compute_blast_radius_scoped_with_ids(
         }
     }
 
-    for (setup, class_id, setup_path, line) in &setups {
+    for (setup, class_id, setup_path, line, constructor_only) in &setups {
         let tests = tests_in_class(conn, class_id)?;
         if !tests.is_empty() {
             replaced.insert((setup_path.clone(), *line));
         }
         for test in tests {
+            let test_key = (test.path.clone(), test.line);
+            if *constructor_only {
+                constructor_only_test_keys.insert(test_key);
+            } else {
+                non_constructor_test_keys.insert(test_key);
+            }
             if seen_test_keys.insert(format!("{}:{}", test.path, test.line)) {
                 likely_tests.push(TestTarget {
                     reason: format!("setup `{setup}` runs before it"),
@@ -5698,6 +5728,7 @@ pub fn compute_blast_radius_scoped_with_ids(
         }
     }
     likely_tests.retain(|test| !replaced.contains(&(test.path.clone(), test.line)));
+    constructor_only_test_keys.retain(|key| !non_constructor_test_keys.contains(key));
 
     let mut test_name_terms = Vec::new();
     let mut module_terms = Vec::new();
@@ -5876,6 +5907,37 @@ pub fn compute_blast_radius_scoped_with_ids(
     }
 
     qualify_test_methods(conn, &mut likely_tests)?;
+    // A whole-file target often reaches many unrelated tests only because they construct an app;
+    // keep that coverage visible while collapsing each affected test file to one run target.
+    if seed_type == "file" {
+        let mut constructor_tests_by_file =
+            std::collections::BTreeMap::<String, Vec<TestTarget>>::new();
+        let mut other_tests = Vec::with_capacity(likely_tests.len());
+        for test in likely_tests.drain(..) {
+            if constructor_only_test_keys.contains(&(test.path.clone(), test.line)) {
+                constructor_tests_by_file
+                    .entry(test.path.clone())
+                    .or_default()
+                    .push(test);
+            } else {
+                other_tests.push(test);
+            }
+        }
+        for (path, mut tests) in constructor_tests_by_file {
+            if tests.len() > 1 {
+                let count = tests.len();
+                other_tests.push(TestTarget {
+                    name: path.clone(),
+                    path,
+                    line: 1,
+                    reason: format!("constructor-only callers ({count} targets)"),
+                });
+            } else if let Some(test) = tests.pop() {
+                other_tests.push(test);
+            }
+        }
+        likely_tests = other_tests;
+    }
     let whole_files: HashSet<String> = likely_tests
         .iter()
         .filter(|test| test.reason.ends_with("matched test file"))

@@ -1793,6 +1793,76 @@ fn the_callers_of_a_constructor_are_the_calls_that_build_its_class() {
 }
 
 #[test]
+fn whole_file_blast_radius_ranks_constructor_only_tests_after_direct_callers() {
+    let (_repo, db_path) = scanned_repo(&[
+        (
+            "src/flask/cli.py",
+            "class AppGroup:\n    def __init__(self):\n        pass\n\n\ndef invoke_cli():\n    return 1\n",
+        ),
+        (
+            "src/flask/app.py",
+            "from . import cli\n\n\nclass Flask:\n    def __init__(self):\n        self.cli = cli.AppGroup()\n",
+        ),
+        ("src/flask/__init__.py", "from .app import Flask\n"),
+        (
+            "src/flask/runner.py",
+            "from flask.cli import invoke_cli\n\n\ndef run_cli():\n    return invoke_cli()\n",
+        ),
+        (
+            "src/flask/entry.py",
+            "from flask.runner import run_cli\n\n\ndef dispatch():\n    return run_cli()\n",
+        ),
+        (
+            "tests/test_runner.py",
+            "from flask.entry import dispatch\n\n\ndef test_runs_cli_command():\n    assert dispatch()\n",
+        ),
+        (
+            "tests/test_application.py",
+            "import flask\n\n\ndef test_constructs_app_only():\n    assert flask.Flask()\n\n\ndef test_constructs_another_app():\n    assert flask.Flask()\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let result = compute_blast_radius(&conn, &[], &["src/flask/cli.py"], 4, 20).unwrap();
+    let tests: Vec<&str> = result
+        .likely_tests
+        .iter()
+        .map(|test| test.name.as_str())
+        .collect();
+    let position = |name: &str| {
+        tests
+            .iter()
+            .position(|test| *test == name)
+            .unwrap_or_else(|| panic!("{name} missing from {tests:?}"))
+    };
+
+    let constructor_rows: Vec<_> = result
+        .likely_tests
+        .iter()
+        .filter(|test| test.path == "tests/test_application.py")
+        .collect();
+    assert_eq!(constructor_rows.len(), 1, "{tests:?}");
+    assert_eq!(constructor_rows[0].name, "tests/test_application.py");
+    assert_eq!(
+        constructor_rows[0].reason,
+        "constructor-only callers (2 targets)"
+    );
+    assert!(
+        position("test_runs_cli_command") < position("tests/test_application.py"),
+        "{tests:?}"
+    );
+    let formatted = format_blast_radius(&result);
+    assert!(
+        formatted.contains("constructor-only callers (2 targets)"),
+        "{formatted}"
+    );
+    assert!(
+        !formatted.contains("`test_constructs_app_only`"),
+        "{formatted}"
+    );
+}
+
+#[test]
 fn blast_radius_lists_tests_through_a_constructor_last_and_skips_app_factories() {
     let (_repo, db_path) = scanned_repo(&[
         (
