@@ -134,6 +134,70 @@ fn receiver_reference_labels_match_the_cli_contract() {
     assert_eq!(rows[1]["kind"], "member_access (candidate)");
 }
 
+#[test]
+fn cli_renders_reference_sites_without_enclosing_symbols() {
+    let repo = code_kb_core::safe_tempdir();
+    let root = repo.path();
+    for (path, source) in [
+        (
+            "pyproject.toml",
+            "[project]\nname = 'callerless-reference'\nversion = '0.1.0'\n",
+        ),
+        (
+            "runners.py",
+            "class Runner:\n    def Contains(self, value):\n        return value\n",
+        ),
+        (
+            "client.py",
+            "def caller(value):\n    return value.Contains\n",
+        ),
+    ] {
+        std::fs::write(root.join(path), source).unwrap();
+    }
+
+    let db = root.join(".code-kb/artifact.db");
+    code_kb_core::scan_workspace(&code_kb_core::Workspace::new(root.to_path_buf()), &db, true)
+        .unwrap();
+    let conn = code_kb_core::open_read_write(&db).unwrap();
+    let changed = conn
+        .execute(
+            "UPDATE identifiers
+             SET containing_symbol_id = NULL, metadata_json = '{}'
+             WHERE path = 'client.py' AND name = 'Contains' AND kind = 'member_access'",
+            [],
+        )
+        .unwrap();
+    assert_eq!(changed, 1, "expected one extracted member access");
+    conn.execute(
+        "DELETE FROM relationships WHERE path = 'client.py' AND start_line = 2",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "DELETE FROM pending_relationships WHERE path = 'client.py' AND start_line = 2",
+        [],
+    )
+    .unwrap();
+    drop(conn);
+
+    let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .args(["refs", "Contains"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        text.contains("- (no enclosing symbol) [client.py:2] (kind: member_access (candidate))"),
+        "{text}"
+    );
+}
+
 fn setup_test_repo() -> tempfile::TempDir {
     let temp_dir = code_kb_core::safe_tempdir();
     let root = temp_dir.path().to_path_buf();

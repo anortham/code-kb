@@ -805,9 +805,16 @@ pub fn format_references(
             None => String::new(),
         };
         let other = if direction == "callers" {
-            displayed_symbol_name(&r.from_symbol_name, r.enclosing_symbol_name.as_deref())
+            if r.from_symbol_name.is_empty() && r.enclosing_symbol_name.is_none() {
+                "(no enclosing symbol)".to_string()
+            } else {
+                format!(
+                    "`{}`",
+                    displayed_symbol_name(&r.from_symbol_name, r.enclosing_symbol_name.as_deref())
+                )
+            }
         } else {
-            callee_name(&r.to_symbol_name)
+            format!("`{}`", callee_name(&r.to_symbol_name))
         };
         let in_file = match r.occurrences {
             Some(n) => format!(", {n} in file"),
@@ -818,7 +825,7 @@ pub fn format_references(
             _ => String::new(),
         };
         out.push_str(&format!(
-            "- `{other}` [{}{line_info}] (kind: {}{in_file}){target}\n",
+            "- {other} [{}{line_info}] (kind: {}{in_file}){target}\n",
             r.path, r.kind
         ));
     }
