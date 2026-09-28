@@ -3139,6 +3139,7 @@ fn receiver_definition_scope(target: &str, origin: &str) -> String {
             SELECT 1 FROM symbols binding
             WHERE binding.name = {target}.name AND binding.path = {origin}
               AND binding.kind = 'import' AND json_valid(binding.metadata_json)
+              AND NOT ({target}.path = {origin} AND binding.start_line < {target}.start_line)
               AND COALESCE({source}, '') != ''
               AND NOT CASE WHEN {relative} THEN {relative_match}
                   WHEN {source} LIKE '.%' THEN EXISTS (

@@ -97,6 +97,33 @@ fn a_relative_package_import_keeps_the_class_that_a_builder_returns() {
 }
 
 #[test]
+fn a_class_defined_after_a_same_named_import_is_the_one_a_builder_returns() {
+    let (_repo, db) = scanned_repo(&[
+        (
+            "other/runner.py",
+            "class Runner:\n    def invoke(self):\n        pass\n",
+        ),
+        (
+            "client.py",
+            "from other.runner import Runner\n\nclass Runner:\n    def invoke(self):\n        pass\n\ndef make() -> Runner:\n    return Runner()\n",
+        ),
+        (
+            "use.py",
+            "from client import make\n\ndef use():\n    runner = make()\n    runner.invoke()\n",
+        ),
+    ]);
+    let conn = open_read_only(&db).unwrap();
+    let callers = |path| {
+        let rows = find_references_scoped(&conn, "Runner.invoke", "callers", 20, false, Some(path))
+            .unwrap();
+        caller_names(&rows)
+    };
+
+    assert_eq!(callers("client.py"), ["use"]);
+    assert!(callers("other/runner.py").is_empty());
+}
+
+#[test]
 fn a_base_instance_does_not_reference_a_subclass_override() {
     let (_repo, db) = scanned_repo(&[
         (

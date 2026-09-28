@@ -194,7 +194,8 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   julie writes no receiver for `super().x` or for Bash, CSS, HTML, Vue, and XML names. Such a
   member access is a candidate for a class method, is dropped for every other target, and is
   dropped from a documentation language. A relative Python import of a package (`from . import
-  Flask`) matches any file under that package when a receiver's class is checked.
+  Flask`) matches any file under that package when a receiver's class is checked, and an import
+  that comes before a same-named class in the same file does not hide that class.
 - Related tests (`get_symbol_context`): callers from relationships, pending calls, and references
   that are tests, test classes, or functions and methods in test files; never setup, teardown, or
   fixture members, and none for a target in a document language. A constructor gets the related
