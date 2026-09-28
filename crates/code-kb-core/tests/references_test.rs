@@ -227,6 +227,24 @@ fn member_access_with_missing_metadata_is_a_candidate() {
 }
 
 #[test]
+fn member_access_with_missing_metadata_never_reaches_a_non_callable_target() {
+    let (_repo, db) = scanned_repo(&[(
+        "counter.rs",
+        "struct Counter { value: i32 }\nfn read(counter: &Counter) -> i32 { counter.value }\n",
+    )]);
+    let conn = open_read_write(&db).unwrap();
+    for metadata in [None, Some("{")] {
+        conn.execute(
+            "UPDATE identifiers SET metadata_json = ?1 WHERE name = 'value'",
+            [metadata],
+        )
+        .unwrap();
+        let rows = find_references_scoped(&conn, "value", "callers", 20, false, None).unwrap();
+        assert!(rows.is_empty(), "{rows:?}");
+    }
+}
+
+#[test]
 fn a_call_is_not_duplicated_as_a_candidate_member_access() {
     let (_repo, db) = scanned_repo(&[
         (
