@@ -3915,6 +3915,40 @@ fn find_direct_references(
         if results.len() < limit && has_table(conn, "identifiers") {
             let remaining = limit - results.len();
             let receiver_match = member_receiver_match(conn);
+            // A name-only type usage reaches only the closest same-named type visible from
+            // the caller's lexical scopes, then the file's top-level types.
+            let type_usage_shadow = format!(
+                "p.kind = 'type_usage'
+                 AND ?3 IS NOT NULL
+                 AND selected_target.kind IN ({NESTED_TYPE_KINDS})
+                 AND EXISTS (
+                     WITH RECURSIVE lexical(symbol_id, depth) AS (
+                         SELECT s_from.symbol_id, 0
+                         UNION ALL
+                         SELECT scope.parent_symbol_id, lexical.depth + 1
+                         FROM symbols scope JOIN lexical ON scope.symbol_id = lexical.symbol_id
+                         WHERE scope.parent_symbol_id IS NOT NULL AND lexical.depth < 32
+                     ), visible_types(symbol_id, depth) AS (
+                         SELECT shadow.symbol_id, lexical.depth
+                         FROM lexical
+                         JOIN symbols shadow ON shadow.parent_symbol_id = lexical.symbol_id
+                         WHERE shadow.name = selected_target.name
+                           AND shadow.kind IN ({NESTED_TYPE_KINDS})
+                           AND shadow.language = p.language
+                         UNION ALL
+                         SELECT shadow.symbol_id, 100
+                         FROM symbols shadow
+                         WHERE shadow.name = selected_target.name
+                           AND shadow.kind IN ({NESTED_TYPE_KINDS})
+                           AND shadow.language = p.language
+                           AND shadow.parent_symbol_id IS NULL
+                           AND replace(shadow.path, '\\', '/') = replace(p.path, '\\', '/')
+                     )
+                     SELECT 1 FROM visible_types nearest
+                     WHERE nearest.symbol_id != selected_target.symbol_id
+                       AND nearest.depth = (SELECT MIN(depth) FROM visible_types)
+                 )"
+            );
             let mut ident_stmt = conn.prepare(&format!(
                 "WITH classified AS MATERIALIZED (SELECT COALESCE(s_from.name, '') AS from_name,
                         COALESCE(p.containing_symbol_id, '') AS from_id,
@@ -3942,8 +3976,13 @@ fn find_direct_references(
                               '[]' AS target_namespace_json
                        FROM identifiers WHERE name = ?1) p
                  LEFT JOIN symbols s_from ON p.containing_symbol_id = s_from.symbol_id
+                 LEFT JOIN symbols selected_target ON selected_target.symbol_id = ?3
                  WHERE p.name = ?1 AND p.kind IN ('type_usage', 'member_access')
                    AND COALESCE(s_from.kind, '') != 'import'
+                   AND (?3 IS NULL OR selected_target.language = p.language
+                        OR (p.language = 'qml' AND selected_target.language = 'cpp')
+                        OR (p.language = 'razor' AND selected_target.language = 'csharp'))
+                   AND NOT ({type_usage_shadow})
                    AND NOT EXISTS (
                        SELECT 1 FROM relationships covered
                        JOIN symbols covered_to ON covered.to_symbol_id = covered_to.symbol_id
