@@ -2650,7 +2650,11 @@ fn get_symbol_by_name_internal(
     for s in &active_pool {
         candidate_list.push_str(&format!(
             "- {} `{}` in {}:{} (id={})\n",
-            s.kind, s.name, s.path, s.start_line, s.symbol_id
+            crate::formatters::display_kind(s),
+            s.name,
+            s.path,
+            s.start_line,
+            s.symbol_id
         ));
     }
 
