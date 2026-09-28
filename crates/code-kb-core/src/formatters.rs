@@ -3,7 +3,7 @@ use std::path::Path;
 
 use crate::models::{
     BlastRadiusResult, ContextSlice, ImpactedSymbol, ReferenceSite, SearchExplain, Symbol,
-    SymbolSearchResult, TestTarget, is_generated_lambda_name,
+    SymbolSearchResult, TestTarget,
 };
 
 /// Format progressive disclosure file skeleton with implementation bodies stripped.
@@ -831,9 +831,7 @@ pub fn format_references(
 }
 
 fn displayed_symbol_name(name: &str, enclosing_symbol_name: Option<&str>) -> String {
-    if is_generated_lambda_name(name)
-        && let Some(enclosing_symbol_name) = enclosing_symbol_name
-    {
+    if let Some(enclosing_symbol_name) = enclosing_symbol_name {
         format!("<lambda> in {enclosing_symbol_name}")
     } else {
         name.to_string()

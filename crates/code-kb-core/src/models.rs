@@ -70,9 +70,21 @@ pub struct ReferenceSite {
     pub enclosing_symbol_name: Option<String>,
 }
 
-pub(crate) fn is_generated_lambda_name(name: &str) -> bool {
+pub(crate) fn has_generated_lambda_name(name: &str) -> bool {
     name.strip_prefix("lambda_")
         .is_some_and(|line| !line.is_empty() && line.bytes().all(|byte| byte.is_ascii_digit()))
+}
+
+pub(crate) fn is_generated_lambda_name(
+    name: &str,
+    language: &str,
+    kind: &str,
+    signature: Option<&str>,
+) -> bool {
+    has_generated_lambda_name(name)
+        && language == "python"
+        && kind == "function"
+        && signature.is_some_and(|signature| signature.starts_with("lambda"))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

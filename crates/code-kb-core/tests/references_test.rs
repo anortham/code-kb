@@ -2091,6 +2091,123 @@ fn a_csharp_constructor_call_reaches_a_class_of_the_enclosing_file_scoped_namesp
 }
 
 #[test]
+fn module_level_lambda_callers_allow_a_null_parent_and_keep_raw_names() {
+    let (_repo, db) = scanned_repo(&[
+        (
+            "flask.py",
+            "class Flask:\n    def __init__(self, name):\n        pass\n",
+        ),
+        (
+            "app.py",
+            "from flask import Flask\nmodule_app = lambda: Flask(\"module\")\n",
+        ),
+    ]);
+    let conn = open_read_only(&db).unwrap();
+    let flask_id: String = conn
+        .query_row(
+            "SELECT symbol_id FROM symbols WHERE name = 'Flask' AND kind = 'class'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+
+    let refs_result = find_references_for_symbol(&conn, "Flask", "callers", 20, &flask_id);
+    assert!(
+        refs_result.is_ok(),
+        "module-level lambda failed: {refs_result:?}"
+    );
+    let refs = refs_result.unwrap();
+    let lambda = refs
+        .iter()
+        .find(|site| site.from_symbol_name.starts_with("lambda_"))
+        .expect("Flask should have a module-level lambda caller");
+    let raw_name = lambda.from_symbol_name.as_str();
+    assert!(lambda.enclosing_symbol_name.is_none());
+    let text = format_references("Flask", &refs, "callers", 20);
+    assert!(text.contains(&format!("`{raw_name}`")), "{text}");
+    let json = serde_json::to_value(&refs).unwrap();
+    assert!(json.as_array().unwrap().iter().any(|row| {
+        row["from_symbol_name"].as_str() == Some(raw_name)
+            && row.get("enclosing_symbol_name").is_none()
+    }));
+
+    let blast = compute_blast_radius(&conn, &["Flask"], &[], 2, 20).unwrap();
+    let impacted = blast
+        .impacted_symbols
+        .iter()
+        .find(|symbol| symbol.name == raw_name)
+        .expect("blast radius should include the module-level lambda");
+    assert!(impacted.enclosing_symbol_name.is_none());
+    assert!(
+        format_blast_radius(&blast).contains(&format!("`{raw_name}`")),
+        "{}",
+        format_blast_radius(&blast)
+    );
+}
+
+#[test]
+fn a_real_function_named_lambda_123_keeps_its_name_in_references_and_blast_radius() {
+    let (_repo, db) = scanned_repo(&[
+        (
+            "flask.py",
+            "class Flask:\n    def __init__(self, name):\n        pass\n",
+        ),
+        (
+            "app.py",
+            "from flask import Flask\ndef outer():\n    def lambda_123():\n        return Flask(\"real function\")\n    return lambda_123()\n",
+        ),
+    ]);
+    let conn = open_read_only(&db).unwrap();
+    let flask_id: String = conn
+        .query_row(
+            "SELECT symbol_id FROM symbols WHERE name = 'Flask' AND kind = 'class'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let refs = find_references_for_symbol(&conn, "Flask", "callers", 20, &flask_id).unwrap();
+    let caller = refs
+        .iter()
+        .find(|site| site.from_symbol_name == "lambda_123")
+        .expect("Flask should have a lambda_123 function caller");
+    assert!(caller.enclosing_symbol_name.is_none());
+    let references_text = format_references("Flask", &refs, "callers", 20);
+    assert!(
+        references_text.contains("`lambda_123`"),
+        "{references_text}"
+    );
+    assert!(
+        !references_text.contains("<lambda> in outer"),
+        "{references_text}"
+    );
+    let references_json = serde_json::to_value(&refs).unwrap();
+    assert!(references_json.as_array().unwrap().iter().any(|row| {
+        row["from_symbol_name"] == "lambda_123" && row.get("enclosing_symbol_name").is_none()
+    }));
+
+    let blast = compute_blast_radius(&conn, &["Flask"], &[], 2, 20).unwrap();
+    let impacted = blast
+        .impacted_symbols
+        .iter()
+        .find(|symbol| symbol.name == "lambda_123")
+        .expect("blast radius should include the lambda_123 function");
+    assert!(impacted.enclosing_symbol_name.is_none());
+    let blast_text = format_blast_radius(&blast);
+    assert!(blast_text.contains("`lambda_123`"), "{blast_text}");
+    assert!(!blast_text.contains("<lambda> in outer"), "{blast_text}");
+    let blast_json = serde_json::to_value(&blast).unwrap();
+    assert!(
+        blast_json["impacted_symbols"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| {
+                row["name"] == "lambda_123" && row.get("enclosing_symbol_name").is_none()
+            })
+    );
+}
+
+#[test]
 fn lambda_callers_render_the_enclosing_symbol_without_changing_json_names() {
     let (_repo, db) = scanned_repo(&[
         (
