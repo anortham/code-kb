@@ -21,7 +21,7 @@ pub enum QueryError {
         hint: String,
     },
     #[error(
-        "Ambiguous symbol '{0}': found {1} matching candidates. Specify file_path or qualified name to disambiguate:\n{2}"
+        "Ambiguous symbol '{0}': found {1} matching candidates. Choose a candidate by its kind and source line; pass its id as `symbol_id` to get_symbol_body or get_symbol_context:\n{2}"
     )]
     AmbiguousSymbol(String, usize, String),
     #[error("Invalid direction '{0}': must be 'callers' or 'callees'")]
@@ -2649,8 +2649,12 @@ fn get_symbol_by_name_internal(
     let mut candidate_list = String::new();
     for s in &active_pool {
         candidate_list.push_str(&format!(
-            "- {} `{}` in {}:{}\n",
-            s.kind, s.name, s.path, s.start_line
+            "- {} `{}` in {}:{} (id={})\n",
+            crate::formatters::display_kind(s),
+            s.name,
+            s.path,
+            s.start_line,
+            s.symbol_id
         ));
     }
 

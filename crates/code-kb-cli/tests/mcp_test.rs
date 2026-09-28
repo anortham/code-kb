@@ -42,6 +42,126 @@ fn receiver_reference_labels_match_the_mcp_contract() {
     assert!(!text.contains("`wrong`"), "{text}");
 }
 
+#[test]
+fn lookup_symbol_reports_actionable_candidates_for_qualified_path_scoped_symbols() {
+    let repo = code_kb_core::safe_tempdir();
+    let root = repo.path();
+    std::fs::write(
+        root.join("pyproject.toml"),
+        "[project]\nname = 'flask-fixture'\nversion = '0.1.0'\n",
+    )
+    .unwrap();
+    let file_path = root.join("src/flask/sansio/scaffold.py");
+    std::fs::create_dir_all(file_path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &file_path,
+        r#"class Scaffold:
+    def __init__(self):
+        self.static_folder = None
+        self.static_url_path = None
+
+    @property
+    def static_folder(self):
+        return self._static_folder
+
+    @static_folder.setter
+    def static_folder(self, value):
+        self._static_folder = value
+
+    @property
+    def static_url_path(self):
+        return self._static_url_path
+
+    @static_url_path.setter
+    def static_url_path(self, value):
+        self._static_url_path = value
+"#,
+    )
+    .unwrap();
+
+    let mut session = McpSession::start(serve_command(root));
+    for (query, name, expected_candidates) in [
+        (
+            "Scaffold.static_folder",
+            "static_folder",
+            [("attribute", 3), ("property", 7), ("property", 11)],
+        ),
+        (
+            "Scaffold.static_url_path",
+            "static_url_path",
+            [("attribute", 4), ("property", 15), ("property", 19)],
+        ),
+    ] {
+        let result = session.call(
+            "lookup_symbol",
+            json!({
+                "project_root": root,
+                "query": query,
+                "path": "src/flask/sansio/scaffold.py",
+                "limit": 10
+            }),
+        );
+        assert_eq!(result["isError"], true, "{result}");
+        let text = result_text(&result);
+        assert!(text.contains("3 matching candidates"), "{text}");
+        assert!(
+            text.contains("Choose a candidate by its kind and source line")
+                && text.contains("`symbol_id`"),
+            "ambiguity response must give actionable advice: {text}"
+        );
+        assert!(
+            !text.contains("Specify file_path or qualified name to disambiguate"),
+            "do not recommend refinements already supplied: {text}"
+        );
+        let candidates: Vec<_> = text.lines().filter(|line| line.starts_with("- ")).collect();
+        assert_eq!(candidates.len(), 3, "{text}");
+
+        for (kind, line) in expected_candidates {
+            let prefix = format!("- {kind} `{name}` in src/flask/sansio/scaffold.py:{line} (id=");
+            let candidate = candidates
+                .iter()
+                .find(|candidate| candidate.starts_with(&prefix))
+                .unwrap_or_else(|| panic!("missing candidate `{prefix}…` in: {text}"));
+            let symbol_id = candidate
+                .strip_prefix(&prefix)
+                .and_then(|id| id.strip_suffix(')'))
+                .expect("candidate must expose its complete symbol id");
+            assert!(
+                !symbol_id.is_empty(),
+                "candidate id must not be empty: {candidate}"
+            );
+
+            let arguments = json!({"project_root": root, "symbol_id": symbol_id});
+            let body = session.call("get_symbol_body", arguments.clone());
+            assert_ne!(body["isError"], true, "body lookup for {candidate}: {body}");
+            assert!(
+                !result_text(&body).trim().is_empty(),
+                "body lookup for {candidate} must return content"
+            );
+
+            let context = session.call("get_symbol_context", arguments);
+            assert_ne!(
+                context["isError"], true,
+                "context lookup for {candidate}: {context}"
+            );
+            assert!(
+                !result_text(&context).trim().is_empty(),
+                "context lookup for {candidate} must return content"
+            );
+        }
+    }
+
+    let unscoped = session.call(
+        "lookup_symbol",
+        json!({"project_root": root, "query": "Scaffold.static_folder", "limit": 10}),
+    );
+    assert_eq!(unscoped["isError"], true, "{unscoped}");
+    assert!(
+        result_text(&unscoped).contains("3 matching candidates"),
+        "an actually ambiguous unscoped request must remain ambiguous: {unscoped}"
+    );
+}
+
 struct ChildGuard(Child);
 
 impl std::ops::Deref for ChildGuard {
