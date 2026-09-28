@@ -5,27 +5,27 @@
   "assets": {
     "aarch64-apple-darwin": {
       "name": "julie-extract-v{VER}-aarch64-apple-darwin.tar.gz",
-      "sha256": "8a1400a13ce7d21f1e04d3966f1ebc38d1fedb8ce88ee0d9cb1864c2538f1c01"
+      "sha256": "e7f28cf542f8162d0534fc1faa7c5a047e6b0be2281426092834edcddfb116cb"
     },
     "x86_64-apple-darwin": {
       "name": "julie-extract-v{VER}-x86_64-apple-darwin.tar.gz",
-      "sha256": "4b429ef99be089866270feec61c91b22d013e6cfd53783d5a9e6c5f4120e202b"
+      "sha256": "9b5ccee729b873602f247c7f15ec60fa0b8403567ca314d009fc7145fdfe998e"
     },
     "x86_64-unknown-linux-gnu": {
       "name": "julie-extract-v{VER}-x86_64-unknown-linux-gnu.tar.gz",
-      "sha256": "4164ab6a4e4f02f12e2afbd050f4a3a81161d32f5b454b9670dfb17de11572c3"
+      "sha256": "ddc7ceb30d3e838df5a109f9b5f66284d3e4a422b04f96d51f9edf487393c146"
     },
     "aarch64-unknown-linux-gnu": {
       "name": "julie-extract-v{VER}-aarch64-unknown-linux-gnu.tar.gz",
-      "sha256": "5785deea8a1e18b8e3c1cf747825bc02bb6ae8f9a3c659066a3c30f1723b2e54"
+      "sha256": "51432e58288d348515313b730004d3a0fadaf06973d49f942d87b763e73a3824"
     },
     "x86_64-pc-windows-msvc": {
       "name": "julie-extract-v{VER}-x86_64-pc-windows-msvc.zip",
-      "sha256": "ff138ec89e538a29311f35668b7cb6204fe429433671685ceb46d5f09a9698cc"
+      "sha256": "2981be394a379a4acbf0c78d263f88de0d2c4a3029471b2752594eae16c68b13"
     },
     "aarch64-pc-windows-msvc": {
       "name": "julie-extract-v{VER}-aarch64-pc-windows-msvc.zip",
-      "sha256": "855fe7acddebce8eea99382be212af7ac302919c1cbecfea57ef35a81c3efdab"
+      "sha256": "6b20ea44a31856817e18a68ffe03a1fe4d2469a051508415808a3f3d0065e532"
     }
   }
 }
