@@ -1427,7 +1427,7 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
             .iter()
             .any(|t| t.reason.starts_with("possible:"))
         {
-            out.push_str("`possible` rows build the class and use a test client, so they reach the target only through a runtime call to `__call__`. The index picks them by shared name words and cannot see whether they send a call that reaches the target; run the whole suite for full coverage.\n");
+            out.push_str("`possible` rows build the class and use a test client, so a runtime call to `__call__` may reach the target. Tests that register an error handler or call `abort` rank ahead of name-only matches; other rows are ranked by shared words. The index cannot prove a request reaches the target; run the whole suite for full coverage.\n");
         }
         out.push('\n');
     } else if result.likely_tests_truncated

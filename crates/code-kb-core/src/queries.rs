@@ -6099,11 +6099,80 @@ fn shared_words(seed_words: &[String], test: &TestTarget) -> (usize, Vec<String>
     (score, found)
 }
 
+#[derive(Default)]
+struct ImplicitHandlerEvidence {
+    registers_error_handler: bool,
+    calls_abort: bool,
+}
+
+impl ImplicitHandlerEvidence {
+    fn is_relevant(&self) -> bool {
+        self.registers_error_handler || self.calls_abort
+    }
+}
+
+/// Whether the test or one of its nested route/handler functions registers an error handler or
+/// calls `abort`. These calls can reach a runtime handler without a statically indexed edge.
+fn implicit_handler_evidence(
+    conn: &Connection,
+    test: &TestTarget,
+) -> Result<ImplicitHandlerEvidence, QueryError> {
+    let mut call_sources = Vec::new();
+    if has_table(conn, "pending_relationships") {
+        call_sources.push(
+            "SELECT lower(p.target_terminal_name) FROM pending_relationships p\n\
+             JOIN candidate_scope d ON d.symbol_id = p.from_symbol_id\n\
+             WHERE p.kind = 'calls'"
+                .to_string(),
+        );
+    }
+    if has_table(conn, "relationships") {
+        call_sources.push(
+            "SELECT lower(target.name) FROM relationships r\n\
+             JOIN candidate_scope d ON d.symbol_id = r.from_symbol_id\n\
+             JOIN symbols target ON target.symbol_id = r.to_symbol_id\n\
+             WHERE r.kind = 'calls'"
+                .to_string(),
+        );
+    }
+    if call_sources.is_empty() {
+        return Ok(ImplicitHandlerEvidence::default());
+    }
+
+    let sql = format!(
+        r#"WITH RECURSIVE candidate_scope(symbol_id) AS (
+               SELECT symbol_id FROM symbols
+               WHERE replace(path, char(92), '/') = ?1 AND start_line = ?2 AND name = ?3
+               UNION
+               SELECT child.symbol_id FROM symbols child
+               JOIN candidate_scope parent ON child.parent_symbol_id = parent.symbol_id
+           ), candidate_calls(name) AS (
+               {}
+           )
+           SELECT
+               EXISTS (SELECT 1 FROM candidate_calls
+                       WHERE name IN ('errorhandler', 'register_error_handler')),
+               EXISTS (SELECT 1 FROM candidate_calls WHERE name = 'abort')"#,
+        call_sources.join("\nUNION ALL\n")
+    );
+    conn.query_row(
+        &sql,
+        params![test.path, test.line as i64, test.name],
+        |row| {
+            Ok(ImplicitHandlerEvidence {
+                registers_error_handler: row.get(0)?,
+                calls_abort: row.get(1)?,
+            })
+        },
+    )
+    .map_err(QueryError::from)
+}
+
 /// Tests that build the class `class_id`, whose `__call__` the impact walk reached, or a subclass
 /// of it, directly or through a fixture. The runtime makes that call, so no call edge links them,
 /// and the index cannot see whether a test sends a call that reaches the target: each row is a
-/// possible test. Only tests whose name or file shares a word with the seed or the code it calls
-/// are kept; the most shared words come first.
+/// possible test. Tests registering an error handler or calling `abort` rank first; other tests
+/// are kept and ranked by shared words in their name or file.
 fn implicit_entry_tests(
     conn: &Connection,
     class_id: &str,
@@ -6177,32 +6246,46 @@ fn implicit_entry_tests(
             }
         }
     }
-    let mut ranked: Vec<(usize, TestTarget)> = builders
+    let mut ranked: Vec<(bool, usize, TestTarget)> = Vec::new();
+    for test in builders
         .into_iter()
         .filter(|test| uses_a_client(conn, test))
-        .filter_map(|test| {
-            let (score, words) = shared_words(seed_words, &test);
-            (score > 0).then(|| {
-                let shared = words
-                    .iter()
-                    .map(|word| format!("`{word}`"))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                let reason = format!(
-                    "possible: {}, and a test client calls its `__call__`, which can reach the target; shares {shared}",
-                    test.reason
-                );
-                (score, TestTarget { reason, ..test })
-            })
-        })
-        .collect();
-    ranked.sort_by(|(a_score, a), (b_score, b)| {
-        b_score
-            .cmp(a_score)
+    {
+        let evidence = implicit_handler_evidence(conn, &test)?;
+        let (score, words) = shared_words(seed_words, &test);
+        if score == 0 && !evidence.is_relevant() {
+            continue;
+        }
+        let mut reasons = Vec::new();
+        if evidence.registers_error_handler {
+            reasons.push("registers an error handler".to_string());
+        }
+        if evidence.calls_abort {
+            reasons.push("calls `abort`".to_string());
+        }
+        if score > 0 {
+            let shared = words
+                .iter()
+                .map(|word| format!("`{word}`"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            reasons.push(format!("shares {shared}"));
+        }
+        let reason = format!(
+            "possible: {}, and a test client calls its `__call__`, which can reach the target; {}",
+            test.reason,
+            reasons.join("; ")
+        );
+        ranked.push((evidence.is_relevant(), score, TestTarget { reason, ..test }));
+    }
+    ranked.sort_by(|(a_handler, a_score, a), (b_handler, b_score, b)| {
+        b_handler
+            .cmp(a_handler)
+            .then_with(|| b_score.cmp(a_score))
             .then_with(|| a.path.cmp(&b.path))
             .then_with(|| a.line.cmp(&b.line))
     });
-    Ok(ranked.into_iter().map(|(_, test)| test).collect())
+    Ok(ranked.into_iter().map(|(_, _, test)| test).collect())
 }
 
 /// Whether `test` drives an app through a test client: it takes a parameter or holds a variable,
