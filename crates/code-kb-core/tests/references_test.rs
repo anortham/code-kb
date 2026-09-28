@@ -107,6 +107,43 @@ fn resolved_same_file_builder_calls_disambiguate_annotated_receivers() {
 }
 
 #[test]
+fn resolved_same_file_builder_calls_keep_lexical_identity() {
+    let (_repo, db) = scanned_repo(&[(
+        "app.py",
+        "class A:\n    def ctx(self):\n        pass\n\nclass B:\n    def ctx(self):\n        pass\n\ndef load() -> A:\n    return A()\n\ndef run():\n    app = load()\n    app.ctx()\n    return app.ctx\n\ndef outer():\n    def load() -> B:\n        return B()\n    app = load()\n    app.ctx()\n    return app.ctx\n",
+    )]);
+    let conn = open_read_only(&db).unwrap();
+    let callers = |target| {
+        find_references_scoped(&conn, target, "callers", 20, false, Some("app.py")).unwrap()
+    };
+
+    let a_callers = callers("A.ctx");
+    let b_callers = callers("B.ctx");
+    assert_eq!(caller_names(&a_callers), ["run"]);
+    assert_eq!(caller_names(&b_callers), ["outer"]);
+    assert_eq!(
+        caller_names(
+            &a_callers
+                .iter()
+                .filter(|row| row.kind == "member_access")
+                .cloned()
+                .collect::<Vec<_>>()
+        ),
+        ["run"]
+    );
+    assert_eq!(
+        caller_names(
+            &b_callers
+                .iter()
+                .filter(|row| row.kind == "member_access")
+                .cloned()
+                .collect::<Vec<_>>()
+        ),
+        ["outer"]
+    );
+}
+
+#[test]
 fn inferred_same_file_builder_returns_disambiguate_flask_receivers() {
     let (_repo, db) = scanned_repo(&[
         (
