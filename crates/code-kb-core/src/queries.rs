@@ -6,7 +6,8 @@ use thiserror::Error;
 use crate::db::local_variable_predicate;
 use crate::models::{
     BlastRadiusResult, FileFact, ImpactedSymbol, LiteralFact, ReferenceSite, SearchExplain,
-    StructuralFact, Symbol, SymbolSearchResult, TestTarget, TypeFact,
+    StructuralFact, Symbol, SymbolSearchResult, TestTarget, TypeFact, has_generated_lambda_name,
+    is_generated_lambda_name,
 };
 
 #[derive(Debug, Error)]
@@ -3663,7 +3664,54 @@ fn find_references_internal(
                 .then(a.start_column.cmp(&b.start_column))
         });
     }
+    if direction == "callers" {
+        populate_lambda_enclosing_names(conn, &mut sites)?;
+    }
     Ok(sites)
+}
+
+fn populate_lambda_enclosing_names(
+    conn: &Connection,
+    sites: &mut [ReferenceSite],
+) -> Result<(), QueryError> {
+    if !sites
+        .iter()
+        .any(|site| has_generated_lambda_name(&site.from_symbol_name))
+    {
+        return Ok(());
+    }
+    let mut stmt = conn.prepare(
+        "SELECT caller.language, caller.kind, caller.signature, parent.name
+         FROM symbols caller
+         LEFT JOIN symbols parent ON parent.symbol_id = caller.parent_symbol_id
+         WHERE caller.symbol_id = ?1",
+    )?;
+    for site in sites
+        .iter_mut()
+        .filter(|site| has_generated_lambda_name(&site.from_symbol_name))
+    {
+        let details = stmt
+            .query_row([&site.from_symbol_id], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                ))
+            })
+            .optional()?;
+        if let Some((language, kind, signature, enclosing_symbol_name)) = details
+            && is_generated_lambda_name(
+                &site.from_symbol_name,
+                &language,
+                &kind,
+                signature.as_deref(),
+            )
+        {
+            site.enclosing_symbol_name = enclosing_symbol_name;
+        }
+    }
+    Ok(())
 }
 
 /// The class a constructor builds, so the calls that build the class count as its callers.
@@ -3721,6 +3769,7 @@ fn find_direct_references(
                 start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
                 occurrences: None,
                 target: None,
+                enclosing_symbol_name: None,
             })
         })?;
 
@@ -3763,6 +3812,7 @@ fn find_direct_references(
                                 start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
                                 occurrences: None,
                                 target: None,
+                                enclosing_symbol_name: None,
                             })
                         },
                     )?;
@@ -3805,6 +3855,7 @@ fn find_direct_references(
                                 start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
                                 occurrences: None,
                                 target: None,
+                                enclosing_symbol_name: None,
                             })
                         })?;
                     for r in p_rows {
@@ -3850,6 +3901,7 @@ fn find_direct_references(
                                 start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
                                 occurrences: None,
                                 target: None,
+                                enclosing_symbol_name: None,
                             })
                         })?;
 
@@ -3954,6 +4006,7 @@ fn find_direct_references(
                         start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
                         occurrences: None,
                         target: None,
+                        enclosing_symbol_name: None,
                     })
                 })?;
             for r in rows {
@@ -3998,6 +4051,7 @@ fn find_direct_references(
                         start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
                         occurrences: Some(row.get::<_, i64>(7)? as usize),
                         target: None,
+                        enclosing_symbol_name: None,
                     })
                 })?;
                 for r in rows {
@@ -4033,6 +4087,7 @@ fn find_direct_references(
                 start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
                 occurrences: None,
                 target: None,
+                enclosing_symbol_name: None,
             })
         })?;
 
@@ -4090,6 +4145,7 @@ fn find_direct_references(
                             start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
                             occurrences: None,
                             target: None,
+                            enclosing_symbol_name: None,
                         })
                     },
                 )?;
@@ -4140,6 +4196,7 @@ fn find_direct_references(
                             start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
                             occurrences: None,
                             target: None,
+                            enclosing_symbol_name: None,
                         })
                     },
                 )?;
@@ -5392,7 +5449,8 @@ pub fn compute_blast_radius_scoped_with_ids(
                    {lifecycle} AS is_fixture, s.parent_symbol_id,
                    EXISTS (SELECT 1 FROM symbols owner
                            WHERE owner.symbol_id = s.parent_symbol_id
-                             AND COALESCE(owner.test_container, 0) != 0) AS in_test_class
+                             AND COALESCE(owner.test_container, 0) != 0) AS in_test_class,
+                   s.language, s.signature
             FROM impact_walk iw
             CROSS JOIN symbols s ON iw.symbol_id = s.symbol_id
             WHERE s.kind NOT IN ({LOW_SIGNAL_KINDS_SQL})
@@ -5422,6 +5480,8 @@ pub fn compute_blast_radius_scoped_with_ids(
                 row.get::<_, bool>(8)?,
                 row.get::<_, Option<String>>(9)?,
                 row.get::<_, bool>(10)?,
+                row.get::<_, String>(11)?,
+                row.get::<_, Option<String>>(12)?,
             ))
         })?;
 
@@ -5442,6 +5502,8 @@ pub fn compute_blast_radius_scoped_with_ids(
                 is_fixture,
                 parent,
                 in_test_class,
+                language,
+                signature,
             ) = r?;
             walked.push(sym_id);
             let path = raw_path.replace('\\', "/");
@@ -5487,12 +5549,24 @@ pub fn compute_blast_radius_scoped_with_ids(
                     });
                 }
             } else {
+                let enclosing_symbol_name =
+                    if is_generated_lambda_name(&name, &language, &kind, signature.as_deref()) {
+                        match parent.as_deref() {
+                            Some(parent_id) => {
+                                get_symbol_by_id(conn, parent_id)?.map(|parent| parent.name)
+                            }
+                            None => None,
+                        }
+                    } else {
+                        None
+                    };
                 impacted_symbols.push(ImpactedSymbol {
                     name,
                     kind,
                     path,
                     line,
                     depth,
+                    enclosing_symbol_name,
                 });
             }
         }

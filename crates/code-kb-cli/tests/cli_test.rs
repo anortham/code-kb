@@ -1,6 +1,85 @@
 use std::process::Command;
 
 #[test]
+fn cli_references_and_blast_radius_handle_lambdas_and_lambda_named_functions() {
+    let repo = code_kb_core::safe_tempdir();
+    let root = repo.path();
+    for (path, source) in [
+        (
+            "pyproject.toml",
+            "[project]\nname = 'lambda-regression'\nversion = '0.1.0'\n",
+        ),
+        (
+            "flask.py",
+            "class Flask:\n    def __init__(self, name):\n        pass\n",
+        ),
+        (
+            "app.py",
+            "from flask import Flask\nmodule_app = lambda: Flask(\"module\")\ndef outer():\n    def lambda_123():\n        return Flask(\"real function\")\n    return lambda_123()\n",
+        ),
+    ] {
+        std::fs::write(root.join(path), source).unwrap();
+    }
+    let run = |args: &[&str]| {
+        let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .arg("--root")
+            .arg(root)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        output.stdout
+    };
+
+    let refs_text = String::from_utf8(run(&["refs", "Flask"])).unwrap();
+    assert!(refs_text.contains("`lambda_123`"), "{refs_text}");
+    assert!(!refs_text.contains("<lambda> in outer"), "{refs_text}");
+    let refs_json: Vec<serde_json::Value> =
+        serde_json::from_slice(&run(&["--json", "refs", "Flask"])).unwrap();
+    assert!(
+        refs_json
+            .iter()
+            .any(|row| row["from_symbol_name"] == "lambda_123")
+    );
+    let module_lambda = refs_json
+        .iter()
+        .find_map(|row| {
+            row["from_symbol_name"]
+                .as_str()
+                .filter(|name| name.starts_with("lambda_") && *name != "lambda_123")
+        })
+        .expect("JSON refs should preserve the module-level lambda's raw name");
+    assert!(
+        refs_text.contains(&format!("`{module_lambda}`")),
+        "{refs_text}"
+    );
+
+    let blast_text = String::from_utf8(run(&["blast-radius", "Flask"])).unwrap();
+    assert!(blast_text.contains("`lambda_123`"), "{blast_text}");
+    assert!(!blast_text.contains("<lambda> in outer"), "{blast_text}");
+    let blast_json: serde_json::Value =
+        serde_json::from_slice(&run(&["--json", "blast-radius", "Flask"])).unwrap();
+    let impacted = blast_json["impacted_symbols"].as_array().unwrap();
+    assert!(impacted.iter().any(|row| row["name"] == "lambda_123"));
+    let module_lambda = impacted
+        .iter()
+        .find_map(|row| {
+            row["name"]
+                .as_str()
+                .filter(|name| name.starts_with("lambda_") && *name != "lambda_123")
+        })
+        .expect("JSON blast radius should preserve the module-level lambda's raw name");
+    assert!(
+        blast_text.contains(&format!("`{module_lambda}`")),
+        "{blast_text}"
+    );
+}
+
+#[test]
 fn receiver_reference_labels_match_the_cli_contract() {
     let repo = code_kb_core::safe_tempdir();
     let root = repo.path();
