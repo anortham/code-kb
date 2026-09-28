@@ -3148,10 +3148,9 @@ fn receiver_definition_scope(target: &str, origin: &str) -> String {
                           SELECT {parent_dir}, substr(hop.rest, 2) FROM hop WHERE hop.rest LIKE '.%'
                       )
                       SELECT 1 FROM hop WHERE hop.rest NOT LIKE '.%'
-                        AND replace({target}.path, '\\', '/') IN (
-                            hop.dir || replace(hop.rest, '.', '/') || '.py',
-                            hop.dir || replace(hop.rest, '.', '/') || '/__init__.py'
-                        )
+                        AND (replace({target}.path, '\\', '/') = hop.dir || replace(hop.rest, '.', '/') || '.py'
+                             OR replace({target}.path, '\\', '/') LIKE
+                                rtrim(hop.dir || replace(hop.rest, '.', '/'), '/') || '/%')
                   )
                   ELSE instr('/' || replace({target}.path, '\\', '/'), '/' || replace({source}, '.', '/') || '.') > 0
                     OR instr('/' || replace({target}.path, '\\', '/'), '/' || replace({source}, '.', '/') || '/') > 0

@@ -65,6 +65,38 @@ fn member_access_rejects_a_different_receiver() {
 }
 
 #[test]
+fn a_relative_package_import_keeps_the_class_that_a_builder_returns() {
+    let (_repo, db) = scanned_repo(&[
+        (
+            "pkg/app.py",
+            "class Server:\n    def ctx(self):\n        pass\n",
+        ),
+        ("pkg/__init__.py", "from .app import Server\n"),
+        (
+            "pkg/factory.py",
+            "from .app import Server\n\ndef load() -> Server:\n    from . import Server\n    return Server()\n",
+        ),
+        (
+            "pkg/cli.py",
+            "from .factory import load\n\ndef run():\n    app = load()\n    app.ctx()\n",
+        ),
+        (
+            "other/app.py",
+            "class Server:\n    def ctx(self):\n        pass\n",
+        ),
+    ]);
+    let conn = open_read_only(&db).unwrap();
+    let callers = |path| {
+        let rows =
+            find_references_scoped(&conn, "Server.ctx", "callers", 20, false, Some(path)).unwrap();
+        caller_names(&rows)
+    };
+
+    assert_eq!(callers("pkg/app.py"), ["run"]);
+    assert!(callers("other/app.py").is_empty());
+}
+
+#[test]
 fn a_base_instance_does_not_reference_a_subclass_override() {
     let (_repo, db) = scanned_repo(&[
         (
