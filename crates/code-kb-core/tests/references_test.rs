@@ -267,6 +267,39 @@ fn supported_member_access_precedes_candidates_at_the_limit() {
 }
 
 #[test]
+fn find_references_stops_receiver_checks_after_filling_the_limit() {
+    let unresolved = (0..1_000)
+        .map(|index| format!("def unresolved_{index}(value):\n    return value.invoke\n"))
+        .collect::<String>();
+    let (_repo, db) = scanned_repo(&[
+        (
+            "web/runners.py",
+            "class Runner:\n    def invoke(self):\n        pass\n",
+        ),
+        (
+            "a_supported.py",
+            "from web.runners import Runner\n\ndef known():\n    value = Runner()\n    return value.invoke\n",
+        ),
+        ("z_unresolved.py", &unresolved),
+    ]);
+    let conn = open_read_only(&db).unwrap();
+    let id = member_of(&conn, "Runner", "invoke");
+    let operations = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let observed = operations.clone();
+    conn.progress_handler(
+        100,
+        Some(move || observed.fetch_add(100, std::sync::atomic::Ordering::Relaxed) >= 200_000),
+    )
+    .unwrap();
+    let result = find_references_for_symbol(&conn, "invoke", "callers", 1, &id);
+    conn.progress_handler(0, None::<fn() -> bool>).unwrap();
+    let rows = result.expect("one supported caller should fit within the receiver-check budget");
+
+    assert_eq!(caller_names(&rows), ["known"]);
+    assert_eq!(rows[0].kind, "member_access");
+}
+
+#[test]
 fn a_super_read_without_metadata_is_not_a_supported_reference_to_itself() {
     let (_repo, db) = scanned_repo(&[(
         "types.py",
