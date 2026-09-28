@@ -8,6 +8,119 @@ use code_kb_core::{
 use std::fs;
 
 #[test]
+fn candidate_member_access_is_not_a_confirmed_related_test() {
+    let repo = safe_tempdir();
+    let root = repo.path();
+    for (path, source) in [
+        (
+            "lib/worker.py",
+            "class Runner:\n    def invoke(self):\n        pass\n\nclass Shell:\n    def invoke(self):\n        pass\n",
+        ),
+        (
+            "tests/conftest.py",
+            "import pytest\nfrom lib.worker import Runner\n\n@pytest.fixture\ndef runner():\n    return Runner()\n",
+        ),
+        (
+            "tests/test_flow.py",
+            "from lib.worker import Shell\n\ndef test_valid(runner):\n    runner.invoke()\n\ndef test_read(runner):\n    return runner.invoke\n\ndef test_unknown(value):\n    return value.invoke\n\ndef test_wrong():\n    value = Shell()\n    return value.invoke\n",
+        ),
+    ] {
+        let file = root.join(path);
+        fs::create_dir_all(file.parent().unwrap()).unwrap();
+        fs::write(file, source).unwrap();
+    }
+    let ws = Workspace::new(root.to_path_buf());
+    let db = root.join("test.db");
+    scan_workspace(&ws, &db, true).unwrap();
+    let conn = open_read_only(&db).unwrap();
+    let context = get_context_slice_op(&ws, &db, &conn, "Runner.invoke", None, false).unwrap();
+    let mut names: Vec<_> = context
+        .related_tests
+        .iter()
+        .map(|test| test.name.as_str())
+        .collect();
+    names.sort();
+    assert_eq!(names, ["test_read", "test_valid"]);
+
+    let impact =
+        code_kb_core::ops::blast_radius_op(&ws, &conn, Some("Runner.invoke"), None, 2, 20).unwrap();
+    assert!(
+        impact
+            .likely_tests
+            .iter()
+            .any(|test| test.name == "test_valid"),
+        "{impact:?}"
+    );
+    assert!(
+        !impact
+            .likely_tests
+            .iter()
+            .any(|test| test.name == "test_unknown" || test.name == "test_wrong"),
+        "{impact:?}"
+    );
+    for include_external in [false, true] {
+        let callees =
+            find_references_scoped(&conn, "test_valid", "callees", 20, include_external, None)
+                .unwrap();
+        assert!(
+            callees.iter().any(|row| row
+                .target
+                .as_deref()
+                .is_some_and(|target| target.contains("Runner.invoke"))),
+            "{callees:?}"
+        );
+        assert!(
+            !callees.iter().any(|row| row
+                .target
+                .as_deref()
+                .is_some_and(|target| target.contains("Shell.invoke"))),
+            "{callees:?}"
+        );
+        let caller_context =
+            get_context_slice_op(&ws, &db, &conn, "test_valid", None, include_external).unwrap();
+        assert!(
+            caller_context
+                .callee_signatures
+                .iter()
+                .any(|signature| signature.contains("invoke")),
+            "{caller_context:?}"
+        );
+    }
+}
+
+#[test]
+fn candidate_filtering_keeps_independent_related_test_suggestions() {
+    let repo = safe_tempdir();
+    let root = repo.path();
+    fs::create_dir_all(root.join("tests")).unwrap();
+    fs::write(
+        root.join("runner.py"),
+        "class Runner:\n    def launch(self):\n        pass\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("tests/test_flow.py"),
+        "def test_launch(value):\n    return value.launch\n",
+    )
+    .unwrap();
+    let ws = Workspace::new(root.to_path_buf());
+    let db = root.join("test.db");
+    scan_workspace(&ws, &db, true).unwrap();
+    let conn = open_read_only(&db).unwrap();
+    let refs = find_references_scoped(&conn, "Runner.launch", "callers", 20, false, None).unwrap();
+    assert_eq!(refs[0].kind, "member_access (candidate)");
+    let context = get_context_slice_op(&ws, &db, &conn, "Runner.launch", None, false).unwrap();
+    assert_eq!(
+        context
+            .related_tests
+            .iter()
+            .map(|test| test.name.as_str())
+            .collect::<Vec<_>>(),
+        ["test_launch"]
+    );
+}
+
+#[test]
 fn test_qualified_parent_disambiguation() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");

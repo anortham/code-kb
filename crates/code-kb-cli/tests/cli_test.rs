@@ -1,5 +1,60 @@
 use std::process::Command;
 
+#[test]
+fn receiver_reference_labels_match_the_cli_contract() {
+    let repo = code_kb_core::safe_tempdir();
+    let root = repo.path();
+    for (path, source) in [
+        (
+            "pyproject.toml",
+            "[project]\nname = 'receivers'\nversion = '0.1.0'\n",
+        ),
+        (
+            "runners.py",
+            "class Runner:\n    def invoke(self):\n        pass\n\nclass Shell:\n    def invoke(self):\n        pass\n",
+        ),
+        (
+            "client.py",
+            "from runners import Runner, Shell\n\ndef supported():\n    receiver = Runner()\n    return receiver.invoke\n\ndef wrong():\n    receiver = Shell()\n    return receiver.invoke\n\ndef unknown(receiver):\n    return receiver.invoke\n",
+        ),
+    ] {
+        std::fs::write(root.join(path), source).unwrap();
+    }
+    let run = |json| {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_code-kb"));
+        command
+            .arg("--root")
+            .arg(root)
+            .args(["refs", "Runner.invoke"]);
+        if json {
+            command.arg("--json");
+        }
+        let output = command.output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        output.stdout
+    };
+    let text = String::from_utf8(run(false)).unwrap();
+    assert!(
+        text.contains("`supported` [client.py:5] (kind: member_access)"),
+        "{text}"
+    );
+    assert!(
+        text.contains("`unknown` [client.py:12] (kind: member_access (candidate))"),
+        "{text}"
+    );
+    assert!(!text.contains("`wrong`"), "{text}");
+    let rows: Vec<serde_json::Value> = serde_json::from_slice(&run(true)).unwrap();
+    assert_eq!(rows.len(), 2, "{rows:?}");
+    assert_eq!(rows[0]["from_symbol_name"], "supported");
+    assert_eq!(rows[0]["kind"], "member_access");
+    assert_eq!(rows[1]["from_symbol_name"], "unknown");
+    assert_eq!(rows[1]["kind"], "member_access (candidate)");
+}
+
 fn setup_test_repo() -> tempfile::TempDir {
     let temp_dir = code_kb_core::safe_tempdir();
     let root = temp_dir.path().to_path_buf();

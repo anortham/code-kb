@@ -18,6 +18,49 @@ fn scanned_repo(files: &[(&str, &str)]) -> (tempfile::TempDir, std::path::PathBu
     (temp_dir, db_path)
 }
 
+#[test]
+fn member_access_keeps_same_named_classes_in_their_imported_modules() {
+    let (_repo, db) = scanned_repo(&[
+        (
+            "one/runner.py",
+            "class Runner:\n    def invoke(self):\n        pass\n",
+        ),
+        (
+            "two/runner.py",
+            "class Runner:\n    def invoke(self):\n        pass\n",
+        ),
+        (
+            "one/build.py",
+            "from one.runner import Runner\n\ndef make_runner() -> Runner:\n    return Runner()\n",
+        ),
+        (
+            "two/build.py",
+            "from .runner import Runner\n\ndef make_runner() -> Runner:\n    return Runner()\n",
+        ),
+        (
+            "clients/one.py",
+            "from one.runner import Runner\nfrom one.build import make_runner\n\ndef first():\n    runner = Runner()\n    return runner.invoke\n\ndef first_factory():\n    runner = make_runner()\n    return runner.invoke\n",
+        ),
+        (
+            "clients/two.py",
+            "from two.runner import Runner\nfrom two.build import make_runner\n\ndef second():\n    runner = Runner()\n    return runner.invoke\n\ndef second_factory():\n    runner = make_runner()\n    return runner.invoke\n",
+        ),
+    ]);
+    let conn = open_read_only(&db).unwrap();
+    for (path, expected) in [
+        ("one/runner.py", ["first", "first_factory"]),
+        ("two/runner.py", ["second", "second_factory"]),
+    ] {
+        let rows =
+            find_references_scoped(&conn, "invoke", "callers", 20, false, Some(path)).unwrap();
+        let names: Vec<_> = rows
+            .iter()
+            .map(|row| row.from_symbol_name.as_str())
+            .collect();
+        assert_eq!(names, expected, "{path}: {rows:?}");
+    }
+}
+
 const SAME_NAME_ACROSS_DIRECTORIES: &[(&str, &str)] = &[
     ("pkg/net/run.py", "def run():\n    return 1\n"),
     (
