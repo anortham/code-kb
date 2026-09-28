@@ -122,6 +122,21 @@ fn inferred_same_file_builder_returns_disambiguate_flask_receivers() {
             "from pkg.flask import Flask\n\ndef create_app():\n    app = Flask()\n    return app\n\ndef run():\n    app = create_app()\n    app.test_client()\n",
         ),
     ]);
+    // The committed extractor pin predates inferredReturnType; model that newer
+    // metadata here so this consumer regression also runs against the pinned binary.
+    let conn = open_read_write(&db).unwrap();
+    let updated = conn
+        .execute(
+            "UPDATE symbols
+             SET metadata_json = json_set(COALESCE(metadata_json, '{}'),
+                                         '$.returnType', '',
+                                         '$.inferredReturnType', 'Flask')
+             WHERE name = 'create_app' AND path = 'pkg/app.py' AND kind = 'function'",
+            [],
+        )
+        .unwrap();
+    assert_eq!(updated, 1);
+    drop(conn);
     let conn = open_read_only(&db).unwrap();
 
     let package_flask = find_references_scoped(
