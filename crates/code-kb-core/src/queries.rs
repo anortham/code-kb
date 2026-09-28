@@ -6,7 +6,7 @@ use thiserror::Error;
 use crate::db::local_variable_predicate;
 use crate::models::{
     BlastRadiusResult, FileFact, ImpactedSymbol, LiteralFact, ReferenceSite, SearchExplain,
-    StructuralFact, Symbol, SymbolSearchResult, TestTarget, TypeFact,
+    StructuralFact, Symbol, SymbolSearchResult, TestTarget, TypeFact, is_generated_lambda_name,
 };
 
 #[derive(Debug, Error)]
@@ -3663,7 +3663,36 @@ fn find_references_internal(
                 .then(a.start_column.cmp(&b.start_column))
         });
     }
+    if direction == "callers" {
+        populate_lambda_enclosing_names(conn, &mut sites)?;
+    }
     Ok(sites)
+}
+
+fn populate_lambda_enclosing_names(
+    conn: &Connection,
+    sites: &mut [ReferenceSite],
+) -> Result<(), QueryError> {
+    if !sites
+        .iter()
+        .any(|site| is_generated_lambda_name(&site.from_symbol_name))
+    {
+        return Ok(());
+    }
+    let mut stmt = conn.prepare(
+        "SELECT parent.name FROM symbols caller
+         LEFT JOIN symbols parent ON parent.symbol_id = caller.parent_symbol_id
+         WHERE caller.symbol_id = ?1",
+    )?;
+    for site in sites
+        .iter_mut()
+        .filter(|site| is_generated_lambda_name(&site.from_symbol_name))
+    {
+        site.enclosing_symbol_name = stmt
+            .query_row([&site.from_symbol_id], |row| row.get(0))
+            .optional()?;
+    }
+    Ok(())
 }
 
 /// The class a constructor builds, so the calls that build the class count as its callers.
@@ -3721,6 +3750,7 @@ fn find_direct_references(
                 start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
                 occurrences: None,
                 target: None,
+                enclosing_symbol_name: None,
             })
         })?;
 
@@ -3763,6 +3793,7 @@ fn find_direct_references(
                                 start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
                                 occurrences: None,
                                 target: None,
+                                enclosing_symbol_name: None,
                             })
                         },
                     )?;
@@ -3805,6 +3836,7 @@ fn find_direct_references(
                                 start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
                                 occurrences: None,
                                 target: None,
+                                enclosing_symbol_name: None,
                             })
                         })?;
                     for r in p_rows {
@@ -3850,6 +3882,7 @@ fn find_direct_references(
                                 start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
                                 occurrences: None,
                                 target: None,
+                                enclosing_symbol_name: None,
                             })
                         })?;
 
@@ -3954,6 +3987,7 @@ fn find_direct_references(
                         start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
                         occurrences: None,
                         target: None,
+                        enclosing_symbol_name: None,
                     })
                 })?;
             for r in rows {
@@ -3998,6 +4032,7 @@ fn find_direct_references(
                         start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
                         occurrences: Some(row.get::<_, i64>(7)? as usize),
                         target: None,
+                        enclosing_symbol_name: None,
                     })
                 })?;
                 for r in rows {
@@ -4033,6 +4068,7 @@ fn find_direct_references(
                 start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
                 occurrences: None,
                 target: None,
+                enclosing_symbol_name: None,
             })
         })?;
 
@@ -4090,6 +4126,7 @@ fn find_direct_references(
                             start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
                             occurrences: None,
                             target: None,
+                            enclosing_symbol_name: None,
                         })
                     },
                 )?;
@@ -4140,6 +4177,7 @@ fn find_direct_references(
                             start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
                             occurrences: None,
                             target: None,
+                            enclosing_symbol_name: None,
                         })
                     },
                 )?;
@@ -5487,12 +5525,23 @@ pub fn compute_blast_radius_scoped_with_ids(
                     });
                 }
             } else {
+                let enclosing_symbol_name = if is_generated_lambda_name(&name) {
+                    match parent.as_deref() {
+                        Some(parent_id) => {
+                            get_symbol_by_id(conn, parent_id)?.map(|parent| parent.name)
+                        }
+                        None => None,
+                    }
+                } else {
+                    None
+                };
                 impacted_symbols.push(ImpactedSymbol {
                     name,
                     kind,
                     path,
                     line,
                     depth,
+                    enclosing_symbol_name,
                 });
             }
         }

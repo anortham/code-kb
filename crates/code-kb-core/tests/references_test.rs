@@ -1,7 +1,8 @@
 use code_kb_core::{
     Workspace, compute_blast_radius, file_skeleton_op, find_julie_extract_binary,
-    find_references_for_symbol, find_references_scoped, fts_search_symbols_scoped, open_read_only,
-    open_read_write, safe_tempdir, scan_workspace, search_symbols_scoped,
+    find_references_for_symbol, find_references_scoped, format_blast_radius, format_references,
+    fts_search_symbols_scoped, open_read_only, open_read_write, safe_tempdir, scan_workspace,
+    search_symbols_scoped,
 };
 use std::fs;
 
@@ -2087,4 +2088,75 @@ fn a_csharp_constructor_call_reaches_a_class_of_the_enclosing_file_scoped_namesp
         refs.iter().any(|r| r.kind == "instantiates"),
         "got {refs:?}"
     );
+}
+
+#[test]
+fn lambda_callers_render_the_enclosing_symbol_without_changing_json_names() {
+    let (_repo, db) = scanned_repo(&[
+        (
+            "flask.py",
+            "class Flask:\n    def __init__(self, name):\n        pass\n",
+        ),
+        (
+            "tests/test_cli.py",
+            "class ScriptInfo:\n    def __init__(self, create_app):\n        self.create_app = create_app\n\ndef test_scriptinfo():\n    ScriptInfo(create_app=lambda: Flask(\"testapp\"))\n",
+        ),
+    ]);
+    let conn = open_read_only(&db).unwrap();
+    let flask_id: String = conn
+        .query_row(
+            "SELECT symbol_id FROM symbols WHERE name = 'Flask' AND kind = 'class'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let refs = find_references_for_symbol(&conn, "Flask", "callers", 20, &flask_id).unwrap();
+    let lambda = refs
+        .iter()
+        .find(|site| site.from_symbol_name.starts_with("lambda_"))
+        .expect("Flask should have a lambda caller");
+
+    let references_text = format_references("Flask", &refs, "callers", 20);
+    assert!(
+        references_text.contains("`<lambda> in test_scriptinfo`"),
+        "{references_text}"
+    );
+    let references_json = serde_json::to_value(&refs).unwrap();
+    let raw_lambda_name = lambda.from_symbol_name.as_str();
+    let lambda_json = references_json
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| {
+            row.get("from_symbol_name")
+                .and_then(serde_json::Value::as_str)
+                == Some(raw_lambda_name)
+        })
+        .expect("JSON should retain the raw lambda name");
+    assert!(lambda_json.get("enclosing_symbol_name").is_none());
+
+    let blast = compute_blast_radius(&conn, &["Flask"], &[], 2, 20).unwrap();
+    let blast_text = format_blast_radius(&blast);
+    assert!(
+        blast_text.contains("`<lambda> in test_scriptinfo`"),
+        "{blast_text}"
+    );
+    assert!(
+        blast
+            .impacted_symbols
+            .iter()
+            .any(|symbol| symbol.name.starts_with("lambda_")),
+        "{:?}",
+        blast.impacted_symbols
+    );
+    let blast_json = serde_json::to_value(&blast).unwrap();
+    let lambda_json = blast_json["impacted_symbols"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|symbol| {
+            symbol.get("name").and_then(serde_json::Value::as_str) == Some(raw_lambda_name)
+        })
+        .expect("JSON should retain the raw lambda name");
+    assert!(lambda_json.get("enclosing_symbol_name").is_none());
 }

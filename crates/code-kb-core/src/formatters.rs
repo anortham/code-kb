@@ -3,7 +3,7 @@ use std::path::Path;
 
 use crate::models::{
     BlastRadiusResult, ContextSlice, ImpactedSymbol, ReferenceSite, SearchExplain, Symbol,
-    SymbolSearchResult, TestTarget,
+    SymbolSearchResult, TestTarget, is_generated_lambda_name,
 };
 
 /// Format progressive disclosure file skeleton with implementation bodies stripped.
@@ -805,7 +805,7 @@ pub fn format_references(
             None => String::new(),
         };
         let other = if direction == "callers" {
-            r.from_symbol_name.clone()
+            displayed_symbol_name(&r.from_symbol_name, r.enclosing_symbol_name.as_deref())
         } else {
             callee_name(&r.to_symbol_name)
         };
@@ -828,6 +828,16 @@ pub fn format_references(
     }
 
     out
+}
+
+fn displayed_symbol_name(name: &str, enclosing_symbol_name: Option<&str>) -> String {
+    if is_generated_lambda_name(name)
+        && let Some(enclosing_symbol_name) = enclosing_symbol_name
+    {
+        format!("<lambda> in {enclosing_symbol_name}")
+    } else {
+        name.to_string()
+    }
 }
 
 /// Formats exact or FTS fallback symbol results with transparent header labeling.
@@ -1464,9 +1474,11 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
                 out.push_str(&format!("{path}:\n"));
                 if let Some(syms) = syms_by_file.get(path) {
                     for s in syms {
+                        let name =
+                            displayed_symbol_name(&s.name, s.enclosing_symbol_name.as_deref());
                         out.push_str(&format!(
                             "  - [depth {}] {} `{}` [line {}]\n",
-                            s.depth, s.kind, s.name, s.line
+                            s.depth, s.kind, name, s.line
                         ));
                     }
                 }
@@ -1631,6 +1643,7 @@ mod tests {
             start_column: Some(4),
             occurrences,
             target: None,
+            enclosing_symbol_name: None,
         };
 
         let grouped = format_references("Color", &[site(Some(6))], "callers", 30);
@@ -2495,6 +2508,7 @@ mod tests {
                 path: "src/caller.rs".into(),
                 line: 42,
                 depth: 1,
+                enclosing_symbol_name: None,
             }],
             traversal_ceiling_reached: false,
             likely_tests_truncated: false,
@@ -2533,6 +2547,7 @@ mod tests {
                 path: "src/service.rs".into(),
                 line: 1,
                 depth: 1,
+                enclosing_symbol_name: None,
             },
             ImpactedSymbol {
                 name: "service_fn".into(),
@@ -2540,6 +2555,7 @@ mod tests {
                 path: "src/service.rs".into(),
                 line: 20,
                 depth: 1,
+                enclosing_symbol_name: None,
             },
             ImpactedSymbol {
                 name: "api_handler".into(),
@@ -2547,6 +2563,7 @@ mod tests {
                 path: "src/api.rs".into(),
                 line: 45,
                 depth: 2,
+                enclosing_symbol_name: None,
             },
         ];
 
@@ -2696,6 +2713,7 @@ mod tests {
                 path: format!("src/mod_{}.rs", i % 10),
                 line: i,
                 depth: 1,
+                enclosing_symbol_name: None,
             })
             .collect();
 
