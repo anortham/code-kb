@@ -239,6 +239,41 @@ fn supported_member_access_precedes_candidates_at_the_limit() {
 }
 
 #[test]
+fn a_super_read_without_metadata_is_not_a_supported_reference_to_itself() {
+    let (_repo, db) = scanned_repo(&[(
+        "types.py",
+        "class Base:\n    def convert(self):\n        return 1\n\nclass Paths(Base):\n    def convert(self):\n        base = super().convert\n        return base()\n",
+    )]);
+    let conn = open_read_write(&db).unwrap();
+    conn.execute(
+        "UPDATE identifiers SET metadata_json = NULL WHERE name = 'convert'",
+        [],
+    )
+    .unwrap();
+    let rows = find_references_scoped(&conn, "Paths.convert", "callers", 20, false, None).unwrap();
+    assert!(!rows.is_empty());
+    assert!(
+        rows.iter()
+            .all(|row| row.kind == "member_access (candidate)"),
+        "{rows:?}"
+    );
+}
+
+#[test]
+fn a_css_selector_is_not_a_candidate_reference_to_a_method() {
+    let (_repo, db) = scanned_repo(&[
+        (
+            "app.py",
+            "class Scaffold:\n    def post(self):\n        pass\n",
+        ),
+        ("static/style.css", ".post > header {\n  color: red;\n}\n"),
+    ]);
+    let conn = open_read_only(&db).unwrap();
+    let rows = find_references_scoped(&conn, "Scaffold.post", "callers", 20, false, None).unwrap();
+    assert!(rows.is_empty(), "{rows:?}");
+}
+
+#[test]
 fn member_access_with_missing_metadata_is_a_candidate() {
     let (_repo, db) = scanned_repo(&[(
         "runners.py",

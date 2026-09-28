@@ -3170,12 +3170,18 @@ fn member_receiver_match(conn: &Connection) -> String {
                           AND selected.kind IN ('method', 'function', 'constructor')
                           AND owner.kind IN ('class', 'struct', 'interface', 'trait', 'enum', 'protocol')
                     )";
-    // v2.3.0 dropped a member access without metadata; keep that for targets that are not
-    // class methods, where the name alone matches unrelated sites such as HTML elements.
+    // A member access without metadata has no receiver evidence: julie leaves `super().x` and
+    // HTML and CSS names without it. It stays a candidate for a class method and never
+    // reaches another target, where the name alone matches unrelated sites.
     let unproven_member = "p.kind = 'member_access' AND NOT p.has_metadata";
+    let documentation_member = format!(
+        "{unproven_member} AND p.language IN ({})",
+        documentation_language_list()
+    );
     if !has_pending_namespace_column(conn) || !has_column(conn, "symbols", "metadata_json") {
         return format!(
-            "CASE WHEN {callable_member} THEN 0 WHEN {unproven_member} THEN -1 ELSE 1 END"
+            "CASE WHEN {documentation_member} THEN -1 WHEN {callable_member} THEN 0
+                  WHEN {unproven_member} THEN -1 ELSE 1 END"
         );
     }
     let matched = pending_target_predicate(conn, "candidate", "candidate_parent");
@@ -3184,7 +3190,9 @@ fn member_receiver_match(conn: &Connection) -> String {
     let builder_scope = receiver_definition_scope("builder", "builder_call.path");
     let returned_scope = receiver_definition_scope("returned_class", "builder.path");
     format!(
-        "CASE WHEN NOT ({callable_member}) THEN CASE WHEN {unproven_member} THEN -1 ELSE 1 END
+        "CASE WHEN {documentation_member} THEN -1
+              WHEN NOT ({callable_member}) THEN CASE WHEN {unproven_member} THEN -1 ELSE 1 END
+              WHEN {unproven_member} THEN 0
               WHEN (SELECT COUNT(*) FROM symbols binding
                     WHERE binding.parent_symbol_id = p.from_symbol_id
                       AND +binding.name = p.target_receiver
@@ -3875,6 +3883,7 @@ fn find_direct_references(
                  FROM (SELECT name, kind, path, start_line, start_column, containing_symbol_id,
                               CASE WHEN json_valid(metadata_json) THEN metadata_json ELSE '{{}}' END AS metadata_json,
                               COALESCE(json_valid(metadata_json), 0) AS has_metadata,
+                              language,
                               containing_symbol_id AS from_symbol_id,
                               CASE WHEN json_valid(metadata_json) THEN json_extract(metadata_json, '$.receiver') END AS target_receiver,
                               '[]' AS target_namespace_json
