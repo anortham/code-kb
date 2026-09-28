@@ -398,6 +398,337 @@ fn find_references_reports_type_usages_of_a_struct() {
 }
 
 #[test]
+fn name_only_type_usages_stay_with_the_declaring_nested_class_and_language() {
+    let (_repo, db_path) = scanned_repo(&[
+        (
+            "java/CustomTypeAdaptersTest.java",
+            "package demo;\npublic class CustomTypeAdaptersTest {\n    public static class Foo {}\n    Foo value;\n    Foo use() { return new Foo(); }\n}\n",
+        ),
+        (
+            "java/RawSerializationTest.java",
+            "package demo;\npublic class RawSerializationTest {\n    public static class Foo {}\n    Foo use() { return new Foo(); }\n}\n",
+        ),
+        (
+            "python/other.py",
+            "class Foo:\n    pass\n\ndef use(value: Foo) -> Foo:\n    return Foo()\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let refs = find_references_scoped(
+        &conn,
+        "Foo",
+        "callers",
+        20,
+        false,
+        Some("java/CustomTypeAdaptersTest.java"),
+    )
+    .unwrap();
+
+    let mut sites: Vec<_> = refs
+        .iter()
+        .map(|row| (row.kind.as_str(), row.path.as_str()))
+        .collect();
+    sites.sort_unstable();
+    assert_eq!(
+        sites,
+        [
+            ("calls", "java/CustomTypeAdaptersTest.java"),
+            ("type_usage", "java/CustomTypeAdaptersTest.java"),
+        ],
+        "{refs:?}"
+    );
+}
+
+#[test]
+fn member_access_identifiers_do_not_cross_language_boundaries() {
+    let (_repo, db_path) = scanned_repo(&[
+        (
+            "src/HTTPHeaders.java",
+            "package demo;\npublic class HTTPHeaders {\n    public String header() { return \"\"; }\n}\n",
+        ),
+        (
+            "src/reader.js",
+            "export function read(headers) { return headers.header; }\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let refs = find_references_scoped(
+        &conn,
+        "HTTPHeaders.header",
+        "callers",
+        20,
+        false,
+        Some("src/HTTPHeaders.java"),
+    )
+    .unwrap();
+
+    assert!(refs.is_empty(), "{refs:?}");
+}
+
+#[test]
+fn name_only_type_usages_resolve_to_the_nearest_nested_type() {
+    let (_repo, db_path) = scanned_repo(&[(
+        "src/Outer.java",
+        "package demo;\nclass Outer {\n    static class Foo {}\n    Foo outerField;\n    static class Inner {\n        static class Foo {}\n        Foo field;\n        Foo use(Foo value) { return value; }\n    }\n}\n",
+    )]);
+    let conn = open_read_only(&db_path).unwrap();
+    let outer_foo_id: String = conn
+        .query_row(
+            "SELECT outer_foo.symbol_id FROM symbols outer_foo
+             JOIN symbols outer_type ON outer_type.symbol_id = outer_foo.parent_symbol_id
+             WHERE outer_foo.path = 'src/Outer.java'
+               AND outer_foo.name = 'Foo' AND outer_foo.kind = 'class'
+               AND outer_type.name = 'Outer'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let inner_foo_id: String = conn
+        .query_row(
+            "SELECT inner_foo.symbol_id FROM symbols inner_foo
+             JOIN symbols inner_type ON inner_type.symbol_id = inner_foo.parent_symbol_id
+             WHERE inner_foo.path = 'src/Outer.java'
+               AND inner_foo.name = 'Foo' AND inner_foo.kind = 'class'
+               AND inner_type.name = 'Inner'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+
+    let refs = find_references_for_symbol(&conn, "Foo", "callers", 20, &inner_foo_id).unwrap();
+
+    let type_usages: Vec<_> = refs.iter().filter(|row| row.kind == "type_usage").collect();
+    assert!(
+        !type_usages.is_empty(),
+        "the nearer Inner.Foo must retain its own type usages: {refs:?}"
+    );
+    assert!(
+        type_usages.iter().all(|row| row.path == "src/Outer.java"),
+        "{type_usages:?}"
+    );
+
+    let outer_refs =
+        find_references_for_symbol(&conn, "Foo", "callers", 20, &outer_foo_id).unwrap();
+    let outer_type_usages: Vec<_> = outer_refs
+        .iter()
+        .filter(|row| row.kind == "type_usage")
+        .collect();
+    assert_eq!(
+        outer_type_usages
+            .iter()
+            .map(|row| row.start_line)
+            .collect::<Vec<_>>(),
+        [Some(4)],
+        "Outer.Foo must not claim the nearer Inner.Foo usages: {outer_refs:?}"
+    );
+}
+
+#[test]
+fn name_only_type_usages_resolve_to_a_same_file_top_level_type_first() {
+    let (_repo, db_path) = scanned_repo(&[
+        (
+            "One.java",
+            "package a;\nclass Foo {}\nclass One {\n    Foo field;\n    Foo use(Foo value) { return value; }\n}\n",
+        ),
+        (
+            "Two.java",
+            "package b;\nclass Foo {}\nclass Two {\n    Foo field;\n    Foo use(Foo value) { return value; }\n}\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+    let one_foo_id: String = conn
+        .query_row(
+            "SELECT symbol_id FROM symbols
+             WHERE path = 'One.java' AND name = 'Foo' AND kind = 'class'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+
+    let refs = find_references_for_symbol(&conn, "Foo", "callers", 20, &one_foo_id).unwrap();
+    let type_usages: Vec<_> = refs.iter().filter(|row| row.kind == "type_usage").collect();
+
+    assert!(!type_usages.is_empty(), "{refs:?}");
+    assert!(
+        type_usages.iter().all(|row| row.path == "One.java"),
+        "same-named type usages in another package must not reach One.Foo: {type_usages:?}"
+    );
+}
+
+#[test]
+fn name_only_identifiers_allow_only_the_supported_qml_and_razor_language_bridges() {
+    let (_repo, db_path) = scanned_repo(&[
+        (
+            "src/BridgeWidget.cpp",
+            "class BridgeWidget { public: int value; };\n",
+        ),
+        (
+            "src/BridgeModel.cs",
+            "public class BridgeModel { public string Title { get; set; } }\n",
+        ),
+        (
+            "ui/View.qml",
+            "import QtQuick\nItem {\n    property BridgeWidget widget\n    property int currentValue: widget.value\n}\n",
+        ),
+        (
+            "ui/View.razor",
+            "@inject BridgeModel Model\n<p>@Model.Title</p>\n",
+        ),
+        ("src/other.py", "def use(value):\n    return value\n"),
+    ]);
+    let conn = open_read_write(&db_path).unwrap();
+    conn.execute_batch(
+        r#"INSERT INTO reference_sites
+            (reference_site_id, file_id, path, language, is_exact, provenance)
+         SELECT 'rs_qml_bridge', file_id, path, language, 0, 'spanless'
+         FROM files WHERE path = 'ui/View.qml';
+         INSERT INTO reference_sites
+            (reference_site_id, file_id, path, language, is_exact, provenance)
+         SELECT 'rs_razor_bridge', file_id, path, language, 0, 'spanless'
+         FROM files WHERE path = 'ui/View.razor';
+         INSERT INTO reference_sites
+            (reference_site_id, file_id, path, language, is_exact, provenance)
+         SELECT 'rs_unrelated', file_id, path, language, 0, 'spanless'
+         FROM files WHERE path = 'src/other.py';
+         INSERT INTO identifiers
+            (identifier_id, reference_site_id, file_id, path, language, name, kind,
+             start_line, start_column, end_line, end_column, start_byte, end_byte,
+             confidence, metadata_json)
+         SELECT 'i_qml_bridge', 'rs_qml_bridge', file_id, path, language,
+                'BridgeWidget', 'type_usage', 3, 13, 3, 24, 0, 11, 1.0, '{}'
+         FROM files WHERE path = 'ui/View.qml';
+         INSERT INTO identifiers
+            (identifier_id, reference_site_id, file_id, path, language, name, kind,
+             start_line, start_column, end_line, end_column, start_byte, end_byte,
+             confidence, metadata_json)
+         SELECT 'i_qml_member', 'rs_qml_bridge', file_id, path, language,
+                'value', 'member_access', 4, 39, 4, 44, 0, 5, 1.0,
+                '{"receiver":"widget"}'
+         FROM files WHERE path = 'ui/View.qml';
+         INSERT INTO identifiers
+            (identifier_id, reference_site_id, file_id, path, language, name, kind,
+             start_line, start_column, end_line, end_column, start_byte, end_byte,
+             confidence, metadata_json)
+         SELECT 'i_razor_bridge', 'rs_razor_bridge', file_id, path, language,
+                'BridgeModel', 'type_usage', 1, 8, 1, 19, 0, 11, 1.0, '{}'
+         FROM files WHERE path = 'ui/View.razor';
+         INSERT INTO identifiers
+            (identifier_id, reference_site_id, file_id, path, language, name, kind,
+             start_line, start_column, end_line, end_column, start_byte, end_byte,
+             confidence, metadata_json)
+         SELECT 'i_razor_member', 'rs_razor_bridge', file_id, path, language,
+                'Title', 'member_access', 2, 10, 2, 15, 0, 5, 1.0,
+                '{"receiver":"Model"}'
+         FROM files WHERE path = 'ui/View.razor';
+         INSERT INTO identifiers
+            (identifier_id, reference_site_id, file_id, path, language, name, kind,
+             start_line, start_column, end_line, end_column, start_byte, end_byte,
+             confidence, metadata_json)
+         SELECT 'i_unrelated', 'rs_unrelated', file_id, path, language,
+                'BridgeWidget', 'type_usage', 1, 0, 1, 12, 0, 12, 1.0, '{}'
+         FROM files WHERE path = 'src/other.py';
+         INSERT INTO identifiers
+            (identifier_id, reference_site_id, file_id, path, language, name, kind,
+             start_line, start_column, end_line, end_column, start_byte, end_byte,
+             confidence, metadata_json)
+         SELECT 'i_unrelated_member', 'rs_unrelated', file_id, path, language,
+                'value', 'member_access', 1, 0, 1, 5, 0, 5, 1.0,
+                '{"receiver":"other"}'
+         FROM files WHERE path = 'src/other.py';"#,
+    )
+    .unwrap();
+
+    let language_for = |path: &str| -> String {
+        conn.query_row(
+            "SELECT language FROM files WHERE path = ?1",
+            [path],
+            |row| row.get(0),
+        )
+        .unwrap()
+    };
+    assert_eq!(language_for("ui/View.qml"), "qml");
+    assert_eq!(language_for("ui/View.razor"), "razor");
+    assert_eq!(language_for("src/BridgeWidget.cpp"), "cpp");
+    assert_eq!(language_for("src/BridgeModel.cs"), "csharp");
+
+    let target_id = |path: &str, name: &str| -> String {
+        conn.query_row(
+            "SELECT symbol_id FROM symbols WHERE path = ?1 AND name = ?2 ORDER BY start_line LIMIT 1",
+            [path, name],
+            |row| row.get(0),
+        )
+        .unwrap()
+    };
+    let cpp_refs = find_references_for_symbol(
+        &conn,
+        "BridgeWidget",
+        "callers",
+        20,
+        &target_id("src/BridgeWidget.cpp", "BridgeWidget"),
+    )
+    .unwrap();
+    let csharp_refs = find_references_for_symbol(
+        &conn,
+        "BridgeModel",
+        "callers",
+        20,
+        &target_id("src/BridgeModel.cs", "BridgeModel"),
+    )
+    .unwrap();
+    let cpp_member_refs = find_references_for_symbol(
+        &conn,
+        "value",
+        "callers",
+        20,
+        &target_id("src/BridgeWidget.cpp", "value"),
+    )
+    .unwrap();
+    let csharp_member_refs = find_references_for_symbol(
+        &conn,
+        "Title",
+        "callers",
+        20,
+        &target_id("src/BridgeModel.cs", "Title"),
+    )
+    .unwrap();
+
+    assert!(
+        cpp_refs
+            .iter()
+            .any(|row| row.path == "ui/View.qml" && row.kind == "type_usage"),
+        "QML-to-C++ bridge was filtered: {cpp_refs:?}"
+    );
+    assert!(
+        !cpp_refs.iter().any(|row| row.path == "src/other.py"),
+        "unrelated-language type usage leaked through: {cpp_refs:?}"
+    );
+    assert!(
+        csharp_refs
+            .iter()
+            .any(|row| row.path == "ui/View.razor" && row.kind == "type_usage"),
+        "Razor-to-C# bridge was filtered: {csharp_refs:?}"
+    );
+    assert!(
+        cpp_member_refs
+            .iter()
+            .any(|row| row.path == "ui/View.qml" && row.kind == "member_access"),
+        "QML-to-C++ member access bridge was filtered: {cpp_member_refs:?}"
+    );
+    assert!(
+        !cpp_member_refs.iter().any(|row| row.path == "src/other.py"),
+        "unrelated-language member access leaked through: {cpp_member_refs:?}"
+    );
+    assert!(
+        csharp_member_refs
+            .iter()
+            .any(|row| row.path == "ui/View.razor" && row.kind == "member_access"),
+        "Razor-to-C# member access bridge was filtered: {csharp_member_refs:?}"
+    );
+}
+
+#[test]
 fn find_references_reports_member_accesses_of_a_field() {
     let (_repo, db_path) = scanned_repo(&[
         (
