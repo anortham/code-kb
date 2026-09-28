@@ -4786,7 +4786,15 @@ pub fn find_structural_facts_scoped(
          LEFT JOIN symbols s ON sf.containing_symbol_id = s.symbol_id
          WHERE (:cat IS NOT NULL AND {cat_clause})
            AND (:path IS NULL OR replace(sf.path, '\\', '/') = :path COLLATE NOCASE OR replace(sf.path, '\\', '/') LIKE :dir_prefix ESCAPE '\\')
-         ORDER BY sf.path ASC, sf.start_line ASC
+         ORDER BY sf.path ASC, sf.start_line ASC,
+                  COALESCE(
+                      json_extract(sf.metadata_json, '$.effective_route_template'),
+                      json_extract(sf.metadata_json, '$.route_template'),
+                      json_extract(sf.metadata_json, '$.normalized_route_template'),
+                      ''
+                  ) ASC,
+                  COALESCE(json_extract(sf.metadata_json, '$.verb'), '') ASC,
+                  sf.structural_fact_id ASC
          LIMIT :limit"
     );
 

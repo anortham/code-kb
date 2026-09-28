@@ -1497,6 +1497,52 @@ fn test_cli_facts_alias_limits_and_listing() {
 }
 
 #[test]
+fn cli_facts_orders_same_line_flask_routes_by_template_and_method() {
+    let repo = setup_test_repo();
+    let root = repo.path();
+
+    let db_path = root.join(".code-kb/artifact.db");
+    let conn = code_kb_core::open_read_write(&db_path).unwrap();
+    conn.execute_batch(
+        "INSERT INTO structural_facts VALUES
+            ('sf_post_create', 'f1', 'examples/tutorial/routes.py', 'python', 'flask.route.v1', 'create', 'decorated_definition', NULL, 10, 10, 1.0, '{\"verb\":\"POST\",\"route_template\":\"/create\",\"normalized_route_template\":\"/create\"}'),
+            ('sf_get_create', 'f1', 'examples/tutorial/routes.py', 'python', 'flask.route.v1', 'create', 'decorated_definition', NULL, 10, 10, 1.0, '{\"verb\":\"GET\",\"route_template\":\"/create\",\"normalized_route_template\":\"/create\"}'),
+            ('sf_get_update', 'f1', 'examples/tutorial/routes.py', 'python', 'flask.route.v1', 'update', 'decorated_definition', NULL, 10, 10, 1.0, '{\"verb\":\"GET\",\"route_template\":\"/<int:id>/update\",\"normalized_route_template\":\"/:id/update\"}'),
+            ('sf_post_update', 'f1', 'examples/tutorial/routes.py', 'python', 'flask.route.v1', 'update', 'decorated_definition', NULL, 10, 10, 1.0, '{\"verb\":\"POST\",\"route_template\":\"/<int:id>/update\",\"normalized_route_template\":\"/:id/update\"}');",
+    )
+    .unwrap();
+    drop(conn);
+
+    let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .args(["facts", "route", "--path", "examples/tutorial"])
+        .output()
+        .expect("Failed to execute route facts");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let route_order = [
+        "GET /<int:id>/update",
+        "POST /<int:id>/update",
+        "GET /create",
+        "POST /create",
+    ]
+    .map(|route| {
+        stdout
+            .find(route)
+            .unwrap_or_else(|| panic!("missing {route}: {stdout}"))
+    });
+    assert!(
+        route_order.windows(2).all(|pair| pair[0] < pair[1]),
+        "{stdout}"
+    );
+}
+
+#[test]
 fn test_cli_hook_session_start() {
     let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
         .arg("hook")
