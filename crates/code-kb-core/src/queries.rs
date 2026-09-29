@@ -3253,7 +3253,13 @@ fn member_receiver_match(conn: &Connection) -> String {
                             {builder_return_type}
                         WHERE builder.name = builder_call.name AND builder.kind IN ('function', 'method')
                           AND (builder.symbol_id = builder_call.resolved_symbol_id
-                               OR builder_call.resolved_symbol_id IS NULL AND {builder_scope})
+                               OR CASE WHEN builder_call.resolved_symbol_id IS NULL
+                                            AND EXISTS (
+                                                SELECT 1 FROM symbols returned_class_probe
+                                                WHERE returned_class_probe.name = {builder_return_type}
+                                                  AND returned_class_probe.kind = 'class'
+                                            )
+                                       THEN {builder_scope} ELSE 0 END)
                           AND returned_class.kind = 'class'
                           AND {returned_scope}
                     )
@@ -3377,10 +3383,16 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                             UNION
                             SELECT returned_class.name, builder.path, returned_class.symbol_id
                             FROM builder_call
-                            JOIN symbols builder ON builder.kind IN ('function', 'method')
+                            JOIN symbols builder ON builder.name = builder_call.name
+                              AND builder.kind IN ('function', 'method')
                               AND (builder.symbol_id = builder_call.resolved_symbol_id
-                                   OR builder_call.resolved_symbol_id IS NULL
-                                      AND builder.name = builder_call.name AND {builder_scope})
+                                   OR CASE WHEN builder_call.resolved_symbol_id IS NULL
+                                                AND EXISTS (
+                                                    SELECT 1 FROM symbols returned_class_probe
+                                                    WHERE returned_class_probe.name = {builder_return_type}
+                                                      AND returned_class_probe.kind = 'class'
+                                                )
+                                           THEN {builder_scope} ELSE 0 END)
                             JOIN symbols returned_class ON returned_class.name = {builder_return_type}
                               AND returned_class.kind = 'class' AND {returned_class_scope}
                         ),

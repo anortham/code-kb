@@ -434,6 +434,54 @@ fn find_references_stops_receiver_checks_after_filling_the_limit() {
 }
 
 #[test]
+fn caller_search_skips_builder_scope_for_helpers_without_class_returns() {
+    const CALLERS: usize = 2_048;
+    let call_sites = (0..CALLERS)
+        .map(|index| {
+            format!("def caller_{index}():\n    value = make_value()\n    return value.get()\n\n")
+        })
+        .collect::<String>();
+    let callers = format!("from pkg.builders import make_value\n\n{call_sites}");
+    let (_repo, db) = scanned_repo(&[
+        (
+            "pkg/widget.py",
+            "class Widget:\n    def get(self):\n        pass\n",
+        ),
+        (
+            "pkg/builders.py",
+            "def make_value():\n    return object()\n",
+        ),
+        ("src/callers.py", &callers),
+    ]);
+    let conn = open_read_write(&db).unwrap();
+    let pending_calls: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM pending_relationships WHERE target_terminal_name = 'get'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(pending_calls, CALLERS as i64);
+    conn.execute("DELETE FROM identifiers WHERE name = 'get'", [])
+        .unwrap();
+    drop(conn);
+
+    let conn = open_read_only(&db).unwrap();
+    let operations = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let observed = operations.clone();
+    conn.progress_handler(
+        100,
+        Some(move || observed.fetch_add(100, std::sync::atomic::Ordering::Relaxed) >= 1_250_000),
+    )
+    .unwrap();
+    let result = find_references_scoped(&conn, "Widget.get", "callers", 20, false, None);
+    conn.progress_handler(0, None::<fn() -> bool>).unwrap();
+    let rows = result.expect("untyped builders should not trigger a full-scope check per caller");
+
+    assert!(rows.is_empty(), "{rows:?}");
+}
+
+#[test]
 fn a_super_read_without_metadata_is_not_a_supported_reference_to_itself() {
     let (_repo, db) = scanned_repo(&[(
         "types.py",
