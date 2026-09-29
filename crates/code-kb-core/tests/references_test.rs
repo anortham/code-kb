@@ -828,6 +828,66 @@ fn name_only_type_usages_resolve_to_a_same_file_top_level_type_first() {
 }
 
 #[test]
+fn a_csharp_type_usage_reaches_a_razor_component() {
+    let (_repo, db) = scanned_repo(&[
+        (
+            "Shared/Tip.razor",
+            "<div class=\"tip\">@Text</div>\n@code {\n    [Parameter] public string Text { get; set; }\n}\n",
+        ),
+        (
+            "Shared/Chart.cs",
+            "public class Chart\n{\n    void Render(RenderTreeBuilder builder)\n    {\n        builder.OpenComponent<Tip>(0);\n    }\n}\n",
+        ),
+    ]);
+    let conn = open_read_only(&db).unwrap();
+    let tip_id: String = conn
+        .query_row(
+            "SELECT symbol_id FROM symbols WHERE path = 'Shared/Tip.razor' AND name = 'Tip'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+
+    let rows = find_references_for_symbol(&conn, "Tip", "callers", 20, &tip_id).unwrap();
+
+    assert!(
+        rows.iter()
+            .any(|row| row.kind == "type_usage" && row.path == "Shared/Chart.cs"),
+        "{rows:?}"
+    );
+}
+
+#[test]
+fn grouped_type_receiver_rows_skip_other_languages_and_nearer_types() {
+    let (_repo, db) = scanned_repo(&[
+        (
+            "src/One.java",
+            "class One {\n    static class Foo {\n        static int size = 1;\n    }\n    int use() { return Foo.size; }\n}\n",
+        ),
+        (
+            "src/Two.java",
+            "class Two {\n    private enum Foo { BAR }\n    Object use() { return Foo.BAR; }\n}\n",
+        ),
+        ("tools/other.py", "def use(Foo):\n    return Foo.size\n"),
+    ]);
+    let conn = open_read_only(&db).unwrap();
+    let foo_id: String = conn
+        .query_row(
+            "SELECT symbol_id FROM symbols WHERE path = 'src/One.java' AND name = 'Foo' AND kind = 'class'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+
+    let rows = find_references_for_symbol(&conn, "Foo", "callers", 20, &foo_id).unwrap();
+
+    assert!(
+        rows.iter().all(|row| row.path == "src/One.java"),
+        "{rows:?}"
+    );
+}
+
+#[test]
 fn name_only_identifiers_allow_only_the_supported_qml_and_razor_language_bridges() {
     let (_repo, db_path) = scanned_repo(&[
         (

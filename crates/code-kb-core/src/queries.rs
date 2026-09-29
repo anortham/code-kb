@@ -3183,6 +3183,19 @@ fn relative_import_matches(value: &str, target: &str) -> String {
 
 /// Languages whose files import each other's names, so a name-only reference may cross them.
 const JS_FAMILY_LANGUAGES: &str = "'javascript', 'typescript', 'tsx', 'jsx', 'vue'";
+/// SQL that holds when a name-only identifier in `identifier` may refer to `target` across
+/// languages: the same language, the JavaScript family, Razor and C#, or QML to C++.
+fn identifier_language_matches(identifier: &str, target: &str) -> String {
+    format!(
+        "({target}.language = {identifier}.language
+          OR ({identifier}.language IN ({JS_FAMILY_LANGUAGES})
+              AND {target}.language IN ({JS_FAMILY_LANGUAGES}))
+          OR ({identifier}.language IN ('razor', 'csharp')
+              AND {target}.language IN ('razor', 'csharp'))
+          OR ({identifier}.language = 'qml' AND {target}.language = 'cpp'))"
+    )
+}
+
 const NESTED_TYPE_KINDS: &str =
     "'class', 'struct', 'interface', 'enum', 'record', 'trait', 'protocol'";
 
@@ -4111,6 +4124,7 @@ fn find_direct_references(
                  )"
             );
             let receiver_match = receiver_match.replace("?3", "?1");
+            let language_match = identifier_language_matches("i", "selected_target");
             let mut receiver_stmt = conn.prepare(&format!(
                 "SELECT {receiver_match}
                  FROM (SELECT name, kind, path, start_line, start_column,
@@ -4152,11 +4166,7 @@ fn find_direct_references(
                  LEFT JOIN symbols selected_target ON selected_target.symbol_id = ?2
                  WHERE i.name = ?1 AND i.kind IN ('type_usage', 'member_access')
                    AND COALESCE(s_from.kind, '') != 'import'
-                   AND (?2 IS NULL OR selected_target.language = i.language
-                        OR (i.language IN ({JS_FAMILY_LANGUAGES})
-                            AND selected_target.language IN ({JS_FAMILY_LANGUAGES}))
-                        OR (i.language = 'qml' AND selected_target.language = 'cpp')
-                        OR (i.language = 'razor' AND selected_target.language = 'csharp'))
+                   AND (?2 IS NULL OR {language_match})
                    AND NOT ({type_usage_shadow})
                    AND NOT EXISTS (
                        SELECT 1 FROM relationships covered
@@ -4263,7 +4273,8 @@ fn find_direct_references(
 
             if let Some(sid) = symbol_id.filter(|_| results.len() < limit) {
                 let remaining = limit - results.len();
-                let mut receiver_stmt = conn.prepare(
+                let language_match = identifier_language_matches("i", "target");
+                let mut receiver_stmt = conn.prepare(&format!(
                     "SELECT COALESCE(s.name, ''),
                             COALESCE(i.containing_symbol_id, ''),
                             i.name,
@@ -4284,10 +4295,18 @@ fn find_direct_references(
                        AND json_extract(i.metadata_json, '$.receiver') = target.name
                        AND (json_extract(i.metadata_json, '$.receiver_qualifier') IS NULL
                             OR json_extract(i.metadata_json, '$.receiver_qualifier') = target_parent.name)
+                       AND {language_match}
+                       AND NOT EXISTS (
+                           SELECT 1 FROM symbols nearer
+                           WHERE nearer.name = target.name
+                             AND nearer.path = i.path
+                             AND nearer.symbol_id != target.symbol_id
+                             AND nearer.kind IN ({NESTED_TYPE_KINDS}, 'module', 'namespace')
+                       )
                      GROUP BY i.path
                      ORDER BY i.path, i.start_line
-                     LIMIT ?1",
-                )?;
+                     LIMIT ?1"
+                ))?;
                 let rows = receiver_stmt.query_map(params![remaining as i64, sid], |row| {
                     Ok(ReferenceSite {
                         from_symbol_name: row.get(0)?,
