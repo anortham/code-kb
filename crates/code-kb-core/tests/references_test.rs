@@ -107,6 +107,61 @@ fn resolved_same_file_builder_calls_disambiguate_annotated_receivers() {
 }
 
 #[test]
+fn a_nested_same_file_helper_call_keeps_the_constructor_receiver_supported() {
+    let (_repo, db) = scanned_repo(&[
+        (
+            "pkg/cfg.py",
+            "class Config:\n    def run(self):\n        pass\n",
+        ),
+        (
+            "pkg/app.py",
+            "from pkg.cfg import Config\n\ndef make_name():\n    return 'x'\n\ndef other(register):\n    c = Config(make_name())\n    register(c.run)\n",
+        ),
+    ]);
+    let conn = open_read_only(&db).unwrap();
+
+    let rows =
+        find_references_scoped(&conn, "run", "callers", 20, false, Some("pkg/cfg.py")).unwrap();
+
+    assert_eq!(caller_names(&rows), ["other"]);
+    assert!(
+        rows.iter().all(|row| row.kind == "member_access"),
+        "{rows:?}"
+    );
+}
+
+#[test]
+fn name_only_type_usages_cross_the_javascript_family_languages() {
+    let (_repo, db) = scanned_repo(&[
+        ("src/model.ts", "export class Store {\n  size = 0;\n}\n"),
+        (
+            "src/view.tsx",
+            "import { Store } from './model';\nexport function View(p: { store: Store }) {\n  const s: Store = p.store;\n  return s;\n}\n",
+        ),
+        (
+            "src/other.ts",
+            "import { Store } from './model';\nexport function other(): Store {\n  return new Store();\n}\n",
+        ),
+    ]);
+    let conn = open_read_only(&db).unwrap();
+    let store_id: String = conn
+        .query_row(
+            "SELECT symbol_id FROM symbols WHERE path = 'src/model.ts' AND name = 'Store' AND kind = 'class'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+
+    let rows = find_references_for_symbol(&conn, "Store", "callers", 20, &store_id).unwrap();
+
+    assert!(
+        rows.iter()
+            .any(|row| row.kind == "type_usage" && row.path == "src/view.tsx"),
+        "{rows:?}"
+    );
+}
+
+#[test]
 fn resolved_same_file_builder_calls_keep_lexical_identity() {
     let (_repo, db) = scanned_repo(&[(
         "app.py",

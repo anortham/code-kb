@@ -106,7 +106,8 @@ fn lookup_symbol_reports_actionable_candidates_for_qualified_path_scoped_symbols
         assert!(text.contains("3 matching candidates"), "{text}");
         assert!(
             text.contains("Choose a candidate by its kind and source line")
-                && text.contains("`symbol_id`"),
+                && text.contains("`symbol_id`")
+                && text.contains("find_references, or blast_radius"),
             "ambiguity response must give actionable advice: {text}"
         );
         assert!(
