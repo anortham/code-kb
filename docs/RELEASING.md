@@ -159,11 +159,9 @@ Draft comprehensive markdown release notes at `docs/release-notes/vX.Y.Z.md`:
 - **Assets & Checksums:** Table of artifact archives and their SHA256 hashes.
 
 ### 4. Commit Version Bump & Release Notes
-Before the bump, push every code commit to `main` and wait for green CI on it:
-```bash
-git push origin main
-gh run watch --exit-status   # the CI run for that commit
-```
+Before the bump, merge every code change to `main` through a pull request and wait for green CI
+on `main`. The branch rule on `main` accepts only a commit that already passed the six required
+CI checks, so a direct push of a new commit fails with `GH006`.
 Then commit the bump locally. It changes only the version files and the release notes below.
 Keep it local.
 ```bash
@@ -175,14 +173,22 @@ git commit -m "chore: release vX.Y.Z"
 Run the corpus check (section 2, step 6) on the bump commit, then the preflight. Step 8 passes
 when the commit before the bump has green CI on `origin/main` and the bump changes only version
 files.
+The branch rule on `main` needs CI to pass on the bump commit itself, so run CI on it in a pull
+request first. Do not merge that pull request on GitHub: a merge or squash makes a new commit.
 ```bash
 ./scripts/release-preflight.sh
+git push --no-follow-tags origin HEAD:refs/heads/release/vX.Y.Z
+gh pr create --base main --head release/vX.Y.Z --title "chore: release vX.Y.Z" --body "CI for the bump commit."
+gh pr checks --watch --fail-fast   # all six required checks must pass
 git tag -a vX.Y.Z -m "Release vX.Y.Z"
-git push --atomic origin main vX.Y.Z
+git push --atomic origin HEAD:main vX.Y.Z
+git push origin --delete release/vX.Y.Z
 ```
+Push the release branch with `--no-follow-tags`. When `push.followTags` is set, a tag that
+already exists goes out with the branch and starts the release before `main` has the bump.
 `--atomic` pushes the bump and the tag together or not at all, so `main` never names a version
-that has no release in progress. The release workflow waits for CI on the tagged commit before
-it builds. Watch it to the end (section 5 below). If it fails, fix it on `main` at once:
+that has no release in progress. GitHub marks the pull request as merged when `main` reaches
+its commit. The release workflow waits for CI on the tagged commit before it builds. Watch it to the end (section 5 below). If it fails, fix it on `main` at once:
 plugins installed from `main` meanwhile run their cached version or cannot start.
 
 ---

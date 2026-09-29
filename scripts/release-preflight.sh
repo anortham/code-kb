@@ -120,9 +120,9 @@ else
   echo "win-test CLI not found on PATH (skipping local Windows test)."
 fi
 
-# 8. GitHub CI must have passed on the code being released. The version bump stays local until
-# `git push --atomic origin main vX.Y.Z`, so CI must pass on the commit before it, and the bump
-# may change only version files. A HEAD already on origin/main needs green CI itself.
+# 8. GitHub CI must have passed on the code being released. The version bump reaches main only
+# in `git push --atomic origin HEAD:main vX.Y.Z` (docs/RELEASING.md section 3.5), so CI must pass
+# on the commit before it, and the bump may change only version files. A HEAD already on origin/main needs green CI itself.
 echo -n "[8/10] Checking GitHub CI... "
 HEAD_SHA=$(git rev-parse HEAD)
 if [[ -n "$(git status --porcelain)" ]]; then
@@ -137,7 +137,7 @@ else
   CI_SHA=$(git rev-parse HEAD~1)
   if ! git merge-base --is-ancestor "${CI_SHA}" "$(git rev-parse origin/main)" 2>/dev/null; then
     echo "FAIL"
-    echo "error: ${CI_SHA:0:7}, the commit before the bump, is not on origin/main; push it and wait for CI." >&2
+    echo "error: ${CI_SHA:0:7}, the commit before the bump, is not on origin/main; merge it through a pull request and wait for CI." >&2
     exit 1
   fi
   OTHER=$(git diff --name-only "${CI_SHA}" HEAD | grep -Ev "${VERSION_FILES}" || true)
