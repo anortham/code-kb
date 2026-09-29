@@ -470,6 +470,139 @@ public readonly record struct ExecutionBudgetRequest(string WorkspaceRoot, strin
 }
 
 #[test]
+fn execution_budget_ranks_above_hooks_record_at_wide_limits() {
+    let budget = r#"namespace Miller.Testing;
+
+/// Capacity-1 user-global lease modeled on a scan governor. Held only while tests execute.
+/// A second workspace reports paused while the first executes; idle daemons starve nobody.
+public sealed class CtExecutionBudget
+{
+    public CtExecutionBudgetLease? TryAcquire(CtExecutionBudgetRequest request) => null;
+}
+
+/// One execution-scoped request for the user-global CT run lease.
+public readonly record struct CtExecutionBudgetRequest(string WorkspaceRoot, string Reason);
+"#;
+    let hooks = r#"namespace Miller.Server.Tools;
+
+/// Seams for the CT verbs. Budget overrides the user-global execution budget a foreground
+/// run takes, so tests bind their own miller home instead of contending on the caller's one.
+public sealed record TestsCoreHooks(CtExecutionBudget? Budget, TestsForegroundRunRequest? Run);
+public sealed record TestsForegroundRunRequest(string WorkspaceRoot);
+"#;
+    let (_dir, db) = scanned_repo(&[
+        ("src/CtExecutionBudget.cs", budget),
+        ("src/TestsCore.cs", hooks),
+    ]);
+    let conn = open_read_only(&db).unwrap();
+
+    for limit in [20, 200] {
+        let results = fts_search_symbols_scoped(
+            &conn,
+            "one workspace executes tests at a time under a user-global budget",
+            None,
+            None,
+            false,
+            limit,
+        )
+        .unwrap();
+        let rank = |name: &str| {
+            results
+                .iter()
+                .position(|result| result.symbol.name == name)
+                .unwrap_or(usize::MAX)
+        };
+        assert!(
+            rank("CtExecutionBudget") < rank("TestsCoreHooks"),
+            "the execution budget should outrank its test hooks at limit {limit}: {:#?}",
+            results
+                .iter()
+                .map(|result| (&result.symbol.name, result.score))
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            rank("CtExecutionBudget") < rank("CtExecutionBudgetRequest"),
+            "the execution budget should outrank its request DTO at limit {limit}: {:#?}",
+            results
+                .iter()
+                .map(|result| (&result.symbol.name, result.score))
+                .collect::<Vec<_>>()
+        );
+    }
+}
+
+#[test]
+fn specific_backend_type_outranks_generic_terminal_placeholder_helper() {
+    let backend = r#"/// The Vercel sandbox terminal backend.
+pub struct VercelSandboxEnvironment;
+"#;
+    let helper = r#"/// Resolve local terminal cwd and provide the sandbox backend default.
+pub fn resolve_placeholder_terminal_cwd(terminal_backend: &str, docker_mount: bool) {}
+"#;
+    let (_dir, db) = scanned_repo(&[("src/backend.rs", backend), ("src/cwd.rs", helper)]);
+    let conn = open_read_only(&db).unwrap();
+    let results = fts_search_symbols_scoped(
+        &conn,
+        "seven terminal backends local docker ssh singularity modal daytona and vercel sandbox",
+        None,
+        None,
+        false,
+        20,
+    )
+    .unwrap();
+    let rank = |name: &str| {
+        results
+            .iter()
+            .position(|result| result.symbol.name == name)
+            .unwrap_or(usize::MAX)
+    };
+
+    assert!(
+        rank("VercelSandboxEnvironment") < rank("resolve_placeholder_terminal_cwd"),
+        "the specific backend type should outrank a generic placeholder helper: {:#?}",
+        results
+            .iter()
+            .map(|result| (&result.symbol.name, result.score))
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn multiword_search_keeps_distinctive_named_tail_after_many_full_matches() {
+    let mut source = String::new();
+    for index in 0..15 {
+        let migration_term = if index < 7 { "migrate " } else { "" };
+        source.push_str(&format!(
+            "/// {migration_term}settings memories skills api keys openclaw.\npub fn import_workspace_{index}() {{}}\n\n"
+        ));
+    }
+    source.push_str("pub fn _cmd_migrate() {}\npub fn generic_settings() {}\n");
+    let (_dir, db) = scanned_repo(&[("src/claw.rs", source.as_str())]);
+    let conn = open_read_only(&db).unwrap();
+    let results = fts_search_symbols_scoped(
+        &conn,
+        "migrate settings memories skills api keys from openclaw",
+        None,
+        None,
+        false,
+        20,
+    )
+    .unwrap();
+    let names: Vec<_> = results
+        .iter()
+        .map(|result| result.symbol.name.as_str())
+        .collect();
+    assert!(
+        names.contains(&"_cmd_migrate"),
+        "the distinctive migration entry point should survive the multi-term cutoff: {names:#?}"
+    );
+    assert!(
+        !names.contains(&"generic_settings"),
+        "a common one-term name should still be pruned: {names:#?}"
+    );
+}
+
+#[test]
 fn multiword_wsgi_query_ranks_dispatch_methods_above_logging_helper() {
     let mut app = r#"class Flask:
     def full_dispatch_request(self, ctx: AppContext) -> Response:

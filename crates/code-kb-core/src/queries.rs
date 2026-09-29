@@ -1688,8 +1688,6 @@ pub fn fts_search_symbols_explained(
         rerank_us += started.elapsed().as_micros();
     }
     let unique_query_terms: HashSet<String> = rerank_words(query).into_iter().collect();
-    // Keep the default top-20 cutoff at 15 strong results, and never trim a row within a
-    // smaller requested result window.
     let min_multi_term_results = ((limit * 3).div_ceil(4)).max(15).min(limit);
     let multi_term_results = ranked
         .iter()
@@ -1702,7 +1700,7 @@ pub fn fts_search_symbols_explained(
                 strong_results_seen += 1;
                 true
             } else {
-                strong_results_seen < min_multi_term_results
+                strong_results_seen < min_multi_term_results || has_distinctive_name_term(breakdown)
             }
         });
     }
@@ -1734,8 +1732,7 @@ const W_TERMS: f64 = 52.0;
 const MAX_TERM_CREDIT: f64 = 3.0;
 const TEXT_CREDIT: f64 = 1.0;
 const FIELD_DIVERSITY_BONUS: f64 = 6.0;
-/// Request-shaped DTOs get only a tie-breaker so secondary fields cannot outweigh their domain type.
-const REQUEST_DTO_FIELD_DIVERSITY_BONUS: f64 = 1.0;
+const DISTINCTIVE_NAME_IDF_FACTOR: f64 = 1.1;
 /// A word that names the class a member belongs to: `Flask init` means `Flask.__init__`.
 const OWNER_CREDIT: f64 = 3.0;
 const OWNER_CONTEXT_CREDIT: f64 = 0.5;
@@ -1844,20 +1841,21 @@ fn term_credits(hits: &Hits, words: &[QueryWord]) -> Vec<(String, String, f64)> 
         .collect()
 }
 
-/// Adds a prior when an exact name token and the signature support the query, and the doc
-/// supports at least two distinct terms. A partial name or one incidental document hit is not
-/// enough to earn it.
+/// Adds a prior when two distinct query terms match name tokens, the signature supports
+/// another term, and the doc supports at least two distinct terms. It applies only to functions
+/// and methods: a single broad name token does not anchor a multi-field match.
 fn credited_field_bonus(terms: &[(String, String, f64)]) -> f64 {
     let mut document_terms = HashSet::new();
-    let has_whole_name_term = terms
-        .iter()
-        .any(|(_, field, credit)| field == "name" && *credit == 3.0);
+    let mut name_terms = HashSet::new();
     let fields = terms.iter().filter(|(_, _, credit)| *credit > 0.0).fold(
         0u8,
-        |fields, (word, field, _)| {
+        |fields, (word, field, credit)| {
             if field == "doc" {
                 // The query can repeat a word; count distinct words as independent evidence.
                 document_terms.insert(word.as_str());
+            }
+            if field == "name" && *credit >= 2.0 {
+                name_terms.insert(word.as_str());
             }
             fields
                 | match field.as_str() {
@@ -1870,7 +1868,7 @@ fn credited_field_bonus(terms: &[(String, String, f64)]) -> f64 {
                 }
         },
     );
-    if has_whole_name_term && fields & 4 != 0 && fields & 8 != 0 && document_terms.len() >= 2 {
+    if name_terms.len() >= 2 && fields & 4 != 0 && fields & 8 != 0 && document_terms.len() >= 2 {
         FIELD_DIVERSITY_BONUS
     } else {
         0.0
@@ -1884,6 +1882,25 @@ fn covered_query_term_count(terms: &[(String, String, f64)]) -> usize {
         .map(|(word, _, _)| word.as_str())
         .collect::<HashSet<_>>()
         .len()
+}
+
+fn has_distinctive_name_term(explain: &SearchExplain) -> bool {
+    let weights = &explain.word_weights;
+    let Some(mean_weight) = (!weights.is_empty())
+        .then(|| weights.iter().map(|(_, weight)| weight).sum::<f64>() / weights.len() as f64)
+    else {
+        return false;
+    };
+    explain
+        .terms
+        .iter()
+        .zip(weights)
+        .any(|((term, field, credit), (weighted_term, weight))| {
+            term == weighted_term
+                && field == "name"
+                && *credit >= 2.0
+                && *weight >= mean_weight * DISTINCTIVE_NAME_IDF_FACTOR
+        })
 }
 
 fn term_score(terms: &[(String, String, f64)], weights: &[f64]) -> f64 {
@@ -2156,17 +2173,10 @@ fn rerank_with(
                 "none"
             };
             let terms = term_credits(&hits, &words);
-            let field_diversity_bonus = credited_field_bonus(&terms);
-            let field_diversity_bonus = if field_diversity_bonus > 0.0
-                && matches!(
-                    symbol.kind.as_str(),
-                    "class" | "struct" | "record" | "interface"
-                )
-                && symbol.name.ends_with("Request")
-            {
-                REQUEST_DTO_FIELD_DIVERSITY_BONUS
+            let field_diversity_bonus = if matches!(symbol.kind.as_str(), "function" | "method") {
+                credited_field_bonus(&terms)
             } else {
-                field_diversity_bonus
+                0.0
             };
             let explain = SearchExplain {
                 bm25: candidate.bm25,
@@ -8136,15 +8146,25 @@ mod tests {
     }
 
     #[test]
-    fn credited_fields_add_a_bonus_only_for_three_distinct_fields() {
+    fn credited_fields_require_multiple_name_terms_and_three_distinct_fields() {
         let terms = vec![
             ("wsgi".into(), "name".into(), 3.0),
+            ("dispatch".into(), "name".into(), 3.0),
             ("response".into(), "signature".into(), TEXT_CREDIT),
             ("request".into(), "doc".into(), TEXT_CREDIT),
             ("error".into(), "doc".into(), TEXT_CREDIT),
         ];
         assert_eq!(credited_field_bonus(&terms), FIELD_DIVERSITY_BONUS);
         assert_eq!(credited_field_bonus(&terms[..2]), 0.0);
+        assert_eq!(
+            credited_field_bonus(&[
+                ("wsgi".into(), "name".into(), 3.0),
+                ("response".into(), "signature".into(), TEXT_CREDIT),
+                ("request".into(), "doc".into(), TEXT_CREDIT),
+                ("error".into(), "doc".into(), TEXT_CREDIT),
+            ]),
+            0.0
+        );
         assert_eq!(
             credited_field_bonus(&[
                 ("response".into(), "name".into(), 3.0),
@@ -8162,16 +8182,6 @@ mod tests {
             ("windows".into(), "doc".into(), TEXT_CREDIT),
         ];
         assert_eq!(credited_field_bonus(&terms), 0.0);
-    }
-
-    #[test]
-    fn covered_query_terms_are_distinct_and_must_have_positive_credit() {
-        let terms = [
-            ("request".into(), "name".into(), 3.0),
-            ("request".into(), "doc".into(), 0.0),
-            ("response".into(), "signature".into(), TEXT_CREDIT),
-        ];
-        assert_eq!(covered_query_term_count(&terms), 2);
     }
 
     #[test]
