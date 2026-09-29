@@ -29,3 +29,6 @@ tempfile = { workspace = true }
 url = { workspace = true }
 rust-stemmers = { workspace = true }
 
+[dev-dependencies]
+rusqlite = { workspace = true, features = ["hooks"] }
+
