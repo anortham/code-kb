@@ -1,31 +1,31 @@
 {
-  "version": "3.7.0",
+  "version": "3.7.1",
   "binary": "julie-extract",
   "urlTemplate": "https://github.com/anortham/julie-extractors/releases/download/v{VER}/{asset}",
   "assets": {
     "aarch64-apple-darwin": {
       "name": "julie-extract-v{VER}-aarch64-apple-darwin.tar.gz",
-      "sha256": "e7f28cf542f8162d0534fc1faa7c5a047e6b0be2281426092834edcddfb116cb"
+      "sha256": "f4dba0b144831d6dd7e18078bfa7f7db2d92610fa8667e9b2d0d4c0b8ca79f88"
     },
     "x86_64-apple-darwin": {
       "name": "julie-extract-v{VER}-x86_64-apple-darwin.tar.gz",
-      "sha256": "9b5ccee729b873602f247c7f15ec60fa0b8403567ca314d009fc7145fdfe998e"
+      "sha256": "e59917068386dd53870c7d2bbab6228016ff093ab6ec12aaf33450818e42b896"
     },
     "x86_64-unknown-linux-gnu": {
       "name": "julie-extract-v{VER}-x86_64-unknown-linux-gnu.tar.gz",
-      "sha256": "ddc7ceb30d3e838df5a109f9b5f66284d3e4a422b04f96d51f9edf487393c146"
+      "sha256": "25814aaf3fd5eaba3293bdd5d7ebe4a8a1f217fd403b9a7c44e343f56704a7af"
     },
     "aarch64-unknown-linux-gnu": {
       "name": "julie-extract-v{VER}-aarch64-unknown-linux-gnu.tar.gz",
-      "sha256": "51432e58288d348515313b730004d3a0fadaf06973d49f942d87b763e73a3824"
+      "sha256": "cd25f4268c04694a51ae70e92ad23be2a29d696037dd3d5c75f4a85654b7b441"
     },
     "x86_64-pc-windows-msvc": {
       "name": "julie-extract-v{VER}-x86_64-pc-windows-msvc.zip",
-      "sha256": "2981be394a379a4acbf0c78d263f88de0d2c4a3029471b2752594eae16c68b13"
+      "sha256": "b14b3e5e85aa188494829a5ccb7e32facadfb54035bc5775e1f95957a99bcbf2"
     },
     "aarch64-pc-windows-msvc": {
       "name": "julie-extract-v{VER}-aarch64-pc-windows-msvc.zip",
-      "sha256": "6b20ea44a31856817e18a68ffe03a1fe4d2469a051508415808a3f3d0065e532"
+      "sha256": "a3e75c7e1b6353ee3c64e0acba3da65c3c49503a29d03552b29789c76cd67a93"
     }
   }
 }

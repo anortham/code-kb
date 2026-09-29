@@ -21,7 +21,7 @@ pub enum QueryError {
         hint: String,
     },
     #[error(
-        "Ambiguous symbol '{0}': found {1} matching candidates. Specify file_path or qualified name to disambiguate:\n{2}"
+        "Ambiguous symbol '{0}': found {1} matching candidates. Choose a candidate by its kind and source line; pass its id as `symbol_id` to get_symbol_body or get_symbol_context:\n{2}"
     )]
     AmbiguousSymbol(String, usize, String),
     #[error("Invalid direction '{0}': must be 'callers' or 'callees'")]
@@ -2649,8 +2649,12 @@ fn get_symbol_by_name_internal(
     let mut candidate_list = String::new();
     for s in &active_pool {
         candidate_list.push_str(&format!(
-            "- {} `{}` in {}:{}\n",
-            s.kind, s.name, s.path, s.start_line
+            "- {} `{}` in {}:{} (id={})\n",
+            crate::formatters::display_kind(s),
+            s.name,
+            s.path,
+            s.start_line,
+            s.symbol_id
         ));
     }
 
@@ -3086,9 +3090,32 @@ const IMPLICIT_RECEIVER_LANGUAGES: &[&str] = &[
 ];
 
 fn receiver_builder_calls(conn: &Connection) -> String {
+    // Same-file calls resolve into `relationships`; cross-file calls remain pending. Keep the
+    // resolved symbol ID so same-named builders in different lexical scopes do not collapse.
+    let resolved_calls = if has_column(conn, "relationships", "from_symbol_id")
+        && has_column(conn, "relationships", "to_symbol_id")
+        && has_column(conn, "relationships", "kind")
+        && has_column(conn, "relationships", "path")
+        && has_column(conn, "relationships", "start_line")
+    {
+        "UNION
+         SELECT resolved_builder.name, assign_call.path, resolved_builder.symbol_id
+         FROM symbols assigned
+         JOIN relationships assign_call
+           ON assign_call.from_symbol_id = p.from_symbol_id
+          AND assign_call.start_line = assigned.start_line
+          AND +assign_call.kind = 'calls'
+         JOIN symbols resolved_builder ON resolved_builder.symbol_id = assign_call.to_symbol_id
+         WHERE assigned.parent_symbol_id = p.from_symbol_id
+           AND +assigned.name = p.target_receiver
+           AND +assigned.kind = 'variable'
+           AND assigned.start_line <= p.start_line"
+    } else {
+        ""
+    };
     let fixture_calls = if has_column(conn, "symbols", "test_lifecycle") {
         "UNION
-         SELECT fixture_call.target_terminal_name, fixture.path
+         SELECT fixture_call.target_terminal_name, fixture.path, NULL
          FROM symbols fixture
          JOIN pending_relationships fixture_call ON fixture_call.from_symbol_id = fixture.symbol_id
          WHERE fixture.name = p.target_receiver
@@ -3111,7 +3138,7 @@ fn receiver_builder_calls(conn: &Connection) -> String {
     };
     // Unary `+` keeps SQLite on the parent index for common receiver names.
     format!(
-        "SELECT assign_call.target_terminal_name, assign_call.path
+        "SELECT assign_call.target_terminal_name, assign_call.path, NULL
          FROM symbols assigned
          JOIN pending_relationships assign_call
            ON assign_call.from_symbol_id = p.from_symbol_id
@@ -3121,7 +3148,16 @@ fn receiver_builder_calls(conn: &Connection) -> String {
            AND +assigned.name = p.target_receiver
            AND +assigned.kind = 'variable'
            AND assigned.start_line <= p.start_line
+         {resolved_calls}
          {fixture_calls}"
+    )
+}
+
+fn builder_return_type_sql(builder: &str) -> String {
+    format!(
+        "CASE WHEN json_valid({builder}.metadata_json)
+              THEN COALESCE(NULLIF(json_extract({builder}.metadata_json, '$.returnType'), ''),
+                            json_extract({builder}.metadata_json, '$.inferredReturnType')) END"
     )
 }
 
@@ -3188,6 +3224,7 @@ fn member_receiver_match(conn: &Connection) -> String {
     }
     let matched = pending_target_predicate(conn, "candidate", "candidate_parent");
     let builders = receiver_builder_calls(conn);
+    let builder_return_type = builder_return_type_sql("builder");
     let class_scope = receiver_definition_scope("receiver_class", "builder_call.path");
     let builder_scope = receiver_definition_scope("builder", "builder_call.path");
     let returned_scope = receiver_definition_scope("returned_class", "builder.path");
@@ -3201,22 +3238,24 @@ fn member_receiver_match(conn: &Connection) -> String {
                       AND +binding.kind IN ('variable', 'parameter')
                       AND binding.start_line <= p.start_line) > 1 THEN 0
               WHEN EXISTS (
-                  WITH builder_call(name, path) AS ({builders})
+                  WITH builder_call(name, path, resolved_symbol_id) AS ({builders})
                   SELECT 1 FROM builder_call
                   WHERE (SELECT COUNT(*) FROM builder_call) > 1
                     AND NOT EXISTS (
                         SELECT 1 FROM symbols receiver_class
                         WHERE receiver_class.name = builder_call.name AND receiver_class.kind = 'class'
-                          AND {class_scope}
+                          AND (receiver_class.symbol_id = builder_call.resolved_symbol_id
+                               OR builder_call.resolved_symbol_id IS NULL AND {class_scope})
                     )
                     AND NOT EXISTS (
                         SELECT 1 FROM symbols builder
                         JOIN symbols returned_class ON returned_class.name =
-                            CASE WHEN json_valid(builder.metadata_json)
-                                 THEN json_extract(builder.metadata_json, '$.returnType') END
+                            {builder_return_type}
                         WHERE builder.name = builder_call.name AND builder.kind IN ('function', 'method')
+                          AND (builder.symbol_id = builder_call.resolved_symbol_id
+                               OR builder_call.resolved_symbol_id IS NULL AND {builder_scope})
                           AND returned_class.kind = 'class'
-                          AND {builder_scope} AND {returned_scope}
+                          AND {returned_scope}
                     )
               ) THEN 0
               ELSE (
@@ -3224,7 +3263,7 @@ fn member_receiver_match(conn: &Connection) -> String {
                               WHEN MAX(candidate.symbol_id = ?3) = 1 THEN 1
                               WHEN COUNT(*) = 1 THEN -1
                               WHEN EXISTS (
-                                  WITH builder_call(name, path) AS ({builders})
+                                  WITH builder_call(name, path, resolved_symbol_id) AS ({builders})
                                   SELECT 1 FROM builder_call
                                   JOIN symbols imported ON imported.name = builder_call.name
                                     AND imported.path = builder_call.path AND imported.kind = 'import'
@@ -3313,7 +3352,15 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
         String::new()
     };
     let builder_calls = receiver_builder_calls(conn);
+    let builder_return_type = builder_return_type_sql("builder");
+    // Type facts retain only the terminal type name; constrain them to the imported definition.
+    let receiver_type_scope = if has_column(conn, "symbols", "metadata_json") {
+        receiver_definition_scope(parent, "p.path")
+    } else {
+        "1 = 1".to_string()
+    };
     let builder_scope = receiver_definition_scope("builder", "builder_call.path");
+    let returned_class_scope = receiver_definition_scope("returned_class", "builder.path");
     let built_scope = receiver_definition_scope("built_class", "built_name.path");
     let fixture_receiver = if has_column(conn, "symbols", "metadata_json") {
         // CASE prevents scope checks for builders that cannot return an indexed class.
@@ -3324,28 +3371,26 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                           AND taken.name = p.target_receiver
                           AND taken.kind IN ('parameter', 'variable')
                     ) THEN EXISTS (
-                        WITH RECURSIVE builder_call(name, path) AS ({builder_calls}),
-                        built_name(name, path) AS (
-                            SELECT name, path FROM builder_call
+                        WITH RECURSIVE builder_call(name, path, resolved_symbol_id) AS ({builder_calls}),
+                        built_name(name, path, resolved_symbol_id) AS (
+                            SELECT name, path, resolved_symbol_id FROM builder_call
                             UNION
-                            SELECT json_extract(builder.metadata_json, '$.returnType'), builder.path
+                            SELECT returned_class.name, builder.path, returned_class.symbol_id
                             FROM builder_call
-                            JOIN symbols builder ON builder.name = builder_call.name
-                            WHERE builder.kind IN ('function', 'method')
-                              AND CASE WHEN json_valid(builder.metadata_json)
-                                        AND json_extract(builder.metadata_json, '$.returnType') IS NOT NULL
-                                        AND EXISTS (
-                                            SELECT 1 FROM symbols returned_class
-                                            WHERE returned_class.name = json_extract(builder.metadata_json, '$.returnType')
-                                              AND returned_class.kind = 'class'
-                                        )
-                                       THEN ({builder_scope}) ELSE 0 END
+                            JOIN symbols builder ON builder.kind IN ('function', 'method')
+                              AND (builder.symbol_id = builder_call.resolved_symbol_id
+                                   OR builder_call.resolved_symbol_id IS NULL
+                                      AND builder.name = builder_call.name AND {builder_scope})
+                            JOIN symbols returned_class ON returned_class.name = {builder_return_type}
+                              AND returned_class.kind = 'class' AND {returned_class_scope}
                         ),
                         built(symbol_id, depth) AS (
                             SELECT built_class.symbol_id, 0
                             FROM built_name
                             CROSS JOIN symbols built_class ON built_class.name = built_name.name
                             WHERE built_class.kind = 'class' AND {built_scope}
+                              AND (built_name.resolved_symbol_id IS NULL
+                                   OR built_class.symbol_id = built_name.resolved_symbol_id)
                             UNION
                             SELECT r.to_symbol_id, built.depth + 1
                             FROM relationships r JOIN built ON r.from_symbol_id = built.symbol_id
@@ -3471,6 +3516,7 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                         WHERE receiver.name = p.target_receiver
                           AND receiver.path = p.path
                           AND receiver_type.resolved_type = {parent}.name
+                          AND {receiver_type_scope}
                           AND NOT EXISTS (
                               SELECT 1 FROM symbols shadow
                               WHERE shadow.name = receiver.name
@@ -3918,8 +3964,8 @@ fn find_direct_references(
             // A name-only type usage reaches only the closest same-named type visible from
             // the caller's lexical scopes, then the file's top-level types.
             let type_usage_shadow = format!(
-                "p.kind = 'type_usage'
-                 AND ?3 IS NOT NULL
+                "i.kind = 'type_usage'
+                 AND ?2 IS NOT NULL
                  AND selected_target.kind IN ({NESTED_TYPE_KINDS})
                  AND EXISTS (
                      WITH RECURSIVE lexical(symbol_id, depth) AS (
@@ -3934,123 +3980,169 @@ fn find_direct_references(
                          JOIN symbols shadow ON shadow.parent_symbol_id = lexical.symbol_id
                          WHERE shadow.name = selected_target.name
                            AND shadow.kind IN ({NESTED_TYPE_KINDS})
-                           AND shadow.language = p.language
+                           AND shadow.language = i.language
                          UNION ALL
                          SELECT shadow.symbol_id, 100
                          FROM symbols shadow
                          WHERE shadow.name = selected_target.name
                            AND shadow.kind IN ({NESTED_TYPE_KINDS})
-                           AND shadow.language = p.language
+                           AND shadow.language = i.language
                            AND shadow.parent_symbol_id IS NULL
-                           AND replace(shadow.path, '\\', '/') = replace(p.path, '\\', '/')
+                           AND replace(shadow.path, '\\', '/') = replace(i.path, '\\', '/')
                      )
                      SELECT 1 FROM visible_types nearest
                      WHERE nearest.symbol_id != selected_target.symbol_id
                        AND nearest.depth = (SELECT MIN(depth) FROM visible_types)
                  )"
             );
+            let receiver_match = receiver_match.replace("?3", "?1");
+            let mut receiver_stmt = conn.prepare(&format!(
+                "SELECT {receiver_match}
+                 FROM (SELECT name, kind, path, start_line, start_column,
+                              containing_symbol_id AS from_symbol_id,
+                              CASE WHEN json_valid(metadata_json) THEN metadata_json ELSE '{{}}' END AS metadata_json,
+                              COALESCE(json_valid(metadata_json), 0) AS has_metadata,
+                              language,
+                              CASE WHEN json_valid(metadata_json) THEN json_extract(metadata_json, '$.receiver') END AS target_receiver,
+                              '[]' AS target_namespace_json
+                       FROM identifiers WHERE identifier_id = ?2) p
+                 LEFT JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id"
+            ))?;
             let mut ident_stmt = conn.prepare(&format!(
-                "WITH classified AS MATERIALIZED (SELECT COALESCE(s_from.name, '') AS from_name,
-                        COALESCE(p.containing_symbol_id, '') AS from_id,
-                        p.name,
-                        CASE WHEN json_valid(p.metadata_json)
-                                  AND json_extract(p.metadata_json, '$.role') = 'signal_handler'
-                             THEN CASE WHEN json_extract(p.metadata_json, '$.receiver') = (
+                "WITH raw AS MATERIALIZED (
+                     SELECT identifier_id, name, kind, path, start_line, start_column,
+                            containing_symbol_id, language,
+                            CASE WHEN json_valid(metadata_json) THEN metadata_json ELSE '{{}}' END AS metadata_json
+                     FROM identifiers WHERE name = ?1 AND kind IN ('type_usage', 'member_access')
+                 )
+                 SELECT i.identifier_id,
+                        COALESCE(s_from.name, ''),
+                        COALESCE(i.containing_symbol_id, ''),
+                        i.name,
+                        CASE WHEN json_valid(i.metadata_json)
+                                  AND json_extract(i.metadata_json, '$.role') = 'signal_handler'
+                             THEN CASE WHEN json_extract(i.metadata_json, '$.receiver') = (
                                       SELECT CASE WHEN t.kind IN ('class', 'struct', 'enum', 'interface', 'trait', 'module', 'namespace')
                                                   THEN t.name ELSE tp.name END
                                       FROM symbols t
                                       LEFT JOIN symbols tp ON tp.symbol_id = t.parent_symbol_id
-                                      WHERE t.symbol_id = ?3)
+                                      WHERE t.symbol_id = ?2)
                                   THEN 'handler' ELSE 'handler (candidate)' END
-                             ELSE p.kind END AS reference_kind,
-                        p.path,
-                        p.start_line,
-                        p.start_column,
-                        {receiver_match} AS receiver_match
-                 FROM (SELECT name, kind, path, start_line, start_column, containing_symbol_id,
-                              CASE WHEN json_valid(metadata_json) THEN metadata_json ELSE '{{}}' END AS metadata_json,
-                              COALESCE(json_valid(metadata_json), 0) AS has_metadata,
-                              language,
-                              containing_symbol_id AS from_symbol_id,
-                              CASE WHEN json_valid(metadata_json) THEN json_extract(metadata_json, '$.receiver') END AS target_receiver,
-                              '[]' AS target_namespace_json
-                       FROM identifiers WHERE name = ?1) p
-                 LEFT JOIN symbols s_from ON p.containing_symbol_id = s_from.symbol_id
-                 LEFT JOIN symbols selected_target ON selected_target.symbol_id = ?3
-                 WHERE p.name = ?1 AND p.kind IN ('type_usage', 'member_access')
+                             ELSE i.kind END,
+                        i.path,
+                        i.start_line,
+                        i.start_column
+                 FROM raw i
+                 LEFT JOIN symbols s_from ON i.containing_symbol_id = s_from.symbol_id
+                 LEFT JOIN symbols selected_target ON selected_target.symbol_id = ?2
+                 WHERE i.name = ?1 AND i.kind IN ('type_usage', 'member_access')
                    AND COALESCE(s_from.kind, '') != 'import'
-                   AND (?3 IS NULL OR selected_target.language = p.language
-                        OR (p.language = 'qml' AND selected_target.language = 'cpp')
-                        OR (p.language = 'razor' AND selected_target.language = 'csharp'))
+                   AND (?2 IS NULL OR selected_target.language = i.language
+                        OR (i.language = 'qml' AND selected_target.language = 'cpp')
+                        OR (i.language = 'razor' AND selected_target.language = 'csharp'))
                    AND NOT ({type_usage_shadow})
                    AND NOT EXISTS (
                        SELECT 1 FROM relationships covered
                        JOIN symbols covered_to ON covered.to_symbol_id = covered_to.symbol_id
-                       WHERE covered_to.name = p.name
-                         AND covered.path = p.path
-                         AND covered.start_line = p.start_line
-                         AND (?3 IS NULL OR covered.to_symbol_id = ?3)
+                       WHERE covered_to.name = i.name
+                         AND covered.path = i.path
+                         AND covered.start_line = i.start_line
+                         AND (?2 IS NULL OR covered.to_symbol_id = ?2)
                    )
                    AND NOT EXISTS (
                        SELECT 1 FROM pending_relationships covered
-                       WHERE covered.target_terminal_name = p.name
-                         AND covered.path = p.path
-                         AND covered.start_line = p.start_line
+                       WHERE covered.target_terminal_name = i.name
+                         AND covered.path = i.path
+                         AND covered.start_line = i.start_line
                    )
-                   AND (?3 IS NULL OR NOT EXISTS (
+                   AND (?2 IS NULL OR NOT EXISTS (
                        SELECT 1 FROM symbols owner
                        JOIN symbols member ON member.parent_symbol_id = owner.symbol_id
-                       WHERE owner.name = CASE WHEN json_valid(p.metadata_json) THEN json_extract(p.metadata_json, '$.receiver') END
-                         AND member.name = p.name
+                       WHERE owner.name = CASE WHEN json_valid(i.metadata_json) THEN json_extract(i.metadata_json, '$.receiver') END
+                         AND member.name = i.name
                          AND owner.name IS NOT (SELECT parent.name FROM symbols target
                                                 JOIN symbols parent ON parent.symbol_id = target.parent_symbol_id
-                                                WHERE target.symbol_id = ?3)
+                                                WHERE target.symbol_id = ?2)
                    ))
-                   AND NOT (p.kind = 'member_access' AND EXISTS (
+                   AND NOT (i.kind = 'member_access' AND EXISTS (
                        SELECT 1 FROM symbols target
                        LEFT JOIN symbols scope ON scope.symbol_id = target.parent_symbol_id
-                       WHERE target.symbol_id = ?3
+                       WHERE target.symbol_id = ?2
                          AND (scope.kind IN ('function', 'method', 'constructor')
                               OR (scope.symbol_id IS NULL
-                                  AND target.path != p.path
+                                  AND target.path != i.path
                                   AND target.language IN ('javascript', 'typescript', 'tsx')
                                   AND COALESCE(target.visibility, 'private') = 'private'))
                    ))
-                   AND NOT COALESCE((p.kind = 'member_access'
-                        AND json_valid(p.metadata_json)
-                        AND json_extract(p.metadata_json, '$.role') IS NOT 'signal_handler'
-                        AND json_extract(p.metadata_json, '$.receiver') GLOB '[A-Z]*'
+                   AND NOT COALESCE((i.kind = 'member_access'
+                        AND json_valid(i.metadata_json)
+                        AND json_extract(i.metadata_json, '$.role') IS NOT 'signal_handler'
+                        AND json_extract(i.metadata_json, '$.receiver') GLOB '[A-Z]*'
                         AND NOT EXISTS (SELECT 1 FROM symbols known
-                                        WHERE known.name = json_extract(p.metadata_json, '$.receiver')
+                                        WHERE known.name = json_extract(i.metadata_json, '$.receiver')
                                           AND known.kind NOT IN ('variable', 'parameter', 'method'))), 0)
-                 )
-                 SELECT from_name, from_id, name,
-                        CASE WHEN reference_kind = 'member_access' AND receiver_match = 0
-                             THEN 'member_access (candidate)' ELSE reference_kind END,
-                        path, start_line, MIN(start_column)
-                 FROM classified WHERE receiver_match != -1
-                 GROUP BY from_id, name, reference_kind, receiver_match, path, start_line
-                 ORDER BY receiver_match DESC, path, start_line
-                 LIMIT ?2"
+                 ORDER BY i.path, i.start_line, i.start_column, i.identifier_id"
             ))?;
-            let rows =
-                ident_stmt.query_map(params![symbol_name, remaining as i64, symbol_id], |row| {
-                    Ok(ReferenceSite {
-                        from_symbol_name: row.get(0)?,
-                        from_symbol_id: row.get(1)?,
-                        to_symbol_name: row.get(2)?,
-                        kind: row.get(3)?,
-                        path: row.get::<_, String>(4)?.replace('\\', "/"),
-                        start_line: row.get::<_, Option<i64>>(5)?.map(|v| v as usize),
-                        start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
-                        occurrences: None,
-                        target: None,
-                        enclosing_symbol_name: None,
-                    })
-                })?;
-            for r in rows {
-                results.push(r?);
+            let mut supported = Vec::new();
+            let mut candidates = Vec::new();
+            let mut supported_keys = HashSet::new();
+            let mut candidate_keys = HashSet::new();
+            let site_key = |site: &ReferenceSite| {
+                (
+                    site.from_symbol_id.clone(),
+                    site.to_symbol_name.clone(),
+                    site.kind.clone(),
+                    site.path.clone(),
+                    site.start_line,
+                )
+            };
+            let mut ident_rows = ident_stmt.query(params![symbol_name, symbol_id])?;
+            while let Some(row) = ident_rows.next()? {
+                let identifier_id: String = row.get(0)?;
+                let mut site = ReferenceSite {
+                    from_symbol_name: row.get(1)?,
+                    from_symbol_id: row.get(2)?,
+                    to_symbol_name: row.get(3)?,
+                    kind: row.get(4)?,
+                    path: row.get::<_, String>(5)?.replace('\\', "/"),
+                    start_line: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
+                    start_column: row.get::<_, Option<i64>>(7)?.map(|v| v as usize),
+                    occurrences: None,
+                    target: None,
+                    enclosing_symbol_name: None,
+                };
+                let receiver_match: i64 =
+                    receiver_stmt.query_row(params![symbol_id, identifier_id], |row| row.get(0))?;
+                if receiver_match < 0 {
+                    continue;
+                }
+                if receiver_match == 0 && site.kind == "member_access" {
+                    site.kind = "member_access (candidate)".to_string();
+                }
+                if site.kind == "member_access (candidate)" {
+                    if candidates.len() < remaining && candidate_keys.insert(site_key(&site)) {
+                        candidates.push(site);
+                    }
+                } else if supported_keys.insert(site_key(&site)) {
+                    supported.push(site);
+                    if supported.len() >= remaining {
+                        break;
+                    }
+                }
             }
+
+            let site_order = |a: &ReferenceSite, b: &ReferenceSite| {
+                a.path
+                    .cmp(&b.path)
+                    .then(a.start_line.cmp(&b.start_line))
+                    .then(a.start_column.cmp(&b.start_column))
+            };
+            supported.sort_by(site_order);
+            supported.truncate(remaining);
+            candidates.sort_by(site_order);
+            candidates.truncate(remaining - supported.len());
+            results.extend(supported);
+            results.extend(candidates);
 
             if let Some(sid) = symbol_id.filter(|_| results.len() < limit) {
                 let remaining = limit - results.len();
@@ -5474,6 +5566,8 @@ pub fn compute_blast_radius_scoped_with_ids(
     let mut fixtures = Vec::new();
     let mut setups = Vec::new();
     let mut entry_classes = Vec::new();
+    let mut constructor_only_test_keys = HashSet::new();
+    let mut non_constructor_test_keys = HashSet::new();
     let mut walked: Vec<String> = resolved_seed_symbols
         .iter()
         .map(|symbol| symbol.symbol_id.clone())
@@ -5492,7 +5586,8 @@ pub fn compute_blast_radius_scoped_with_ids(
 
                 {recursive_sql}
             )
-            SELECT s.symbol_id, s.name, s.kind, s.path, s.start_line, s.is_test, s.test_container, MIN(iw.depth) as min_depth,
+            SELECT s.symbol_id, s.name, s.kind, s.path, s.start_line, s.is_test, s.test_container,
+                   MIN(iw.depth) as min_depth, MIN(iw.via) as min_via,
                    {lifecycle} AS is_fixture, s.parent_symbol_id,
                    EXISTS (SELECT 1 FROM symbols owner
                            WHERE owner.symbol_id = s.parent_symbol_id
@@ -5524,11 +5619,12 @@ pub fn compute_blast_radius_scoped_with_ids(
                 row.get::<_, bool>(5)?,
                 row.get::<_, bool>(6)?,
                 row.get::<_, i64>(7)? as usize,
-                row.get::<_, bool>(8)?,
-                row.get::<_, Option<String>>(9)?,
-                row.get::<_, bool>(10)?,
-                row.get::<_, String>(11)?,
-                row.get::<_, Option<String>>(12)?,
+                row.get::<_, i64>(8)? as usize,
+                row.get::<_, bool>(9)?,
+                row.get::<_, Option<String>>(10)?,
+                row.get::<_, bool>(11)?,
+                row.get::<_, String>(12)?,
+                row.get::<_, Option<String>>(13)?,
             ))
         })?;
 
@@ -5546,6 +5642,7 @@ pub fn compute_blast_radius_scoped_with_ids(
                 is_test,
                 test_container,
                 depth,
+                min_via,
                 is_fixture,
                 parent,
                 in_test_class,
@@ -5558,6 +5655,7 @@ pub fn compute_blast_radius_scoped_with_ids(
                 || test_container
                 || is_fixture
                 || (is_test_path(&path) && (in_test_class || names_a_test(&name)));
+            let constructor_only = min_via > 0;
             if name == "__call__"
                 && let Some(parent) = &parent
             {
@@ -5566,6 +5664,12 @@ pub fn compute_blast_radius_scoped_with_ids(
 
             if is_test_target {
                 let key = format!("{}:{}", path, line);
+                let test_key = (path.clone(), line);
+                if constructor_only {
+                    constructor_only_test_keys.insert(test_key);
+                } else {
+                    non_constructor_test_keys.insert(test_key);
+                }
                 if seen_test_keys.insert(key) {
                     let lowered = name.to_ascii_lowercase();
                     let pytest_fixture = path.ends_with(".py")
@@ -5578,11 +5682,17 @@ pub fn compute_blast_radius_scoped_with_ids(
                         format!("indirect caller [depth {depth}]")
                     };
                     let reason = if is_fixture && pytest_fixture {
-                        fixtures.push((name.clone(), path.clone(), line));
+                        fixtures.push((name.clone(), path.clone(), line, constructor_only));
                         format!("fixture ({caller})")
                     } else if is_fixture {
                         if let Some(class_id) = parent {
-                            setups.push((name.clone(), class_id, path.clone(), line));
+                            setups.push((
+                                name.clone(),
+                                class_id,
+                                path.clone(),
+                                line,
+                                constructor_only,
+                            ));
                         }
                         format!("setup ({caller})")
                     } else {
@@ -5621,13 +5731,19 @@ pub fn compute_blast_radius_scoped_with_ids(
 
     // A fixture or setup member is not a test to run; the tests it serves stand in for it.
     let mut replaced = HashSet::new();
-    for (fixture, fixture_path, line) in &fixtures {
+    for (fixture, fixture_path, line, constructor_only) in &fixtures {
         let shown = fixture_name(conn, fixture, fixture_path);
         let users = fixture_users(conn, fixture, fixture_path)?;
         if !users.is_empty() {
             replaced.insert((fixture_path.clone(), *line));
         }
         for test in users {
+            let test_key = (test.path.clone(), test.line);
+            if *constructor_only {
+                constructor_only_test_keys.insert(test_key);
+            } else {
+                non_constructor_test_keys.insert(test_key);
+            }
             if seen_test_keys.insert(format!("{}:{}", test.path, test.line)) {
                 likely_tests.push(TestTarget {
                     reason: format!("uses fixture `{shown}`"),
@@ -5637,12 +5753,18 @@ pub fn compute_blast_radius_scoped_with_ids(
         }
     }
 
-    for (setup, class_id, setup_path, line) in &setups {
+    for (setup, class_id, setup_path, line, constructor_only) in &setups {
         let tests = tests_in_class(conn, class_id)?;
         if !tests.is_empty() {
             replaced.insert((setup_path.clone(), *line));
         }
         for test in tests {
+            let test_key = (test.path.clone(), test.line);
+            if *constructor_only {
+                constructor_only_test_keys.insert(test_key);
+            } else {
+                non_constructor_test_keys.insert(test_key);
+            }
             if seen_test_keys.insert(format!("{}:{}", test.path, test.line)) {
                 likely_tests.push(TestTarget {
                     reason: format!("setup `{setup}` runs before it"),
@@ -5652,6 +5774,7 @@ pub fn compute_blast_radius_scoped_with_ids(
         }
     }
     likely_tests.retain(|test| !replaced.contains(&(test.path.clone(), test.line)));
+    constructor_only_test_keys.retain(|key| !non_constructor_test_keys.contains(key));
 
     let mut test_name_terms = Vec::new();
     let mut module_terms = Vec::new();
@@ -5839,6 +5962,37 @@ pub fn compute_blast_radius_scoped_with_ids(
     likely_tests.extend(possible_tests.into_iter().map(|test| test.test));
 
     qualify_test_methods(conn, &mut likely_tests)?;
+    // A whole-file target often reaches many unrelated tests only because they construct an app;
+    // keep that coverage visible while collapsing each affected test file to one run target.
+    if seed_type == "file" {
+        let mut constructor_tests_by_file =
+            std::collections::BTreeMap::<String, Vec<TestTarget>>::new();
+        let mut other_tests = Vec::with_capacity(likely_tests.len());
+        for test in likely_tests.drain(..) {
+            if constructor_only_test_keys.contains(&(test.path.clone(), test.line)) {
+                constructor_tests_by_file
+                    .entry(test.path.clone())
+                    .or_default()
+                    .push(test);
+            } else {
+                other_tests.push(test);
+            }
+        }
+        for (path, mut tests) in constructor_tests_by_file {
+            if tests.len() > 1 {
+                let count = tests.len();
+                other_tests.push(TestTarget {
+                    name: path.clone(),
+                    path,
+                    line: 1,
+                    reason: format!("constructor-only callers ({count} targets)"),
+                });
+            } else if let Some(test) = tests.pop() {
+                other_tests.push(test);
+            }
+        }
+        likely_tests = other_tests;
+    }
     let whole_files: HashSet<String> = likely_tests
         .iter()
         .filter(|test| test.reason.ends_with("matched test file"))

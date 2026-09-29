@@ -66,6 +66,140 @@ fn member_access_rejects_a_different_receiver() {
 }
 
 #[test]
+fn resolved_same_file_builder_calls_disambiguate_annotated_receivers() {
+    let (_repo, db) = scanned_repo(&[
+        (
+            "pkg/server.py",
+            "class Server:\n    def ctx(self):\n        pass\n",
+        ),
+        (
+            "other/server.py",
+            "class Server:\n    def ctx(self):\n        pass\n",
+        ),
+        (
+            "pkg/cli.py",
+            "from pkg.server import Server\n\ndef load() -> Server:\n    return Server()\n\ndef run():\n    app = load()\n    app.ctx()\n",
+        ),
+    ]);
+    let conn = open_read_only(&db).unwrap();
+
+    let package_server = find_references_scoped(
+        &conn,
+        "Server.ctx",
+        "callers",
+        20,
+        false,
+        Some("pkg/server.py"),
+    )
+    .unwrap();
+    let rival_server = find_references_scoped(
+        &conn,
+        "Server.ctx",
+        "callers",
+        20,
+        false,
+        Some("other/server.py"),
+    )
+    .unwrap();
+
+    assert_eq!(caller_names(&package_server), ["run"]);
+    assert!(rival_server.is_empty(), "{rival_server:?}");
+}
+
+#[test]
+fn resolved_same_file_builder_calls_keep_lexical_identity() {
+    let (_repo, db) = scanned_repo(&[(
+        "app.py",
+        "class A:\n    def ctx(self):\n        pass\n\nclass B:\n    def ctx(self):\n        pass\n\ndef load() -> A:\n    return A()\n\ndef run():\n    app = load()\n    app.ctx()\n    return app.ctx\n\ndef outer():\n    def load() -> B:\n        return B()\n    app = load()\n    app.ctx()\n    return app.ctx\n",
+    )]);
+    let conn = open_read_only(&db).unwrap();
+    let callers = |target| {
+        find_references_scoped(&conn, target, "callers", 20, false, Some("app.py")).unwrap()
+    };
+
+    let a_callers = callers("A.ctx");
+    let b_callers = callers("B.ctx");
+    assert_eq!(caller_names(&a_callers), ["run"]);
+    assert_eq!(caller_names(&b_callers), ["outer"]);
+    assert_eq!(
+        caller_names(
+            &a_callers
+                .iter()
+                .filter(|row| row.kind == "member_access")
+                .cloned()
+                .collect::<Vec<_>>()
+        ),
+        ["run"]
+    );
+    assert_eq!(
+        caller_names(
+            &b_callers
+                .iter()
+                .filter(|row| row.kind == "member_access")
+                .cloned()
+                .collect::<Vec<_>>()
+        ),
+        ["outer"]
+    );
+}
+
+#[test]
+fn inferred_same_file_builder_returns_disambiguate_flask_receivers() {
+    let (_repo, db) = scanned_repo(&[
+        (
+            "pkg/flask.py",
+            "class Flask:\n    def test_client(self):\n        pass\n",
+        ),
+        (
+            "other/flask.py",
+            "class Flask:\n    def test_client(self):\n        pass\n",
+        ),
+        (
+            "pkg/app.py",
+            "from pkg.flask import Flask\n\ndef create_app():\n    app = Flask()\n    return app\n\ndef run():\n    app = create_app()\n    app.test_client()\n",
+        ),
+    ]);
+    // The committed extractor pin predates inferredReturnType; model that newer
+    // metadata here so this consumer regression also runs against the pinned binary.
+    let conn = open_read_write(&db).unwrap();
+    let updated = conn
+        .execute(
+            "UPDATE symbols
+             SET metadata_json = json_set(COALESCE(metadata_json, '{}'),
+                                         '$.returnType', '',
+                                         '$.inferredReturnType', 'Flask')
+             WHERE name = 'create_app' AND path = 'pkg/app.py' AND kind = 'function'",
+            [],
+        )
+        .unwrap();
+    assert_eq!(updated, 1);
+    drop(conn);
+    let conn = open_read_only(&db).unwrap();
+
+    let package_flask = find_references_scoped(
+        &conn,
+        "Flask.test_client",
+        "callers",
+        20,
+        false,
+        Some("pkg/flask.py"),
+    )
+    .unwrap();
+    let rival_flask = find_references_scoped(
+        &conn,
+        "Flask.test_client",
+        "callers",
+        20,
+        false,
+        Some("other/flask.py"),
+    )
+    .unwrap();
+
+    assert_eq!(caller_names(&package_flask), ["run"]);
+    assert!(rival_flask.is_empty(), "{rival_flask:?}");
+}
+
+#[test]
 fn a_relative_package_import_keeps_the_class_that_a_builder_returns() {
     let (_repo, db) = scanned_repo(&[
         (
@@ -264,6 +398,39 @@ fn supported_member_access_precedes_candidates_at_the_limit() {
             .unwrap()
             .is_empty()
     );
+}
+
+#[test]
+fn find_references_stops_receiver_checks_after_filling_the_limit() {
+    let unresolved = (0..1_000)
+        .map(|index| format!("def unresolved_{index}(value):\n    return value.invoke\n"))
+        .collect::<String>();
+    let (_repo, db) = scanned_repo(&[
+        (
+            "web/runners.py",
+            "class Runner:\n    def invoke(self):\n        pass\n",
+        ),
+        (
+            "a_supported.py",
+            "from web.runners import Runner\n\ndef known():\n    value = Runner()\n    return value.invoke\n",
+        ),
+        ("z_unresolved.py", &unresolved),
+    ]);
+    let conn = open_read_only(&db).unwrap();
+    let id = member_of(&conn, "Runner", "invoke");
+    let operations = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let observed = operations.clone();
+    conn.progress_handler(
+        100,
+        Some(move || observed.fetch_add(100, std::sync::atomic::Ordering::Relaxed) >= 200_000),
+    )
+    .unwrap();
+    let result = find_references_for_symbol(&conn, "invoke", "callers", 1, &id);
+    conn.progress_handler(0, None::<fn() -> bool>).unwrap();
+    let rows = result.expect("one supported caller should fit within the receiver-check budget");
+
+    assert_eq!(caller_names(&rows), ["known"]);
+    assert_eq!(rows[0].kind, "member_access");
 }
 
 #[test]
@@ -1656,6 +1823,76 @@ fn the_callers_of_a_constructor_are_the_calls_that_build_its_class() {
         .map(|t| t.name.as_str())
         .collect();
     assert!(tests.contains(&"test_builds"), "{tests:?}");
+}
+
+#[test]
+fn whole_file_blast_radius_ranks_constructor_only_tests_after_direct_callers() {
+    let (_repo, db_path) = scanned_repo(&[
+        (
+            "src/flask/cli.py",
+            "class AppGroup:\n    def __init__(self):\n        pass\n\n\ndef invoke_cli():\n    return 1\n",
+        ),
+        (
+            "src/flask/app.py",
+            "from . import cli\n\n\nclass Flask:\n    def __init__(self):\n        self.cli = cli.AppGroup()\n",
+        ),
+        ("src/flask/__init__.py", "from .app import Flask\n"),
+        (
+            "src/flask/runner.py",
+            "from flask.cli import invoke_cli\n\n\ndef run_cli():\n    return invoke_cli()\n",
+        ),
+        (
+            "src/flask/entry.py",
+            "from flask.runner import run_cli\n\n\ndef dispatch():\n    return run_cli()\n",
+        ),
+        (
+            "tests/test_runner.py",
+            "from flask.entry import dispatch\n\n\ndef test_runs_cli_command():\n    assert dispatch()\n",
+        ),
+        (
+            "tests/test_application.py",
+            "import flask\n\n\ndef test_constructs_app_only():\n    assert flask.Flask()\n\n\ndef test_constructs_another_app():\n    assert flask.Flask()\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let result = compute_blast_radius(&conn, &[], &["src/flask/cli.py"], 4, 20).unwrap();
+    let tests: Vec<&str> = result
+        .likely_tests
+        .iter()
+        .map(|test| test.name.as_str())
+        .collect();
+    let position = |name: &str| {
+        tests
+            .iter()
+            .position(|test| *test == name)
+            .unwrap_or_else(|| panic!("{name} missing from {tests:?}"))
+    };
+
+    let constructor_rows: Vec<_> = result
+        .likely_tests
+        .iter()
+        .filter(|test| test.path == "tests/test_application.py")
+        .collect();
+    assert_eq!(constructor_rows.len(), 1, "{tests:?}");
+    assert_eq!(constructor_rows[0].name, "tests/test_application.py");
+    assert_eq!(
+        constructor_rows[0].reason,
+        "constructor-only callers (2 targets)"
+    );
+    assert!(
+        position("test_runs_cli_command") < position("tests/test_application.py"),
+        "{tests:?}"
+    );
+    let formatted = format_blast_radius(&result);
+    assert!(
+        formatted.contains("constructor-only callers (2 targets)"),
+        "{formatted}"
+    );
+    assert!(
+        !formatted.contains("`test_constructs_app_only`"),
+        "{formatted}"
+    );
 }
 
 #[test]
