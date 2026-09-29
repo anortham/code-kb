@@ -1841,21 +1841,28 @@ fn term_credits(hits: &Hits, words: &[QueryWord]) -> Vec<(String, String, f64)> 
         .collect()
 }
 
-/// Adds a prior when two distinct query terms match name tokens, the signature supports
-/// another term, and the doc supports at least two distinct terms. It applies only to functions
-/// and methods: a single broad name token does not anchor a multi-field match.
+/// Adds a prior when one whole name token, the signature, and at least two distinct doc terms
+/// independently support the query, which the row covers with at least half its distinct terms.
+/// The caller limits it to functions and methods, so request-shaped types cannot earn it.
 fn credited_field_bonus(terms: &[(String, String, f64)]) -> f64 {
+    let query_terms: HashSet<&str> = terms.iter().map(|(word, _, _)| word.as_str()).collect();
+    let covered_terms: HashSet<&str> = terms
+        .iter()
+        .filter(|(_, _, credit)| *credit >= TEXT_CREDIT)
+        .map(|(word, _, _)| word.as_str())
+        .collect();
+    let adequate_query_coverage =
+        !query_terms.is_empty() && covered_terms.len() * 2 >= query_terms.len();
     let mut document_terms = HashSet::new();
-    let mut name_terms = HashSet::new();
+    let has_exact_name_term = terms
+        .iter()
+        .any(|(_, field, credit)| field == "name" && *credit == 3.0);
     let fields = terms.iter().filter(|(_, _, credit)| *credit > 0.0).fold(
         0u8,
-        |fields, (word, field, credit)| {
+        |fields, (word, field, _)| {
             if field == "doc" {
                 // The query can repeat a word; count distinct words as independent evidence.
                 document_terms.insert(word.as_str());
-            }
-            if field == "name" && *credit >= 2.0 {
-                name_terms.insert(word.as_str());
             }
             fields
                 | match field.as_str() {
@@ -1868,7 +1875,12 @@ fn credited_field_bonus(terms: &[(String, String, f64)]) -> f64 {
                 }
         },
     );
-    if name_terms.len() >= 2 && fields & 4 != 0 && fields & 8 != 0 && document_terms.len() >= 2 {
+    if has_exact_name_term
+        && fields & 4 != 0
+        && fields & 8 != 0
+        && document_terms.len() >= 2
+        && adequate_query_coverage
+    {
         FIELD_DIVERSITY_BONUS
     } else {
         0.0
@@ -8146,10 +8158,9 @@ mod tests {
     }
 
     #[test]
-    fn credited_fields_require_multiple_name_terms_and_three_distinct_fields() {
+    fn credited_fields_require_whole_name_multi_field_evidence_and_query_coverage() {
         let terms = vec![
             ("wsgi".into(), "name".into(), 3.0),
-            ("dispatch".into(), "name".into(), 3.0),
             ("response".into(), "signature".into(), TEXT_CREDIT),
             ("request".into(), "doc".into(), TEXT_CREDIT),
             ("error".into(), "doc".into(), TEXT_CREDIT),
@@ -8158,13 +8169,26 @@ mod tests {
         assert_eq!(credited_field_bonus(&terms[..2]), 0.0);
         assert_eq!(
             credited_field_bonus(&[
-                ("wsgi".into(), "name".into(), 3.0),
+                ("wsgi".into(), "name".into(), 2.0),
                 ("response".into(), "signature".into(), TEXT_CREDIT),
                 ("request".into(), "doc".into(), TEXT_CREDIT),
                 ("error".into(), "doc".into(), TEXT_CREDIT),
             ]),
             0.0
         );
+        let sparse_terms = [
+            ("terminal".into(), "name".into(), 3.0),
+            ("docker".into(), "signature".into(), TEXT_CREDIT),
+            ("local".into(), "doc".into(), TEXT_CREDIT),
+            ("sandbox".into(), "doc".into(), TEXT_CREDIT),
+            ("seven".into(), "none".into(), 0.0),
+            ("ssh".into(), "none".into(), 0.0),
+            ("singularity".into(), "none".into(), 0.0),
+            ("modal".into(), "none".into(), 0.0),
+            ("daytona".into(), "none".into(), 0.0),
+            ("vercel".into(), "none".into(), 0.0),
+        ];
+        assert_eq!(credited_field_bonus(&sparse_terms), 0.0);
         assert_eq!(
             credited_field_bonus(&[
                 ("response".into(), "name".into(), 3.0),

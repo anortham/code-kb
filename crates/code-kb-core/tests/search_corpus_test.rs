@@ -603,42 +603,81 @@ fn multiword_search_keeps_distinctive_named_tail_after_many_full_matches() {
 }
 
 #[test]
-fn multiword_wsgi_query_ranks_dispatch_methods_above_logging_helper() {
-    let mut app = r#"class Flask:
+fn multiword_wsgi_query_ranks_application_methods_ahead_of_real_stream_handler() {
+    // Keep the query-bearing signatures and documentation aligned with Flask's app.py and
+    // logging.py so the stream handler competes on real documentation, not a weakened stand-in.
+    let app = r#"class Flask:
     def full_dispatch_request(self, ctx: AppContext) -> Response:
-        """Dispatches the request and performs request preprocessing, response
-        creation, HTTP exception catching, and error handling.
+        """Dispatches the request and on top of that performs request
+        pre and postprocessing as well as HTTP exception catching and
+        error handling.
+
+        .. versionadded:: 0.7
         """
-        return self.finalize_request(ctx)
+        return self.finalize_request(ctx, None)
+
+    def finalize_request(
+        self,
+        ctx: AppContext,
+        rv: ft.ResponseReturnValue | HTTPException,
+        from_error_handler: bool = False,
+    ) -> Response:
+        """Given the return value from a view function this finalizes
+        the request by converting it into a response and invoking the
+        postprocessing functions. This is invoked for both normal
+        request dispatching as well as error handlers.
+
+        Because this means that it might be called as a result of a
+        failure a special safe mode is available which can be enabled
+        with the `from_error_handler` flag. If enabled, failures in
+        response processing will be logged and otherwise ignored.
+
+        :internal:
+        """
+        return self.make_response(rv)
 
     def wsgi_app(
         self, environ: WSGIEnvironment, start_response: StartResponse
-    ) -> Iterable[bytes]:
-        """The actual WSGI application. This is not implemented in __call__ so
-        that middlewares can be applied without losing a reference to the app.
-        DOC_PADDING
+    ) -> cabc.Iterable[bytes]:
+        """The actual WSGI application. This is not implemented in
+        :meth:`__call__` so that middlewares can be applied without
+        losing a reference to the app object. Instead of doing this::
 
-        Teardown events for the request and app contexts are called even if an
-        unhandled error occurs. Other events may not be called during dispatch.
+            app = MyMiddleware(app)
+
+        It's a better idea to do this instead::
+
+            app.wsgi_app = MyMiddleware(app.wsgi_app)
+
+        Then you still have the original application object around and
+        can continue to call methods on it.
+
+        .. versionchanged:: 0.7
+            Teardown events for the request and app contexts are called
+            even if an unhandled error occurs. Other events may not be
+            called depending on when an error occurs during dispatch.
+
+        :param environ: A WSGI environment.
+        :param start_response: A callable accepting a status code,
+            a list of headers, and an optional exception context to
+            start the response.
         """
         ctx = self.request_context(environ)
         return self.full_dispatch_request(ctx)
-"#
-    .to_string();
-    app = app.replace(
-        "DOC_PADDING",
-        &"Middleware wrappers retain the app object. ".repeat(7),
-    );
-    let logging = r#"def wsgi_errors_stream() -> TextIO:
+"#;
+    let logging = r#"@LocalProxy
+def wsgi_errors_stream() -> t.TextIO:
     """Find the most appropriate error stream for the application. If a request
-    is active, log to wsgi.errors, otherwise use sys.stderr.
+    is active, log to ``wsgi.errors``, otherwise use ``sys.stderr``.
+
+    If you configure your own :class:`logging.StreamHandler`, you may want to
+    use this for the stream. If you are using file or dict configuration and
+    can't import this directly, you can refer to it as
+    ``ext://flask.logging.wsgi_errors_stream``.
     """
     return sys.stderr
 "#;
-    let (_dir, db) = scanned_repo(&[
-        ("src/flask/app.py", app.as_str()),
-        ("src/flask/logging.py", logging),
-    ]);
+    let (_dir, db) = scanned_repo(&[("src/flask/app.py", app), ("src/flask/logging.py", logging)]);
     let conn = open_read_only(&db).unwrap();
     let results = fts_search_symbols_scoped(
         &conn,
@@ -649,23 +688,16 @@ fn multiword_wsgi_query_ranks_dispatch_methods_above_logging_helper() {
         20,
     )
     .unwrap();
-    let rank = |name: &str| {
-        results
-            .iter()
-            .position(|result| result.symbol.name == name)
-            .unwrap_or(usize::MAX)
-    };
-    assert!(
-        rank("wsgi_app") < rank("wsgi_errors_stream"),
-        "the WSGI app should outrank the logging helper: {:#?}",
-        results
-            .iter()
-            .map(|result| (&result.symbol.name, result.score))
-            .collect::<Vec<_>>()
-    );
-    assert!(
-        rank("full_dispatch_request") < rank("wsgi_errors_stream"),
-        "the request dispatcher should outrank the logging helper: {:#?}",
+    let top_two: Vec<_> = results
+        .iter()
+        .take(2)
+        .map(|result| result.symbol.name.as_str())
+        .collect();
+
+    assert_eq!(
+        top_two,
+        ["wsgi_app", "full_dispatch_request"],
+        "Flask's application entry point and dispatcher should lead its actual stream-handler competitor: {:#?}",
         results
             .iter()
             .map(|result| (&result.symbol.name, result.score))
