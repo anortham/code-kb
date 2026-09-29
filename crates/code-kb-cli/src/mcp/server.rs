@@ -1427,6 +1427,12 @@ impl McpServer {
             tracing::info!(tool = name, "MCP tool executed successfully");
         }
 
+        let content = &result.content;
+        result.baseline_paths.retain(|path| {
+            content
+                .iter()
+                .any(|block| block.text.contains(path.as_str()))
+        });
         if !result.baseline_paths.is_empty() {
             result.baseline_bytes = file_sizes_for_paths(&conn, &result.baseline_paths);
         }

@@ -2802,6 +2802,88 @@ fn test_mcp_records_a_known_baseline_for_references_and_none_for_an_outline() {
 }
 
 #[test]
+fn test_mcp_lookup_baseline_counts_only_the_files_its_answer_shows() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let root = temp_dir.path();
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"folded\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("src").join("lib.rs"), "pub struct Widget;\n").unwrap();
+    let hidden = format!(
+        "pub struct WidgetFactory;\n{}",
+        "// padding that makes this file a large baseline\n".repeat(400)
+    );
+    std::fs::write(root.join("src").join("factory.rs"), &hidden).unwrap();
+
+    let mut child = ChildGuard(
+        Command::new(env!("CARGO_BIN_EXE_code-kb"))
+            .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+            .env("CODE_KB_INDEX_WAIT_MS", "60000")
+            .arg("serve")
+            .arg("--root")
+            .arg(root)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("Failed to spawn code-kb serve"),
+    );
+    let mut stdin = child.stdin.take().unwrap();
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+    let mut call = |id: u64, method: &str, params: Value| -> Value {
+        let request = json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params });
+        let mut line = serde_json::to_string(&request).unwrap();
+        line.push('\n');
+        stdin.write_all(line.as_bytes()).unwrap();
+        stdin.flush().unwrap();
+        let mut response = String::new();
+        reader.read_line(&mut response).unwrap();
+        serde_json::from_str(&response).unwrap()
+    };
+    call(
+        1,
+        "initialize",
+        json!({
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": { "name": "test-client", "version": "1.0" }
+        }),
+    );
+
+    let lookup = call(
+        2,
+        "tools/call",
+        json!({ "name": "lookup_symbol", "arguments": { "project_root": root, "query": "Widget" } }),
+    );
+    let text = result_text(&lookup["result"]);
+    assert!(text.contains("WidgetFactory"), "{text}");
+    assert!(!text.contains("src/factory.rs"), "{text}");
+
+    let stats = call(
+        3,
+        "tools/call",
+        json!({ "name": "telemetry_summary", "arguments": { "workspace_only": true, "json": true } }),
+    );
+    let summary: Value =
+        serde_json::from_str(stats["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    let lookup_stat = summary["tool_stats"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["tool"] == "lookup_symbol")
+        .expect("lookup_symbol stat should be present");
+    assert_eq!(
+        lookup_stat["tokens_saved"], 0,
+        "only src/lib.rs is shown, and it is smaller than the answer: {lookup_stat}"
+    );
+
+    drop(stdin);
+    let _ = child.wait();
+}
+
+#[test]
 fn mcp_read_tool_handlers_validate_selectors_and_preserve_git_discovery() {
     let repo = code_kb_core::safe_tempdir();
     let root = repo.path().to_path_buf();
