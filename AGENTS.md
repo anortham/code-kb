@@ -220,13 +220,14 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   reaches a class's `__call__`, or one hop short of it, the tests that build that class or a
   subclass of it, directly or through a fixture, and use a test client (a parameter, variable, call,
   or receiver whose name contains `client`), are `possible` rows: the runtime makes that call,
-  so the index cannot see whether a test reaches the target. They are kept only when their names
-  or file names share a word with the target or the functions it calls (two words match when one
-  starts the other or they share five leading letters; generic words such as `get` and `find` do
-  not count), ranked by the words they share, and each row names those words. Whole-file rows for
-  matched test files come first and `possible` rows last. A whole-file row replaces the rows of
-  the tests inside that file. When `limit` cuts a list, the answer
-  says how many rows it shows of how many it found. A stem-matched test file matches
+  so the index cannot see whether a test reaches the target. A test is kept when it registers an
+  error handler or calls `abort`, or when its name or file name shares a word with the target or
+  the functions it calls (two words match when one starts the other or they share five leading
+  letters; generic words such as `get` and `find` do not count). Handler evidence ranks ahead of
+  name-only matches globally across entry classes, before the limit; each row names its evidence
+  or shared words. Whole-file rows for matched test files come first and `possible` rows last.
+  A whole-file row replaces the rows of the tests inside that file. When `limit` cuts a list,
+  the answer says how many rows it shows of how many it found. A stem-matched test file matches
   the seed file's stem as whole words of its own file name, never in a folder name above it. A stem- or
   module-matched file counts only when it holds a test, when its file name split on `_`, `-`, and `.`
   has the word `test`, `tests`, `spec`, `specs`, or `tst`, or when the name ends in `Test`, `Tests`,
