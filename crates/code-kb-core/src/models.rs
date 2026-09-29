@@ -146,7 +146,7 @@ pub struct SymbolSearchResult {
 /// Rerank breakdown for one `search` hit: which recall branches admitted the row, the name
 /// tier with its match strength, every score part, the query terms with the field that
 /// credited each and each term's rarity weight, and the timer over the whole candidate set.
-/// `score` is `term_score + name_bonus + kind_prior + path_role + documentation + test_intent + nested`.
+/// `score` is `term_score + field_diversity_bonus + name_bonus + kind_prior + path_role + documentation + test_intent + nested`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SearchExplain {
     pub bm25: Option<f64>,
@@ -155,6 +155,8 @@ pub struct SearchExplain {
     pub name_strength: u32,
     pub terms: Vec<(String, String, f64)>,
     pub term_score: f64,
+    #[serde(default)]
+    pub field_diversity_bonus: f64,
     pub name_bonus: f64,
     pub kind_prior: f64,
     pub path_role: f64,
