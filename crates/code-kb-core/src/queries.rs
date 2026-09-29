@@ -21,7 +21,7 @@ pub enum QueryError {
         hint: String,
     },
     #[error(
-        "Ambiguous symbol '{0}': found {1} matching candidates. Choose a candidate by its kind and source line; pass its id as `symbol_id` to get_symbol_body or get_symbol_context:\n{2}"
+        "Ambiguous symbol '{0}': found {1} matching candidates. Choose a candidate by its kind and source line, then pass its id as `symbol_id` (CLI: `--symbol-id`) to get_symbol_body, get_symbol_context, find_references, or blast_radius:\n{2}"
     )]
     AmbiguousSymbol(String, usize, String),
     #[error("Invalid direction '{0}': must be 'callers' or 'callees'")]
@@ -3181,11 +3181,13 @@ fn relative_import_matches(value: &str, target: &str) -> String {
     )
 }
 
-/// Languages where a bare call inside a class reaches the members of that class and its bases,
-/// as a call through `this` or `self` does.
+/// Languages whose files import each other's names, so a name-only reference may cross them.
+const JS_FAMILY_LANGUAGES: &str = "'javascript', 'typescript', 'tsx', 'jsx', 'vue'";
 const NESTED_TYPE_KINDS: &str =
     "'class', 'struct', 'interface', 'enum', 'record', 'trait', 'protocol'";
 
+/// Languages where a bare call inside a class reaches the members of that class and its bases,
+/// as a call through `this` or `self` does.
 const IMPLICIT_RECEIVER_LANGUAGES: &[&str] = &[
     "java", "csharp", "kotlin", "swift", "cpp", "scala", "dart", "ruby", "vbnet",
 ];
@@ -3342,6 +3344,7 @@ fn member_receiver_match(conn: &Connection) -> String {
                   WITH builder_call(name, path, resolved_symbol_id) AS ({builders})
                   SELECT 1 FROM builder_call
                   WHERE (SELECT COUNT(*) FROM builder_call) > 1
+                    AND builder_call.resolved_symbol_id IS NULL
                     AND NOT EXISTS (
                         SELECT 1 FROM symbols receiver_class
                         WHERE receiver_class.name = builder_call.name AND receiver_class.kind = 'class'
@@ -3629,7 +3632,6 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                         WHERE receiver.name = p.target_receiver
                           AND receiver.path = p.path
                           AND receiver_type.resolved_type = {parent}.name
-                          AND {receiver_type_scope}
                           AND NOT EXISTS (
                               SELECT 1 FROM symbols shadow
                               WHERE shadow.name = receiver.name
@@ -3638,7 +3640,7 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                                 AND shadow.kind IN ('variable', 'parameter')
                                 AND shadow.symbol_id != receiver.symbol_id
                           )
-                    )
+                    ) AND {receiver_type_scope}
                     {fixture_receiver}
                 )
                 AND NOT EXISTS (
@@ -4151,6 +4153,8 @@ fn find_direct_references(
                  WHERE i.name = ?1 AND i.kind IN ('type_usage', 'member_access')
                    AND COALESCE(s_from.kind, '') != 'import'
                    AND (?2 IS NULL OR selected_target.language = i.language
+                        OR (i.language IN ({JS_FAMILY_LANGUAGES})
+                            AND selected_target.language IN ({JS_FAMILY_LANGUAGES}))
                         OR (i.language = 'qml' AND selected_target.language = 'cpp')
                         OR (i.language = 'razor' AND selected_target.language = 'csharp'))
                    AND NOT ({type_usage_shadow})
@@ -6402,16 +6406,16 @@ fn implicit_handler_evidence(
     let mut call_sources = Vec::new();
     if has_table(conn, "pending_relationships") {
         call_sources.push(
-            "SELECT lower(p.target_terminal_name) FROM pending_relationships p\n\
-             JOIN candidate_scope d ON d.symbol_id = p.from_symbol_id\n\
+            "SELECT lower(p.target_terminal_name) FROM candidate_scope d\n\
+             CROSS JOIN pending_relationships p ON p.from_symbol_id = d.symbol_id\n\
              WHERE p.kind = 'calls'"
                 .to_string(),
         );
     }
     if has_table(conn, "relationships") {
         call_sources.push(
-            "SELECT lower(target.name) FROM relationships r\n\
-             JOIN candidate_scope d ON d.symbol_id = r.from_symbol_id\n\
+            "SELECT lower(target.name) FROM candidate_scope d\n\
+             CROSS JOIN relationships r ON r.from_symbol_id = d.symbol_id\n\
              JOIN symbols target ON target.symbol_id = r.to_symbol_id\n\
              WHERE r.kind = 'calls'"
                 .to_string(),
