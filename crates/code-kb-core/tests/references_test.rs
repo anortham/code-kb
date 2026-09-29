@@ -1682,6 +1682,44 @@ fn blast_radius_reaches_tests_that_build_a_class_whose_call_method_reaches_the_t
 }
 
 #[test]
+fn blast_radius_rendering_keeps_handler_priority_across_file_groups_with_a_limit() {
+    let (_repo, db_path) = scanned_repo(&[
+        (
+            "src/web/app.py",
+            "class Flask:\n    def __call__(self, environ):\n        return self.handle_user_exception(environ)\n\n    def handle_user_exception(self, error):\n        return error\n\n    def errorhandler(self, error):\n        return error\n\n    def test_client(self):\n        return None\n",
+        ),
+        (
+            "tests/conftest.py",
+            "import pytest\nfrom web.app import Flask\n\n\n@pytest.fixture\ndef app():\n    return Flask()\n",
+        ),
+        (
+            "tests/test_basic.py",
+            "def test_error_handling(app):\n    app.errorhandler(Exception)\n    app.test_client().get('/')\n\n\ndef test_teardown_request_handler(app):\n    app.test_client().get('/')\n",
+        ),
+        (
+            "tests/test_regression.py",
+            "def test_aborting(app):\n    abort(403)\n    app.test_client().get('/')\n",
+        ),
+        (
+            "tests/test_extra.py",
+            "def test_exception_logging(app):\n    app.test_client().get('/')\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let result = compute_blast_radius(&conn, &["handle_user_exception"], &[], 3, 3).unwrap();
+    assert_eq!(result.likely_tests.len(), 3, "{:?}", result.likely_tests);
+    assert!(result.likely_tests_truncated, "{:?}", result.likely_tests);
+
+    let rendered = format_blast_radius(&result);
+    let handler = rendered.find("`test_error_handling`").unwrap();
+    let aborting = rendered.find("`test_aborting`").unwrap();
+    let name_only = rendered.find("`test_teardown_request_handler`").unwrap();
+    assert!(handler < aborting && aborting < name_only, "{rendered}");
+    assert!(!rendered.contains("`test_exception_logging`"), "{rendered}");
+}
+
+#[test]
 fn blast_radius_lists_the_tests_behind_a_fixture_that_takes_a_fixture_not_the_fixture() {
     let (_repo, db_path) = scanned_repo(&[
         ("src/web/app.py", "def report(e):\n    return str(e)\n"),

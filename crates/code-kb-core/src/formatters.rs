@@ -3,7 +3,7 @@ use std::path::Path;
 
 use crate::models::{
     BlastRadiusResult, ContextSlice, ImpactedSymbol, ReferenceSite, SearchExplain, Symbol,
-    SymbolSearchResult, TestTarget,
+    SymbolSearchResult,
 };
 
 /// Format progressive disclosure file skeleton with implementation bodies stripped.
@@ -1403,26 +1403,17 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
         let total = result.likely_tests.len();
         out.push_str(&format!("### Likely Tests to Run ({} returned)\n", total));
 
-        let mut tests_by_file: std::collections::BTreeMap<&str, Vec<&TestTarget>> =
-            std::collections::BTreeMap::new();
-        let mut file_order = Vec::new();
+        // Preserve ranked row order; collecting every row by file can put lower-ranked tests first.
+        let mut previous_path = None;
         for t in &result.likely_tests {
-            if !tests_by_file.contains_key(t.path.as_str()) {
-                file_order.push(t.path.as_str());
+            if previous_path != Some(t.path.as_str()) {
+                out.push_str(&format!("{}:\n", t.path));
+                previous_path = Some(t.path.as_str());
             }
-            tests_by_file.entry(t.path.as_str()).or_default().push(t);
-        }
-
-        for path in file_order {
-            out.push_str(&format!("{path}:\n"));
-            if let Some(tests) = tests_by_file.get(path) {
-                for t in tests {
-                    out.push_str(&format!(
-                        "  - `{}` [line {}] ({})\n",
-                        t.name, t.line, t.reason
-                    ));
-                }
-            }
+            out.push_str(&format!(
+                "  - `{}` [line {}] ({})\n",
+                t.name, t.line, t.reason
+            ));
         }
 
         if result
