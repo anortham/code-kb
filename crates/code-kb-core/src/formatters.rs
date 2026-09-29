@@ -1322,6 +1322,9 @@ fn explain_line(score: f64, e: &SearchExplain) -> String {
         "score {score:.1} = terms {:.1} + name {}({}) {:.1} + kind {:.1} + path {:.1}",
         e.term_score, e.name_tier, e.name_strength, e.name_bonus, e.kind_prior, e.path_role,
     );
+    if e.field_diversity_bonus != 0.0 {
+        line.push_str(&format!(" + field coverage {:.1}", e.field_diversity_bonus));
+    }
     if e.documentation != 0.0 {
         line.push_str(&format!(" + doc {:.1}", e.documentation));
     }
@@ -2379,6 +2382,7 @@ mod tests {
             name_tier: "all".into(),
             name_strength: 6,
             term_score: 24.5,
+            field_diversity_bonus: 6.0,
             name_bonus: 60.0,
             kind_prior: 4.0,
             path_role: -10.0,
@@ -2391,6 +2395,7 @@ mod tests {
             rerank_us: 1,
         };
         let score = e.term_score
+            + e.field_diversity_bonus
             + e.name_bonus
             + e.kind_prior
             + e.path_role
@@ -2412,6 +2417,7 @@ mod tests {
         assert!(line.starts_with(&format!(
             "score {score:.1} = terms 24.5 + name all(6) 60.0 "
         )));
+        assert!(line.contains("+ field coverage 6.0"));
         assert_eq!(format!("{parts:.1}"), format!("{score:.1}"));
     }
 
@@ -2431,6 +2437,7 @@ mod tests {
                     ("256".into(), "name".into(), 3.0),
                 ],
                 term_score: 12.6,
+                field_diversity_bonus: 0.0,
                 name_bonus: 60.0,
                 kind_prior: 4.0,
                 path_role: -10.0,

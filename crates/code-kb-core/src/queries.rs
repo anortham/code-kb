@@ -1687,6 +1687,23 @@ pub fn fts_search_symbols_explained(
         ranked = rerank_with(candidates, query, include_tests, Some(&idf));
         rerank_us += started.elapsed().as_micros();
     }
+    let unique_query_terms: HashSet<String> = rerank_words(query).into_iter().collect();
+    let min_multi_term_results = ((limit * 3).div_ceil(4)).max(15).min(limit);
+    let multi_term_results = ranked
+        .iter()
+        .filter(|(_, breakdown)| covered_query_term_count(&breakdown.terms) >= 2)
+        .count();
+    if unique_query_terms.len() > 1 && multi_term_results >= min_multi_term_results {
+        let mut strong_results_seen = 0;
+        ranked.retain(|(_, breakdown)| {
+            if covered_query_term_count(&breakdown.terms) >= 2 {
+                strong_results_seen += 1;
+                true
+            } else {
+                strong_results_seen < min_multi_term_results || has_distinctive_name_term(breakdown)
+            }
+        });
+    }
     Ok(ranked
         .into_iter()
         .take(limit)
@@ -1714,10 +1731,13 @@ const W_TEST_INTENT: f64 = 5.0;
 const W_TERMS: f64 = 52.0;
 const MAX_TERM_CREDIT: f64 = 3.0;
 const TEXT_CREDIT: f64 = 1.0;
+const FIELD_DIVERSITY_BONUS: f64 = 6.0;
+const DISTINCTIVE_NAME_IDF_FACTOR: f64 = 1.1;
 /// A word that names the class a member belongs to: `Flask init` means `Flask.__init__`.
 const OWNER_CREDIT: f64 = 3.0;
 const OWNER_CONTEXT_CREDIT: f64 = 0.5;
 const TEXT_HEAD_BYTES: usize = 400;
+const DOC_HEAD_BYTES: usize = 640;
 
 /// Symbol kinds that define a body: the kinds a touched-symbol or ranking rule prefers over locals.
 pub const DEFINITION_KINDS: &[&str] = &[
@@ -1819,6 +1839,80 @@ fn term_credits(hits: &Hits, words: &[QueryWord]) -> Vec<(String, String, f64)> 
             (w.word.clone(), field.to_string(), credit)
         })
         .collect()
+}
+
+/// Adds a prior when one whole name token, the signature, and at least two distinct doc terms
+/// independently support the query, which the row covers with at least half its distinct terms.
+/// The caller limits it to functions and methods, so request-shaped types cannot earn it.
+fn credited_field_bonus(terms: &[(String, String, f64)]) -> f64 {
+    let query_terms: HashSet<&str> = terms.iter().map(|(word, _, _)| word.as_str()).collect();
+    let covered_terms: HashSet<&str> = terms
+        .iter()
+        .filter(|(_, _, credit)| *credit >= TEXT_CREDIT)
+        .map(|(word, _, _)| word.as_str())
+        .collect();
+    let adequate_query_coverage =
+        !query_terms.is_empty() && covered_terms.len() * 2 >= query_terms.len();
+    let mut document_terms = HashSet::new();
+    let has_exact_name_term = terms
+        .iter()
+        .any(|(_, field, credit)| field == "name" && *credit == 3.0);
+    let fields = terms.iter().filter(|(_, _, credit)| *credit > 0.0).fold(
+        0u8,
+        |fields, (word, field, _)| {
+            if field == "doc" {
+                // The query can repeat a word; count distinct words as independent evidence.
+                document_terms.insert(word.as_str());
+            }
+            fields
+                | match field.as_str() {
+                    "name" => 1,
+                    "owner" => 2,
+                    "signature" => 4,
+                    "doc" => 8,
+                    "owner_context" => 16,
+                    _ => 0,
+                }
+        },
+    );
+    if has_exact_name_term
+        && fields & 4 != 0
+        && fields & 8 != 0
+        && document_terms.len() >= 2
+        && adequate_query_coverage
+    {
+        FIELD_DIVERSITY_BONUS
+    } else {
+        0.0
+    }
+}
+
+fn covered_query_term_count(terms: &[(String, String, f64)]) -> usize {
+    terms
+        .iter()
+        .filter(|(_, _, credit)| *credit > 0.0)
+        .map(|(word, _, _)| word.as_str())
+        .collect::<HashSet<_>>()
+        .len()
+}
+
+fn has_distinctive_name_term(explain: &SearchExplain) -> bool {
+    let weights = &explain.word_weights;
+    let Some(mean_weight) = (!weights.is_empty())
+        .then(|| weights.iter().map(|(_, weight)| weight).sum::<f64>() / weights.len() as f64)
+    else {
+        return false;
+    };
+    explain
+        .terms
+        .iter()
+        .zip(weights)
+        .any(|((term, field, credit), (weighted_term, weight))| {
+            term == weighted_term
+                && field == "name"
+                && *credit >= 2.0
+                && *weight >= mean_weight * DISTINCTIVE_NAME_IDF_FACTOR
+        })
 }
 
 fn term_score(terms: &[(String, String, f64)], weights: &[f64]) -> f64 {
@@ -2057,7 +2151,7 @@ fn rerank_with(
                     symbol
                         .doc_comment
                         .as_deref()
-                        .map(|doc| head_bytes(doc, TEXT_HEAD_BYTES)),
+                        .map(|doc| head_bytes(doc, DOC_HEAD_BYTES)),
                     &words,
                     &mut tokens,
                 ),
@@ -2091,6 +2185,11 @@ fn rerank_with(
                 "none"
             };
             let terms = term_credits(&hits, &words);
+            let field_diversity_bonus = if matches!(symbol.kind.as_str(), "function" | "method") {
+                credited_field_bonus(&terms)
+            } else {
+                0.0
+            };
             let explain = SearchExplain {
                 bm25: candidate.bm25,
                 branches: [
@@ -2107,6 +2206,7 @@ fn rerank_with(
                 name_tier: tier.to_string(),
                 name_strength,
                 term_score: term_score(&terms, &term_weights),
+                field_diversity_bonus,
                 name_bonus: match tier {
                     "whole"
                         if DEFINITION_KINDS.contains(&normalize_kind(&symbol.kind).as_str()) =>
@@ -2135,6 +2235,7 @@ fn rerank_with(
                 rerank_us: 0,
             };
             let score = explain.term_score
+                + explain.field_diversity_bonus
                 + explain.name_bonus
                 + explain.kind_prior
                 + explain.path_role
@@ -8057,6 +8158,57 @@ mod tests {
     }
 
     #[test]
+    fn credited_fields_require_whole_name_multi_field_evidence_and_query_coverage() {
+        let terms = vec![
+            ("wsgi".into(), "name".into(), 3.0),
+            ("response".into(), "signature".into(), TEXT_CREDIT),
+            ("request".into(), "doc".into(), TEXT_CREDIT),
+            ("error".into(), "doc".into(), TEXT_CREDIT),
+        ];
+        assert_eq!(credited_field_bonus(&terms), FIELD_DIVERSITY_BONUS);
+        assert_eq!(credited_field_bonus(&terms[..2]), 0.0);
+        assert_eq!(
+            credited_field_bonus(&[
+                ("wsgi".into(), "name".into(), 2.0),
+                ("response".into(), "signature".into(), TEXT_CREDIT),
+                ("request".into(), "doc".into(), TEXT_CREDIT),
+                ("error".into(), "doc".into(), TEXT_CREDIT),
+            ]),
+            0.0
+        );
+        let sparse_terms = [
+            ("terminal".into(), "name".into(), 3.0),
+            ("docker".into(), "signature".into(), TEXT_CREDIT),
+            ("local".into(), "doc".into(), TEXT_CREDIT),
+            ("sandbox".into(), "doc".into(), TEXT_CREDIT),
+            ("seven".into(), "none".into(), 0.0),
+            ("ssh".into(), "none".into(), 0.0),
+            ("singularity".into(), "none".into(), 0.0),
+            ("modal".into(), "none".into(), 0.0),
+            ("daytona".into(), "none".into(), 0.0),
+            ("vercel".into(), "none".into(), 0.0),
+        ];
+        assert_eq!(credited_field_bonus(&sparse_terms), 0.0);
+        assert_eq!(
+            credited_field_bonus(&[
+                ("response".into(), "name".into(), 3.0),
+                ("request".into(), "name".into(), 3.0),
+            ]),
+            0.0
+        );
+    }
+
+    #[test]
+    fn credited_field_bonus_requires_two_distinct_document_terms() {
+        let terms = [
+            ("strip".into(), "name".into(), 3.0),
+            ("path".into(), "signature".into(), TEXT_CREDIT),
+            ("windows".into(), "doc".into(), TEXT_CREDIT),
+        ];
+        assert_eq!(credited_field_bonus(&terms), 0.0);
+    }
+
+    #[test]
     fn name_coverage_accepts_token_runs_substrings_and_stems() {
         let strengths = |name: &str, query: &str| {
             let stemmer = Stemmer::create(Algorithm::English);
@@ -8120,7 +8272,7 @@ mod tests {
     fn a_doc_hit_past_the_head_byte_cap_does_not_credit_its_term() {
         let mut row = function("load");
         row.result.symbol.signature = Some("fn load(config: &Config) -> Loaded".into());
-        row.result.symbol.doc_comment = Some(format!("{}settings", "é".repeat(200)));
+        row.result.symbol.doc_comment = Some(format!("{}settings", "é".repeat(321)));
         let (result, explain) = ranked(vec![row], "config settings").remove(0);
 
         assert_eq!(

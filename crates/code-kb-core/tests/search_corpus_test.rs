@@ -386,3 +386,368 @@ fn trigram_only_target_survives_admission_past_the_word_branch_cap() {
         "parseSha256Sidecar",
     );
 }
+
+#[test]
+fn multiword_search_does_not_fill_the_top_twenty_with_one_term_name_hits() {
+    let mut source = String::new();
+    for index in 0..15 {
+        source.push_str(&format!(
+            "/// Handles an exception error and creates a response.\npub fn handle_exception_{index}(error: Error, response: Response) {{}}\n\n"
+        ));
+    }
+    source.push_str(
+        "pub struct Response;\npub fn process_response() {}\npub fn make_default_options_response() {}\npub fn json_provider_response() {}\npub fn default_json_provider_response() {}\n",
+    );
+
+    let (_dir, db) = scanned_repo(&[("src/handlers.rs", source.as_str())]);
+    let conn = open_read_only(&db).unwrap();
+    let results = fts_search_symbols_scoped(
+        &conn,
+        "handle exception error response",
+        None,
+        None,
+        false,
+        20,
+    )
+    .unwrap();
+
+    assert_eq!(
+        results.len(),
+        15,
+        "single-term matches should not pad a top 20 when 15 multi-term hits exist: {:#?}",
+        results
+            .iter()
+            .map(|result| &result.symbol.name)
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        results
+            .iter()
+            .all(|result| result.symbol.name.starts_with("handle_exception_"))
+    );
+}
+
+#[test]
+fn a_budget_domain_type_ranks_above_its_competing_request_dto() {
+    let source = r#"namespace SearchCorpus;
+
+/// A capacity-one user-global lease for test execution.
+/// Only one workspace may execute tests; other workspaces wait.
+public sealed class ExecutionBudget
+{
+    public BudgetLease? Acquire(ExecutionBudgetRequest request) => null;
+}
+
+/// A user-global request for the execution lease.
+public readonly record struct ExecutionBudgetRequest(string WorkspaceRoot, string Reason);
+"#;
+    let (_dir, db) = scanned_repo(&[("src/budget.cs", source)]);
+    let conn = open_read_only(&db).unwrap();
+    let results = fts_search_symbols_scoped(
+        &conn,
+        "workspace tests execution user global budget",
+        None,
+        None,
+        false,
+        20,
+    )
+    .unwrap();
+    let rank = |name: &str| {
+        results
+            .iter()
+            .position(|result| result.symbol.name == name)
+            .unwrap_or(usize::MAX)
+    };
+
+    assert!(
+        rank("ExecutionBudget") < rank("ExecutionBudgetRequest"),
+        "the domain type should outrank its request DTO: {:#?}",
+        results
+            .iter()
+            .map(|result| (&result.symbol.name, result.score))
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn execution_budget_ranks_above_hooks_record_at_wide_limits() {
+    let budget = r#"namespace Miller.Testing;
+
+/// Capacity-1 user-global lease modeled on a scan governor. Held only while tests execute.
+/// A second workspace reports paused while the first executes; idle daemons starve nobody.
+public sealed class CtExecutionBudget
+{
+    public CtExecutionBudgetLease? TryAcquire(CtExecutionBudgetRequest request) => null;
+}
+
+/// One execution-scoped request for the user-global CT run lease.
+public readonly record struct CtExecutionBudgetRequest(string WorkspaceRoot, string Reason);
+"#;
+    let hooks = r#"namespace Miller.Server.Tools;
+
+/// Seams for the CT verbs. Budget overrides the user-global execution budget a foreground
+/// run takes, so tests bind their own miller home instead of contending on the caller's one.
+public sealed record TestsCoreHooks(CtExecutionBudget? Budget, TestsForegroundRunRequest? Run);
+public sealed record TestsForegroundRunRequest(string WorkspaceRoot);
+"#;
+    let (_dir, db) = scanned_repo(&[
+        ("src/CtExecutionBudget.cs", budget),
+        ("src/TestsCore.cs", hooks),
+    ]);
+    let conn = open_read_only(&db).unwrap();
+
+    for limit in [20, 200] {
+        let results = fts_search_symbols_scoped(
+            &conn,
+            "one workspace executes tests at a time under a user-global budget",
+            None,
+            None,
+            false,
+            limit,
+        )
+        .unwrap();
+        let rank = |name: &str| {
+            results
+                .iter()
+                .position(|result| result.symbol.name == name)
+                .unwrap_or(usize::MAX)
+        };
+        assert!(
+            rank("CtExecutionBudget") < rank("TestsCoreHooks"),
+            "the execution budget should outrank its test hooks at limit {limit}: {:#?}",
+            results
+                .iter()
+                .map(|result| (&result.symbol.name, result.score))
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            rank("CtExecutionBudget") < rank("CtExecutionBudgetRequest"),
+            "the execution budget should outrank its request DTO at limit {limit}: {:#?}",
+            results
+                .iter()
+                .map(|result| (&result.symbol.name, result.score))
+                .collect::<Vec<_>>()
+        );
+    }
+}
+
+#[test]
+fn specific_backend_type_outranks_generic_terminal_placeholder_helper() {
+    let backend = r#"/// The Vercel sandbox terminal backend.
+pub struct VercelSandboxEnvironment;
+"#;
+    let helper = r#"/// Resolve local terminal cwd and provide the sandbox backend default.
+pub fn resolve_placeholder_terminal_cwd(terminal_backend: &str, docker_mount: bool) {}
+"#;
+    let (_dir, db) = scanned_repo(&[("src/backend.rs", backend), ("src/cwd.rs", helper)]);
+    let conn = open_read_only(&db).unwrap();
+    let results = fts_search_symbols_scoped(
+        &conn,
+        "seven terminal backends local docker ssh singularity modal daytona and vercel sandbox",
+        None,
+        None,
+        false,
+        20,
+    )
+    .unwrap();
+    let rank = |name: &str| {
+        results
+            .iter()
+            .position(|result| result.symbol.name == name)
+            .unwrap_or(usize::MAX)
+    };
+
+    assert!(
+        rank("VercelSandboxEnvironment") < rank("resolve_placeholder_terminal_cwd"),
+        "the specific backend type should outrank a generic placeholder helper: {:#?}",
+        results
+            .iter()
+            .map(|result| (&result.symbol.name, result.score))
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn multiword_search_keeps_distinctive_named_tail_after_many_full_matches() {
+    let mut source = String::new();
+    for index in 0..15 {
+        let migration_term = if index < 7 { "migrate " } else { "" };
+        source.push_str(&format!(
+            "/// {migration_term}settings memories skills api keys openclaw.\npub fn import_workspace_{index}() {{}}\n\n"
+        ));
+    }
+    source.push_str("pub fn _cmd_migrate() {}\npub fn generic_settings() {}\n");
+    let (_dir, db) = scanned_repo(&[("src/claw.rs", source.as_str())]);
+    let conn = open_read_only(&db).unwrap();
+    let results = fts_search_symbols_scoped(
+        &conn,
+        "migrate settings memories skills api keys from openclaw",
+        None,
+        None,
+        false,
+        20,
+    )
+    .unwrap();
+    let names: Vec<_> = results
+        .iter()
+        .map(|result| result.symbol.name.as_str())
+        .collect();
+    assert!(
+        names.contains(&"_cmd_migrate"),
+        "the distinctive migration entry point should survive the multi-term cutoff: {names:#?}"
+    );
+    assert!(
+        !names.contains(&"generic_settings"),
+        "a common one-term name should still be pruned: {names:#?}"
+    );
+}
+
+#[test]
+fn multiword_wsgi_query_ranks_application_methods_ahead_of_real_stream_handler() {
+    // Keep the query-bearing signatures and documentation aligned with Flask's app.py and
+    // logging.py so the stream handler competes on real documentation, not a weakened stand-in.
+    let app = r#"class Flask:
+    def full_dispatch_request(self, ctx: AppContext) -> Response:
+        """Dispatches the request and on top of that performs request
+        pre and postprocessing as well as HTTP exception catching and
+        error handling.
+
+        .. versionadded:: 0.7
+        """
+        return self.finalize_request(ctx, None)
+
+    def finalize_request(
+        self,
+        ctx: AppContext,
+        rv: ft.ResponseReturnValue | HTTPException,
+        from_error_handler: bool = False,
+    ) -> Response:
+        """Given the return value from a view function this finalizes
+        the request by converting it into a response and invoking the
+        postprocessing functions. This is invoked for both normal
+        request dispatching as well as error handlers.
+
+        Because this means that it might be called as a result of a
+        failure a special safe mode is available which can be enabled
+        with the `from_error_handler` flag. If enabled, failures in
+        response processing will be logged and otherwise ignored.
+
+        :internal:
+        """
+        return self.make_response(rv)
+
+    def wsgi_app(
+        self, environ: WSGIEnvironment, start_response: StartResponse
+    ) -> cabc.Iterable[bytes]:
+        """The actual WSGI application. This is not implemented in
+        :meth:`__call__` so that middlewares can be applied without
+        losing a reference to the app object. Instead of doing this::
+
+            app = MyMiddleware(app)
+
+        It's a better idea to do this instead::
+
+            app.wsgi_app = MyMiddleware(app.wsgi_app)
+
+        Then you still have the original application object around and
+        can continue to call methods on it.
+
+        .. versionchanged:: 0.7
+            Teardown events for the request and app contexts are called
+            even if an unhandled error occurs. Other events may not be
+            called depending on when an error occurs during dispatch.
+
+        :param environ: A WSGI environment.
+        :param start_response: A callable accepting a status code,
+            a list of headers, and an optional exception context to
+            start the response.
+        """
+        ctx = self.request_context(environ)
+        return self.full_dispatch_request(ctx)
+"#;
+    let logging = r#"@LocalProxy
+def wsgi_errors_stream() -> t.TextIO:
+    """Find the most appropriate error stream for the application. If a request
+    is active, log to ``wsgi.errors``, otherwise use ``sys.stderr``.
+
+    If you configure your own :class:`logging.StreamHandler`, you may want to
+    use this for the stream. If you are using file or dict configuration and
+    can't import this directly, you can refer to it as
+    ``ext://flask.logging.wsgi_errors_stream``.
+    """
+    return sys.stderr
+"#;
+    let (_dir, db) = scanned_repo(&[("src/flask/app.py", app), ("src/flask/logging.py", logging)]);
+    let conn = open_read_only(&db).unwrap();
+    let results = fts_search_symbols_scoped(
+        &conn,
+        "incoming WSGI request response error handling",
+        None,
+        Some("src/flask"),
+        false,
+        20,
+    )
+    .unwrap();
+    let top_two: Vec<_> = results
+        .iter()
+        .take(2)
+        .map(|result| result.symbol.name.as_str())
+        .collect();
+
+    assert_eq!(
+        top_two,
+        ["wsgi_app", "full_dispatch_request"],
+        "Flask's application entry point and dispatcher should lead its actual stream-handler competitor: {:#?}",
+        results
+            .iter()
+            .map(|result| (&result.symbol.name, result.score))
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn multiword_search_keeps_single_term_fallback_for_sparse_matches() {
+    let source = r#"pub fn handle_exception() {}
+
+/// An unrelated payload.
+pub struct ResponseNoise;
+"#;
+    let (_dir, db) = scanned_repo(&[("src/handlers.rs", source)]);
+    let conn = open_read_only(&db).unwrap();
+    let results = fts_search_symbols_scoped(
+        &conn,
+        "handle exception error response",
+        None,
+        None,
+        false,
+        20,
+    )
+    .unwrap();
+
+    assert!(
+        results
+            .iter()
+            .any(|result| result.symbol.name == "handle_exception")
+    );
+    assert!(
+        results
+            .iter()
+            .any(|result| result.symbol.name == "ResponseNoise")
+    );
+}
+
+#[test]
+fn multiword_search_keeps_an_exact_name_hit_ahead_of_strong_fallbacks() {
+    let mut source = String::from("pub fn fuse() {}\n\n");
+    for index in 0..15 {
+        source.push_str(&format!(
+            "/// rrf fuse\npub const unrelated_{index}: u8 = 0;\n"
+        ));
+    }
+
+    let (_dir, db) = scanned_repo(&[("src/search.rs", source.as_str())]);
+    let conn = open_read_only(&db).unwrap();
+    let results = fts_search_symbols_scoped(&conn, "rrf fuse", None, None, false, 20).unwrap();
+
+    assert!(results.iter().any(|result| result.symbol.name == "fuse"));
+}
