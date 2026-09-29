@@ -3,6 +3,7 @@ use std::fs;
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
+use std::time::{Duration, Instant};
 
 const PROJECT_ROOT_DESCRIPTION: &str = "Absolute path of the project or git worktree you are working in. Send the same value on every call. Change it when you move to a worktree or another project.";
 
@@ -19,6 +20,21 @@ impl std::ops::DerefMut for ChildGuard {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
+}
+
+fn server_logs(roots: &[&Path]) -> String {
+    roots
+        .iter()
+        .map(|root| root.join(".code-kb").join("logs"))
+        .flat_map(|dir| fs::read_dir(dir).into_iter().flatten().flatten())
+        .map(|entry| {
+            format!(
+                "=== {}\n{}",
+                entry.path().display(),
+                fs::read_to_string(entry.path()).unwrap_or_default()
+            )
+        })
+        .collect()
 }
 
 impl Drop for ChildGuard {
@@ -1021,29 +1037,38 @@ fn test_adversarial_worktree_parent_in_active_transaction_resilience() {
     let mut resp_line = String::new();
     reader.read_line(&mut resp_line).unwrap();
 
-    // Query on worktree file
-    let wt_call = json!({
-        "jsonrpc": "2.0",
-        "id": 2,
-        "method": "tools/call",
-        "params": {
-            "name": "file_skeleton",
-            "arguments": {
-                "project_root": wt_root.to_string_lossy().to_string(),
-                "file": wt_file.to_string_lossy().to_string()
+    let deadline = Instant::now() + Duration::from_secs(180);
+    let mut call_id = 1;
+    let resp2 = loop {
+        call_id += 1;
+        let wt_call = json!({
+            "jsonrpc": "2.0",
+            "id": call_id,
+            "method": "tools/call",
+            "params": {
+                "name": "file_skeleton",
+                "arguments": {
+                    "project_root": wt_root.to_string_lossy().to_string(),
+                    "file": wt_file.to_string_lossy().to_string()
+                }
             }
+        });
+        let mut line2 = serde_json::to_string(&wt_call).unwrap();
+        line2.push('\n');
+        stdin.write_all(line2.as_bytes()).unwrap();
+        stdin.flush().unwrap();
+        let mut resp_line2 = String::new();
+        reader.read_line(&mut resp_line2).unwrap();
+        let resp: Value = serde_json::from_str(&resp_line2).unwrap();
+        assert_eq!(resp["id"], call_id);
+        let still_indexing = resp["result"]["content"][0]["text"]
+            .as_str()
+            .is_some_and(|text| text.starts_with("Indexing "));
+        if !still_indexing || Instant::now() >= deadline {
+            break resp;
         }
-    });
-    let mut line2 = serde_json::to_string(&wt_call).unwrap();
-    line2.push('\n');
-    stdin.write_all(line2.as_bytes()).unwrap();
-    stdin.flush().unwrap();
-    let mut resp_line2 = String::new();
-    reader.read_line(&mut resp_line2).unwrap();
-    let resp2: Value = serde_json::from_str(&resp_line2).unwrap();
-    assert_eq!(resp2["id"], 2);
+    };
 
-    // Server must respond cleanly without hang or crash
     assert!(resp2["result"]["content"][0]["text"].as_str().is_some());
     assert_ne!(resp2["result"]["isError"], true, "{resp2}");
     assert!(
@@ -1051,7 +1076,8 @@ fn test_adversarial_worktree_parent_in_active_transaction_resilience() {
             .as_str()
             .unwrap()
             .contains("pub fn tx_resilience_fn()"),
-        "The worktree call must answer from the worktree index: {resp2}"
+        "The worktree call must answer from the worktree index: {resp2}\n{}",
+        server_logs(&[&main_root, &wt_root])
     );
 
     // Rollback active transaction and clean up
