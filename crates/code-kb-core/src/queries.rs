@@ -1734,6 +1734,8 @@ const W_TERMS: f64 = 52.0;
 const MAX_TERM_CREDIT: f64 = 3.0;
 const TEXT_CREDIT: f64 = 1.0;
 const FIELD_DIVERSITY_BONUS: f64 = 6.0;
+/// Request-shaped DTOs get only a tie-breaker so secondary fields cannot outweigh their domain type.
+const REQUEST_DTO_FIELD_DIVERSITY_BONUS: f64 = 1.0;
 /// A word that names the class a member belongs to: `Flask init` means `Flask.__init__`.
 const OWNER_CREDIT: f64 = 3.0;
 const OWNER_CONTEXT_CREDIT: f64 = 0.5;
@@ -2155,6 +2157,17 @@ fn rerank_with(
             };
             let terms = term_credits(&hits, &words);
             let field_diversity_bonus = credited_field_bonus(&terms);
+            let field_diversity_bonus = if field_diversity_bonus > 0.0
+                && matches!(
+                    symbol.kind.as_str(),
+                    "class" | "struct" | "record" | "interface"
+                )
+                && symbol.name.ends_with("Request")
+            {
+                REQUEST_DTO_FIELD_DIVERSITY_BONUS
+            } else {
+                field_diversity_bonus
+            };
             let explain = SearchExplain {
                 bm25: candidate.bm25,
                 branches: [

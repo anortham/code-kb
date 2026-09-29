@@ -428,6 +428,48 @@ fn multiword_search_does_not_fill_the_top_twenty_with_one_term_name_hits() {
 }
 
 #[test]
+fn a_budget_domain_type_ranks_above_its_competing_request_dto() {
+    let source = r#"namespace SearchCorpus;
+
+/// A capacity-one user-global lease for test execution.
+/// Only one workspace may execute tests; other workspaces wait.
+public sealed class ExecutionBudget
+{
+    public BudgetLease? Acquire(ExecutionBudgetRequest request) => null;
+}
+
+/// A user-global request for the execution lease.
+public readonly record struct ExecutionBudgetRequest(string WorkspaceRoot, string Reason);
+"#;
+    let (_dir, db) = scanned_repo(&[("src/budget.cs", source)]);
+    let conn = open_read_only(&db).unwrap();
+    let results = fts_search_symbols_scoped(
+        &conn,
+        "workspace tests execution user global budget",
+        None,
+        None,
+        false,
+        20,
+    )
+    .unwrap();
+    let rank = |name: &str| {
+        results
+            .iter()
+            .position(|result| result.symbol.name == name)
+            .unwrap_or(usize::MAX)
+    };
+
+    assert!(
+        rank("ExecutionBudget") < rank("ExecutionBudgetRequest"),
+        "the domain type should outrank its request DTO: {:#?}",
+        results
+            .iter()
+            .map(|result| (&result.symbol.name, result.score))
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
 fn multiword_wsgi_query_ranks_dispatch_methods_above_logging_helper() {
     let mut app = r#"class Flask:
     def full_dispatch_request(self, ctx: AppContext) -> Response:
