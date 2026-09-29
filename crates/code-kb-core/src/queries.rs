@@ -5821,13 +5821,22 @@ pub fn compute_blast_radius_scoped_with_ids(
             }
         }
     }
+    let mut possible_tests = Vec::new();
     for class_id in entry_classes {
         for test in implicit_entry_tests(conn, &class_id, &seed_words)? {
-            if seen_test_keys.insert(format!("{}:{}", test.path, test.line)) {
-                likely_tests.push(test);
+            if seen_test_keys.insert(format!("{}:{}", test.test.path, test.test.line)) {
+                possible_tests.push(test);
             }
         }
     }
+    possible_tests.sort_by(|a, b| {
+        b.handler_evidence
+            .cmp(&a.handler_evidence)
+            .then_with(|| b.shared_word_score.cmp(&a.shared_word_score))
+            .then_with(|| a.test.path.cmp(&b.test.path))
+            .then_with(|| a.test.line.cmp(&b.test.line))
+    });
+    likely_tests.extend(possible_tests.into_iter().map(|test| test.test));
 
     qualify_test_methods(conn, &mut likely_tests)?;
     let whole_files: HashSet<String> = likely_tests
@@ -6111,6 +6120,12 @@ impl ImplicitHandlerEvidence {
     }
 }
 
+struct RankedImplicitTest {
+    handler_evidence: bool,
+    shared_word_score: usize,
+    test: TestTarget,
+}
+
 /// Whether the test or one of its nested route/handler functions registers an error handler or
 /// calls `abort`. These calls can reach a runtime handler without a statically indexed edge.
 fn implicit_handler_evidence(
@@ -6177,7 +6192,7 @@ fn implicit_entry_tests(
     conn: &Connection,
     class_id: &str,
     seed_words: &[String],
-) -> Result<Vec<TestTarget>, QueryError> {
+) -> Result<Vec<RankedImplicitTest>, QueryError> {
     let Some(class) = get_symbol_by_id(conn, class_id)? else {
         return Ok(Vec::new());
     };
@@ -6246,7 +6261,7 @@ fn implicit_entry_tests(
             }
         }
     }
-    let mut ranked: Vec<(bool, usize, TestTarget)> = Vec::new();
+    let mut ranked = Vec::new();
     for test in builders
         .into_iter()
         .filter(|test| uses_a_client(conn, test))
@@ -6276,16 +6291,13 @@ fn implicit_entry_tests(
             test.reason,
             reasons.join("; ")
         );
-        ranked.push((evidence.is_relevant(), score, TestTarget { reason, ..test }));
+        ranked.push(RankedImplicitTest {
+            handler_evidence: evidence.is_relevant(),
+            shared_word_score: score,
+            test: TestTarget { reason, ..test },
+        });
     }
-    ranked.sort_by(|(a_handler, a_score, a), (b_handler, b_score, b)| {
-        b_handler
-            .cmp(a_handler)
-            .then_with(|| b_score.cmp(a_score))
-            .then_with(|| a.path.cmp(&b.path))
-            .then_with(|| a.line.cmp(&b.line))
-    });
-    Ok(ranked.into_iter().map(|(_, _, test)| test).collect())
+    Ok(ranked)
 }
 
 /// Whether `test` drives an app through a test client: it takes a parameter or holds a variable,

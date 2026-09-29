@@ -157,6 +157,53 @@ fn cli_blast_radius_ranks_error_handler_and_abort_tests_before_name_matches() {
 }
 
 #[test]
+fn cli_blast_radius_globally_ranks_handler_tests_across_entry_classes_before_limit() {
+    let repo = code_kb_core::safe_tempdir();
+    let root = repo.path();
+    for (path, source) in [
+        (
+            "pyproject.toml",
+            "[project]\nname = 'global-handler-ranking'\nversion = '0.1.0'\n",
+        ),
+        (
+            "app.py",
+            "def dispatch_request():\n    return None\n\nclass Alpha:\n    def __call__(self, environ):\n        return dispatch_request()\n\nclass Beta:\n    def __call__(self, environ):\n        return dispatch_request()\n",
+        ),
+        (
+            "tests/test_runtime.py",
+            "from app import Alpha, Beta\nfrom flask import abort\n\ndef test_dispatch_request_alpha():\n    app = Alpha()\n    app.test_client().get('/')\n\ndef test_unrelated_beta():\n    app = Beta()\n    @app.errorhandler(ValueError)\n    def on_error(error):\n        return str(error)\n    @app.route('/')\n    def index():\n        abort(400)\n    app.test_client().get('/')\n",
+        ),
+    ] {
+        std::fs::create_dir_all(root.join(path).parent().unwrap_or(root)).unwrap();
+        std::fs::write(root.join(path), source).unwrap();
+    }
+
+    let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .args([
+            "--json",
+            "blast-radius",
+            "dispatch_request",
+            "--depth",
+            "3",
+            "--limit",
+            "1",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let tests = result["likely_tests"].as_array().unwrap();
+    assert_eq!(tests.len(), 1, "{result:#}");
+    assert_eq!(tests[0]["name"], "test_unrelated_beta", "{result:#}");
+}
+
+#[test]
 fn receiver_reference_labels_match_the_cli_contract() {
     let repo = code_kb_core::safe_tempdir();
     let root = repo.path();
