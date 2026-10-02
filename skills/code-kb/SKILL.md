@@ -5,9 +5,6 @@ description: Navigates code with the code-kb MCP server (symbol lookup, concept 
 
 # code-kb
 
-The tools below come from the `code-kb` MCP server. The host may show them with a prefix,
-such as `mcp__code-kb__lookup_symbol` or `mcp__plugin_code-kb_code-kb__lookup_symbol`.
-
 code-kb indexes symbol names, signatures, and docstrings, not file contents. Use `rg` for
 literal text: string literals, error messages, comments, and config values.
 

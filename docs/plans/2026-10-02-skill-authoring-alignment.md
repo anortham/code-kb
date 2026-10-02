@@ -138,7 +138,8 @@ after step 1.
 
 The user approved all findings and the rename on 2026-10-02.
 
-- Findings 1 to 4: `skills/code-kb/SKILL.md` has the new description, a server-name line, one table with CLI twins, and the rules that change a call. About 1,500 words became about 550.
+- Findings 1 to 3: `skills/code-kb/SKILL.md` has the new description, one table with CLI twins, and the rules that change a call. About 1,500 words became about 520.
+- Finding 4: rejected by the user. Bare tool names have worked in every harness, so the skill does not name the server prefixes.
 - Finding 5: `skills/telemetry` is now `skills/code-kb-telemetry`. In the plugin the command is `/code-kb:code-kb-telemetry`; the bare `/code-kb-telemetry` also works. README names it.
 - Finding 6: `code-kb-telemetry` and `report-issue` have `argument-hint`, and their descriptions now say what the skill does first. The bodies do not use `$ARGUMENTS`: Claude Code appends `ARGUMENTS: <input>` when no placeholder takes it, and other harnesses would show the literal text. Codex ignores unknown frontmatter keys: `SkillFrontmatter` in `codex-rs/skills/src/parser.rs` has no `deny_unknown_fields`.
 - Finding 7: `.claude-plugin/skills/` is deleted. No manifest pointed at it. `test_skills_md_sync_contract` became `test_skills_follow_agent_skill_frontmatter_rules`, which checks the name, the description, and the body length of each skill. The preflight script no longer compares the copies.
