@@ -144,3 +144,12 @@ The user approved all findings and the rename on 2026-10-02.
 - Finding 6: `code-kb-telemetry` and `report-issue` have `argument-hint`, and their descriptions now say what the skill does first. The bodies do not use `$ARGUMENTS`: Claude Code appends `ARGUMENTS: <input>` when no placeholder takes it, and other harnesses would show the literal text. Codex ignores unknown frontmatter keys: `SkillFrontmatter` in `codex-rs/skills/src/parser.rs` has no `deny_unknown_fields`.
 - Finding 7: `.claude-plugin/skills/` is deleted. No manifest pointed at it. `test_skills_md_sync_contract` became `test_skills_follow_agent_skill_frontmatter_rules`, which checks the name, the description, and the body length of each skill. The preflight script no longer compares the copies.
 - Finding 8: `evals/` has three cases per skill, with mocks for the `code-kb` MCP server and its real `tools/list` in `evals/mocks/code-kb/_tools.json`. `scripts/plugin-eval.sh` runs them: `claude plugin eval` refuses a plugin folder with more than 20,000 entries, so the script runs the suite on a copy of the tracked files.
+
+## Trial in a live session
+
+A fresh Claude Code session in this repo got six prompts on 2026-10-02.
+
+- Code questions: the agent used `lookup_symbol`, `find_references`, `get_symbol_context`, and `blast_radius` with `project_root`, and `rg` for literal text. It did not load the `code-kb` skill, because the routing hook already gives that guidance.
+- `code-kb-telemetry` loaded for "how many tokens did code-kb save this week" and for `/code-kb-telemetry 30d workspace`.
+- `report-issue` asked for the three details, built the bundle, checked it for private data, showed the body, and waited. It did not submit.
+- Defect found and fixed: the telemetry skill left out `version`. `telemetry_summary` and `code-kb stats` count only the running version by default, so a window that spans a release counted too few calls, and the terminal command in the reply gave different numbers. The skill now passes `version="all"` and prints `--version all`. The README tool table names `version`.

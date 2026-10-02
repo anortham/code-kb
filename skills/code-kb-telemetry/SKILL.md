@@ -11,7 +11,7 @@ Summarize code-kb tool usage, token savings, and recent errors from `~/.code-kb/
 ## Steps
 
 1. Read the arguments: an optional time window (`today`, `7d`, `30d`, `month`, `year`, `all`) and the optional word `workspace`. The window defaults to `all`. The word `workspace` sets `workspace_only=true`; otherwise report all workspaces. `telemetry_summary` takes no `project_root`: `workspace_only` scopes to the project of the most recent code-kb call.
-2. Call `telemetry_summary(time_window=<window>, workspace_only=<bool>)`.
+2. Call `telemetry_summary(time_window=<window>, workspace_only=<bool>, version="all")`. Without `version`, the summary counts only the running code-kb version, so a window that spans a release counts too few calls. Pass one version, such as `version="2.5.1"`, only when the user asks about that version.
 3. Reply in this shape:
    - First line: scope, window, total calls, success rate, tokens served, tokens saved with its coverage.
    - Then only what needs attention: tools under 95% success, errors that repeat, calls to tool names that do not exist.
@@ -20,7 +20,7 @@ Summarize code-kb tool usage, token savings, and recent errors from `~/.code-kb/
 5. End with the terminal twin so the user can verify:
 
 ```
-code-kb stats --since <window> [--workspace]
+code-kb stats --since <window> --version all [--workspace]
 ```
 
 ## What "saved" means
