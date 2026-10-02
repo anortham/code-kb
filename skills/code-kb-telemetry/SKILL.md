@@ -1,6 +1,7 @@
 ---
-name: telemetry
-description: Use when the user runs /telemetry or asks how many tokens code-kb saved, how often its tools fail, or what the recent tool errors were. Arguments are optional; a time window (today, 7d, 30d, month, year, all) and the word "workspace" to scope to the project of the most recent code-kb call.
+name: code-kb-telemetry
+description: Reports code-kb token savings with their coverage, call counts, success rates, and recent tool errors from the telemetry database in ~/.code-kb. Use when the user runs /code-kb-telemetry or asks how many tokens code-kb saved, how often its tools fail, or what the recent tool errors were.
+argument-hint: "[today|7d|30d|month|year|all] [workspace]"
 ---
 
 # code-kb Telemetry
@@ -9,7 +10,7 @@ Summarize code-kb tool usage, token savings, and recent errors from `~/.code-kb/
 
 ## Steps
 
-1. Read the arguments. The window defaults to `all`. The word `workspace` sets `workspace_only=true`; otherwise report all workspaces. `telemetry_summary` takes no `project_root`: `workspace_only` scopes to the project of the most recent code-kb call.
+1. Read the arguments: an optional time window (`today`, `7d`, `30d`, `month`, `year`, `all`) and the optional word `workspace`. The window defaults to `all`. The word `workspace` sets `workspace_only=true`; otherwise report all workspaces. `telemetry_summary` takes no `project_root`: `workspace_only` scopes to the project of the most recent code-kb call.
 2. Call `telemetry_summary(time_window=<window>, workspace_only=<bool>)`.
 3. Reply in this shape:
    - First line: scope, window, total calls, success rate, tokens served, tokens saved with its coverage.

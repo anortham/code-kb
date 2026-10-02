@@ -1,6 +1,7 @@
 ---
 name: report-issue
-description: Use when the user runs /report-issue, says code-kb misbehaved, or asks to file a bug against code-kb. Collects a diagnostic bundle (versions, index facts, recent tool errors, log tail) and opens a GitHub issue with it.
+description: Files a GitHub issue against code-kb with a diagnostic bundle (versions, index facts, recent tool errors, log tail) after the user approves the exact text. Use when the user runs /report-issue, says code-kb misbehaved, or asks to file a bug against code-kb.
+argument-hint: "[what went wrong]"
 ---
 
 # Report a code-kb Issue

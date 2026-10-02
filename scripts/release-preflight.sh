@@ -15,22 +15,14 @@ echo "========================================================"
 echo " Starting code-kb Release Pre-Flight Verification"
 echo "========================================================"
 
-# 1. Sync contract (AGENTS.md vs CLAUDE.md and SKILL.md)
-echo -n "[1/10] Verifying sync contracts (AGENTS.md vs CLAUDE.md, SKILL.md copies)... "
+# 1. Sync contract (AGENTS.md vs CLAUDE.md)
+echo -n "[1/10] Verifying sync contract (AGENTS.md vs CLAUDE.md)... "
 if ! cmp -s AGENTS.md CLAUDE.md; then
   echo "FAIL"
   echo "error: AGENTS.md and CLAUDE.md differ. Keep them byte-for-byte identical." >&2
   cmp AGENTS.md CLAUDE.md || true
   exit 1
 fi
-for skill in skills/*/SKILL.md; do
-  if ! cmp -s "$skill" ".claude-plugin/$skill"; then
-    echo "FAIL"
-    echo "error: $skill and .claude-plugin/$skill differ." >&2
-    cmp "$skill" ".claude-plugin/$skill" || true
-    exit 1
-  fi
-done
 echo "OK (byte-for-byte identical)"
 
 # 2. Version consistency check

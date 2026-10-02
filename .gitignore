@@ -29,3 +29,6 @@ __pycache__/
 .tools/
 .razorback/
 .agents/
+
+# Plugin eval run output
+evals/results/

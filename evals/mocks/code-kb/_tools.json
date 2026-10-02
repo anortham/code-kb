@@ -1,0 +1,326 @@
+{
+  "tools": [
+    {
+      "description": "Provides a top-level architectural orientation of the repository or sub-package in a few hundred tokens. Start here when exploring unfamiliar code instead of running directory listings or reading files.",
+      "inputSchema": {
+        "properties": {
+          "depth": {
+            "description": "Directory recursion depth (default: 2).",
+            "type": "integer"
+          },
+          "path": {
+            "description": "Subdirectory to scope the outline to, relative to project_root. Defaults to project_root.",
+            "type": "string"
+          },
+          "project_root": {
+            "description": "Absolute path of the project or git worktree you are working in. Send the same value on every call. Change it when you move to a worktree or another project.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_root"
+        ],
+        "type": "object"
+      },
+      "name": "codebase_outline"
+    },
+    {
+      "description": "Returns all types, traits, functions, signatures, docstrings, and visibility for a file with implementation bodies stripped. Use this instead of reading the entire file when inspecting interfaces and types. A directory path returns its outline.",
+      "inputSchema": {
+        "properties": {
+          "file_path": {
+            "description": "File path relative to project_root, or an absolute path inside it.",
+            "type": "string"
+          },
+          "project_root": {
+            "description": "Absolute path of the project or git worktree you are working in. Send the same value on every call. Change it when you move to a worktree or another project.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file_path",
+          "project_root"
+        ],
+        "type": "object"
+      },
+      "name": "file_skeleton"
+    },
+    {
+      "description": "Look up symbols by identifier. Use for exact names, qualified paths ('Type::method'), or identifier prefixes. Exact matches come first, then names that start with the query, then names that contain it. Returns kind, path, and signature. Do NOT use for natural-language concepts or keywords; use search_symbols instead.",
+      "inputSchema": {
+        "properties": {
+          "is_test": {
+            "description": "Include test functions, test containers, and rows from test files (default: false). A row whose name equals the query is returned either way.",
+            "type": "boolean"
+          },
+          "kind": {
+            "description": "Optional filter by kind (e.g. function, struct, trait, class, interface, enum).",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Maximum number of symbols to return, 0-200 (default: 20).",
+            "maximum": 200,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "path": {
+            "description": "Optional file path or directory prefix to scope search, relative to project_root or absolute inside it (e.g. 'crates/code-kb-core').",
+            "type": "string"
+          },
+          "project_root": {
+            "description": "Absolute path of the project or git worktree you are working in. Send the same value on every call. Change it when you move to a worktree or another project.",
+            "type": "string"
+          },
+          "query": {
+            "description": "Exact identifier name, qualified path ('Type::method'), or prefix. Not a sentence or concept.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query",
+          "project_root"
+        ],
+        "type": "object"
+      },
+      "name": "lookup_symbol"
+    },
+    {
+      "description": "Natural-language and keyword search over symbol names, signatures, and docstrings; substrings inside identifiers are found ('sha256' finds 'parseSha256Sidecar'). Use when the exact identifier is unknown or searching for concepts (e.g. 'auth middleware', 'retry loop'). Do NOT use if you already know the exact symbol name; use lookup_symbol instead.",
+      "inputSchema": {
+        "properties": {
+          "is_test": {
+            "description": "Include test functions, test containers, and rows from test files (default: false).",
+            "type": "boolean"
+          },
+          "kind": {
+            "description": "Optional filter by kind (e.g. function, struct, trait, class, interface, enum).",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Maximum number of symbols to return, 0-200 (default: 20).",
+            "maximum": 200,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "path": {
+            "description": "Optional file path or directory prefix to scope search, relative to project_root or absolute inside it (e.g. 'crates/code-kb-core').",
+            "type": "string"
+          },
+          "project_root": {
+            "description": "Absolute path of the project or git worktree you are working in. Send the same value on every call. Change it when you move to a worktree or another project.",
+            "type": "string"
+          },
+          "query": {
+            "description": "Natural language query or keywords (e.g. 'parse tokens', 'authentication middleware', 'retry backoff').",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query",
+          "project_root"
+        ],
+        "type": "object"
+      },
+      "name": "search_symbols"
+    },
+    {
+      "description": "Retrieves the source of one symbol as written, with its declaration and decorators. Use when you only need the implementation without dependency context. If preparing to edit a function, use get_symbol_context instead.",
+      "inputSchema": {
+        "properties": {
+          "file_path": {
+            "description": "Optional file path to disambiguate identical symbol names, relative to project_root or absolute inside it.",
+            "type": "string"
+          },
+          "project_root": {
+            "description": "Absolute path of the project or git worktree you are working in. Send the same value on every call. Change it when you move to a worktree or another project.",
+            "type": "string"
+          },
+          "symbol_id": {
+            "description": "Exact current-index symbol identifier. Provide exactly one non-empty symbol_name or symbol_id.",
+            "type": "string"
+          },
+          "symbol_name": {
+            "description": "Full or qualified symbol name. Provide exactly one non-empty symbol_name or symbol_id.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_root"
+        ],
+        "type": "object"
+      },
+      "name": "get_symbol_body"
+    },
+    {
+      "description": "Surgical context bundle combining target body, callee signatures, parameter types, and related tests in one turn. Use this before modifying a function to understand its immediate dependencies.",
+      "inputSchema": {
+        "properties": {
+          "file_path": {
+            "description": "Optional file path to disambiguate identical symbol names, relative to project_root or absolute inside it.",
+            "type": "string"
+          },
+          "include_external": {
+            "description": "Include external stdlib/runtime calls in callee signatures (default: false).",
+            "type": "boolean"
+          },
+          "project_root": {
+            "description": "Absolute path of the project or git worktree you are working in. Send the same value on every call. Change it when you move to a worktree or another project.",
+            "type": "string"
+          },
+          "symbol_id": {
+            "description": "Exact current-index symbol identifier. Provide exactly one non-empty symbol_name or symbol_id.",
+            "type": "string"
+          },
+          "symbol_name": {
+            "description": "Target symbol name. Provide exactly one non-empty symbol_name or symbol_id.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_root"
+        ],
+        "type": "object"
+      },
+      "name": "get_symbol_context"
+    },
+    {
+      "description": "Discovers callers or callees of a symbol from AST call sites. Callers also include type usages (annotations, casts) and member accesses of the name. Matching is by symbol name, ranked by the call site (same file, same directory, receiver type); same-named symbols with no closer candidate can merge, so pass file_path or a qualified name ('Type::method') for overloaded names and verify before refactoring.",
+      "inputSchema": {
+        "properties": {
+          "direction": {
+            "description": "Direction of references ('callers' or 'callees', default: 'callers').",
+            "enum": [
+              "callers",
+              "callees"
+            ],
+            "type": "string"
+          },
+          "file_path": {
+            "description": "Optional file path to disambiguate symbols with identical names across files, relative to project_root or absolute inside it.",
+            "type": "string"
+          },
+          "include_external": {
+            "description": "If true, includes external runtime/stdlib primitives in callees (default: false, only internal workspace symbols).",
+            "type": "boolean"
+          },
+          "limit": {
+            "description": "Maximum references to return, 0-200 (default: 20).",
+            "maximum": 200,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "project_root": {
+            "description": "Absolute path of the project or git worktree you are working in. Send the same value on every call. Change it when you move to a worktree or another project.",
+            "type": "string"
+          },
+          "symbol_id": {
+            "description": "Exact current-index symbol identifier. Provide exactly one non-empty symbol_name or symbol_id.",
+            "type": "string"
+          },
+          "symbol_name": {
+            "description": "Target symbol name. Provide exactly one non-empty symbol_name or symbol_id.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_root"
+        ],
+        "type": "object"
+      },
+      "name": "find_references"
+    },
+    {
+      "description": "Queries framework-level facts (routes, SQL tables, config keys) extracted from AST. If category is omitted, lists all available categories with counts.",
+      "inputSchema": {
+        "properties": {
+          "category": {
+            "description": "Optional fact category or pattern to search (e.g. route, query, model, config). If omitted, lists available categories with counts.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Maximum facts and literals to return per section, 0-200 each (default: 30).",
+            "maximum": 200,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "path": {
+            "description": "Optional file path or directory to filter structural facts, relative to project_root or absolute inside it.",
+            "type": "string"
+          },
+          "project_root": {
+            "description": "Absolute path of the project or git worktree you are working in. Send the same value on every call. Change it when you move to a worktree or another project.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_root"
+        ],
+        "type": "object"
+      },
+      "name": "find_structural_facts"
+    },
+    {
+      "description": "Predicts which downstream symbols are affected and which tests to run before or after edits. With no symbol, symbol_id, or file, it inspects uncommitted git changes and uses changed files to predict impact and likely tests. You can also pass symbol (or symbol_name) or file (or file_path).",
+      "inputSchema": {
+        "properties": {
+          "depth": {
+            "description": "Maximum relationship hops to walk outward from seeds (default: 2).",
+            "type": "integer"
+          },
+          "file": {
+            "description": "File path to seed the impact walk, relative to project_root or absolute inside it (aliases: file_path, path).",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Maximum visible tests and impacted symbols per section, 0-200 each (default: 20).",
+            "maximum": 200,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "project_root": {
+            "description": "Absolute path of the project or git worktree you are working in. Send the same value on every call. Change it when you move to a worktree or another project.",
+            "type": "string"
+          },
+          "symbol": {
+            "description": "Symbol name to seed the impact walk (aliases: symbol_name, name, target).",
+            "type": "string"
+          },
+          "symbol_id": {
+            "description": "Exact current-index symbol identifier. Provide one non-empty symbol or symbol_id.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_root"
+        ],
+        "type": "object"
+      },
+      "name": "blast_radius"
+    },
+    {
+      "description": "Summarizes code-kb tool usage, token consumption, and tokens saved across sessions and workspaces. Useful for diagnosing usage patterns and evaluating agent performance.",
+      "inputSchema": {
+        "properties": {
+          "all_versions": {
+            "description": "If true, includes telemetry across all historical versions (default: false).",
+            "type": "boolean"
+          },
+          "time_window": {
+            "description": "Optional time window for metrics: 'today', '7d', '30d', 'month', 'year', or 'all' (default: 'all').",
+            "type": "string"
+          },
+          "version": {
+            "description": "Filter metrics by code-kb version (e.g. '1.1.3'), 'current' (default), or 'all'.",
+            "type": "string"
+          },
+          "workspace_only": {
+            "description": "If true, scopes metrics to the project of the most recent tool call instead of all workspaces (default: false).",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "name": "telemetry_summary"
+    }
+  ]
+}

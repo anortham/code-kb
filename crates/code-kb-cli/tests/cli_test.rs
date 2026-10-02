@@ -1807,28 +1807,49 @@ fn test_agents_and_claude_md_sync_contract() {
 }
 
 #[test]
-fn test_skills_md_sync_contract() {
+fn test_skills_follow_agent_skill_frontmatter_rules() {
     let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let root = manifest_dir.parent().unwrap().parent().unwrap();
-    let skills: Vec<_> = std::fs::read_dir(root.join("skills"))
+    let mut skills: Vec<_> = std::fs::read_dir(root.join("skills"))
         .unwrap()
-        .map(|entry| entry.unwrap().file_name())
+        .map(|entry| entry.unwrap().file_name().into_string().unwrap())
         .collect();
-    assert!(
-        skills.len() >= 2,
-        "expected the code-kb and telemetry skills"
-    );
+    skills.sort();
+    assert_eq!(skills, ["code-kb", "code-kb-telemetry", "report-issue"]);
     for skill in skills {
-        let relative = std::path::Path::new("skills").join(&skill).join("SKILL.md");
-        let skill_root = std::fs::read_to_string(root.join(&relative)).unwrap();
-        let skill_plugin =
-            std::fs::read_to_string(root.join(".claude-plugin").join(&relative)).unwrap();
-        assert_eq!(
-            skill_root,
-            skill_plugin,
-            "{} and .claude-plugin/{} must be byte-for-byte identical",
-            relative.display(),
-            relative.display()
+        let path = format!("skills/{skill}/SKILL.md");
+        let text = std::fs::read_to_string(root.join(&path)).unwrap();
+        let (frontmatter, body) = text
+            .strip_prefix("---\n")
+            .and_then(|rest| rest.split_once("\n---\n"))
+            .unwrap_or_else(|| panic!("{path} has no frontmatter"));
+        let field = |key: &str| {
+            frontmatter
+                .lines()
+                .find_map(|line| line.strip_prefix(&format!("{key}: ")))
+                .unwrap_or_else(|| panic!("{path} has no {key}"))
+        };
+        let name = field("name");
+        assert_eq!(name, skill, "{path} name must match its directory");
+        assert!(
+            name.len() <= 64
+                && name
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'),
+            "{path} name must be at most 64 lowercase letters, digits, or hyphens"
+        );
+        let description = field("description");
+        assert!(
+            !description.is_empty() && description.len() <= 1024,
+            "{path} description must hold 1 to 1024 characters"
+        );
+        assert!(
+            !description.contains(": ") && !description.contains('<'),
+            "{path} description must stay a plain YAML scalar with no XML tag"
+        );
+        assert!(
+            body.lines().count() < 500,
+            "{path} body must stay under 500 lines"
         );
     }
 }
