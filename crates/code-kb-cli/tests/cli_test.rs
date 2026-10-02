@@ -1818,7 +1818,9 @@ fn test_skills_follow_agent_skill_frontmatter_rules() {
     assert_eq!(skills, ["code-kb", "code-kb-telemetry", "report-issue"]);
     for skill in skills {
         let path = format!("skills/{skill}/SKILL.md");
-        let text = std::fs::read_to_string(root.join(&path)).unwrap();
+        let text = std::fs::read_to_string(root.join(&path))
+            .unwrap()
+            .replace("\r\n", "\n");
         let (frontmatter, body) = text
             .strip_prefix("---\n")
             .and_then(|rest| rest.split_once("\n---\n"))
