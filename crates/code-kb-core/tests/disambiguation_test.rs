@@ -1546,3 +1546,31 @@ fn a_name_with_overloads_in_one_class_returns_every_overload() {
         "{error}"
     );
 }
+
+#[test]
+fn an_app_factory_in_a_test_folder_is_not_a_related_test() {
+    let (_repo, ws, db) = scanned(&[
+        (
+            "src/app.py",
+            "class Flask:\n    def __init__(self, name):\n        self.name = name\n",
+        ),
+        (
+            "tests/apps/factory.py",
+            "from app import Flask\n\ndef create_app():\n    return Flask(\"factory\")\n",
+        ),
+        (
+            "tests/test_basic.py",
+            "from app import Flask\n\ndef test_static_url_path():\n    Flask(\"basic\")\n",
+        ),
+    ]);
+    let conn = open_read_only(&db).unwrap();
+
+    let slice = get_context_slice_op(&ws, &db, &conn, "Flask.__init__", None, false).unwrap();
+    let names: Vec<_> = slice
+        .related_tests
+        .iter()
+        .map(|test| test.name.as_str())
+        .collect();
+
+    assert_eq!(names, ["test_static_url_path"]);
+}

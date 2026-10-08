@@ -2295,7 +2295,11 @@ pub fn find_related_tests(
         "1 = 1"
     };
     let is_test = format!(
-        "((s.is_test = 1 OR s.test_container = 1 OR ({} AND s.kind IN ('function', 'method'))) AND {not_setup})",
+        "((s.is_test = 1 OR s.test_container = 1
+           OR ({} AND s.kind IN ('function', 'method') AND ({NAMES_A_TEST_SQL}
+               OR EXISTS (SELECT 1 FROM symbols tc
+                          WHERE tc.symbol_id = s.parent_symbol_id AND tc.test_container = 1))))
+          AND {not_setup})",
         test_path_predicate("s")
     );
     let not_documentation = not_documentation(conn, "s");
@@ -5448,6 +5452,10 @@ fn type_declaration_line(signature: &str) -> String {
 /// A name that reads like a test (`test_run`, `TestRoutes`, `runSpec`), for a symbol in a test file
 /// that julie did not flag and that is not in a test class: an app factory such as `create_app` in
 /// `tests/test_apps` is not a test, but a helper method of a test class leads to that class.
+/// The SQL mirror of [`names_a_test`] for the row `s`; `LIKE` ignores ASCII case.
+const NAMES_A_TEST_SQL: &str = "(s.name LIKE 'test%' OR s.name LIKE '%test' OR s.name LIKE '%tests'
+     OR s.name LIKE '%spec' OR s.name LIKE '%specs')";
+
 fn names_a_test(name: &str) -> bool {
     let lowered = name.to_ascii_lowercase();
     lowered.starts_with("test")
@@ -7337,6 +7345,29 @@ mod tests {
     }
 
     #[test]
+    fn test_name_rule_and_its_sql_mirror_agree_on_every_name() {
+        let conn = Connection::open_in_memory().unwrap();
+        let sql = format!("SELECT {NAMES_A_TEST_SQL} FROM (SELECT :name AS name) s");
+        let mut stmt = conn.prepare(&sql).unwrap();
+        for name in [
+            "test_run",
+            "TestRoutes",
+            "RoutesTest",
+            "RoutesTests",
+            "runSpec",
+            "Specs",
+            "create_app",
+            "attest_value",
+            "inspection",
+        ] {
+            let from_sql: bool = stmt
+                .query_row(rusqlite::named_params! { ":name": name }, |row| row.get(0))
+                .unwrap();
+            assert_eq!(from_sql, names_a_test(name), "sql mirror: {name}");
+        }
+    }
+
+    #[test]
     fn unflagged_test_file_rows_are_hidden_unless_tests_are_included() {
         let conn = search_fixture(
             &[
@@ -7603,16 +7634,17 @@ mod tests {
     }
 
     #[test]
-    fn related_tests_admit_recognized_unflagged_paths_without_low_signal_rows() {
+    fn related_tests_admit_unflagged_test_names_in_test_paths_without_helpers_or_low_signal_rows() {
         let conn = search_fixture(
             "('target', 'f_target', 'src/core.rs', 'rust', 'calculate', 'function', 'fn calculate()', NULL, NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_target', NULL, 0, 0, 'code'),
-              ('direct', 'f_direct', 'tests/direct.rs', 'rust', 'direct_case', 'function', 'fn direct_case()', NULL, NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_direct', NULL, 0, 0, 'code'),
-              ('pending', 'f_pending', 'autotests/tst_pending.qml', 'qml', 'pending_case', 'function', 'function pending_case() {}', NULL, NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_pending', NULL, 0, 0, 'code'),
-              ('name', 'f_name', 'tests/name.rs', 'rust', 'calculate_named_case', 'function', 'fn calculate_named_case()', NULL, NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_name', NULL, 0, 0, 'code'),
-              ('fts', 'f_fts', 'tests/fts.rs', 'rust', 'fts_case', 'function', 'fn fts_case()', 'calculate behavior', NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_fts', NULL, 0, 0, 'code'),
+              ('direct', 'f_direct', 'tests/direct.rs', 'rust', 'test_direct', 'function', 'fn test_direct()', NULL, NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_direct', NULL, 0, 0, 'code'),
+              ('pending', 'f_pending', 'autotests/tst_pending.qml', 'qml', 'test_pending', 'function', 'function test_pending() {}', NULL, NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_pending', NULL, 0, 0, 'code'),
+              ('name', 'f_name', 'tests/name.rs', 'rust', 'test_calculate_named', 'function', 'fn test_calculate_named()', NULL, NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_name', NULL, 0, 0, 'code'),
+              ('fts', 'f_fts', 'tests/fts.rs', 'rust', 'test_fts', 'function', 'fn test_fts()', 'calculate behavior', NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_fts', NULL, 0, 0, 'code'),
               ('local', 'f_local', 'tests/name.rs', 'rust', 'calculate_local', 'variable', 'let calculate_local = 1;', NULL, NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_local', NULL, 0, 0, 'code'),
               ('import', 'f_import', 'tests/name.rs', 'rust', 'calculate_import', 'import', 'use calculate_import;', NULL, NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_import', NULL, 0, 0, 'code'),
-              ('production', 'f_production', 'src/testing.rs', 'rust', 'calculate_production', 'function', 'fn calculate_production()', NULL, NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_production', NULL, 0, 0, 'code')",
+              ('production', 'f_production', 'src/testing.rs', 'rust', 'calculate_production', 'function', 'fn calculate_production()', NULL, NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_production', NULL, 0, 0, 'code'),
+              ('helper', 'f_helper', 'tests/apps/factory.rs', 'rust', 'build_calculate_app', 'function', 'fn build_calculate_app()', NULL, NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_helper', NULL, 0, 0, 'code')",
         );
         conn.execute_batch(
             "CREATE TABLE relationships (from_symbol_id TEXT, to_symbol_id TEXT, kind TEXT, path TEXT, start_line INTEGER, start_column INTEGER);
@@ -7635,10 +7667,10 @@ mod tests {
         assert_eq!(
             names,
             vec![
-                "direct_case",
-                "pending_case",
-                "calculate_named_case",
-                "fts_case"
+                "test_direct",
+                "test_pending",
+                "test_calculate_named",
+                "test_fts"
             ]
         );
     }
