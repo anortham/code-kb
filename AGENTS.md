@@ -215,8 +215,9 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   that comes before a same-named class in the same file does not hide that class.
 - Related tests (`get_symbol_context`): callers from relationships, pending calls, and references
   that are tests, test classes, or functions and methods in test files that are members of a test
-  class or have a name that reads like a test (`names_a_test`), so an app factory such as
-  `create_app` is not a related test; never setup, teardown, or
+  class or have a name that reads like a test (`names_a_test`), so a module-level app factory such
+  as `create_app` is not a related test. A helper function defined inside such a test counts as
+  that test (`enclosing_test`); never setup, teardown, or
   fixture members, and none for a target in a document language. A constructor gets the related
   tests of its class. The name and full-text stages run only when the target's name has one
   definition in the index and is not a dunder name. `member_access (candidate)` rows do not enter

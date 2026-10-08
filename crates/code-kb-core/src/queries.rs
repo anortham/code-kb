@@ -2296,11 +2296,16 @@ pub fn find_related_tests(
     };
     let is_test = format!(
         "((s.is_test = 1 OR s.test_container = 1
-           OR ({} AND s.kind IN ('function', 'method') AND ({NAMES_A_TEST_SQL}
+           OR ({} AND s.kind IN ('function', 'method') AND ({}
                OR EXISTS (SELECT 1 FROM symbols tc
-                          WHERE tc.symbol_id = s.parent_symbol_id AND tc.test_container = 1))))
+                          WHERE tc.symbol_id = s.parent_symbol_id
+                            AND (tc.test_container = 1
+                                 OR (tc.kind IN ('function', 'method')
+                                     AND (tc.is_test = 1 OR {})))))))
           AND {not_setup})",
-        test_path_predicate("s")
+        test_path_predicate("s"),
+        names_a_test_sql("s"),
+        names_a_test_sql("tc")
     );
     let not_documentation = not_documentation(conn, "s");
 
@@ -2320,6 +2325,7 @@ pub fn find_related_tests(
         && let Ok(rows) = stmt.query_map(params![target_symbol.symbol_id, limit as i64], map_symbol)
     {
         for row in rows.flatten() {
+            let row = enclosing_test(conn, row)?;
             if seen_ids.insert(row.symbol_id.clone()) {
                 tests.push(row);
                 if tests.len() >= limit {
@@ -2355,6 +2361,7 @@ pub fn find_related_tests(
             )
         {
             for row in rows.flatten() {
+                let row = enclosing_test(conn, row)?;
                 if seen_ids.insert(row.symbol_id.clone()) {
                     tests.push(row);
                     if tests.len() >= limit {
@@ -2384,10 +2391,12 @@ pub fn find_related_tests(
                 .query_row(params![site.from_symbol_id], map_symbol)
                 .optional()?
         {
-            seen_ids.insert(test.symbol_id.clone());
-            tests.push(test);
-            if tests.len() >= limit {
-                return Ok(tests);
+            let test = enclosing_test(conn, test)?;
+            if seen_ids.insert(test.symbol_id.clone()) {
+                tests.push(test);
+                if tests.len() >= limit {
+                    return Ok(tests);
+                }
             }
         }
     }
@@ -2442,6 +2451,7 @@ pub fn find_related_tests(
         )
     {
         for row in rows.flatten() {
+            let row = enclosing_test(conn, row)?;
             if seen_ids.insert(row.symbol_id.clone()) {
                 tests.push(row);
                 if tests.len() >= limit {
@@ -2476,6 +2486,7 @@ pub fn find_related_tests(
             && let Ok(rows) = stmt.query_map(params![and_q, (remaining * 2) as i64], map_symbol)
         {
             for row in rows.flatten() {
+                let row = enclosing_test(conn, row)?;
                 if seen_ids.insert(row.symbol_id.clone()) {
                     tests.push(row);
                     if tests.len() >= limit {
@@ -5452,9 +5463,30 @@ fn type_declaration_line(signature: &str) -> String {
 /// A name that reads like a test (`test_run`, `TestRoutes`, `runSpec`), for a symbol in a test file
 /// that julie did not flag and that is not in a test class: an app factory such as `create_app` in
 /// `tests/test_apps` is not a test, but a helper method of a test class leads to that class.
-/// The SQL mirror of [`names_a_test`] for the row `s`; `LIKE` ignores ASCII case.
-const NAMES_A_TEST_SQL: &str = "(s.name LIKE 'test%' OR s.name LIKE '%test' OR s.name LIKE '%tests'
-     OR s.name LIKE '%spec' OR s.name LIKE '%specs')";
+/// The SQL mirror of [`names_a_test`] for the row `alias`; `LIKE` ignores ASCII case.
+fn names_a_test_sql(alias: &str) -> String {
+    ["test%", "%test", "%tests", "%spec", "%specs"]
+        .map(|pattern| format!("{alias}.name LIKE '{pattern}'"))
+        .join(" OR ")
+}
+
+/// The test a related-test row stands for: the row, or the test that encloses a helper defined
+/// inside it (`@app.url_defaults def add_language_code` in `test_url_processors`).
+fn enclosing_test(conn: &Connection, row: Symbol) -> Result<Symbol, QueryError> {
+    if row.is_test || row.test_container || names_a_test(&row.name) {
+        return Ok(row);
+    }
+    let parent = row
+        .parent_symbol_id
+        .as_deref()
+        .map(|id| get_symbol_by_id(conn, id))
+        .transpose()?
+        .flatten();
+    Ok(match parent {
+        Some(parent) if matches!(parent.kind.as_str(), "function" | "method") => parent,
+        _ => row,
+    })
+}
 
 fn names_a_test(name: &str) -> bool {
     let lowered = name.to_ascii_lowercase();
@@ -7347,7 +7379,10 @@ mod tests {
     #[test]
     fn test_name_rule_and_its_sql_mirror_agree_on_every_name() {
         let conn = Connection::open_in_memory().unwrap();
-        let sql = format!("SELECT {NAMES_A_TEST_SQL} FROM (SELECT :name AS name) s");
+        let sql = format!(
+            "SELECT {} FROM (SELECT :name AS name) s",
+            names_a_test_sql("s")
+        );
         let mut stmt = conn.prepare(&sql).unwrap();
         for name in [
             "test_run",

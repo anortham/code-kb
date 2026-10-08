@@ -1562,15 +1562,20 @@ fn an_app_factory_in_a_test_folder_is_not_a_related_test() {
             "tests/test_basic.py",
             "from app import Flask\n\ndef test_static_url_path():\n    Flask(\"basic\")\n",
         ),
+        (
+            "tests/test_cli.py",
+            "from app import Flask\n\ndef test_cli_custom_obj():\n    def create_app():\n        return Flask(\"cli\")\n\n    create_app()\n",
+        ),
     ]);
     let conn = open_read_only(&db).unwrap();
 
     let slice = get_context_slice_op(&ws, &db, &conn, "Flask.__init__", None, false).unwrap();
-    let names: Vec<_> = slice
+    let mut names: Vec<_> = slice
         .related_tests
         .iter()
         .map(|test| test.name.as_str())
         .collect();
+    names.sort();
 
-    assert_eq!(names, ["test_static_url_path"]);
+    assert_eq!(names, ["test_cli_custom_obj", "test_static_url_path"]);
 }
