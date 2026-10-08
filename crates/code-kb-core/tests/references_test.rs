@@ -1,8 +1,8 @@
 use code_kb_core::{
     Workspace, compute_blast_radius, file_skeleton_op, find_julie_extract_binary,
     find_references_for_symbol, find_references_scoped, format_blast_radius, format_references,
-    fts_search_symbols_scoped, open_read_only, open_read_write, safe_tempdir, scan_workspace,
-    search_symbols_scoped,
+    fts_search_symbols_scoped, get_symbol_by_name, open_read_only, open_read_write, safe_tempdir,
+    scan_workspace, search_symbols_scoped, update_file,
 };
 use std::fs;
 
@@ -3045,4 +3045,55 @@ fn lambda_callers_render_the_enclosing_symbol_without_changing_json_names() {
         })
         .expect("JSON should retain the raw lambda name");
     assert!(lambda_json.get("enclosing_symbol_name").is_none());
+}
+
+#[test]
+fn rust_methods_in_an_impl_block_in_another_file_belong_to_their_type() {
+    let runtime = "pub struct QueueRuntime {\n    pub ready: bool,\n}\n\nimpl QueueRuntime {\n    pub fn run_cycle(&self) {\n        self.apply_changes();\n    }\n}\n";
+    let (temp_dir, db_path) = scanned_repo(&[
+        ("src/runtime.rs", runtime),
+        (
+            "src/runtime/processing.rs",
+            "use super::*;\n\nimpl QueueRuntime {\n    fn apply_changes(&self) {}\n\n    pub fn process_batch(&self) {\n        self.apply_changes();\n    }\n}\n",
+        ),
+        (
+            "other/runtime.rs",
+            "pub struct QueueRuntime;\n\nimpl QueueRuntime {\n    fn apply_changes(&self) {}\n}\n",
+        ),
+    ]);
+    let workspace = Workspace::new(temp_dir.path().to_path_buf());
+    let conn = open_read_only(&db_path).unwrap();
+
+    let method = get_symbol_by_name(&conn, "QueueRuntime.apply_changes", Some("src"))
+        .unwrap()
+        .expect("qualified name of a method in a detached impl block");
+    assert_eq!(method.path, "src/runtime/processing.rs");
+
+    let callers =
+        find_references_for_symbol(&conn, "apply_changes", "callers", 20, &method.symbol_id)
+            .unwrap();
+    let mut names: Vec<_> = callers
+        .iter()
+        .map(|row| row.from_symbol_name.as_str())
+        .collect();
+    names.sort();
+    assert_eq!(names, ["process_batch", "run_cycle"], "{callers:?}");
+
+    let skeleton =
+        file_skeleton_op(&workspace, &db_path, &conn, "src/runtime/processing.rs").unwrap();
+    assert!(skeleton.contains("fn apply_changes"), "{skeleton}");
+    assert!(skeleton.contains("fn process_batch"), "{skeleton}");
+
+    fs::write(
+        temp_dir.path().join("src/runtime.rs"),
+        runtime.replace("pub ready: bool,", "pub ready: bool,\n    pub busy: bool,"),
+    )
+    .unwrap();
+    update_file(&workspace, &db_path, "src/runtime.rs").unwrap();
+    assert!(
+        get_symbol_by_name(&conn, "QueueRuntime.process_batch", Some("src"))
+            .unwrap()
+            .is_some(),
+        "the link survives a rewrite of the type's file"
+    );
 }

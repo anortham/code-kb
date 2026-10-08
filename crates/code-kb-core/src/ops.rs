@@ -32,8 +32,6 @@ pub enum OpError {
         workspace: String,
         hint: String,
     },
-    #[error("Path '{0}' is a directory, not a file")]
-    IsADirectory(String),
     #[error(
         "symbol_id '{id}' is no longer indexed in {workspace}; run lookup_symbol or search_symbols and select a current id"
     )]
@@ -67,31 +65,34 @@ pub fn resolve_symbol_op(
     file_path: Option<&str>,
 ) -> Result<Symbol, OpError> {
     let id_selector = matches!(selector, SymbolSelector::Id(_));
+    let mut folder = None;
     let guard = if let Some(file_path) = file_path {
         let (absolute, rel) = workspace.resolve_path(Path::new(file_path))?;
         if !absolute.exists() {
             return Err(file_not_found(conn, &rel));
         }
         if absolute.is_dir() {
-            return Err(OpError::IsADirectory(rel));
+            folder = Some(rel);
+            None
+        } else {
+            if !id_selector {
+                sync::ensure_fresh_file(workspace, db_path, conn, &rel)?;
+            }
+            Some((absolute, rel))
         }
-        if !id_selector {
-            sync::ensure_fresh_file(workspace, db_path, conn, &rel)?;
-        }
-        Some((absolute, rel))
     } else {
         None
     };
+    let scope = guard
+        .as_ref()
+        .map(|(_, rel)| rel.as_str())
+        .or(folder.as_deref());
     let lookup = |conn: &Connection| match selector {
-        SymbolSelector::Name(name) => {
-            queries::get_symbol_by_name(conn, name, guard.as_ref().map(|(_, rel)| rel.as_str()))
-        }
+        SymbolSelector::Name(name) => queries::get_symbol_by_name(conn, name, scope),
         SymbolSelector::Id(id) => queries::get_symbol_by_id(conn, id),
     };
     let initial = lookup(conn)?.ok_or_else(|| match selector {
-        SymbolSelector::Name(name) => {
-            symbol_not_found(conn, name, guard.as_ref().map(|(_, rel)| rel.as_str()))
-        }
+        SymbolSelector::Name(name) => symbol_not_found(conn, name, scope),
         SymbolSelector::Id(id) => stale_symbol_id(conn, id),
     })?;
     if !id_selector
@@ -112,9 +113,7 @@ pub fn resolve_symbol_op(
             SymbolSelector::Id(id) => queries::get_symbol_by_id(conn, id)?,
         }
         .ok_or_else(|| match selector {
-            SymbolSelector::Name(name) => {
-                symbol_not_found(conn, name, guard.as_ref().map(|(_, rel)| rel.as_str()))
-            }
+            SymbolSelector::Name(name) => symbol_not_found(conn, name, scope),
             SymbolSelector::Id(id) => stale_symbol_id(conn, id),
         })?
     } else {
@@ -183,6 +182,105 @@ pub fn get_symbol_body_selected_op(
     let source = slicer::slice_symbol_source(&abs_file, &symbol, start)?;
 
     Ok((symbol, source))
+}
+
+/// A context read builds callees, types, and tests for each overload, so it stops at this many.
+pub const MAX_CONTEXT_OVERLOADS: usize = 4;
+
+/// Like [`get_symbol_body_selected_op`], but a name that selects several overloads of one owner
+/// in one file returns the body of each overload instead of an ambiguity error.
+pub fn get_symbol_bodies_selected_op(
+    workspace: &Workspace,
+    db_path: &Path,
+    conn: &Connection,
+    selector: &SymbolSelector,
+    file_path: Option<&str>,
+) -> Result<Vec<(Symbol, String)>, OpError> {
+    match get_symbol_body_selected_op(workspace, db_path, conn, selector, file_path) {
+        Err(ambiguity @ OpError::Query(QueryError::AmbiguousSymbol(..))) => overload_selectors(
+            workspace,
+            db_path,
+            conn,
+            selector,
+            file_path,
+            ambiguity,
+            usize::MAX,
+        )?
+        .iter()
+        .map(|overload| get_symbol_body_selected_op(workspace, db_path, conn, overload, None))
+        .collect(),
+        result => result.map(|body| vec![body]),
+    }
+}
+
+/// Like [`get_context_slice_selected_op`], but a name that selects up to
+/// [`MAX_CONTEXT_OVERLOADS`] overloads of one owner in one file returns a slice for each overload.
+pub fn get_context_slices_selected_op(
+    workspace: &Workspace,
+    db_path: &Path,
+    conn: &Connection,
+    selector: &SymbolSelector,
+    file_path: Option<&str>,
+    include_external: bool,
+) -> Result<Vec<ContextSlice>, OpError> {
+    let slice = |selector: &SymbolSelector, file_path: Option<&str>| {
+        get_context_slice_selected_op(
+            workspace,
+            db_path,
+            conn,
+            selector,
+            file_path,
+            include_external,
+        )
+    };
+    match slice(selector, file_path) {
+        Err(ambiguity @ OpError::Query(QueryError::AmbiguousSymbol(..))) => overload_selectors(
+            workspace,
+            db_path,
+            conn,
+            selector,
+            file_path,
+            ambiguity,
+            MAX_CONTEXT_OVERLOADS,
+        )?
+        .iter()
+        .map(|overload| slice(overload, None))
+        .collect(),
+        result => result.map(|slice| vec![slice]),
+    }
+}
+
+/// The current ids of the overloads a name selects, after their file is refreshed. Returns
+/// `ambiguity` for an id selector, for more than `max` overloads, or when the refresh left none.
+fn overload_selectors(
+    workspace: &Workspace,
+    db_path: &Path,
+    conn: &Connection,
+    selector: &SymbolSelector,
+    file_path: Option<&str>,
+    ambiguity: OpError,
+    max: usize,
+) -> Result<Vec<SymbolSelector>, OpError> {
+    let SymbolSelector::Name(name) = selector else {
+        return Err(ambiguity);
+    };
+    let scope = file_path
+        .map(|path| workspace.resolve_path(Path::new(path)))
+        .transpose()?
+        .map(|(_, rel)| rel);
+    let mut overloads = queries::get_symbol_overloads(conn, name, scope.as_deref())?;
+    if let Some(path) = overloads.first().map(|symbol| symbol.path.clone())
+        && sync::ensure_fresh_file(workspace, db_path, conn, &path)?
+    {
+        overloads = queries::get_symbol_overloads(conn, name, scope.as_deref())?;
+    }
+    if overloads.is_empty() || overloads.len() > max {
+        return Err(ambiguity);
+    }
+    Ok(overloads
+        .into_iter()
+        .map(|symbol| SymbolSelector::Id(symbol.symbol_id))
+        .collect())
 }
 
 /// Where the decorators above a Python symbol begin: julie starts the symbol at its `def` or

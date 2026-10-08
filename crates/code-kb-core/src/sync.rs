@@ -191,7 +191,11 @@ fn write_incrementally(
             warn!("Index was written by another julie-extract build; rescanning it");
             scan_workspace(workspace, db_path, true)
         }
-        result => result.map(drop),
+        Err(error) => Err(error),
+        Ok(_) => crate::db::link_impl_owners_path(db_path).map_err(|e| {
+            error!(db = %db_path.display(), "Linking impl blocks to their types failed: {e}");
+            e.into()
+        }),
     }
 }
 

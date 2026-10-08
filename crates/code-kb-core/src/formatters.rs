@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
 
 use crate::models::{
@@ -32,13 +32,15 @@ pub fn format_file_skeleton(
         return out;
     }
 
-    // Group symbols by parent to render hierarchically
+    // A Rust `impl` block in this file can belong to a type in another file; its methods are roots here.
+    let in_file: HashSet<&str> = symbols.iter().map(|s| s.symbol_id.as_str()).collect();
     let mut children_map: HashMap<Option<String>, Vec<&Symbol>> = HashMap::new();
     for s in symbols {
-        children_map
-            .entry(s.parent_symbol_id.clone())
-            .or_default()
-            .push(s);
+        let parent = s
+            .parent_symbol_id
+            .clone()
+            .filter(|parent| in_file.contains(parent.as_str()));
+        children_map.entry(parent).or_default().push(s);
     }
 
     // Render top-level symbols and their children
@@ -644,6 +646,37 @@ pub fn format_symbol_body(symbol: &Symbol, source: &str) -> String {
         out.push('\n');
     }
     out
+}
+
+/// The bodies of one symbol or of its overloads, each under its own location comment.
+pub fn format_symbol_bodies(bodies: &[(Symbol, String)]) -> String {
+    let mut out = overloads_header(bodies.iter().map(|(symbol, _)| symbol));
+    let parts: Vec<String> = bodies
+        .iter()
+        .map(|(symbol, source)| format_symbol_body(symbol, source))
+        .collect();
+    out.push_str(&parts.join("\n"));
+    out
+}
+
+/// The context of one symbol or of each of its overloads.
+pub fn format_context_slices(slices: &[ContextSlice]) -> String {
+    let mut out = overloads_header(slices.iter().map(|slice| &slice.target_symbol));
+    let parts: Vec<String> = slices.iter().map(format_context_slice).collect();
+    out.push_str(&parts.join("\n"));
+    out
+}
+
+fn overloads_header<'a>(symbols: impl ExactSizeIterator<Item = &'a Symbol>) -> String {
+    let count = symbols.len();
+    let mut symbols = symbols;
+    match symbols.next() {
+        Some(first) if count > 1 => format!(
+            "`{}` has {count} overloads in {}; each one follows.\n\n",
+            first.name, first.path
+        ),
+        _ => String::new(),
+    }
 }
 
 /// Format surgical context bundle for a symbol.

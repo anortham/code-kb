@@ -13,9 +13,10 @@ pub use db::{
     Connection, DbError, ensure_fts_index, ensure_fts_index_path, open_read_only, open_read_write,
 };
 pub use formatters::{
-    format_blast_radius, format_context_slice, format_fact_categories, format_file_skeleton,
-    format_find_symbol_results, format_import_summary, format_no_facts, format_references,
-    format_search_results, format_structural_facts, format_symbol_body, no_facts_heading,
+    format_blast_radius, format_context_slice, format_context_slices, format_fact_categories,
+    format_file_skeleton, format_find_symbol_results, format_import_summary, format_no_facts,
+    format_references, format_search_results, format_structural_facts, format_symbol_bodies,
+    format_symbol_body, no_facts_heading,
 };
 pub use models::{
     BlastRadiusResult, ContextSlice, FileFact, ImpactedSymbol, LiteralFact, ReferenceSite,
@@ -23,7 +24,8 @@ pub use models::{
 };
 pub use ops::{
     OpError, SymbolSelector, blast_radius_op, blast_radius_selected_op, codebase_outline_op,
-    file_skeleton_op, get_context_slice_op, get_context_slice_selected_op, get_symbol_body_op,
+    file_skeleton_op, get_context_slice_op, get_context_slice_selected_op,
+    get_context_slices_selected_op, get_symbol_bodies_selected_op, get_symbol_body_op,
     get_symbol_body_selected_op, resolve_symbol_op,
 };
 pub use queries::{
@@ -34,7 +36,7 @@ pub use queries::{
     find_references_scoped, find_related_tests, find_structural_facts,
     find_structural_facts_scoped, find_type_facts, fts_search_symbols_explained,
     fts_search_symbols_scoped, get_file, get_symbol_by_id, get_symbol_by_name,
-    get_symbol_by_name_exact, import_sites, is_category_alias, is_test_path,
+    get_symbol_by_name_exact, get_symbol_overloads, import_sites, is_category_alias, is_test_path,
     list_structural_fact_categories, list_structural_fact_categories_scoped, load_file_symbols,
     load_scoped_outline_symbols, normalize_kind, qualify_members, sanitize_fts5_query,
     search_symbols, search_symbols_scoped, suggest_file_paths, suggest_symbol_names,

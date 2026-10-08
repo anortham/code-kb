@@ -97,6 +97,14 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   and `idx_symbols_import_path_name` over `symbols(path, name)` for rows with `kind = 'import'`.
   These bound receiver-type, duplicate-reference, and import-binding lookups. Existing indexes
   gain them without rebuilding FTS; SQLite maintains them during file updates.
+- julie leaves `parent_symbol_id` empty on a Rust method whose `impl` block is in another file
+  than its type, and names the type as `impl_type_name` in `metadata_json`. `link_impl_owners`
+  in `db.rs` sets that parent to the type with that name nearest to the method's folder, and
+  leaves it empty when two types are equally near. It runs in `ensure_fts_index` and after every
+  incremental `update` or `delete`, and reads the rows through the partial index
+  `idx_symbols_unlinked_impl`. julie's `ON DELETE SET NULL` clears a link when it rewrites the
+  type's file, and the next run links it again. A skeleton shows a method whose parent is in
+  another file as a top-level row.
 
 ### 3. Token-Dense Progressive Disclosure
 - Always return the most compact representation that answers the query.
@@ -120,8 +128,17 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   `"callers"`, `category` in `find_structural_facts` lists all categories with counts when omitted).
 - Scoped search: `lookup_symbol`, `search_symbols`, `find_references`, and `find_structural_facts` support an optional `path`/`file_path` filter. The filter is relative to `project_root`, or absolute inside it.
 - Lookup and search text include `id=<symbol_id>`. `get_symbol_body`, `get_symbol_context`, `find_references`, and `blast_radius` accept that current-index ID as `symbol_id` / `--symbol-id`; IDs are reselected after edits or rebuilds, and unresolved-call matching remains heuristic.
+- `file_path` of `get_symbol_body` and `get_symbol_context` can name a folder; the folder narrows
+  a name lookup. When a name selects overloads, every candidate with the same name, parent, and
+  file, `get_symbol_body` returns each body under the line
+  ``` `Name` has N overloads in path; each one follows.``` and `get_symbol_context` returns a
+  context for each overload up to `MAX_CONTEXT_OVERLOADS` (4). Other candidate sets stay an
+  `Ambiguous symbol` error that lists each candidate's `id`. CLI JSON is one object for one
+  symbol and an array for overloads.
 - Recovery on a miss: every not-found path builds its text from `symbol_not_found_parts` or
-  `file_not_found_parts` in `queries.rs`. The text names the bound workspace, then either
+  `file_not_found_parts` in `queries.rs`. The text names the bound workspace, then
+  ``` `path` does not define it; it is defined in:``` with the definitions elsewhere when a path
+  filter excludes a symbol of that exact name, or
   `Did you mean one of:` with up to three candidates as `kind `name` (path:line)`, or
   `No similar name is indexed; check the workspace and spelling.` Candidates come from the
   substring search first, then from `symbol_names_tri` trigram rows kept within an edit distance

@@ -5,10 +5,10 @@ use code_kb_core::workspace::NO_PROJECT_MARKER_REASON;
 use code_kb_core::{
     SymbolSelector, Workspace, WorkspaceError, blast_radius_selected_op, codebase_outline_op,
     ensure_fresh_file, ensure_fts_index_path, file_skeleton_op, find_references_for_symbol_ext,
-    format_context_slice, format_fact_categories, format_find_symbol_results, format_references,
-    format_search_results, format_structural_facts, format_symbol_body,
-    fts_search_symbols_explained, fts_search_symbols_scoped, get_context_slice_selected_op,
-    get_symbol_body_selected_op, list_structural_fact_categories_scoped, load_file_symbols,
+    format_context_slices, format_fact_categories, format_find_symbol_results, format_references,
+    format_search_results, format_structural_facts, format_symbol_bodies,
+    fts_search_symbols_explained, fts_search_symbols_scoped, get_context_slices_selected_op,
+    get_symbol_bodies_selected_op, list_structural_fact_categories_scoped, load_file_symbols,
     open_read_only, qualify_members, queries, resolve_symbol_op, scan_workspace,
     search_symbols_scoped,
 };
@@ -633,7 +633,7 @@ fn main() -> anyhow::Result<()> {
         }
         Command::Body(args) => {
             let selector = symbol_selector(args.symbol.as_ref(), args.symbol_id.as_ref())?;
-            let (symbol, body) = get_symbol_body_selected_op(
+            let bodies = get_symbol_bodies_selected_op(
                 &workspace,
                 &db_path,
                 &conn,
@@ -642,14 +642,21 @@ fn main() -> anyhow::Result<()> {
             )?;
 
             if cli.json {
-                println!("{}", serde_json::json!({ "symbol": symbol, "body": body }));
+                let rows: Vec<_> = bodies
+                    .iter()
+                    .map(|(symbol, body)| serde_json::json!({ "symbol": symbol, "body": body }))
+                    .collect();
+                match rows.as_slice() {
+                    [row] => println!("{row}"),
+                    _ => println!("{}", serde_json::Value::Array(rows)),
+                }
             } else {
-                print!("{}", format_symbol_body(&symbol, &body));
+                print!("{}", format_symbol_bodies(&bodies));
             }
         }
         Command::Context(args) => {
             let selector = symbol_selector(args.symbol.as_ref(), args.symbol_id.as_ref())?;
-            let slice = get_context_slice_selected_op(
+            let slices = get_context_slices_selected_op(
                 &workspace,
                 &db_path,
                 &conn,
@@ -659,9 +666,12 @@ fn main() -> anyhow::Result<()> {
             )?;
 
             if cli.json {
-                println!("{}", serde_json::to_string_pretty(&slice)?);
+                match slices.as_slice() {
+                    [slice] => println!("{}", serde_json::to_string_pretty(slice)?),
+                    _ => println!("{}", serde_json::to_string_pretty(&slices)?),
+                }
             } else {
-                println!("{}", format_context_slice(&slice));
+                println!("{}", format_context_slices(&slices));
             }
         }
         Command::Refs(args) => {

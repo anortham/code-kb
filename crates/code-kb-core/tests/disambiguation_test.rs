@@ -1,7 +1,8 @@
 use code_kb_core::{
-    Workspace, ensure_fts_index, find_callee_signatures, find_julie_extract_binary,
+    SymbolSelector, Workspace, ensure_fts_index, find_callee_signatures, find_julie_extract_binary,
     find_literals_scoped, find_references_scoped, find_structural_facts_scoped,
-    format_fact_categories, format_structural_facts, get_context_slice_op, get_symbol_by_id,
+    format_fact_categories, format_structural_facts, format_symbol_bodies, get_context_slice_op,
+    get_context_slices_selected_op, get_symbol_bodies_selected_op, get_symbol_by_id,
     get_symbol_by_name, list_structural_fact_categories_scoped, open_read_only, open_read_write,
     safe_tempdir, scan_workspace, search_symbols_scoped, suggest_file_paths, suggest_symbol_names,
 };
@@ -1456,4 +1457,92 @@ fn the_category_listing_names_the_qt_aliases() {
         assert!(alias_line.contains(alias), "{alias_line}");
     }
     assert!(!alias_line.contains("signals ("), "{alias_line}");
+}
+
+fn scanned(files: &[(&str, &str)]) -> (tempfile::TempDir, Workspace, std::path::PathBuf) {
+    let repo = safe_tempdir();
+    for (path, source) in files {
+        let file = repo.path().join(path);
+        fs::create_dir_all(file.parent().unwrap()).unwrap();
+        fs::write(file, source).unwrap();
+    }
+    let ws = Workspace::new(repo.path().to_path_buf());
+    let db = repo.path().join("test.db");
+    scan_workspace(&ws, &db, true).unwrap();
+    (repo, ws, db)
+}
+
+#[test]
+fn a_wrong_file_path_names_the_file_that_defines_the_symbol() {
+    let (_repo, ws, db) = scanned(&[
+        ("src/watch.rs", "pub fn stop_file_watching() {}\n"),
+        ("src/handler.rs", "pub fn handle() {}\n"),
+    ]);
+    let conn = open_read_only(&db).unwrap();
+
+    let error = get_context_slice_op(
+        &ws,
+        &db,
+        &conn,
+        "stop_file_watching",
+        Some("src/handler.rs"),
+        false,
+    )
+    .unwrap_err()
+    .to_string();
+
+    assert!(
+        error.contains("`src/handler.rs` does not define it"),
+        "{error}"
+    );
+    assert!(
+        error.contains("`stop_file_watching` (src/watch.rs:1)"),
+        "{error}"
+    );
+}
+
+#[test]
+fn a_folder_as_file_path_narrows_the_lookup_to_that_folder() {
+    let (_repo, ws, db) = scanned(&[
+        ("src/watch.rs", "pub fn stop_file_watching() {}\n"),
+        ("tools/watch.rs", "pub fn stop_file_watching() {}\n"),
+    ]);
+    let conn = open_read_only(&db).unwrap();
+
+    let slice =
+        get_context_slice_op(&ws, &db, &conn, "stop_file_watching", Some("tools"), false).unwrap();
+
+    assert_eq!(slice.target_symbol.path, "tools/watch.rs");
+}
+
+#[test]
+fn a_name_with_overloads_in_one_class_returns_every_overload() {
+    let (_repo, ws, db) = scanned(&[(
+        "src/Cache.cs",
+        "public static class Cache\n{\n    public static int Read(string key) => Read(key, null);\n\n    internal static int Read(string key, string scope)\n    {\n        return key.Length;\n    }\n}\n\npublic class Left { public void Run() {} }\n\npublic class Right { public void Run() {} }\n",
+    )]);
+    let conn = open_read_only(&db).unwrap();
+    let read = SymbolSelector::Name("Cache.Read".to_string());
+
+    let bodies = get_symbol_bodies_selected_op(&ws, &db, &conn, &read, None).unwrap();
+    let text = format_symbol_bodies(&bodies);
+    assert_eq!(bodies.len(), 2, "{text}");
+    assert!(
+        text.starts_with("`Read` has 2 overloads in src/Cache.cs; each one follows."),
+        "{text}"
+    );
+    assert!(
+        text.contains("internal static int Read(string key, string scope)"),
+        "{text}"
+    );
+
+    let slices = get_context_slices_selected_op(&ws, &db, &conn, &read, None, false).unwrap();
+    assert_eq!(slices.len(), 2);
+
+    let run = SymbolSelector::Name("Run".to_string());
+    let error = get_symbol_bodies_selected_op(&ws, &db, &conn, &run, None).unwrap_err();
+    assert!(
+        error.to_string().contains("Ambiguous symbol 'Run'"),
+        "{error}"
+    );
 }

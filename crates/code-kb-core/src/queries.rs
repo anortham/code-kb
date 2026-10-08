@@ -2419,12 +2419,14 @@ pub fn find_related_tests(
     }
 
     let remaining = limit - tests.len();
+    // SQLite tests these terms in the order written, and the test-path rule costs about 16 times
+    // the name match on every row, so the name match comes first.
     let name_sql = format!(
         "SELECT {COLUMNS}
      FROM symbols s
-     WHERE {is_test}
+     WHERE (s.name LIKE ?1 ESCAPE '\\' OR s.signature LIKE ?1 ESCAPE '\\')
+       AND {is_test}
        AND {not_documentation}
-       AND (s.name LIKE ?1 ESCAPE '\\' OR s.signature LIKE ?1 ESCAPE '\\')
      ORDER BY (s.name LIKE ?1 ESCAPE '\\') DESC, {TEST_ORDER}
      LIMIT ?2"
     );
@@ -2591,12 +2593,12 @@ fn chain_contains(chain: &[String], wanted: &[&str]) -> bool {
         .all(|segment| remaining.any(|name| name == segment))
 }
 
-fn get_symbol_by_name_internal(
+fn name_candidates(
     conn: &Connection,
     name: &str,
     path_filter: Option<&str>,
     exact_path: bool,
-) -> Result<Option<Symbol>, QueryError> {
+) -> Result<Vec<Symbol>, QueryError> {
     let (ancestor_segments, terminal_name) = split_qualified_name(name);
     let parent_name = ancestor_segments.last().copied();
 
@@ -2659,11 +2661,11 @@ fn get_symbol_by_name_internal(
     }
 
     if matches.is_empty() {
-        return Ok(None);
+        return Ok(Vec::new());
     }
 
     if matches.len() == 1 {
-        return Ok(Some(matches.remove(0)));
+        return Ok(vec![matches.remove(0)]);
     }
 
     // Exclude imports if non-import candidates exist
@@ -2674,7 +2676,7 @@ fn get_symbol_by_name_internal(
     };
 
     if candidates.len() == 1 {
-        return Ok(Some(candidates.into_iter().next().unwrap()));
+        return Ok(vec![candidates.into_iter().next().unwrap()]);
     }
 
     // Check if there's an exact match on full name among candidates
@@ -2684,7 +2686,7 @@ fn get_symbol_by_name_internal(
         .cloned()
         .collect();
     if exact_name_matches.len() == 1 {
-        return Ok(Some(exact_name_matches.into_iter().next().unwrap()));
+        return Ok(vec![exact_name_matches.into_iter().next().unwrap()]);
     }
 
     let definition_candidates = if exact_name_matches.is_empty() {
@@ -2710,7 +2712,7 @@ fn get_symbol_by_name_internal(
         .cloned()
         .collect();
     if def_matches.len() == 1 {
-        return Ok(Some(def_matches.into_iter().next().unwrap()));
+        return Ok(vec![def_matches.into_iter().next().unwrap()]);
     }
 
     let active_pool = if !def_matches.is_empty() {
@@ -2729,26 +2731,43 @@ fn get_symbol_by_name_internal(
             .cloned()
             .collect();
         if exact_path_matches.len() == 1 {
-            return Ok(Some(exact_path_matches.into_iter().next().unwrap()));
+            return Ok(vec![exact_path_matches.into_iter().next().unwrap()]);
         }
     }
 
     if active_pool.len() == 1 {
-        return Ok(Some(active_pool.into_iter().next().unwrap()));
+        return Ok(vec![active_pool.into_iter().next().unwrap()]);
     }
 
     let mut outside_tests = active_pool.iter().filter(|s| !is_test_path(&s.path));
     if let (Some(only), None) = (outside_tests.next(), outside_tests.next()) {
-        return Ok(Some(only.clone()));
+        return Ok(vec![only.clone()]);
     }
 
     let mut outer = outer_definitions(conn, &active_pool)?;
     if outer.len() == 1 {
-        return Ok(Some(outer.remove(0)));
+        return Ok(vec![outer.remove(0)]);
     }
 
+    Ok(active_pool)
+}
+
+fn get_symbol_by_name_internal(
+    conn: &Connection,
+    name: &str,
+    path_filter: Option<&str>,
+    exact_path: bool,
+) -> Result<Option<Symbol>, QueryError> {
+    let mut candidates = name_candidates(conn, name, path_filter, exact_path)?;
+    match candidates.len() {
+        0 | 1 => Ok(candidates.pop()),
+        _ => Err(ambiguous_symbol(name, &candidates)),
+    }
+}
+
+fn ambiguous_symbol(name: &str, candidates: &[Symbol]) -> QueryError {
     let mut candidate_list = String::new();
-    for s in &active_pool {
+    for s in candidates {
         candidate_list.push_str(&format!(
             "- {} `{}` in {}:{} (id={})\n",
             crate::formatters::display_kind(s),
@@ -2758,12 +2777,30 @@ fn get_symbol_by_name_internal(
             s.symbol_id
         ));
     }
+    QueryError::AmbiguousSymbol(name.to_string(), candidates.len(), candidate_list)
+}
 
-    Err(QueryError::AmbiguousSymbol(
-        name.to_string(),
-        active_pool.len(),
-        candidate_list,
-    ))
+/// The overloads a name selects: one symbol, or every symbol with that name, owner, and file.
+/// Any other set of candidates is an `AmbiguousSymbol` error.
+pub fn get_symbol_overloads(
+    conn: &Connection,
+    name: &str,
+    path_filter: Option<&str>,
+) -> Result<Vec<Symbol>, QueryError> {
+    let candidates = name_candidates(conn, name, path_filter, false)?;
+    let first = candidates.first();
+    let overloads = candidates.iter().all(|s| {
+        first.is_some_and(|first| {
+            s.name == first.name
+                && s.path == first.path
+                && s.parent_symbol_id == first.parent_symbol_id
+        })
+    });
+    if overloads {
+        Ok(candidates)
+    } else {
+        Err(ambiguous_symbol(name, &candidates))
+    }
 }
 
 /// The candidates left after dropping an `export` row that repeats a definition on its line and,
@@ -3008,16 +3045,32 @@ pub fn symbol_not_found_parts(
     name: &str,
     path_filter: Option<&str>,
 ) -> (String, String) {
+    let list = |candidates: &[Symbol]| {
+        candidates
+            .iter()
+            .map(|s| format!("  - {} `{}` ({}:{})", s.kind, s.name, s.path, s.start_line))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    let terminal = split_qualified_name(name).1;
+    if let Some(path) = path_filter {
+        let elsewhere: Vec<Symbol> = suggest_symbol_names(conn, name, None)
+            .into_iter()
+            .filter(|s| s.name == terminal)
+            .collect();
+        if !elsewhere.is_empty() {
+            let hint = format!(
+                "`{path}` does not define it; it is defined in:\n{}",
+                list(&elsewhere)
+            );
+            return (workspace_name(conn), hint);
+        }
+    }
     let candidates = suggest_symbol_names(conn, name, path_filter);
     let hint = if candidates.is_empty() {
         "No similar name is indexed; check the workspace and spelling.".to_string()
     } else {
-        let list = candidates
-            .iter()
-            .map(|s| format!("  - {} `{}` ({}:{})", s.kind, s.name, s.path, s.start_line))
-            .collect::<Vec<_>>()
-            .join("\n");
-        format!("Did you mean one of:\n{list}")
+        format!("Did you mean one of:\n{}", list(&candidates))
     };
     (workspace_name(conn), hint)
 }

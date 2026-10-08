@@ -8,10 +8,10 @@ use code_kb_core::{
     Connection, SymbolSelector, TelemetryFilter, TimeWindow, WatcherHandle, Workspace,
     WorkspaceError, blast_radius_selected_op, codebase_outline_op, create_index,
     ensure_fts_index_path, ensure_index_matches_extractor, file_sizes_for_paths, file_skeleton_op,
-    find_references_for_symbol_ext, format_blast_radius, format_context_slice,
+    find_references_for_symbol_ext, format_blast_radius, format_context_slices,
     format_fact_categories, format_find_symbol_results, format_references, format_search_results,
-    format_structural_facts, format_symbol_body, format_telemetry_summary,
-    fts_search_symbols_scoped, get_context_slice_selected_op, get_symbol_body_selected_op,
+    format_structural_facts, format_symbol_bodies, format_telemetry_summary,
+    fts_search_symbols_scoped, get_context_slices_selected_op, get_symbol_bodies_selected_op,
     get_telemetry_summary, installed_extractor_version, is_project_root,
     list_structural_fact_categories_scoped, open_global_telemetry_db, open_read_only,
     qualify_members, reconcile_offline_edits, record_tool_call, record_tool_call_conn,
@@ -381,7 +381,7 @@ impl McpServer {
             },
             Tool {
                 name: "get_symbol_body".to_string(),
-                description: "Retrieves the source of one symbol as written, with its declaration and decorators. Use when you only need the implementation without dependency context. If preparing to edit a function, use get_symbol_context instead.".to_string(),
+                description: "Retrieves the source of one symbol as written, with its declaration and decorators. Use when you only need the implementation without dependency context. A name with overloads in one class returns each overload. If preparing to edit a function, use get_symbol_context instead.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -392,14 +392,14 @@ impl McpServer {
                         "symbol_id": { "type": "string", "description": "Exact current-index symbol identifier. Provide exactly one non-empty symbol_name or symbol_id." },
                         "file_path": {
                             "type": "string",
-                            "description": "Optional file path to disambiguate identical symbol names, relative to project_root or absolute inside it."
+                            "description": "Optional file or folder path to disambiguate identical symbol names, relative to project_root or absolute inside it."
                         }
                     }
                 }),
             },
             Tool {
                 name: "get_symbol_context".to_string(),
-                description: "Surgical context bundle combining target body, callee signatures, parameter types, and related tests in one turn. Use this before modifying a function to understand its immediate dependencies.".to_string(),
+                description: "Surgical context bundle combining target body, callee signatures, parameter types, and related tests in one turn. Use this before modifying a function to understand its immediate dependencies. A name with up to four overloads in one class returns a bundle for each.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -410,7 +410,7 @@ impl McpServer {
                         "symbol_id": { "type": "string", "description": "Exact current-index symbol identifier. Provide exactly one non-empty symbol_name or symbol_id." },
                         "file_path": {
                             "type": "string",
-                            "description": "Optional file path to disambiguate identical symbol names, relative to project_root or absolute inside it."
+                            "description": "Optional file or folder path to disambiguate identical symbol names, relative to project_root or absolute inside it."
                         },
                         "include_external": {
                             "type": "boolean",
@@ -1153,16 +1153,16 @@ impl McpServer {
                     .or_else(|| arguments.get("path"))
                     .and_then(|v| v.as_str());
 
-                match get_symbol_body_selected_op(
+                match get_symbol_bodies_selected_op(
                     &self.workspace,
                     &self.db_path,
                     &conn,
                     &selector,
                     file_path,
                 ) {
-                    Ok((symbol, body)) => CallToolResult::text(format_symbol_body(&symbol, &body))
-                        .with_logical_result_count(1)
-                        .with_baseline_paths(vec![symbol.path.clone()]),
+                    Ok(bodies) => CallToolResult::text(format_symbol_bodies(&bodies))
+                        .with_logical_result_count(bodies.len())
+                        .with_baseline_paths(vec![bodies[0].0.path.clone()]),
                     Err(e) => CallToolResult::error(e.to_string()),
                 }
             }
@@ -1181,7 +1181,7 @@ impl McpServer {
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false);
 
-                match get_context_slice_selected_op(
+                match get_context_slices_selected_op(
                     &self.workspace,
                     &self.db_path,
                     &conn,
@@ -1189,12 +1189,9 @@ impl McpServer {
                     file_path,
                     include_external,
                 ) {
-                    Ok(slice) => {
-                        let target_path = slice.target_symbol.path.clone();
-                        CallToolResult::text(format_context_slice(&slice))
-                            .with_logical_result_count(1)
-                            .with_baseline_paths(vec![target_path])
-                    }
+                    Ok(slices) => CallToolResult::text(format_context_slices(&slices))
+                        .with_logical_result_count(slices.len())
+                        .with_baseline_paths(vec![slices[0].target_symbol.path.clone()]),
                     Err(e) => CallToolResult::error(e.to_string()),
                 }
             }

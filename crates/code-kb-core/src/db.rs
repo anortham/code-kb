@@ -201,6 +201,8 @@ pub fn ensure_fts_index(conn: &Connection) -> Result<(), rusqlite::Error> {
         )?;
     }
 
+    link_impl_owners(conn)?;
+
     if fts_index_is_ready(conn) {
         return Ok(());
     }
@@ -309,6 +311,101 @@ pub fn ensure_fts_index(conn: &Connection) -> Result<(), rusqlite::Error> {
     Ok(())
 }
 
+/// The kinds of type an `impl` block can name.
+const IMPL_OWNER_KINDS: &str = "'class', 'struct', 'enum', 'union', 'interface', 'type'";
+
+/// julie leaves `parent_symbol_id` empty on a Rust method whose `impl` block is in another file
+/// than its type, and names the type as `impl_type_name` in `metadata_json`. Links each such
+/// method to the type with that name nearest to its file, so every query that reads the parent
+/// sees the owner. Equally near types leave the method unlinked. julie's `ON DELETE SET NULL`
+/// clears a link when it rewrites the type's file, and the next call links the method again.
+pub fn link_impl_owners(conn: &Connection) -> rusqlite::Result<()> {
+    let has_metadata: bool = conn.query_row(
+        "SELECT count(*) = 1 FROM pragma_table_info('symbols') WHERE name = 'metadata_json'",
+        [],
+        |row| row.get(0),
+    )?;
+    if !has_metadata {
+        return Ok(());
+    }
+    const UNLINKED: &str = "parent_symbol_id IS NULL
+         AND metadata_json LIKE '%\"impl_parent_id_resolved\":false%'";
+    conn.execute_batch(&format!(
+        "CREATE INDEX IF NOT EXISTS idx_symbols_unlinked_impl ON symbols(symbol_id) WHERE {UNLINKED};"
+    ))?;
+    let unlinked: Vec<(String, String, String, String)> = conn
+        .prepare(&format!(
+            "SELECT symbol_id, path, language, json_extract(metadata_json, '$.impl_type_name')
+             FROM symbols
+             WHERE {UNLINKED} AND json_valid(metadata_json)
+               AND json_extract(metadata_json, '$.impl_type_name') IS NOT NULL"
+        ))?
+        .query_map([], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+        })?
+        .collect::<rusqlite::Result<_>>()?;
+    if unlinked.is_empty() {
+        return Ok(());
+    }
+
+    let mut owners = conn.prepare(&format!(
+        "SELECT symbol_id, path FROM symbols
+         WHERE name = ?1 AND language = ?2 AND kind IN ({IMPL_OWNER_KINDS})"
+    ))?;
+    let mut links = Vec::new();
+    for (method_id, method_path, language, type_name) in &unlinked {
+        let candidates: Vec<(String, String)> = owners
+            .query_map([type_name, language], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .collect::<rusqlite::Result<_>>()?;
+        if let Some(owner_id) = nearest_owner(method_path, &candidates) {
+            links.push((owner_id.to_string(), method_id));
+        }
+    }
+    if links.is_empty() {
+        return Ok(());
+    }
+
+    let tx = rusqlite::Transaction::new_unchecked(conn, rusqlite::TransactionBehavior::Immediate)?;
+    {
+        // The owner must still exist: julie checks every foreign key on its next write.
+        let mut link = tx.prepare(
+            "UPDATE symbols SET parent_symbol_id = ?1
+             WHERE symbol_id = ?2 AND parent_symbol_id IS NULL
+               AND EXISTS (SELECT 1 FROM symbols WHERE symbol_id = ?1)",
+        )?;
+        for (owner_id, method_id) in &links {
+            link.execute([owner_id, *method_id])?;
+        }
+    }
+    tx.commit()
+}
+
+/// The candidate whose folder shares the most leading folders with `path`, unless two tie.
+fn nearest_owner<'a>(path: &str, candidates: &'a [(String, String)]) -> Option<&'a str> {
+    fn folders(path: &str) -> impl Iterator<Item = &str> {
+        let mut segments: Vec<&str> = path.split(['/', '\\']).collect();
+        segments.pop();
+        segments.into_iter()
+    }
+    let mut best: Option<(&str, usize)> = None;
+    let mut tied = false;
+    for (id, candidate_path) in candidates {
+        let score = folders(path)
+            .zip(folders(candidate_path))
+            .take_while(|(a, b)| a == b)
+            .count();
+        match best {
+            Some((_, top)) if score < top => {}
+            Some((_, top)) if score == top => tied = true,
+            _ => {
+                best = Some((id, score));
+                tied = false;
+            }
+        }
+    }
+    best.filter(|_| !tied).map(|(id, _)| id)
+}
+
 /// Ensures the FTS5 index on `symbols` exists at the specified database file path. The
 /// connection waits up to 60 s for another process's migration; a large index takes seconds.
 pub fn ensure_fts_index_path(path: &Path) -> Result<(), DbError> {
@@ -319,6 +416,15 @@ pub fn ensure_fts_index_path(path: &Path) -> Result<(), DbError> {
     conn.busy_timeout(std::time::Duration::from_secs(60))
         .map_err(DbError::PragmaFailed)?;
     ensure_fts_index(&conn).map_err(DbError::FtsMigration)?;
+    Ok(())
+}
+
+/// Runs [`link_impl_owners`] on the database file after an incremental write.
+pub fn link_impl_owners_path(path: &Path) -> Result<(), DbError> {
+    let conn = open_read_write(path)?;
+    conn.busy_timeout(std::time::Duration::from_secs(60))
+        .map_err(DbError::PragmaFailed)?;
+    link_impl_owners(&conn)?;
     Ok(())
 }
 
@@ -370,6 +476,24 @@ pub fn retarget_artifact_root(db_path: &Path, new_root: &Path) -> Result<(), DbE
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn nearest_owner_prefers_the_closest_folder_and_refuses_a_tie() {
+        let owners = |paths: &[&str]| -> Vec<(String, String)> {
+            paths
+                .iter()
+                .map(|path| (format!("id:{path}"), path.to_string()))
+                .collect()
+        };
+        let near = owners(&["crates/a/src/runtime.rs", "crates/b/src/runtime.rs"]);
+        assert_eq!(
+            nearest_owner("crates/a/src/runtime/processing.rs", &near),
+            Some("id:crates/a/src/runtime.rs")
+        );
+        let tied = owners(&["crates/a/src/x.rs", "crates/a/src/y.rs"]);
+        assert_eq!(nearest_owner("crates/a/src/z/w.rs", &tied), None);
+        assert_eq!(nearest_owner("crates/a/src/z/w.rs", &[]), None);
+    }
 
     #[test]
     fn test_open_read_write_and_read_only() {
