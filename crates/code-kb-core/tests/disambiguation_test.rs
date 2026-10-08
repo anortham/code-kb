@@ -1579,3 +1579,23 @@ fn an_app_factory_in_a_test_folder_is_not_a_related_test() {
 
     assert_eq!(names, ["test_cli_custom_obj", "test_static_url_path"]);
 }
+
+#[test]
+fn neither_a_setup_hook_nor_the_target_itself_is_a_related_test() {
+    let (_repo, ws, db) = scanned(&[(
+        "test/serve.js",
+        "describe('setHeaders', function () {\n  before(function () {\n    this.options = { 'setHeaders': function (res) { res.setHeader('x', 'y') } }\n  })\n\n  it('sets the header', function () {\n    serve(this.options)\n  })\n})\n",
+    )]);
+    let conn = open_read_only(&db).unwrap();
+
+    let slice =
+        get_context_slice_op(&ws, &db, &conn, "setHeaders", Some("test/serve.js"), false).unwrap();
+    let names: Vec<_> = slice
+        .related_tests
+        .iter()
+        .map(|test| test.name.as_str())
+        .collect();
+
+    assert!(!names.contains(&"before"), "{names:?}");
+    assert!(!names.contains(&"setHeaders"), "{names:?}");
+}

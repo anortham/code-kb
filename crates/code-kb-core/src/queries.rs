@@ -2289,10 +2289,12 @@ pub fn find_related_tests(
             s.is_test, s.test_container";
     // Rows a scan writes can land in any order, so every query below needs a full ORDER BY.
     const TEST_ORDER: &str = "s.is_test DESC, s.path, s.start_line, s.symbol_id";
-    let not_setup = if has_column(conn, "symbols", "test_lifecycle") {
-        "COALESCE(s.test_lifecycle, 0) = 0"
-    } else {
-        "1 = 1"
+    let not_setup = |alias: &str| {
+        if has_column(conn, "symbols", "test_lifecycle") {
+            format!("COALESCE({alias}.test_lifecycle, 0) = 0")
+        } else {
+            "1 = 1".to_string()
+        }
     };
     let is_test = format!(
         "((s.is_test = 1 OR s.test_container = 1
@@ -2300,17 +2302,19 @@ pub fn find_related_tests(
                OR EXISTS (SELECT 1 FROM symbols tc
                           WHERE tc.symbol_id = s.parent_symbol_id
                             AND (tc.test_container = 1
-                                 OR (tc.kind IN ('function', 'method')
+                                 OR (tc.kind IN ('function', 'method') AND {}
                                      AND (tc.is_test = 1 OR {})))))))
-          AND {not_setup})",
+          AND {})",
         test_path_predicate("s"),
         names_a_test_sql("s"),
-        names_a_test_sql("tc")
+        not_setup("tc"),
+        names_a_test_sql("tc"),
+        not_setup("s")
     );
     let not_documentation = not_documentation(conn, "s");
 
     let mut tests = Vec::new();
-    let mut seen_ids = std::collections::HashSet::new();
+    let mut seen_ids = std::collections::HashSet::from([target_symbol.symbol_id.clone()]);
 
     let callers_sql = format!(
         "SELECT {COLUMNS}
