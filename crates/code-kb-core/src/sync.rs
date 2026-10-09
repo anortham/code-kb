@@ -335,6 +335,12 @@ pub fn ensure_index_matches_extractor(
     if !db_path.exists() {
         return Ok(false);
     }
+    // Servers that start together on one stale index must not each scan it into the same
+    // side file; the first rebuilds and the others wait, then find the index current.
+    let _rebuild_lock = std::fs::File::create(format!("{}.rebuild.lock", db_path.display()))
+        .and_then(|file| file.lock().map(|()| file))
+        .map_err(|e| warn!(db = %db_path.display(), "Index rebuild lock unavailable: {e}"))
+        .ok();
     let metadata = |key: &str| -> Option<String> {
         let conn = crate::db::open_read_only(db_path).ok()?;
         conn.query_row(

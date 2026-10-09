@@ -921,6 +921,45 @@ fn a_worktree_index_copied_from_an_older_extractor_is_rebuilt() {
 }
 
 #[test]
+fn test_servers_starting_together_on_a_stale_index_rebuild_it_once() {
+    find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+    let temp_dir = safe_tempdir();
+    let root = temp_dir.path().to_path_buf();
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(
+        root.join("src").join("calc.rs"),
+        "pub fn foo_fn() -> i32 {\n    100\n}\n",
+    )
+    .unwrap();
+    let ws = Workspace::new(root.clone());
+    let db_path = root.join(".code-kb").join("artifact.db");
+    scan_workspace(&ws, &db_path, true).expect("Scan failed");
+    rusqlite::Connection::open(&db_path)
+        .unwrap()
+        .execute(
+            "UPDATE artifact_metadata SET value = '0.0.1' WHERE key = 'binary_version'",
+            [],
+        )
+        .unwrap();
+    let installed = installed_extractor_version();
+
+    let rebuilds = std::thread::scope(|scope| {
+        let starts: Vec<_> = (0..4)
+            .map(|_| scope.spawn(|| ensure_index_matches_extractor(&ws, &db_path, &installed)))
+            .collect();
+        starts
+            .into_iter()
+            .map(|start| start.join().unwrap().unwrap())
+            .filter(|&rebuilt| rebuilt)
+            .count()
+    });
+
+    assert_eq!(rebuilds, 1);
+    let conn = open_read_only(&db_path).unwrap();
+    assert!(get_symbol_by_name(&conn, "foo_fn", None).unwrap().is_some());
+}
+
+#[test]
 fn test_index_from_other_extractor_version_is_rebuilt() {
     find_julie_extract_binary().expect("julie-extract binary must be present for tests");
     let temp_dir = safe_tempdir();
