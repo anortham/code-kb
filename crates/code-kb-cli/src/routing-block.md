@@ -5,8 +5,9 @@
 
 **CRITICAL ROUTING RULES (Saves 80-90% context tokens):**
 - **DO** pass `project_root`, the absolute path of the project or git worktree you work in, on every code-kb call except `telemetry_summary`. Send the same value each time. Change it when you move to a worktree or another project.
-- **DO NOT** run `grep`, `rg`, `find`, `cat`, or `view_file` to search symbols or discover interfaces.
-- **DO NOT** read an entire file when you only need a function, class, or type signature.
+- **Before you `Read`, `cat`, `head`, or `sed -n` a source file**, call `file_skeleton` on it, then `get_symbol_body` or `get_symbol_context` for the symbols you need. Read a whole source file only when you will change most of it.
+- **To find a definition or its uses**, call `lookup_symbol` or `find_references`, not `rg` or `grep` on the name.
+- **To find code by concept**, call `search_symbols`, not `rg`.
 - **DO** use `rg` for literal text: string literals, error messages, comments, and config values. `code-kb` indexes symbol names, signatures, and docstrings, not file contents.
 
 ### Quick Tool Routing:

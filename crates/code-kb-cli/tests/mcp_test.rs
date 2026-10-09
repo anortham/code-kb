@@ -3171,6 +3171,22 @@ fn test_mcp_tools_list_requires_project_root_on_every_tool_except_telemetry_summ
 }
 
 #[test]
+fn test_mcp_tools_list_asks_claude_to_load_every_code_tool_at_start() {
+    let repo = setup_test_repo();
+    let mut session = McpSession::start(serve_command(repo.path()));
+
+    let listed = session.request("tools/list", json!({}));
+    for tool in listed["result"]["tools"].as_array().unwrap() {
+        let always_load = &tool["_meta"]["anthropic/alwaysLoad"];
+        if tool["name"] == "telemetry_summary" {
+            assert!(tool.get("_meta").is_none(), "{tool}");
+        } else {
+            assert_eq!(always_load, &json!(true), "{tool}");
+        }
+    }
+}
+
+#[test]
 fn test_mcp_call_without_project_root_asks_for_the_absolute_project_path() {
     let repo = setup_test_repo();
     let mut session = McpSession::start(serve_command(repo.path()));

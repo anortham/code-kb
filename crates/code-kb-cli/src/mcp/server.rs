@@ -303,7 +303,7 @@ impl McpServer {
             },
             Tool {
                 name: "file_skeleton".to_string(),
-                description: "Returns all types, traits, functions, signatures, docstrings, and visibility for a file with implementation bodies stripped. Use this instead of reading the entire file when inspecting interfaces and types. A directory path returns its outline.".to_string(),
+                description: "Returns all types, traits, functions, signatures, docstrings, and visibility for a file with implementation bodies stripped. Call this before reading a source file with Read, cat, or sed, then fetch the symbols you need with get_symbol_body; read the whole file only when you will change most of it. A directory path returns its outline.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -381,7 +381,7 @@ impl McpServer {
             },
             Tool {
                 name: "get_symbol_body".to_string(),
-                description: "Retrieves the source of one symbol as written, with its declaration and decorators. Use when you only need the implementation without dependency context. A name with overloads in one class returns each overload. If preparing to edit a function, use get_symbol_context instead.".to_string(),
+                description: "Retrieves the source of one symbol as written, with its declaration and decorators. Use instead of reading a line range with Read, cat, or sed -n when you need the implementation without dependency context. A name with overloads in one class returns each overload. If preparing to edit a function, use get_symbol_context instead.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -421,7 +421,7 @@ impl McpServer {
             },
             Tool {
                 name: "find_references".to_string(),
-                description: "Discovers callers or callees of a symbol from AST call sites. Callers also include type usages (annotations, casts) and member accesses of the name. Matching is by symbol name, ranked by the call site (same file, same directory, receiver type); same-named symbols with no closer candidate can merge, so pass file_path or a qualified name ('Type::method') for overloaded names and verify before refactoring.".to_string(),
+                description: "Discovers callers or callees of a symbol from AST call sites; use instead of rg or grep on the symbol name. Callers also include type usages (annotations, casts) and member accesses of the name. Matching is by symbol name, ranked by the call site (same file, same directory, receiver type); same-named symbols with no closer candidate can merge, so pass file_path or a qualified name ('Type::method') for overloaded names and verify before refactoring.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -1509,7 +1509,14 @@ impl McpServer {
             "notifications/initialized" => None,
             "ping" => Some(JsonRpcResponse::success(id, json!({}))),
             "tools/list" => {
-                let tools = Self::tool_definitions();
+                let mut tools = json!(Self::tool_definitions());
+                // Claude Code defers MCP tools behind ToolSearch, and its agents almost never
+                // search for them, so every code tool asks to be loaded at session start.
+                for tool in tools.as_array_mut().into_iter().flatten() {
+                    if tool["name"] != "telemetry_summary" {
+                        tool["_meta"] = json!({ "anthropic/alwaysLoad": true });
+                    }
+                }
                 Some(JsonRpcResponse::success(id, json!({ "tools": tools })))
             }
             "tools/call" => {

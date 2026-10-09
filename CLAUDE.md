@@ -287,5 +287,9 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
 ### 8. Dynamic MCP Discovery & Zero Ghost Compatibility
 - **An MCP server is an ephemeral, agent-facing discovery surface, not a frozen REST API.**
 - Agents discover tools dynamically via `tools/list` on session start and carry zero state across sessions. There is no concept of "backward compatibility" for tool names across sessions.
+- `tools/list` sets `_meta["anthropic/alwaysLoad"]: true` on every tool except `telemetry_summary`.
+  Claude Code otherwise defers MCP tools behind `ToolSearch`, and in a 2026-10 test no Claude agent
+  called `ToolSearch` for them: 0 of 24 runs used code-kb, against 22 of 24 with the tools loaded.
+  A routing-block line that told agents to call `ToolSearch` changed nothing.
 - Do not freeze suboptimal tool names, preserve dead aliases, or compromise ergonomics for "backward compatibility" when improving tool schemas.
 - Optimize ruthlessly for agent cognitive clarity and minimal tool-selection ambiguity. When a tool name or boundary causes model friction, rename or sharpen it cleanly.

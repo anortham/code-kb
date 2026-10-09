@@ -8,6 +8,11 @@ description: Navigates code with the code-kb MCP server (symbol lookup, concept 
 code-kb indexes symbol names, signatures, and docstrings, not file contents. Use `rg` for
 literal text: string literals, error messages, comments, and config values.
 
+Before you `Read`, `cat`, or `sed -n` a source file, call `file_skeleton` on it, then
+`get_symbol_body` or `get_symbol_context` for the symbols you need. Read a whole source file
+only when you will change most of it. Find a definition or its uses with `lookup_symbol` or
+`find_references`, not `rg` on the name.
+
 ## `project_root`
 
 Pass `project_root`, the absolute path of the project or git worktree you work in, on every
