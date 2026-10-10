@@ -4,7 +4,8 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
-const PROJECT_ROOT_DESCRIPTION: &str = "Absolute path of the project or git worktree you are working in. Send the same value on every call. Change it when you move to a worktree or another project.";
+const PROJECT_ROOT_DESCRIPTION: &str =
+    "Absolute path of the project or git worktree you work in. Change it when you move to another.";
 
 struct ChildGuard(Child);
 

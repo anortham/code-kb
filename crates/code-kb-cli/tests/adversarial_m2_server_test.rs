@@ -5,7 +5,8 @@ use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
-const PROJECT_ROOT_DESCRIPTION: &str = "Absolute path of the project or git worktree you are working in. Send the same value on every call. Change it when you move to a worktree or another project.";
+const PROJECT_ROOT_DESCRIPTION: &str =
+    "Absolute path of the project or git worktree you work in. Change it when you move to another.";
 
 struct ChildGuard(Child);
 

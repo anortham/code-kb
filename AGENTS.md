@@ -27,9 +27,8 @@ symbol search, and surgical context slicing with minimal token consumption.
 schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
 
 - `project_root` is the absolute path of the project or git worktree the agent works
-  in. The schema description is: "Absolute path of the project or git worktree you are
-  working in. Send the same value on every call. Change it when you move to a worktree
-  or another project."
+  in. The schema description is: "Absolute path of the project or git worktree you work
+  in. Change it when you move to another."
 - **Why:**
   - The agent always knows where it works. In fresh sessions, the first code-kb call
     after the worktree step already passed an absolute worktree path.

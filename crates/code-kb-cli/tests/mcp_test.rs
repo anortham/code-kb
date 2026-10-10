@@ -201,7 +201,8 @@ fn mcp_request(
     serde_json::from_str(&response).unwrap()
 }
 
-const PROJECT_ROOT_DESCRIPTION: &str = "Absolute path of the project or git worktree you are working in. Send the same value on every call. Change it when you move to a worktree or another project.";
+const PROJECT_ROOT_DESCRIPTION: &str =
+    "Absolute path of the project or git worktree you work in. Change it when you move to another.";
 const MISSING_PROJECT_ROOT: &str = "Missing required parameter: project_root. Pass the absolute path of the project or git worktree you are working in.";
 
 fn serve_command(launch_root: &Path) -> Command {
@@ -509,7 +510,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
     assert!(
         resp["result"]["instructions"]
             .as_str()
-            .is_some_and(|instructions| instructions.starts_with("Pass project_root, the absolute path of the project or git worktree you work in, on every call except telemetry_summary. For progressive code exploration,"))
+            .is_some_and(|instructions| instructions.starts_with("Pass project_root, the absolute path of the project or git worktree you work in, on every call except telemetry_summary. Call file_skeleton before you read a source file,"))
     );
 
     // 2. Send tools/list

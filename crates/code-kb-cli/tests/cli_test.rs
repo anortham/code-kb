@@ -1685,7 +1685,7 @@ fn test_cli_hook_session_start() {
         .unwrap()
         .as_str()
         .unwrap();
-    assert!(ctx.contains("Code Intelligence: Always use `code-kb` MCP tools"));
+    assert!(ctx.contains("Code navigation: use the `code-kb` MCP tools first"));
     assert!(ctx.contains("`project_root`"));
     assert!(ctx.contains("except `telemetry_summary`"));
     assert!(!ctx.contains("EnterWorktree"));
@@ -1726,7 +1726,7 @@ fn test_cli_hook_subagent_start() {
         .unwrap()
         .as_str()
         .unwrap();
-    assert!(ctx.contains("Code Intelligence: Always use `code-kb` MCP tools"));
+    assert!(ctx.contains("Code navigation: use the `code-kb` MCP tools first"));
 }
 
 #[test]
@@ -1756,7 +1756,7 @@ fn test_cli_hook_copilot_env() {
     let val: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert!(val.get("hookSpecificOutput").is_none());
     let ctx = val.get("additionalContext").unwrap().as_str().unwrap();
-    assert!(ctx.contains("Code Intelligence: Always use `code-kb` MCP tools"));
+    assert!(ctx.contains("Code navigation: use the `code-kb` MCP tools first"));
 
     let subagent_output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
         .env("COPILOT_PLUGIN_DATA", "1")
@@ -1791,7 +1791,7 @@ fn test_cli_hook_pre_invocation() {
         .expect("ephemeralMessage key")
         .as_str()
         .expect("string message");
-    assert!(msg.contains("Code Intelligence: Always use `code-kb` MCP tools"));
+    assert!(msg.contains("Code navigation: use the `code-kb` MCP tools first"));
 }
 
 #[test]

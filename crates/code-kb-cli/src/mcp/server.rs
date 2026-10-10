@@ -21,7 +21,8 @@ use code_kb_core::{
 use super::protocol::{CallToolResult, JsonRpcRequest, JsonRpcResponse, Tool};
 
 const ZERO_LIMIT_NOTICE: &str = "Result limit is 0; increase it to check for matches.";
-const PROJECT_ROOT_DESCRIPTION: &str = "Absolute path of the project or git worktree you are working in. Send the same value on every call. Change it when you move to a worktree or another project.";
+const PROJECT_ROOT_DESCRIPTION: &str =
+    "Absolute path of the project or git worktree you work in. Change it when you move to another.";
 
 /// Counts the tree lines a `codebase_outline` answer renders, ignoring the root header
 /// and the bracketed notices that follow the tree.
@@ -286,30 +287,30 @@ impl McpServer {
         let mut tools = vec![
             Tool {
                 name: "codebase_outline".to_string(),
-                description: "Provides a top-level architectural orientation of the repository or sub-package in a few hundred tokens. Start here when exploring unfamiliar code instead of running directory listings or reading files.".to_string(),
+                description: "Directory layout and main exports of the project or a subdirectory, in a few hundred tokens. Use instead of ls -R or find on unfamiliar code.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
                         "path": {
                             "type": "string",
-                            "description": "Subdirectory to scope the outline to, relative to project_root. Defaults to project_root."
+                            "description": "Subdirectory (default: project_root)."
                         },
                         "depth": {
                             "type": "integer",
-                            "description": "Directory recursion depth (default: 2)."
+                            "description": "Depth (default: 2)."
                         }
                     }
                 }),
             },
             Tool {
                 name: "file_skeleton".to_string(),
-                description: "Returns all types, traits, functions, signatures, docstrings, and visibility for a file with implementation bodies stripped. Call this before reading a source file with Read, cat, or sed, then fetch the symbols you need with get_symbol_body; read the whole file only when you will change most of it. A directory path returns its outline.".to_string(),
+                description: "A file's types, functions, signatures, and docstrings with bodies stripped. Call this before you read a source file with Read, cat, or sed, then fetch the symbols you need with get_symbol_body; read the whole file only when you will change most of it. A directory returns its outline.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
                         "file_path": {
                             "type": "string",
-                            "description": "File path relative to project_root, or an absolute path inside it."
+                            "description": "File or directory path."
                         }
                     },
                     "required": ["file_path"]
@@ -317,31 +318,31 @@ impl McpServer {
             },
             Tool {
                 name: "lookup_symbol".to_string(),
-                description: "Look up symbols by identifier. Use for exact names, qualified paths ('Type::method'), or identifier prefixes. Exact matches come first, then names that start with the query, then names that contain it. Returns kind, path, and signature. Do NOT use for natural-language concepts or keywords; use search_symbols instead.".to_string(),
+                description: "Find symbols by exact name, qualified name ('Type::method'), or prefix; returns kind, path, line, signature, and id. Use instead of grep on a name. For a concept, use search_symbols.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
                         "query": {
                             "type": "string",
-                            "description": "Exact identifier name, qualified path ('Type::method'), or prefix. Not a sentence or concept."
+                            "description": "Identifier, qualified name, or prefix."
                         },
                         "path": {
                             "type": "string",
-                            "description": "Optional file path or directory prefix to scope search, relative to project_root or absolute inside it (e.g. 'crates/code-kb-core')."
+                            "description": "File or directory to search in."
                         },
                         "kind": {
                             "type": "string",
-                            "description": "Optional filter by kind (e.g. function, struct, trait, class, interface, enum)."
+                            "description": "Kind, such as function or class."
                         },
                         "is_test": {
                             "type": "boolean",
-                            "description": "Include test functions, test containers, and rows from test files (default: false). A row whose name equals the query is returned either way."
+                            "description": "Include rows from tests (default: false)."
                         },
                         "limit": {
                             "type": "integer",
                             "minimum": 0,
                             "maximum": code_kb_core::queries::MAX_RESULT_LIMIT,
-                            "description": "Maximum number of symbols to return, 0-200 (default: 20)."
+                            "description": "Default: 20."
                         }
                     },
                     "required": ["query"]
@@ -349,31 +350,31 @@ impl McpServer {
             },
             Tool {
                 name: "search_symbols".to_string(),
-                description: "Natural-language and keyword search over symbol names, signatures, and docstrings; substrings inside identifiers are found ('sha256' finds 'parseSha256Sidecar'). Use when the exact identifier is unknown or searching for concepts (e.g. 'auth middleware', 'retry loop'). Do NOT use if you already know the exact symbol name; use lookup_symbol instead.".to_string(),
+                description: "Keyword search over symbol names, signatures, and docstrings, for code found by concept ('retry backoff'); matches substrings inside names. For a known name, use lookup_symbol.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
                         "query": {
                             "type": "string",
-                            "description": "Natural language query or keywords (e.g. 'parse tokens', 'authentication middleware', 'retry backoff')."
+                            "description": "Keywords."
                         },
                         "path": {
                             "type": "string",
-                            "description": "Optional file path or directory prefix to scope search, relative to project_root or absolute inside it (e.g. 'crates/code-kb-core')."
+                            "description": "File or directory to search in."
                         },
                         "kind": {
                             "type": "string",
-                            "description": "Optional filter by kind (e.g. function, struct, trait, class, interface, enum)."
+                            "description": "Kind, such as function or class."
                         },
                         "is_test": {
                             "type": "boolean",
-                            "description": "Include test functions, test containers, and rows from test files (default: false)."
+                            "description": "Include rows from tests (default: false)."
                         },
                         "limit": {
                             "type": "integer",
                             "minimum": 0,
                             "maximum": code_kb_core::queries::MAX_RESULT_LIMIT,
-                            "description": "Maximum number of symbols to return, 0-200 (default: 20)."
+                            "description": "Default: 20."
                         }
                     },
                     "required": ["query"]
@@ -381,124 +382,124 @@ impl McpServer {
             },
             Tool {
                 name: "get_symbol_body".to_string(),
-                description: "Retrieves the source of one symbol as written, with its declaration and decorators. Use instead of reading a line range with Read, cat, or sed -n when you need the implementation without dependency context. A name with overloads in one class returns each overload. If preparing to edit a function, use get_symbol_context instead.".to_string(),
+                description: "The source of one symbol, with its declaration and decorators; overloads return each body. Use instead of reading a line range with Read, cat, or sed -n. Before an edit, use get_symbol_context.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
                         "symbol_name": {
                             "type": "string",
-                            "description": "Full or qualified symbol name. Provide exactly one non-empty symbol_name or symbol_id."
+                            "description": "Name or qualified name; pass exactly one of this or symbol_id."
                         },
-                        "symbol_id": { "type": "string", "description": "Exact current-index symbol identifier. Provide exactly one non-empty symbol_name or symbol_id." },
+                        "symbol_id": { "type": "string", "description": "The id from lookup or search; pass exactly one of this or symbol_name." },
                         "file_path": {
                             "type": "string",
-                            "description": "Optional file or folder path to disambiguate identical symbol names, relative to project_root or absolute inside it."
+                            "description": "File or folder that holds the symbol."
                         }
                     }
                 }),
             },
             Tool {
                 name: "get_symbol_context".to_string(),
-                description: "Surgical context bundle combining target body, callee signatures, parameter types, and related tests in one turn. Use this before modifying a function to understand its immediate dependencies. A name with up to four overloads in one class returns a bundle for each.".to_string(),
+                description: "A symbol's body with the signatures of what it calls, its parameter types, and its tests, in one call. Use before you change a function.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
                         "symbol_name": {
                             "type": "string",
-                            "description": "Target symbol name. Provide exactly one non-empty symbol_name or symbol_id."
+                            "description": "Name or qualified name; pass exactly one of this or symbol_id."
                         },
-                        "symbol_id": { "type": "string", "description": "Exact current-index symbol identifier. Provide exactly one non-empty symbol_name or symbol_id." },
+                        "symbol_id": { "type": "string", "description": "The id from lookup or search; pass exactly one of this or symbol_name." },
                         "file_path": {
                             "type": "string",
-                            "description": "Optional file or folder path to disambiguate identical symbol names, relative to project_root or absolute inside it."
+                            "description": "File or folder that holds the symbol."
                         },
                         "include_external": {
                             "type": "boolean",
-                            "description": "Include external stdlib/runtime calls in callee signatures (default: false)."
+                            "description": "Include library calls (default: false)."
                         }
                     }
                 }),
             },
             Tool {
                 name: "find_references".to_string(),
-                description: "Discovers callers or callees of a symbol from AST call sites; use instead of rg or grep on the symbol name. Callers also include type usages (annotations, casts) and member accesses of the name. Matching is by symbol name, ranked by the call site (same file, same directory, receiver type); same-named symbols with no closer candidate can merge, so pass file_path or a qualified name ('Type::method') for overloaded names and verify before refactoring.".to_string(),
+                description: "Callers (with type usages and member accesses) or callees of a symbol from parsed call sites; use instead of rg or grep on the name. Calls match by name and nearest scope, so pass file_path or a qualified name for a common name.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
                         "symbol_name": {
                             "type": "string",
-                            "description": "Target symbol name. Provide exactly one non-empty symbol_name or symbol_id."
+                            "description": "Name or qualified name; pass exactly one of this or symbol_id."
                         },
-                        "symbol_id": { "type": "string", "description": "Exact current-index symbol identifier. Provide exactly one non-empty symbol_name or symbol_id." },
+                        "symbol_id": { "type": "string", "description": "The id from lookup or search; pass exactly one of this or symbol_name." },
                         "file_path": {
                             "type": "string",
-                            "description": "Optional file path to disambiguate symbols with identical names across files, relative to project_root or absolute inside it."
+                            "description": "File that holds the symbol."
                         },
                         "direction": {
                             "type": "string",
                             "enum": ["callers", "callees"],
-                            "description": "Direction of references ('callers' or 'callees', default: 'callers')."
+                            "description": "Default: callers."
                         },
                         "limit": {
                             "type": "integer",
                             "minimum": 0,
                             "maximum": code_kb_core::queries::MAX_RESULT_LIMIT,
-                            "description": "Maximum references to return, 0-200 (default: 20)."
+                            "description": "Default: 20."
                         },
                         "include_external": {
                             "type": "boolean",
-                            "description": "If true, includes external runtime/stdlib primitives in callees (default: false, only internal workspace symbols)."
+                            "description": "Include library callees (default: false)."
                         }
                     }
                 }),
             },
             Tool {
                 name: "find_structural_facts".to_string(),
-                description: "Queries framework-level facts (routes, SQL tables, config keys) extracted from AST. If category is omitted, lists all available categories with counts.".to_string(),
+                description: "Framework facts such as routes, SQL, and config keys. With no category, lists the categories with counts.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
                         "category": {
                             "type": "string",
-                            "description": "Optional fact category or pattern to search (e.g. route, query, model, config). If omitted, lists available categories with counts."
+                            "description": "Category, such as route, query, model, or config."
                         },
                         "path": {
                             "type": "string",
-                            "description": "Optional file path or directory to filter structural facts, relative to project_root or absolute inside it."
+                            "description": "File or directory."
                         },
                         "limit": {
                             "type": "integer",
                             "minimum": 0,
                             "maximum": code_kb_core::queries::MAX_RESULT_LIMIT,
-                            "description": "Maximum facts and literals to return per section, 0-200 each (default: 30)."
+                            "description": "Per section (default: 30)."
                         }
                     }
                 }),
             },
             Tool {
                 name: "blast_radius".to_string(),
-                description: "Predicts which downstream symbols are affected and which tests to run before or after edits. With no symbol, symbol_id, or file, it inspects uncommitted git changes and uses changed files to predict impact and likely tests. You can also pass symbol (or symbol_name) or file (or file_path).".to_string(),
+                description: "The symbols a change affects and the tests to run. With no symbol, symbol_id, or file, it reads the uncommitted git changes.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
                         "symbol": {
                             "type": "string",
-                            "description": "Symbol name to seed the impact walk (aliases: symbol_name, name, target)."
+                            "description": "Symbol name."
                         },
-                        "symbol_id": { "type": "string", "description": "Exact current-index symbol identifier. Provide one non-empty symbol or symbol_id." },
+                        "symbol_id": { "type": "string", "description": "The id from lookup or search; pass one of this or symbol." },
                         "file": {
                             "type": "string",
-                            "description": "File path to seed the impact walk, relative to project_root or absolute inside it (aliases: file_path, path)."
+                            "description": "File path."
                         },
                         "depth": {
                             "type": "integer",
-                            "description": "Maximum relationship hops to walk outward from seeds (default: 2)."
+                            "description": "Hops (default: 2)."
                         },
                         "limit": {
                             "type": "integer",
                             "minimum": 0,
                             "maximum": code_kb_core::queries::MAX_RESULT_LIMIT,
-                            "description": "Maximum visible tests and impacted symbols per section, 0-200 each (default: 20)."
+                            "description": "Per section (default: 20)."
                         }
                     }
                 }),
@@ -1502,7 +1503,7 @@ impl McpServer {
                         "name": "code-kb",
                         "version": env!("CARGO_PKG_VERSION")
                     },
-                    "instructions": "Pass project_root, the absolute path of the project or git worktree you work in, on every call except telemetry_summary. For progressive code exploration, start with codebase_outline (a few hundred tokens) for directory structure. Use file_skeleton to inspect interfaces without bodies. Use lookup_symbol for exact name lookups and search_symbols for natural-language concepts. Use get_symbol_context for surgical context before native file edits; use get_symbol_body only when the isolated implementation is needed. Trace callers/callees with find_references. Use blast_radius to assess downstream impact and predict which tests to run before or after changes."
+                    "instructions": "Pass project_root, the absolute path of the project or git worktree you work in, on every call except telemetry_summary. Call file_skeleton before you read a source file, then get_symbol_body or get_symbol_context for the symbols you need. Use lookup_symbol and find_references instead of grep on a name, search_symbols for a concept, and blast_radius to pick the tests to run."
                 });
                 Some(JsonRpcResponse::success(id, init_result))
             }

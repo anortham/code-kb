@@ -1,19 +1,22 @@
 {
   "tools": [
     {
-      "description": "Provides a top-level architectural orientation of the repository or sub-package in a few hundred tokens. Start here when exploring unfamiliar code instead of running directory listings or reading files.",
+      "_meta": {
+        "anthropic/alwaysLoad": true
+      },
+      "description": "Directory layout and main exports of the project or a subdirectory, in a few hundred tokens. Use instead of ls -R or find on unfamiliar code.",
       "inputSchema": {
         "properties": {
           "depth": {
-            "description": "Directory recursion depth (default: 2).",
+            "description": "Depth (default: 2).",
             "type": "integer"
           },
           "path": {
-            "description": "Subdirectory to scope the outline to, relative to project_root. Defaults to project_root.",
+            "description": "Subdirectory (default: project_root).",
             "type": "string"
           },
           "project_root": {
-            "description": "Absolute path of the project or git worktree you are working in. Send the same value on every call. Change it when you move to a worktree or another project.",
+            "description": "Absolute path of the project or git worktree you work in. Change it when you move to another.",
             "type": "string"
           }
         },
@@ -25,15 +28,18 @@
       "name": "codebase_outline"
     },
     {
-      "description": "Returns all types, traits, functions, signatures, docstrings, and visibility for a file with implementation bodies stripped. Use this instead of reading the entire file when inspecting interfaces and types. A directory path returns its outline.",
+      "_meta": {
+        "anthropic/alwaysLoad": true
+      },
+      "description": "A file's types, functions, signatures, and docstrings with bodies stripped. Call this before you read a source file with Read, cat, or sed, then fetch the symbols you need with get_symbol_body; read the whole file only when you will change most of it. A directory returns its outline.",
       "inputSchema": {
         "properties": {
           "file_path": {
-            "description": "File path relative to project_root, or an absolute path inside it.",
+            "description": "File or directory path.",
             "type": "string"
           },
           "project_root": {
-            "description": "Absolute path of the project or git worktree you are working in. Send the same value on every call. Change it when you move to a worktree or another project.",
+            "description": "Absolute path of the project or git worktree you work in. Change it when you move to another.",
             "type": "string"
           }
         },
@@ -46,33 +52,36 @@
       "name": "file_skeleton"
     },
     {
-      "description": "Look up symbols by identifier. Use for exact names, qualified paths ('Type::method'), or identifier prefixes. Exact matches come first, then names that start with the query, then names that contain it. Returns kind, path, and signature. Do NOT use for natural-language concepts or keywords; use search_symbols instead.",
+      "_meta": {
+        "anthropic/alwaysLoad": true
+      },
+      "description": "Find symbols by exact name, qualified name ('Type::method'), or prefix; returns kind, path, line, signature, and id. Use instead of grep on a name. For a concept, use search_symbols.",
       "inputSchema": {
         "properties": {
           "is_test": {
-            "description": "Include test functions, test containers, and rows from test files (default: false). A row whose name equals the query is returned either way.",
+            "description": "Include rows from tests (default: false).",
             "type": "boolean"
           },
           "kind": {
-            "description": "Optional filter by kind (e.g. function, struct, trait, class, interface, enum).",
+            "description": "Kind, such as function or class.",
             "type": "string"
           },
           "limit": {
-            "description": "Maximum number of symbols to return, 0-200 (default: 20).",
+            "description": "Default: 20.",
             "maximum": 200,
             "minimum": 0,
             "type": "integer"
           },
           "path": {
-            "description": "Optional file path or directory prefix to scope search, relative to project_root or absolute inside it (e.g. 'crates/code-kb-core').",
+            "description": "File or directory to search in.",
             "type": "string"
           },
           "project_root": {
-            "description": "Absolute path of the project or git worktree you are working in. Send the same value on every call. Change it when you move to a worktree or another project.",
+            "description": "Absolute path of the project or git worktree you work in. Change it when you move to another.",
             "type": "string"
           },
           "query": {
-            "description": "Exact identifier name, qualified path ('Type::method'), or prefix. Not a sentence or concept.",
+            "description": "Identifier, qualified name, or prefix.",
             "type": "string"
           }
         },
@@ -85,33 +94,36 @@
       "name": "lookup_symbol"
     },
     {
-      "description": "Natural-language and keyword search over symbol names, signatures, and docstrings; substrings inside identifiers are found ('sha256' finds 'parseSha256Sidecar'). Use when the exact identifier is unknown or searching for concepts (e.g. 'auth middleware', 'retry loop'). Do NOT use if you already know the exact symbol name; use lookup_symbol instead.",
+      "_meta": {
+        "anthropic/alwaysLoad": true
+      },
+      "description": "Keyword search over symbol names, signatures, and docstrings, for code found by concept ('retry backoff'); matches substrings inside names. For a known name, use lookup_symbol.",
       "inputSchema": {
         "properties": {
           "is_test": {
-            "description": "Include test functions, test containers, and rows from test files (default: false).",
+            "description": "Include rows from tests (default: false).",
             "type": "boolean"
           },
           "kind": {
-            "description": "Optional filter by kind (e.g. function, struct, trait, class, interface, enum).",
+            "description": "Kind, such as function or class.",
             "type": "string"
           },
           "limit": {
-            "description": "Maximum number of symbols to return, 0-200 (default: 20).",
+            "description": "Default: 20.",
             "maximum": 200,
             "minimum": 0,
             "type": "integer"
           },
           "path": {
-            "description": "Optional file path or directory prefix to scope search, relative to project_root or absolute inside it (e.g. 'crates/code-kb-core').",
+            "description": "File or directory to search in.",
             "type": "string"
           },
           "project_root": {
-            "description": "Absolute path of the project or git worktree you are working in. Send the same value on every call. Change it when you move to a worktree or another project.",
+            "description": "Absolute path of the project or git worktree you work in. Change it when you move to another.",
             "type": "string"
           },
           "query": {
-            "description": "Natural language query or keywords (e.g. 'parse tokens', 'authentication middleware', 'retry backoff').",
+            "description": "Keywords.",
             "type": "string"
           }
         },
@@ -124,23 +136,26 @@
       "name": "search_symbols"
     },
     {
-      "description": "Retrieves the source of one symbol as written, with its declaration and decorators. Use when you only need the implementation without dependency context. If preparing to edit a function, use get_symbol_context instead.",
+      "_meta": {
+        "anthropic/alwaysLoad": true
+      },
+      "description": "The source of one symbol, with its declaration and decorators; overloads return each body. Use instead of reading a line range with Read, cat, or sed -n. Before an edit, use get_symbol_context.",
       "inputSchema": {
         "properties": {
           "file_path": {
-            "description": "Optional file path to disambiguate identical symbol names, relative to project_root or absolute inside it.",
+            "description": "File or folder that holds the symbol.",
             "type": "string"
           },
           "project_root": {
-            "description": "Absolute path of the project or git worktree you are working in. Send the same value on every call. Change it when you move to a worktree or another project.",
+            "description": "Absolute path of the project or git worktree you work in. Change it when you move to another.",
             "type": "string"
           },
           "symbol_id": {
-            "description": "Exact current-index symbol identifier. Provide exactly one non-empty symbol_name or symbol_id.",
+            "description": "The id from lookup or search.",
             "type": "string"
           },
           "symbol_name": {
-            "description": "Full or qualified symbol name. Provide exactly one non-empty symbol_name or symbol_id.",
+            "description": "Name or qualified name; or pass symbol_id.",
             "type": "string"
           }
         },
@@ -152,27 +167,30 @@
       "name": "get_symbol_body"
     },
     {
-      "description": "Surgical context bundle combining target body, callee signatures, parameter types, and related tests in one turn. Use this before modifying a function to understand its immediate dependencies.",
+      "_meta": {
+        "anthropic/alwaysLoad": true
+      },
+      "description": "A symbol's body with the signatures of what it calls, its parameter types, and its tests, in one call. Use before you change a function.",
       "inputSchema": {
         "properties": {
           "file_path": {
-            "description": "Optional file path to disambiguate identical symbol names, relative to project_root or absolute inside it.",
+            "description": "File or folder that holds the symbol.",
             "type": "string"
           },
           "include_external": {
-            "description": "Include external stdlib/runtime calls in callee signatures (default: false).",
+            "description": "Include library calls (default: false).",
             "type": "boolean"
           },
           "project_root": {
-            "description": "Absolute path of the project or git worktree you are working in. Send the same value on every call. Change it when you move to a worktree or another project.",
+            "description": "Absolute path of the project or git worktree you work in. Change it when you move to another.",
             "type": "string"
           },
           "symbol_id": {
-            "description": "Exact current-index symbol identifier. Provide exactly one non-empty symbol_name or symbol_id.",
+            "description": "The id from lookup or search.",
             "type": "string"
           },
           "symbol_name": {
-            "description": "Target symbol name. Provide exactly one non-empty symbol_name or symbol_id.",
+            "description": "Name or qualified name; or pass symbol_id.",
             "type": "string"
           }
         },
@@ -184,11 +202,14 @@
       "name": "get_symbol_context"
     },
     {
-      "description": "Discovers callers or callees of a symbol from AST call sites. Callers also include type usages (annotations, casts) and member accesses of the name. Matching is by symbol name, ranked by the call site (same file, same directory, receiver type); same-named symbols with no closer candidate can merge, so pass file_path or a qualified name ('Type::method') for overloaded names and verify before refactoring.",
+      "_meta": {
+        "anthropic/alwaysLoad": true
+      },
+      "description": "Callers (with type usages and member accesses) or callees of a symbol from parsed call sites; use instead of rg or grep on the name. Calls match by name and nearest scope, so pass file_path or a qualified name for a common name.",
       "inputSchema": {
         "properties": {
           "direction": {
-            "description": "Direction of references ('callers' or 'callees', default: 'callers').",
+            "description": "Default: callers.",
             "enum": [
               "callers",
               "callees"
@@ -196,29 +217,29 @@
             "type": "string"
           },
           "file_path": {
-            "description": "Optional file path to disambiguate symbols with identical names across files, relative to project_root or absolute inside it.",
+            "description": "File that holds the symbol.",
             "type": "string"
           },
           "include_external": {
-            "description": "If true, includes external runtime/stdlib primitives in callees (default: false, only internal workspace symbols).",
+            "description": "Include library callees (default: false).",
             "type": "boolean"
           },
           "limit": {
-            "description": "Maximum references to return, 0-200 (default: 20).",
+            "description": "Default: 20.",
             "maximum": 200,
             "minimum": 0,
             "type": "integer"
           },
           "project_root": {
-            "description": "Absolute path of the project or git worktree you are working in. Send the same value on every call. Change it when you move to a worktree or another project.",
+            "description": "Absolute path of the project or git worktree you work in. Change it when you move to another.",
             "type": "string"
           },
           "symbol_id": {
-            "description": "Exact current-index symbol identifier. Provide exactly one non-empty symbol_name or symbol_id.",
+            "description": "The id from lookup or search.",
             "type": "string"
           },
           "symbol_name": {
-            "description": "Target symbol name. Provide exactly one non-empty symbol_name or symbol_id.",
+            "description": "Name or qualified name; or pass symbol_id.",
             "type": "string"
           }
         },
@@ -230,25 +251,28 @@
       "name": "find_references"
     },
     {
-      "description": "Queries framework-level facts (routes, SQL tables, config keys) extracted from AST. If category is omitted, lists all available categories with counts.",
+      "_meta": {
+        "anthropic/alwaysLoad": true
+      },
+      "description": "Framework facts such as routes, SQL, and config keys. With no category, lists the categories with counts.",
       "inputSchema": {
         "properties": {
           "category": {
-            "description": "Optional fact category or pattern to search (e.g. route, query, model, config). If omitted, lists available categories with counts.",
+            "description": "Category, such as route, query, model, or config.",
             "type": "string"
           },
           "limit": {
-            "description": "Maximum facts and literals to return per section, 0-200 each (default: 30).",
+            "description": "Per section (default: 30).",
             "maximum": 200,
             "minimum": 0,
             "type": "integer"
           },
           "path": {
-            "description": "Optional file path or directory to filter structural facts, relative to project_root or absolute inside it.",
+            "description": "File or directory.",
             "type": "string"
           },
           "project_root": {
-            "description": "Absolute path of the project or git worktree you are working in. Send the same value on every call. Change it when you move to a worktree or another project.",
+            "description": "Absolute path of the project or git worktree you work in. Change it when you move to another.",
             "type": "string"
           }
         },
@@ -260,33 +284,36 @@
       "name": "find_structural_facts"
     },
     {
-      "description": "Predicts which downstream symbols are affected and which tests to run before or after edits. With no symbol, symbol_id, or file, it inspects uncommitted git changes and uses changed files to predict impact and likely tests. You can also pass symbol (or symbol_name) or file (or file_path).",
+      "_meta": {
+        "anthropic/alwaysLoad": true
+      },
+      "description": "The symbols a change affects and the tests to run. With no symbol, symbol_id, or file, it reads the uncommitted git changes.",
       "inputSchema": {
         "properties": {
           "depth": {
-            "description": "Maximum relationship hops to walk outward from seeds (default: 2).",
+            "description": "Hops (default: 2).",
             "type": "integer"
           },
           "file": {
-            "description": "File path to seed the impact walk, relative to project_root or absolute inside it (aliases: file_path, path).",
+            "description": "File path.",
             "type": "string"
           },
           "limit": {
-            "description": "Maximum visible tests and impacted symbols per section, 0-200 each (default: 20).",
+            "description": "Per section (default: 20).",
             "maximum": 200,
             "minimum": 0,
             "type": "integer"
           },
           "project_root": {
-            "description": "Absolute path of the project or git worktree you are working in. Send the same value on every call. Change it when you move to a worktree or another project.",
+            "description": "Absolute path of the project or git worktree you work in. Change it when you move to another.",
             "type": "string"
           },
           "symbol": {
-            "description": "Symbol name to seed the impact walk (aliases: symbol_name, name, target).",
+            "description": "Symbol name.",
             "type": "string"
           },
           "symbol_id": {
-            "description": "Exact current-index symbol identifier. Provide one non-empty symbol or symbol_id.",
+            "description": "The id from lookup or search.",
             "type": "string"
           }
         },
