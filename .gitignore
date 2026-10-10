@@ -32,3 +32,6 @@ __pycache__/
 
 # Plugin eval run output
 evals/results/
+
+# Private planning notes
+docs/futures/
