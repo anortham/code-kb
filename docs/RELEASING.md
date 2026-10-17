@@ -20,7 +20,8 @@ This guide details the end-to-end release process for `code-kb`. Any agent or ma
 - **Pre-flight Invariants:**
   - `AGENTS.md` and `CLAUDE.md` must stay byte-for-byte identical (`cmp AGENTS.md CLAUDE.md`).
   - No `workspace` parameter exposed in any MCP tool schema (`mcp_test.rs`).
-  - Retained memory about 25 MB, measured on a live `serve` process.
+  - Retained memory about 25–40 MB (50–60 MB after a large callers report), measured on a live
+    `serve` process.
   - Windows NTFS compatibility validated via `win-test` or CI.
 
 ---
@@ -86,8 +87,9 @@ Run the automated pre-flight script, or execute each check manually:
    ```bash
    scripts/reach_gate.py run   # writes target/reach-gate/report.md
    ```
-   The gate fails when a language has proven precision or accounted share under 0.98. Fix a wrong
-   proven site on a dev symbol only, and adjudicate a holdout disagreement without a fix for it.
+   The gate fails when a language has proven precision, excluded precision, or accounted share
+   under 0.98. Fix a wrong proven or excluded site on a dev symbol only, and adjudicate a holdout
+   disagreement without a fix for it. `scripts/reach_gate.py disagreements --repo R` lists them.
    `evals/reach/README.md` has the scoring rules.
 8. **Harness Dogfood Round (preflight step 11 requires it): one round per release.**
    The corpus check finds only output that changed since the previous release, so a defect that

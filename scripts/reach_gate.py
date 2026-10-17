@@ -29,7 +29,7 @@ DEFAULT_OUT = REPO_ROOT / "target/reach-gate"
 DEFAULT_CACHE = Path.home() / ".cache/code-kb-reach"
 
 LABELS = ("proven", "likely", "unresolved", "excluded")
-MARKS = {"proven_precision": 0.98, "accounted": 0.98, "recall_target": 0.90}
+MARKS = {"proven_precision": 0.98, "excluded_precision": 0.98, "accounted": 0.98, "recall_target": 0.90}
 SCAN_TIMEOUT_SECONDS = 3600
 CALL_TIMEOUT_SECONDS = 180
 SOURCE_TEXT_LIMIT = 160
@@ -165,6 +165,7 @@ def aggregate(counts_list):
             if key != "symbols":
                 total[key] += counts[key]
     total["proven_precision"] = ratio(total["true_proven"], total["sites_proven"])
+    total["excluded_precision"] = ratio(total["sites_excluded"] - total["true_excluded"], total["sites_excluded"])
     total["recall"] = ratio(total["recalled_lines"], total["truth_lines"])
     total["accounted"] = ratio(total["accounted_lines"], total["truth_lines"])
     return total
@@ -183,6 +184,9 @@ def decide(report):
             failures.append(f"{language}: proven precision has no proven sites")
         elif precision < MARKS["proven_precision"]:
             failures.append(f"{language}: proven precision {precision:.3f} is below {MARKS['proven_precision']}")
+        excluded = metrics["excluded_precision"]
+        if excluded is not None and excluded < MARKS["excluded_precision"]:
+            failures.append(f"{language}: excluded precision {excluded:.3f} is below {MARKS['excluded_precision']}")
         accounted = metrics["accounted"]
         if accounted is None:
             failures.append(f"{language}: accounted share has no truth lines")
@@ -234,21 +238,22 @@ def render_markdown(report):
         f"Scored repos: {', '.join(report['scored']) or 'none'}",
         "",
         (
-            f"Marks: proven precision >= {marks['proven_precision']} and accounted share >= {marks['accounted']} "
-            f"in every language. Recall target (report only): proven+likely >= {marks['recall_target']}."
+            f"Marks: proven precision >= {marks['proven_precision']}, excluded precision >= {marks['excluded_precision']}, "
+            f"and accounted share >= {marks['accounted']} in every language. "
+            f"Recall target (report only): proven+likely >= {marks['recall_target']}."
         ),
         "",
         "## Languages",
         "",
-        "| Language | Split | Symbols | Truth lines | Proven sites | Proven precision | Recall | Accounted |",
-        "|---|---|---|---|---|---|---|---|",
+        "| Language | Split | Symbols | Truth lines | Proven sites | Proven precision | Excluded precision | Recall | Accounted |",
+        "|---|---|---|---|---|---|---|---|---|",
     ]
     for language, tiers in report["languages"].items():
         for split in ("all", "dev", "holdout"):
             m = tiers[split]
             out.append(
                 f"| {language} | {split} | {m['symbols']} | {m['truth_lines']} | {m['sites_proven']} | "
-                f"{fmt(m['proven_precision'])} | {fmt(m['recall'])} | {fmt(m['accounted'])} |"
+                f"{fmt(m['proven_precision'])} | {fmt(m['excluded_precision'])} | {fmt(m['recall'])} | {fmt(m['accounted'])} |"
             )
     overall = report["overall"]
     verdict = "met" if overall["recall"] is not None and overall["recall"] >= marks["recall_target"] else "not met"
@@ -326,9 +331,14 @@ def disagreements(truth, answer):
         site for site in answer["sites"]
         if site["label"] == "proven" and not any(site_covers(site, *line) for line in truth)
     ]
+    wrongly_excluded = [
+        site for site in answer["sites"]
+        if site["label"] == "excluded" and any(site_covers(site, *line) for line in truth)
+    ]
     missed = sorted(line for line in truth if not any(site_covers(site, *line) for site in answer["sites"]))
     return {
         "proven_without_truth": wrong,
+        "excluded_with_truth": wrongly_excluded,
         "truth_without_site": [(path, line, (path, line) in answer["text_only"]) for path, line in missed],
     }
 
@@ -445,7 +455,7 @@ def cmd_disagreements(args):
     root = prepared_root(entry, args.cache_dir)
     run_binary(args.binary, root, "scan", timeout=SCAN_TIMEOUT_SECONDS)
     source = SourceLines(root)
-    hidden = {"symbols": 0, "wrong": 0, "missed": 0}
+    hidden = {"symbols": 0, "wrong": 0, "excluded": 0, "missed": 0}
     for symbol in cases["symbols"]:
         if args.split != "all" and symbol["split"] != args.split:
             continue
@@ -455,6 +465,7 @@ def cmd_disagreements(args):
         if symbol["split"] == "holdout" and not args.show_holdout:
             hidden["symbols"] += 1
             hidden["wrong"] += len(found["proven_without_truth"])
+            hidden["excluded"] += len(found["excluded_with_truth"])
             hidden["missed"] += len(found["truth_without_site"])
             continue
         print(f"{args.repo} {symbol['split']} {symbol['id']} (answer: {answer['shape']}, {status})")
@@ -464,12 +475,19 @@ def cmd_disagreements(args):
         for site in found["proven_without_truth"]:
             path, line = site["path"], site.get("start_line") or 0
             print(f"  proven, no truth line{adjudication_mark(verdicts, path, line)}: {path}:{line}  {source.text(path, line)}")
+        for site in found["excluded_with_truth"]:
+            path, line = site["path"], site.get("start_line") or 0
+            print(
+                f"  excluded, covers a truth line{adjudication_mark(verdicts, path, line)}: {path}:{line}  "
+                f"({site.get('basis', '')})  {source.text(path, line)}"
+            )
         for path, line, text_only in found["truth_without_site"]:
             note = (" [text only]" if text_only else "") + adjudication_mark(verdicts, path, line)
             print(f"  truth line, no site{note}: {path}:{line}  {source.text(path, line)}")
     if hidden["symbols"]:
         print(
             f"holdout: {hidden['symbols']} symbols, {hidden['wrong']} proven sites with no truth line, "
+            f"{hidden['excluded']} excluded sites that cover a truth line, "
             f"{hidden['missed']} truth lines with no site (add --show-holdout for detail)"
         )
     return 0

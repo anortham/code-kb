@@ -290,6 +290,37 @@ class DecisionTest(unittest.TestCase):
         report = reach_gate.build_report([], [], ["demo"])
         self.assertEqual(report["result"], "FAIL")
 
+    def with_exclusions(self, split, wrong, clean, language="typescript", repo="zod"):
+        truth = lines("a.py", 100)
+        sites = [site("a.py", n, label="proven") for n in range(1, 101)]
+        sites += [site("a.py", n, label="excluded") for n in range(1, wrong + 1)]
+        sites += [site("b.py", n, label="excluded") for n in range(1, clean + 1)]
+        return result(language, split, truth, report_answer(sites), repo=repo)
+
+    def test_gate_fails_when_wrong_exclusions_drop_a_language_below_the_mark(self):
+        rows = [self.with_exclusions("dev", wrong=0, clean=10), self.with_exclusions("holdout", wrong=1, clean=9)]
+        report = reach_gate.build_report(rows, ["zod"], ["zod"])
+        tiers = report["languages"]["typescript"]
+        self.assertEqual(tiers["dev"]["excluded_precision"], 1.0)
+        self.assertEqual(tiers["holdout"]["excluded_precision"], 0.9)
+        self.assertEqual(tiers["all"]["excluded_precision"], 0.95)
+        self.assertEqual(report["result"], "FAIL")
+        self.assertEqual(report["failures"], ["typescript: excluded precision 0.950 is below 0.98"])
+
+    def test_excluded_precision_at_the_mark_passes(self):
+        report = reach_gate.build_report([self.with_exclusions("dev", wrong=1, clean=49)], ["zod"], ["zod"])
+        self.assertEqual(report["languages"]["typescript"]["all"]["excluded_precision"], 0.98)
+        self.assertEqual(report["result"], "PASS")
+
+    def test_language_without_excluded_sites_passes_and_shows_no_data(self):
+        report = reach_gate.build_report([self.passing()], ["demo"], ["demo"])
+        self.assertIsNone(report["languages"]["python"]["all"]["excluded_precision"])
+        self.assertEqual(report["result"], "PASS")
+        text = reach_gate.render_markdown(report)
+        self.assertIn("| Proven precision | Excluded precision | Recall | Accounted |", text)
+        self.assertIn("| python | all | 1 | 100 | 100 | 1.000 | n/a | 1.000 | 1.000 |", text)
+        self.assertIn("excluded precision >= 0.98", text)
+
     def test_marks_apply_to_each_language_not_to_the_overall_mix(self):
         truth = lines("a.py", 100)
         poor = reach_gate.parse_answer([site("a.py", n) for n in range(1, 51)] + [site("b.py", n) for n in range(1, 51)])
@@ -329,13 +360,20 @@ class HoldoutHidingTest(unittest.TestCase):
 
 class DisagreementTest(unittest.TestCase):
     def test_lists_proven_sites_without_truth_and_truth_lines_without_sites(self):
-        truth = {("a.py", 1), ("a.py", 2), ("d.rst", 4)}
+        truth = {("a.py", 1), ("a.py", 2), ("a.py", 5), ("d.rst", 4)}
         answer = report_answer(
-            [site("a.py", 1, label="proven"), site("a.py", 30, label="proven"), site("a.py", 31, label="likely")],
+            [
+                site("a.py", 1, label="proven"),
+                site("a.py", 5, label="excluded"),
+                site("a.py", 30, label="proven"),
+                site("a.py", 31, label="likely"),
+                site("a.py", 32, label="excluded"),
+            ],
             text_only=[{"path": "d.rst", "lines": [4]}],
         )
         found = reach_gate.disagreements(truth, answer)
         self.assertEqual([row["start_line"] for row in found["proven_without_truth"]], [30])
+        self.assertEqual([row["start_line"] for row in found["excluded_with_truth"]], [5])
         self.assertEqual(found["truth_without_site"], [("a.py", 2, False), ("d.rst", 4, True)])
 
 

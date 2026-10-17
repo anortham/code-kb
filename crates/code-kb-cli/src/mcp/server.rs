@@ -1569,6 +1569,7 @@ impl McpServer {
                 let arguments = params.get("arguments").unwrap_or(&Value::Null);
 
                 let result = self.handle_call_tool(tool_name, arguments);
+                release_freed_memory();
                 Some(JsonRpcResponse::success(
                     id,
                     serde_json::to_value(result).unwrap_or(Value::Null),
@@ -1583,6 +1584,23 @@ impl McpServer {
         }
     }
 }
+
+/// glibc keeps the pages it frees after a large report, so the process stays at a high
+/// resident size until this call returns them to the OS.
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+#[allow(unsafe_code)]
+fn release_freed_memory() {
+    unsafe extern "C" {
+        fn malloc_trim(pad: usize) -> std::ffi::c_int;
+    }
+    // SAFETY: malloc_trim takes no pointers and only returns free heap pages to the OS.
+    unsafe {
+        malloc_trim(0);
+    }
+}
+
+#[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+fn release_freed_memory() {}
 
 #[cfg(test)]
 mod tests {

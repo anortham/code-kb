@@ -30,7 +30,9 @@ Candidate by split (recall, dev / holdout): csharp 0.960 / 0.824, go 0.806 / 1.0
 0.900, javascript 0.441 / 0.407, python 0.970 / 0.800, rust 1.000 / 1.000, typescript 0.555 /
 0.357. Proven precision is 1.000 on both splits in every language.
 
-The pass marks are proven precision >= 0.98 and accounted share >= 0.98 per language. The recall
+The pass marks are proven precision, excluded precision, and accounted share, each >= 0.98 per
+language. Excluded precision is new (owner, 2026-10-17): excluded sites that cover no truth line,
+divided by all excluded sites. The candidate scores at least 0.998 in every language. The recall
 target of 0.90 is reported and does not decide the result.
 
 ## Holdout before and after the fix loop
@@ -93,8 +95,8 @@ excluded. Four causes on dev symbols, each with a regression test:
 
 Now 4 true sites stay excluded: Java 2 and TypeScript 1 on holdout, TypeScript 1 on dev. No proven
 site that covers a truth line was lost in any of the 7 projects (checked against the build before
-these fixes). The gate should get a pass mark for excluded precision; that change to the gate is
-an owner decision.
+these fixes). The gate now fails a language whose excluded precision is under 0.98, and
+`reach_gate.py disagreements` lists each excluded site that covers a truth line.
 
 ## Known gaps (not tuned)
 
@@ -144,8 +146,8 @@ The candidate indexes at julie's `full` level (call and variable-reference ident
 
 ## Memory in `serve`
 
-RSS after the benchmark calls: aspnetcore 37.8 MB (v2.6.0) and 88.2 MB (candidate); hermes-agent
-32.2 MB and 113.7 MB. Both start at about 11 MB.
+RSS after the benchmark calls, before the fix: aspnetcore 37.8 MB (v2.6.0) and 88.2 MB
+(candidate); hermes-agent 32.2 MB and 113.7 MB. All start at 11–14 MB.
 
 A heap probe (`mallinfo2` after each call) shows that this is not live data. After a `get` call the
 live heap is 12–17 MB and SQLite holds 4 MB. glibc keeps 69–88 MB of freed heap. The report peaks
@@ -153,6 +155,10 @@ at about 40 MB of live heap for `get`: 18 MB of rows, then the merged sites and 
 freed 36 MB row buffer also raises glibc's trim threshold to 64 MB, so glibc stops returning free
 pages.
 
-One `malloc_trim(0)` call after each tool call cuts the hermes-agent RSS to 38–53 MB in the same
-probe. The workspace sets `unsafe_code = "forbid"`, so that call, or a different allocator such as
-mimalloc, is an owner decision. The branch does neither.
+Fix (owner approved the one unsafe call, 2026-10-17): on Linux glibc, `release_freed_memory` in
+`mcp/server.rs` calls `malloc_trim(0)` after each tool call. The workspace lint is now
+`unsafe_code = "deny"`, and this function is the only unsafe code. Other targets get an empty
+function. With the fix, RSS after the same benchmark is 58.5 MB on aspnetcore (v2.6.0: 38.3 MB)
+and 51.4 MB on hermes-agent (v2.6.0: 31.6 MB). Latency did not change: `get` p50 3,242 ms,
+`ThrowIfNull` 174 ms. The remaining 20 MB is heap that live allocations split, which
+`malloc_trim` cannot return.

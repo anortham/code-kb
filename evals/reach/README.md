@@ -91,18 +91,23 @@ The candidate report object (`sites[].label`, `sites[].basis`, `sites[].end_line
 A truth line `(P, L)` matches a site when `site.path == P` and `site.start_line <= L <= (site.end_line or site.start_line)`.
 
 - Proven precision: proven sites that cover a truth line, divided by all proven sites.
+- Excluded precision: excluded sites that cover no truth line, divided by all excluded sites.
+  An excluded site claims that the site reaches another definition, so one that covers a truth line is a wrong exclusion.
 - Recall: truth lines covered by a proven or likely site, divided by truth lines.
 - Accounted share: truth lines covered by any site, or listed in `text_only`, divided by truth lines.
 - Per label tier (proven, likely, unresolved, excluded) the report lists sites that cover a truth line over all sites.
 
-Pass marks, per language over dev and holdout together: proven precision at least 0.98 and accounted share at least 0.98.
+Pass marks, per language over dev and holdout together: proven precision at least 0.98, excluded precision at least 0.98, and accounted share at least 0.98.
 The recall target of 0.90 is reported but does not decide the result.
-A language with no proven sites or no truth lines fails. A project with no case file counts as not scored and fails the run,
+A language with no proven sites or no truth lines fails.
+A language with no excluded sites passes the excluded mark and shows `n/a`, because the answer made no exclusion claim.
+A project with no case file counts as not scored and fails the run,
 so a partial run (`--repos`) never ends in PASS.
 
 `run` writes `report.json` and `report.md` and exits 0 on PASS, 1 on FAIL (the report is still written), 2 on a setup error.
 `report.md` carries a `Commit:` line (the HEAD of this checkout) and ends with `## Result: PASS` or `## Result: FAIL`.
 Holdout symbols are not listed in the report or in `disagreements` output unless `--show-holdout` is set; their totals always show.
+`disagreements` lists proven sites with no truth line, excluded sites that cover a truth line, and truth lines with no site.
 
 `scripts/release-preflight.sh` (step 10) requires `target/reach-gate/report.md` with `## Result: PASS` and a `Commit:` line that names an ancestor of HEAD.
 

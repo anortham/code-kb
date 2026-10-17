@@ -13,7 +13,7 @@ repository = "https://github.com/anortham/code-kb"
 rust-version = "1.95"
 
 [workspace.lints.rust]
-unsafe_code = "forbid"
+unsafe_code = "deny"
 
 [workspace.lints.clippy]
 all = "warn"
