@@ -189,6 +189,10 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   as a test or fixture counts as a test to run only when it is a member of a test class or its
   name reads like one (`test_run`, `RoutesTest`); an app factory such as `create_app` is an
   impacted symbol.
+  A Rust path call (`crate::util::f()`, `my_crate::module::f()`) matches a top-level function when
+  a leading `crate`, `self`, or `super` names the caller's own package or a leading crate name names
+  the package folder (`-` read as `_`), and every other segment is a file stem or folder below that
+  package's `src/`; a call rooted at `std`, `core`, or `alloc` never matches.
   A `super` call matches a method of an ancestor, and a `self`, `this`, `cls`, or `super` call
   matches only the nearest class in the chain that defines the name. A bare call matches a class
   or function defined inside the caller, and a definition in an enclosing function, namespace,
@@ -212,6 +216,29 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   dropped from a documentation language. A relative Python import of a package (`from . import
   Flask`) matches any file under that package when a receiver's class is checked, and an import
   that comes before a same-named class in the same file does not hide that class.
+- Callers report: `find_references` for callers (CLI `refs`) comes from `reference_report` in
+  `reference_report.rs`. It lists every indexed site of the name (pending calls, relationships,
+  and identifiers; never an import row or a definition line, and a definition line includes its
+  decorators) and gives each site one label and a basis: `proven` (index evidence ties the site to
+  the target: same file, qualified path, receiver type, class chain, import, enclosing scope, same
+  package, builds the class), `likely` (only the name ties them), `unresolved` (the index cannot
+  choose among definitions), or `excluded` (evidence ties the site to another definition, to an
+  unindexed import, to another type, or to another language). The other definitions of the name
+  are checked nearest first, at most 12 and for at most 1.5 s; the answer names the ones it did
+  not check. A whole-word text scan with a 3 s budget sorts every line of the name into a site, a
+  definition, an import, or text only. Counts are always complete, `limit` caps only the listed
+  rows, and CLI `--json` prints the whole report. Callees keep the plain list.
+  Proof rules: a package import proves a site only when it reaches no other top-level definition
+  of the name (`import * as z from "zod"` reaches every `boolean` in the package, so `z.boolean()`
+  is unresolved). A module receiver never proves a class member. A Python absolute import proves
+  only a file whose top package (the outermost folder with `__init__.py`), or a plain folder
+  above it, is the first segment of the import (`import json` does not reach `src/flask/json/`).
+  A JavaScript or TypeScript read of the name that only scope ties to the target is likely,
+  because julie does not record callback parameters. A bare name never reaches a JavaScript
+  method assigned to a property (`req.accepts = function`). A call that julie links to its own
+  caller is not proof, because julie links a call inside a method to that method by name alone. A
+  subclass write to an inherited attribute (`self.debug = …`) is a site, not a definition, and
+  does not hide the base class's definition in a class chain.
 - Related tests (`get_symbol_context`): callers from relationships, pending calls, and references
   that are tests, test classes, or functions and methods in test files that are members of a test
   class or have a name that reads like a test (`names_a_test`), so a module-level app factory such
@@ -278,10 +305,10 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
 - Single-download distribution: Release archives ship `code-kb` and matching `julie-extract` pre-packaged side-by-side. Users download one archive and receive both binaries ready to execute.
 - Runtime discovery: `code-kb` checks `JULIE_EXTRACT_BIN`, next to its own executable (`current_exe().parent()`), `.tools/julie-extract` in that directory or any directory above it, and `PATH`. The current directory is never searched, so another repository's vendored extractor is never run. The first candidate whose version matches the pin wins; otherwise the first candidate found is used with a warning.
 - Index version guard: the index is rebuilt once when it was written by a different `julie-extract` than the one in use. The guard compares against the binary in use, never against the pin alone, so a non-pinned extractor never causes repeated rebuilds. An index that a newer `julie-extract` wrote (artifact metadata or any file row) is kept rather than rebuilt by an older binary. A rebuild scans into `artifact.db.rebuild` and replaces the index only after the scan succeeds. Servers that start together on one stale index take turns on `artifact.db.rebuild.lock`, so one rebuilds and the others find the index current. When `julie-extract` refuses an incremental `scan`, `update`, or `delete` with `fingerprint_mismatch` (another extractor build wrote the index), `code-kb` runs `scan --force` on the index in place, so callers with an open connection read the new rows.
-- New artifacts are built at the extractor's `facts` level (symbol core, structural facts, literals, and type-usage and member-access identifiers; no call or variable-reference identifiers and no source regions). `find_references(direction="callers")` reads those identifiers. The version guard also rebuilds an index recorded at another level.
+- New artifacts are built at the extractor's `full` level: everything julie computes, including call and variable-reference identifiers, annotations, and source regions. The callers report reads the call and read identifiers. On this repository the `full` index is 137 MB against 70 MB at `facts`, and a scan takes 3.25 s against 2.6 s. The version guard also rebuilds an index recorded at another level.
 - Scans pass `--parent-pid` (Unix) so an extractor scan aborts when the `code-kb` process that started it dies.
 - Plugin distribution: every harness plugin (`.claude-plugin/plugin.json`, `.codex-plugin/plugin.json` with `.mcp.json`, root `plugin.json` with `mcp.json`, `mcp_config.json`, and `hooks.json` for Antigravity) starts the server and hooks through `bin/code-kb-launcher.cjs`. The launcher is a dependency-free Node script: on first run it downloads the release archive for the plugin's version from GitHub Releases into `~/.code-kb/dist/<version>/<target>/`, verifies the `.sha256` sidecar, unpacks it, and then executes `code-kb` with the given arguments. When that download fails, it runs the newest other cached version with a warning, so a version bump that reaches `main` before its release does not stop the server. `CODE_KB_BIN` names a binary to run instead; a binary or symlink at `~/.code-kb/bin/code-kb` overrides the download in every harness (Codex clones plugins into a cache and drops the environment of MCP servers, so only a file can reach it); and a plugin installed from a source checkout runs that checkout's `target/release/code-kb` when it exists. With one of these, `cargo build --release` plus a session restart is the whole dev loop. No binaries are committed to git. `tests/plugin/*.test.cjs` (run with `node --test`) cover the launcher and keep every manifest on the launcher and on one version.
-- Release workflow: Documented step-by-step in `docs/RELEASING.md`; automated pre-flight check via `scripts/release-preflight.sh`, which also requires a fresh PASS from `scripts/release-corpus-check.py` (the previous release against the candidate on the real projects in `scripts/release-corpus.txt`) and a dogfood report from `scripts/release-dogfood.sh` with `## Result: PASS` and no `[open]` defect. The corpus check finds only changed output; the dogfood round finds wrong answers. Each release runs one dogfood round: a wrong answer is fixed before the tag with a regression test and a rerun of the failed call, not a new round; a gap (a true but incomplete answer, a heuristic miss, a feature request) does not block the release; only the user defers a wrong answer. A new julie-extract version is tagged after its code-kb dogfood round has no `[open]` defect. The launcher fetches by the version in `.claude-plugin/plugin.json`, so the version bump reaches `main` only in `git push --atomic origin main vX.Y.Z` with its tag, after CI passed on the commit before it; the release workflow waits for CI on the tagged commit.
+- Release workflow: Documented step-by-step in `docs/RELEASING.md`; automated pre-flight check via `scripts/release-preflight.sh`, which also requires a fresh PASS from `scripts/release-corpus-check.py` (the previous release against the candidate on the real projects in `scripts/release-corpus.txt`) a dogfood report from `scripts/release-dogfood.sh` with `## Result: PASS` and no `[open]` defect, and `target/reach-gate/report.md` from `scripts/reach_gate.py run` with `## Result: PASS` and a `Commit:` line that names an ancestor of HEAD. The reach gate scores the callers report against compiler (SCIP) truth for 30 symbols in each repository of `evals/reach/corpus.json`: proven precision and accounted share must be at least 0.98 in every language, and fixes are tuned on the dev half only. The corpus check finds only changed output; the dogfood round finds wrong answers. Each release runs one dogfood round: a wrong answer is fixed before the tag with a regression test and a rerun of the failed call, not a new round; a gap (a true but incomplete answer, a heuristic miss, a feature request) does not block the release; only the user defers a wrong answer. A new julie-extract version is tagged after its code-kb dogfood round has no `[open]` defect. The launcher fetches by the version in `.claude-plugin/plugin.json`, so the version bump reaches `main` only in `git push --atomic origin main vX.Y.Z` with its tag, after CI passed on the commit before it; the release workflow waits for CI on the tagged commit.
 
 ### 8. Dynamic MCP Discovery & Zero Ghost Compatibility
 - **An MCP server is an ephemeral, agent-facing discovery surface, not a frozen REST API.**

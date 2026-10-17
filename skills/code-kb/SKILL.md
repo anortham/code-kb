@@ -49,7 +49,7 @@ Edit with the host's own file tools. code-kb refreshes the index when files chan
 - For a name that several symbols share, such as `new`, pass `file_path` or a qualified name (`Server::new`).
 - Lookup and search hide test code. Pass `is_test=true` (CLI `--include-tests`) to show it.
 - Callee lists leave out standard library and runtime calls. Pass `include_external=true` (CLI `--include-external`) to show them.
-- A caller found through an unresolved call is a best guess, and the list can miss callers. Read the code before you rely on what the list leaves out.
+- Each caller site has a label. `proven` sites have index evidence. Read the code before you rely on a `likely` or `unresolved` site. The `Text only` lines and the `Not visible to this index` line show what the index did not record.
 
 ## Related skills
 

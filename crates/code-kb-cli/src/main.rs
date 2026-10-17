@@ -84,7 +84,7 @@ pub enum Command {
     /// Generate surgical symbol context bundle (target body + callees + types + tests).
     #[command(alias = "slice")]
     Context(ContextArgs),
-    /// Find callers or callees of a symbol.
+    /// Callers of a symbol with each site labeled by its evidence, or the calls it makes.
     Refs(RefsArgs),
     /// Predict downstream impact and which tests to run before or after changes.
     BlastRadius(BlastRadiusArgs),
@@ -206,7 +206,7 @@ pub struct RefsArgs {
     /// Direction: "callers" or "callees" (default: "callers").
     #[arg(long, default_value = "callers", value_parser = ["callers", "callees"])]
     pub direction: String,
-    /// Maximum number of results (0-200).
+    /// Listed rows (0-200). Callers counts and --json stay complete.
     #[arg(long, default_value_t = 20, value_parser = parse_result_limit)]
     pub limit: usize,
     /// Include unresolved external runtime/stdlib primitives in callees.

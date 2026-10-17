@@ -449,7 +449,7 @@ git worktree you work in. The table does not repeat it. `path` and `file_path` a
 | `search_symbols` | Conceptual search over symbol names, signatures & docstrings; substrings inside identifiers are found (`sha256` finds `parseSha256Sidecar`). Results are reranked by crediting each query term once from its strongest field (name, signature, docstring), weighted by the term's rarity across the index, plus kind and path priors; `score` is that rerank score. Test functions, test containers, and rows from test files are hidden unless `is_test` is true. | `query` (req), `path` (opt), `kind` (opt), `is_test` (opt), `limit` (opt) | `name`, `q` |
 | `get_symbol_body` | Slices the source of a symbol from disk as written, with its declaration and decorators; a name with overloads in one class returns each overload. | Exactly one `symbol_name` or current-index `symbol_id`; `file_path` (opt, a file or a folder) | `symbol`, `name`, `path` |
 | `get_symbol_context` | Surgical bundle: target body + callee signatures + parameter types + tests; up to four overloads in one class return a bundle each. | Exactly one `symbol_name` or current-index `symbol_id`; `file_path` (opt, a file or a folder), `include_external` (opt, def: false) | `symbol`, `name`, `path` |
-| `find_references` | Callers or callees of a symbol, matched by name from AST call sites and ranked by same file, same directory, then receiver type; callers also include type usages and member accesses (filters external stdlib noise; qualify overloaded names). | Exactly one `symbol_name` or current-index `symbol_id`; `file_path` (opt), `direction` ("callers" \| "callees", def: callers), `include_external` (opt, def: false) | `symbol`, `name`, `file`, `path` |
+| `find_references` | Callers: every indexed site of the name, each labeled proven, likely, unresolved, or excluded with its evidence, plus a whole-word text count that accounts for every line of the name. Callees: the calls a symbol makes (filters external stdlib noise). Qualify overloaded names. | Exactly one `symbol_name` or current-index `symbol_id`; `file_path` (opt), `direction` ("callers" \| "callees", def: callers), `limit` (opt, def: 20, listed rows only), `include_external` (opt, def: false) | `symbol`, `name`, `file`, `path` |
 | `blast_radius` | Multi-hop reverse reachability (CTEs) & targeted test prediction. | `symbol` or current-index `symbol_id` (opt), `file` (opt guard for an ID), `depth` (opt, def: 2), `limit` (opt) | `name`, `path`, `impact` |
 | `find_structural_facts` | Queries framework facts (routes, SQL queries, config keys, tables). Lists all categories when omitted. | `category` (opt), `path` (opt), `limit` (opt) | `cat`, `kind`, `type`, `file`, `file_path` |
 | `telemetry_summary` | Token savings with their coverage, call counts, and error rates from `~/.code-kb/telemetry.db`, across all workspaces or scoped to the project of the most recent code-kb call. | `time_window` (opt, def: all), `workspace_only` (opt, def: false), `version` (opt, def: current; `all` for every version), `json` (opt) | `since`, `window` |
@@ -482,7 +482,7 @@ code-kb body Workspace
 # Get surgical context bundle: body + callees + types + tests (alias: code-kb slice)
 code-kb context ensure_fresh_file
 
-# Find callers or callees of a function (language-agnostically filters stdlib noise)
+# Find callers, each labeled proven, likely, unresolved, or excluded, with a text count
 code-kb refs open_read_only --direction callers
 
 # View callees including external standard library tokens

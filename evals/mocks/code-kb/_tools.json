@@ -151,11 +151,11 @@
             "type": "string"
           },
           "symbol_id": {
-            "description": "The id from lookup or search.",
+            "description": "The id from lookup or search; pass exactly one of this or symbol_name.",
             "type": "string"
           },
           "symbol_name": {
-            "description": "Name or qualified name; or pass symbol_id.",
+            "description": "Name or qualified name; pass exactly one of this or symbol_id.",
             "type": "string"
           }
         },
@@ -186,11 +186,11 @@
             "type": "string"
           },
           "symbol_id": {
-            "description": "The id from lookup or search.",
+            "description": "The id from lookup or search; pass exactly one of this or symbol_name.",
             "type": "string"
           },
           "symbol_name": {
-            "description": "Name or qualified name; or pass symbol_id.",
+            "description": "Name or qualified name; pass exactly one of this or symbol_id.",
             "type": "string"
           }
         },
@@ -205,7 +205,7 @@
       "_meta": {
         "anthropic/alwaysLoad": true
       },
-      "description": "Callers (with type usages and member accesses) or callees of a symbol from parsed call sites; use instead of rg or grep on the name. Calls match by name and nearest scope, so pass file_path or a qualified name for a common name.",
+      "description": "Callers of a symbol: every indexed site with its name, each labeled proven, likely, unresolved, or excluded by its evidence, plus a whole-word text count that accounts for every line of the name. Use instead of rg or grep on a name. Callees: the calls a symbol makes. Pass file_path or a qualified name for a common name.",
       "inputSchema": {
         "properties": {
           "direction": {
@@ -235,11 +235,11 @@
             "type": "string"
           },
           "symbol_id": {
-            "description": "The id from lookup or search.",
+            "description": "The id from lookup or search; pass exactly one of this or symbol_name.",
             "type": "string"
           },
           "symbol_name": {
-            "description": "Name or qualified name; or pass symbol_id.",
+            "description": "Name or qualified name; pass exactly one of this or symbol_id.",
             "type": "string"
           }
         },
@@ -313,7 +313,7 @@
             "type": "string"
           },
           "symbol_id": {
-            "description": "The id from lookup or search.",
+            "description": "The id from lookup or search; pass one of this or symbol.",
             "type": "string"
           }
         },
