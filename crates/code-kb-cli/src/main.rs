@@ -5,12 +5,13 @@ use code_kb_core::workspace::NO_PROJECT_MARKER_REASON;
 use code_kb_core::{
     SymbolSelector, Workspace, WorkspaceError, blast_radius_selected_op, codebase_outline_op,
     ensure_fresh_file, ensure_fts_index_path, file_skeleton_op, find_references_for_symbol_ext,
-    format_context_slices, format_fact_categories, format_find_symbol_results, format_references,
-    format_search_results, format_structural_facts, format_symbol_bodies,
-    fts_search_symbols_explained, fts_search_symbols_scoped, get_context_slices_selected_op,
-    get_symbol_bodies_selected_op, list_structural_fact_categories_scoped, load_file_symbols,
-    open_read_only, qualify_members, queries, resolve_symbol_op, scan_workspace,
-    search_symbols_scoped,
+    format_context_slices, format_fact_categories, format_find_symbol_results,
+    format_reference_report, format_references, format_search_results, format_structural_facts,
+    format_symbol_bodies, fts_search_symbols_explained, fts_search_symbols_scoped,
+    get_context_slices_selected_op, get_symbol_bodies_selected_op,
+    list_structural_fact_categories_scoped, load_file_symbols, open_read_only, qualify_members,
+    queries, reference_report, resolve_symbol_op, scan_workspace, search_symbols_scoped,
+    select_reference_target,
 };
 
 mod logging;
@@ -674,9 +675,39 @@ fn main() -> anyhow::Result<()> {
                 println!("{}", format_context_slices(&slices));
             }
         }
+        Command::Refs(args) if args.direction == "callers" => {
+            let selector = symbol_selector(args.symbol.as_ref(), args.symbol_id.as_ref())?;
+            let selected = match selector {
+                SymbolSelector::Name(name) => {
+                    let path = args
+                        .file
+                        .as_deref()
+                        .map(|path| workspace.relativize_filter(path));
+                    select_reference_target(&conn, &name, path.as_deref())?
+                }
+                SymbolSelector::Id(id) => resolve_symbol_op(
+                    &workspace,
+                    &db_path,
+                    &conn,
+                    &SymbolSelector::Id(id),
+                    args.file.as_deref(),
+                )?,
+            };
+            if !cli.json && args.limit == 0 {
+                println!("{ZERO_LIMIT_NOTICE}");
+            } else {
+                let report =
+                    reference_report(&conn, &workspace.root, &selected, args.include_external)?;
+                if cli.json {
+                    println!("{}", serde_json::to_string_pretty(&report)?);
+                } else {
+                    print!("{}", format_reference_report(&report, args.limit));
+                }
+            }
+        }
         Command::Refs(args) => {
             let selector = symbol_selector(args.symbol.as_ref(), args.symbol_id.as_ref())?;
-            let (target, target_path, refs) = match selector {
+            let (target, refs) = match selector {
                 SymbolSelector::Name(name) => {
                     let path = args
                         .file
@@ -690,7 +721,7 @@ fn main() -> anyhow::Result<()> {
                         args.include_external,
                         path.as_deref(),
                     )?;
-                    (name, path, refs)
+                    (name, refs)
                 }
                 SymbolSelector::Id(id) => {
                     let selected = resolve_symbol_op(
@@ -708,7 +739,7 @@ fn main() -> anyhow::Result<()> {
                         &selected.symbol_id,
                         args.include_external,
                     )?;
-                    (selected.name, Some(selected.path), refs)
+                    (selected.name, refs)
                 }
             };
             if cli.json {
@@ -720,11 +751,6 @@ fn main() -> anyhow::Result<()> {
                     "{}",
                     format_references(&target, &refs, &args.direction, args.limit)
                 );
-                if args.direction == "callers" {
-                    let imports =
-                        code_kb_core::import_sites(&conn, &target, target_path.as_deref())?;
-                    print!("{}", code_kb_core::format_import_summary(&imports));
-                }
                 println!();
             }
         }

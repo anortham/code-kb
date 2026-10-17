@@ -2,8 +2,8 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
 
 use crate::models::{
-    BlastRadiusResult, ContextSlice, ImpactedSymbol, ReferenceSite, SearchExplain, Symbol,
-    SymbolSearchResult,
+    BlastRadiusResult, ContextSlice, ImpactedSymbol, LabeledSite, ReferenceReport, ReferenceSite,
+    SearchExplain, SiteLabel, Symbol, SymbolSearchResult,
 };
 
 /// Format progressive disclosure file skeleton with implementation bodies stripped.
@@ -838,14 +838,7 @@ pub fn format_references(
             None => String::new(),
         };
         let other = if direction == "callers" {
-            if r.from_symbol_name.is_empty() && r.enclosing_symbol_name.is_none() {
-                "(no enclosing symbol)".to_string()
-            } else {
-                format!(
-                    "`{}`",
-                    displayed_symbol_name(&r.from_symbol_name, r.enclosing_symbol_name.as_deref())
-                )
-            }
+            caller_text(r)
         } else {
             format!("`{}`", callee_name(&r.to_symbol_name))
         };
@@ -867,6 +860,185 @@ pub fn format_references(
         out.push_str(&cap_notice(refs.len(), limit));
     }
 
+    out
+}
+
+fn caller_text(site: &ReferenceSite) -> String {
+    if site.from_symbol_name.is_empty() && site.enclosing_symbol_name.is_none() {
+        "(no enclosing symbol)".to_string()
+    } else {
+        format!(
+            "`{}`",
+            displayed_symbol_name(
+                &site.from_symbol_name,
+                site.enclosing_symbol_name.as_deref()
+            )
+        )
+    }
+}
+
+const FOLD_FILES_NAMED: usize = 5;
+const TEXT_ONLY_FILES_LISTED: usize = 10;
+const TEXT_ONLY_LINES_PER_FILE: usize = 12;
+
+/// The callers answer: three header lines, the sites in label order up to `limit`, the text-only
+/// lines, the blind spots of the index, and the import summary. Counts are always complete.
+pub fn format_reference_report(report: &ReferenceReport, limit: usize) -> String {
+    let target = &report.target;
+    let counts = &report.counts;
+    let mut out = format!(
+        "References to {} `{}` ({}:{})\nSites: {} · proven {} · likely {} · unresolved {} · excluded {}\n",
+        target.kind,
+        target.display_name,
+        target.path,
+        target.line,
+        counts.sites,
+        counts.proven,
+        counts.likely,
+        counts.unresolved,
+        counts.excluded,
+    );
+    out.push_str(&text_count_line(report));
+    let scan = &report.text_scan;
+    if !scan.complete && scan.skipped.is_none() {
+        out.push_str(&format!(
+            "Text scan stopped after {} s: {} of {} files read; counts cover those files.\n",
+            (scan.elapsed_ms + 500) / 1000,
+            scan.files_scanned,
+            scan.files_total
+        ));
+    }
+
+    let mut body = site_groups(&report.sites, limit);
+    body.push_str(&text_only_section(report));
+    if !report.cannot_see.is_empty() {
+        body.push_str(&format!(
+            "Not visible to this index: {}.\n",
+            report.cannot_see.join("; ")
+        ));
+    }
+    body.push_str(&format_import_summary(&report.imports));
+    if !body.is_empty() {
+        out.push('\n');
+        out.push_str(&body);
+    }
+    out
+}
+
+fn text_count_line(report: &ReferenceReport) -> String {
+    if let Some(class) = &report.text_scan.skipped {
+        return format!(
+            "Text: skipped for a constructor; its call sites spell the class name. Use find_references on `{class}`.\n"
+        );
+    }
+    let counts = &report.counts;
+    format!(
+        "Text: `{}` is on {} {}: {} {}, {} {}, {} {}, {} text only.\n",
+        report.target.name,
+        counts.text_lines,
+        plural(counts.text_lines, "line"),
+        counts.site_lines,
+        plural(counts.site_lines, "site"),
+        counts.definition_lines,
+        plural(counts.definition_lines, "definition"),
+        counts.import_lines,
+        plural(counts.import_lines, "import"),
+        counts.text_only_lines,
+    )
+}
+
+fn site_groups(sites: &[LabeledSite], limit: usize) -> String {
+    let mut out = String::new();
+    let mut listed = 0;
+    for label in SiteLabel::ALL {
+        let group: Vec<&LabeledSite> = sites.iter().filter(|site| site.label == label).collect();
+        if group.is_empty() {
+            continue;
+        }
+        let title = match label {
+            SiteLabel::Proven => "Proven",
+            SiteLabel::Likely => "Likely",
+            SiteLabel::Unresolved => "Unresolved",
+            SiteLabel::Excluded => "Excluded",
+        };
+        out.push_str(&format!("{title} ({}):\n", group.len()));
+        let shown = limit.saturating_sub(listed).min(group.len());
+        for labeled in &group[..shown] {
+            let site = &labeled.site;
+            let line = site.start_line.map(|l| format!(":{l}")).unwrap_or_default();
+            out.push_str(&format!(
+                "- {} [{}{line}] (kind: {}; {})\n",
+                caller_text(site),
+                site.path,
+                site.kind,
+                labeled.basis
+            ));
+        }
+        listed += shown;
+        if shown < group.len() {
+            out.push_str(&fold_line(label, &group[shown..]));
+        }
+    }
+    out
+}
+
+fn fold_line(label: SiteLabel, hidden: &[&LabeledSite]) -> String {
+    let mut per_file: BTreeMap<&str, usize> = BTreeMap::new();
+    for labeled in hidden {
+        *per_file.entry(labeled.site.path.as_str()).or_default() += 1;
+    }
+    let mut files: Vec<(&str, usize)> = per_file.into_iter().collect();
+    files.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(b.0)));
+    let named: Vec<String> = files
+        .iter()
+        .take(FOLD_FILES_NAMED)
+        .map(|(path, count)| format!("{path} ({count})"))
+        .collect();
+    let more = if files.len() > FOLD_FILES_NAMED {
+        ", …"
+    } else {
+        ""
+    };
+    format!(
+        "… {} more {} {} in {} {}: {}{more}\n",
+        hidden.len(),
+        label.as_str(),
+        plural(hidden.len(), "site"),
+        files.len(),
+        plural(files.len(), "file"),
+        named.join(", ")
+    )
+}
+
+fn text_only_section(report: &ReferenceReport) -> String {
+    if report.text_only.is_empty() {
+        return String::new();
+    }
+    let mut out = format!("Text only ({}):\n", report.counts.text_only_lines);
+    let mut hidden_lines = 0;
+    let mut hidden_files = 0;
+    for (index, file) in report.text_only.iter().enumerate() {
+        let listed = if index < TEXT_ONLY_FILES_LISTED {
+            file.lines.len().min(TEXT_ONLY_LINES_PER_FILE)
+        } else {
+            0
+        };
+        if listed > 0 {
+            let lines: Vec<String> = file.lines[..listed].iter().map(usize::to_string).collect();
+            out.push_str(&format!("  {}: {}\n", file.path, lines.join(", ")));
+        }
+        if listed < file.lines.len() {
+            hidden_lines += file.lines.len() - listed;
+            hidden_files += 1;
+        }
+    }
+    if hidden_lines > 0 {
+        out.push_str(&format!(
+            "  … {hidden_lines} more {} in {hidden_files} {}\n",
+            plural(hidden_lines, "line"),
+            plural(hidden_files, "file")
+        ));
+    }
     out
 }
 
@@ -1541,7 +1713,10 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{ImpactedSymbol, TestTarget};
+    use crate::models::{
+        ImpactedSymbol, LabeledSite, ReferenceCounts, ReferenceReport, ReferenceTarget, SiteLabel,
+        TestTarget, TextOnlyLines, TextScanSummary,
+    };
 
     fn structural_fact(key: Option<&str>) -> crate::models::StructuralFact {
         crate::models::StructuralFact {
@@ -3135,6 +3310,366 @@ mod tests {
              } // L11-52\n\
              \n\
              signal clicked(); // L60-60\n"
+        );
+    }
+
+    fn labeled_site(
+        label: SiteLabel,
+        path: &str,
+        line: usize,
+        caller: &str,
+        basis: &str,
+    ) -> LabeledSite {
+        LabeledSite {
+            site: ReferenceSite {
+                from_symbol_name: caller.into(),
+                from_symbol_id: "c1".into(),
+                to_symbol_name: "target".into(),
+                kind: "calls".into(),
+                path: path.into(),
+                start_line: Some(line),
+                start_column: Some(4),
+                occurrences: None,
+                target: None,
+                enclosing_symbol_name: None,
+            },
+            label,
+            basis: basis.into(),
+            end_line: None,
+        }
+    }
+
+    fn report_of(sites: Vec<LabeledSite>) -> ReferenceReport {
+        let count = |label| sites.iter().filter(|site| site.label == label).count();
+        ReferenceReport {
+            target: ReferenceTarget {
+                symbol_id: "t1".into(),
+                name: "from_mapping".into(),
+                display_name: "Config.from_mapping".into(),
+                kind: "method".into(),
+                path: "src/flask/config.py".into(),
+                line: 304,
+                definitions_with_name: 1,
+            },
+            counts: ReferenceCounts {
+                sites: sites.len(),
+                proven: count(SiteLabel::Proven),
+                likely: count(SiteLabel::Likely),
+                unresolved: count(SiteLabel::Unresolved),
+                excluded: count(SiteLabel::Excluded),
+                text_lines: sites.len(),
+                site_lines: sites.len(),
+                ..ReferenceCounts::default()
+            },
+            sites,
+            text_only: Vec::new(),
+            text_scan: TextScanSummary {
+                files_scanned: 12,
+                files_total: 12,
+                complete: true,
+                elapsed_ms: 40,
+                skipped: None,
+            },
+            cannot_see: Vec::new(),
+            imports: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn the_report_header_has_three_lines_with_plural_counts() {
+        let mut report = report_of(vec![
+            labeled_site(
+                SiteLabel::Proven,
+                "src/flask/config.py",
+                302,
+                "Config.from_file",
+                "same file",
+            ),
+            labeled_site(
+                SiteLabel::Likely,
+                "tests/test_config.py",
+                112,
+                "test_config",
+                "name only",
+            ),
+        ]);
+        report.counts.text_lines = 17;
+        report.counts.site_lines = 2;
+        report.counts.definition_lines = 2;
+        report.counts.import_lines = 0;
+        report.counts.text_only_lines = 13;
+
+        let text = format_reference_report(&report, 20);
+
+        assert_eq!(
+            text.lines().take(3).collect::<Vec<_>>(),
+            [
+                "References to method `Config.from_mapping` (src/flask/config.py:304)",
+                "Sites: 2 · proven 1 · likely 1 · unresolved 0 · excluded 0",
+                "Text: `from_mapping` is on 17 lines: 2 sites, 2 definitions, 0 imports, 13 text only.",
+            ]
+        );
+    }
+
+    #[test]
+    fn the_report_header_uses_singular_forms_for_a_count_of_one() {
+        let mut report = report_of(vec![labeled_site(
+            SiteLabel::Proven,
+            "a.py",
+            3,
+            "caller",
+            "same file",
+        )]);
+        report.counts.text_lines = 1;
+        report.counts.site_lines = 1;
+        report.counts.definition_lines = 1;
+        report.counts.import_lines = 1;
+        report.counts.text_only_lines = 0;
+
+        let text = format_reference_report(&report, 20);
+
+        assert_eq!(
+            text.lines().nth(2),
+            Some("Text: `from_mapping` is on 1 line: 1 site, 1 definition, 1 import, 0 text only.")
+        );
+    }
+
+    #[test]
+    fn the_report_lists_each_group_in_label_order_with_its_basis() {
+        let report = report_of(vec![
+            labeled_site(SiteLabel::Proven, "a.py", 2, "first", "same file"),
+            labeled_site(SiteLabel::Likely, "l.py", 6, "second", "name only"),
+            labeled_site(SiteLabel::Unresolved, "u.py", 4, "third", "3 definitions"),
+            labeled_site(SiteLabel::Excluded, "x.py", 9, "other", "other language"),
+        ]);
+
+        let text = format_reference_report(&report, 20);
+
+        let body = text.split_once("\n\n").unwrap().1;
+        assert_eq!(
+            body,
+            "Proven (1):\n\
+             - `first` [a.py:2] (kind: calls; same file)\n\
+             Likely (1):\n\
+             - `second` [l.py:6] (kind: calls; name only)\n\
+             Unresolved (1):\n\
+             - `third` [u.py:4] (kind: calls; 3 definitions)\n\
+             Excluded (1):\n\
+             - `other` [x.py:9] (kind: calls; other language)\n"
+        );
+    }
+
+    #[test]
+    fn a_group_with_no_sites_is_left_out() {
+        let report = report_of(vec![labeled_site(
+            SiteLabel::Likely,
+            "l.py",
+            6,
+            "second",
+            "name only",
+        )]);
+
+        let text = format_reference_report(&report, 20);
+
+        assert!(!text.contains("Proven ("), "{text}");
+        assert!(!text.contains("Excluded ("), "{text}");
+        assert!(text.contains("Likely (1):\n"), "{text}");
+    }
+
+    #[test]
+    fn a_report_without_sites_has_only_the_header() {
+        let report = report_of(Vec::new());
+
+        let text = format_reference_report(&report, 20);
+
+        assert_eq!(
+            text,
+            "References to method `Config.from_mapping` (src/flask/config.py:304)\n\
+             Sites: 0 · proven 0 · likely 0 · unresolved 0 · excluded 0\n\
+             Text: `from_mapping` is on 0 lines: 0 sites, 0 definitions, 0 imports, 0 text only.\n"
+        );
+    }
+
+    #[test]
+    fn caller_names_follow_the_lambda_and_no_enclosing_symbol_rules() {
+        let mut lambda = labeled_site(SiteLabel::Proven, "a.py", 1, "lambda_7", "same file");
+        lambda.site.enclosing_symbol_name = Some("outer".into());
+        let callerless = labeled_site(SiteLabel::Proven, "a.py", 2, "", "same file");
+        let report = report_of(vec![lambda, callerless]);
+
+        let text = format_reference_report(&report, 20);
+
+        assert!(
+            text.contains("- `<lambda> in outer` [a.py:1] (kind: calls; same file)\n"),
+            "{text}"
+        );
+        assert!(
+            text.contains("- (no enclosing symbol) [a.py:2] (kind: calls; same file)\n"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn rows_past_the_limit_fold_into_one_line_per_label_with_per_file_counts() {
+        let mut sites = vec![labeled_site(
+            SiteLabel::Proven,
+            "a.py",
+            1,
+            "p1",
+            "same file",
+        )];
+        for (index, path) in ["b.py", "b.py", "b.py", "c.py", "c.py", "d.py"]
+            .iter()
+            .enumerate()
+        {
+            sites.push(labeled_site(
+                SiteLabel::Likely,
+                path,
+                10 + index,
+                "caller",
+                "name only",
+            ));
+        }
+        sites.push(labeled_site(
+            SiteLabel::Excluded,
+            "z.py",
+            1,
+            "other",
+            "other language",
+        ));
+        let report = report_of(sites);
+
+        let text = format_reference_report(&report, 3);
+
+        let body = text.split_once("\n\n").unwrap().1;
+        assert_eq!(
+            body,
+            "Proven (1):\n\
+             - `p1` [a.py:1] (kind: calls; same file)\n\
+             Likely (6):\n\
+             - `caller` [b.py:10] (kind: calls; name only)\n\
+             - `caller` [b.py:11] (kind: calls; name only)\n\
+             … 4 more likely sites in 3 files: c.py (2), b.py (1), d.py (1)\n\
+             Excluded (1):\n\
+             … 1 more excluded site in 1 file: z.py (1)\n"
+        );
+    }
+
+    #[test]
+    fn a_fold_line_names_at_most_five_files() {
+        let sites = ["a", "b", "c", "d", "e", "f", "g"]
+            .iter()
+            .map(|stem| {
+                labeled_site(
+                    SiteLabel::Likely,
+                    &format!("{stem}.py"),
+                    1,
+                    "caller",
+                    "name only",
+                )
+            })
+            .collect();
+        let report = report_of(sites);
+
+        let text = format_reference_report(&report, 1);
+
+        assert!(
+            text.contains(
+                "… 6 more likely sites in 6 files: b.py (1), c.py (1), d.py (1), e.py (1), f.py (1), …\n"
+            ),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn text_only_lines_list_per_file_and_fold_past_ten_files_and_twelve_lines() {
+        let mut report = report_of(Vec::new());
+        report.text_only = (0..12)
+            .map(|index| TextOnlyLines {
+                path: format!("docs/f{index:02}.rst"),
+                lines: if index == 0 {
+                    (1..=15).collect()
+                } else {
+                    vec![index + 1, index + 2]
+                },
+            })
+            .collect();
+        report.counts.text_only_lines = report.text_only.iter().map(|f| f.lines.len()).sum();
+
+        let text = format_reference_report(&report, 20);
+
+        let section = text.split_once("Text only (").unwrap().1;
+        let mut lines = section.lines();
+        assert_eq!(lines.next(), Some("37):"));
+        assert_eq!(
+            lines.next(),
+            Some("  docs/f00.rst: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12")
+        );
+        assert_eq!(lines.next(), Some("  docs/f01.rst: 2, 3"));
+        assert_eq!(lines.nth(7), Some("  docs/f09.rst: 10, 11"));
+        assert_eq!(lines.next(), Some("  … 7 more lines in 3 files"));
+        assert_eq!(lines.next(), None);
+    }
+
+    #[test]
+    fn a_text_scan_cut_by_its_budget_adds_the_stopped_line() {
+        let mut report = report_of(Vec::new());
+        report.text_scan = TextScanSummary {
+            files_scanned: 410,
+            files_total: 17334,
+            complete: false,
+            elapsed_ms: 3012,
+            skipped: None,
+        };
+
+        let text = format_reference_report(&report, 20);
+
+        assert_eq!(
+            text.lines().nth(3),
+            Some("Text scan stopped after 3 s: 410 of 17334 files read; counts cover those files.")
+        );
+    }
+
+    #[test]
+    fn a_constructor_report_replaces_the_text_line_with_the_skip_line() {
+        let mut report = report_of(Vec::new());
+        report.text_scan.skipped = Some("Flask".into());
+
+        let text = format_reference_report(&report, 20);
+
+        assert_eq!(
+            text.lines().nth(2),
+            Some(
+                "Text: skipped for a constructor; its call sites spell the class name. Use find_references on `Flask`."
+            )
+        );
+        assert!(!text.contains("is on"), "{text}");
+        assert!(!text.contains("Text scan stopped"), "{text}");
+    }
+
+    #[test]
+    fn the_report_ends_with_the_blind_spots_and_the_import_summary() {
+        let mut report = report_of(vec![labeled_site(
+            SiteLabel::Proven,
+            "a.py",
+            2,
+            "first",
+            "same file",
+        )]);
+        report.cannot_see = vec![
+            "calls through getattr() or names built at runtime".into(),
+            "calls through dynamic dispatch reach overrides that this list does not show".into(),
+        ];
+        report.imports = vec![("b.py".into(), 1), ("c.py".into(), 4)];
+
+        let text = format_reference_report(&report, 20);
+
+        assert!(
+            text.ends_with(
+                "Not visible to this index: calls through getattr() or names built at runtime; calls through dynamic dispatch reach overrides that this list does not show.\n\
+                 Imported 2 times in 2 files: b.py:1, c.py:4 (lookup_symbol with kind=\"import\" lists them)\n"
+            ),
+            "{text}"
         );
     }
 }

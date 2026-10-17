@@ -558,6 +558,15 @@ fn test_adversarial_cli_json_strict_forward_slash_across_all_commands() {
                 serde_json::to_string_pretty(&val).unwrap()
             );
         }
+        if args == ["--json", "refs", "helper"] {
+            let sites = val["sites"].as_array().expect("refs JSON is a report");
+            assert_eq!(sites.len(), 1, "{val}");
+            assert_eq!(sites[0]["from_symbol_name"], "run_task", "{val}");
+            assert_eq!(sites[0]["path"], "src/workspace.rs", "{val}");
+            assert_eq!(sites[0]["label"], "proven", "{val}");
+            assert_eq!(sites[0]["basis"], "same file", "{val}");
+            assert_eq!(val["target"]["path"], "src/workspace.rs", "{val}");
+        }
     }
 }
 
