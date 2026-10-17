@@ -1,0 +1,51 @@
+[
+  {
+    "name": "flask",
+    "language": "python",
+    "url": "https://github.com/pallets/flask",
+    "commit": "d73fa1cdcbd8b1465c151db8924ba58b1dd14e35",
+    "local": "/home/murphy/source/flask"
+  },
+  {
+    "name": "express",
+    "language": "javascript",
+    "url": "https://github.com/expressjs/express",
+    "commit": "bed501c695a61886399ee622875f3be933c716d8",
+    "local": "/home/murphy/source/express"
+  },
+  {
+    "name": "zod",
+    "language": "typescript",
+    "url": "https://github.com/colinhacks/zod",
+    "commit": "e516c3baf22615e20934116abebfed6c000222c2",
+    "local": "/home/murphy/source/zod"
+  },
+  {
+    "name": "gson",
+    "language": "java",
+    "url": "https://github.com/google/gson",
+    "commit": "8b4b55051489132190cb8d1c61eb9dc7f5381295",
+    "local": null
+  },
+  {
+    "name": "cobra",
+    "language": "go",
+    "url": "https://github.com/spf13/cobra",
+    "commit": "adbc8813901bba65827259daa8e22ff94ec1f30e",
+    "local": null
+  },
+  {
+    "name": "newtonsoft-json",
+    "language": "csharp",
+    "url": "https://github.com/JamesNK/Newtonsoft.Json",
+    "commit": "09bb545d72969ad7fb4ea07db0d5c34f4fc07877",
+    "local": null
+  },
+  {
+    "name": "code-kb",
+    "language": "rust",
+    "url": "https://github.com/anortham/code-kb",
+    "commit": "765d94079677cd21fc180f9b3e1e266b02c83a31",
+    "local": "/home/murphy/source/code-kb"
+  }
+]
