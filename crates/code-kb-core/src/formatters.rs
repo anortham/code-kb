@@ -1014,7 +1014,10 @@ fn text_only_section(report: &ReferenceReport) -> String {
     if report.text_only.is_empty() {
         return String::new();
     }
-    let mut out = format!("Text only ({}):\n", report.counts.text_only_lines);
+    let mut out = format!(
+        "Text only ({}): docs, comments, strings, or code the index did not record\n",
+        report.counts.text_only_lines
+    );
     let mut hidden_lines = 0;
     let mut hidden_files = 0;
     for (index, file) in report.text_only.iter().enumerate() {
@@ -3600,7 +3603,10 @@ mod tests {
 
         let section = text.split_once("Text only (").unwrap().1;
         let mut lines = section.lines();
-        assert_eq!(lines.next(), Some("37):"));
+        assert_eq!(
+            lines.next(),
+            Some("37): docs, comments, strings, or code the index did not record")
+        );
         assert_eq!(
             lines.next(),
             Some("  docs/f00.rst: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12")

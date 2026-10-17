@@ -1,7 +1,7 @@
 use code_kb_core::{
     LabeledSite, ReferenceReport, SiteLabel, Workspace, find_julie_extract_binary,
-    find_references_scoped, open_read_only, reference_report, safe_tempdir, scan_workspace,
-    select_reference_target,
+    find_references_scoped, get_symbol_by_id, open_read_only, reference_report, safe_tempdir,
+    scan_workspace, select_reference_target,
 };
 use std::fs;
 use std::path::PathBuf;
@@ -33,6 +33,19 @@ fn scanned_repo(files: &[(&str, &str)]) -> Repo {
 fn report(repo: &Repo, name: &str, path: Option<&str>) -> ReferenceReport {
     let conn = open_read_only(&repo.db).unwrap();
     let target = select_reference_target(&conn, name, path).unwrap();
+    reference_report(&conn, &repo.root, &target, false).unwrap()
+}
+
+fn first_definition_report(repo: &Repo, name: &str, path: &str) -> ReferenceReport {
+    let conn = open_read_only(&repo.db).unwrap();
+    let id: String = conn
+        .query_row(
+            "SELECT symbol_id FROM symbols WHERE name = ?1 AND path = ?2 ORDER BY start_line LIMIT 1",
+            [name, path],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let target = get_symbol_by_id(&conn, &id).unwrap().unwrap();
     reference_report(&conn, &repo.root, &target, false).unwrap()
 }
 
@@ -1018,5 +1031,182 @@ fn a_constructor_target_counts_a_same_file_new_expression() {
         line,
         SiteLabel::Proven,
         "builds the class",
+    );
+}
+
+#[test]
+fn a_javascript_read_of_the_name_is_likely_because_callback_parameters_are_not_indexed() {
+    let repo = scanned_repo(&[(
+        "app/index.js",
+        "function count(req, res, next) {\n  next();\n}\n\napp.get('/', function (err, count) {\n  res.send({ total: count });\n});\n\napp.use(count);\n",
+    )]);
+    let report = report(&repo, "count", None);
+
+    let basis = "same file; the index does not record callback parameters";
+    let shadowed = line_of(&repo, "app/index.js", "total: count");
+    assert_site(&report, "app/index.js", shadowed, SiteLabel::Likely, basis);
+    let passed = line_of(&repo, "app/index.js", "app.use(count)");
+    assert_site(&report, "app/index.js", passed, SiteLabel::Likely, basis);
+}
+
+#[test]
+fn a_bare_call_never_reaches_a_javascript_property_method() {
+    let repo = scanned_repo(&[(
+        "lib/request.js",
+        "var accepts = require('accepts');\nvar req = module.exports = {};\n\nreq.accepts = function () {\n  var accept = accepts(this);\n  return accept.types();\n};\n",
+    )]);
+    let report = report(&repo, "accepts", Some("lib/request.js"));
+
+    let line = line_of(&repo, "lib/request.js", "accepts(this)");
+    assert_site(
+        &report,
+        "lib/request.js",
+        line,
+        SiteLabel::Excluded,
+        "resolves to the import of `accepts` from `accepts`",
+    );
+}
+
+#[test]
+fn a_decorator_line_of_a_property_setter_is_a_definition_line() {
+    let repo = scanned_repo(&[(
+        "pkg/box.py",
+        "class Box:\n    @property\n    def size(self):\n        return 1\n\n    @size.setter\n    def size(self, value):\n        pass\n",
+    )]);
+    let report = first_definition_report(&repo, "size", "pkg/box.py");
+
+    let decorator = line_of(&repo, "pkg/box.py", "@size.setter");
+    assert!(
+        report
+            .sites
+            .iter()
+            .all(|site| site.site.start_line != Some(decorator)),
+        "{}",
+        dump(&report)
+    );
+    assert_counts_add_up(&report);
+}
+
+const PY_STDLIB_JSON: &[(&str, &str)] = &[
+    ("pkg/__init__.py", ""),
+    ("pkg/json/__init__.py", "def dumps(obj):\n    return obj\n"),
+    (
+        "pkg/json/provider.py",
+        "import json\n\n\nclass Provider:\n    def dumps(self, obj):\n        return json.dumps(obj)\n",
+    ),
+];
+
+#[test]
+fn a_module_receiver_never_proves_a_class_member() {
+    let repo = scanned_repo(PY_STDLIB_JSON);
+    let report = report(&repo, "Provider.dumps", None);
+
+    let line = line_of(&repo, "pkg/json/provider.py", "json.dumps(obj)");
+    assert_ne!(
+        site_at(&report, "pkg/json/provider.py", line).label,
+        SiteLabel::Proven,
+        "{}",
+        dump(&report)
+    );
+}
+
+#[test]
+fn a_python_absolute_import_proves_only_a_file_of_its_top_package() {
+    let repo = scanned_repo(PY_STDLIB_JSON);
+    let report = report(&repo, "dumps", Some("pkg/json/__init__.py"));
+
+    let line = line_of(&repo, "pkg/json/provider.py", "json.dumps(obj)");
+    assert_ne!(
+        site_at(&report, "pkg/json/provider.py", line).label,
+        SiteLabel::Proven,
+        "{}",
+        dump(&report)
+    );
+}
+
+#[test]
+fn a_package_import_that_matches_two_definitions_is_unresolved() {
+    let repo = scanned_repo(&[
+        (
+            "packages/lib/src/schemas.ts",
+            "export function boolean() {\n  return 1;\n}\n",
+        ),
+        (
+            "packages/lib/src/coerce.ts",
+            "export function boolean() {\n  return 2;\n}\n",
+        ),
+        (
+            "packages/lib/src/index.ts",
+            "export * from './schemas';\nexport * as coerce from './coerce';\n",
+        ),
+        (
+            "packages/app/use.ts",
+            "import * as z from 'lib';\n\nexport const s = z.boolean();\n",
+        ),
+    ]);
+    let report = report(&repo, "boolean", Some("packages/lib/src/coerce.ts"));
+
+    let line = line_of(&repo, "packages/app/use.ts", "z.boolean()");
+    assert_site(
+        &report,
+        "packages/app/use.ts",
+        line,
+        SiteLabel::Unresolved,
+        "the import matches 2 definitions",
+    );
+}
+
+#[test]
+fn a_call_julie_links_to_its_own_caller_is_not_proven() {
+    let repo = scanned_repo(&[
+        (
+            "src/Reader.cs",
+            "namespace N\n{\n    public class Reader\n    {\n        private void AddReference(string id)\n        {\n            Resolver().AddReference(this, id);\n        }\n\n        private Other Resolver()\n        {\n            return null;\n        }\n    }\n}\n",
+        ),
+        (
+            "src/Other.cs",
+            "namespace N\n{\n    public class Other\n    {\n        public void AddReference(object o, string id)\n        {\n        }\n    }\n}\n",
+        ),
+    ]);
+    let report = report(&repo, "Reader.AddReference", None);
+
+    let line = line_of(&repo, "src/Reader.cs", "Resolver().AddReference");
+    assert_ne!(
+        site_at(&report, "src/Reader.cs", line).label,
+        SiteLabel::Proven,
+        "{}",
+        dump(&report)
+    );
+}
+
+#[test]
+fn a_subclass_write_to_an_inherited_property_is_a_site_not_a_definition() {
+    let repo = scanned_repo(&[
+        ("pkg/__init__.py", ""),
+        (
+            "pkg/base.py",
+            "class Base:\n    @property\n    def debug(self):\n        return self._debug\n\n    @debug.setter\n    def debug(self, value):\n        self._debug = value\n",
+        ),
+        (
+            "pkg/app.py",
+            "from pkg.base import Base\n\n\nclass App(Base):\n    def __init__(self):\n        self.debug = False\n\n    def run(self):\n        return self.debug\n",
+        ),
+    ]);
+    let report = first_definition_report(&repo, "debug", "pkg/base.py");
+
+    let read = line_of(&repo, "pkg/app.py", "return self.debug");
+    assert_site(
+        &report,
+        "pkg/app.py",
+        read,
+        SiteLabel::Proven,
+        "class chain",
+    );
+    let write = line_of(&repo, "pkg/app.py", "self.debug = False");
+    assert_eq!(
+        site_at(&report, "pkg/app.py", write).label,
+        SiteLabel::Proven,
+        "{}",
+        dump(&report)
     );
 }

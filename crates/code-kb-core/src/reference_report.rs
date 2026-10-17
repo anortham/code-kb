@@ -12,8 +12,8 @@ use crate::models::{
 use crate::queries::{
     QueryError, built_receiver_sql, class_chain_sql, constructed_class, direct_identifier_rows,
     documentation_language_list, enclosing_scope_sql, get_symbol_by_name,
-    grouped_member_access_rows, implicit_receiver_language_list, import_sites,
-    module_import_binding_sql, path_proximity, pending_target_predicate,
+    grouped_member_access_rows, has_column, implicit_receiver_language_list, import_sites,
+    inherited_writes_among, module_import_binding_sql, path_proximity, pending_target_predicate,
     populate_lambda_enclosing_names, receiver_type_sql, symbol_not_found_parts,
 };
 use crate::text_scan::scan_word;
@@ -36,6 +36,8 @@ const CLASS_LIKE_KINDS: &[&str] = &[
 ];
 const SELF_RECEIVERS: &[&str] = &["self", "this", "cls", "Self", "super"];
 const EXTERNAL_RUST_ROOTS: &[&str] = &["std", "core", "alloc"];
+/// The basis of a claim that rests on an import; a package import can match several files.
+const IMPORT_BASIS: &str = "import";
 
 /// Selects the callers target by name exactly as `find_references_scoped` does: the same
 /// `QueryError::SymbolNotFound` (built with `symbol_not_found_parts`) or ambiguity error.
@@ -252,6 +254,8 @@ const IMPORT_SOURCES_SQL: &str = "SELECT COALESCE(json_extract(metadata_json, '$
 const PENDING_IMPORT_MODULES_SQL: &str = "SELECT target_namespace_json FROM pending_relationships
      WHERE kind = 'imports' AND path = ?1 AND target_terminal_name = ?2";
 
+const FILE_EXISTS_SQL: &str = "SELECT 1 FROM files WHERE path = ?1 OR path = ?2 LIMIT 1";
+
 const SOURCE_FILES_SQL: &str = "SELECT 1 FROM files
      WHERE '/' || replace(replace(path, '\\', '/'), '-', '_') LIKE ?1 ESCAPE '\\'
         OR '/' || replace(replace(path, '\\', '/'), '-', '_') LIKE ?2 ESCAPE '\\'
@@ -372,6 +376,14 @@ impl NameRow {
     }
 }
 
+/// A JavaScript method assigned to a property (`req.accepts = function`): no scope binds its name,
+/// so a bare use of that name reads an import or a global.
+fn is_property_method(symbol: &Symbol) -> bool {
+    symbol.kind == "method"
+        && symbol.parent_symbol_id.is_none()
+        && language_family(&symbol.language) == "js"
+}
+
 fn is_plain_identifier(text: &str) -> bool {
     let mut chars = text.chars();
     chars
@@ -386,6 +398,8 @@ struct Definition {
     name: String,
     path: String,
     start_line: usize,
+    /// The first decorator line above the definition, when it has decorators.
+    decorated_start_line: Option<usize>,
     body_start_line: Option<usize>,
     owner_name: Option<String>,
     local: bool,
@@ -469,8 +483,11 @@ impl TextOutcome {
 struct Accounting<'a> {
     conn: &'a Connection,
     judge_stmt: RefCell<Option<Statement<'a>>>,
+    import_match_stmt: Option<Statement<'a>>,
     statements: RefCell<HashMap<&'static str, Statement<'a>>>,
     external_sources: HashMap<String, bool>,
+    /// Definitions an import reaches, by caller file, receiver, and name.
+    import_matches: HashMap<(String, String, String), Vec<(String, String)>>,
 }
 
 impl<'a> Accounting<'a> {
@@ -478,8 +495,10 @@ impl<'a> Accounting<'a> {
         Accounting {
             conn,
             judge_stmt: RefCell::new(None),
+            import_match_stmt: None,
             statements: RefCell::new(HashMap::new()),
             external_sources: HashMap::new(),
+            import_matches: HashMap::new(),
         }
     }
 
@@ -501,9 +520,18 @@ impl<'a> Accounting<'a> {
     }
 
     fn definitions(&self, name: &str) -> Result<Vec<Definition>, QueryError> {
+        let decorated_start = if has_column(self.conn, "structural_facts", "end_byte")
+            && has_column(self.conn, "symbols", "end_byte")
+        {
+            "(SELECT MIN(f.start_line) FROM structural_facts f
+              WHERE f.path = s.path AND f.pattern_id LIKE '%.decorated_definition.%'
+                AND f.end_byte = s.end_byte AND f.start_byte < s.start_byte)"
+        } else {
+            "NULL"
+        };
         let mut stmt = self.conn.prepare(&format!(
             "SELECT s.symbol_id, s.name, s.kind, s.language, s.path, s.start_line,
-                    s.body_start_line, s.parent_symbol_id, par.name, par.kind
+                    s.body_start_line, s.parent_symbol_id, par.name, par.kind, {decorated_start}
              FROM symbols s LEFT JOIN symbols par ON par.symbol_id = s.parent_symbol_id
              WHERE s.name = ?1 AND s.kind NOT IN ('import', 'export')
                AND s.language NOT IN ({})",
@@ -523,6 +551,7 @@ impl<'a> Accounting<'a> {
                 name: row.get(1)?,
                 path: row.get::<_, String>(4)?.replace('\\', "/"),
                 start_line: row.get::<_, i64>(5)? as usize,
+                decorated_start_line: row.get::<_, Option<i64>>(10)?.map(|v| v as usize),
                 body_start_line: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
                 owner_name: parent_name.filter(|_| {
                     parent_kind
@@ -532,7 +561,11 @@ impl<'a> Accounting<'a> {
                 local,
             })
         })?;
-        Ok(rows.collect::<Result<_, _>>()?)
+        let mut definitions: Vec<Definition> = rows.collect::<Result<_, _>>()?;
+        let writes =
+            inherited_writes_among(self.conn, definitions.iter().map(|d| d.symbol_id.as_str()))?;
+        definitions.retain(|d| !writes.contains(&d.symbol_id));
+        Ok(definitions)
     }
 
     fn definition_count(&self, name: &str) -> Result<usize, QueryError> {
@@ -588,25 +621,33 @@ impl<'a> Accounting<'a> {
             }
             checked += 1;
             let judged = self.judge(&spec.name, &other.symbol_id)?;
-            undecided.retain(|&index| {
+            let mut kept = Vec::with_capacity(undecided.len());
+            for index in undecided {
                 let row = &rows[index];
-                match judged.get(&row.key) {
-                    Some(Judged {
-                        claimed: true,
-                        basis: Some(_),
-                    }) => {
-                        verdicts.insert(
-                            row.key.clone(),
-                            Verdict::new(SiteLabel::Excluded, other.resolves_to(), false),
-                        );
-                        false
-                    }
-                    _ => true,
+                let Some(Judged {
+                    claimed: true,
+                    basis: Some(basis),
+                }) = judged.get(&row.key)
+                else {
+                    kept.push(index);
+                    continue;
+                };
+                if basis == IMPORT_BASIS
+                    && row.language == "python"
+                    && !self.python_import_reaches(row, &spec.name, &other.path)?
+                {
+                    kept.push(index);
+                    continue;
                 }
-            });
+                verdicts.insert(
+                    row.key.clone(),
+                    Verdict::new(SiteLabel::Excluded, other.resolves_to(), false),
+                );
+            }
+            undecided = kept;
         }
-        if !undecided.is_empty() && checked < others.len() {
-            let unchecked = others.len() - checked;
+        let unchecked = others.len() - checked;
+        if !undecided.is_empty() && unchecked > 0 {
             cannot_see.push(if unchecked == 1 {
                 "1 other definition with this name was not checked".to_string()
             } else {
@@ -904,8 +945,20 @@ impl<'a> Accounting<'a> {
                     continue;
                 }
                 let basis = match row.source {
+                    // julie links a call inside a method to that method by name alone.
+                    Source::Relationship if row.caller_id == row.to_symbol_id => None,
                     Source::Relationship => Some("same file".to_string()),
                     _ => judged_row.and_then(|j| j.basis.clone()),
+                };
+                let basis = match basis {
+                    Some(basis)
+                        if basis == IMPORT_BASIS
+                            && row.language == "python"
+                            && !self.python_import_reaches(row, &spec.name, &member.path)? =>
+                    {
+                        None
+                    }
+                    basis => basis,
                 };
                 let candidate = resolver_claim.unwrap_or(false);
                 let entry = claims.entry(row.key.clone()).or_insert(Claim {
@@ -944,9 +997,22 @@ impl<'a> Accounting<'a> {
                 false,
             )));
         }
+        if row.is_bare_use() && spec.group.iter().all(is_property_method) {
+            return Ok(Some(self.bare_use_of_property_method(row, &spec.name)?));
+        }
         if let Some(claim) = claims.get(&row.key)
-            && claim.basis.is_some()
+            && let Some(basis) = &claim.basis
         {
+            if basis == IMPORT_BASIS {
+                let others = self.other_import_matches(row, &spec.name, group_ids)?;
+                if others > 0 {
+                    return Ok(Some(Verdict::new(
+                        SiteLabel::Unresolved,
+                        format!("the import matches {} definitions", others + 1),
+                        true,
+                    )));
+                }
+            }
             return Ok(Some(claimed_verdict(row, claim, k, spec.builds_class)));
         }
         if self.crate_path_names_owner(row, &spec.group)? {
@@ -957,6 +1023,7 @@ impl<'a> Accounting<'a> {
             )));
         }
         if let Some(to) = row.to_symbol_id.as_deref()
+            && !group_ids.contains(to)
             && let Some(other) = self.definition_by_id(to)?
         {
             return Ok(Some(Verdict::new(
@@ -1072,6 +1139,7 @@ impl<'a> Accounting<'a> {
                     name: row.get(1)?,
                     path: row.get::<_, String>(4)?.replace('\\', "/"),
                     start_line: row.get::<_, i64>(5)? as usize,
+                    decorated_start_line: None,
                     body_start_line: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
                     owner_name: parent_name.filter(|_| {
                         parent_kind
@@ -1114,6 +1182,112 @@ impl<'a> Accounting<'a> {
             Some(id) if !group_ids.contains(id.as_str()) => self.definition_by_id(&id),
             _ => Ok(None),
         }
+    }
+
+    /// How many top-level definitions outside the target group the import behind the row also
+    /// reaches: a package import (`import * as z from "zod"`) can match every file of the package.
+    fn other_import_matches(
+        &mut self,
+        row: &NameRow,
+        name: &str,
+        group_ids: &HashSet<&str>,
+    ) -> Result<usize, QueryError> {
+        let receiver = row.receiver.clone().unwrap_or_default();
+        let key = (row.path.clone(), receiver.clone(), name.to_string());
+        if !self.import_matches.contains_key(&key) {
+            if self.import_match_stmt.is_none() {
+                self.import_match_stmt = Some(self.conn.prepare(&import_match_sql())?);
+            }
+            let stmt = self
+                .import_match_stmt
+                .as_mut()
+                .expect("import match statement was just prepared");
+            let matches = stmt
+                .query_map(params![row.path, receiver, name], |r| {
+                    Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+                })?
+                .collect::<Result<Vec<_>, _>>()?;
+            self.import_matches.insert(key.clone(), matches);
+        }
+        let mut count = 0;
+        for (symbol_id, path) in &self.import_matches[&key] {
+            if group_ids.contains(symbol_id.as_str()) {
+                continue;
+            }
+            if row.language == "python"
+                && !self.python_import_reaches(row, name, &path.replace('\\', "/"))?
+            {
+                continue;
+            }
+            count += 1;
+        }
+        Ok(count)
+    }
+
+    fn bare_use_of_property_method(
+        &self,
+        row: &NameRow,
+        name: &str,
+    ) -> Result<Verdict, QueryError> {
+        let sources = self.with_statement(IMPORT_SOURCES_SQL, |stmt| {
+            stmt.query_map(params![row.path, name], |r| r.get::<_, String>(0))?
+                .collect::<Result<Vec<_>, _>>()
+        })?;
+        let basis = match sources.iter().find(|source| !source.is_empty()) {
+            Some(source) => format!("resolves to the import of `{name}` from `{source}`"),
+            None => "a bare name cannot reach a property method".to_string(),
+        };
+        Ok(Verdict::new(SiteLabel::Excluded, basis, false))
+    }
+
+    /// Whether the absolute import that binds the row's qualifier, or the name itself, starts at
+    /// the top package of `path` or at a folder above it: `import json` does not reach
+    /// `src/flask/json/provider.py`, whose top package is `flask`.
+    fn python_import_reaches(
+        &self,
+        row: &NameRow,
+        name: &str,
+        path: &str,
+    ) -> Result<bool, QueryError> {
+        let binding = row.qualifier().unwrap_or(name);
+        let sources = self.with_statement(IMPORT_SOURCES_SQL, |stmt| {
+            stmt.query_map(params![row.path, binding], |r| r.get::<_, String>(0))?
+                .collect::<Result<Vec<_>, _>>()
+        })?;
+        if sources.is_empty() || sources.iter().any(|s| s.is_empty() || s.starts_with('.')) {
+            return Ok(true);
+        }
+        let (folders, file) = match path.rsplit_once('/') {
+            Some((dir, file)) => (dir.split('/').collect::<Vec<_>>(), file),
+            None => (Vec::new(), path),
+        };
+        let mut top = folders.len();
+        while top > 0 {
+            let init = format!("{}/__init__.py", folders[..top].join("/"));
+            let is_package = self.with_statement(FILE_EXISTS_SQL, |stmt| {
+                stmt.exists(params![init, init.replace('/', "\\")])
+            })?;
+            if !is_package {
+                break;
+            }
+            top -= 1;
+        }
+        let stem = file.strip_suffix(".py").unwrap_or(file);
+        let reachable: Vec<&str> = if top == folders.len() {
+            folders
+                .iter()
+                .copied()
+                .chain(std::iter::once(stem))
+                .collect()
+        } else {
+            folders[..=top].to_vec()
+        };
+        Ok(sources.iter().any(|source| {
+            source
+                .split('.')
+                .next()
+                .is_some_and(|first| reachable.contains(&first))
+        }))
     }
 
     /// The import that binds the qualifier of the call to a module outside the index.
@@ -1379,11 +1553,19 @@ type SiteRowOut = LabeledSite;
 
 fn claimed_verdict(row: &NameRow, claim: &Claim, k: usize, builds_class: bool) -> Verdict {
     if let Some(basis) = &claim.basis {
-        let basis = if builds_class {
-            "builds the class"
-        } else {
-            basis
-        };
+        if builds_class {
+            return Verdict::new(SiteLabel::Proven, "builds the class", true);
+        }
+        if row.kind == "variable_ref"
+            && language_family(&row.language) == "js"
+            && matches!(basis.as_str(), "same file" | "enclosing scope")
+        {
+            return Verdict::new(
+                SiteLabel::Likely,
+                format!("{basis}; the index does not record callback parameters"),
+                true,
+            );
+        }
         return Verdict::new(SiteLabel::Proven, basis, true);
     }
     if claim.candidate && k > 1 {
@@ -1504,10 +1686,12 @@ fn definition_spans(definitions: &[Definition]) -> HashMap<String, Vec<(usize, u
             .body_start_line
             .unwrap_or(definition.start_line)
             .max(definition.start_line);
-        spans
-            .entry(definition.path.clone())
-            .or_default()
-            .push((definition.start_line, end));
+        spans.entry(definition.path.clone()).or_default().push((
+            definition
+                .decorated_start_line
+                .unwrap_or(definition.start_line),
+            end,
+        ));
     }
     spans
 }
@@ -1599,6 +1783,22 @@ fn judge_sql(conn: &Connection) -> String {
     )
 }
 
+/// The top-level definitions named `?3` that the import binding of receiver `?2` (or of the name
+/// itself when `?2` is empty) in file `?1` reaches, as `(symbol_id, path)` rows.
+fn import_match_sql() -> String {
+    let receiver = module_import_binding_sql("t", "p.target_receiver");
+    let bare = module_import_binding_sql("t", "t.name");
+    format!(
+        "SELECT t.symbol_id, t.path
+         FROM (SELECT ?1 AS path, ?2 AS target_receiver) p
+         JOIN symbols t ON t.name = ?3
+         WHERE t.parent_symbol_id IS NULL AND t.kind NOT IN ('import', 'export')
+           AND t.language NOT IN ({docs})
+           AND CASE WHEN p.target_receiver != '' THEN {receiver} ELSE {bare} END",
+        docs = documentation_language_list()
+    )
+}
+
 /// SQL `CASE` that names the positive evidence tying row `p` to `target`, or yields `NULL`.
 fn evidence_sql(conn: &Connection, target: &str, parent: &str) -> String {
     let ns = "json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END)";
@@ -1633,7 +1833,8 @@ fn evidence_sql(conn: &Connection, target: &str, parent: &str) -> String {
             WHEN {target}.parent_symbol_id IS NOT NULL
                  AND ({self_receiver} OR {names_self}) AND {receiver_chain} THEN 'class chain'
             WHEN {has_receiver} AND {parent}.name = p.target_receiver THEN 'qualified path'
-            WHEN {has_receiver} AND {module_receiver} THEN 'import'
+            WHEN {has_receiver} AND {target}.parent_symbol_id IS NULL AND {module_receiver}
+                 THEN 'import'
             WHEN {has_receiver} AND {target}.parent_symbol_id IS NOT NULL AND {receiver_type}
                  THEN 'receiver type'
             {built}

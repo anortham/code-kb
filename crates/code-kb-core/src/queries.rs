@@ -3620,6 +3620,7 @@ pub(crate) fn receiver_type_sql(conn: &Connection, parent: &str) -> String {
 pub(crate) fn class_chain_sql(target: &str, own_class_rule: &str) -> String {
     let rival_rank = path_proximity("rival.path", "pe.path");
     let base_rank = path_proximity("c.path", "pe.path");
+    let inherited_write = inherited_attribute_write("nearer");
     format!(
         "EXISTS (
                             WITH RECURSIVE base(symbol_id, depth) AS (
@@ -3651,6 +3652,7 @@ pub(crate) fn class_chain_sql(target: &str, own_class_rule: &str) -> String {
                                     AND nearer.kind IN ('method', 'function', 'constructor', 'property')
                                     AND closer.depth < base.depth
                                     AND (closer.depth > 0 OR p.target_receiver IS NOT 'super')
+                                    AND NOT {inherited_write}
                               )
                         )"
     )
