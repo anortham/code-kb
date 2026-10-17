@@ -70,6 +70,116 @@ pub struct ReferenceSite {
     pub enclosing_symbol_name: Option<String>,
 }
 
+/// How well the index evidence ties a name site to the selected definition.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum SiteLabel {
+    Proven,
+    Likely,
+    Unresolved,
+    Excluded,
+}
+
+impl SiteLabel {
+    pub const ALL: [SiteLabel; 4] = [
+        SiteLabel::Proven,
+        SiteLabel::Likely,
+        SiteLabel::Unresolved,
+        SiteLabel::Excluded,
+    ];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            SiteLabel::Proven => "proven",
+            SiteLabel::Likely => "likely",
+            SiteLabel::Unresolved => "unresolved",
+            SiteLabel::Excluded => "excluded",
+        }
+    }
+
+    /// Position in the report order: proven, likely, unresolved, excluded.
+    pub fn rank(self) -> usize {
+        match self {
+            SiteLabel::Proven => 0,
+            SiteLabel::Likely => 1,
+            SiteLabel::Unresolved => 2,
+            SiteLabel::Excluded => 3,
+        }
+    }
+}
+
+/// One line of the project that holds the target's name, with the evidence that ties it to the
+/// target. `end_line` is set only when the site spans more than its first line.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct LabeledSite {
+    #[serde(flatten)]
+    pub site: ReferenceSite,
+    pub label: SiteLabel,
+    pub basis: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_line: Option<usize>,
+}
+
+/// Lines that hold the target's name as a whole word but have no site, definition, or import.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TextOnlyLines {
+    pub path: String,
+    pub lines: Vec<usize>,
+}
+
+/// What the whole-word text scan covered.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TextScanSummary {
+    pub files_scanned: usize,
+    pub files_total: usize,
+    pub complete: bool,
+    pub elapsed_ms: u64,
+    /// Set to the class name when the scan did not run because the target is a constructor,
+    /// whose call sites spell the class name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skipped: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct ReferenceCounts {
+    pub sites: usize,
+    pub proven: usize,
+    pub likely: usize,
+    pub unresolved: usize,
+    pub excluded: usize,
+    pub text_lines: usize,
+    pub site_lines: usize,
+    pub definition_lines: usize,
+    pub import_lines: usize,
+    pub text_only_lines: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ReferenceTarget {
+    pub symbol_id: String,
+    pub name: String,
+    /// `Owner.name` for a member of a class or another code type, else `name`.
+    pub display_name: String,
+    pub kind: String,
+    pub path: String,
+    pub line: usize,
+    pub definitions_with_name: usize,
+}
+
+/// Every indexed site of one definition's name, labeled by evidence, with a whole-word text count
+/// that accounts for each line of the name. `sites` is complete and sorted by label (proven,
+/// likely, unresolved, excluded), then path, line, and column.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ReferenceReport {
+    pub target: ReferenceTarget,
+    pub counts: ReferenceCounts,
+    pub sites: Vec<LabeledSite>,
+    pub text_only: Vec<TextOnlyLines>,
+    pub text_scan: TextScanSummary,
+    pub cannot_see: Vec<String>,
+    pub imports: Vec<(String, usize)>,
+}
+
 pub(crate) fn has_generated_lambda_name(name: &str) -> bool {
     name.strip_prefix("lambda_")
         .is_some_and(|line| !line.is_empty() && line.bytes().all(|byte| byte.is_ascii_digit()))
