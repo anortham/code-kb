@@ -192,6 +192,7 @@ dependencies = [
  "dunce",
  "hex",
  "ignore",
+ "memchr",
  "notify",
  "notify-debouncer-full",
  "rusqlite",

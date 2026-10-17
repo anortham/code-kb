@@ -6,6 +6,7 @@ pub mod queries;
 pub mod slicer;
 pub mod sync;
 pub mod telemetry;
+pub mod text_scan;
 pub mod watcher;
 pub mod workspace;
 
@@ -54,6 +55,7 @@ pub use telemetry::{
     get_global_telemetry_dir, get_telemetry_summary, open_global_telemetry_db, open_telemetry_db,
     record_tool_call, record_tool_call_conn,
 };
+pub use text_scan::{WordHits, scan_word};
 pub use watcher::{WatcherError, WatcherHandle, start_watcher};
 pub use workspace::{
     Workspace, WorkspaceError, is_hard_excluded, is_project_root, normalize_path, parse_file_uri,
