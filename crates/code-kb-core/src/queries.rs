@@ -3695,6 +3695,7 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
               )
         )"
     );
+    let rust_path = rust_path_rule(target, ns);
     format!(
         "(
             NOT (p.kind IS 'extends' AND p.from_symbol_id = {target}.symbol_id)
@@ -3789,12 +3790,71 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
             )
             OR (
                 {target}.parent_symbol_id IS NULL
-                AND EXISTS (
-                    SELECT 1 FROM {ns}
-                    WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super')
-                      AND {target_path} LIKE '%/' || {like_value} || '.%' ESCAPE '\\'
+                AND (
+                    EXISTS (
+                        SELECT 1 FROM {ns}
+                        WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super')
+                          AND {target_path} LIKE '%/' || {like_value} || '.%' ESCAPE '\\'
+                    )
+                    OR ({rust_path})
                 )
             )
+            )
+        )"
+    )
+}
+
+/// SQL predicate for a Rust call written with a path (`crate::f()`, `super::f()`, `my_crate::f()`,
+/// `crate::module::f()`) that reaches the top-level function `target`. A package folder is the
+/// path before the last `/src/`; a leading `crate`, `self`, or `super` names the caller's own
+/// package, a leading crate name names the package folder with `-` read as `_`, and every other
+/// segment must be a file stem or folder below that `src/`. A call rooted at `std`, `core`, or
+/// `alloc` never matches.
+fn rust_path_rule(target: &str, ns: &str) -> String {
+    let target_path = format!("('/' || replace({target}.path, '\\', '/'))");
+    let caller_path = "('/' || replace(p.path, '\\', '/'))";
+    let skipped = "'std', 'core', 'alloc', 'crate', 'self', 'super', 'Self'";
+    let like_segment = "replace(replace(replace(seg.value, '\\', '\\\\'), '%', '\\%'), '_', '\\_')";
+    let in_module_path = format!(
+        "(module_path.value LIKE '%/' || {like_segment} || '.%' ESCAPE '\\'
+          OR module_path.value LIKE '%/' || {like_segment} || '/%' ESCAPE '\\')"
+    );
+    format!(
+        "s_from.language = 'rust'
+        AND {target}.language = 'rust'
+        AND EXISTS (
+            SELECT 1
+            FROM json_each(json_array(replace({target_path}, '/src/', char(1)))) marked
+            CROSS JOIN json_each(json_array(
+                CASE WHEN instr(marked.value, char(1)) > 0
+                     THEN length({target_path})
+                          - length(replace(marked.value, rtrim(marked.value, replace(marked.value, char(1), '')), ''))
+                     ELSE 0 END)) src
+            CROSS JOIN json_each(json_array(
+                CASE WHEN src.value > 0 THEN replace(substr({target_path}, src.value), '-', '_') ELSE '' END)) module_path
+            WHERE (
+                EXISTS (
+                    SELECT 1 FROM {ns} head
+                    WHERE head.key = 0
+                      AND (head.value IN ('crate', 'self', 'super')
+                           AND ({target}.path = p.path
+                                OR src.value > 0
+                                   AND substr({caller_path}, 1, src.value) = substr({target_path}, 1, src.value))
+                           OR head.value NOT IN ({skipped})
+                              AND src.value >= length(head.value) + 6
+                              AND replace(substr({target_path}, src.value - length(head.value) - 5, length(head.value) + 6), '-', '_')
+                                  = '/' || head.value || '/src/')
+                )
+                AND NOT EXISTS (
+                    SELECT 1 FROM {ns} seg
+                    WHERE seg.key > 0 AND seg.value NOT IN ({skipped}) AND NOT {in_module_path}
+                )
+                OR src.value > 0
+                   AND EXISTS (SELECT 1 FROM {ns} head WHERE head.key = 0 AND head.value NOT IN ({skipped}))
+                   AND NOT EXISTS (
+                       SELECT 1 FROM {ns} seg
+                       WHERE seg.value NOT IN ({skipped}) AND NOT {in_module_path}
+                   )
             )
         )"
     )
