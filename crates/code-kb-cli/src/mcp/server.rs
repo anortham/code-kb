@@ -9,13 +9,14 @@ use code_kb_core::{
     WorkspaceError, blast_radius_selected_op, codebase_outline_op, create_index,
     ensure_fts_index_path, ensure_index_matches_extractor, file_sizes_for_paths, file_skeleton_op,
     find_references_for_symbol_ext, format_blast_radius, format_context_slices,
-    format_fact_categories, format_find_symbol_results, format_references, format_search_results,
-    format_structural_facts, format_symbol_bodies, format_telemetry_summary,
+    format_fact_categories, format_find_symbol_results, format_reference_report, format_references,
+    format_search_results, format_structural_facts, format_symbol_bodies, format_telemetry_summary,
     fts_search_symbols_scoped, get_context_slices_selected_op, get_symbol_bodies_selected_op,
     get_telemetry_summary, installed_extractor_version, is_project_root,
     list_structural_fact_categories_scoped, open_global_telemetry_db, open_read_only,
     qualify_members, reconcile_offline_edits, record_tool_call, record_tool_call_conn,
-    resolve_symbol_op, search_symbols_scoped, start_watcher,
+    reference_report, resolve_symbol_op, search_symbols_scoped, select_reference_target,
+    start_watcher,
 };
 
 use super::protocol::{CallToolResult, JsonRpcRequest, JsonRpcResponse, Tool};
@@ -422,7 +423,7 @@ impl McpServer {
             },
             Tool {
                 name: "find_references".to_string(),
-                description: "Callers (with type usages and member accesses) or callees of a symbol from parsed call sites; use instead of rg or grep on the name. Calls match by name and nearest scope, so pass file_path or a qualified name for a common name.".to_string(),
+                description: "Callers of a symbol: every indexed site with its name, each labeled proven, likely, unresolved, or excluded by its evidence, plus a whole-word text count that accounts for every line of the name. Use instead of rg or grep on a name. Callees: the calls a symbol makes. Pass file_path or a qualified name for a common name.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -1219,62 +1220,104 @@ impl McpServer {
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false);
 
-                let (target, target_path, refs) = match selector {
-                    SymbolSelector::Name(name) => {
-                        let path = raw_file_path.map(|path| self.workspace.relativize_filter(path));
-                        match code_kb_core::find_references_scoped(
-                            &conn,
-                            &name,
-                            direction,
-                            limit,
-                            include_external,
-                            path.as_deref(),
-                        ) {
-                            Ok(refs) => (name, path, refs),
-                            Err(error) => return CallToolResult::error(error.to_string()),
+                if direction == "callers" {
+                    let selected = match selector {
+                        SymbolSelector::Name(name) => {
+                            let path =
+                                raw_file_path.map(|path| self.workspace.relativize_filter(path));
+                            select_reference_target(&conn, &name, path.as_deref())
+                                .map_err(|error| error.to_string())
                         }
-                    }
-                    SymbolSelector::Id(id) => {
-                        let selected = match resolve_symbol_op(
+                        SymbolSelector::Id(id) => resolve_symbol_op(
                             &self.workspace,
                             &self.db_path,
                             &conn,
                             &SymbolSelector::Id(id),
                             raw_file_path,
-                        ) {
-                            Ok(symbol) => symbol,
-                            Err(error) => return CallToolResult::error(error.to_string()),
-                        };
-                        match find_references_for_symbol_ext(
+                        )
+                        .map_err(|error| error.to_string()),
+                    };
+                    let selected = match selected {
+                        Ok(symbol) => symbol,
+                        Err(error) => return CallToolResult::error(error),
+                    };
+                    if limit == 0 {
+                        CallToolResult::text(ZERO_LIMIT_NOTICE.to_string())
+                            .with_logical_result_count(0)
+                    } else {
+                        let report = match reference_report(
                             &conn,
-                            &selected.name,
-                            direction,
-                            limit,
-                            &selected.symbol_id,
+                            &self.workspace.root,
+                            &selected,
                             include_external,
                         ) {
-                            Ok(refs) => (selected.name, Some(selected.path), refs),
+                            Ok(report) => report,
                             Err(error) => return CallToolResult::error(error.to_string()),
-                        }
+                        };
+                        let mut baseline_paths: Vec<String> = report
+                            .sites
+                            .iter()
+                            .map(|labeled| labeled.site.path.clone())
+                            .collect();
+                        baseline_paths.sort();
+                        baseline_paths.dedup();
+                        CallToolResult::text(format_reference_report(&report, limit))
+                            .with_logical_result_count(report.counts.sites)
+                            .with_baseline_paths(baseline_paths)
                     }
-                };
-
-                let baseline_paths = refs.iter().map(|site| site.path.clone()).collect();
-
-                let output = if limit == 0 {
-                    ZERO_LIMIT_NOTICE.to_string()
-                } else if direction == "callers" {
-                    let imports =
-                        code_kb_core::import_sites(&conn, &target, target_path.as_deref())
-                            .unwrap_or_default();
-                    format_references(&target, &refs, direction, limit)
-                        + &code_kb_core::format_import_summary(&imports)
                 } else {
-                    format_references(&target, &refs, direction, limit)
-                };
-                CallToolResult::text(output)
-                    .with_logical_result_count(refs.len())
-                    .with_baseline_paths(baseline_paths)
+                    let (target, refs) = match selector {
+                        SymbolSelector::Name(name) => {
+                            let path =
+                                raw_file_path.map(|path| self.workspace.relativize_filter(path));
+                            match code_kb_core::find_references_scoped(
+                                &conn,
+                                &name,
+                                direction,
+                                limit,
+                                include_external,
+                                path.as_deref(),
+                            ) {
+                                Ok(refs) => (name, refs),
+                                Err(error) => return CallToolResult::error(error.to_string()),
+                            }
+                        }
+                        SymbolSelector::Id(id) => {
+                            let selected = match resolve_symbol_op(
+                                &self.workspace,
+                                &self.db_path,
+                                &conn,
+                                &SymbolSelector::Id(id),
+                                raw_file_path,
+                            ) {
+                                Ok(symbol) => symbol,
+                                Err(error) => return CallToolResult::error(error.to_string()),
+                            };
+                            match find_references_for_symbol_ext(
+                                &conn,
+                                &selected.name,
+                                direction,
+                                limit,
+                                &selected.symbol_id,
+                                include_external,
+                            ) {
+                                Ok(refs) => (selected.name, refs),
+                                Err(error) => return CallToolResult::error(error.to_string()),
+                            }
+                        }
+                    };
+
+                    let baseline_paths = refs.iter().map(|site| site.path.clone()).collect();
+
+                    let output = if limit == 0 {
+                        ZERO_LIMIT_NOTICE.to_string()
+                    } else {
+                        format_references(&target, &refs, direction, limit)
+                    };
+                    CallToolResult::text(output)
+                        .with_logical_result_count(refs.len())
+                        .with_baseline_paths(baseline_paths)
+                }
             }
             "find_structural_facts" => {
                 let raw_path = arguments

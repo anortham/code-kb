@@ -32,14 +32,174 @@ fn receiver_reference_labels_match_the_mcp_contract() {
     assert_ne!(result["isError"], true, "{result}");
     let text = result_text(&result);
     assert!(
-        text.contains("`supported` [client.py:5] (kind: member_access)"),
+        text.contains(
+            "Proven (1):\n- `supported` [client.py:5] (kind: member_access; builds the class)\n"
+        ),
         "{text}"
     );
     assert!(
-        text.contains("`unknown` [client.py:12] (kind: member_access (candidate))"),
+        text.contains(
+            "Unresolved (1):\n- `unknown` [client.py:12] (kind: member_access; 2 definitions)\n"
+        ),
         "{text}"
     );
-    assert!(!text.contains("`wrong`"), "{text}");
+    assert!(
+        text.contains(
+            "Excluded (1):\n- `wrong` [client.py:9] (kind: member_access; resolves to `Shell.invoke` (runners.py:6))\n"
+        ),
+        "{text}"
+    );
+}
+
+fn three_caller_repo() -> tempfile::TempDir {
+    let repo = code_kb_core::safe_tempdir();
+    let root = repo.path();
+    for (path, source) in [
+        (
+            "pyproject.toml",
+            "[project]\nname = 'three'\nversion = '0.1.0'\n",
+        ),
+        ("util.py", "def helper():\n    return 1\n"),
+        (
+            "app.py",
+            "from util import helper\n\n\ndef a():\n    return helper()\n\n\ndef b():\n    return helper()\n\n\ndef c():\n    return helper()  # helper again\n",
+        ),
+        ("notes.md", "The helper function is documented here.\n"),
+    ] {
+        std::fs::write(root.join(path), source).unwrap();
+    }
+    repo
+}
+
+fn cli_stdout(root: &Path, args: &[&str]) -> String {
+    let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+        .arg("--root")
+        .arg(root)
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{args:?}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8(output.stdout).unwrap()
+}
+
+#[test]
+fn mcp_and_cli_print_byte_identical_callers_text_for_the_same_call() {
+    let repo = three_caller_repo();
+    let root = repo.path();
+    let report: Value =
+        serde_json::from_str(&cli_stdout(root, &["--json", "refs", "helper"])).unwrap();
+    let helper_id = report["target"]["symbol_id"].as_str().unwrap().to_string();
+    let calls = [
+        (json!({"symbol_name": "helper"}), vec!["refs", "helper"]),
+        (
+            json!({"symbol_name": "helper", "limit": 1}),
+            vec!["refs", "helper", "--limit", "1"],
+        ),
+        (
+            json!({"symbol_name": "helper", "file_path": "util.py"}),
+            vec!["refs", "helper", "--file", "util.py"],
+        ),
+        (
+            json!({"symbol_id": helper_id}),
+            vec!["refs", "--symbol-id", &helper_id],
+        ),
+    ];
+    let cli_texts: Vec<String> = calls
+        .iter()
+        .map(|(_, cli_args)| cli_stdout(root, cli_args))
+        .collect();
+
+    let mut session = McpSession::start(serve_command(root));
+    for ((arguments, _), cli_text) in calls.iter().zip(&cli_texts) {
+        let mut arguments = arguments.clone();
+        arguments["project_root"] = json!(root);
+        let result = session.call("find_references", arguments.clone());
+        assert_ne!(result["isError"], true, "{arguments}: {result}");
+
+        assert_eq!(result_text(&result), cli_text, "{arguments}");
+    }
+    session.finish();
+}
+
+#[test]
+fn test_mcp_find_references_description_names_the_labels_and_keeps_its_schema() {
+    let repo = three_caller_repo();
+    let mut session = McpSession::start(serve_command(repo.path()));
+
+    let listed = session.request("tools/list", json!({}));
+
+    let tool = listed["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|tool| tool["name"] == "find_references")
+        .unwrap();
+    assert_eq!(
+        tool["description"],
+        "Callers of a symbol: every indexed site with its name, each labeled proven, likely, unresolved, or excluded by its evidence, plus a whole-word text count that accounts for every line of the name. Use instead of rg or grep on a name. Callees: the calls a symbol makes. Pass file_path or a qualified name for a common name."
+    );
+    let mut properties: Vec<&str> = tool["inputSchema"]["properties"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    properties.sort_unstable();
+    assert_eq!(
+        properties,
+        [
+            "direction",
+            "file_path",
+            "include_external",
+            "limit",
+            "project_root",
+            "symbol_id",
+            "symbol_name"
+        ]
+    );
+}
+
+#[test]
+fn test_mcp_find_references_counts_sites_as_its_result_count() {
+    let repo = reference_baseline_repo();
+    let root = repo.path();
+    let mut session = McpSession::start(serve_command(root));
+
+    let without_callers = session.call(
+        "find_references",
+        json!({"project_root": root, "symbol_name": "make_0"}),
+    );
+    assert_ne!(without_callers["isError"], true, "{without_callers}");
+    assert!(
+        result_text(&without_callers).contains("Sites: 0 · proven 0"),
+        "{without_callers}"
+    );
+    let with_sites = session.call(
+        "find_references",
+        json!({"project_root": root, "symbol_name": "Alpha"}),
+    );
+    assert_ne!(with_sites["isError"], true, "{with_sites}");
+
+    let stats = session.call(
+        "telemetry_summary",
+        json!({"workspace_only": true, "json": true}),
+    );
+    let summary: Value = serde_json::from_str(result_text(&stats)).unwrap();
+    let refs_stat = summary["tool_stats"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|stat| stat["tool"] == "find_references")
+        .unwrap();
+    assert_eq!(refs_stat["count"], 2, "{refs_stat}");
+    assert_eq!(refs_stat["empty_count"], 1, "{refs_stat}");
+    assert_eq!(refs_stat["ok_count"], 1, "{refs_stat}");
+    session.finish();
 }
 
 #[test]
@@ -448,6 +608,32 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
         [],
     )
     .unwrap();
+
+    conn.execute_batch(
+        "ALTER TABLE pending_relationships ADD COLUMN pending_relationship_id TEXT;
+         ALTER TABLE pending_relationships ADD COLUMN caller_scope_symbol_id TEXT;
+         ALTER TABLE pending_relationships ADD COLUMN file_id TEXT;
+         ALTER TABLE pending_relationships ADD COLUMN target_display_name TEXT;
+         ALTER TABLE pending_relationships ADD COLUMN target_receiver TEXT;
+         ALTER TABLE pending_relationships ADD COLUMN target_namespace_json TEXT;
+         ALTER TABLE pending_relationships ADD COLUMN target_import_context TEXT;
+         ALTER TABLE pending_relationships ADD COLUMN end_line INTEGER;
+         ALTER TABLE pending_relationships ADD COLUMN metadata_json TEXT;
+         ALTER TABLE relationships ADD COLUMN file_id TEXT;
+         ALTER TABLE relationships ADD COLUMN end_line INTEGER;
+         ALTER TABLE relationships ADD COLUMN metadata_json TEXT;
+         ALTER TABLE symbols ADD COLUMN metadata_json TEXT;
+         CREATE TABLE identifiers (
+            identifier_id TEXT PRIMARY KEY, file_id TEXT, path TEXT, language TEXT, name TEXT,
+            kind TEXT, containing_symbol_id TEXT, start_line INTEGER, start_column INTEGER,
+            end_line INTEGER, end_column INTEGER, metadata_json TEXT
+        );
+        CREATE TABLE type_facts (
+            type_fact_id TEXT PRIMARY KEY, symbol_id TEXT NOT NULL, language TEXT,
+            resolved_type TEXT NOT NULL, generic_params_json TEXT
+        );",
+    )
+    .unwrap();
     conn.execute_batch(
         "INSERT INTO structural_facts VALUES
             ('sf1', 'src/routes.rs', 'rust', 'axum.route.v1', 'route', 'call', 's1', 1, 1, 1.0, NULL),
@@ -746,7 +932,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
         serde_json::from_str(&response_line5).expect("Failed to parse JSON response");
     assert_eq!(resp5["id"], 5);
     assert!(resp5["error"].is_null());
-    assert_ne!(resp5["result"]["isError"], true);
+    assert_ne!(resp5["result"]["isError"], true, "{resp5}");
     let refs_text = resp5["result"]["content"][0]["text"].as_str().unwrap();
     assert!(
         refs_text.contains("Callers")
@@ -1037,8 +1223,10 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
     }
     assert_ne!(overload_bodies[0], overload_bodies[1]);
     assert_ne!(overload_contexts[0], overload_contexts[1]);
-    assert!(overload_refs[0].contains("first") && !overload_refs[0].contains("second"));
-    assert!(overload_refs[1].contains("second") && !overload_refs[1].contains("first"));
+    for refs in &overload_refs {
+        assert!(refs.contains("- `first` [src/workspace.rs:5]"), "{refs}");
+        assert!(refs.contains("- `second` [src/workspace.rs:6]"), "{refs}");
+    }
     assert!(overload_impacts[0].contains("first") && !overload_impacts[0].contains("second"));
     assert!(overload_impacts[1].contains("second") && !overload_impacts[1].contains("first"));
 
@@ -1871,6 +2059,32 @@ fn fixture_repo(struct_name: &str) -> tempfile::TempDir {
     conn.execute(
         "INSERT INTO pending_relationships VALUES ('s1', 'println', 'call', 'src/workspace.rs', 2, 4)",
         [],
+    )
+    .unwrap();
+
+    conn.execute_batch(
+        "ALTER TABLE pending_relationships ADD COLUMN pending_relationship_id TEXT;
+         ALTER TABLE pending_relationships ADD COLUMN caller_scope_symbol_id TEXT;
+         ALTER TABLE pending_relationships ADD COLUMN file_id TEXT;
+         ALTER TABLE pending_relationships ADD COLUMN target_display_name TEXT;
+         ALTER TABLE pending_relationships ADD COLUMN target_receiver TEXT;
+         ALTER TABLE pending_relationships ADD COLUMN target_namespace_json TEXT;
+         ALTER TABLE pending_relationships ADD COLUMN target_import_context TEXT;
+         ALTER TABLE pending_relationships ADD COLUMN end_line INTEGER;
+         ALTER TABLE pending_relationships ADD COLUMN metadata_json TEXT;
+         ALTER TABLE relationships ADD COLUMN file_id TEXT;
+         ALTER TABLE relationships ADD COLUMN end_line INTEGER;
+         ALTER TABLE relationships ADD COLUMN metadata_json TEXT;
+         ALTER TABLE symbols ADD COLUMN metadata_json TEXT;
+         CREATE TABLE identifiers (
+            identifier_id TEXT PRIMARY KEY, file_id TEXT, path TEXT, language TEXT, name TEXT,
+            kind TEXT, containing_symbol_id TEXT, start_line INTEGER, start_column INTEGER,
+            end_line INTEGER, end_column INTEGER, metadata_json TEXT
+        );
+        CREATE TABLE type_facts (
+            type_fact_id TEXT PRIMARY KEY, symbol_id TEXT NOT NULL, language TEXT,
+            resolved_type TEXT NOT NULL, generic_params_json TEXT
+        );",
     )
     .unwrap();
     code_kb_core::db::ensure_fts_index(&conn).unwrap();

@@ -38,14 +38,15 @@ fn cli_references_and_blast_radius_handle_lambdas_and_lambda_named_functions() {
     let refs_text = String::from_utf8(run(&["refs", "Flask"])).unwrap();
     assert!(refs_text.contains("`lambda_123`"), "{refs_text}");
     assert!(!refs_text.contains("<lambda> in outer"), "{refs_text}");
-    let refs_json: Vec<serde_json::Value> =
+    let refs_json: serde_json::Value =
         serde_json::from_slice(&run(&["--json", "refs", "Flask"])).unwrap();
+    let sites = refs_json["sites"].as_array().unwrap();
     assert!(
-        refs_json
+        sites
             .iter()
             .any(|row| row["from_symbol_name"] == "lambda_123")
     );
-    let module_lambda = refs_json
+    let module_lambda = sites
         .iter()
         .find_map(|row| {
             row["from_symbol_name"]
@@ -242,20 +243,36 @@ fn receiver_reference_labels_match_the_cli_contract() {
     };
     let text = String::from_utf8(run(false)).unwrap();
     assert!(
-        text.contains("`supported` [client.py:5] (kind: member_access)"),
+        text.contains(
+            "Proven (1):\n- `supported` [client.py:5] (kind: member_access; builds the class)\n"
+        ),
         "{text}"
     );
     assert!(
-        text.contains("`unknown` [client.py:12] (kind: member_access (candidate))"),
+        text.contains(
+            "Unresolved (1):\n- `unknown` [client.py:12] (kind: member_access; 2 definitions)\n"
+        ),
         "{text}"
     );
-    assert!(!text.contains("`wrong`"), "{text}");
-    let rows: Vec<serde_json::Value> = serde_json::from_slice(&run(true)).unwrap();
-    assert_eq!(rows.len(), 2, "{rows:?}");
-    assert_eq!(rows[0]["from_symbol_name"], "supported");
-    assert_eq!(rows[0]["kind"], "member_access");
-    assert_eq!(rows[1]["from_symbol_name"], "unknown");
-    assert_eq!(rows[1]["kind"], "member_access (candidate)");
+    assert!(
+        text.contains(
+            "Excluded (1):\n- `wrong` [client.py:9] (kind: member_access; resolves to `Shell.invoke` (runners.py:6))\n"
+        ),
+        "{text}"
+    );
+    let report: serde_json::Value = serde_json::from_slice(&run(true)).unwrap();
+    let rows = report["sites"].as_array().unwrap();
+    let row = |caller: &str| {
+        rows.iter()
+            .find(|row| row["from_symbol_name"] == caller)
+            .unwrap_or_else(|| panic!("{caller} missing from {rows:?}"))
+    };
+    assert_eq!(rows.len(), 3, "{rows:?}");
+    assert_eq!(row("supported")["label"], "proven");
+    assert_eq!(row("unknown")["label"], "unresolved");
+    assert_eq!(row("unknown")["basis"], "2 definitions");
+    assert_eq!(row("wrong")["label"], "excluded");
+    assert_eq!(row("wrong")["kind"], "member_access");
 }
 
 #[test]
@@ -317,9 +334,100 @@ fn cli_renders_reference_sites_without_enclosing_symbols() {
     );
     let text = String::from_utf8(output.stdout).unwrap();
     assert!(
-        text.contains("- (no enclosing symbol) [client.py:2] (kind: member_access (candidate))"),
+        text.contains(
+            "Likely (1):\n- (no enclosing symbol) [client.py:2] (kind: member_access; name only)\n"
+        ),
         "{text}"
     );
+}
+
+fn three_caller_repo() -> tempfile::TempDir {
+    let repo = code_kb_core::safe_tempdir();
+    let root = repo.path();
+    for (path, source) in [
+        (
+            "pyproject.toml",
+            "[project]\nname = 'three'\nversion = '0.1.0'\n",
+        ),
+        ("util.py", "def helper():\n    return 1\n"),
+        (
+            "app.py",
+            "from util import helper\n\n\ndef a():\n    return helper()\n\n\ndef b():\n    return helper()\n\n\ndef c():\n    return helper()  # helper again\n",
+        ),
+        ("notes.md", "The helper function is documented here.\n"),
+    ] {
+        std::fs::write(root.join(path), source).unwrap();
+    }
+    repo
+}
+
+fn run_refs(root: &std::path::Path, args: &[&str]) -> String {
+    let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{args:?}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8(output.stdout).unwrap()
+}
+
+#[test]
+fn cli_refs_text_lists_up_to_the_limit_and_folds_the_rest_with_complete_counts() {
+    let repo = three_caller_repo();
+
+    let text = run_refs(repo.path(), &["refs", "helper", "--limit", "1"]);
+
+    assert_eq!(
+        text,
+        "References to function `helper` (util.py:1)\n\
+         Sites: 3 · proven 3 · likely 0 · unresolved 0 · excluded 0\n\
+         Text: `helper` is on 6 lines: 3 sites, 1 definition, 1 import, 1 text only.\n\
+         \n\
+         Proven (3):\n\
+         - `a` [app.py:5] (kind: calls; import)\n\
+         … 2 more proven sites in 1 file: app.py (2)\n\
+         Text only (1):\n\
+         \x20 notes.md: 1\n\
+         Not visible to this index: calls through getattr() or names built at runtime; calls through dynamic dispatch reach overrides that this list does not show.\n\
+         Imported 1 time in 1 file: app.py:1 (lookup_symbol with kind=\"import\" lists them)\n"
+    );
+}
+
+#[test]
+fn cli_refs_json_prints_the_whole_labeled_report_whatever_the_limit() {
+    let repo = three_caller_repo();
+
+    let raw = run_refs(repo.path(), &["--json", "refs", "helper", "--limit", "1"]);
+
+    let report: serde_json::Value = serde_json::from_str(&raw).unwrap();
+    assert_eq!(report["target"]["name"], "helper", "{raw}");
+    assert_eq!(report["target"]["path"], "util.py", "{raw}");
+    assert_eq!(report["counts"]["sites"], 3, "{raw}");
+    assert_eq!(report["counts"]["proven"], 3, "{raw}");
+    assert_eq!(report["counts"]["text_lines"], 6, "{raw}");
+    assert_eq!(report["counts"]["text_only_lines"], 1, "{raw}");
+    let sites = report["sites"].as_array().unwrap();
+    assert_eq!(sites.len(), 3, "{raw}");
+    for (site, (caller, line)) in sites.iter().zip([("a", 5), ("b", 9), ("c", 13)]) {
+        assert_eq!(site["from_symbol_name"], caller, "{raw}");
+        assert_eq!(site["start_line"], line, "{raw}");
+        assert_eq!(site["path"], "app.py", "{raw}");
+        assert_eq!(site["label"], "proven", "{raw}");
+        assert_eq!(site["basis"], "import", "{raw}");
+    }
+    assert_eq!(
+        report["text_only"],
+        serde_json::json!([{ "path": "notes.md", "lines": [1] }]),
+        "{raw}"
+    );
+    assert_eq!(report["text_scan"]["complete"], true, "{raw}");
+    assert!(report["text_scan"]["files_scanned"].as_u64().unwrap() >= 4);
+    assert!(!raw.contains("\\\\"), "{raw}");
 }
 
 fn setup_test_repo() -> tempfile::TempDir {
@@ -423,6 +531,28 @@ fn setup_test_repo() -> tempfile::TempDir {
     conn.execute(
         "INSERT INTO relationships VALUES ('r1', 's2', 's3', 'calls', 'src/workspace.rs', 6, 4)",
         rusqlite::params![],
+    )
+    .unwrap();
+
+    conn.execute_batch(
+        "ALTER TABLE pending_relationships ADD COLUMN pending_relationship_id TEXT;
+         ALTER TABLE pending_relationships ADD COLUMN caller_scope_symbol_id TEXT;
+         ALTER TABLE pending_relationships ADD COLUMN file_id TEXT;
+         ALTER TABLE pending_relationships ADD COLUMN target_display_name TEXT;
+         ALTER TABLE pending_relationships ADD COLUMN target_receiver TEXT;
+         ALTER TABLE pending_relationships ADD COLUMN target_namespace_json TEXT;
+         ALTER TABLE pending_relationships ADD COLUMN target_import_context TEXT;
+         ALTER TABLE pending_relationships ADD COLUMN end_line INTEGER;
+         ALTER TABLE pending_relationships ADD COLUMN metadata_json TEXT;
+         ALTER TABLE relationships ADD COLUMN file_id TEXT;
+         ALTER TABLE relationships ADD COLUMN end_line INTEGER;
+         ALTER TABLE relationships ADD COLUMN metadata_json TEXT;
+         ALTER TABLE symbols ADD COLUMN metadata_json TEXT;
+         CREATE TABLE identifiers (
+            identifier_id TEXT PRIMARY KEY, file_id TEXT, path TEXT, language TEXT, name TEXT,
+            kind TEXT, containing_symbol_id TEXT, start_line INTEGER, start_column INTEGER,
+            end_line INTEGER, end_column INTEGER, metadata_json TEXT
+        );",
     )
     .unwrap();
     code_kb_core::db::ensure_fts_index(&conn).unwrap();
@@ -1006,10 +1136,16 @@ fn symbol_ids_select_same_parent_cpp_overloads_across_read_tools() {
         })
         .collect();
     assert_ne!(outputs[0][0], outputs[0][1]);
-    assert!(outputs[1][0].contains("`first`") && outputs[1][0].contains("kind: calls"));
-    assert!(!outputs[1][0].contains("second"));
-    assert!(outputs[1][1].contains("`second`") && outputs[1][1].contains("kind: calls"));
-    assert!(!outputs[1][1].contains("first"));
+    for refs in &outputs[1] {
+        assert!(
+            refs.contains("- `first` [src/overloads.cpp:2] (kind: calls;"),
+            "{refs}"
+        );
+        assert!(
+            refs.contains("- `second` [src/overloads.cpp:3] (kind: calls;"),
+            "{refs}"
+        );
+    }
     assert!(outputs[2][0].contains("first"));
     assert!(!outputs[2][0].contains("second"));
     assert!(outputs[2][1].contains("second"));
@@ -1054,7 +1190,11 @@ fn test_cli_refs() {
 
     assert!(callers_output.status.success());
     let stdout = String::from_utf8_lossy(&callers_output.stdout);
-    assert!(stdout.contains("run_task"));
+    assert!(
+        stdout
+            .contains("Proven (1):\n- `run_task` [src/workspace.rs:6] (kind: calls; same file)\n"),
+        "{stdout}"
+    );
 
     let callees_output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
         .arg("--root")
@@ -1112,7 +1252,11 @@ fn test_cli_refs_with_file_filter() {
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("run_task"));
+    assert!(
+        stdout
+            .contains("Proven (1):\n- `run_task` [src/workspace.rs:6] (kind: calls; same file)\n"),
+        "{stdout}"
+    );
 
     let short_output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
         .arg("--root")
@@ -1126,7 +1270,7 @@ fn test_cli_refs_with_file_filter() {
 
     assert!(short_output.status.success());
     let short_stdout = String::from_utf8_lossy(&short_output.stdout);
-    assert!(short_stdout.contains("run_task"));
+    assert_eq!(short_stdout, stdout);
 }
 
 #[test]
@@ -2007,6 +2151,14 @@ fn test_cli_json_strict_forward_slash_invariants() {
         });
         let mut found = 0;
         assert_all_paths_forward_slash(&val, &mut found);
+        if cmd_args == ["--json", "refs", "helper"] {
+            let sites = val["sites"].as_array().expect("refs JSON is a report");
+            assert_eq!(sites.len(), 1, "{val}");
+            assert_eq!(sites[0]["from_symbol_name"], "run_task", "{val}");
+            assert_eq!(sites[0]["path"], "src/workspace.rs", "{val}");
+            assert_eq!(sites[0]["label"], "proven", "{val}");
+            assert!(found > 0, "{val}");
+        }
     }
 }
 
