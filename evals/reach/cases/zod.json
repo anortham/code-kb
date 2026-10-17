@@ -6925,7 +6925,14 @@
           "line": 1290
         }
       ],
-      "adjudicated": []
+      "adjudicated": [
+        {
+          "path": "packages/zod/src/v4/classic/tests/credit-card.test.ts",
+          "line": 64,
+          "verdict": "true",
+          "note": "SCIP index has no row from this file; `z` is `import * as z from \"zod\"`, and classic/external.ts:34 re-exports `fromJSONSchema` from this file"
+        }
+      ]
     },
     {
       "id": "nonempty@packages/zod/src/v4/classic/schemas.ts:1972",
