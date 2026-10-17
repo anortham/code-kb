@@ -1,0 +1,2743 @@
+{
+  "repo": "code-kb",
+  "commit": "765d94079677cd21fc180f9b3e1e266b02c83a31",
+  "language": "rust",
+  "symbols": [
+    {
+      "id": "new@crates/code-kb-core/src/queries.rs:155",
+      "split": "dev",
+      "name": "new",
+      "file": "crates/code-kb-core/src/queries.rs",
+      "line": 155,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "crates/code-kb-core/src/ops.rs",
+          "line": 399
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 264
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 334
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 269,
+          "verdict": "false",
+          "note": "`String::new` passed to `map_or_else`; a std function, not `OutlineScope::new`"
+        }
+      ]
+    },
+    {
+      "id": "error@crates/code-kb-cli/src/mcp/protocol.rs:111",
+      "split": "holdout",
+      "name": "error",
+      "file": "crates/code-kb-cli/src/mcp/protocol.rs",
+      "line": 111,
+      "kind": "method",
+      "tags": [
+        "overridden",
+        "many-refs"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 148
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 555
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 675
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 729
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 753
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 762
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 903
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 917
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 932
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 958
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 969
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 989
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1002
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1034
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1039
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1050
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1074
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1092
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1114
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1126
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1138
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1149
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1167
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1173
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1196
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1202
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1234
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1246
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1257
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1307
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1327
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1337
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1347
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1373
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1416
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1419
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "search_symbols_scoped@crates/code-kb-core/src/queries.rs:665",
+      "split": "dev",
+      "name": "search_symbols_scoped",
+      "file": "crates/code-kb-core/src/queries.rs",
+      "line": 665,
+      "kind": "function",
+      "tags": [
+        "many-refs"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "crates/code-kb-cli/src/main.rs",
+          "line": 564
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1025
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 554
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 2970
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 7448
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 7456
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 7533
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 7539
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 7545
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 9523
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 9577
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 9631
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 844
+        },
+        {
+          "path": "crates/code-kb-core/tests/qt_cpp_test.rs",
+          "line": 127
+        },
+        {
+          "path": "crates/code-kb-core/tests/qt_cpp_test.rs",
+          "line": 179
+        },
+        {
+          "path": "crates/code-kb-core/tests/qt_cpp_test.rs",
+          "line": 196
+        },
+        {
+          "path": "crates/code-kb-core/tests/qt_cpp_test.rs",
+          "line": 312
+        },
+        {
+          "path": "crates/code-kb-core/tests/qt_cpp_test.rs",
+          "line": 341
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 2435
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 2556
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 2572
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 2586
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 2606
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 2620
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 2622
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "crates/code-kb-core/src/lib.rs",
+          "line": 31,
+          "verdict": "false",
+          "note": "pub use list that starts on this line; a use line is not a reference"
+        }
+      ]
+    },
+    {
+      "id": "collapse@crates/code-kb-core/src/queries.rs:1946",
+      "split": "holdout",
+      "name": "collapse",
+      "file": "crates/code-kb-core/src/queries.rs",
+      "line": 1946,
+      "kind": "function",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 1986
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 2117
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 2131
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 2178
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 2131,
+          "verdict": "true",
+          "note": "code-kb miss: `collapse` passed as a function value to `Option::map`"
+        }
+      ]
+    },
+    {
+      "id": "kind_prior@crates/code-kb-core/src/queries.rs:2045",
+      "split": "dev",
+      "name": "kind_prior",
+      "file": "crates/code-kb-core/src/queries.rs",
+      "line": 2045,
+      "kind": "function",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 2219
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 2433,
+          "verdict": "false",
+          "note": "reads the `kind_prior` field of a `SearchExplain` value; the field is not the function `kind_prior`"
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 2240,
+          "verdict": "false",
+          "note": "reads `explain.kind_prior`, a `SearchExplain` field, not a call to the function"
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8519,
+          "verdict": "false",
+          "note": "closure reads `e.kind_prior`, a `SearchExplain` field, not a call to the function"
+        }
+      ]
+    },
+    {
+      "id": "new@crates/code-kb-core/src/workspace.rs:521",
+      "split": "holdout",
+      "name": "new",
+      "file": "crates/code-kb-core/src/workspace.rs",
+      "line": 521,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden",
+        "many-refs"
+      ],
+      "truth_source": "scip+manual",
+      "truth": [
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 97
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1635
+        },
+        {
+          "path": "crates/code-kb-cli/tests/adversarial_m3_server_test.rs",
+          "line": 554
+        },
+        {
+          "path": "crates/code-kb-cli/tests/cli_test.rs",
+          "line": 283
+        },
+        {
+          "path": "crates/code-kb-cli/tests/mcp_test.rs",
+          "line": 334
+        },
+        {
+          "path": "crates/code-kb-cli/tests/mcp_test.rs",
+          "line": 2119
+        },
+        {
+          "path": "crates/code-kb-cli/tests/mcp_test.rs",
+          "line": 2141
+        },
+        {
+          "path": "crates/code-kb-cli/tests/mcp_test.rs",
+          "line": 2564
+        },
+        {
+          "path": "crates/code-kb-cli/tests/mcp_test.rs",
+          "line": 2900
+        },
+        {
+          "path": "crates/code-kb-core/src/ops.rs",
+          "line": 590
+        },
+        {
+          "path": "crates/code-kb-core/src/ops.rs",
+          "line": 665
+        },
+        {
+          "path": "crates/code-kb-core/src/ops.rs",
+          "line": 705
+        },
+        {
+          "path": "crates/code-kb-core/src/ops.rs",
+          "line": 752
+        },
+        {
+          "path": "crates/code-kb-core/src/ops.rs",
+          "line": 822
+        },
+        {
+          "path": "crates/code-kb-core/src/sync.rs",
+          "line": 1022
+        },
+        {
+          "path": "crates/code-kb-core/src/workspace.rs",
+          "line": 492
+        },
+        {
+          "path": "crates/code-kb-core/src/workspace.rs",
+          "line": 655
+        },
+        {
+          "path": "crates/code-kb-core/src/workspace.rs",
+          "line": 899
+        },
+        {
+          "path": "crates/code-kb-core/src/workspace.rs",
+          "line": 935
+        },
+        {
+          "path": "crates/code-kb-core/src/workspace.rs",
+          "line": 962
+        },
+        {
+          "path": "crates/code-kb-core/src/workspace.rs",
+          "line": 1127
+        },
+        {
+          "path": "crates/code-kb-core/src/workspace.rs",
+          "line": 1198
+        },
+        {
+          "path": "crates/code-kb-core/src/workspace.rs",
+          "line": 1427
+        },
+        {
+          "path": "crates/code-kb-core/tests/adversarial_m1_test.rs",
+          "line": 62
+        },
+        {
+          "path": "crates/code-kb-core/tests/adversarial_m1_test.rs",
+          "line": 90
+        },
+        {
+          "path": "crates/code-kb-core/tests/adversarial_m1_test.rs",
+          "line": 112
+        },
+        {
+          "path": "crates/code-kb-core/tests/adversarial_m1_test.rs",
+          "line": 888
+        },
+        {
+          "path": "crates/code-kb-core/tests/adversarial_m1_test.rs",
+          "line": 1046
+        },
+        {
+          "path": "crates/code-kb-core/tests/blast_radius_test.rs",
+          "line": 125
+        },
+        {
+          "path": "crates/code-kb-core/tests/blast_radius_test.rs",
+          "line": 239
+        },
+        {
+          "path": "crates/code-kb-core/tests/blast_radius_test.rs",
+          "line": 370
+        },
+        {
+          "path": "crates/code-kb-core/tests/blast_radius_test.rs",
+          "line": 422
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 33
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 107
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 153
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 198
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 230
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 284
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 314
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 335
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 362
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 404
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 456
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 501
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 541
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 589
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 640
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 710
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 1040
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 1092
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 1469
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 27
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 58
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 117
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 157
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 208
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 249
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 334
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 362
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 389
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 427
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 517
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 595
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 642
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 681
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 716
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 781
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 837
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 897
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 908
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 934
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 973
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 1013
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 1051
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 1155
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 1174
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 1209
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 1250
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 1298
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 1323
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 1351
+        },
+        {
+          "path": "crates/code-kb-core/tests/fts_triggers_test.rs",
+          "line": 20
+        },
+        {
+          "path": "crates/code-kb-core/tests/fts_triggers_test.rs",
+          "line": 41
+        },
+        {
+          "path": "crates/code-kb-core/tests/go_manifest_test.rs",
+          "line": 22
+        },
+        {
+          "path": "crates/code-kb-core/tests/m1_stress_test.rs",
+          "line": 377
+        },
+        {
+          "path": "crates/code-kb-core/tests/m1_stress_test.rs",
+          "line": 383
+        },
+        {
+          "path": "crates/code-kb-core/tests/m1_stress_test.rs",
+          "line": 390
+        },
+        {
+          "path": "crates/code-kb-core/tests/m1_stress_test.rs",
+          "line": 396
+        },
+        {
+          "path": "crates/code-kb-core/tests/m1_stress_test.rs",
+          "line": 402
+        },
+        {
+          "path": "crates/code-kb-core/tests/qt_cpp_test.rs",
+          "line": 89
+        },
+        {
+          "path": "crates/code-kb-core/tests/qt_cpp_test.rs",
+          "line": 98
+        },
+        {
+          "path": "crates/code-kb-core/tests/qt_cpp_test.rs",
+          "line": 286
+        },
+        {
+          "path": "crates/code-kb-core/tests/qt_cpp_test.rs",
+          "line": 338
+        },
+        {
+          "path": "crates/code-kb-core/tests/qt_qml_test.rs",
+          "line": 49
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 19
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 2432
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 2531
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 3064
+        },
+        {
+          "path": "crates/code-kb-core/tests/resolution_test.rs",
+          "line": 17
+        },
+        {
+          "path": "crates/code-kb-core/tests/search_corpus_test.rs",
+          "line": 18
+        },
+        {
+          "path": "crates/code-kb-core/tests/watcher_test.rs",
+          "line": 22
+        },
+        {
+          "path": "crates/code-kb-core/tests/watcher_test.rs",
+          "line": 105
+        },
+        {
+          "path": "crates/code-kb-core/tests/watcher_test.rs",
+          "line": 138
+        },
+        {
+          "path": "crates/code-kb-core/tests/watcher_test.rs",
+          "line": 192
+        },
+        {
+          "path": "crates/code-kb-core/tests/watcher_test.rs",
+          "line": 243
+        },
+        {
+          "path": "crates/code-kb-core/tests/watcher_test.rs",
+          "line": 296
+        },
+        {
+          "path": "crates/code-kb-core/tests/worktree_test.rs",
+          "line": 51
+        },
+        {
+          "path": "crates/code-kb-core/tests/worktree_test.rs",
+          "line": 262
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 269,
+          "verdict": "false",
+          "note": "`String::new` passed to `map_or_else`; a std function, not `Workspace::new`"
+        },
+        {
+          "path": "crates/code-kb-cli/tests/adversarial_m3_server_test.rs",
+          "line": 554,
+          "verdict": "true",
+          "note": "code-kb miss: call `code_kb_core::Workspace::new(...)` through the crate path in an integration test"
+        },
+        {
+          "path": "crates/code-kb-cli/tests/cli_test.rs",
+          "line": 283,
+          "verdict": "true",
+          "note": "code-kb miss: call `code_kb_core::Workspace::new(...)` through the crate path in an integration test"
+        },
+        {
+          "path": "crates/code-kb-cli/tests/mcp_test.rs",
+          "line": 334,
+          "verdict": "true",
+          "note": "code-kb miss: call `code_kb_core::Workspace::new(...)` through the crate path in an integration test"
+        },
+        {
+          "path": "crates/code-kb-cli/tests/mcp_test.rs",
+          "line": 2119,
+          "verdict": "true",
+          "note": "code-kb miss: call `code_kb_core::Workspace::new(...)` through the crate path in an integration test"
+        },
+        {
+          "path": "crates/code-kb-cli/tests/mcp_test.rs",
+          "line": 2141,
+          "verdict": "true",
+          "note": "code-kb miss: call `code_kb_core::Workspace::new(...)` through the crate path in an integration test"
+        },
+        {
+          "path": "crates/code-kb-cli/tests/mcp_test.rs",
+          "line": 2564,
+          "verdict": "true",
+          "note": "code-kb miss: call `code_kb_core::Workspace::new(...)` through the crate path in an integration test"
+        },
+        {
+          "path": "crates/code-kb-cli/tests/mcp_test.rs",
+          "line": 2900,
+          "verdict": "true",
+          "note": "code-kb miss: call `code_kb_core::Workspace::new(...)` through the crate path in an integration test"
+        },
+        {
+          "path": "crates/code-kb-core/tests/blast_radius_test.rs",
+          "line": 370,
+          "verdict": "true",
+          "note": "code-kb miss: call `code_kb_core::Workspace::new(...)` through the crate path in an integration test"
+        },
+        {
+          "path": "crates/code-kb-cli/tests/adversarial_m3_server_test.rs",
+          "line": 443,
+          "verdict": "true",
+          "note": "SCIP gap: call `code_kb_core::Workspace::new(root.to_path_buf())` inside a #[cfg(windows)] test fn (lines 277-468), which rust-analyzer does not index"
+        }
+      ]
+    },
+    {
+      "id": "new@crates/code-kb-cli/src/mcp/server.rs:158",
+      "split": "dev",
+      "name": "new",
+      "file": "crates/code-kb-cli/src/mcp/server.rs",
+      "line": 158,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "crates/code-kb-cli/src/main.rs",
+          "line": 482
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 269,
+          "verdict": "false",
+          "note": "`String::new` passed to `map_or_else`; a std function, not `McpServer::new`"
+        }
+      ]
+    },
+    {
+      "id": "find_julie_extract_binary@crates/code-kb-core/src/sync.rs:45",
+      "split": "holdout",
+      "name": "find_julie_extract_binary",
+      "file": "crates/code-kb-core/src/sync.rs",
+      "line": 45,
+      "kind": "function",
+      "tags": [
+        "many-refs"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "crates/code-kb-cli/tests/cli_test.rs",
+          "line": 2056
+        },
+        {
+          "path": "crates/code-kb-cli/tests/mcp_test.rs",
+          "line": 311
+        },
+        {
+          "path": "crates/code-kb-cli/tests/mcp_test.rs",
+          "line": 3903
+        },
+        {
+          "path": "crates/code-kb-core/src/sync.rs",
+          "line": 127
+        },
+        {
+          "path": "crates/code-kb-core/src/sync.rs",
+          "line": 957
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 127
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 186
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 212
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 263
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 349
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 383
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 439
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 488
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 515
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 558
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 621
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 697
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 1020
+        },
+        {
+          "path": "crates/code-kb-core/tests/disambiguation_test.rs",
+          "line": 1072
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 14
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 51
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 111
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 151
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 200
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 236
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 325
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 353
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 377
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 413
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 498
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 583
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 629
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 672
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 708
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 765
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 827
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 871
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 925
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 964
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 1004
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 1044
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 1143
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 1165
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 1204
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 1241
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 1288
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 1319
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 1348
+        },
+        {
+          "path": "crates/code-kb-core/tests/fts_triggers_test.rs",
+          "line": 11
+        },
+        {
+          "path": "crates/code-kb-core/tests/qt_cpp_test.rs",
+          "line": 80
+        },
+        {
+          "path": "crates/code-kb-core/tests/qt_qml_test.rs",
+          "line": 41
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 10
+        },
+        {
+          "path": "crates/code-kb-core/tests/resolution_test.rs",
+          "line": 8
+        },
+        {
+          "path": "crates/code-kb-core/tests/search_corpus_test.rs",
+          "line": 9
+        },
+        {
+          "path": "crates/code-kb-core/tests/watcher_test.rs",
+          "line": 12
+        },
+        {
+          "path": "crates/code-kb-core/tests/watcher_test.rs",
+          "line": 96
+        },
+        {
+          "path": "crates/code-kb-core/tests/watcher_test.rs",
+          "line": 129
+        },
+        {
+          "path": "crates/code-kb-core/tests/watcher_test.rs",
+          "line": 178
+        },
+        {
+          "path": "crates/code-kb-core/tests/watcher_test.rs",
+          "line": 233
+        },
+        {
+          "path": "crates/code-kb-core/tests/watcher_test.rs",
+          "line": 288
+        },
+        {
+          "path": "crates/code-kb-core/tests/worktree_test.rs",
+          "line": 11
+        },
+        {
+          "path": "crates/code-kb-core/tests/worktree_test.rs",
+          "line": 217
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "crates/code-kb-core/src/lib.rs",
+          "line": 46,
+          "verdict": "false",
+          "note": "pub use list that starts on this line; a use line is not a reference"
+        },
+        {
+          "path": "crates/code-kb-cli/tests/cli_test.rs",
+          "line": 2056,
+          "verdict": "true",
+          "note": "code-kb miss: call `code_kb_core::find_julie_extract_binary(...)` through the crate path in an integration test"
+        },
+        {
+          "path": "crates/code-kb-cli/tests/mcp_test.rs",
+          "line": 311,
+          "verdict": "true",
+          "note": "code-kb miss: call `code_kb_core::find_julie_extract_binary(...)` through the crate path in an integration test"
+        },
+        {
+          "path": "crates/code-kb-cli/tests/mcp_test.rs",
+          "line": 3903,
+          "verdict": "true",
+          "note": "code-kb miss: call `code_kb_core::find_julie_extract_binary(...)` through the crate path in an integration test"
+        }
+      ]
+    },
+    {
+      "id": "index_facts@crates/code-kb-core/src/telemetry.rs:746",
+      "split": "dev",
+      "name": "index_facts",
+      "file": "crates/code-kb-core/src/telemetry.rs",
+      "line": 746,
+      "kind": "function",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "crates/code-kb-core/src/telemetry.rs",
+          "line": 939
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "crates/code-kb-core/src/telemetry.rs",
+          "line": 939,
+          "verdict": "true",
+          "note": "code-kb miss: `index_facts` passed as a function value to `Option::and_then`"
+        }
+      ]
+    },
+    {
+      "id": "call_site_proximity@crates/code-kb-core/src/queries.rs:3198",
+      "split": "holdout",
+      "name": "call_site_proximity",
+      "file": "crates/code-kb-core/src/queries.rs",
+      "line": 3198,
+      "kind": "function",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 3491
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 3492
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "error@crates/code-kb-cli/src/mcp/protocol.rs:35",
+      "split": "dev",
+      "name": "error",
+      "file": "crates/code-kb-cli/src/mcp/protocol.rs",
+      "line": 35,
+      "kind": "method",
+      "tags": [
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1466
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1535
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "sanitize_symbol_name@crates/code-kb-cli/src/mcp/server.rs:766",
+      "split": "holdout",
+      "name": "sanitize_symbol_name",
+      "file": "crates/code-kb-cli/src/mcp/server.rs",
+      "line": 766,
+      "kind": "method",
+      "tags": [
+        "many-refs"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 822
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1004
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1702
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1704
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1707
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1710
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1712
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1716
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1719
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1720
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1721
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1723
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1729
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1732
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1735
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1737
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1741
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1746
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1747
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1748
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1751
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1752
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1755
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 1757
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "split_identifier@crates/code-kb-core/src/queries.rs:976",
+      "split": "dev",
+      "name": "split_identifier",
+      "file": "crates/code-kb-core/src/queries.rs",
+      "line": 976,
+      "kind": "function",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 865
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 943
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 1936
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 1978
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8471
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 1936,
+          "verdict": "true",
+          "note": "code-kb miss: `split_identifier` passed as a function value to `flat_map`"
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8471,
+          "verdict": "true",
+          "note": "code-kb miss: `split_identifier` passed as a function value to `flat_map` in a test helper of the same file"
+        }
+      ]
+    },
+    {
+      "id": "outer_definitions@crates/code-kb-core/src/queries.rs:2827",
+      "split": "holdout",
+      "name": "outer_definitions",
+      "file": "crates/code-kb-core/src/queries.rs",
+      "line": 2827,
+      "kind": "function",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 2766
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "codebase_outline_op@crates/code-kb-core/src/ops.rs:388",
+      "split": "dev",
+      "name": "codebase_outline_op",
+      "file": "crates/code-kb-core/src/ops.rs",
+      "line": 388,
+      "kind": "function",
+      "tags": [
+        "many-refs"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "crates/code-kb-cli/src/main.rs",
+          "line": 545
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 953
+        },
+        {
+          "path": "crates/code-kb-core/src/ops.rs",
+          "line": 367
+        },
+        {
+          "path": "crates/code-kb-core/src/ops.rs",
+          "line": 615
+        },
+        {
+          "path": "crates/code-kb-core/src/ops.rs",
+          "line": 632
+        },
+        {
+          "path": "crates/code-kb-core/src/ops.rs",
+          "line": 637
+        },
+        {
+          "path": "crates/code-kb-core/src/ops.rs",
+          "line": 642
+        },
+        {
+          "path": "crates/code-kb-core/src/ops.rs",
+          "line": 652
+        },
+        {
+          "path": "crates/code-kb-core/src/ops.rs",
+          "line": 692
+        },
+        {
+          "path": "crates/code-kb-core/src/ops.rs",
+          "line": 698
+        },
+        {
+          "path": "crates/code-kb-core/src/ops.rs",
+          "line": 739
+        },
+        {
+          "path": "crates/code-kb-core/src/ops.rs",
+          "line": 803
+        },
+        {
+          "path": "crates/code-kb-core/src/ops.rs",
+          "line": 815
+        },
+        {
+          "path": "crates/code-kb-core/src/ops.rs",
+          "line": 851
+        },
+        {
+          "path": "crates/code-kb-core/src/ops.rs",
+          "line": 854
+        },
+        {
+          "path": "crates/code-kb-core/tests/adversarial_m1_test.rs",
+          "line": 890
+        },
+        {
+          "path": "crates/code-kb-core/tests/adversarial_m1_test.rs",
+          "line": 903
+        },
+        {
+          "path": "crates/code-kb-core/tests/adversarial_m1_test.rs",
+          "line": 1112
+        },
+        {
+          "path": "crates/code-kb-core/tests/adversarial_m1_test.rs",
+          "line": 1155
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 817
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "crates/code-kb-core/src/lib.rs",
+          "line": 25,
+          "verdict": "false",
+          "note": "pub use list that starts on this line; a use line is not a reference"
+        },
+        {
+          "path": "crates/code-kb-core/tests/adversarial_m1_test.rs",
+          "line": 890,
+          "verdict": "true",
+          "note": "code-kb miss: call `code_kb_core::codebase_outline_op(...)` through the crate path in an integration test"
+        },
+        {
+          "path": "crates/code-kb-core/tests/adversarial_m1_test.rs",
+          "line": 903,
+          "verdict": "true",
+          "note": "code-kb miss: call `code_kb_core::codebase_outline_op(...)` through the crate path in an integration test"
+        },
+        {
+          "path": "crates/code-kb-core/tests/adversarial_m1_test.rs",
+          "line": 1112,
+          "verdict": "true",
+          "note": "code-kb miss: call `code_kb_core::codebase_outline_op(...)` through the crate path in an integration test"
+        },
+        {
+          "path": "crates/code-kb-core/tests/adversarial_m1_test.rs",
+          "line": 1155,
+          "verdict": "true",
+          "note": "code-kb miss: call `code_kb_core::codebase_outline_op(...)` through the crate path in an integration test"
+        },
+        {
+          "path": "crates/code-kb-core/tests/freshness_test.rs",
+          "line": 817,
+          "verdict": "true",
+          "note": "code-kb miss: call `code_kb_core::codebase_outline_op(...)` through the crate path in an integration test"
+        }
+      ]
+    },
+    {
+      "id": "doc_summary@crates/code-kb-core/src/formatters.rs:964",
+      "split": "holdout",
+      "name": "doc_summary",
+      "file": "crates/code-kb-core/src/formatters.rs",
+      "line": 964,
+      "kind": "function",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 1027
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 1081
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 1338
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 1628
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 1635
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 1639
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 1643
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 1647
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 1651
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 1655
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 1659
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 1662
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 1663
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 1027,
+          "verdict": "true",
+          "note": "code-kb miss: `doc_summary` passed as a function value to `Option::and_then`"
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 1081,
+          "verdict": "true",
+          "note": "code-kb miss: `doc_summary` passed as a function value to `Option::and_then`"
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 1338,
+          "verdict": "true",
+          "note": "code-kb miss: `doc_summary` passed as a function value to `Option::and_then`"
+        }
+      ]
+    },
+    {
+      "id": "requires_project_root@crates/code-kb-cli/src/mcp/server.rs:72",
+      "split": "dev",
+      "name": "requires_project_root",
+      "file": "crates/code-kb-cli/src/mcp/server.rs",
+      "line": 72,
+      "kind": "function",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 551
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "function@crates/code-kb-core/src/queries.rs:8046",
+      "split": "holdout",
+      "name": "function",
+      "file": "crates/code-kb-core/src/queries.rs",
+      "line": 8046,
+      "kind": "function",
+      "tags": [
+        "many-refs"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 7209
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8062
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8110
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8112
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8132
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8146
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8147
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8148
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8149
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8187
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8210
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8211
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8212
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8213
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8273
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8387
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8406
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8420
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8440
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8445
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8497
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8536
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8663
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8664
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8673
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8675
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8686
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8688
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8699
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8706
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8709
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8712
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "normalize_kind@crates/code-kb-core/src/queries.rs:528",
+      "split": "dev",
+      "name": "normalize_kind",
+      "file": "crates/code-kb-core/src/queries.rs",
+      "line": 528,
+      "kind": "function",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 677
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 1212
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 1485
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 1604
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 2046
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 2212
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "crates/code-kb-core/src/lib.rs",
+          "line": 31,
+          "verdict": "false",
+          "note": "pub use list that starts on this line; a use line is not a reference"
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 677,
+          "verdict": "true",
+          "note": "code-kb miss: `normalize_kind` passed as a function value to `Option::map`"
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 1212,
+          "verdict": "true",
+          "note": "code-kb miss: `normalize_kind` passed as a function value to `Option::map`"
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 1485,
+          "verdict": "true",
+          "note": "code-kb miss: `normalize_kind` passed as a function value to `Option::map`"
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 1604,
+          "verdict": "true",
+          "note": "code-kb miss: `normalize_kind` passed as a function value to `Option::map`"
+        }
+      ]
+    },
+    {
+      "id": "name_prefix_query@crates/code-kb-core/src/queries.rs:966",
+      "split": "holdout",
+      "name": "name_prefix_query",
+      "file": "crates/code-kb-core/src/queries.rs",
+      "line": 966,
+      "kind": "function",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 2487
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "find_references_for_symbol@crates/code-kb-core/src/queries.rs:3168",
+      "split": "dev",
+      "name": "find_references_for_symbol",
+      "file": "crates/code-kb-core/src/queries.rs",
+      "line": 3168,
+      "kind": "function",
+      "tags": [
+        "many-refs"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 2383
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 6168
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 6598
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8856
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 9232
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 9236
+        },
+        {
+          "path": "crates/code-kb-core/tests/qt_qml_test.rs",
+          "line": 169
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 155
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 443
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 483
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 770
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 783
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 820
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 851
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 882
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 994
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 1002
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 1010
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 1018
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 2312
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 2335
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 2733
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 2818
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 2854
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 2883
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 2937
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 2999
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 3073
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "crates/code-kb-core/src/lib.rs",
+          "line": 31,
+          "verdict": "false",
+          "note": "pub use list that starts on this line; a use line is not a reference"
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 443,
+          "verdict": "true",
+          "note": "code-kb miss: call `code_kb_core::find_references_for_symbol(...)` through the crate path in an integration test"
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 2312,
+          "verdict": "true",
+          "note": "code-kb miss: call `code_kb_core::find_references_for_symbol(...)` through the crate path in an integration test"
+        },
+        {
+          "path": "crates/code-kb-core/tests/references_test.rs",
+          "line": 2335,
+          "verdict": "true",
+          "note": "code-kb miss: call `code_kb_core::find_references_for_symbol(...)` through the crate path in an integration test"
+        }
+      ]
+    },
+    {
+      "id": "sanitize_error_message@crates/code-kb-core/src/telemetry.rs:680",
+      "split": "holdout",
+      "name": "sanitize_error_message",
+      "file": "crates/code-kb-core/src/telemetry.rs",
+      "line": 680,
+      "kind": "function",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "crates/code-kb-core/src/telemetry.rs",
+          "line": 652
+        },
+        {
+          "path": "crates/code-kb-core/src/telemetry.rs",
+          "line": 900
+        },
+        {
+          "path": "crates/code-kb-core/src/telemetry.rs",
+          "line": 977
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "crates/code-kb-core/src/telemetry.rs",
+          "line": 977,
+          "verdict": "true",
+          "note": "code-kb miss: `sanitize_error_message` passed as a function value to `Option::map`"
+        }
+      ]
+    },
+    {
+      "id": "slice_symbol_source@crates/code-kb-core/src/slicer.rs:79",
+      "split": "dev",
+      "name": "slice_symbol_source",
+      "file": "crates/code-kb-core/src/slicer.rs",
+      "line": 79,
+      "kind": "function",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "crates/code-kb-core/src/ops.rs",
+          "line": 182
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "has_column@crates/code-kb-core/src/queries.rs:3832",
+      "split": "holdout",
+      "name": "has_column",
+      "file": "crates/code-kb-core/src/queries.rs",
+      "line": 3832,
+      "kind": "function",
+      "tags": [
+        "many-refs"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 191
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 335
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 462
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 2293
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 3283
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 3284
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 3285
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 3286
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 3287
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 3304
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 3407
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 3498
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 3516
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 3552
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 3560
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 4652
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 5794
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 6334
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 6392
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 6586
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "map_symbol@crates/code-kb-core/src/queries.rs:42",
+      "split": "dev",
+      "name": "map_symbol",
+      "file": "crates/code-kb-core/src/queries.rs",
+      "line": 42,
+      "kind": "function",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 306
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 501
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 521
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 733
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 830
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 1161
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 1645
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 2329
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 2364
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 2395
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 2454
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 2490
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 2564
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 2665
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 2944
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 501,
+          "verdict": "true",
+          "note": "code-kb miss: `map_symbol` passed as the row mapper function value to a rusqlite `query_map` or `query_row` call"
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 521,
+          "verdict": "true",
+          "note": "code-kb miss: `map_symbol` passed as the row mapper function value to a rusqlite `query_map` or `query_row` call"
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 733,
+          "verdict": "true",
+          "note": "code-kb miss: `map_symbol` passed as the row mapper function value to a rusqlite `query_map` or `query_row` call"
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 830,
+          "verdict": "true",
+          "note": "code-kb miss: `map_symbol` passed as the row mapper function value to a rusqlite `query_map` or `query_row` call"
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 1645,
+          "verdict": "true",
+          "note": "code-kb miss: `map_symbol` passed as the row mapper function value to a rusqlite `query_map` or `query_row` call"
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 2329,
+          "verdict": "true",
+          "note": "code-kb miss: `map_symbol` passed as the row mapper function value to a rusqlite `query_map` or `query_row` call"
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 2364,
+          "verdict": "true",
+          "note": "code-kb miss: `map_symbol` passed as the row mapper function value to a rusqlite `query_map` or `query_row` call"
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 2395,
+          "verdict": "true",
+          "note": "code-kb miss: `map_symbol` passed as the row mapper function value to a rusqlite `query_map` or `query_row` call"
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 2454,
+          "verdict": "true",
+          "note": "code-kb miss: `map_symbol` passed as the row mapper function value to a rusqlite `query_map` or `query_row` call"
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 2490,
+          "verdict": "true",
+          "note": "code-kb miss: `map_symbol` passed as the row mapper function value to a rusqlite `query_map` or `query_row` call"
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 2564,
+          "verdict": "true",
+          "note": "code-kb miss: `map_symbol` passed as the row mapper function value to a rusqlite `query_map` or `query_row` call"
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 2944,
+          "verdict": "true",
+          "note": "code-kb miss: `map_symbol` passed as the row mapper function value to a rusqlite `query_map` or `query_row` call"
+        }
+      ]
+    },
+    {
+      "id": "shared_words@crates/code-kb-core/src/queries.rs:6476",
+      "split": "holdout",
+      "name": "shared_words",
+      "file": "crates/code-kb-core/src/queries.rs",
+      "line": 6476,
+      "kind": "function",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 6657
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "sample_symbol@crates/code-kb-core/src/formatters.rs:2641",
+      "split": "dev",
+      "name": "sample_symbol",
+      "file": "crates/code-kb-core/src/formatters.rs",
+      "line": 2641,
+      "kind": "function",
+      "tags": [
+        "many-refs"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 1792
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 1852
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 1859
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 1892
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 1916
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 1927
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 1938
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 2001
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 2011
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 2043
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 2054
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 2108
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 2184
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 2193
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 2243
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 2252
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 2283
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 2330
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 2342
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 2348
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 2354
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 2376
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 2378
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 2460
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 2503
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 2520
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 2674
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 2733
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "format_context_slice@crates/code-kb-core/src/formatters.rs:683",
+      "split": "holdout",
+      "name": "format_context_slice",
+      "file": "crates/code-kb-core/src/formatters.rs",
+      "line": 683,
+      "kind": "function",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 665
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 2692
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 2707
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 2715
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 2727
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 2739
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "crates/code-kb-core/src/lib.rs",
+          "line": 15,
+          "verdict": "false",
+          "note": "pub use list that starts on this line; a use line is not a reference"
+        },
+        {
+          "path": "crates/code-kb-core/src/formatters.rs",
+          "line": 665,
+          "verdict": "true",
+          "note": "code-kb miss: `format_context_slice` passed as a function value to `Iterator::map`"
+        }
+      ]
+    },
+    {
+      "id": "receiver_definition_scope@crates/code-kb-core/src/queries.rs:3352",
+      "split": "dev",
+      "name": "receiver_definition_scope",
+      "file": "crates/code-kb-core/src/queries.rs",
+      "line": 3352,
+      "kind": "function",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 3416
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 3417
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 3418
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 3553
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 3557
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 3558
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 3559
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "get_telemetry_summary@crates/code-kb-core/src/telemetry.rs:429",
+      "split": "holdout",
+      "name": "get_telemetry_summary",
+      "file": "crates/code-kb-core/src/telemetry.rs",
+      "line": 429,
+      "kind": "function",
+      "tags": [
+        "many-refs"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "crates/code-kb-cli/src/main.rs",
+          "line": 413
+        },
+        {
+          "path": "crates/code-kb-cli/src/main.rs",
+          "line": 424
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 735
+        },
+        {
+          "path": "crates/code-kb-cli/src/mcp/server.rs",
+          "line": 743
+        },
+        {
+          "path": "crates/code-kb-core/src/telemetry.rs",
+          "line": 1236
+        },
+        {
+          "path": "crates/code-kb-core/src/telemetry.rs",
+          "line": 1247
+        },
+        {
+          "path": "crates/code-kb-core/src/telemetry.rs",
+          "line": 1258
+        },
+        {
+          "path": "crates/code-kb-core/src/telemetry.rs",
+          "line": 1269
+        },
+        {
+          "path": "crates/code-kb-core/src/telemetry.rs",
+          "line": 1280
+        },
+        {
+          "path": "crates/code-kb-core/src/telemetry.rs",
+          "line": 1336
+        },
+        {
+          "path": "crates/code-kb-core/src/telemetry.rs",
+          "line": 1347
+        },
+        {
+          "path": "crates/code-kb-core/src/telemetry.rs",
+          "line": 1358
+        },
+        {
+          "path": "crates/code-kb-core/src/telemetry.rs",
+          "line": 1418
+        },
+        {
+          "path": "crates/code-kb-core/src/telemetry.rs",
+          "line": 1495
+        },
+        {
+          "path": "crates/code-kb-core/src/telemetry.rs",
+          "line": 1615
+        },
+        {
+          "path": "crates/code-kb-core/src/telemetry.rs",
+          "line": 1676
+        },
+        {
+          "path": "crates/code-kb-core/src/telemetry.rs",
+          "line": 1737
+        },
+        {
+          "path": "crates/code-kb-core/src/telemetry.rs",
+          "line": 1759
+        },
+        {
+          "path": "crates/code-kb-core/src/telemetry.rs",
+          "line": 1786
+        },
+        {
+          "path": "crates/code-kb-core/src/telemetry.rs",
+          "line": 2033
+        },
+        {
+          "path": "crates/code-kb-core/src/telemetry.rs",
+          "line": 2061
+        },
+        {
+          "path": "crates/code-kb-core/src/telemetry.rs",
+          "line": 2182
+        },
+        {
+          "path": "crates/code-kb-core/src/telemetry.rs",
+          "line": 2199
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "crates/code-kb-core/src/lib.rs",
+          "line": 51,
+          "verdict": "false",
+          "note": "pub use list that starts on this line; a use line is not a reference"
+        },
+        {
+          "path": "crates/code-kb-cli/src/main.rs",
+          "line": 413,
+          "verdict": "true",
+          "note": "code-kb miss: call `code_kb_core::get_telemetry_summary(...)` through the crate path in an integration test"
+        },
+        {
+          "path": "crates/code-kb-cli/src/main.rs",
+          "line": 424,
+          "verdict": "true",
+          "note": "code-kb miss: call `code_kb_core::get_telemetry_summary(...)` through the crate path in an integration test"
+        }
+      ]
+    }
+  ]
+}

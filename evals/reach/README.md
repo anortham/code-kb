@@ -116,6 +116,7 @@ Holdout symbols are not listed in the report or in `disagreements` output unless
 6. `reach_gate.py disagreements --repo R --split all --show-holdout`, then adjudicate every line in the case file.
 
 Truth is every reference occurrence of the symbol minus definitions, and minus import, `use`, and `using` lines.
+SCIP also lists some lines that belong to a definition (a Python property setter, an `@overload` stub, a TypeScript object-literal method that implements an interface member); the case files adjudicate them false.
 Overloads with the same owner and name are unioned. Cases skip test files and generated or build folders.
 A name with more than 250 reference lines is not sampled.
 
@@ -123,7 +124,7 @@ A name with more than 250 reference lines is not sampled.
 |---|---|---|
 | flask | scip-python 0.6.6 | `python3 -m venv V && V/bin/pip install werkzeug jinja2 itsdangerous click blinker markupsafe pytest asgiref python-dotenv && V/bin/pip install -e . --no-deps`, then `PATH=V/bin:$PATH scip-python index --project-name flask --project-version d73fa1c --output X.scip`. Install flask editable, or tests resolve to the wrong module. |
 | express | scip-typescript 0.4.0 | `npm install --no-package-lock --ignore-scripts`, then `scip-typescript index --infer-tsconfig --no-progress-bar --output X.scip`. It writes `tsconfig.json` into the copy; delete it afterwards. Methods assigned as properties (`app.use`, `res.send`) are local symbols, so their truth is `manual`. |
-| zod | scip-typescript 0.4.0 | As express, with the project's own `tsconfig.json`. |
+| zod | scip-typescript 0.4.0 | In a separate copy: `pnpm install --frozen-lockfile --ignore-scripts`, then `scip-typescript index --no-progress-bar --output X.scip` with the project's own `tsconfig.json`. `packages/bench` has an npm alias of zod 4.0.8 whose symbols merge with the workspace symbols; the case file adjudicates those lines false. `packages/docs` is outside the tsconfig, so it has no truth. |
 | gson | scip-java 0.12.3 | JDK 17, Maven 3.9: `cs launch com.sourcegraph:scip-java_2.13:0.12.3 -- index --output X.scip`. JDK 21 and 25 fail. |
 | cobra | scip-go 0.2.7 | `scip-go index --repository-remote github.com/spf13/cobra --module-version adbc881 --output X.scip`. Install from `github.com/scip-code/scip-go/cmd/scip-go`. |
 | newtonsoft-json | scip-dotnet 0.2.14 | In `Src/Newtonsoft.Json`: `LibraryFrameworks=net8.0 scip-dotnet index Newtonsoft.Json.csproj --output X.scip`, then pass `--path-prefix Src/Newtonsoft.Json/` to `reach_truth.py`. Scope symbols and truth to the library; the test project does not resolve. The SDK pin in `Src/global.json` may need a lower version. |

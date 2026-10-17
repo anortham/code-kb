@@ -1,0 +1,2870 @@
+{
+  "repo": "newtonsoft-json",
+  "commit": "09bb545d72969ad7fb4ea07db0d5c34f4fc07877",
+  "language": "csharp",
+  "scope": [
+    "Src/Newtonsoft.Json/"
+  ],
+  "symbols": [
+    {
+      "id": "AddReference@Src/Newtonsoft.Json/Serialization/JsonSerializerInternalReader.cs:1194",
+      "split": "dev",
+      "name": "AddReference",
+      "file": "Src/Newtonsoft.Json/Serialization/JsonSerializerInternalReader.cs",
+      "line": 1194,
+      "kind": "method",
+      "tags": [
+        "common-name"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonSerializerInternalReader.cs",
+          "line": 1384
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonSerializerInternalReader.cs",
+          "line": 1509
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonSerializerInternalReader.cs",
+          "line": 1662
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonSerializerInternalReader.cs",
+          "line": 1822
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonSerializerInternalReader.cs",
+          "line": 1882
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonSerializerInternalReader.cs",
+          "line": 2099
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonSerializerInternalReader.cs",
+          "line": 2401
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonSerializerInternalReader.cs",
+          "line": 1203,
+          "verdict": "false",
+          "note": "calls IReferenceResolver.AddReference through Serializer.GetReferenceResolver(), not JsonSerializerInternalReader.AddReference"
+        }
+      ]
+    },
+    {
+      "id": "FlushAsync@Src/Newtonsoft.Json/JsonWriter.Async.cs:149",
+      "split": "holdout",
+      "name": "FlushAsync",
+      "file": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+      "line": 149,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.Async.cs",
+          "line": 57
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.Async.cs",
+          "line": 57,
+          "verdict": "true",
+          "note": "code-kb miss: base.FlushAsync(cancellationToken) in the JsonTextWriter.FlushAsync override reaches JsonWriter.FlushAsync"
+        }
+      ]
+    },
+    {
+      "id": "InternalWriteValue@Src/Newtonsoft.Json/JsonWriter.cs:1767",
+      "split": "dev",
+      "name": "InternalWriteValue",
+      "file": "Src/Newtonsoft.Json/JsonWriter.cs",
+      "line": 1767,
+      "kind": "method",
+      "tags": [
+        "many-refs"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 397
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 412
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 421
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 442
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 466
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 477
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 487
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 498
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 508
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 524
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 535
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 551
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 562
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 572
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 583
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 593
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 603
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 614
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 624
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 634
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 676
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 691
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 727
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 748
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 774
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 905
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 913
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 943
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 952
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 962
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 971
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 981
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 990
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 999
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1008
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1017
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1027
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1036
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1045
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1055
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1064
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1073
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1083
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1093
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1102
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1395
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1411
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1729
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JTokenWriter.cs",
+          "line": 281
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JTokenWriter.cs",
+          "line": 573
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 331
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 345
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 575
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "GetCreator@Src/Newtonsoft.Json/Serialization/JsonTypeReflector.cs:262",
+      "split": "holdout",
+      "name": "GetCreator",
+      "file": "Src/Newtonsoft.Json/Serialization/JsonTypeReflector.cs",
+      "line": 262,
+      "kind": "method",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonTypeReflector.cs",
+          "line": 69
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonTypeReflector.cs",
+          "line": 69,
+          "verdict": "true",
+          "note": "code-kb miss: GetCreator passed as a method group to the ThreadSafeStore constructor in nested class CreatorCache"
+        }
+      ]
+    },
+    {
+      "id": "ParsePath@Src/Newtonsoft.Json/Linq/JsonPath/JPath.cs:93",
+      "split": "dev",
+      "name": "ParsePath",
+      "file": "Src/Newtonsoft.Json/Linq/JsonPath/JPath.cs",
+      "line": 93,
+      "kind": "method",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JsonPath/JPath.cs",
+          "line": 80
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JsonPath/JPath.cs",
+          "line": 452
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "WriteWhitespace@Src/Newtonsoft.Json/JsonWriter.cs:1455",
+      "split": "holdout",
+      "name": "WriteWhitespace",
+      "file": "Src/Newtonsoft.Json/JsonWriter.cs",
+      "line": 1455,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1624
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 500
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 501
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1624,
+          "verdict": "true",
+          "note": "code-kb miss: unqualified WriteWhitespace() call inside the JsonWriter.WriteWhitespaceAsync default implementation reaches JsonWriter.WriteWhitespace"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 501,
+          "verdict": "true",
+          "note": "code-kb miss: base.WriteWhitespace() in a TraceJsonWriter member, where TraceJsonWriter derives from JsonWriter, reaches JsonWriter.WriteWhitespace"
+        }
+      ]
+    },
+    {
+      "id": "Close@Src/Newtonsoft.Json/JsonReader.cs:1160",
+      "split": "dev",
+      "name": "Close",
+      "file": "Src/Newtonsoft.Json/JsonReader.cs",
+      "line": 1160,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "Src/Newtonsoft.Json/Bson/BsonReader.cs",
+          "line": 234
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonReader.cs",
+          "line": 1152
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 2603
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonValidatingReader.cs",
+          "line": 331
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonValidatingReader.cs",
+          "line": 334
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonReader.cs",
+          "line": 145
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "Src/Newtonsoft.Json/Bson/BsonReader.cs",
+          "line": 234,
+          "verdict": "true",
+          "note": "code-kb miss: base.Close() in a BsonReader member, where BsonReader derives from JsonReader, reaches JsonReader.Close"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 2603,
+          "verdict": "true",
+          "note": "code-kb miss: base.Close() in a JsonTextReader member, where JsonTextReader derives from JsonReader, reaches JsonReader.Close"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonValidatingReader.cs",
+          "line": 331,
+          "verdict": "true",
+          "note": "code-kb miss: base.Close() in a JsonValidatingReader member, where JsonValidatingReader derives from JsonReader, reaches JsonReader.Close"
+        }
+      ]
+    },
+    {
+      "id": "Assert@Src/Newtonsoft.Json/Utilities/MiscellaneousUtils.cs:48",
+      "split": "holdout",
+      "name": "Assert",
+      "file": "Src/Newtonsoft.Json/Utilities/MiscellaneousUtils.cs",
+      "line": 48,
+      "kind": "method",
+      "tags": [
+        "many-refs"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "Src/Newtonsoft.Json/Converters/BinaryConverter.cs",
+          "line": 77
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/BinaryConverter.cs",
+          "line": 148
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/EntityKeyMemberConverter.cs",
+          "line": 99
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/EntityKeyMemberConverter.cs",
+          "line": 167
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/IsoDateTimeConverter.cs",
+          "line": 170
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.Async.cs",
+          "line": 114
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.Async.cs",
+          "line": 199
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.Async.cs",
+          "line": 230
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.Async.cs",
+          "line": 254
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.Async.cs",
+          "line": 385
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.Async.cs",
+          "line": 603
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.Async.cs",
+          "line": 662
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.Async.cs",
+          "line": 760
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.Async.cs",
+          "line": 818
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.Async.cs",
+          "line": 863
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.Async.cs",
+          "line": 963
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.Async.cs",
+          "line": 982
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.Async.cs",
+          "line": 1036
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.Async.cs",
+          "line": 1072
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.Async.cs",
+          "line": 1123
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.Async.cs",
+          "line": 1143
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.Async.cs",
+          "line": 1170
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.Async.cs",
+          "line": 1306
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.Async.cs",
+          "line": 1433
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.Async.cs",
+          "line": 1569
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 141
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 255
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 283
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 348
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 417
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 500
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 606
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 773
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 911
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 1065
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 1087
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 1138
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 1293
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 1316
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 1328
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 1356
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 1442
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 1524
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 1580
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 1643
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 1676
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 1695
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 1837
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 1880
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 1971
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 1983
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 2265
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 2361
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 2373
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 2397
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.cs",
+          "line": 2417
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.Async.cs",
+          "line": 195
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.Async.cs",
+          "line": 207
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 328
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 641
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 655
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 697
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 711
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 851
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 865
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 911
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextWriter.cs",
+          "line": 919
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JContainer.Async.cs",
+          "line": 78
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JContainer.cs",
+          "line": 817
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JProperty.cs",
+          "line": 126
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JValue.cs",
+          "line": 368
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JsonPath/QueryExpression.cs",
+          "line": 308
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JsonPath/QueryExpression.cs",
+          "line": 309
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonArrayContract.cs",
+          "line": 283
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonArrayContract.cs",
+          "line": 284
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonProperty.cs",
+          "line": 314
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonPropertyCollection.cs",
+          "line": 77
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonSerializerInternalReader.cs",
+          "line": 486
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonSerializerInternalReader.cs",
+          "line": 487
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonSerializerInternalReader.cs",
+          "line": 868
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonSerializerInternalReader.cs",
+          "line": 869
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonSerializerInternalReader.cs",
+          "line": 966
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonSerializerInternalWriter.cs",
+          "line": 168
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonSerializerInternalWriter.cs",
+          "line": 261
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonSerializerInternalWriter.cs",
+          "line": 313
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/AsyncUtils.cs",
+          "line": 57
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/AsyncUtils.cs",
+          "line": 63
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/AsyncUtils.cs",
+          "line": 76
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/AsyncUtils.cs",
+          "line": 82
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/AsyncUtils.cs",
+          "line": 88
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/AsyncUtils.cs",
+          "line": 94
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/BoxedPrimitives.cs",
+          "line": 107
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/DictionaryWrapper.cs",
+          "line": 83
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/DynamicUtils.cs",
+          "line": 128
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/DynamicUtils.cs",
+          "line": 129
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/DynamicUtils.cs",
+          "line": 143
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/DynamicUtils.cs",
+          "line": 144
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/FSharpUtils.cs",
+          "line": 100
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/JavaScriptUtils.cs",
+          "line": 269
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/JavaScriptUtils.cs",
+          "line": 292
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/JavaScriptUtils.cs",
+          "line": 297
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/StringBuffer.cs",
+          "line": 110
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/LinqBridge.cs",
+          "line": 380,
+          "verdict": "true",
+          "note": "SCIP miss: MiscellaneousUtils.Assert call in LinqBridge.cs, which compiles only when HAVE_LINQ is undefined, so the net8.0 index skipped it"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/LinqBridge.cs",
+          "line": 1367,
+          "verdict": "true",
+          "note": "SCIP miss: MiscellaneousUtils.Assert call in LinqBridge.cs, which compiles only when HAVE_LINQ is undefined, so the net8.0 index skipped it"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/LinqBridge.cs",
+          "line": 1381,
+          "verdict": "true",
+          "note": "SCIP miss: MiscellaneousUtils.Assert call in LinqBridge.cs, which compiles only when HAVE_LINQ is undefined, so the net8.0 index skipped it"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/LinqBridge.cs",
+          "line": 1445,
+          "verdict": "true",
+          "note": "SCIP miss: MiscellaneousUtils.Assert call in LinqBridge.cs, which compiles only when HAVE_LINQ is undefined, so the net8.0 index skipped it"
+        }
+      ]
+    },
+    {
+      "id": "CreateCallSiteGetter@Src/Newtonsoft.Json/Serialization/JsonDynamicContract.cs:60",
+      "split": "dev",
+      "name": "CreateCallSiteGetter",
+      "file": "Src/Newtonsoft.Json/Serialization/JsonDynamicContract.cs",
+      "line": 60,
+      "kind": "method",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonDynamicContract.cs",
+          "line": 53
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonDynamicContract.cs",
+          "line": 53,
+          "verdict": "true",
+          "note": "code-kb miss: CreateCallSiteGetter passed as a method group to the ThreadSafeStore constructor in a field initializer"
+        }
+      ]
+    },
+    {
+      "id": "IsIConvertible@Src/Newtonsoft.Json/Serialization/DefaultContractResolver.cs:1272",
+      "split": "holdout",
+      "name": "IsIConvertible",
+      "file": "Src/Newtonsoft.Json/Serialization/DefaultContractResolver.cs",
+      "line": 1272,
+      "kind": "method",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/DefaultContractResolver.cs",
+          "line": 1255
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "WriteValueAsync@Src/Newtonsoft.Json/Linq/JProperty.Async.cs:69",
+      "split": "dev",
+      "name": "WriteValueAsync",
+      "file": "Src/Newtonsoft.Json/Linq/JProperty.Async.cs",
+      "line": 69,
+      "kind": "method",
+      "tags": [
+        "common-name"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JProperty.Async.cs",
+          "line": 52
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JProperty.Async.cs",
+          "line": 64
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "AppendChild@Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs:754",
+      "split": "holdout",
+      "name": "AppendChild",
+      "file": "Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs",
+      "line": 754,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs",
+          "line": 576
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs",
+          "line": 914
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "WriteNull@Src/Newtonsoft.Json/JsonWriter.cs:903",
+      "split": "dev",
+      "name": "WriteNull",
+      "file": "Src/Newtonsoft.Json/JsonWriter.cs",
+      "line": 903,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden",
+        "many-refs"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "Src/Newtonsoft.Json/Bson/BsonWriter.cs",
+          "line": 258
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/BinaryConverter.cs",
+          "line": 62
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/DataSetConverter.cs",
+          "line": 52
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/DataTableConverter.cs",
+          "line": 55
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/DiscriminatedUnionConverter.cs",
+          "line": 134
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/EntityKeyMemberConverter.cs",
+          "line": 94
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/EntityKeyMemberConverter.cs",
+          "line": 122
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/EntityKeyMemberConverter.cs",
+          "line": 140
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/KeyValuePairConverter.cs",
+          "line": 66
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/RegexConverter.cs",
+          "line": 57
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/StringEnumConverter.cs",
+          "line": 185
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/VersionConverter.cs",
+          "line": 47
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs",
+          "line": 993
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs",
+          "line": 1347
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 475
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 591
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 766
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1113
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1130
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1146
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1163
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1179
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1195
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1211
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1227
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1244
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1260
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1276
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1293
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1309
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1325
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1342
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1359
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1375
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1391
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1407
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1424
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1646
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 1661
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JProperty.cs",
+          "line": 359
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JTokenWriter.cs",
+          "line": 296
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JValue.cs",
+          "line": 753
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonSerializerInternalWriter.cs",
+          "line": 164
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonSerializerInternalWriter.cs",
+          "line": 1242
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 236
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "Src/Newtonsoft.Json/Bson/BsonWriter.cs",
+          "line": 258,
+          "verdict": "true",
+          "note": "code-kb miss: base.WriteNull() in a BsonWriter member, where BsonWriter derives from JsonWriter, reaches JsonWriter.WriteNull"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 475,
+          "verdict": "true",
+          "note": "code-kb miss: unqualified WriteNull() call inside the JsonWriter.WriteNullAsync default implementation reaches JsonWriter.WriteNull"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JTokenWriter.cs",
+          "line": 296,
+          "verdict": "true",
+          "note": "code-kb miss: base.WriteNull() in a JTokenWriter member, where JTokenWriter derives from JsonWriter, reaches JsonWriter.WriteNull"
+        }
+      ]
+    },
+    {
+      "id": "ValidateObject@Src/Newtonsoft.Json/JsonValidatingReader.cs:995",
+      "split": "holdout",
+      "name": "ValidateObject",
+      "file": "Src/Newtonsoft.Json/JsonValidatingReader.cs",
+      "line": 995,
+      "kind": "method",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "Src/Newtonsoft.Json/JsonValidatingReader.cs",
+          "line": 518
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "Src/Newtonsoft.Json/JsonValidatingReader.cs",
+          "line": 518,
+          "verdict": "true",
+          "note": "code-kb miss: ValidateObject passed as a method group to Where() in JsonValidatingReader.ValidateCurrentToken"
+        }
+      ]
+    },
+    {
+      "id": "MatchAndSetAsync@Src/Newtonsoft.Json/JsonTextReader.Async.cs:834",
+      "split": "dev",
+      "name": "MatchAndSetAsync",
+      "file": "Src/Newtonsoft.Json/JsonTextReader.Async.cs",
+      "line": 834,
+      "kind": "method",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.Async.cs",
+          "line": 848
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.Async.cs",
+          "line": 853
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.Async.cs",
+          "line": 858
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonTextReader.Async.cs",
+          "line": 977
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "Parse@Src/Newtonsoft.Json/Linq/JToken.cs:2261",
+      "split": "holdout",
+      "name": "Parse",
+      "file": "Src/Newtonsoft.Json/Linq/JToken.cs",
+      "line": 2261,
+      "kind": "method",
+      "tags": [
+        "common-name"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JToken.cs",
+          "line": 2263
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "AppendChild@Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs:400",
+      "split": "dev",
+      "name": "AppendChild",
+      "file": "Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs",
+      "line": 400,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs",
+          "line": 1576
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs",
+          "line": 1579
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs",
+          "line": 1582
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs",
+          "line": 1585
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs",
+          "line": 1678
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs",
+          "line": 1707
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs",
+          "line": 1807
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs",
+          "line": 2026
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs",
+          "line": 2031
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs",
+          "line": 2073
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs",
+          "line": 2141
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs",
+          "line": 1707,
+          "verdict": "true",
+          "note": "code-kb miss: element.AppendChild(...) on an IXmlElement, which extends IXmlNode, reaches IXmlNode.AppendChild"
+        }
+      ]
+    },
+    {
+      "id": "WriteStartObject@Src/Newtonsoft.Json/JsonWriter.cs:422",
+      "split": "holdout",
+      "name": "WriteStartObject",
+      "file": "Src/Newtonsoft.Json/JsonWriter.cs",
+      "line": 422,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden",
+        "many-refs"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "Src/Newtonsoft.Json/Bson/BsonWriter.cs",
+          "line": 159
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/DataSetConverter.cs",
+          "line": 61
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/DataTableConverter.cs",
+          "line": 66
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/DiscriminatedUnionConverter.cs",
+          "line": 146
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/EntityKeyMemberConverter.cs",
+          "line": 108
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/KeyValuePairConverter.cs",
+          "line": 74
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/RegexConverter.cs",
+          "line": 122
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs",
+          "line": 1004
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs",
+          "line": 1356
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs",
+          "line": 1406
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Converters/XmlNodeConverter.cs",
+          "line": 1429
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 630
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 533
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JObject.cs",
+          "line": 524
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JTokenWriter.cs",
+          "line": 116
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Schema/JsonSchemaWriter.cs",
+          "line": 62
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Schema/JsonSchemaWriter.cs",
+          "line": 84
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Schema/JsonSchemaWriter.cs",
+          "line": 182
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Schema/JsonSchemaWriter.cs",
+          "line": 211
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonSerializerInternalWriter.cs",
+          "line": 144
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonSerializerInternalWriter.cs",
+          "line": 383
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonSerializerInternalWriter.cs",
+          "line": 607
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonSerializerInternalWriter.cs",
+          "line": 862
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 558
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 559
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "Src/Newtonsoft.Json/Bson/BsonWriter.cs",
+          "line": 159,
+          "verdict": "true",
+          "note": "code-kb miss: base.WriteStartObject() in a BsonWriter member, where BsonWriter derives from JsonWriter, reaches JsonWriter.WriteStartObject"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 630,
+          "verdict": "true",
+          "note": "code-kb miss: unqualified WriteStartObject() call inside the JsonWriter.WriteStartObjectAsync default implementation reaches JsonWriter.WriteStartObject"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JTokenWriter.cs",
+          "line": 116,
+          "verdict": "true",
+          "note": "code-kb miss: base.WriteStartObject() in a JTokenWriter member, where JTokenWriter derives from JsonWriter, reaches JsonWriter.WriteStartObject"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 559,
+          "verdict": "true",
+          "note": "code-kb miss: base.WriteStartObject() in a TraceJsonWriter member, where TraceJsonWriter derives from JsonWriter, reaches JsonWriter.WriteStartObject"
+        }
+      ]
+    },
+    {
+      "id": "InitializeValuesAndNames@Src/Newtonsoft.Json/Utilities/EnumUtils.cs:52",
+      "split": "dev",
+      "name": "InitializeValuesAndNames",
+      "file": "Src/Newtonsoft.Json/Utilities/EnumUtils.cs",
+      "line": 52,
+      "kind": "method",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/EnumUtils.cs",
+          "line": 49
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/EnumUtils.cs",
+          "line": 49,
+          "verdict": "true",
+          "note": "code-kb miss: InitializeValuesAndNames passed as a method group to the ThreadSafeStore constructor in a static field initializer"
+        }
+      ]
+    },
+    {
+      "id": "SerializeObject@Src/Newtonsoft.Json/JsonConvert.cs:530",
+      "split": "holdout",
+      "name": "SerializeObject",
+      "file": "Src/Newtonsoft.Json/JsonConvert.cs",
+      "line": 530,
+      "kind": "method",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "Src/Newtonsoft.Json/JsonConvert.cs",
+          "line": 532
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonConvert.cs",
+          "line": 548
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonConvert.cs",
+          "line": 566
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonConvert.cs",
+          "line": 585
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonConvert.cs",
+          "line": 602
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonConvert.cs",
+          "line": 644
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonConvert.cs",
+          "line": 947
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonConvert.cs",
+          "line": 963
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonConvert.cs",
+          "line": 1078
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "Src/Newtonsoft.Json/JsonConvert.cs",
+          "line": 532,
+          "verdict": "true",
+          "note": "code-kb miss: call to a JsonConvert.SerializeObject overload from inside JsonConvert; overloads are unioned"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonConvert.cs",
+          "line": 548,
+          "verdict": "true",
+          "note": "code-kb miss: call to a JsonConvert.SerializeObject overload from inside JsonConvert; overloads are unioned"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonConvert.cs",
+          "line": 566,
+          "verdict": "true",
+          "note": "code-kb miss: call to a JsonConvert.SerializeObject overload from inside JsonConvert; overloads are unioned"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonConvert.cs",
+          "line": 585,
+          "verdict": "true",
+          "note": "code-kb miss: call to a JsonConvert.SerializeObject overload from inside JsonConvert; overloads are unioned"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonConvert.cs",
+          "line": 602,
+          "verdict": "true",
+          "note": "code-kb miss: call to a JsonConvert.SerializeObject overload from inside JsonConvert; overloads are unioned"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonConvert.cs",
+          "line": 644,
+          "verdict": "true",
+          "note": "code-kb miss: call to a JsonConvert.SerializeObject overload from inside JsonConvert; overloads are unioned"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonConvert.cs",
+          "line": 947,
+          "verdict": "true",
+          "note": "code-kb miss: call to a JsonConvert.SerializeObject overload from inside JsonConvert; overloads are unioned"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonConvert.cs",
+          "line": 963,
+          "verdict": "true",
+          "note": "code-kb miss: call to a JsonConvert.SerializeObject overload from inside JsonConvert; overloads are unioned"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonConvert.cs",
+          "line": 1078,
+          "verdict": "true",
+          "note": "code-kb miss: call to a JsonConvert.SerializeObject overload from inside JsonConvert; overloads are unioned"
+        }
+      ]
+    },
+    {
+      "id": "ToString@Src/Newtonsoft.Json/Utilities/MiscellaneousUtils.cs:92",
+      "split": "dev",
+      "name": "ToString",
+      "file": "Src/Newtonsoft.Json/Utilities/MiscellaneousUtils.cs",
+      "line": 92,
+      "kind": "method",
+      "tags": [
+        "common-name"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "Src/Newtonsoft.Json/Converters/StringEnumConverter.cs",
+          "line": 256
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JArray.cs",
+          "line": 260
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JArray.cs",
+          "line": 279
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JConstructor.cs",
+          "line": 194
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JConstructor.cs",
+          "line": 205
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JObject.cs",
+          "line": 339
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JObject.cs",
+          "line": 350
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonSerializerInternalReader.cs",
+          "line": 1023
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/MiscellaneousUtils.cs",
+          "line": 99,
+          "verdict": "false",
+          "note": "calls object.ToString on value inside MiscellaneousUtils.ToString, not MiscellaneousUtils.ToString"
+        }
+      ]
+    },
+    {
+      "id": "BindToName@Src/Newtonsoft.Json/Serialization/ISerializationBinder.cs:51",
+      "split": "holdout",
+      "name": "BindToName",
+      "file": "Src/Newtonsoft.Json/Serialization/ISerializationBinder.cs",
+      "line": 51,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/ReflectionUtils.cs",
+          "line": 169
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "FromCanceled@Src/Newtonsoft.Json/Utilities/AsyncUtils.cs:55",
+      "split": "dev",
+      "name": "FromCanceled",
+      "file": "Src/Newtonsoft.Json/Utilities/AsyncUtils.cs",
+      "line": 55,
+      "kind": "method",
+      "tags": [
+        "many-refs"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 135
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 153
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 172
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 190
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 208
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 226
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 245
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 263
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 284
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 295
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 418
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 436
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 454
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 472
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 491
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 511
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 522
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 540
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 566
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 590
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 609
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 627
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 693
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 873
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 892
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 911
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 930
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 949
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 968
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 987
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1006
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1025
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1044
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1063
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1082
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1101
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1120
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1139
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1158
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1177
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1196
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1215
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1234
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1253
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1272
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1291
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1310
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1330
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1350
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1369
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1388
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1407
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1426
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1445
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1465
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1485
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1505
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1525
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1544
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1564
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1584
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1602
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1621
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1632
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1652
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/AsyncUtils.cs",
+          "line": 45
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/AsyncUtils.cs",
+          "line": 77
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/AsyncUtils.cs",
+          "line": 83
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/AsyncUtils.cs",
+          "line": 89
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/Base64Encoder.cs",
+          "line": 201
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/JavaScriptUtils.cs",
+          "line": 370
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 135,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 153,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 172,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 190,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 208,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 226,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 245,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 263,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 284,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 295,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 418,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 436,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 454,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 472,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 491,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 511,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 522,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 540,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 566,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 590,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 609,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 627,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 693,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 873,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 892,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 911,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 930,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 949,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 968,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 987,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1006,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1025,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1044,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1063,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1082,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1101,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1120,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1139,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1158,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1177,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1196,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1215,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1234,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1253,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1272,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1291,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1310,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1330,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1350,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1369,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1388,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1407,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1426,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1445,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1465,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1485,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1505,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1525,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1544,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1564,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1584,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1602,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1621,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1632,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1652,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/AsyncUtils.cs",
+          "line": 50,
+          "verdict": "true",
+          "note": "SCIP miss: call to the generic overload AsyncUtils.FromCanceled<T>; same owner and name, and overloads are unioned"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/AsyncUtils.cs",
+          "line": 95,
+          "verdict": "true",
+          "note": "SCIP miss: call to the generic overload AsyncUtils.FromCanceled<int>; same owner and name, and overloads are unioned"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/Base64Encoder.cs",
+          "line": 201,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/JavaScriptUtils.cs",
+          "line": 370,
+          "verdict": "true",
+          "note": "code-kb miss: extension call cancellationToken.FromCanceled() reaches AsyncUtils.FromCanceled(this CancellationToken)"
+        }
+      ]
+    },
+    {
+      "id": "InitializeReflectionObject@Src/Newtonsoft.Json/Converters/KeyValuePairConverter.cs:47",
+      "split": "holdout",
+      "name": "InitializeReflectionObject",
+      "file": "Src/Newtonsoft.Json/Converters/KeyValuePairConverter.cs",
+      "line": 47,
+      "kind": "method",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "Src/Newtonsoft.Json/Converters/KeyValuePairConverter.cs",
+          "line": 45
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "Src/Newtonsoft.Json/Converters/KeyValuePairConverter.cs",
+          "line": 45,
+          "verdict": "true",
+          "note": "code-kb miss: InitializeReflectionObject passed as a method group to the ThreadSafeStore constructor in a static field initializer"
+        }
+      ]
+    },
+    {
+      "id": "GetArgArray@Src/Newtonsoft.Json/Utilities/DynamicProxyMetaObject.cs:183",
+      "split": "dev",
+      "name": "GetArgArray",
+      "file": "Src/Newtonsoft.Json/Utilities/DynamicProxyMetaObject.cs",
+      "line": 183,
+      "kind": "method",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/DynamicProxyMetaObject.cs",
+          "line": 109
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/DynamicProxyMetaObject.cs",
+          "line": 124
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/DynamicProxyMetaObject.cs",
+          "line": 131
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/DynamicProxyMetaObject.cs",
+          "line": 152
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/DynamicProxyMetaObject.cs",
+          "line": 159
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Utilities/DynamicProxyMetaObject.cs",
+          "line": 166
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "ContainsItem@Src/Newtonsoft.Json/Linq/JPropertyKeyedCollection.cs:95",
+      "split": "holdout",
+      "name": "ContainsItem",
+      "file": "Src/Newtonsoft.Json/Linq/JPropertyKeyedCollection.cs",
+      "line": 95,
+      "kind": "method",
+      "tags": [
+        "common-name"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JPropertyKeyedCollection.cs",
+          "line": 53
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "WriteRawValue@Src/Newtonsoft.Json/JsonWriter.cs:929",
+      "split": "dev",
+      "name": "WriteRawValue",
+      "file": "Src/Newtonsoft.Json/JsonWriter.cs",
+      "line": 929,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 593
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 619
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JValue.cs",
+          "line": 750
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 571
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 572
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 593,
+          "verdict": "true",
+          "note": "code-kb miss: unqualified WriteRawValue() call inside the JsonWriter.WriteRawValueAsync default implementation reaches JsonWriter.WriteRawValue"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 571,
+          "verdict": "true",
+          "note": "code-kb miss: _textWriter.WriteRawValue(json) on a JsonTextWriter, which does not override it, reaches JsonWriter.WriteRawValue"
+        }
+      ]
+    },
+    {
+      "id": "WriteUndefined@Src/Newtonsoft.Json/JsonWriter.cs:911",
+      "split": "holdout",
+      "name": "WriteUndefined",
+      "file": "Src/Newtonsoft.Json/JsonWriter.cs",
+      "line": 911,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden",
+        "many-refs"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "Src/Newtonsoft.Json/Bson/BsonWriter.cs",
+          "line": 267
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1605
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.cs",
+          "line": 594
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JTokenWriter.cs",
+          "line": 305
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JValue.cs",
+          "line": 756
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 80
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 101
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 122
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 143
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 153
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 178
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 200
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 222
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 229
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 230
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 237
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 257
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 278
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 299
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 320
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 340
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 367
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 388
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 416
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 437
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 458
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 468
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 493
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "Src/Newtonsoft.Json/Bson/BsonWriter.cs",
+          "line": 267,
+          "verdict": "true",
+          "note": "code-kb miss: base.WriteUndefined() in a BsonWriter member, where BsonWriter derives from JsonWriter, reaches JsonWriter.WriteUndefined"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriter.Async.cs",
+          "line": 1605,
+          "verdict": "true",
+          "note": "code-kb miss: unqualified WriteUndefined() call inside the JsonWriter.WriteUndefinedAsync default implementation reaches JsonWriter.WriteUndefined"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JTokenWriter.cs",
+          "line": 305,
+          "verdict": "true",
+          "note": "code-kb miss: base.WriteUndefined() in a JTokenWriter member, where JTokenWriter derives from JsonWriter, reaches JsonWriter.WriteUndefined"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 80,
+          "verdict": "true",
+          "note": "code-kb miss: base.WriteUndefined() in a TraceJsonWriter member, where TraceJsonWriter derives from JsonWriter, reaches JsonWriter.WriteUndefined"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 101,
+          "verdict": "true",
+          "note": "code-kb miss: base.WriteUndefined() in a TraceJsonWriter member, where TraceJsonWriter derives from JsonWriter, reaches JsonWriter.WriteUndefined"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 122,
+          "verdict": "true",
+          "note": "code-kb miss: base.WriteUndefined() in a TraceJsonWriter member, where TraceJsonWriter derives from JsonWriter, reaches JsonWriter.WriteUndefined"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 143,
+          "verdict": "true",
+          "note": "code-kb miss: base.WriteUndefined() in a TraceJsonWriter member, where TraceJsonWriter derives from JsonWriter, reaches JsonWriter.WriteUndefined"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 153,
+          "verdict": "true",
+          "note": "code-kb miss: base.WriteUndefined() in a TraceJsonWriter member, where TraceJsonWriter derives from JsonWriter, reaches JsonWriter.WriteUndefined"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 178,
+          "verdict": "true",
+          "note": "code-kb miss: base.WriteUndefined() in a TraceJsonWriter member, where TraceJsonWriter derives from JsonWriter, reaches JsonWriter.WriteUndefined"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 200,
+          "verdict": "true",
+          "note": "code-kb miss: base.WriteUndefined() in a TraceJsonWriter member, where TraceJsonWriter derives from JsonWriter, reaches JsonWriter.WriteUndefined"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 222,
+          "verdict": "true",
+          "note": "code-kb miss: base.WriteUndefined() in a TraceJsonWriter member, where TraceJsonWriter derives from JsonWriter, reaches JsonWriter.WriteUndefined"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 230,
+          "verdict": "true",
+          "note": "code-kb miss: base.WriteUndefined() in a TraceJsonWriter member, where TraceJsonWriter derives from JsonWriter, reaches JsonWriter.WriteUndefined"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 237,
+          "verdict": "true",
+          "note": "code-kb miss: base.WriteUndefined() in a TraceJsonWriter member, where TraceJsonWriter derives from JsonWriter, reaches JsonWriter.WriteUndefined"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 257,
+          "verdict": "true",
+          "note": "code-kb miss: base.WriteUndefined() in a TraceJsonWriter member, where TraceJsonWriter derives from JsonWriter, reaches JsonWriter.WriteUndefined"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 278,
+          "verdict": "true",
+          "note": "code-kb miss: base.WriteUndefined() in a TraceJsonWriter member, where TraceJsonWriter derives from JsonWriter, reaches JsonWriter.WriteUndefined"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 299,
+          "verdict": "true",
+          "note": "code-kb miss: base.WriteUndefined() in a TraceJsonWriter member, where TraceJsonWriter derives from JsonWriter, reaches JsonWriter.WriteUndefined"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 320,
+          "verdict": "true",
+          "note": "code-kb miss: base.WriteUndefined() in a TraceJsonWriter member, where TraceJsonWriter derives from JsonWriter, reaches JsonWriter.WriteUndefined"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 340,
+          "verdict": "true",
+          "note": "code-kb miss: base.WriteUndefined() in a TraceJsonWriter member, where TraceJsonWriter derives from JsonWriter, reaches JsonWriter.WriteUndefined"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 367,
+          "verdict": "true",
+          "note": "code-kb miss: base.WriteUndefined() in a TraceJsonWriter member, where TraceJsonWriter derives from JsonWriter, reaches JsonWriter.WriteUndefined"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 388,
+          "verdict": "true",
+          "note": "code-kb miss: base.WriteUndefined() in a TraceJsonWriter member, where TraceJsonWriter derives from JsonWriter, reaches JsonWriter.WriteUndefined"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 416,
+          "verdict": "true",
+          "note": "code-kb miss: base.WriteUndefined() in a TraceJsonWriter member, where TraceJsonWriter derives from JsonWriter, reaches JsonWriter.WriteUndefined"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 437,
+          "verdict": "true",
+          "note": "code-kb miss: base.WriteUndefined() in a TraceJsonWriter member, where TraceJsonWriter derives from JsonWriter, reaches JsonWriter.WriteUndefined"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 458,
+          "verdict": "true",
+          "note": "code-kb miss: base.WriteUndefined() in a TraceJsonWriter member, where TraceJsonWriter derives from JsonWriter, reaches JsonWriter.WriteUndefined"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 468,
+          "verdict": "true",
+          "note": "code-kb miss: base.WriteUndefined() in a TraceJsonWriter member, where TraceJsonWriter derives from JsonWriter, reaches JsonWriter.WriteUndefined"
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/TraceJsonWriter.cs",
+          "line": 493,
+          "verdict": "true",
+          "note": "code-kb miss: base.WriteUndefined() in a TraceJsonWriter member, where TraceJsonWriter derives from JsonWriter, reaches JsonWriter.WriteUndefined"
+        }
+      ]
+    },
+    {
+      "id": "GetTypeFromTypeNameKey@Src/Newtonsoft.Json/Serialization/DefaultSerializationBinder.cs:59",
+      "split": "dev",
+      "name": "GetTypeFromTypeNameKey",
+      "file": "Src/Newtonsoft.Json/Serialization/DefaultSerializationBinder.cs",
+      "line": 59,
+      "kind": "method",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/DefaultSerializationBinder.cs",
+          "line": 56
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/DefaultSerializationBinder.cs",
+          "line": 56,
+          "verdict": "true",
+          "note": "code-kb miss: GetTypeFromTypeNameKey passed as a method group to the ThreadSafeStore constructor in the DefaultSerializationBinder constructor"
+        }
+      ]
+    },
+    {
+      "id": "SerializeDictionary@Src/Newtonsoft.Json/Serialization/JsonSerializerInternalWriter.cs:1083",
+      "split": "holdout",
+      "name": "SerializeDictionary",
+      "file": "Src/Newtonsoft.Json/Serialization/JsonSerializerInternalWriter.cs",
+      "line": 1083,
+      "kind": "method",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonSerializerInternalWriter.cs",
+          "line": 208
+        }
+      ],
+      "adjudicated": []
+    }
+  ]
+}
