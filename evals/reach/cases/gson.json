@@ -1,0 +1,4141 @@
+{
+  "repo": "gson",
+  "commit": "8b4b55051489132190cb8d1c61eb9dc7f5381295",
+  "language": "java",
+  "symbols": [
+    {
+      "id": "create@gson/src/main/java/com/google/gson/internal/UnsafeAllocator.java:48",
+      "split": "dev",
+      "name": "create",
+      "file": "gson/src/main/java/com/google/gson/internal/UnsafeAllocator.java",
+      "line": 48,
+      "kind": "method",
+      "tags": [
+        "common-name"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/UnsafeAllocator.java",
+          "line": 46
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "getAccessor@gson/src/main/java/com/google/gson/internal/reflect/ReflectionHelper.java:230",
+      "split": "holdout",
+      "name": "getAccessor",
+      "file": "gson/src/main/java/com/google/gson/internal/reflect/ReflectionHelper.java",
+      "line": 230,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/reflect/ReflectionHelper.java",
+          "line": 192
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "nextString@gson/src/main/java/com/google/gson/stream/JsonReader.java:995",
+      "split": "dev",
+      "name": "nextString",
+      "file": "gson/src/main/java/com/google/gson/stream/JsonReader.java",
+      "line": 995,
+      "kind": "method",
+      "tags": [
+        "overridden",
+        "many-refs",
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "extras/src/main/java/com/google/gson/typeadapters/UtcDateTypeAdapter.java",
+          "line": 53
+        },
+        {
+          "path": "extras/src/test/java/com/google/gson/interceptors/InterceptorTest.java",
+          "line": 125
+        },
+        {
+          "path": "extras/src/test/java/com/google/gson/interceptors/InterceptorTest.java",
+          "line": 127
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/ToNumberPolicy.java",
+          "line": 56
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/ToNumberPolicy.java",
+          "line": 72
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/ToNumberPolicy.java",
+          "line": 106
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/DefaultDateTypeAdapter.java",
+          "line": 166
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/EnumTypeAdapter.java",
+          "line": 119
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JavaTimeTypeAdapters.java",
+          "line": 303
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JsonElementTypeAdapter.java",
+          "line": 61
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JsonElementTypeAdapter.java",
+          "line": 63
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/ObjectTypeAdapter.java",
+          "line": 94
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/TypeAdapters.java",
+          "line": 158
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/TypeAdapters.java",
+          "line": 180
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/TypeAdapters.java",
+          "line": 543
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/TypeAdapters.java",
+          "line": 579
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/TypeAdapters.java",
+          "line": 596
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/TypeAdapters.java",
+          "line": 622
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/TypeAdapters.java",
+          "line": 651
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/TypeAdapters.java",
+          "line": 673
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/TypeAdapters.java",
+          "line": 693
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/TypeAdapters.java",
+          "line": 713
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/TypeAdapters.java",
+          "line": 741
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/TypeAdapters.java",
+          "line": 776
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/TypeAdapters.java",
+          "line": 809
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/TypeAdapters.java",
+          "line": 830
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/TypeAdapters.java",
+          "line": 938
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/sql/SqlDateTypeAdapter.java",
+          "line": 62
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/sql/SqlTimeTypeAdapter.java",
+          "line": 63
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/GsonTest.java",
+          "line": 469
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/GsonTest.java",
+          "line": 479
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/OverrideCoreTypeAdaptersTest.java",
+          "line": 56
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/TypeAdapterTest.java",
+          "line": 111
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/DefaultTypeAdaptersTest.java",
+          "line": 1015
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/DefaultTypeAdaptersTest.java",
+          "line": 1100
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/DefaultTypeAdaptersTest.java",
+          "line": 1124
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 88
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 213
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 237
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 263
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 316
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 334
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 353
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 569
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 613
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnFieldsTest.java",
+          "line": 142
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnFieldsTest.java",
+          "line": 159
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnFieldsTest.java",
+          "line": 191
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnFieldsTest.java",
+          "line": 214
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnFieldsTest.java",
+          "line": 227
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnFieldsTest.java",
+          "line": 364
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/MapTest.java",
+          "line": 185
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/NumberLimitsTest.java",
+          "line": 53
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/NumberLimitsTest.java",
+          "line": 65
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/NumberLimitsTest.java",
+          "line": 69
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/NumberLimitsTest.java",
+          "line": 73
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/NumberLimitsTest.java",
+          "line": 77
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/StreamingTypeAdaptersTest.java",
+          "line": 124
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/StreamingTypeAdaptersTest.java",
+          "line": 187
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/TypeAdapterPrecedenceTest.java",
+          "line": 164
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/Java17ReflectiveTypeAdapterFactoryTest.java",
+          "line": 90
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderPathTest.java",
+          "line": 72
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderPathTest.java",
+          "line": 81
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderPathTest.java",
+          "line": 415
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderPathTest.java",
+          "line": 419
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 84
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 94
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 103
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 113
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 123
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 137
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 153
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 165
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 172
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 268
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 270
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 463
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 524
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 525
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 526
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 527
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 528
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 529
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 530
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 531
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 532
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 533
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 534
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 535
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 536
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 537
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 538
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 539
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 540
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 541
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 542
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 554
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 559
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 564
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 571
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 580
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 590
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 598
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 611
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 624
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 847
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 862
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 885
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 941
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 962
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1008
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1096
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1140
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1162
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1200
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1256
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1262
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1268
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1378
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1395
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1402
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1411
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1615
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1662
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1663
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1743
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1809
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1982
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1999
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 2012
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 2025
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 2106
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 2121
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 2192
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 2269
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 2309
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 2315
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 2337
+        },
+        {
+          "path": "metrics/src/main/java/com/google/gson/metrics/BagOfPrimitivesDeserializationBenchmark.java",
+          "line": 78
+        },
+        {
+          "path": "metrics/src/main/java/com/google/gson/metrics/BagOfPrimitivesDeserializationBenchmark.java",
+          "line": 112
+        },
+        {
+          "path": "metrics/src/main/java/com/google/gson/metrics/CollectionsDeserializationBenchmark.java",
+          "line": 90
+        },
+        {
+          "path": "metrics/src/main/java/com/google/gson/metrics/CollectionsDeserializationBenchmark.java",
+          "line": 130
+        },
+        {
+          "path": "metrics/src/main/java/com/google/gson/metrics/ParseBenchmark.java",
+          "line": 208
+        },
+        {
+          "path": "proto/src/test/java/com/google/gson/protobuf/functional/LegacyProtoTypeAdapterFactoryTest.java",
+          "line": 400
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 847,
+          "verdict": "true",
+          "note": "code-kb miss: `new JsonReader(reader(number)).nextString()` inside a lambda calls JsonReader.nextString"
+        }
+      ]
+    },
+    {
+      "id": "nextName@gson/src/main/java/com/google/gson/stream/JsonReader.java:957",
+      "split": "holdout",
+      "name": "nextName",
+      "file": "gson/src/main/java/com/google/gson/stream/JsonReader.java",
+      "line": 957,
+      "kind": "method",
+      "tags": [
+        "overridden",
+        "many-refs",
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "extras/src/test/java/com/google/gson/interceptors/InterceptorTest.java",
+          "line": 124
+        },
+        {
+          "path": "extras/src/test/java/com/google/gson/interceptors/InterceptorTest.java",
+          "line": 126
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JavaTimeTypeAdapters.java",
+          "line": 123
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JavaTimeTypeAdapters.java",
+          "line": 176
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JavaTimeTypeAdapters.java",
+          "line": 217
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JavaTimeTypeAdapters.java",
+          "line": 300
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JavaTimeTypeAdapters.java",
+          "line": 352
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JsonElementTypeAdapter.java",
+          "line": 99
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/ObjectTypeAdapter.java",
+          "line": 126
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/ReflectiveTypeAdapterFactory.java",
+          "line": 515
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/TypeAdapters.java",
+          "line": 871
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 315
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 421
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 477
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 663
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderPathTest.java",
+          "line": 54
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderPathTest.java",
+          "line": 78
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderPathTest.java",
+          "line": 120
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderPathTest.java",
+          "line": 134
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderPathTest.java",
+          "line": 259
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderPathTest.java",
+          "line": 263
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderPathTest.java",
+          "line": 272
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderPathTest.java",
+          "line": 369
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderPathTest.java",
+          "line": 375
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderPathTest.java",
+          "line": 381
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderPathTest.java",
+          "line": 390
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderPathTest.java",
+          "line": 396
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 148
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 267
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 269
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 297
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 299
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 310
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 313
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 333
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 335
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 351
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 354
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 357
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 399
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 401
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 411
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 413
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 459
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 461
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 479
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 748
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 759
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1095
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1108
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1110
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1118
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1128
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1143
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1145
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1165
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1208
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1215
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1226
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1232
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1240
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1246
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1261
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1267
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1330
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1339
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1354
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1363
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1451
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1461
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1463
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1470
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1772
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1844
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1889
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1898
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1981
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 2093
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 2105
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 2120
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 2263
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 2297
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 2313
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 2388
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 2400
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 2404
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 2424
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 2436
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 2439
+        },
+        {
+          "path": "metrics/src/main/java/com/google/gson/metrics/BagOfPrimitivesDeserializationBenchmark.java",
+          "line": 66
+        },
+        {
+          "path": "metrics/src/main/java/com/google/gson/metrics/BagOfPrimitivesDeserializationBenchmark.java",
+          "line": 101
+        },
+        {
+          "path": "metrics/src/main/java/com/google/gson/metrics/CollectionsDeserializationBenchmark.java",
+          "line": 78
+        },
+        {
+          "path": "metrics/src/main/java/com/google/gson/metrics/CollectionsDeserializationBenchmark.java",
+          "line": 119
+        },
+        {
+          "path": "metrics/src/main/java/com/google/gson/metrics/ParseBenchmark.java",
+          "line": 196
+        },
+        {
+          "path": "proto/src/main/java/com/google/gson/protobuf/LegacyProtoTypeAdapterFactory.java",
+          "line": 414
+        },
+        {
+          "path": "test-shrinker/src/main/java/com/example/ClassWithAdapter.java",
+          "line": 15
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "getAnnotation@gson/src/main/java/com/google/gson/internal/bind/JsonAdapterAnnotationTypeAdapterFactory.java:70",
+      "split": "dev",
+      "name": "getAnnotation",
+      "file": "gson/src/main/java/com/google/gson/internal/bind/JsonAdapterAnnotationTypeAdapterFactory.java",
+      "line": 70,
+      "kind": "method",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JsonAdapterAnnotationTypeAdapterFactory.java",
+          "line": 79
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JsonAdapterAnnotationTypeAdapterFactory.java",
+          "line": 194
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "deserialize@gson/src/main/java/com/google/gson/JsonDeserializer.java:94",
+      "split": "holdout",
+      "name": "deserialize",
+      "file": "gson/src/main/java/com/google/gson/JsonDeserializer.java",
+      "line": 94,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/TreeTypeAdapter.java",
+          "line": 95
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "name@gson/src/main/java/com/google/gson/internal/bind/JsonTreeWriter.java:147",
+      "split": "dev",
+      "name": "name",
+      "file": "gson/src/main/java/com/google/gson/internal/bind/JsonTreeWriter.java",
+      "line": 147,
+      "kind": "method",
+      "tags": [
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 65
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 66
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 75
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 77
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 81
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 111
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 117
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 126
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 130
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 142
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 143
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 152
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 163
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 309
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "extras/src/main/java/com/google/gson/extras/examples/rawcollections/RawCollectionsExample.java",
+          "line": 31,
+          "verdict": "false",
+          "note": "assigns the field `name` (`this.name = ...`); a field is not a call of the method name()"
+        },
+        {
+          "path": "extras/src/test/java/com/google/gson/interceptors/InterceptorTest.java",
+          "line": 161,
+          "verdict": "false",
+          "note": "assigns the field `name` (`this.name = ...`); a field is not a call of the method name()"
+        },
+        {
+          "path": "extras/src/test/java/com/google/gson/interceptors/InterceptorTest.java",
+          "line": 170,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/MixedStreamTest.java",
+          "line": 236,
+          "verdict": "false",
+          "note": "assigns the field `name` (`this.name = ...`); a field is not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/MixedStreamTest.java",
+          "line": 250,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnFieldsTest.java",
+          "line": 53,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnFieldsTest.java",
+          "line": 62,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnFieldsTest.java",
+          "line": 72,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnFieldsTest.java",
+          "line": 96,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnFieldsTest.java",
+          "line": 105,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnFieldsTest.java",
+          "line": 130,
+          "verdict": "false",
+          "note": "assigns the field `name` (`this.name = ...`); a field is not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnFieldsTest.java",
+          "line": 179,
+          "verdict": "false",
+          "note": "assigns the field `name` (`this.name = ...`); a field is not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnFieldsTest.java",
+          "line": 237,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnFieldsTest.java",
+          "line": 238,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnFieldsTest.java",
+          "line": 282,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnFieldsTest.java",
+          "line": 340,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterSerializerDeserializerTest.java",
+          "line": 54,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterSerializerDeserializerTest.java",
+          "line": 55,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterSerializerDeserializerTest.java",
+          "line": 82,
+          "verdict": "false",
+          "note": "assigns the field `name` (`this.name = ...`); a field is not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterSerializerDeserializerTest.java",
+          "line": 121,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterSerializerDeserializerTest.java",
+          "line": 137,
+          "verdict": "false",
+          "note": "assigns the field `name` (`this.name = ...`); a field is not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterSerializerDeserializerTest.java",
+          "line": 237,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterSerializerDeserializerTest.java",
+          "line": 238,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterSerializerDeserializerTest.java",
+          "line": 239,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/StreamingTypeAdaptersTest.java",
+          "line": 130,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/StreamingTypeAdaptersTest.java",
+          "line": 193,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/StreamingTypeAdaptersTest.java",
+          "line": 221,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/StreamingTypeAdaptersTest.java",
+          "line": 263,
+          "verdict": "false",
+          "note": "assigns the field `name` (`this.name = ...`); a field is not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/StreamingTypeAdaptersTest.java",
+          "line": 269,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/TreeTypeAdaptersTest.java",
+          "line": 132,
+          "verdict": "false",
+          "note": "assigns the field `name` (`this.name = ...`); a field is not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/TypeAdapterPrecedenceTest.java",
+          "line": 47,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/TypeAdapterPrecedenceTest.java",
+          "line": 58,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/TypeAdapterPrecedenceTest.java",
+          "line": 70,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/TypeAdapterPrecedenceTest.java",
+          "line": 82,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/TypeAdapterPrecedenceTest.java",
+          "line": 94,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/TypeAdapterPrecedenceTest.java",
+          "line": 106,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/TypeAdapterPrecedenceTest.java",
+          "line": 118,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/TypeAdapterPrecedenceTest.java",
+          "line": 131,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/TypeAdapterPrecedenceTest.java",
+          "line": 138,
+          "verdict": "false",
+          "note": "assigns the field `name` (`this.name = ...`); a field is not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/TypeAdapterPrecedenceTest.java",
+          "line": 146,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/TypeAdapterPrecedenceTest.java",
+          "line": 169,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/reflect/Java17ReflectionHelperTest.java",
+          "line": 73,
+          "verdict": "false",
+          "note": "assigns the field `name` (`this.name = ...`); a field is not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/reflect/Java17ReflectionHelperTest.java",
+          "line": 84,
+          "verdict": "false",
+          "note": "reads or writes the field `name` through `expr.name` with no parentheses; not a call of the method name()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/metrics/PerformanceTest.java",
+          "line": 112,
+          "verdict": "false",
+          "note": "assigns the field `name` (`this.name = ...`); a field is not a call of the method name()"
+        }
+      ]
+    },
+    {
+      "id": "toString@gson/src/main/java/com/google/gson/JsonElement.java:421",
+      "split": "holdout",
+      "name": "toString",
+      "file": "gson/src/main/java/com/google/gson/JsonElement.java",
+      "line": 421,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "many-refs"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonArrayTest.java",
+          "line": 192
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonArrayTest.java",
+          "line": 217
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonArrayTest.java",
+          "line": 240
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonArrayTest.java",
+          "line": 254
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonArrayTest.java",
+          "line": 269
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonArrayTest.java",
+          "line": 291
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonArrayTest.java",
+          "line": 309
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonArrayTest.java",
+          "line": 338
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonArrayTest.java",
+          "line": 345
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonArrayTest.java",
+          "line": 356
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonNullTest.java",
+          "line": 49
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonObjectTest.java",
+          "line": 138
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonObjectTest.java",
+          "line": 147
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonObjectTest.java",
+          "line": 345
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonObjectTest.java",
+          "line": 355
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonParserTest.java",
+          "line": 92
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonPrimitiveTest.java",
+          "line": 240
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonPrimitiveTest.java",
+          "line": 243
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonPrimitiveTest.java",
+          "line": 246
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonPrimitiveTest.java",
+          "line": 250
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonPrimitiveTest.java",
+          "line": 253
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonPrimitiveTest.java",
+          "line": 256
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonPrimitiveTest.java",
+          "line": 259
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonPrimitiveTest.java",
+          "line": 262
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonPrimitiveTest.java",
+          "line": 265
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonPrimitiveTest.java",
+          "line": 314
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/SubsetTest.java",
+          "line": 28
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 44
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 58
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 68
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 85
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 135
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 155
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 166
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 220
+        },
+        {
+          "path": "proto/src/test/java/com/google/gson/protobuf/functional/LegacyProtoTypeAdapterFactoryTest.java",
+          "line": 180
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "gson/src/main/java/com/google/gson/JsonPrimitive.java",
+          "line": 85,
+          "verdict": "false",
+          "note": "calls Character.toString on `Objects.requireNonNull(c)`, not JsonElement.toString"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/JsonPrimitive.java",
+          "line": 163,
+          "verdict": "false",
+          "note": "calls Number.toString on the result of getAsNumber(), not JsonElement.toString"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/JsonPrimitive.java",
+          "line": 165,
+          "verdict": "false",
+          "note": "calls Boolean.toString on `((Boolean) value)`, not JsonElement.toString"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonNullTest.java",
+          "line": 49,
+          "verdict": "true",
+          "note": "code-kb miss: `JsonNull.INSTANCE.toString()`; JsonNull declares no toString, so the call reaches JsonElement.toString"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonParserTest.java",
+          "line": 92,
+          "verdict": "true",
+          "note": "code-kb miss: `array.get(0).toString()`; JsonArray.get returns JsonElement, which declares toString"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 44,
+          "verdict": "true",
+          "note": "code-kb miss: `writer.get().toString()`; JsonTreeWriter.get returns JsonElement, which declares toString"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 58,
+          "verdict": "true",
+          "note": "code-kb miss: `writer.get().toString()`; JsonTreeWriter.get returns JsonElement, which declares toString"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 68,
+          "verdict": "true",
+          "note": "code-kb miss: `writer.get().toString()`; JsonTreeWriter.get returns JsonElement, which declares toString"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 85,
+          "verdict": "true",
+          "note": "code-kb miss: `writer.get().toString()`; JsonTreeWriter.get returns JsonElement, which declares toString"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 135,
+          "verdict": "true",
+          "note": "code-kb miss: `writer.get().toString()`; JsonTreeWriter.get returns JsonElement, which declares toString"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 155,
+          "verdict": "true",
+          "note": "code-kb miss: `writer.get().toString()`; JsonTreeWriter.get returns JsonElement, which declares toString"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 166,
+          "verdict": "true",
+          "note": "code-kb miss: `writer.get().toString()`; JsonTreeWriter.get returns JsonElement, which declares toString"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 220,
+          "verdict": "true",
+          "note": "code-kb miss: `writer.get().toString()`; JsonTreeWriter.get returns JsonElement, which declares toString"
+        },
+        {
+          "path": "proto/src/test/java/com/google/gson/protobuf/functional/LegacyProtoTypeAdapterFactoryTest.java",
+          "line": 180,
+          "verdict": "true",
+          "note": "code-kb miss: `legacyJson.toString()` and `rtafJson.toString()` on JsonObject, which inherits JsonElement.toString"
+        }
+      ]
+    },
+    {
+      "id": "alternate@gson/src/main/java/com/google/gson/annotations/SerializedName.java:100",
+      "split": "dev",
+      "name": "alternate",
+      "file": "gson/src/main/java/com/google/gson/annotations/SerializedName.java",
+      "line": 100,
+      "kind": "method",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/EnumTypeAdapter.java",
+          "line": 98
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/ReflectiveTypeAdapterFactory.java",
+          "line": 96
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/Java17RecordTest.java",
+          "line": 85
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/SerializedNameTest.java",
+          "line": 57
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/Java17RecordTest.java",
+          "line": 85,
+          "verdict": "true",
+          "note": "code-kb miss: the element name `alternate` set in an @SerializedName(...) annotation use"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/SerializedNameTest.java",
+          "line": 57,
+          "verdict": "true",
+          "note": "code-kb miss: the element name `alternate` set in an @SerializedName(...) annotation use"
+        }
+      ]
+    },
+    {
+      "id": "getInaccessibleTroubleshootingSuffix@gson/src/main/java/com/google/gson/internal/reflect/ReflectionHelper.java:46",
+      "split": "holdout",
+      "name": "getInaccessibleTroubleshootingSuffix",
+      "file": "gson/src/main/java/com/google/gson/internal/reflect/ReflectionHelper.java",
+      "line": 46,
+      "kind": "method",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/reflect/ReflectionHelper.java",
+          "line": 76
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/reflect/ReflectionHelper.java",
+          "line": 177
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "getAsBigInteger@gson/src/main/java/com/google/gson/JsonElement.java:367",
+      "split": "dev",
+      "name": "getAsBigInteger",
+      "file": "gson/src/main/java/com/google/gson/JsonElement.java",
+      "line": 367,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "gson/src/main/java/com/google/gson/JsonArray.java",
+          "line": 307
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "gson/src/main/java/com/google/gson/JsonArray.java",
+          "line": 307,
+          "verdict": "true",
+          "note": "code-kb miss: `getAsSingleElement().getAsBigInteger()`; getAsSingleElement returns JsonElement (JsonArray.java:235), so the call reaches JsonElement.getAsBigInteger"
+        }
+      ]
+    },
+    {
+      "id": "getCanonicalRecordConstructor@gson/src/main/java/com/google/gson/internal/reflect/ReflectionHelper.java:228",
+      "split": "holdout",
+      "name": "getCanonicalRecordConstructor",
+      "file": "gson/src/main/java/com/google/gson/internal/reflect/ReflectionHelper.java",
+      "line": 228,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/reflect/ReflectionHelper.java",
+          "line": 196
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "beginArray@gson/src/main/java/com/google/gson/internal/bind/JsonTreeReader.java:82",
+      "split": "dev",
+      "name": "beginArray",
+      "file": "gson/src/main/java/com/google/gson/internal/bind/JsonTreeReader.java",
+      "line": 82,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden",
+        "many-refs"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonElementReaderTest.java",
+          "line": 38
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonElementReaderTest.java",
+          "line": 50
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonElementReaderTest.java",
+          "line": 62
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonElementReaderTest.java",
+          "line": 85
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonElementReaderTest.java",
+          "line": 96
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonElementReaderTest.java",
+          "line": 105
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonElementReaderTest.java",
+          "line": 115
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonElementReaderTest.java",
+          "line": 125
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonElementReaderTest.java",
+          "line": 136
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonElementReaderTest.java",
+          "line": 171
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonElementReaderTest.java",
+          "line": 179
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonElementReaderTest.java",
+          "line": 180
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonElementReaderTest.java",
+          "line": 182
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonElementReaderTest.java",
+          "line": 183
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonElementReaderTest.java",
+          "line": 218
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonElementReaderTest.java",
+          "line": 232
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonElementReaderTest.java",
+          "line": 245
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonElementReaderTest.java",
+          "line": 276
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonElementReaderTest.java",
+          "line": 287
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeReaderTest.java",
+          "line": 93
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeReaderTest.java",
+          "line": 222
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeReaderTest.java",
+          "line": 264
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeReaderTest.java",
+          "line": 267
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "getAsInt@gson/src/main/java/com/google/gson/JsonElement.java:305",
+      "split": "holdout",
+      "name": "getAsInt",
+      "file": "gson/src/main/java/com/google/gson/JsonElement.java",
+      "line": 305,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden",
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "gson/src/main/java/com/google/gson/JsonArray.java",
+          "line": 346
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/GsonTypeAdapterTest.java",
+          "line": 120
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonArrayAsListTest.java",
+          "line": 240
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonArrayAsListTest.java",
+          "line": 257
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonParserTest.java",
+          "line": 57
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonParserTest.java",
+          "line": 93
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonParserTest.java",
+          "line": 148
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/ParameterizedTypeFixtures.java",
+          "line": 148
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/SubsetTest.java",
+          "line": 15
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/CustomTypeAdaptersTest.java",
+          "line": 87
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/CustomTypeAdaptersTest.java",
+          "line": 142
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/CustomTypeAdaptersTest.java",
+          "line": 253
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/ExclusionStrategyFunctionalTest.java",
+          "line": 114
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/MoreSpecificTypeSerializationTest.java",
+          "line": 71
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/MoreSpecificTypeSerializationTest.java",
+          "line": 73
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/MoreSpecificTypeSerializationTest.java",
+          "line": 74
+        },
+        {
+          "path": "proto/src/main/java/com/google/gson/protobuf/ProtoTypeAdapter.java",
+          "line": 423
+        },
+        {
+          "path": "proto/src/main/java/com/google/gson/protobuf/ProtoTypeAdapter.java",
+          "line": 426
+        },
+        {
+          "path": "test-shrinker/src/main/java/com/example/ClassWithJsonAdapterAnnotation.java",
+          "line": 118
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "gson/src/main/java/com/google/gson/JsonArray.java",
+          "line": 346,
+          "verdict": "true",
+          "note": "code-kb miss: `getAsSingleElement().getAsInt()`; getAsSingleElement returns JsonElement (JsonArray.java:235), so the call reaches JsonElement.getAsInt"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonArrayAsListTest.java",
+          "line": 257,
+          "verdict": "true",
+          "note": "code-kb miss: `element.getAsInt()` in a lambda over List<JsonElement>"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonParserTest.java",
+          "line": 57,
+          "verdict": "true",
+          "note": "code-kb miss: `e.getAsJsonObject().get(\"a\").getAsInt()`; JsonObject.get returns JsonElement"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonParserTest.java",
+          "line": 93,
+          "verdict": "true",
+          "note": "code-kb miss: `array.get(1).getAsInt()`; JsonArray.get returns JsonElement"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonParserTest.java",
+          "line": 148,
+          "verdict": "true",
+          "note": "code-kb miss: `e.getAsJsonObject().get(\"a\").getAsInt()`; JsonObject.get returns JsonElement"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/SubsetTest.java",
+          "line": 15,
+          "verdict": "true",
+          "note": "code-kb miss: `jsonObject.get(\"a\").getAsInt()`; JsonObject.get returns JsonElement"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/CustomTypeAdaptersTest.java",
+          "line": 87,
+          "verdict": "true",
+          "note": "code-kb miss: `jsonObject.get(\"bag\").getAsInt()`; JsonObject.get returns JsonElement"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/CustomTypeAdaptersTest.java",
+          "line": 142,
+          "verdict": "true",
+          "note": "code-kb miss: `json.getAsInt()` where `json` is the JsonElement parameter of a JsonDeserializer lambda"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/CustomTypeAdaptersTest.java",
+          "line": 253,
+          "verdict": "true",
+          "note": "code-kb miss: `json.getAsInt()` where `json` is the JsonElement parameter of a JsonDeserializer lambda"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/ExclusionStrategyFunctionalTest.java",
+          "line": 114,
+          "verdict": "true",
+          "note": "code-kb miss: `json.get(\"annotatedField\").getAsInt()`; JsonObject.get returns JsonElement"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/MoreSpecificTypeSerializationTest.java",
+          "line": 71,
+          "verdict": "true",
+          "note": "code-kb miss: `.get(\"b\").getAsInt()` after getAsJsonObject(); JsonObject.get returns JsonElement"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/MoreSpecificTypeSerializationTest.java",
+          "line": 73,
+          "verdict": "true",
+          "note": "code-kb miss: `sub.get(\"b\").getAsInt()`; JsonObject.get returns JsonElement"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/MoreSpecificTypeSerializationTest.java",
+          "line": 74,
+          "verdict": "true",
+          "note": "code-kb miss: `sub.get(\"s\").getAsInt()`; JsonObject.get returns JsonElement"
+        }
+      ]
+    },
+    {
+      "id": "testTypeTokenWriteRead@test-shrinker/src/main/java/com/example/Main.java:60",
+      "split": "dev",
+      "name": "testTypeTokenWriteRead",
+      "file": "test-shrinker/src/main/java/com/example/Main.java",
+      "line": 60,
+      "kind": "method",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "test-shrinker/src/main/java/com/example/Main.java",
+          "line": 31
+        },
+        {
+          "path": "test-shrinker/src/main/java/com/example/Main.java",
+          "line": 33
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "getAsInt@gson/src/main/java/com/google/gson/JsonArray.java:345",
+      "split": "holdout",
+      "name": "getAsInt",
+      "file": "gson/src/main/java/com/google/gson/JsonArray.java",
+      "line": 345,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonArrayTest.java",
+          "line": 157
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "gson/src/main/java/com/google/gson/JsonArray.java",
+          "line": 346,
+          "verdict": "false",
+          "note": "calls JsonElement.getAsInt on the result of getAsSingleElement() (declared return type JsonElement), not the JsonArray.getAsInt override"
+        }
+      ]
+    },
+    {
+      "id": "endArray@gson/src/main/java/com/google/gson/internal/bind/JsonTreeWriter.java:110",
+      "split": "dev",
+      "name": "endArray",
+      "file": "gson/src/main/java/com/google/gson/internal/bind/JsonTreeWriter.java",
+      "line": 110,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 43
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 52
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 55
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 56
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 57
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 94
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 133
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 219
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 302
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 310
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 317
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "value@gson/src/main/java/com/google/gson/internal/bind/JsonTreeWriter.java:162",
+      "split": "holdout",
+      "name": "value",
+      "file": "gson/src/main/java/com/google/gson/internal/bind/JsonTreeWriter.java",
+      "line": 162,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden",
+        "many-refs"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 40
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 41
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 42
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 93
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 114
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 129
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 191
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 198
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 205
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 213
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 214
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 215
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 216
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 217
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 218
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 229
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 230
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 231
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 232
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 233
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 234
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 244
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 246
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 248
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 249
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 251
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 253
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 263
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/bind/JsonTreeWriterTest.java",
+          "line": 266
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "gson/src/main/java/com/google/gson/JsonPrimitive.java",
+          "line": 320,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/JsonPrimitive.java",
+          "line": 323,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/JsonPrimitive.java",
+          "line": 327,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/JsonPrimitive.java",
+          "line": 328,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/JsonPrimitive.java",
+          "line": 339,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/JsonPrimitive.java",
+          "line": 347,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/JsonPrimitive.java",
+          "line": 348,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/LazilyParsedNumber.java",
+          "line": 36,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/LazilyParsedNumber.java",
+          "line": 102,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/LazilyParsedNumber.java",
+          "line": 117,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/LinkedTreeMap.java",
+          "line": 97,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/LinkedTreeMap.java",
+          "line": 115,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/LinkedTreeMap.java",
+          "line": 116,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/LinkedTreeMap.java",
+          "line": 134,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/LinkedTreeMap.java",
+          "line": 222,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/LinkedTreeMap.java",
+          "line": 504,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/LinkedTreeMap.java",
+          "line": 505,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/ParameterizedTypeFixtures.java",
+          "line": 41,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/ParameterizedTypeFixtures.java",
+          "line": 112,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/ParameterizedTypeFixtures.java",
+          "line": 115,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/ParameterizedTypeFixtures.java",
+          "line": 119,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/common/TestTypes.java",
+          "line": 312,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/CollectionTest.java",
+          "line": 456,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/CollectionTest.java",
+          "line": 477,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/CustomTypeAdaptersTest.java",
+          "line": 119,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/CustomTypeAdaptersTest.java",
+          "line": 217,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/DefaultTypeAdaptersTest.java",
+          "line": 327,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/DefaultTypeAdaptersTest.java",
+          "line": 335,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/DefaultTypeAdaptersTest.java",
+          "line": 358,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/DefaultTypeAdaptersTest.java",
+          "line": 786,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/DefaultTypeAdaptersTest.java",
+          "line": 798,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/EnumTest.java",
+          "line": 251,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/EnumTest.java",
+          "line": 263,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/FieldExclusionTest.java",
+          "line": 91,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JavaUtilConcurrentAtomicTest.java",
+          "line": 75,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JavaUtilTest.java",
+          "line": 39,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JavaUtilTest.java",
+          "line": 45,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 74,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 105,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 116,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 226,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 248,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 285,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 769,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterSerializerDeserializerTest.java",
+          "line": 184,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/NamingPolicyTest.java",
+          "line": 232,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/NamingPolicyTest.java",
+          "line": 351,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/NullObjectAndFieldTest.java",
+          "line": 106,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/NullObjectAndFieldTest.java",
+          "line": 222,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/NullObjectAndFieldTest.java",
+          "line": 235,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/ParameterizedTypesTest.java",
+          "line": 145,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/ParameterizedTypesTest.java",
+          "line": 150,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/ParameterizedTypesTest.java",
+          "line": 504,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/TreeTypeAdaptersTest.java",
+          "line": 90,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/metrics/PerformanceTest.java",
+          "line": 113,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        }
+      ]
+    },
+    {
+      "id": "value@gson/src/main/java/com/google/gson/annotations/SerializedName.java:93",
+      "split": "dev",
+      "name": "value",
+      "file": "gson/src/main/java/com/google/gson/annotations/SerializedName.java",
+      "line": 93,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/EnumTypeAdapter.java",
+          "line": 97
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/ReflectiveTypeAdapterFactory.java",
+          "line": 95
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/Java17RecordTest.java",
+          "line": 84
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/SerializedNameTest.java",
+          "line": 56
+        },
+        {
+          "path": "test-jpms/src/test/java/com/google/gson/jpms_test/ExportedPackagesTest.java",
+          "line": 58
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "gson/src/main/java/com/google/gson/JsonPrimitive.java",
+          "line": 320,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/JsonPrimitive.java",
+          "line": 323,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/JsonPrimitive.java",
+          "line": 327,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/JsonPrimitive.java",
+          "line": 328,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/JsonPrimitive.java",
+          "line": 339,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/JsonPrimitive.java",
+          "line": 347,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/JsonPrimitive.java",
+          "line": 348,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/LazilyParsedNumber.java",
+          "line": 36,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/LazilyParsedNumber.java",
+          "line": 102,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/LazilyParsedNumber.java",
+          "line": 117,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/LinkedTreeMap.java",
+          "line": 97,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/LinkedTreeMap.java",
+          "line": 115,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/LinkedTreeMap.java",
+          "line": 116,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/LinkedTreeMap.java",
+          "line": 134,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/LinkedTreeMap.java",
+          "line": 222,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/LinkedTreeMap.java",
+          "line": 504,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/LinkedTreeMap.java",
+          "line": 505,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/ParameterizedTypeFixtures.java",
+          "line": 41,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/ParameterizedTypeFixtures.java",
+          "line": 112,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/ParameterizedTypeFixtures.java",
+          "line": 115,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/ParameterizedTypeFixtures.java",
+          "line": 119,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/common/TestTypes.java",
+          "line": 312,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/CollectionTest.java",
+          "line": 456,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/CollectionTest.java",
+          "line": 477,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/CustomTypeAdaptersTest.java",
+          "line": 119,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/CustomTypeAdaptersTest.java",
+          "line": 217,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/DefaultTypeAdaptersTest.java",
+          "line": 327,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/DefaultTypeAdaptersTest.java",
+          "line": 335,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/DefaultTypeAdaptersTest.java",
+          "line": 358,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/DefaultTypeAdaptersTest.java",
+          "line": 786,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/DefaultTypeAdaptersTest.java",
+          "line": 798,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/EnumTest.java",
+          "line": 251,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/EnumTest.java",
+          "line": 263,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/FieldExclusionTest.java",
+          "line": 91,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JavaUtilConcurrentAtomicTest.java",
+          "line": 75,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JavaUtilTest.java",
+          "line": 39,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JavaUtilTest.java",
+          "line": 45,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 74,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 105,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 116,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 226,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 248,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 285,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 769,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterSerializerDeserializerTest.java",
+          "line": 184,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/NamingPolicyTest.java",
+          "line": 232,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/NamingPolicyTest.java",
+          "line": 351,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/NullObjectAndFieldTest.java",
+          "line": 106,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/NullObjectAndFieldTest.java",
+          "line": 222,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/NullObjectAndFieldTest.java",
+          "line": 235,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/ParameterizedTypesTest.java",
+          "line": 145,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/ParameterizedTypesTest.java",
+          "line": 150,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/ParameterizedTypesTest.java",
+          "line": 504,
+          "verdict": "false",
+          "note": "reads or writes the field `value` through `expr.value` with no parentheses; not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/TreeTypeAdaptersTest.java",
+          "line": 90,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/metrics/PerformanceTest.java",
+          "line": 113,
+          "verdict": "false",
+          "note": "assigns the field `value` (`this.value = ...`); a field is not a call of the method value()"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/Java17RecordTest.java",
+          "line": 84,
+          "verdict": "true",
+          "note": "code-kb miss: the element name `value` set in an @SerializedName(...) annotation use"
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/SerializedNameTest.java",
+          "line": 56,
+          "verdict": "true",
+          "note": "code-kb miss: the element name `value` set in an @SerializedName(...) annotation use"
+        }
+      ]
+    },
+    {
+      "id": "atomicLongAdapter@gson/src/main/java/com/google/gson/internal/bind/TypeAdapters.java:309",
+      "split": "holdout",
+      "name": "atomicLongAdapter",
+      "file": "gson/src/main/java/com/google/gson/internal/bind/TypeAdapters.java",
+      "line": 309,
+      "kind": "method",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "gson/src/main/java/com/google/gson/GsonBuilder.java",
+          "line": 958
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "newBuilder@proto/src/main/java/com/google/gson/protobuf/ProtoTypeAdapter.java:223",
+      "split": "dev",
+      "name": "newBuilder",
+      "file": "proto/src/main/java/com/google/gson/protobuf/ProtoTypeAdapter.java",
+      "line": 223,
+      "kind": "method",
+      "tags": [
+        "common-name"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "proto/src/test/java/com/google/gson/protobuf/functional/ProtosWithAnnotationsAndJsonNamesTest.java",
+          "line": 39
+        },
+        {
+          "path": "proto/src/test/java/com/google/gson/protobuf/functional/ProtosWithAnnotationsAndJsonNamesTest.java",
+          "line": 45
+        },
+        {
+          "path": "proto/src/test/java/com/google/gson/protobuf/functional/ProtosWithAnnotationsAndJsonNamesTest.java",
+          "line": 54
+        },
+        {
+          "path": "proto/src/test/java/com/google/gson/protobuf/functional/ProtosWithAnnotationsAndJsonNamesTest.java",
+          "line": 60
+        },
+        {
+          "path": "proto/src/test/java/com/google/gson/protobuf/functional/ProtosWithAnnotationsTest.java",
+          "line": 48
+        },
+        {
+          "path": "proto/src/test/java/com/google/gson/protobuf/functional/ProtosWithComplexAndRepeatedFieldsTest.java",
+          "line": 48
+        },
+        {
+          "path": "proto/src/test/java/com/google/gson/protobuf/functional/ProtosWithComplexAndRepeatedFieldsTest.java",
+          "line": 56
+        },
+        {
+          "path": "proto/src/test/java/com/google/gson/protobuf/functional/ProtosWithPrimitiveTypesTest.java",
+          "line": 38
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "getAsDouble@gson/src/main/java/com/google/gson/JsonArray.java:278",
+      "split": "holdout",
+      "name": "getAsDouble",
+      "file": "gson/src/main/java/com/google/gson/JsonArray.java",
+      "line": 278,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonArrayTest.java",
+          "line": 154
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "gson/src/main/java/com/google/gson/JsonArray.java",
+          "line": 279,
+          "verdict": "false",
+          "note": "calls JsonElement.getAsDouble on the result of getAsSingleElement() (declared return type JsonElement), not the JsonArray.getAsDouble override"
+        }
+      ]
+    },
+    {
+      "id": "beginObject@gson/src/main/java/com/google/gson/stream/JsonReader.java:506",
+      "split": "dev",
+      "name": "beginObject",
+      "file": "gson/src/main/java/com/google/gson/stream/JsonReader.java",
+      "line": 506,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden",
+        "many-refs"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "extras/src/test/java/com/google/gson/interceptors/InterceptorTest.java",
+          "line": 123
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JavaTimeTypeAdapters.java",
+          "line": 121
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JavaTimeTypeAdapters.java",
+          "line": 172
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JavaTimeTypeAdapters.java",
+          "line": 213
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JavaTimeTypeAdapters.java",
+          "line": 296
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JavaTimeTypeAdapters.java",
+          "line": 347
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JsonElementTypeAdapter.java",
+          "line": 50
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/MapTypeAdapterFactory.java",
+          "line": 200
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/ObjectTypeAdapter.java",
+          "line": 83
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/ReflectiveTypeAdapterFactory.java",
+          "line": 513
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/TypeAdapters.java",
+          "line": 868
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/MixedStreamTest.java",
+          "line": 126
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 314
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 420
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 476
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 662
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderPathTest.java",
+          "line": 51
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderPathTest.java",
+          "line": 75
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderPathTest.java",
+          "line": 113
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderPathTest.java",
+          "line": 243
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderPathTest.java",
+          "line": 256
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderPathTest.java",
+          "line": 271
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderPathTest.java",
+          "line": 273
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderPathTest.java",
+          "line": 311
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderPathTest.java",
+          "line": 317
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderPathTest.java",
+          "line": 323
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderPathTest.java",
+          "line": 366
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderPathTest.java",
+          "line": 372
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderPathTest.java",
+          "line": 393
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderPathTest.java",
+          "line": 413
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 147
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 266
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 278
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 287
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 296
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 309
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 332
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 350
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 366
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 377
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 388
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 398
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 410
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 422
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 444
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 458
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 478
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 496
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 747
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 758
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1094
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1107
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1116
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1123
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1127
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1138
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1154
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1207
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1213
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1225
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1231
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1239
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1245
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1260
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1266
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1329
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1338
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1345
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1353
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1362
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1369
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1450
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1460
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1469
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1577
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1771
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1843
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1888
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1897
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 1980
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 2091
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 2104
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 2119
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 2251
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 2295
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 2311
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 2386
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 2402
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 2422
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 2435
+        },
+        {
+          "path": "metrics/src/main/java/com/google/gson/metrics/BagOfPrimitivesDeserializationBenchmark.java",
+          "line": 60
+        },
+        {
+          "path": "metrics/src/main/java/com/google/gson/metrics/BagOfPrimitivesDeserializationBenchmark.java",
+          "line": 98
+        },
+        {
+          "path": "metrics/src/main/java/com/google/gson/metrics/CollectionsDeserializationBenchmark.java",
+          "line": 72
+        },
+        {
+          "path": "metrics/src/main/java/com/google/gson/metrics/CollectionsDeserializationBenchmark.java",
+          "line": 116
+        },
+        {
+          "path": "metrics/src/main/java/com/google/gson/metrics/ParseBenchmark.java",
+          "line": 190
+        },
+        {
+          "path": "proto/src/main/java/com/google/gson/protobuf/LegacyProtoTypeAdapterFactory.java",
+          "line": 212
+        },
+        {
+          "path": "proto/src/main/java/com/google/gson/protobuf/LegacyProtoTypeAdapterFactory.java",
+          "line": 392
+        },
+        {
+          "path": "test-shrinker/src/main/java/com/example/ClassWithAdapter.java",
+          "line": 14
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonReaderTest.java",
+          "line": 496,
+          "verdict": "true",
+          "note": "code-kb miss: `new JsonReader(reader(\"\")).beginObject()` inside a lambda calls JsonReader.beginObject"
+        }
+      ]
+    },
+    {
+      "id": "hasNext@gson/src/main/java/com/google/gson/JsonStreamParser.java:103",
+      "split": "holdout",
+      "name": "hasNext",
+      "file": "gson/src/main/java/com/google/gson/JsonStreamParser.java",
+      "line": 103,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "gson/src/main/java/com/google/gson/JsonStreamParser.java",
+          "line": 84
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonStreamParserTest.java",
+          "line": 49
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonStreamParserTest.java",
+          "line": 51
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonStreamParserTest.java",
+          "line": 53
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonStreamParserTest.java",
+          "line": 58
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonStreamParserTest.java",
+          "line": 59
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonStreamParserTest.java",
+          "line": 60
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonStreamParserTest.java",
+          "line": 63
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonStreamParserTest.java",
+          "line": 64
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonStreamParserTest.java",
+          "line": 67
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonStreamParserTest.java",
+          "line": 68
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonStreamParserTest.java",
+          "line": 86
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonStreamParserTest.java",
+          "line": 93
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonStreamParserTest.java",
+          "line": 100
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/ReadersWritersTest.java",
+          "line": 129
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "peekStack@gson/src/main/java/com/google/gson/internal/bind/JsonTreeReader.java:173",
+      "split": "dev",
+      "name": "peekStack",
+      "file": "gson/src/main/java/com/google/gson/internal/bind/JsonTreeReader.java",
+      "line": 173,
+      "kind": "method",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JsonTreeReader.java",
+          "line": 84
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JsonTreeReader.java",
+          "line": 102
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JsonTreeReader.java",
+          "line": 134
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JsonTreeReader.java",
+          "line": 193
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JsonTreeReader.java",
+          "line": 246
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JsonTreeReader.java",
+          "line": 270
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JsonTreeReader.java",
+          "line": 294
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JsonTreeReader.java",
+          "line": 319
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JsonTreeReader.java",
+          "line": 363
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "size@gson/src/main/java/com/google/gson/JsonArray.java:198",
+      "split": "holdout",
+      "name": "size",
+      "file": "gson/src/main/java/com/google/gson/JsonArray.java",
+      "line": 198,
+      "kind": "method",
+      "tags": [
+        "common-name"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonArrayTest.java",
+          "line": 283
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonArrayTest.java",
+          "line": 286
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonArrayTest.java",
+          "line": 310
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/JsonParserTest.java",
+          "line": 113
+        },
+        {
+          "path": "proto/src/main/java/com/google/gson/protobuf/ProtoTypeAdapter.java",
+          "line": 319
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "proto/src/main/java/com/google/gson/protobuf/ProtoTypeAdapter.java",
+          "line": 319,
+          "verdict": "true",
+          "note": "code-kb miss: `jsonElement.getAsJsonArray().size()`; getAsJsonArray returns JsonArray, whose size is the target"
+        }
+      ]
+    },
+    {
+      "id": "shouldSkipClass@gson/src/main/java/com/google/gson/ExclusionStrategy.java:110",
+      "split": "dev",
+      "name": "shouldSkipClass",
+      "file": "gson/src/main/java/com/google/gson/ExclusionStrategy.java",
+      "line": 110,
+      "kind": "method",
+      "tags": [
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/Excluder.java",
+          "line": 229
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "endObject@gson/src/main/java/com/google/gson/stream/JsonWriter.java:440",
+      "split": "holdout",
+      "name": "endObject",
+      "file": "gson/src/main/java/com/google/gson/stream/JsonWriter.java",
+      "line": 440,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden",
+        "many-refs"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JavaTimeTypeAdapters.java",
+          "line": 148
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JavaTimeTypeAdapters.java",
+          "line": 202
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JavaTimeTypeAdapters.java",
+          "line": 243
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JavaTimeTypeAdapters.java",
+          "line": 330
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JavaTimeTypeAdapters.java",
+          "line": 335
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JavaTimeTypeAdapters.java",
+          "line": 388
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JsonElementTypeAdapter.java",
+          "line": 165
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/MapTypeAdapterFactory.java",
+          "line": 229
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/MapTypeAdapterFactory.java",
+          "line": 260
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/ObjectTypeAdapter.java",
+          "line": 180
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/ReflectiveTypeAdapterFactory.java",
+          "line": 499
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/TypeAdapters.java",
+          "line": 895
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/GsonTest.java",
+          "line": 428
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/GsonTest.java",
+          "line": 456
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 308
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 434
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 490
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/functional/JsonAdapterAnnotationOnClassesTest.java",
+          "line": 676
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 163
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 228
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 247
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 260
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 707
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 719
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 723
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 744
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 771
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 773
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 788
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 811
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 812
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 846
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 889
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 982
+        },
+        {
+          "path": "proto/src/main/java/com/google/gson/protobuf/LegacyProtoTypeAdapterFactory.java",
+          "line": 475
+        },
+        {
+          "path": "proto/src/main/java/com/google/gson/protobuf/LegacyProtoTypeAdapterFactory.java",
+          "line": 580
+        },
+        {
+          "path": "proto/src/main/java/com/google/gson/protobuf/LegacyProtoTypeAdapterFactory.java",
+          "line": 584
+        },
+        {
+          "path": "proto/src/main/java/com/google/gson/protobuf/LegacyProtoTypeAdapterFactory.java",
+          "line": 585
+        },
+        {
+          "path": "proto/src/main/java/com/google/gson/protobuf/LegacyProtoTypeAdapterFactory.java",
+          "line": 634
+        },
+        {
+          "path": "test-shrinker/src/main/java/com/example/ClassWithAdapter.java",
+          "line": 30
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "beginArray@gson/src/main/java/com/google/gson/stream/JsonWriter.java:407",
+      "split": "dev",
+      "name": "beginArray",
+      "file": "gson/src/main/java/com/google/gson/stream/JsonWriter.java",
+      "line": 407,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden",
+        "many-refs",
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/ArrayTypeAdapter.java",
+          "line": 104
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/CollectionTypeAdapterFactory.java",
+          "line": 98
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/JsonElementTypeAdapter.java",
+          "line": 153
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/MapTypeAdapterFactory.java",
+          "line": 245
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/MapTypeAdapterFactory.java",
+          "line": 247
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/TypeAdapters.java",
+          "line": 137
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/TypeAdapters.java",
+          "line": 365
+        },
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/bind/TypeAdapters.java",
+          "line": 402
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/GsonTest.java",
+          "line": 251
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/MixedStreamTest.java",
+          "line": 60
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/MixedStreamTest.java",
+          "line": 106
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/MixedStreamTest.java",
+          "line": 155
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 132
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 180
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 183
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 192
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 195
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 204
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 206
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 216
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 226
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 227
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 265
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 302
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 341
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 395
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 408
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 421
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 434
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 465
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 494
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 510
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 606
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 617
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 629
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 639
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 685
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 697
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 715
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 735
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 740
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 753
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 804
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 838
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 847
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 875
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 880
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 897
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 908
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 919
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 930
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 949
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 978
+        },
+        {
+          "path": "proto/src/main/java/com/google/gson/protobuf/LegacyProtoTypeAdapterFactory.java",
+          "line": 491
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "gson/src/test/java/com/google/gson/stream/JsonWriterTest.java",
+          "line": 804,
+          "verdict": "true",
+          "note": "code-kb miss: `jsonWriter.name(\"f\").beginArray()`; JsonWriter.name returns the JsonWriter, so the call reaches JsonWriter.beginArray"
+        }
+      ]
+    },
+    {
+      "id": "setChars@gson/src/main/java/com/google/gson/internal/Streams.java:139",
+      "split": "holdout",
+      "name": "setChars",
+      "file": "gson/src/main/java/com/google/gson/internal/Streams.java",
+      "line": 139,
+      "kind": "method",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "gson/src/main/java/com/google/gson/internal/Streams.java",
+          "line": 89
+        }
+      ],
+      "adjudicated": []
+    }
+  ]
+}

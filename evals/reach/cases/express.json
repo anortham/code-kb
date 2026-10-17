@@ -1,0 +1,2818 @@
+{
+  "repo": "express",
+  "commit": "bed501c695a61886399ee622875f3be933c716d8",
+  "language": "javascript",
+  "symbols": [
+    {
+      "id": "count2@examples/view-locals/index.js:86",
+      "split": "dev",
+      "name": "count2",
+      "file": "examples/view-locals/index.js",
+      "line": 86,
+      "kind": "function",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 102
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 102,
+          "verdict": "true",
+          "note": "code-kb miss: count2 passed to app.get as route middleware"
+        }
+      ]
+    },
+    {
+      "id": "tryRender@lib/application.js:625",
+      "split": "holdout",
+      "name": "tryRender",
+      "file": "lib/application.js",
+      "line": 625,
+      "kind": "function",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "lib/application.js",
+          "line": 574
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "View@lib/view.js:52",
+      "split": "holdout",
+      "name": "View",
+      "file": "lib/view.js",
+      "line": 52,
+      "kind": "function",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "lib/application.js",
+          "line": 134
+        },
+        {
+          "path": "lib/view.js",
+          "line": 36
+        },
+        {
+          "path": "lib/view.js",
+          "line": 104
+        },
+        {
+          "path": "lib/view.js",
+          "line": 133
+        },
+        {
+          "path": "lib/view.js",
+          "line": 169
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "lib/application.js",
+          "line": 134,
+          "verdict": "true",
+          "note": "code-kb miss: View passed as a value to this.set('view', View)"
+        },
+        {
+          "path": "lib/view.js",
+          "line": 36,
+          "verdict": "true",
+          "note": "code-kb miss: View exported as the module value"
+        },
+        {
+          "path": "lib/view.js",
+          "line": 104,
+          "verdict": "true",
+          "note": "code-kb miss: View.prototype member assignment reads View.prototype of the View constructor"
+        },
+        {
+          "path": "lib/view.js",
+          "line": 133,
+          "verdict": "true",
+          "note": "code-kb miss: View.prototype member assignment reads View.prototype of the View constructor"
+        },
+        {
+          "path": "lib/view.js",
+          "line": 169,
+          "verdict": "true",
+          "note": "code-kb miss: View.prototype member assignment reads View.prototype of the View constructor"
+        }
+      ]
+    },
+    {
+      "id": "sendfile@lib/response.js:921",
+      "split": "dev",
+      "name": "sendfile",
+      "file": "lib/response.js",
+      "line": 921,
+      "kind": "function",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "lib/response.js",
+          "line": 406
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "users@examples/view-locals/index.js:56",
+      "split": "dev",
+      "name": "users",
+      "file": "examples/view-locals/index.js",
+      "line": 56,
+      "kind": "function",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 64
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 59,
+          "verdict": "false",
+          "note": "`users` is the callback parameter of User.all, so the middleware function users is not used"
+        },
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 64,
+          "verdict": "true",
+          "note": "code-kb miss: users passed to app.get as route middleware"
+        },
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 68,
+          "verdict": "false",
+          "note": "`req.users` is a property of the request set at line 59, not the function users"
+        },
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 97,
+          "verdict": "false",
+          "note": "`users` is the callback parameter of User.all and `res.locals.users` is a property; neither reaches the function users"
+        }
+      ]
+    },
+    {
+      "id": "list@examples/online/index.js:40",
+      "split": "holdout",
+      "name": "list",
+      "file": "examples/online/index.js",
+      "line": 40,
+      "kind": "function",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "examples/online/index.js",
+          "line": 53
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "examples/online/index.js",
+          "line": 53,
+          "verdict": "true",
+          "note": "code-kb miss: list(ids) call"
+        }
+      ]
+    },
+    {
+      "id": "loadUser@examples/route-middleware/index.js:25",
+      "split": "holdout",
+      "name": "loadUser",
+      "file": "examples/route-middleware/index.js",
+      "line": 25,
+      "kind": "function",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "examples/route-middleware/index.js",
+          "line": 74
+        },
+        {
+          "path": "examples/route-middleware/index.js",
+          "line": 78
+        },
+        {
+          "path": "examples/route-middleware/index.js",
+          "line": 82
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "examples/route-middleware/index.js",
+          "line": 74,
+          "verdict": "true",
+          "note": "code-kb miss: loadUser passed to app route as middleware"
+        },
+        {
+          "path": "examples/route-middleware/index.js",
+          "line": 78,
+          "verdict": "true",
+          "note": "code-kb miss: loadUser passed to app route as middleware"
+        },
+        {
+          "path": "examples/route-middleware/index.js",
+          "line": 82,
+          "verdict": "true",
+          "note": "code-kb miss: loadUser passed to app route as middleware"
+        }
+      ]
+    },
+    {
+      "id": "tryStat@lib/view.js:197",
+      "split": "dev",
+      "name": "tryStat",
+      "file": "lib/view.js",
+      "line": 197,
+      "kind": "function",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "lib/view.js",
+          "line": 174
+        },
+        {
+          "path": "lib/view.js",
+          "line": 182
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "parseExtendedQueryString@lib/utils.js:267",
+      "split": "dev",
+      "name": "parseExtendedQueryString",
+      "file": "lib/utils.js",
+      "line": 267,
+      "kind": "function",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "lib/utils.js",
+          "line": 177
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "lib/utils.js",
+          "line": 177,
+          "verdict": "true",
+          "note": "code-kb miss: parseExtendedQueryString assigned to fn as a value"
+        }
+      ]
+    },
+    {
+      "id": "createETagGenerator@lib/utils.js:249",
+      "split": "holdout",
+      "name": "createETagGenerator",
+      "file": "lib/utils.js",
+      "line": 249,
+      "kind": "function",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "lib/utils.js",
+          "line": 40
+        },
+        {
+          "path": "lib/utils.js",
+          "line": 51
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "lib/utils.js",
+          "line": 40,
+          "verdict": "true",
+          "note": "code-kb miss: createETagGenerator({...}) call"
+        },
+        {
+          "path": "lib/utils.js",
+          "line": 51,
+          "verdict": "true",
+          "note": "code-kb miss: createETagGenerator({...}) call"
+        }
+      ]
+    },
+    {
+      "id": "User@examples/view-locals/user.js:7",
+      "split": "holdout",
+      "name": "User",
+      "file": "examples/view-locals/user.js",
+      "line": 7,
+      "kind": "function",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 27
+        },
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 29
+        },
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 49
+        },
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 57
+        },
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 87
+        },
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 95
+        },
+        {
+          "path": "examples/view-locals/user.js",
+          "line": 3
+        },
+        {
+          "path": "examples/view-locals/user.js",
+          "line": 13
+        },
+        {
+          "path": "examples/view-locals/user.js",
+          "line": 22
+        },
+        {
+          "path": "examples/view-locals/user.js",
+          "line": 32
+        },
+        {
+          "path": "examples/view-locals/user.js",
+          "line": 33
+        },
+        {
+          "path": "examples/view-locals/user.js",
+          "line": 34
+        },
+        {
+          "path": "examples/view-locals/user.js",
+          "line": 35
+        },
+        {
+          "path": "examples/view-locals/user.js",
+          "line": 36
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 27,
+          "verdict": "true",
+          "note": "code-kb miss: User.count(...) static method call on the User constructor"
+        },
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 29,
+          "verdict": "true",
+          "note": "code-kb miss: User.all(...) static method call on the User constructor"
+        },
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 49,
+          "verdict": "true",
+          "note": "code-kb miss: User.count(...) static method call on the User constructor"
+        },
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 57,
+          "verdict": "true",
+          "note": "code-kb miss: User.all(...) static method call on the User constructor"
+        },
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 87,
+          "verdict": "true",
+          "note": "code-kb miss: User.count(...) static method call on the User constructor"
+        },
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 95,
+          "verdict": "true",
+          "note": "code-kb miss: User.all(...) static method call on the User constructor"
+        },
+        {
+          "path": "examples/view-locals/user.js",
+          "line": 3,
+          "verdict": "true",
+          "note": "code-kb miss: User exported as the module value"
+        },
+        {
+          "path": "examples/view-locals/user.js",
+          "line": 13,
+          "verdict": "true",
+          "note": "code-kb miss: User.all assignment adds a static method to the User constructor"
+        },
+        {
+          "path": "examples/view-locals/user.js",
+          "line": 22,
+          "verdict": "true",
+          "note": "code-kb miss: User.count assignment adds a static method to the User constructor"
+        },
+        {
+          "path": "examples/view-locals/user.js",
+          "line": 32,
+          "verdict": "true",
+          "note": "code-kb miss: new User(...) constructor call"
+        },
+        {
+          "path": "examples/view-locals/user.js",
+          "line": 33,
+          "verdict": "true",
+          "note": "code-kb miss: new User(...) constructor call"
+        },
+        {
+          "path": "examples/view-locals/user.js",
+          "line": 34,
+          "verdict": "true",
+          "note": "code-kb miss: new User(...) constructor call"
+        },
+        {
+          "path": "examples/view-locals/user.js",
+          "line": 35,
+          "verdict": "true",
+          "note": "code-kb miss: new User(...) constructor call"
+        },
+        {
+          "path": "examples/view-locals/user.js",
+          "line": 36,
+          "verdict": "true",
+          "note": "code-kb miss: new User(...) constructor call"
+        }
+      ]
+    },
+    {
+      "id": "defineGetter@lib/request.js:521",
+      "split": "dev",
+      "name": "defineGetter",
+      "file": "lib/request.js",
+      "line": 521,
+      "kind": "function",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "lib/request.js",
+          "line": 230
+        },
+        {
+          "path": "lib/request.js",
+          "line": 297
+        },
+        {
+          "path": "lib/request.js",
+          "line": 326
+        },
+        {
+          "path": "lib/request.js",
+          "line": 340
+        },
+        {
+          "path": "lib/request.js",
+          "line": 357
+        },
+        {
+          "path": "lib/request.js",
+          "line": 383
+        },
+        {
+          "path": "lib/request.js",
+          "line": 403
+        },
+        {
+          "path": "lib/request.js",
+          "line": 418
+        },
+        {
+          "path": "lib/request.js",
+          "line": 444
+        },
+        {
+          "path": "lib/request.js",
+          "line": 469
+        },
+        {
+          "path": "lib/request.js",
+          "line": 497
+        },
+        {
+          "path": "lib/request.js",
+          "line": 508
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "lib/request.js",
+          "line": 230,
+          "verdict": "true",
+          "note": "code-kb miss: defineGetter(req, ...) call that defines a request property"
+        },
+        {
+          "path": "lib/request.js",
+          "line": 297,
+          "verdict": "true",
+          "note": "code-kb miss: defineGetter(req, ...) call that defines a request property"
+        },
+        {
+          "path": "lib/request.js",
+          "line": 326,
+          "verdict": "true",
+          "note": "code-kb miss: defineGetter(req, ...) call that defines a request property"
+        },
+        {
+          "path": "lib/request.js",
+          "line": 340,
+          "verdict": "true",
+          "note": "code-kb miss: defineGetter(req, ...) call that defines a request property"
+        },
+        {
+          "path": "lib/request.js",
+          "line": 357,
+          "verdict": "true",
+          "note": "code-kb miss: defineGetter(req, ...) call that defines a request property"
+        },
+        {
+          "path": "lib/request.js",
+          "line": 383,
+          "verdict": "true",
+          "note": "code-kb miss: defineGetter(req, ...) call that defines a request property"
+        },
+        {
+          "path": "lib/request.js",
+          "line": 403,
+          "verdict": "true",
+          "note": "code-kb miss: defineGetter(req, ...) call that defines a request property"
+        },
+        {
+          "path": "lib/request.js",
+          "line": 418,
+          "verdict": "true",
+          "note": "code-kb miss: defineGetter(req, ...) call that defines a request property"
+        },
+        {
+          "path": "lib/request.js",
+          "line": 444,
+          "verdict": "true",
+          "note": "code-kb miss: defineGetter(req, ...) call that defines a request property"
+        },
+        {
+          "path": "lib/request.js",
+          "line": 469,
+          "verdict": "true",
+          "note": "code-kb miss: defineGetter(req, ...) call that defines a request property"
+        },
+        {
+          "path": "lib/request.js",
+          "line": 497,
+          "verdict": "true",
+          "note": "code-kb miss: defineGetter(req, ...) call that defines a request property"
+        },
+        {
+          "path": "lib/request.js",
+          "line": 508,
+          "verdict": "true",
+          "note": "code-kb miss: defineGetter(req, ...) call that defines a request property"
+        }
+      ]
+    },
+    {
+      "id": "ferrets@examples/view-locals/index.js:17",
+      "split": "dev",
+      "name": "ferrets",
+      "file": "examples/view-locals/index.js",
+      "line": 17,
+      "kind": "function",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 34
+        },
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 68
+        },
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 97
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 34,
+          "verdict": "true",
+          "note": "code-kb miss: ferrets passed to filter as a callback"
+        },
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 68,
+          "verdict": "true",
+          "note": "code-kb miss: ferrets passed to filter as a callback"
+        },
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 97,
+          "verdict": "true",
+          "note": "code-kb miss: ferrets passed to filter as a callback"
+        }
+      ]
+    },
+    {
+      "id": "andRestrictTo@examples/route-middleware/index.js:50",
+      "split": "holdout",
+      "name": "andRestrictTo",
+      "file": "examples/route-middleware/index.js",
+      "line": 50,
+      "kind": "function",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "examples/route-middleware/index.js",
+          "line": 82
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "examples/route-middleware/index.js",
+          "line": 82,
+          "verdict": "true",
+          "note": "code-kb miss: andRestrictTo('admin') call that builds route middleware"
+        }
+      ]
+    },
+    {
+      "id": "users2@examples/view-locals/index.js:94",
+      "split": "holdout",
+      "name": "users2",
+      "file": "examples/view-locals/index.js",
+      "line": 94,
+      "kind": "function",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 102
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 102,
+          "verdict": "true",
+          "note": "code-kb miss: users2 passed to app.get as route middleware"
+        }
+      ]
+    },
+    {
+      "id": "format@examples/content-negotiation/index.js:33",
+      "split": "dev",
+      "name": "format",
+      "file": "examples/content-negotiation/index.js",
+      "line": 33,
+      "kind": "function",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "examples/content-negotiation/index.js",
+          "line": 40
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "examples/content-negotiation/index.js",
+          "line": 40,
+          "verdict": "true",
+          "note": "code-kb miss: format('./users') call that builds the route handler"
+        }
+      ]
+    },
+    {
+      "id": "count@examples/view-locals/index.js:48",
+      "split": "dev",
+      "name": "count",
+      "file": "examples/view-locals/index.js",
+      "line": 48,
+      "kind": "function",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 64
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 64,
+          "verdict": "true",
+          "note": "code-kb miss: count passed to app.get as route middleware"
+        },
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 89,
+          "verdict": "false",
+          "note": "`count` is the callback parameter of User.count, so the middleware function count is not used"
+        }
+      ]
+    },
+    {
+      "id": "authenticate@examples/auth/index.js:60",
+      "split": "holdout",
+      "name": "authenticate",
+      "file": "examples/auth/index.js",
+      "line": 60,
+      "kind": "function",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "examples/auth/index.js",
+          "line": 106
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "examples/auth/index.js",
+          "line": 106,
+          "verdict": "true",
+          "note": "code-kb miss: authenticate(...) call"
+        }
+      ]
+    },
+    {
+      "id": "error@examples/error/index.js:20",
+      "split": "holdout",
+      "name": "error",
+      "file": "examples/error/index.js",
+      "line": 20,
+      "kind": "function",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "examples/error/index.js",
+          "line": 47
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "examples/error/index.js",
+          "line": 47,
+          "verdict": "true",
+          "note": "code-kb miss: error passed to app.use as the error handler"
+        }
+      ]
+    },
+    {
+      "id": "initializeRedis@examples/search/index.js:29",
+      "split": "dev",
+      "name": "initializeRedis",
+      "file": "examples/search/index.js",
+      "line": 29,
+      "kind": "function",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "examples/search/index.js",
+          "line": 78
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "examples/search/index.js",
+          "line": 78,
+          "verdict": "true",
+          "note": "code-kb miss: await initializeRedis() call"
+        }
+      ]
+    },
+    {
+      "id": "render@lib/application.js:522",
+      "split": "dev",
+      "name": "render",
+      "file": "lib/application.js",
+      "line": 522,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden",
+        "many-refs"
+      ],
+      "truth_source": "manual",
+      "truth": [
+        {
+          "path": "lib/response.js",
+          "line": 917
+        },
+        {
+          "path": "test/app.engine.js",
+          "line": 25
+        },
+        {
+          "path": "test/app.engine.js",
+          "line": 46
+        },
+        {
+          "path": "test/app.engine.js",
+          "line": 61
+        },
+        {
+          "path": "test/app.engine.js",
+          "line": 76
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 15
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 28
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 41
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 54
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 75
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 87
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 101
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 115
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 130
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 145
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 163
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 180
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 197
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 221
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 247
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 251
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 277
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 281
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 300
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 313
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 327
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 340
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 344
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 370
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 374
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "examples/view-constructor/github-view.js",
+          "line": 36,
+          "verdict": "false",
+          "note": "defines GithubView.prototype.render, a different method"
+        },
+        {
+          "path": "lib/application.js",
+          "line": 522,
+          "verdict": "false",
+          "note": "own definition line of the target, not a use"
+        },
+        {
+          "path": "lib/response.js",
+          "line": 894,
+          "verdict": "false",
+          "note": "defines res.render, a different method that calls app.render"
+        },
+        {
+          "path": "lib/response.js",
+          "line": 917,
+          "verdict": "true",
+          "note": "code-kb miss: app.render(...) call on an express app (app is this.req.app inside res.render)"
+        },
+        {
+          "path": "lib/view.js",
+          "line": 133,
+          "verdict": "false",
+          "note": "defines View.prototype.render, a different method"
+        },
+        {
+          "path": "test/app.engine.js",
+          "line": 25,
+          "verdict": "true",
+          "note": "code-kb miss: app.render(...) call on an express app"
+        },
+        {
+          "path": "test/app.engine.js",
+          "line": 46,
+          "verdict": "true",
+          "note": "code-kb miss: app.render(...) call on an express app"
+        },
+        {
+          "path": "test/app.engine.js",
+          "line": 61,
+          "verdict": "true",
+          "note": "code-kb miss: app.render(...) call on an express app"
+        },
+        {
+          "path": "test/app.engine.js",
+          "line": 76,
+          "verdict": "true",
+          "note": "code-kb miss: app.render(...) call on an express app"
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 15,
+          "verdict": "true",
+          "note": "code-kb miss: app.render(...) call on an express app"
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 28,
+          "verdict": "true",
+          "note": "code-kb miss: app.render(...) call on an express app"
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 41,
+          "verdict": "true",
+          "note": "code-kb miss: app.render(...) call on an express app"
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 54,
+          "verdict": "true",
+          "note": "code-kb miss: app.render(...) call on an express app"
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 69,
+          "verdict": "false",
+          "note": "test assigns View.prototype.render to stub the view class, a different method"
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 75,
+          "verdict": "true",
+          "note": "code-kb miss: app.render(...) call on an express app"
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 87,
+          "verdict": "true",
+          "note": "code-kb miss: app.render(...) call on an express app"
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 101,
+          "verdict": "true",
+          "note": "code-kb miss: app.render(...) call on an express app"
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 115,
+          "verdict": "true",
+          "note": "code-kb miss: app.render(...) call on an express app"
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 130,
+          "verdict": "true",
+          "note": "code-kb miss: app.render(...) call on an express app"
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 145,
+          "verdict": "true",
+          "note": "code-kb miss: app.render(...) call on an express app"
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 163,
+          "verdict": "true",
+          "note": "code-kb miss: app.render(...) call on an express app"
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 180,
+          "verdict": "true",
+          "note": "code-kb miss: app.render(...) call on an express app"
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 197,
+          "verdict": "true",
+          "note": "code-kb miss: app.render(...) call on an express app"
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 215,
+          "verdict": "false",
+          "note": "test assigns View.prototype.render to stub the view class, a different method"
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 221,
+          "verdict": "true",
+          "note": "code-kb miss: app.render(...) call on an express app"
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 240,
+          "verdict": "false",
+          "note": "test assigns View.prototype.render to stub the view class, a different method"
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 247,
+          "verdict": "true",
+          "note": "code-kb miss: app.render(...) call on an express app"
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 251,
+          "verdict": "true",
+          "note": "code-kb miss: app.render(...) call on an express app"
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 270,
+          "verdict": "false",
+          "note": "test assigns View.prototype.render to stub the view class, a different method"
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 277,
+          "verdict": "true",
+          "note": "code-kb miss: app.render(...) call on an express app"
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 281,
+          "verdict": "true",
+          "note": "code-kb miss: app.render(...) call on an express app"
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 300,
+          "verdict": "true",
+          "note": "code-kb miss: app.render(...) call on an express app"
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 313,
+          "verdict": "true",
+          "note": "code-kb miss: app.render(...) call on an express app"
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 327,
+          "verdict": "true",
+          "note": "code-kb miss: app.render(...) call on an express app"
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 340,
+          "verdict": "true",
+          "note": "code-kb miss: app.render(...) call on an express app"
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 344,
+          "verdict": "true",
+          "note": "code-kb miss: app.render(...) call on an express app"
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 363,
+          "verdict": "false",
+          "note": "test assigns View.prototype.render to stub the view class, a different method"
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 370,
+          "verdict": "true",
+          "note": "code-kb miss: app.render(...) call on an express app"
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 374,
+          "verdict": "true",
+          "note": "code-kb miss: app.render(...) call on an express app"
+        }
+      ]
+    },
+    {
+      "id": "redirect@lib/response.js:812",
+      "split": "dev",
+      "name": "redirect",
+      "file": "lib/response.js",
+      "line": 812,
+      "kind": "method",
+      "tags": [
+        "many-refs"
+      ],
+      "truth_source": "manual",
+      "truth": [
+        {
+          "path": "examples/auth/index.js",
+          "line": 80
+        },
+        {
+          "path": "examples/auth/index.js",
+          "line": 85
+        },
+        {
+          "path": "examples/auth/index.js",
+          "line": 96
+        },
+        {
+          "path": "examples/auth/index.js",
+          "line": 119
+        },
+        {
+          "path": "examples/auth/index.js",
+          "line": 125
+        },
+        {
+          "path": "examples/cookies/index.js",
+          "line": 36
+        },
+        {
+          "path": "examples/cookies/index.js",
+          "line": 46
+        },
+        {
+          "path": "examples/mvc/controllers/main/index.js",
+          "line": 4
+        },
+        {
+          "path": "examples/mvc/controllers/pet/index.js",
+          "line": 30
+        },
+        {
+          "path": "examples/mvc/controllers/user-pet/index.js",
+          "line": 21
+        },
+        {
+          "path": "examples/mvc/controllers/user/index.js",
+          "line": 40
+        },
+        {
+          "path": "examples/route-middleware/index.js",
+          "line": 71
+        },
+        {
+          "path": "examples/route-separation/user.js",
+          "line": 46
+        },
+        {
+          "path": "examples/vhost/index.js",
+          "line": 39
+        },
+        {
+          "path": "test/res.redirect.js",
+          "line": 13
+        },
+        {
+          "path": "test/res.redirect.js",
+          "line": 26
+        },
+        {
+          "path": "test/res.redirect.js",
+          "line": 39
+        },
+        {
+          "path": "test/res.redirect.js",
+          "line": 54
+        },
+        {
+          "path": "test/res.redirect.js",
+          "line": 69
+        },
+        {
+          "path": "test/res.redirect.js",
+          "line": 86
+        },
+        {
+          "path": "test/res.redirect.js",
+          "line": 101
+        },
+        {
+          "path": "test/res.redirect.js",
+          "line": 119
+        },
+        {
+          "path": "test/res.redirect.js",
+          "line": 135
+        },
+        {
+          "path": "test/res.redirect.js",
+          "line": 152
+        },
+        {
+          "path": "test/res.redirect.js",
+          "line": 167
+        },
+        {
+          "path": "test/res.redirect.js",
+          "line": 183
+        },
+        {
+          "path": "test/res.redirect.js",
+          "line": 200
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "examples/auth/index.js",
+          "line": 80,
+          "verdict": "true",
+          "note": "code-kb miss: res.redirect(...) call on the response in a handler"
+        },
+        {
+          "path": "examples/auth/index.js",
+          "line": 85,
+          "verdict": "true",
+          "note": "code-kb miss: res.redirect(...) call on the response in a handler"
+        },
+        {
+          "path": "examples/auth/index.js",
+          "line": 96,
+          "verdict": "true",
+          "note": "code-kb miss: res.redirect(...) call on the response in a handler"
+        },
+        {
+          "path": "examples/auth/index.js",
+          "line": 119,
+          "verdict": "true",
+          "note": "code-kb miss: res.redirect(...) call on the response in a handler"
+        },
+        {
+          "path": "examples/auth/index.js",
+          "line": 125,
+          "verdict": "true",
+          "note": "code-kb miss: res.redirect(...) call on the response in a handler"
+        },
+        {
+          "path": "examples/cookies/index.js",
+          "line": 36,
+          "verdict": "true",
+          "note": "code-kb miss: res.redirect(...) call on the response in a handler"
+        },
+        {
+          "path": "examples/cookies/index.js",
+          "line": 46,
+          "verdict": "true",
+          "note": "code-kb miss: res.redirect(...) call on the response in a handler"
+        },
+        {
+          "path": "examples/mvc/controllers/main/index.js",
+          "line": 4,
+          "verdict": "true",
+          "note": "code-kb miss: res.redirect(...) call on the response in a handler"
+        },
+        {
+          "path": "examples/mvc/controllers/pet/index.js",
+          "line": 30,
+          "verdict": "true",
+          "note": "code-kb miss: res.redirect(...) call on the response in a handler"
+        },
+        {
+          "path": "examples/mvc/controllers/user-pet/index.js",
+          "line": 21,
+          "verdict": "true",
+          "note": "code-kb miss: res.redirect(...) call on the response in a handler"
+        },
+        {
+          "path": "examples/mvc/controllers/user/index.js",
+          "line": 40,
+          "verdict": "true",
+          "note": "code-kb miss: res.redirect(...) call on the response in a handler"
+        },
+        {
+          "path": "examples/route-middleware/index.js",
+          "line": 71,
+          "verdict": "true",
+          "note": "code-kb miss: res.redirect(...) call on the response in a handler"
+        },
+        {
+          "path": "examples/route-separation/user.js",
+          "line": 46,
+          "verdict": "true",
+          "note": "code-kb miss: res.redirect(...) call on the response in a handler"
+        },
+        {
+          "path": "examples/vhost/index.js",
+          "line": 39,
+          "verdict": "true",
+          "note": "code-kb miss: res.redirect(...) call on the response in a handler"
+        },
+        {
+          "path": "lib/response.js",
+          "line": 812,
+          "verdict": "false",
+          "note": "own definition line of the target, not a use"
+        },
+        {
+          "path": "test/res.redirect.js",
+          "line": 13,
+          "verdict": "true",
+          "note": "code-kb miss: res.redirect(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.redirect.js",
+          "line": 26,
+          "verdict": "true",
+          "note": "code-kb miss: res.redirect(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.redirect.js",
+          "line": 39,
+          "verdict": "true",
+          "note": "code-kb miss: res.redirect(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.redirect.js",
+          "line": 54,
+          "verdict": "true",
+          "note": "code-kb miss: res.redirect(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.redirect.js",
+          "line": 69,
+          "verdict": "true",
+          "note": "code-kb miss: res.redirect(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.redirect.js",
+          "line": 86,
+          "verdict": "true",
+          "note": "code-kb miss: res.redirect(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.redirect.js",
+          "line": 101,
+          "verdict": "true",
+          "note": "code-kb miss: res.redirect(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.redirect.js",
+          "line": 119,
+          "verdict": "true",
+          "note": "code-kb miss: res.redirect(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.redirect.js",
+          "line": 135,
+          "verdict": "true",
+          "note": "code-kb miss: res.redirect(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.redirect.js",
+          "line": 152,
+          "verdict": "true",
+          "note": "code-kb miss: res.redirect(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.redirect.js",
+          "line": 167,
+          "verdict": "true",
+          "note": "code-kb miss: res.redirect(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.redirect.js",
+          "line": 183,
+          "verdict": "true",
+          "note": "code-kb miss: res.redirect(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.redirect.js",
+          "line": 200,
+          "verdict": "true",
+          "note": "code-kb miss: res.redirect(...) call on the response in a handler"
+        }
+      ]
+    },
+    {
+      "id": "lookup@lib/view.js:104",
+      "split": "dev",
+      "name": "lookup",
+      "file": "lib/view.js",
+      "line": 104,
+      "kind": "method",
+      "tags": [],
+      "truth_source": "manual",
+      "truth": [
+        {
+          "path": "lib/view.js",
+          "line": 94
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "sendStatus@lib/response.js:323",
+      "split": "dev",
+      "name": "sendStatus",
+      "file": "lib/response.js",
+      "line": 323,
+      "kind": "method",
+      "tags": [],
+      "truth_source": "manual",
+      "truth": [
+        {
+          "path": "examples/auth/index.js",
+          "line": 105
+        },
+        {
+          "path": "test/app.routes.error.js",
+          "line": 54
+        },
+        {
+          "path": "test/express.static.js",
+          "line": 283
+        },
+        {
+          "path": "test/express.static.js",
+          "line": 358
+        },
+        {
+          "path": "test/express.static.js",
+          "line": 772
+        },
+        {
+          "path": "test/express.static.js",
+          "line": 811
+        },
+        {
+          "path": "test/res.sendStatus.js",
+          "line": 12
+        },
+        {
+          "path": "test/res.sendStatus.js",
+          "line": 24
+        },
+        {
+          "path": "test/res.sendStatus.js",
+          "line": 36
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "examples/auth/index.js",
+          "line": 105,
+          "verdict": "true",
+          "note": "code-kb miss: res.sendStatus(...) call on the response in a handler"
+        },
+        {
+          "path": "lib/response.js",
+          "line": 323,
+          "verdict": "false",
+          "note": "own definition line of the target, not a use"
+        },
+        {
+          "path": "test/app.routes.error.js",
+          "line": 54,
+          "verdict": "true",
+          "note": "code-kb miss: res.sendStatus(...) call on the response in a handler"
+        },
+        {
+          "path": "test/express.static.js",
+          "line": 283,
+          "verdict": "true",
+          "note": "code-kb miss: res.sendStatus(...) call on the response in a handler"
+        },
+        {
+          "path": "test/express.static.js",
+          "line": 358,
+          "verdict": "true",
+          "note": "code-kb miss: res.sendStatus(...) call on the response in a handler"
+        },
+        {
+          "path": "test/express.static.js",
+          "line": 772,
+          "verdict": "true",
+          "note": "code-kb miss: res.sendStatus(...) call on the response in a handler"
+        },
+        {
+          "path": "test/express.static.js",
+          "line": 811,
+          "verdict": "true",
+          "note": "code-kb miss: res.sendStatus(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.sendStatus.js",
+          "line": 12,
+          "verdict": "true",
+          "note": "code-kb miss: res.sendStatus(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.sendStatus.js",
+          "line": 24,
+          "verdict": "true",
+          "note": "code-kb miss: res.sendStatus(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.sendStatus.js",
+          "line": 36,
+          "verdict": "true",
+          "note": "code-kb miss: res.sendStatus(...) call on the response in a handler"
+        }
+      ]
+    },
+    {
+      "id": "accepts@lib/request.js:127",
+      "split": "dev",
+      "name": "accepts",
+      "file": "lib/request.js",
+      "line": 127,
+      "kind": "method",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "manual",
+      "truth": [
+        {
+          "path": "lib/response.js",
+          "line": 579
+        },
+        {
+          "path": "test/exports.js",
+          "line": 44
+        },
+        {
+          "path": "test/req.accepts.js",
+          "line": 12
+        },
+        {
+          "path": "test/req.accepts.js",
+          "line": 24
+        },
+        {
+          "path": "test/req.accepts.js",
+          "line": 37
+        },
+        {
+          "path": "test/req.accepts.js",
+          "line": 51
+        },
+        {
+          "path": "test/req.accepts.js",
+          "line": 65
+        },
+        {
+          "path": "test/req.accepts.js",
+          "line": 77
+        },
+        {
+          "path": "test/req.accepts.js",
+          "line": 90
+        },
+        {
+          "path": "test/req.accepts.js",
+          "line": 103
+        },
+        {
+          "path": "test/req.accepts.js",
+          "line": 116
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "lib/request.js",
+          "line": 127,
+          "verdict": "false",
+          "note": "own definition line of the target, not a use"
+        },
+        {
+          "path": "lib/response.js",
+          "line": 579,
+          "verdict": "true",
+          "note": "code-kb miss: req.accepts(...) call on the request"
+        },
+        {
+          "path": "test/req.accepts.js",
+          "line": 12,
+          "verdict": "true",
+          "note": "code-kb miss: req.accepts(...) call on the request"
+        },
+        {
+          "path": "test/req.accepts.js",
+          "line": 24,
+          "verdict": "true",
+          "note": "code-kb miss: req.accepts(...) call on the request"
+        },
+        {
+          "path": "test/req.accepts.js",
+          "line": 37,
+          "verdict": "true",
+          "note": "code-kb miss: req.accepts(...) call on the request"
+        },
+        {
+          "path": "test/req.accepts.js",
+          "line": 51,
+          "verdict": "true",
+          "note": "code-kb miss: req.accepts(...) call on the request"
+        },
+        {
+          "path": "test/req.accepts.js",
+          "line": 65,
+          "verdict": "true",
+          "note": "code-kb miss: req.accepts(...) call on the request"
+        },
+        {
+          "path": "test/req.accepts.js",
+          "line": 77,
+          "verdict": "true",
+          "note": "code-kb miss: req.accepts(...) call on the request"
+        },
+        {
+          "path": "test/req.accepts.js",
+          "line": 90,
+          "verdict": "true",
+          "note": "code-kb miss: req.accepts(...) call on the request"
+        },
+        {
+          "path": "test/req.accepts.js",
+          "line": 103,
+          "verdict": "true",
+          "note": "code-kb miss: req.accepts(...) call on the request"
+        },
+        {
+          "path": "test/req.accepts.js",
+          "line": 116,
+          "verdict": "true",
+          "note": "code-kb miss: req.accepts(...) call on the request"
+        }
+      ]
+    },
+    {
+      "id": "handle@lib/application.js:152",
+      "split": "holdout",
+      "name": "handle",
+      "file": "lib/application.js",
+      "line": 152,
+      "kind": "method",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "manual",
+      "truth": [
+        {
+          "path": "lib/application.js",
+          "line": 221
+        },
+        {
+          "path": "lib/application.js",
+          "line": 232
+        },
+        {
+          "path": "lib/express.js",
+          "line": 38
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "lib/application.js",
+          "line": 152,
+          "verdict": "false",
+          "note": "own definition line of the target, not a use"
+        },
+        {
+          "path": "lib/application.js",
+          "line": 232,
+          "verdict": "true",
+          "note": "code-kb miss: fn.handle(req, res, ...) call on a mounted sub-app"
+        },
+        {
+          "path": "lib/express.js",
+          "line": 38,
+          "verdict": "true",
+          "note": "code-kb miss: app.handle(req, res, next) call in the function that createApplication returns"
+        },
+        {
+          "path": "test/Router.js",
+          "line": 15,
+          "verdict": "false",
+          "note": "checks router.handle of a Router from the router package, not app.handle"
+        }
+      ]
+    },
+    {
+      "id": "engine@lib/application.js:294",
+      "split": "holdout",
+      "name": "engine",
+      "file": "lib/application.js",
+      "line": 294,
+      "kind": "method",
+      "tags": [],
+      "truth_source": "manual",
+      "truth": [
+        {
+          "path": "examples/ejs/index.js",
+          "line": 23
+        },
+        {
+          "path": "examples/markdown/index.js",
+          "line": 17
+        },
+        {
+          "path": "examples/view-constructor/index.js",
+          "line": 14
+        },
+        {
+          "path": "test/app.engine.js",
+          "line": 22
+        },
+        {
+          "path": "test/app.engine.js",
+          "line": 35
+        },
+        {
+          "path": "test/app.engine.js",
+          "line": 43
+        },
+        {
+          "path": "test/app.engine.js",
+          "line": 57
+        },
+        {
+          "path": "test/app.engine.js",
+          "line": 72
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 389
+        },
+        {
+          "path": "test/res.render.js",
+          "line": 364
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "examples/ejs/index.js",
+          "line": 23,
+          "verdict": "true",
+          "note": "code-kb miss: app.engine(...) call on an express app"
+        },
+        {
+          "path": "examples/markdown/index.js",
+          "line": 17,
+          "verdict": "true",
+          "note": "code-kb miss: app.engine(...) call on an express app"
+        },
+        {
+          "path": "examples/mvc/controllers/pet/index.js",
+          "line": 9,
+          "verdict": "false",
+          "note": "`exports.engine = 'ejs'` sets a string property of a controller module, not app.engine"
+        },
+        {
+          "path": "examples/mvc/controllers/user/index.js",
+          "line": 9,
+          "verdict": "false",
+          "note": "`exports.engine = 'hbs'` sets a string property of a controller module, not app.engine"
+        },
+        {
+          "path": "examples/mvc/lib/boot.js",
+          "line": 27,
+          "verdict": "false",
+          "note": "`obj.engine` reads the engine name string of a controller module; app.engine is not called"
+        },
+        {
+          "path": "examples/view-constructor/github-view.js",
+          "line": 26,
+          "verdict": "false",
+          "note": "`this.engine` stores a template function on a GithubView instance, not app.engine"
+        },
+        {
+          "path": "examples/view-constructor/index.js",
+          "line": 14,
+          "verdict": "true",
+          "note": "code-kb miss: app.engine(...) call on an express app"
+        },
+        {
+          "path": "lib/application.js",
+          "line": 294,
+          "verdict": "false",
+          "note": "own definition line of the target, not a use"
+        },
+        {
+          "path": "lib/view.js",
+          "line": 91,
+          "verdict": "false",
+          "note": "`this.engine` stores a template function on a View instance, not app.engine"
+        },
+        {
+          "path": "test/app.engine.js",
+          "line": 22,
+          "verdict": "true",
+          "note": "code-kb miss: app.engine(...) call on an express app"
+        },
+        {
+          "path": "test/app.engine.js",
+          "line": 35,
+          "verdict": "true",
+          "note": "code-kb miss: app.engine(...) call on an express app"
+        },
+        {
+          "path": "test/app.engine.js",
+          "line": 43,
+          "verdict": "true",
+          "note": "code-kb miss: app.engine(...) call on an express app"
+        },
+        {
+          "path": "test/app.engine.js",
+          "line": 57,
+          "verdict": "true",
+          "note": "code-kb miss: app.engine(...) call on an express app"
+        },
+        {
+          "path": "test/app.engine.js",
+          "line": 72,
+          "verdict": "true",
+          "note": "code-kb miss: app.engine(...) call on an express app"
+        },
+        {
+          "path": "test/app.render.js",
+          "line": 389,
+          "verdict": "true",
+          "note": "code-kb miss: app.engine(...) call on an express app"
+        },
+        {
+          "path": "test/res.render.js",
+          "line": 364,
+          "verdict": "true",
+          "note": "code-kb miss: app.engine(...) call on an express app"
+        }
+      ]
+    },
+    {
+      "id": "format@lib/response.js:571",
+      "split": "holdout",
+      "name": "format",
+      "file": "lib/response.js",
+      "line": 571,
+      "kind": "method",
+      "tags": [],
+      "truth_source": "manual",
+      "truth": [
+        {
+          "path": "examples/content-negotiation/index.js",
+          "line": 10
+        },
+        {
+          "path": "examples/content-negotiation/index.js",
+          "line": 36
+        },
+        {
+          "path": "examples/error-pages/index.js",
+          "line": 66
+        },
+        {
+          "path": "lib/response.js",
+          "line": 839
+        },
+        {
+          "path": "test/res.format.js",
+          "line": 11
+        },
+        {
+          "path": "test/res.format.js",
+          "line": 38
+        },
+        {
+          "path": "test/res.format.js",
+          "line": 53
+        },
+        {
+          "path": "test/res.format.js",
+          "line": 67
+        },
+        {
+          "path": "test/res.format.js",
+          "line": 82
+        },
+        {
+          "path": "test/res.format.js",
+          "line": 101
+        },
+        {
+          "path": "test/res.format.js",
+          "line": 135
+        },
+        {
+          "path": "test/res.format.js",
+          "line": 163
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "examples/content-negotiation/index.js",
+          "line": 10,
+          "verdict": "true",
+          "note": "code-kb miss: res.format(...) call on the response in a handler"
+        },
+        {
+          "path": "examples/content-negotiation/index.js",
+          "line": 36,
+          "verdict": "true",
+          "note": "code-kb miss: res.format(...) call on the response in a handler"
+        },
+        {
+          "path": "examples/error-pages/index.js",
+          "line": 66,
+          "verdict": "true",
+          "note": "code-kb miss: res.format(...) call on the response in a handler"
+        },
+        {
+          "path": "examples/resource/index.js",
+          "line": 18,
+          "verdict": "false",
+          "note": "`req.params.format` reads a route parameter named format, not res.format"
+        },
+        {
+          "path": "lib/response.js",
+          "line": 571,
+          "verdict": "false",
+          "note": "own definition line of the target, not a use"
+        },
+        {
+          "path": "lib/response.js",
+          "line": 839,
+          "verdict": "true",
+          "note": "code-kb miss: this.format({...}) call inside res.redirect, where this is the response"
+        },
+        {
+          "path": "test/app.router.js",
+          "line": 786,
+          "verdict": "false",
+          "note": "`req.params.format` reads a route parameter named format, not res.format"
+        },
+        {
+          "path": "test/app.router.js",
+          "line": 805,
+          "verdict": "false",
+          "note": "`req.params.format` reads a route parameter named format, not res.format"
+        },
+        {
+          "path": "test/res.format.js",
+          "line": 11,
+          "verdict": "true",
+          "note": "code-kb miss: res.format(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.format.js",
+          "line": 38,
+          "verdict": "true",
+          "note": "code-kb miss: res.format(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.format.js",
+          "line": 53,
+          "verdict": "true",
+          "note": "code-kb miss: res.format(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.format.js",
+          "line": 67,
+          "verdict": "true",
+          "note": "code-kb miss: res.format(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.format.js",
+          "line": 82,
+          "verdict": "true",
+          "note": "code-kb miss: res.format(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.format.js",
+          "line": 101,
+          "verdict": "true",
+          "note": "code-kb miss: res.format(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.format.js",
+          "line": 135,
+          "verdict": "true",
+          "note": "code-kb miss: res.format(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.format.js",
+          "line": 163,
+          "verdict": "true",
+          "note": "code-kb miss: res.format(...) call on the response in a handler"
+        }
+      ]
+    },
+    {
+      "id": "clearCookie@lib/response.js:712",
+      "split": "holdout",
+      "name": "clearCookie",
+      "file": "lib/response.js",
+      "line": 712,
+      "kind": "method",
+      "tags": [],
+      "truth_source": "manual",
+      "truth": [
+        {
+          "path": "examples/cookies/index.js",
+          "line": 35
+        },
+        {
+          "path": "test/res.clearCookie.js",
+          "line": 12
+        },
+        {
+          "path": "test/res.clearCookie.js",
+          "line": 27
+        },
+        {
+          "path": "test/res.clearCookie.js",
+          "line": 40
+        },
+        {
+          "path": "test/res.clearCookie.js",
+          "line": 53
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "examples/cookies/index.js",
+          "line": 35,
+          "verdict": "true",
+          "note": "code-kb miss: res.clearCookie(...) call on the response in a handler"
+        },
+        {
+          "path": "lib/response.js",
+          "line": 712,
+          "verdict": "false",
+          "note": "own definition line of the target, not a use"
+        },
+        {
+          "path": "test/res.clearCookie.js",
+          "line": 12,
+          "verdict": "true",
+          "note": "code-kb miss: res.clearCookie(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.clearCookie.js",
+          "line": 27,
+          "verdict": "true",
+          "note": "code-kb miss: res.clearCookie(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.clearCookie.js",
+          "line": 40,
+          "verdict": "true",
+          "note": "code-kb miss: res.clearCookie(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.clearCookie.js",
+          "line": 53,
+          "verdict": "true",
+          "note": "code-kb miss: res.clearCookie(...) call on the response in a handler"
+        }
+      ]
+    },
+    {
+      "id": "json@lib/response.js:234",
+      "split": "holdout",
+      "name": "json",
+      "file": "lib/response.js",
+      "line": 234,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "many-refs"
+      ],
+      "truth_source": "manual",
+      "truth": [
+        {
+          "path": "examples/content-negotiation/index.js",
+          "line": 24
+        },
+        {
+          "path": "examples/content-negotiation/users.js",
+          "line": 18
+        },
+        {
+          "path": "examples/error-pages/index.js",
+          "line": 71
+        },
+        {
+          "path": "lib/response.js",
+          "line": 156
+        },
+        {
+          "path": "test/app.router.js",
+          "line": 161
+        },
+        {
+          "path": "test/app.router.js",
+          "line": 839
+        },
+        {
+          "path": "test/app.router.js",
+          "line": 927
+        },
+        {
+          "path": "test/express.json.js",
+          "line": 63
+        },
+        {
+          "path": "test/express.json.js",
+          "line": 80
+        },
+        {
+          "path": "test/express.json.js",
+          "line": 537
+        },
+        {
+          "path": "test/express.json.js",
+          "line": 736
+        },
+        {
+          "path": "test/express.raw.js",
+          "line": 35
+        },
+        {
+          "path": "test/express.raw.js",
+          "line": 37
+        },
+        {
+          "path": "test/express.raw.js",
+          "line": 73
+        },
+        {
+          "path": "test/express.raw.js",
+          "line": 75
+        },
+        {
+          "path": "test/express.raw.js",
+          "line": 363
+        },
+        {
+          "path": "test/express.raw.js",
+          "line": 365
+        },
+        {
+          "path": "test/express.raw.js",
+          "line": 506
+        },
+        {
+          "path": "test/express.raw.js",
+          "line": 508
+        },
+        {
+          "path": "test/express.text.js",
+          "line": 33
+        },
+        {
+          "path": "test/express.text.js",
+          "line": 67
+        },
+        {
+          "path": "test/express.text.js",
+          "line": 394
+        },
+        {
+          "path": "test/express.text.js",
+          "line": 562
+        },
+        {
+          "path": "test/express.urlencoded.js",
+          "line": 34
+        },
+        {
+          "path": "test/express.urlencoded.js",
+          "line": 69
+        },
+        {
+          "path": "test/express.urlencoded.js",
+          "line": 640
+        },
+        {
+          "path": "test/express.urlencoded.js",
+          "line": 818
+        },
+        {
+          "path": "test/req.is.js",
+          "line": 12
+        },
+        {
+          "path": "test/req.is.js",
+          "line": 26
+        },
+        {
+          "path": "test/req.is.js",
+          "line": 40
+        },
+        {
+          "path": "test/req.is.js",
+          "line": 56
+        },
+        {
+          "path": "test/req.is.js",
+          "line": 71
+        },
+        {
+          "path": "test/req.is.js",
+          "line": 87
+        },
+        {
+          "path": "test/req.is.js",
+          "line": 101
+        },
+        {
+          "path": "test/req.is.js",
+          "line": 115
+        },
+        {
+          "path": "test/req.is.js",
+          "line": 131
+        },
+        {
+          "path": "test/req.is.js",
+          "line": 145
+        },
+        {
+          "path": "test/req.is.js",
+          "line": 159
+        },
+        {
+          "path": "test/req.range.js",
+          "line": 12
+        },
+        {
+          "path": "test/req.range.js",
+          "line": 25
+        },
+        {
+          "path": "test/req.range.js",
+          "line": 38
+        },
+        {
+          "path": "test/req.range.js",
+          "line": 51
+        },
+        {
+          "path": "test/req.range.js",
+          "line": 64
+        },
+        {
+          "path": "test/req.range.js",
+          "line": 92
+        },
+        {
+          "path": "test/res.cookie.js",
+          "line": 136
+        },
+        {
+          "path": "test/res.json.js",
+          "line": 13
+        },
+        {
+          "path": "test/res.json.js",
+          "line": 26
+        },
+        {
+          "path": "test/res.json.js",
+          "line": 40
+        },
+        {
+          "path": "test/res.json.js",
+          "line": 53
+        },
+        {
+          "path": "test/res.json.js",
+          "line": 66
+        },
+        {
+          "path": "test/res.json.js",
+          "line": 81
+        },
+        {
+          "path": "test/res.json.js",
+          "line": 96
+        },
+        {
+          "path": "test/res.json.js",
+          "line": 118
+        },
+        {
+          "path": "test/res.json.js",
+          "line": 133
+        },
+        {
+          "path": "test/res.json.js",
+          "line": 154
+        },
+        {
+          "path": "test/res.json.js",
+          "line": 176
+        },
+        {
+          "path": "test/res.locals.js",
+          "line": 12
+        },
+        {
+          "path": "test/res.locals.js",
+          "line": 33
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "examples/content-negotiation/index.js",
+          "line": 24,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "examples/content-negotiation/users.js",
+          "line": 17,
+          "verdict": "false",
+          "note": "`exports.json = function` defines a formatter of the example module, a different function than res.json"
+        },
+        {
+          "path": "examples/content-negotiation/users.js",
+          "line": 18,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "examples/error-pages/index.js",
+          "line": 71,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "lib/express.js",
+          "line": 77,
+          "verdict": "false",
+          "note": "`exports.json = bodyParser.json` is express.json, the body parser, not res.json"
+        },
+        {
+          "path": "lib/response.js",
+          "line": 156,
+          "verdict": "true",
+          "note": "code-kb miss: this.json(chunk) call inside res.send, where this is the response"
+        },
+        {
+          "path": "lib/response.js",
+          "line": 234,
+          "verdict": "false",
+          "note": "own definition line of the target, not a use"
+        },
+        {
+          "path": "test/app.router.js",
+          "line": 161,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/app.router.js",
+          "line": 839,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/app.router.js",
+          "line": 927,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/exports.js",
+          "line": 13,
+          "verdict": "false",
+          "note": "checks express.json, the body parser export, not res.json"
+        },
+        {
+          "path": "test/exports.js",
+          "line": 14,
+          "verdict": "false",
+          "note": "checks express.json, the body parser export, not res.json"
+        },
+        {
+          "path": "test/express.json.js",
+          "line": 63,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/express.json.js",
+          "line": 80,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/express.json.js",
+          "line": 537,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/express.json.js",
+          "line": 736,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/express.raw.js",
+          "line": 35,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/express.raw.js",
+          "line": 37,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/express.raw.js",
+          "line": 73,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/express.raw.js",
+          "line": 75,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/express.raw.js",
+          "line": 363,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/express.raw.js",
+          "line": 365,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/express.raw.js",
+          "line": 506,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/express.raw.js",
+          "line": 508,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/express.text.js",
+          "line": 33,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/express.text.js",
+          "line": 67,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/express.text.js",
+          "line": 394,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/express.text.js",
+          "line": 562,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/express.urlencoded.js",
+          "line": 34,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/express.urlencoded.js",
+          "line": 69,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/express.urlencoded.js",
+          "line": 640,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/express.urlencoded.js",
+          "line": 818,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/req.is.js",
+          "line": 12,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/req.is.js",
+          "line": 26,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/req.is.js",
+          "line": 40,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/req.is.js",
+          "line": 56,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/req.is.js",
+          "line": 71,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/req.is.js",
+          "line": 87,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/req.is.js",
+          "line": 101,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/req.is.js",
+          "line": 115,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/req.is.js",
+          "line": 131,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/req.is.js",
+          "line": 145,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/req.is.js",
+          "line": 159,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/req.range.js",
+          "line": 12,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/req.range.js",
+          "line": 25,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/req.range.js",
+          "line": 38,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/req.range.js",
+          "line": 51,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/req.range.js",
+          "line": 64,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/req.range.js",
+          "line": 92,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.cookie.js",
+          "line": 136,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.json.js",
+          "line": 13,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.json.js",
+          "line": 26,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.json.js",
+          "line": 40,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.json.js",
+          "line": 53,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.json.js",
+          "line": 66,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.json.js",
+          "line": 81,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.json.js",
+          "line": 96,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.json.js",
+          "line": 118,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.json.js",
+          "line": 133,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.json.js",
+          "line": 154,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.json.js",
+          "line": 176,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.locals.js",
+          "line": 12,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        },
+        {
+          "path": "test/res.locals.js",
+          "line": 33,
+          "verdict": "true",
+          "note": "code-kb miss: res.json(...) call on the response in a handler"
+        }
+      ]
+    }
+  ]
+}

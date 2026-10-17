@@ -798,6 +798,13 @@ def sample_fixture(root):
     return index_bytes(documents)
 
 
+class SkippedNameTest(unittest.TestCase):
+    def test_accessor_and_dunder_names_are_skipped_and_plain_names_are_not(self):
+        for name in ("<get>schema", "<set>value", "<lambda>", "__init__"):
+            self.assertTrue(reach_truth.SKIPPED_NAME.match(name), name)
+        self.assertFalse(reach_truth.SKIPPED_NAME.match("get"))
+
+
 class SampleTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

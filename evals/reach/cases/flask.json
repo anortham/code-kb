@@ -1,0 +1,1961 @@
+{
+  "repo": "flask",
+  "commit": "d73fa1cdcbd8b1465c151db8924ba58b1dd14e35",
+  "language": "python",
+  "symbols": [
+    {
+      "id": "create_app@examples/tutorial/flaskr/__init__.py:6",
+      "split": "dev",
+      "name": "create_app",
+      "file": "examples/tutorial/flaskr/__init__.py",
+      "line": 6,
+      "kind": "function",
+      "tags": [
+        "common-name"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "examples/tutorial/tests/conftest.py",
+          "line": 21
+        },
+        {
+          "path": "examples/tutorial/tests/test_factory.py",
+          "line": 6
+        },
+        {
+          "path": "examples/tutorial/tests/test_factory.py",
+          "line": 7
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "examples/celery/make_celery.py",
+          "line": 3,
+          "verdict": "false",
+          "note": "calls create_app imported from task_app (examples/celery/src/task_app/__init__.py), not the flaskr factory"
+        },
+        {
+          "path": "src/flask/cli.py",
+          "line": 316,
+          "verdict": "false",
+          "note": "stores the ScriptInfo create_app parameter in an attribute; not the flaskr function"
+        },
+        {
+          "path": "src/flask/cli.py",
+          "line": 341,
+          "verdict": "false",
+          "note": "reads the ScriptInfo.create_app attribute"
+        },
+        {
+          "path": "src/flask/cli.py",
+          "line": 589,
+          "verdict": "false",
+          "note": "stores the FlaskGroup create_app parameter in an attribute; not the flaskr function"
+        },
+        {
+          "path": "src/flask/cli.py",
+          "line": 671,
+          "verdict": "false",
+          "note": "create_app= is a keyword argument that passes the FlaskGroup attribute; not the flaskr function"
+        }
+      ]
+    },
+    {
+      "id": "to_python@src/flask/json/tag.py:82",
+      "split": "holdout",
+      "name": "to_python",
+      "file": "src/flask/json/tag.py",
+      "line": 82,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden",
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "src/flask/json/tag.py",
+          "line": 307
+        },
+        {
+          "path": "tests/test_json_tag.py",
+          "line": 70
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "src/flask/json/tag.py",
+          "line": 307,
+          "verdict": "true",
+          "note": "code-kb miss: self.tags[key].to_python(value[key]) where tags is dict[str, JSONTag], so the call reaches JSONTag.to_python"
+        }
+      ]
+    },
+    {
+      "id": "url_for@src/flask/helpers.py:200",
+      "split": "dev",
+      "name": "url_for",
+      "file": "src/flask/helpers.py",
+      "line": 200,
+      "kind": "function",
+      "tags": [
+        "many-refs",
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "examples/tutorial/flaskr/auth.py",
+          "line": 25
+        },
+        {
+          "path": "examples/tutorial/flaskr/auth.py",
+          "line": 77
+        },
+        {
+          "path": "examples/tutorial/flaskr/auth.py",
+          "line": 105
+        },
+        {
+          "path": "examples/tutorial/flaskr/auth.py",
+          "line": 116
+        },
+        {
+          "path": "examples/tutorial/flaskr/blog.py",
+          "line": 81
+        },
+        {
+          "path": "examples/tutorial/flaskr/blog.py",
+          "line": 108
+        },
+        {
+          "path": "examples/tutorial/flaskr/blog.py",
+          "line": 125
+        },
+        {
+          "path": "tests/test_appctx.py",
+          "line": 19
+        },
+        {
+          "path": "tests/test_appctx.py",
+          "line": 26
+        },
+        {
+          "path": "tests/test_appctx.py",
+          "line": 31
+        },
+        {
+          "path": "tests/test_basic.py",
+          "line": 1366
+        },
+        {
+          "path": "tests/test_basic.py",
+          "line": 1368
+        },
+        {
+          "path": "tests/test_basic.py",
+          "line": 1376
+        },
+        {
+          "path": "tests/test_basic.py",
+          "line": 1381
+        },
+        {
+          "path": "tests/test_basic.py",
+          "line": 1396
+        },
+        {
+          "path": "tests/test_basic.py",
+          "line": 1407
+        },
+        {
+          "path": "tests/test_basic.py",
+          "line": 1422
+        },
+        {
+          "path": "tests/test_basic.py",
+          "line": 1431
+        },
+        {
+          "path": "tests/test_basic.py",
+          "line": 1443
+        },
+        {
+          "path": "tests/test_basic.py",
+          "line": 1454
+        },
+        {
+          "path": "tests/test_basic.py",
+          "line": 1499
+        },
+        {
+          "path": "tests/test_basic.py",
+          "line": 1659
+        },
+        {
+          "path": "tests/test_basic.py",
+          "line": 1663
+        },
+        {
+          "path": "tests/test_basic.py",
+          "line": 1667
+        },
+        {
+          "path": "tests/test_basic.py",
+          "line": 1693
+        },
+        {
+          "path": "tests/test_basic.py",
+          "line": 1758
+        },
+        {
+          "path": "tests/test_basic.py",
+          "line": 1759
+        },
+        {
+          "path": "tests/test_basic.py",
+          "line": 1760
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 163
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 167
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 208
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 257
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 261
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 850
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 854
+        },
+        {
+          "path": "tests/test_converters.py",
+          "line": 26
+        },
+        {
+          "path": "tests/test_helpers.py",
+          "line": 100
+        },
+        {
+          "path": "tests/test_helpers.py",
+          "line": 108
+        },
+        {
+          "path": "tests/test_helpers.py",
+          "line": 116
+        },
+        {
+          "path": "tests/test_helpers.py",
+          "line": 121
+        },
+        {
+          "path": "tests/test_helpers.py",
+          "line": 128
+        },
+        {
+          "path": "tests/test_helpers.py",
+          "line": 130
+        },
+        {
+          "path": "tests/test_helpers.py",
+          "line": 133
+        },
+        {
+          "path": "tests/test_helpers.py",
+          "line": 152
+        },
+        {
+          "path": "tests/test_helpers.py",
+          "line": 153
+        },
+        {
+          "path": "tests/test_helpers.py",
+          "line": 154
+        },
+        {
+          "path": "tests/test_helpers.py",
+          "line": 161
+        },
+        {
+          "path": "tests/test_regression.py",
+          "line": 14
+        },
+        {
+          "path": "tests/test_reqctx.py",
+          "line": 75
+        },
+        {
+          "path": "tests/test_reqctx.py",
+          "line": 81
+        },
+        {
+          "path": "tests/test_testing.py",
+          "line": 314
+        },
+        {
+          "path": "tests/test_testing.py",
+          "line": 331
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "src/flask/app.py",
+          "line": 497,
+          "verdict": "false",
+          "note": "url_for=self.url_for passes the Flask.url_for method, not the flask.helpers.url_for function"
+        }
+      ]
+    },
+    {
+      "id": "_fail@src/flask/sessions.py:89",
+      "split": "holdout",
+      "name": "_fail",
+      "file": "src/flask/sessions.py",
+      "line": 89,
+      "kind": "method",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "src/flask/sessions.py",
+          "line": 96
+        },
+        {
+          "path": "src/flask/sessions.py",
+          "line": 97
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "src/flask/sessions.py",
+          "line": 96,
+          "verdict": "true",
+          "note": "code-kb miss: the NullSession class body assigns _fail to __setitem__, __delitem__, clear, pop, popitem, update and setdefault (value references)"
+        },
+        {
+          "path": "src/flask/sessions.py",
+          "line": 97,
+          "verdict": "false",
+          "note": "del _fail only removes the class-scope name after the aliases are bound; it is not a call or a value use"
+        }
+      ]
+    },
+    {
+      "id": "static_folder@src/flask/sansio/scaffold.py:224",
+      "split": "dev",
+      "name": "static_folder",
+      "file": "src/flask/sansio/scaffold.py",
+      "line": 224,
+      "kind": "method",
+      "tags": [
+        "value-ref",
+        "decorator"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "src/flask/app.py",
+          "line": 412
+        },
+        {
+          "path": "src/flask/blueprints.py",
+          "line": 101
+        },
+        {
+          "path": "src/flask/sansio/scaffold.py",
+          "line": 87
+        },
+        {
+          "path": "src/flask/sansio/scaffold.py",
+          "line": 233
+        },
+        {
+          "path": "src/flask/sansio/scaffold.py",
+          "line": 234
+        },
+        {
+          "path": "src/flask/sansio/scaffold.py",
+          "line": 246
+        },
+        {
+          "path": "src/flask/sansio/scaffold.py",
+          "line": 258
+        },
+        {
+          "path": "src/flask/sansio/scaffold.py",
+          "line": 259
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "src/flask/sansio/scaffold.py",
+          "line": 233,
+          "verdict": "false",
+          "note": "@static_folder.setter is the declaration of the property setter, part of the definition"
+        },
+        {
+          "path": "src/flask/sansio/scaffold.py",
+          "line": 234,
+          "verdict": "false",
+          "note": "def static_folder(self, value) is the setter definition of the same property, not a use"
+        }
+      ]
+    },
+    {
+      "id": "get_load_dotenv@src/flask/helpers.py:36",
+      "split": "holdout",
+      "name": "get_load_dotenv",
+      "file": "src/flask/helpers.py",
+      "line": 36,
+      "kind": "function",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "src/flask/app.py",
+          "line": 710
+        },
+        {
+          "path": "src/flask/cli.py",
+          "line": 322
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "save_session@src/flask/sessions.py:263",
+      "split": "holdout",
+      "name": "save_session",
+      "file": "src/flask/sessions.py",
+      "line": 263,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "src/flask/app.py",
+          "line": 1419
+        },
+        {
+          "path": "src/flask/testing.py",
+          "line": 177
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "src/flask/testing.py",
+          "line": 177,
+          "verdict": "true",
+          "note": "code-kb miss: app.session_interface.save_session(app, sess, resp); Flask.session_interface is annotated SessionInterface"
+        }
+      ]
+    },
+    {
+      "id": "get_cookie_name@src/flask/sessions.py:171",
+      "split": "dev",
+      "name": "get_cookie_name",
+      "file": "src/flask/sessions.py",
+      "line": 171,
+      "kind": "method",
+      "tags": [
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "src/flask/sessions.py",
+          "line": 327
+        },
+        {
+          "path": "src/flask/sessions.py",
+          "line": 340
+        },
+        {
+          "path": "tests/test_reqctx.py",
+          "line": 209
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "render_template@src/flask/templating.py:136",
+      "split": "holdout",
+      "name": "render_template",
+      "file": "src/flask/templating.py",
+      "line": 136,
+      "kind": "function",
+      "tags": [
+        "many-refs"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "examples/celery/src/task_app/__init__.py",
+          "line": 21
+        },
+        {
+          "path": "examples/javascript/js_example/views.py",
+          "line": 11
+        },
+        {
+          "path": "examples/tutorial/flaskr/auth.py",
+          "line": 81
+        },
+        {
+          "path": "examples/tutorial/flaskr/auth.py",
+          "line": 109
+        },
+        {
+          "path": "examples/tutorial/flaskr/blog.py",
+          "line": 25
+        },
+        {
+          "path": "examples/tutorial/flaskr/blog.py",
+          "line": 83
+        },
+        {
+          "path": "examples/tutorial/flaskr/blog.py",
+          "line": 110
+        },
+        {
+          "path": "tests/test_apps/blueprintapp/apps/admin/__init__.py",
+          "line": 15
+        },
+        {
+          "path": "tests/test_apps/blueprintapp/apps/admin/__init__.py",
+          "line": 20
+        },
+        {
+          "path": "tests/test_apps/blueprintapp/apps/frontend/__init__.py",
+          "line": 9
+        },
+        {
+          "path": "tests/test_apps/blueprintapp/apps/frontend/__init__.py",
+          "line": 14
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 214
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 218
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 437
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 446
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 470
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 487
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 504
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 597
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 606
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 630
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 647
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 664
+        },
+        {
+          "path": "tests/test_signals.py",
+          "line": 7
+        },
+        {
+          "path": "tests/test_signals.py",
+          "line": 30
+        },
+        {
+          "path": "tests/test_templating.py",
+          "line": 18
+        },
+        {
+          "path": "tests/test_templating.py",
+          "line": 76
+        },
+        {
+          "path": "tests/test_templating.py",
+          "line": 96
+        },
+        {
+          "path": "tests/test_templating.py",
+          "line": 115
+        },
+        {
+          "path": "tests/test_templating.py",
+          "line": 194
+        },
+        {
+          "path": "tests/test_templating.py",
+          "line": 208
+        },
+        {
+          "path": "tests/test_templating.py",
+          "line": 221
+        },
+        {
+          "path": "tests/test_templating.py",
+          "line": 235
+        },
+        {
+          "path": "tests/test_templating.py",
+          "line": 312
+        },
+        {
+          "path": "tests/test_templating.py",
+          "line": 326
+        },
+        {
+          "path": "tests/test_templating.py",
+          "line": 339
+        },
+        {
+          "path": "tests/test_templating.py",
+          "line": 353
+        },
+        {
+          "path": "tests/test_templating.py",
+          "line": 416
+        },
+        {
+          "path": "tests/test_templating.py",
+          "line": 430
+        },
+        {
+          "path": "tests/type_check/typing_route.py",
+          "line": 88
+        },
+        {
+          "path": "tests/type_check/typing_route.py",
+          "line": 106
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "handle_http_exception@src/flask/app.py:833",
+      "split": "dev",
+      "name": "handle_http_exception",
+      "file": "src/flask/app.py",
+      "line": 833,
+      "kind": "method",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "src/flask/app.py",
+          "line": 262
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 891
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "endpoint@src/flask/sansio/scaffold.py:444",
+      "split": "holdout",
+      "name": "endpoint",
+      "file": "src/flask/sansio/scaffold.py",
+      "line": 444,
+      "kind": "method",
+      "tags": [
+        "decorator"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 340
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "src/flask/app.py",
+          "line": 993,
+          "verdict": "false",
+          "note": "rule.endpoint reads the endpoint attribute of a werkzeug Rule, not Scaffold.endpoint"
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 1311,
+          "verdict": "false",
+          "note": "request.endpoint reads the Request.endpoint property (src/flask/wrappers.py:147), not Scaffold.endpoint"
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 1385,
+          "verdict": "false",
+          "note": "req.endpoint reads the Request.endpoint property (src/flask/wrappers.py:147), not Scaffold.endpoint"
+        },
+        {
+          "path": "src/flask/cli.py",
+          "line": 1076,
+          "verdict": "false",
+          "note": "rule.endpoint reads the endpoint attribute of a werkzeug Rule, not Scaffold.endpoint"
+        },
+        {
+          "path": "src/flask/wrappers.py",
+          "line": 157,
+          "verdict": "false",
+          "note": "self.url_rule.endpoint reads the endpoint attribute of a werkzeug Rule, not Scaffold.endpoint"
+        },
+        {
+          "path": "src/flask/wrappers.py",
+          "line": 173,
+          "verdict": "false",
+          "note": "self.endpoint inside Request reads the Request.endpoint property (src/flask/wrappers.py:147), not Scaffold.endpoint"
+        },
+        {
+          "path": "tests/test_basic.py",
+          "line": 1747,
+          "verdict": "false",
+          "note": "flask.request.endpoint reads the Request.endpoint property (src/flask/wrappers.py:147), not Scaffold.endpoint"
+        },
+        {
+          "path": "tests/test_basic.py",
+          "line": 1751,
+          "verdict": "false",
+          "note": "flask.request.endpoint reads the Request.endpoint property (src/flask/wrappers.py:147), not Scaffold.endpoint"
+        },
+        {
+          "path": "tests/test_basic.py",
+          "line": 1755,
+          "verdict": "false",
+          "note": "flask.request.endpoint reads the Request.endpoint property (src/flask/wrappers.py:147), not Scaffold.endpoint"
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 288,
+          "verdict": "false",
+          "note": "flask.request.endpoint reads the Request.endpoint property (src/flask/wrappers.py:147), not Scaffold.endpoint"
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 292,
+          "verdict": "false",
+          "note": "flask.request.endpoint reads the Request.endpoint property (src/flask/wrappers.py:147), not Scaffold.endpoint"
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 296,
+          "verdict": "false",
+          "note": "flask.request.endpoint reads the Request.endpoint property (src/flask/wrappers.py:147), not Scaffold.endpoint"
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 300,
+          "verdict": "false",
+          "note": "flask.request.endpoint reads the Request.endpoint property (src/flask/wrappers.py:147), not Scaffold.endpoint"
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 306,
+          "verdict": "false",
+          "note": "flask.request.endpoint reads the Request.endpoint property (src/flask/wrappers.py:147), not Scaffold.endpoint"
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 342,
+          "verdict": "false",
+          "note": "flask.request.endpoint reads the Request.endpoint property (src/flask/wrappers.py:147), not Scaffold.endpoint"
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 1092,
+          "verdict": "false",
+          "note": "flask.request.endpoint reads the Request.endpoint property (src/flask/wrappers.py:147), not Scaffold.endpoint"
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 1104,
+          "verdict": "false",
+          "note": "flask.request.endpoint reads the Request.endpoint property (src/flask/wrappers.py:147), not Scaffold.endpoint"
+        },
+        {
+          "path": "tests/test_cli.py",
+          "line": 485,
+          "verdict": "false",
+          "note": "r.endpoint iterates werkzeug Rule objects from app.url_map.iter_rules(); reads the endpoint attribute of a werkzeug Rule, not Scaffold.endpoint"
+        },
+        {
+          "path": "tests/test_session_interface.py",
+          "line": 18,
+          "verdict": "false",
+          "note": "request.endpoint reads the Request.endpoint property (src/flask/wrappers.py:147), not Scaffold.endpoint"
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 340,
+          "verdict": "true",
+          "note": "code-kb miss: @bp.endpoint(\"bar\") decorates a view with the endpoint method that Blueprint inherits from Scaffold"
+        }
+      ]
+    },
+    {
+      "id": "is_null_session@src/flask/sessions.py:162",
+      "split": "dev",
+      "name": "is_null_session",
+      "file": "src/flask/sessions.py",
+      "line": 162,
+      "kind": "method",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "src/flask/app.py",
+          "line": 1418
+        },
+        {
+          "path": "src/flask/testing.py",
+          "line": 173
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "src/flask/testing.py",
+          "line": 173,
+          "verdict": "true",
+          "note": "code-kb miss: app.session_interface.is_null_session(sess); Flask.session_interface is annotated SessionInterface"
+        }
+      ]
+    },
+    {
+      "id": "dumps@src/flask/json/provider.py:166",
+      "split": "dev",
+      "name": "dumps",
+      "file": "src/flask/json/provider.py",
+      "line": 166,
+      "kind": "method",
+      "tags": [
+        "common-name"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "src/flask/json/provider.py",
+          "line": 214
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "src/flask/json/provider.py",
+          "line": 179,
+          "verdict": "false",
+          "note": "json.dumps(obj, **kwargs) calls the standard library function"
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 507,
+          "verdict": "false",
+          "note": "self.json is annotated JSONProvider, so self.json.dumps reaches JSONProvider.dumps; the target is the DefaultJSONProvider override"
+        }
+      ]
+    },
+    {
+      "id": "open_session@src/flask/sessions.py:249",
+      "split": "holdout",
+      "name": "open_session",
+      "file": "src/flask/sessions.py",
+      "line": 249,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "src/flask/ctx.py",
+          "line": 388
+        },
+        {
+          "path": "src/flask/testing.py",
+          "line": 165
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "src/flask/ctx.py",
+          "line": 388,
+          "verdict": "true",
+          "note": "code-kb miss: si.open_session(self.app, self.request) where si is self.app.session_interface, annotated SessionInterface"
+        },
+        {
+          "path": "src/flask/testing.py",
+          "line": 165,
+          "verdict": "true",
+          "note": "code-kb miss: app.session_interface.open_session(app, ctx.request); Flask.session_interface is annotated SessionInterface"
+        }
+      ]
+    },
+    {
+      "id": "ensure_sync@src/flask/app.py:1068",
+      "split": "dev",
+      "name": "ensure_sync",
+      "file": "src/flask/app.py",
+      "line": 1068,
+      "kind": "method",
+      "tags": [
+        "many-refs",
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "src/flask/app.py",
+          "line": 617
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 866
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 898
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 929
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 949
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 993
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 1016
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 1046
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 1390
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 1411
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 1416
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 1449
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 1452
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 1477
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 1480
+        },
+        {
+          "path": "src/flask/ctx.py",
+          "line": 204
+        },
+        {
+          "path": "src/flask/ctx.py",
+          "line": 434
+        },
+        {
+          "path": "src/flask/ctx.py",
+          "line": 502
+        },
+        {
+          "path": "src/flask/helpers.py",
+          "line": 354
+        },
+        {
+          "path": "src/flask/templating.py",
+          "line": 127
+        },
+        {
+          "path": "src/flask/templating.py",
+          "line": 131
+        },
+        {
+          "path": "src/flask/templating.py",
+          "line": 169
+        },
+        {
+          "path": "src/flask/templating.py",
+          "line": 175
+        },
+        {
+          "path": "src/flask/views.py",
+          "line": 110
+        },
+        {
+          "path": "src/flask/views.py",
+          "line": 116
+        },
+        {
+          "path": "src/flask/views.py",
+          "line": 191
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "src/flask/ctx.py",
+          "line": 204,
+          "verdict": "true",
+          "note": "code-kb miss: ctx.app.ensure_sync(f)(...) where ctx is an AppContext copy and its app is a Flask"
+        },
+        {
+          "path": "src/flask/views.py",
+          "line": 110,
+          "verdict": "true",
+          "note": "code-kb miss: current_app.ensure_sync(self.dispatch_request); current_app is a Flask proxy"
+        },
+        {
+          "path": "src/flask/views.py",
+          "line": 116,
+          "verdict": "true",
+          "note": "code-kb miss: current_app.ensure_sync(self.dispatch_request); current_app is a Flask proxy"
+        },
+        {
+          "path": "src/flask/views.py",
+          "line": 191,
+          "verdict": "true",
+          "note": "code-kb miss: current_app.ensure_sync(meth); current_app is a Flask proxy"
+        }
+      ]
+    },
+    {
+      "id": "handle_user_exception@src/flask/app.py:868",
+      "split": "holdout",
+      "name": "handle_user_exception",
+      "file": "src/flask/app.py",
+      "line": 868,
+      "kind": "method",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "src/flask/app.py",
+          "line": 263
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 1021
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "app_template_global@src/flask/sansio/blueprints.py:556",
+      "split": "dev",
+      "name": "app_template_global",
+      "file": "src/flask/sansio/blueprints.py",
+      "line": 556,
+      "kind": "method",
+      "tags": [
+        "decorator"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "src/flask/sansio/blueprints.py",
+          "line": 558
+        },
+        {
+          "path": "src/flask/sansio/blueprints.py",
+          "line": 562
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 714
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 718
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 722
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 726
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "src/flask/sansio/blueprints.py",
+          "line": 558,
+          "verdict": "false",
+          "note": "second @t.overload definition of the same method; a definition, not a use"
+        },
+        {
+          "path": "src/flask/sansio/blueprints.py",
+          "line": 562,
+          "verdict": "false",
+          "note": "implementation definition of the same overloaded method; a definition, not a use"
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 714,
+          "verdict": "true",
+          "note": "code-kb miss: @bp.app_template_global() decorator on a flask.Blueprint"
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 722,
+          "verdict": "true",
+          "note": "code-kb miss: @bp.app_template_global(\"my_get_stuff_custom_name_2\") decorator on a flask.Blueprint"
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 726,
+          "verdict": "true",
+          "note": "code-kb miss: @bp.app_template_global(name=...) decorator on a flask.Blueprint"
+        }
+      ]
+    },
+    {
+      "id": "get_cookie_secure@src/flask/sessions.py:202",
+      "split": "holdout",
+      "name": "get_cookie_secure",
+      "file": "src/flask/sessions.py",
+      "line": 202,
+      "kind": "method",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "src/flask/sessions.py",
+          "line": 343
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "dispatch_request@src/flask/app.py:969",
+      "split": "holdout",
+      "name": "dispatch_request",
+      "file": "src/flask/app.py",
+      "line": 969,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "src/flask/app.py",
+          "line": 266
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 1019
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "src/flask/views.py",
+          "line": 110,
+          "verdict": "false",
+          "note": "self is a View instance built by view.view_class(...); reaches View.dispatch_request, not Flask.dispatch_request"
+        },
+        {
+          "path": "src/flask/views.py",
+          "line": 116,
+          "verdict": "false",
+          "note": "self is cls(...), a View instance; reaches View.dispatch_request, not Flask.dispatch_request"
+        }
+      ]
+    },
+    {
+      "id": "response@src/flask/json/provider.py:89",
+      "split": "dev",
+      "name": "response",
+      "file": "src/flask/json/provider.py",
+      "line": 89,
+      "kind": "method",
+      "tags": [
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "src/flask/app.py",
+          "line": 1329
+        },
+        {
+          "path": "src/flask/json/__init__.py",
+          "line": 170
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "src/flask/app.py",
+          "line": 1329,
+          "verdict": "true",
+          "note": "code-kb miss: self.json.response(rv) where self.json is annotated JSONProvider"
+        },
+        {
+          "path": "src/flask/json/__init__.py",
+          "line": 170,
+          "verdict": "true",
+          "note": "code-kb miss: current_app.json.response(*args, **kwargs); current_app.json is annotated JSONProvider"
+        }
+      ]
+    },
+    {
+      "id": "name@src/flask/sansio/app.py:423",
+      "split": "holdout",
+      "name": "name",
+      "file": "src/flask/sansio/app.py",
+      "line": 423,
+      "kind": "method",
+      "tags": [
+        "many-refs",
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "examples/celery/src/task_app/__init__.py",
+          "line": 35
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 345
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 746
+        },
+        {
+          "path": "src/flask/ctx.py",
+          "line": 114
+        },
+        {
+          "path": "src/flask/ctx.py",
+          "line": 521
+        },
+        {
+          "path": "src/flask/ctx.py",
+          "line": 525
+        },
+        {
+          "path": "src/flask/logging.py",
+          "line": 71
+        },
+        {
+          "path": "src/flask/sansio/app.py",
+          "line": 518
+        },
+        {
+          "path": "tests/test_appctx.py",
+          "line": 210
+        },
+        {
+          "path": "tests/test_cli.py",
+          "line": 70
+        },
+        {
+          "path": "tests/test_cli.py",
+          "line": 79
+        },
+        {
+          "path": "tests/test_cli.py",
+          "line": 88
+        },
+        {
+          "path": "tests/test_cli.py",
+          "line": 195
+        },
+        {
+          "path": "tests/test_cli.py",
+          "line": 249
+        },
+        {
+          "path": "tests/test_cli.py",
+          "line": 257
+        },
+        {
+          "path": "tests/test_cli.py",
+          "line": 261
+        },
+        {
+          "path": "tests/test_cli.py",
+          "line": 269
+        },
+        {
+          "path": "tests/test_cli.py",
+          "line": 279
+        },
+        {
+          "path": "tests/test_cli.py",
+          "line": 285
+        },
+        {
+          "path": "tests/test_cli.py",
+          "line": 310
+        },
+        {
+          "path": "tests/test_cli.py",
+          "line": 326
+        },
+        {
+          "path": "tests/test_cli.py",
+          "line": 334
+        },
+        {
+          "path": "tests/test_cli.py",
+          "line": 357
+        },
+        {
+          "path": "tests/test_cli.py",
+          "line": 391
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "examples/javascript/tests/test_js_example.py",
+          "line": 16,
+          "verdict": "false",
+          "note": "template.name reads the jinja2 Template.name attribute"
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 289,
+          "verdict": "false",
+          "note": "param.name reads the inspect.Parameter.name attribute"
+        },
+        {
+          "path": "src/flask/blueprints.py",
+          "line": 53,
+          "verdict": "false",
+          "note": "self.name is the Blueprint.name attribute; self.cli.name is the click Group name"
+        },
+        {
+          "path": "src/flask/cli.py",
+          "line": 471,
+          "verdict": "false",
+          "note": "param.name reads the click Option.name attribute"
+        },
+        {
+          "path": "src/flask/cli.py",
+          "line": 605,
+          "verdict": "false",
+          "note": "ep.name reads the importlib.metadata EntryPoint.name attribute"
+        },
+        {
+          "path": "src/flask/debughelpers.py",
+          "line": 147,
+          "verdict": "false",
+          "note": "srcobj.name is a Blueprint name (branch after isinstance(srcobj, Blueprint)), not App.name"
+        },
+        {
+          "path": "src/flask/sansio/blueprints.py",
+          "line": 79,
+          "verdict": "false",
+          "note": "blueprint.name reads the Blueprint.name attribute"
+        },
+        {
+          "path": "src/flask/sansio/blueprints.py",
+          "line": 112,
+          "verdict": "false",
+          "note": "self.name is the BlueprintSetupState.name attribute"
+        },
+        {
+          "path": "src/flask/sansio/blueprints.py",
+          "line": 201,
+          "verdict": "false",
+          "note": "self.name = name assigns the Blueprint.name attribute"
+        },
+        {
+          "path": "src/flask/sansio/blueprints.py",
+          "line": 217,
+          "verdict": "false",
+          "note": "self.name reads the Blueprint.name attribute"
+        },
+        {
+          "path": "src/flask/sansio/blueprints.py",
+          "line": 303,
+          "verdict": "false",
+          "note": "self.name reads the Blueprint.name attribute"
+        },
+        {
+          "path": "src/flask/sansio/blueprints.py",
+          "line": 343,
+          "verdict": "false",
+          "note": "self.cli.name assigns the click Group name of the blueprint cli"
+        },
+        {
+          "path": "src/flask/sansio/blueprints.py",
+          "line": 346,
+          "verdict": "false",
+          "note": "self.cli.name assigns the click Group name of the blueprint cli"
+        },
+        {
+          "path": "src/flask/sansio/scaffold.py",
+          "line": 218,
+          "verdict": "false",
+          "note": "self.name in Scaffold.__repr__ reaches the Scaffold.name annotation (name: str), not the App.name cached_property"
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 215,
+          "verdict": "false",
+          "note": "e.value.name reads the jinja2 TemplateNotFound.name attribute"
+        },
+        {
+          "path": "tests/test_cli.py",
+          "line": 44,
+          "verdict": "true",
+          "note": "SCIP missed: testapp.name reads App.name on testapp = Flask(\"testapp\") from tests/test_apps/cliapp/app.py (SCIP cannot resolve the import)"
+        },
+        {
+          "path": "tests/test_config.py",
+          "line": 89,
+          "verdict": "false",
+          "note": "os.name reads the standard library attribute"
+        },
+        {
+          "path": "tests/test_logging.py",
+          "line": 37,
+          "verdict": "false",
+          "note": "app.logger.name reads the logging.Logger.name attribute"
+        },
+        {
+          "path": "tests/test_signals.py",
+          "line": 19,
+          "verdict": "false",
+          "note": "template.name reads the jinja2 Template.name attribute"
+        },
+        {
+          "path": "tests/test_signals.py",
+          "line": 43,
+          "verdict": "false",
+          "note": "template.name reads the jinja2 Template.name attribute"
+        },
+        {
+          "path": "tests/test_testing.py",
+          "line": 134,
+          "verdict": "false",
+          "note": "bp.name reads the Blueprint.name attribute of flask.Blueprint(\"company\", ...)"
+        }
+      ]
+    },
+    {
+      "id": "_set_app@src/flask/cli.py:440",
+      "split": "dev",
+      "name": "_set_app",
+      "file": "src/flask/cli.py",
+      "line": 440,
+      "kind": "function",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "src/flask/cli.py",
+          "line": 464
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "src/flask/cli.py",
+          "line": 464,
+          "verdict": "true",
+          "note": "code-kb miss: callback=_set_app passes the function as a keyword argument (value reference)"
+        }
+      ]
+    },
+    {
+      "id": "permanent@src/flask/sessions.py:28",
+      "split": "holdout",
+      "name": "permanent",
+      "file": "src/flask/sessions.py",
+      "line": 28,
+      "kind": "method",
+      "tags": [
+        "value-ref",
+        "decorator"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "src/flask/sessions.py",
+          "line": 32
+        },
+        {
+          "path": "src/flask/sessions.py",
+          "line": 33
+        },
+        {
+          "path": "src/flask/sessions.py",
+          "line": 229
+        },
+        {
+          "path": "src/flask/sessions.py",
+          "line": 246
+        },
+        {
+          "path": "tests/test_basic.py",
+          "line": 430
+        },
+        {
+          "path": "tests/test_basic.py",
+          "line": 435
+        },
+        {
+          "path": "tests/test_basic.py",
+          "line": 507
+        },
+        {
+          "path": "tests/test_basic.py",
+          "line": 607
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "src/flask/sessions.py",
+          "line": 32,
+          "verdict": "false",
+          "note": "@permanent.setter is the declaration of the property setter, part of the definition"
+        },
+        {
+          "path": "src/flask/sessions.py",
+          "line": 33,
+          "verdict": "false",
+          "note": "def permanent(self, value) is the setter definition of the same property, not a use"
+        }
+      ]
+    },
+    {
+      "id": "from_file@src/flask/config.py:256",
+      "split": "dev",
+      "name": "from_file",
+      "file": "src/flask/config.py",
+      "line": 256,
+      "kind": "method",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "tests/test_config.py",
+          "line": 34
+        },
+        {
+          "path": "tests/test_config.py",
+          "line": 42
+        },
+        {
+          "path": "tests/test_config.py",
+          "line": 189
+        },
+        {
+          "path": "tests/test_config.py",
+          "line": 195
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "tests/test_config.py",
+          "line": 34,
+          "verdict": "true",
+          "note": "code-kb miss: app.config.from_file(path, json.load) on app = flask.Flask(__name__); app.config is a Config"
+        },
+        {
+          "path": "tests/test_config.py",
+          "line": 42,
+          "verdict": "true",
+          "note": "code-kb miss: app.config.from_file(path, tomllib.load, text=False) on app = flask.Flask(__name__)"
+        },
+        {
+          "path": "tests/test_config.py",
+          "line": 189,
+          "verdict": "true",
+          "note": "code-kb miss: app.config.from_file(\"missing.json\", load=json.load) on app = flask.Flask(__name__)"
+        },
+        {
+          "path": "tests/test_config.py",
+          "line": 195,
+          "verdict": "true",
+          "note": "code-kb miss: app.config.from_file(\"missing.json\", ..., silent=True) on app = flask.Flask(__name__)"
+        }
+      ]
+    },
+    {
+      "id": "to_json@src/flask/json/tag.py:125",
+      "split": "dev",
+      "name": "to_json",
+      "file": "src/flask/json/tag.py",
+      "line": 125,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "src/flask/json/tag.py",
+          "line": 130
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "src/flask/json/tag.py",
+          "line": 130,
+          "verdict": "true",
+          "note": "code-kb miss: tag = to_json in the PassDict class body aliases PassDict.to_json (value reference)"
+        }
+      ]
+    },
+    {
+      "id": "loads@src/flask/json/provider.py:59",
+      "split": "holdout",
+      "name": "loads",
+      "file": "src/flask/json/provider.py",
+      "line": 59,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "src/flask/json/__init__.py",
+          "line": 103
+        },
+        {
+          "path": "src/flask/json/provider.py",
+          "line": 73
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "src/flask/config.py",
+          "line": 127,
+          "verdict": "false",
+          "note": "json.loads is the standard library function, used as a default argument value"
+        },
+        {
+          "path": "src/flask/json/__init__.py",
+          "line": 103,
+          "verdict": "true",
+          "note": "code-kb miss: current_app.json.loads(s, **kwargs); current_app.json is annotated JSONProvider"
+        }
+      ]
+    },
+    {
+      "id": "debug@src/flask/sansio/app.py:550",
+      "split": "dev",
+      "name": "debug",
+      "file": "src/flask/sansio/app.py",
+      "line": 550,
+      "kind": "method",
+      "tags": [
+        "many-refs",
+        "value-ref",
+        "decorator"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "src/flask/app.py",
+          "line": 491
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 580
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 715
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 719
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 742
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 743
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 746
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 886
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 933
+        },
+        {
+          "path": "src/flask/cli.py",
+          "line": 369
+        },
+        {
+          "path": "src/flask/json/provider.py",
+          "line": 208
+        },
+        {
+          "path": "src/flask/logging.py",
+          "line": 73
+        },
+        {
+          "path": "src/flask/sansio/app.py",
+          "line": 562
+        },
+        {
+          "path": "src/flask/sansio/app.py",
+          "line": 563
+        },
+        {
+          "path": "src/flask/sansio/app.py",
+          "line": 918
+        },
+        {
+          "path": "src/flask/wrappers.py",
+          "line": 204
+        },
+        {
+          "path": "src/flask/wrappers.py",
+          "line": 216
+        },
+        {
+          "path": "tests/test_cli.py",
+          "line": 368
+        },
+        {
+          "path": "tests/test_cli.py",
+          "line": 377
+        },
+        {
+          "path": "tests/test_templating.py",
+          "line": 451
+        },
+        {
+          "path": "tests/test_templating.py",
+          "line": 456
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "tests/test_basic.py",
+          "line": 1132,
+          "verdict": "true",
+          "note": "SCIP missed: app.debug = True on the app fixture (tests/conftest.py returns a Flask), through the debug property"
+        },
+        {
+          "path": "tests/test_basic.py",
+          "line": 1708,
+          "verdict": "true",
+          "note": "SCIP missed: app.debug = True on the app fixture (tests/conftest.py returns a Flask), through the debug property"
+        },
+        {
+          "path": "tests/test_basic.py",
+          "line": 1743,
+          "verdict": "true",
+          "note": "SCIP missed: app.debug = True on the app fixture (tests/conftest.py returns a Flask), through the debug property"
+        },
+        {
+          "path": "tests/test_json.py",
+          "line": 271,
+          "verdict": "true",
+          "note": "SCIP missed: app.debug = True on the app fixture (tests/conftest.py returns a Flask), through the debug property"
+        },
+        {
+          "path": "tests/test_logging.py",
+          "line": 43,
+          "verdict": "true",
+          "note": "SCIP missed: app.debug = True on the app fixture (tests/conftest.py returns a Flask), through the debug property"
+        },
+        {
+          "path": "tests/test_templating.py",
+          "line": 445,
+          "verdict": "true",
+          "note": "SCIP missed: app.debug is False on the app fixture (tests/conftest.py returns a Flask), through the debug property"
+        },
+        {
+          "path": "tests/test_views.py",
+          "line": 183,
+          "verdict": "true",
+          "note": "SCIP missed: app.debug = True on the app fixture (tests/conftest.py returns a Flask), through the debug property"
+        },
+        {
+          "path": "src/flask/sansio/app.py",
+          "line": 562,
+          "verdict": "false",
+          "note": "@debug.setter is the declaration of the property setter, part of the definition"
+        },
+        {
+          "path": "src/flask/sansio/app.py",
+          "line": 563,
+          "verdict": "false",
+          "note": "def debug(self, value) is the setter definition of the same property, not a use"
+        }
+      ]
+    },
+    {
+      "id": "url_for@src/flask/app.py:1105",
+      "split": "holdout",
+      "name": "url_for",
+      "file": "src/flask/app.py",
+      "line": 1105,
+      "kind": "method",
+      "tags": [
+        "value-ref"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "src/flask/app.py",
+          "line": 497
+        },
+        {
+          "path": "src/flask/helpers.py",
+          "line": 244
+        }
+      ],
+      "adjudicated": [
+        {
+          "path": "tests/test_basic.py",
+          "line": 1376,
+          "verdict": "false",
+          "note": "flask.url_for is the flask.helpers.url_for function, not the Flask.url_for method"
+        },
+        {
+          "path": "tests/test_basic.py",
+          "line": 1407,
+          "verdict": "false",
+          "note": "flask.url_for is the flask.helpers.url_for function, not the Flask.url_for method"
+        },
+        {
+          "path": "src/flask/helpers.py",
+          "line": 244,
+          "verdict": "true",
+          "note": "code-kb miss: current_app.url_for(...) where current_app is a Flask proxy"
+        }
+      ]
+    },
+    {
+      "id": "app_context_processor@src/flask/sansio/blueprints.py:644",
+      "split": "dev",
+      "name": "app_context_processor",
+      "file": "src/flask/sansio/blueprints.py",
+      "line": 644,
+      "kind": "method",
+      "tags": [
+        "decorator"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "tests/test_blueprints.py",
+          "line": 680
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "_get_session@src/flask/ctx.py:381",
+      "split": "holdout",
+      "name": "_get_session",
+      "file": "src/flask/ctx.py",
+      "line": 381,
+      "kind": "method",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "src/flask/app.py",
+          "line": 1418
+        },
+        {
+          "path": "src/flask/app.py",
+          "line": 1419
+        },
+        {
+          "path": "src/flask/ctx.py",
+          "line": 401
+        },
+        {
+          "path": "src/flask/ctx.py",
+          "line": 439
+        }
+      ],
+      "adjudicated": []
+    }
+  ]
+}

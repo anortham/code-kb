@@ -431,6 +431,11 @@ def cmd_run(args):
     return 0 if report["result"] == "PASS" else 1
 
 
+def adjudication_mark(verdicts, path, line):
+    verdict = verdicts.get((path, line))
+    return f" [adjudicated {verdict}]" if verdict else ""
+
+
 def cmd_disagreements(args):
     corpus = load_corpus(args.corpus)
     entry = corpus_entry(corpus, args.repo)
@@ -455,10 +460,12 @@ def cmd_disagreements(args):
         print(f"{args.repo} {symbol['split']} {symbol['id']} (answer: {answer['shape']}, {status})")
         if detail:
             print(f"  {detail}")
+        verdicts = {(row["path"], row["line"]): row["verdict"] for row in symbol.get("adjudicated", [])}
         for site in found["proven_without_truth"]:
-            print(f"  proven, no truth line: {site['path']}:{site.get('start_line')}  {source.text(site['path'], site.get('start_line') or 0)}")
+            path, line = site["path"], site.get("start_line") or 0
+            print(f"  proven, no truth line{adjudication_mark(verdicts, path, line)}: {path}:{line}  {source.text(path, line)}")
         for path, line, text_only in found["truth_without_site"]:
-            note = " [text only]" if text_only else ""
+            note = (" [text only]" if text_only else "") + adjudication_mark(verdicts, path, line)
             print(f"  truth line, no site{note}: {path}:{line}  {source.text(path, line)}")
     if hidden["symbols"]:
         print(

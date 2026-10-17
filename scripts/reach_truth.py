@@ -37,7 +37,7 @@ COMMON_NAME_DEFINITIONS = 3
 MAX_STATEMENT_LINES = 200
 STRATA = ("common-name", "overridden", "many-refs", "value-ref", "decorator", "plain")
 
-SKIPPED_NAME = re.compile(r"^(__\w+__|<.*>)$")
+SKIPPED_NAME = re.compile(r"^(__\w+__|<.*)$")
 TEST_PATH = re.compile(
     r"(^|/)(tests?|__tests__|specs?|testing|autotests)/|(^|/)test_[^/]*$|_test\.[^/]+$"
     r"|\.(test|spec)\.[^/.]+$|Tests?\.(java|cs|kt)$"
