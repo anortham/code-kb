@@ -55,6 +55,7 @@ reuses the copies. Nothing writes into a copy except the `.code-kb/` index, whic
 }
 ```
 
+- An optional top-level `scope` (a list of path prefixes, such as `["Src/Newtonsoft.Json/"]`) limits scoring to sites and text lines under those prefixes. Use it when the truth covers only part of the repo.
 - `name` is the bare name, not `Owner.name`. `file` and every `path` use `/` and are relative to the project root.
 - `split` is `dev` or `holdout`. Tune fixes on dev only.
 - `truth_source` is `scip`, `manual`, or `scip+manual`. `reach_truth.py truth` rewrites `truth` for

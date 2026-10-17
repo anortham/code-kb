@@ -176,6 +176,16 @@ class AnswerShapeTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             reach_gate.parse_answer("not json shaped")
 
+    def test_scope_keeps_only_sites_and_text_lines_under_its_prefixes(self):
+        answer = report_answer(
+            [site("Src/Lib/a.cs", 1, label="proven"), site("Src/Lib.Tests/b.cs", 2, label="proven")],
+            text_only=[{"path": "Src/Lib/c.cs", "lines": [3]}, {"path": "Doc/d.md", "lines": [4]}],
+        )
+        scoped = reach_gate.within_scope(answer, ["Src/Lib/"])
+        self.assertEqual([row["path"] for row in scoped["sites"]], ["Src/Lib/a.cs"])
+        self.assertEqual(scoped["text_only"], {("Src/Lib/c.cs", 3)})
+        self.assertIs(reach_gate.within_scope(answer, None), answer)
+
 
 class TierMetricsTest(unittest.TestCase):
     def test_label_tiers_count_sites_and_true_sites_apart(self):

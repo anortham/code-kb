@@ -120,6 +120,18 @@ def parse_answer(data):
     raise ValueError("refs output is neither a site array nor a report object")
 
 
+def within_scope(answer, scope):
+    """Keeps the sites and text lines under the case file's `scope` path prefixes, when it has one."""
+    if not scope:
+        return answer
+    inside = lambda path: any(path.startswith(prefix) for prefix in scope)
+    return dict(
+        answer,
+        sites=[row for row in answer["sites"] if inside(row["path"])],
+        text_only={key for key in answer["text_only"] if inside(key[0])},
+    )
+
+
 def score_symbol(truth, answer):
     counts = {"truth_lines": len(truth), "recalled_lines": 0, "accounted_lines": 0}
     for label in LABELS:
@@ -390,6 +402,7 @@ def cmd_run(args):
         scored.append(name)
         for number, symbol in enumerate(cases["symbols"], 1):
             status, detail, answer = fetch_answer(args.binary, root, symbol)
+            answer = within_scope(answer, cases.get("scope"))
             results.append({
                 "repo": name,
                 "language": entry["language"],
@@ -432,6 +445,7 @@ def cmd_disagreements(args):
         if args.split != "all" and symbol["split"] != args.split:
             continue
         status, detail, answer = fetch_answer(args.binary, root, symbol)
+        answer = within_scope(answer, cases.get("scope"))
         found = disagreements(effective_truth(symbol), answer)
         if symbol["split"] == "holdout" and not args.show_holdout:
             hidden["symbols"] += 1
