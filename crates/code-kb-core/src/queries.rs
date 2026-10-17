@@ -3201,7 +3201,7 @@ fn call_site_proximity(candidate_path: &str) -> String {
 
 /// SQL expression ranking `candidate_path` against `site_path`: 2 for the same file, 1 for the
 /// same directory, 0 otherwise.
-fn path_proximity(candidate_path: &str, site_path: &str) -> String {
+pub(crate) fn path_proximity(candidate_path: &str, site_path: &str) -> String {
     let normalized = format!("replace({candidate_path}, '\\', '/')");
     let call_site = format!("replace({site_path}, '\\', '/')");
     format!(
@@ -3482,48 +3482,16 @@ fn member_receiver_match(conn: &Connection) -> String {
     )
 }
 
-/// SQL predicate that decides whether a pending call edge `p` (with caller `s_from`) points at
-/// the candidate definition `target` (whose parent symbol is joined as `parent`).
-fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> String {
-    let ns = "json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END)";
+/// SQL that holds when the caller's file `p.path` binds `binding_name` through an import whose
+/// source module, or imported name, names a folder or file on the path of `target`.
+pub(crate) fn module_import_binding_sql(target: &str, binding_name: &str) -> String {
     let target_path = format!("('/' || replace({target}.path, '\\', '/'))");
-    let like_value = "replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_')";
-    let closer_rank = call_site_proximity("closer.path");
-    let target_rank = call_site_proximity(&format!("{target}.path"));
     let dotted = "replace(module_path.value, '/', '.')";
     let segment = format!("replace({dotted}, rtrim({dotted}, replace({dotted}, '.', '')), '')");
     let relative = is_relative_import_path("import_source.value");
     let relative_match = relative_import_matches("import_source.value", target);
-    // `import { util } from "../helpers/util.js"`: `util.f()` reaches only that file's `util`.
-    let receiver_import_elsewhere = if has_column(conn, "symbols", "metadata_json") {
-        format!(
-            "AND NOT EXISTS (
-                            SELECT 1 FROM symbols receiver_import
-                            CROSS JOIN json_each(json_array(
-                                json_extract(receiver_import.metadata_json, '$.source')
-                            )) import_source
-                            WHERE receiver_import.kind = 'import'
-                              AND receiver_import.path = p.path
-                              AND receiver_import.name = p.target_receiver
-                              AND json_valid(receiver_import.metadata_json)
-                              AND {relative}
-                              AND NOT {relative_match}
-                        )"
-        )
-    } else {
-        String::new()
-    };
-    let import_alias_receiver = if has_column(conn, "symbols", "metadata_json") {
-        format!("OR EXISTS (
-                        SELECT 1 FROM symbols alias_import
-                        WHERE alias_import.kind = 'import'
-                          AND alias_import.path = p.path
-                          AND json_valid(alias_import.metadata_json)
-                          AND (json_extract(alias_import.metadata_json, '$.alias') = p.target_receiver
-                               OR json_extract(alias_import.metadata_json, '$.local_name') = p.target_receiver)
-                          AND COALESCE(json_extract(alias_import.metadata_json, '$.source'), '') NOT LIKE 'Qt%'
-                    )
-                    OR EXISTS (
+    format!(
+        "EXISTS (
                         SELECT 1 FROM symbols module_import
                         CROSS JOIN json_each(json_array(
                             json_extract(module_import.metadata_json, '$.source')
@@ -3534,7 +3502,7 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                         )) module_path
                         WHERE module_import.kind = 'import'
                           AND module_import.path = p.path
-                          AND module_import.name = p.target_receiver
+                          AND module_import.name = {binding_name}
                           AND json_valid(module_import.metadata_json)
                           AND CASE WHEN {relative} THEN {relative_match}
                               ELSE {segment} != ''
@@ -3542,25 +3510,24 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                                         OR {target_path} LIKE '%/' || {segment} || '.%')
                               END
                     )"
-        )
-    } else {
-        String::new()
-    };
+    )
+}
+
+/// SQL that holds when the receiver `p.target_receiver` is a parameter or variable of the caller
+/// that a call builds as the class owning `target`, directly or through a builder's return type
+/// or a fixture, and no nearer class in the chain defines the name. `None` without metadata.
+pub(crate) fn built_receiver_sql(conn: &Connection, target: &str) -> Option<String> {
+    if !has_column(conn, "symbols", "metadata_json") {
+        return None;
+    }
     let builder_calls = receiver_builder_calls(conn);
     let builder_return_type = builder_return_type_sql("builder");
-    // Type facts retain only the terminal type name; constrain them to the imported definition.
-    let receiver_type_scope = if has_column(conn, "symbols", "metadata_json") {
-        receiver_definition_scope(parent, "p.path")
-    } else {
-        "1 = 1".to_string()
-    };
     let builder_scope = receiver_definition_scope("builder", "builder_call.path");
     let returned_class_scope = receiver_definition_scope("returned_class", "builder.path");
     let built_scope = receiver_definition_scope("built_class", "built_name.path");
-    let fixture_receiver = if has_column(conn, "symbols", "metadata_json") {
-        // CASE prevents scope checks for builders that cannot return an indexed class.
-        format!(
-            "OR CASE WHEN EXISTS (
+    // CASE prevents scope checks for builders that cannot return an indexed class.
+    Some(format!(
+        "CASE WHEN EXISTS (
                         SELECT 1 FROM symbols taken
                         WHERE taken.parent_symbol_id = p.from_symbol_id
                           AND taken.name = p.target_receiver
@@ -3613,18 +3580,47 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                                 AND closer.depth < built.depth
                           )
                     ) ELSE 0 END"
-        )
+    ))
+}
+
+/// SQL that holds when a variable or parameter named `p.target_receiver` in the caller's file has
+/// a type fact naming the parent of `target`, and no other variable of the caller shadows it.
+pub(crate) fn receiver_type_sql(conn: &Connection, parent: &str) -> String {
+    // Type facts retain only the terminal type name; constrain them to the imported definition.
+    let receiver_type_scope = if has_column(conn, "symbols", "metadata_json") {
+        receiver_definition_scope(parent, "p.path")
     } else {
-        String::new()
+        "1 = 1".to_string()
     };
+    format!(
+        "EXISTS (
+                        SELECT 1 FROM symbols receiver
+                        JOIN type_facts receiver_type ON receiver_type.symbol_id = receiver.symbol_id
+                        WHERE receiver.name = p.target_receiver
+                          AND receiver.path = p.path
+                          AND receiver_type.resolved_type = {parent}.name
+                          AND NOT EXISTS (
+                              SELECT 1 FROM symbols shadow
+                              WHERE shadow.name = receiver.name
+                                AND shadow.path = receiver.path
+                                AND shadow.parent_symbol_id = p.from_symbol_id
+                                AND shadow.kind IN ('variable', 'parameter')
+                                AND shadow.symbol_id != receiver.symbol_id
+                          )
+                    ) AND {receiver_type_scope}"
+    )
+}
+
+/// SQL that holds when `target` is a member of the class chain of the caller `s_from`: its own
+/// class when `own_class_rule` holds, or a base class named by an `extends` row, where the nearest
+/// class that defines the name wins. julie resolves most `this` calls to the caller's own class,
+/// but not one inside an ordinary JavaScript function, so a `this`, `self`, or `cls` call also
+/// matches a sibling member. A base class that a pending `extends` row names counts unless a class
+/// of that name is closer.
+pub(crate) fn class_chain_sql(target: &str, own_class_rule: &str) -> String {
     let rival_rank = path_proximity("rival.path", "pe.path");
     let base_rank = path_proximity("c.path", "pe.path");
-    // A member of the caller's class chain, where the nearest class that defines the name wins.
-    // julie resolves most `this` calls to the caller's own class, but not one inside an ordinary
-    // JavaScript function, so a `this`, `self`, or `cls` call also matches a sibling member. A base
-    // class that a pending `extends` row names counts unless a class of that name is closer.
-    let class_chain = |own_class_rule: &str| {
-        format!(
+    format!(
         "EXISTS (
                             WITH RECURSIVE base(symbol_id, depth) AS (
                                 SELECT s_from.parent_symbol_id, 0
@@ -3657,20 +3653,26 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                                     AND (closer.depth > 0 OR p.target_receiver IS NOT 'super')
                               )
                         )"
-        )
-    };
-    let inherited = class_chain(&format!("{target}.kind IN ('variable', 'field')"));
-    let receiver_chain = class_chain("p.target_receiver IS NOT 'super'");
-    let implicit_receiver_languages = IMPLICIT_RECEIVER_LANGUAGES
+    )
+}
+
+/// The quoted, comma-separated [`IMPLICIT_RECEIVER_LANGUAGES`] for an SQL `IN` list.
+pub(crate) fn implicit_receiver_language_list() -> String {
+    IMPLICIT_RECEIVER_LANGUAGES
         .iter()
         .map(|language| format!("'{language}'"))
         .collect::<Vec<_>>()
-        .join(", ");
-    // A definition in a scope that encloses the caller's parent, where the nearest scope that
-    // defines or imports the name wins. An enclosing class body contributes only its nested types, and only
-    // where a bare call reaches members; its methods are left to the class-chain rule, because
-    // julie parses macro calls in C++ test files as methods of made-up classes.
-    let enclosing = format!(
+        .join(", ")
+}
+
+/// SQL that holds when `target` is defined in a scope that encloses the caller's parent, where the
+/// nearest scope that defines or imports the name wins. An enclosing class body contributes only
+/// its nested types, and only where a bare call reaches members; its methods are left to the
+/// class-chain rule, because julie parses macro calls in C++ test files as methods of made-up
+/// classes.
+pub(crate) fn enclosing_scope_sql(target: &str) -> String {
+    let implicit_receiver_languages = implicit_receiver_language_list();
+    format!(
         "EXISTS (
             WITH RECURSIVE lexical(symbol_id, depth) AS (
                 SELECT s_from.parent_symbol_id, 1
@@ -3694,7 +3696,63 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                     AND nearer.kind IN ({target}.kind, 'import')
               )
         )"
-    );
+    )
+}
+
+/// SQL predicate that decides whether a pending call edge `p` (with caller `s_from`) points at
+/// the candidate definition `target` (whose parent symbol is joined as `parent`).
+pub(crate) fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> String {
+    let ns = "json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END)";
+    let target_path = format!("('/' || replace({target}.path, '\\', '/'))");
+    let like_value = "replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_')";
+    let closer_rank = call_site_proximity("closer.path");
+    let target_rank = call_site_proximity(&format!("{target}.path"));
+    let relative = is_relative_import_path("import_source.value");
+    let relative_match = relative_import_matches("import_source.value", target);
+    // `import { util } from "../helpers/util.js"`: `util.f()` reaches only that file's `util`.
+    let receiver_import_elsewhere = if has_column(conn, "symbols", "metadata_json") {
+        format!(
+            "AND NOT EXISTS (
+                            SELECT 1 FROM symbols receiver_import
+                            CROSS JOIN json_each(json_array(
+                                json_extract(receiver_import.metadata_json, '$.source')
+                            )) import_source
+                            WHERE receiver_import.kind = 'import'
+                              AND receiver_import.path = p.path
+                              AND receiver_import.name = p.target_receiver
+                              AND json_valid(receiver_import.metadata_json)
+                              AND {relative}
+                              AND NOT {relative_match}
+                        )"
+        )
+    } else {
+        String::new()
+    };
+    let module_import = module_import_binding_sql(target, "p.target_receiver");
+    let import_alias_receiver = if has_column(conn, "symbols", "metadata_json") {
+        format!("OR EXISTS (
+                        SELECT 1 FROM symbols alias_import
+                        WHERE alias_import.kind = 'import'
+                          AND alias_import.path = p.path
+                          AND json_valid(alias_import.metadata_json)
+                          AND (json_extract(alias_import.metadata_json, '$.alias') = p.target_receiver
+                               OR json_extract(alias_import.metadata_json, '$.local_name') = p.target_receiver)
+                          AND COALESCE(json_extract(alias_import.metadata_json, '$.source'), '') NOT LIKE 'Qt%'
+                    )
+                    OR {module_import}"
+        )
+    } else {
+        String::new()
+    };
+    let receiver_type = receiver_type_sql(conn, parent);
+    let fixture_receiver = match built_receiver_sql(conn, target) {
+        Some(built) => format!("OR {built}"),
+        None => String::new(),
+    };
+    let inherited = class_chain_sql(target, &format!("{target}.kind IN ('variable', 'field')"));
+    let receiver_chain = class_chain_sql(target, "p.target_receiver IS NOT 'super'");
+    let implicit_receiver_languages = implicit_receiver_language_list();
+    let enclosing = enclosing_scope_sql(target);
     let rust_path = rust_path_rule(target, ns);
     format!(
         "(
@@ -3712,21 +3770,7 @@ fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> St
                     OR ((p.target_receiver IN ('self', 'this', 'cls', 'Self', 'super')
                          OR EXISTS (SELECT 1 FROM {ns} WHERE value = 'Self'))
                         AND {receiver_chain})
-                    OR EXISTS (
-                        SELECT 1 FROM symbols receiver
-                        JOIN type_facts receiver_type ON receiver_type.symbol_id = receiver.symbol_id
-                        WHERE receiver.name = p.target_receiver
-                          AND receiver.path = p.path
-                          AND receiver_type.resolved_type = {parent}.name
-                          AND NOT EXISTS (
-                              SELECT 1 FROM symbols shadow
-                              WHERE shadow.name = receiver.name
-                                AND shadow.path = receiver.path
-                                AND shadow.parent_symbol_id = p.from_symbol_id
-                                AND shadow.kind IN ('variable', 'parameter')
-                                AND shadow.symbol_id != receiver.symbol_id
-                          )
-                    ) AND {receiver_type_scope}
+                    OR {receiver_type}
                     {fixture_receiver}
                 )
                 AND NOT EXISTS (
@@ -3866,7 +3910,7 @@ pub(crate) const DOCUMENTATION_LANGUAGES: &[&str] = &[
     "markdown", "yaml", "toml", "json", "html", "css", "xml", "ini", "text",
 ];
 
-fn documentation_language_list() -> String {
+pub(crate) fn documentation_language_list() -> String {
     DOCUMENTATION_LANGUAGES
         .iter()
         .map(|l| format!("'{l}'"))
@@ -3976,7 +4020,7 @@ fn find_references_internal(
     Ok(sites)
 }
 
-fn populate_lambda_enclosing_names(
+pub(crate) fn populate_lambda_enclosing_names(
     conn: &Connection,
     sites: &mut [ReferenceSite],
 ) -> Result<(), QueryError> {
@@ -4021,7 +4065,7 @@ fn populate_lambda_enclosing_names(
 }
 
 /// The class a constructor builds, so the calls that build the class count as its callers.
-fn constructed_class(
+pub(crate) fn constructed_class(
     conn: &Connection,
     symbol_id: &str,
 ) -> Result<Option<(String, String)>, QueryError> {
@@ -4035,6 +4079,270 @@ fn constructed_class(
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .optional()?)
+}
+
+/// A type-usage or member-access identifier that resolves to the selected target.
+pub(crate) struct DirectIdentifier {
+    pub identifier_id: String,
+    pub site: ReferenceSite,
+}
+
+/// Type-usage and member-access identifiers named `symbol_name` that reach the selected target,
+/// at most `remaining`: supported rows first, then candidates, each in source order.
+pub(crate) fn direct_identifier_rows(
+    conn: &Connection,
+    symbol_name: &str,
+    symbol_id: Option<&str>,
+    remaining: usize,
+) -> Result<Vec<DirectIdentifier>, QueryError> {
+    let receiver_match = member_receiver_match(conn);
+    // A name-only type usage reaches only the closest same-named type visible from
+    // the caller's lexical scopes, then the file's top-level types.
+    let type_usage_shadow = format!(
+        "i.kind = 'type_usage'
+                 AND ?2 IS NOT NULL
+                 AND selected_target.kind IN ({NESTED_TYPE_KINDS})
+                 AND EXISTS (
+                     WITH RECURSIVE lexical(symbol_id, depth) AS (
+                         SELECT s_from.symbol_id, 0
+                         UNION ALL
+                         SELECT scope.parent_symbol_id, lexical.depth + 1
+                         FROM symbols scope JOIN lexical ON scope.symbol_id = lexical.symbol_id
+                         WHERE scope.parent_symbol_id IS NOT NULL AND lexical.depth < 32
+                     ), visible_types(symbol_id, depth) AS (
+                         SELECT shadow.symbol_id, lexical.depth
+                         FROM lexical
+                         JOIN symbols shadow ON shadow.parent_symbol_id = lexical.symbol_id
+                         WHERE shadow.name = selected_target.name
+                           AND shadow.kind IN ({NESTED_TYPE_KINDS})
+                           AND shadow.language = i.language
+                         UNION ALL
+                         SELECT shadow.symbol_id, 100
+                         FROM symbols shadow
+                         WHERE shadow.name = selected_target.name
+                           AND shadow.kind IN ({NESTED_TYPE_KINDS})
+                           AND shadow.language = i.language
+                           AND shadow.parent_symbol_id IS NULL
+                           AND replace(shadow.path, '\\', '/') = replace(i.path, '\\', '/')
+                     )
+                     SELECT 1 FROM visible_types nearest
+                     WHERE nearest.symbol_id != selected_target.symbol_id
+                       AND nearest.depth = (SELECT MIN(depth) FROM visible_types)
+                 )"
+    );
+    let receiver_match = receiver_match.replace("?3", "?1");
+    let language_match = identifier_language_matches("i", "selected_target");
+    let mut receiver_stmt = conn.prepare(&format!(
+                "SELECT {receiver_match}
+                 FROM (SELECT name, kind, path, start_line, start_column,
+                              containing_symbol_id AS from_symbol_id,
+                              CASE WHEN json_valid(metadata_json) THEN metadata_json ELSE '{{}}' END AS metadata_json,
+                              COALESCE(json_valid(metadata_json), 0) AS has_metadata,
+                              language,
+                              CASE WHEN json_valid(metadata_json) THEN json_extract(metadata_json, '$.receiver') END AS target_receiver,
+                              '[]' AS target_namespace_json
+                       FROM identifiers WHERE identifier_id = ?2) p
+                 LEFT JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id"
+            ))?;
+    let mut ident_stmt = conn.prepare(&format!(
+                "WITH raw AS MATERIALIZED (
+                     SELECT identifier_id, name, kind, path, start_line, start_column,
+                            containing_symbol_id, language,
+                            CASE WHEN json_valid(metadata_json) THEN metadata_json ELSE '{{}}' END AS metadata_json
+                     FROM identifiers WHERE name = ?1 AND kind IN ('type_usage', 'member_access')
+                 )
+                 SELECT i.identifier_id,
+                        COALESCE(s_from.name, ''),
+                        COALESCE(i.containing_symbol_id, ''),
+                        i.name,
+                        CASE WHEN json_valid(i.metadata_json)
+                                  AND json_extract(i.metadata_json, '$.role') = 'signal_handler'
+                             THEN CASE WHEN json_extract(i.metadata_json, '$.receiver') = (
+                                      SELECT CASE WHEN t.kind IN ('class', 'struct', 'enum', 'interface', 'trait', 'module', 'namespace')
+                                                  THEN t.name ELSE tp.name END
+                                      FROM symbols t
+                                      LEFT JOIN symbols tp ON tp.symbol_id = t.parent_symbol_id
+                                      WHERE t.symbol_id = ?2)
+                                  THEN 'handler' ELSE 'handler (candidate)' END
+                             ELSE i.kind END,
+                        i.path,
+                        i.start_line,
+                        i.start_column
+                 FROM raw i
+                 LEFT JOIN symbols s_from ON i.containing_symbol_id = s_from.symbol_id
+                 LEFT JOIN symbols selected_target ON selected_target.symbol_id = ?2
+                 WHERE i.name = ?1 AND i.kind IN ('type_usage', 'member_access')
+                   AND COALESCE(s_from.kind, '') != 'import'
+                   AND (?2 IS NULL OR {language_match})
+                   AND NOT ({type_usage_shadow})
+                   AND NOT EXISTS (
+                       SELECT 1 FROM relationships covered
+                       JOIN symbols covered_to ON covered.to_symbol_id = covered_to.symbol_id
+                       WHERE covered_to.name = i.name
+                         AND covered.path = i.path
+                         AND covered.start_line = i.start_line
+                         AND (?2 IS NULL OR covered.to_symbol_id = ?2)
+                   )
+                   AND NOT EXISTS (
+                       SELECT 1 FROM pending_relationships covered
+                       WHERE covered.target_terminal_name = i.name
+                         AND covered.path = i.path
+                         AND covered.start_line = i.start_line
+                   )
+                   AND (?2 IS NULL OR NOT EXISTS (
+                       SELECT 1 FROM symbols owner
+                       JOIN symbols member ON member.parent_symbol_id = owner.symbol_id
+                       WHERE owner.name = CASE WHEN json_valid(i.metadata_json) THEN json_extract(i.metadata_json, '$.receiver') END
+                         AND member.name = i.name
+                         AND owner.name IS NOT (SELECT parent.name FROM symbols target
+                                                JOIN symbols parent ON parent.symbol_id = target.parent_symbol_id
+                                                WHERE target.symbol_id = ?2)
+                   ))
+                   AND NOT (i.kind = 'member_access' AND EXISTS (
+                       SELECT 1 FROM symbols target
+                       LEFT JOIN symbols scope ON scope.symbol_id = target.parent_symbol_id
+                       WHERE target.symbol_id = ?2
+                         AND (scope.kind IN ('function', 'method', 'constructor')
+                              OR (scope.symbol_id IS NULL
+                                  AND target.path != i.path
+                                  AND target.language IN ('javascript', 'typescript', 'tsx')
+                                  AND COALESCE(target.visibility, 'private') = 'private'))
+                   ))
+                   AND NOT COALESCE((i.kind = 'member_access'
+                        AND json_valid(i.metadata_json)
+                        AND json_extract(i.metadata_json, '$.role') IS NOT 'signal_handler'
+                        AND json_extract(i.metadata_json, '$.receiver') GLOB '[A-Z]*'
+                        AND NOT EXISTS (SELECT 1 FROM symbols known
+                                        WHERE known.name = json_extract(i.metadata_json, '$.receiver')
+                                          AND known.kind NOT IN ('variable', 'parameter', 'method'))), 0)
+                 ORDER BY i.path, i.start_line, i.start_column, i.identifier_id"
+            ))?;
+    let mut supported = Vec::new();
+    let mut candidates = Vec::new();
+    let mut supported_keys = HashSet::new();
+    let mut candidate_keys = HashSet::new();
+    let site_key = |site: &ReferenceSite| {
+        (
+            site.from_symbol_id.clone(),
+            site.to_symbol_name.clone(),
+            site.kind.clone(),
+            site.path.clone(),
+            site.start_line,
+        )
+    };
+    let mut ident_rows = ident_stmt.query(params![symbol_name, symbol_id])?;
+    while let Some(row) = ident_rows.next()? {
+        let identifier_id: String = row.get(0)?;
+        let mut site = ReferenceSite {
+            from_symbol_name: row.get(1)?,
+            from_symbol_id: row.get(2)?,
+            to_symbol_name: row.get(3)?,
+            kind: row.get(4)?,
+            path: row.get::<_, String>(5)?.replace('\\', "/"),
+            start_line: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
+            start_column: row.get::<_, Option<i64>>(7)?.map(|v| v as usize),
+            occurrences: None,
+            target: None,
+            enclosing_symbol_name: None,
+        };
+        let receiver_match: i64 =
+            receiver_stmt.query_row(params![symbol_id, identifier_id], |row| row.get(0))?;
+        if receiver_match < 0 {
+            continue;
+        }
+        if receiver_match == 0 && site.kind == "member_access" {
+            site.kind = "member_access (candidate)".to_string();
+        }
+        if site.kind == "member_access (candidate)" {
+            if candidates.len() < remaining && candidate_keys.insert(site_key(&site)) {
+                candidates.push(DirectIdentifier {
+                    identifier_id,
+                    site,
+                });
+            }
+        } else if supported_keys.insert(site_key(&site)) {
+            supported.push(DirectIdentifier {
+                identifier_id,
+                site,
+            });
+            if supported.len() >= remaining {
+                break;
+            }
+        }
+    }
+
+    let site_order = |a: &DirectIdentifier, b: &DirectIdentifier| {
+        a.site
+            .path
+            .cmp(&b.site.path)
+            .then(a.site.start_line.cmp(&b.site.start_line))
+            .then(a.site.start_column.cmp(&b.site.start_column))
+    };
+    supported.sort_by(site_order);
+    supported.truncate(remaining);
+    candidates.sort_by(site_order);
+    candidates.truncate(remaining - supported.len());
+    let mut rows = supported;
+    rows.extend(candidates);
+    Ok(rows)
+}
+
+/// Member accesses whose receiver names the type `symbol_id`, one row per file with an
+/// `occurrences` count, at most `remaining`.
+pub(crate) fn grouped_member_access_rows(
+    conn: &Connection,
+    symbol_id: &str,
+    remaining: usize,
+) -> Result<Vec<ReferenceSite>, QueryError> {
+    let language_match = identifier_language_matches("i", "target");
+    let mut receiver_stmt = conn.prepare(&format!(
+                    "SELECT COALESCE(s.name, ''),
+                            COALESCE(i.containing_symbol_id, ''),
+                            i.name,
+                            i.kind,
+                            i.path,
+                            MIN(i.start_line),
+                            i.start_column,
+                            COUNT(*)
+                     FROM identifiers i
+                     LEFT JOIN symbols s ON i.containing_symbol_id = s.symbol_id
+                     JOIN symbols target ON target.symbol_id = ?2
+                     LEFT JOIN symbols target_parent ON target_parent.symbol_id = target.parent_symbol_id
+                     WHERE i.kind = 'member_access'
+                       AND i.name != target.name
+                       AND COALESCE(s.kind, '') != 'import'
+                       AND target.kind IN ('class', 'struct', 'enum', 'interface', 'trait', 'module', 'namespace')
+                       AND json_valid(i.metadata_json)
+                       AND json_extract(i.metadata_json, '$.receiver') = target.name
+                       AND (json_extract(i.metadata_json, '$.receiver_qualifier') IS NULL
+                            OR json_extract(i.metadata_json, '$.receiver_qualifier') = target_parent.name)
+                       AND {language_match}
+                       AND NOT EXISTS (
+                           SELECT 1 FROM symbols nearer
+                           WHERE nearer.name = target.name
+                             AND nearer.path = i.path
+                             AND nearer.symbol_id != target.symbol_id
+                             AND nearer.kind IN ({NESTED_TYPE_KINDS}, 'module', 'namespace')
+                       )
+                     GROUP BY i.path
+                     ORDER BY i.path, i.start_line
+                     LIMIT ?1"
+                ))?;
+    let rows = receiver_stmt.query_map(params![remaining as i64, symbol_id], |row| {
+        Ok(ReferenceSite {
+            from_symbol_name: row.get(0)?,
+            from_symbol_id: row.get(1)?,
+            to_symbol_name: row.get(2)?,
+            kind: row.get(3)?,
+            path: row.get::<_, String>(4)?.replace('\\', "/"),
+            start_line: row.get::<_, Option<i64>>(5)?.map(|v| v as usize),
+            start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
+            occurrences: Some(row.get::<_, i64>(7)? as usize),
+            target: None,
+            enclosing_symbol_name: None,
+        })
+    })?;
+    Ok(rows.collect::<Result<_, _>>()?)
 }
 
 fn find_direct_references(
@@ -4220,242 +4528,11 @@ fn find_direct_references(
 
         if results.len() < limit && has_table(conn, "identifiers") {
             let remaining = limit - results.len();
-            let receiver_match = member_receiver_match(conn);
-            // A name-only type usage reaches only the closest same-named type visible from
-            // the caller's lexical scopes, then the file's top-level types.
-            let type_usage_shadow = format!(
-                "i.kind = 'type_usage'
-                 AND ?2 IS NOT NULL
-                 AND selected_target.kind IN ({NESTED_TYPE_KINDS})
-                 AND EXISTS (
-                     WITH RECURSIVE lexical(symbol_id, depth) AS (
-                         SELECT s_from.symbol_id, 0
-                         UNION ALL
-                         SELECT scope.parent_symbol_id, lexical.depth + 1
-                         FROM symbols scope JOIN lexical ON scope.symbol_id = lexical.symbol_id
-                         WHERE scope.parent_symbol_id IS NOT NULL AND lexical.depth < 32
-                     ), visible_types(symbol_id, depth) AS (
-                         SELECT shadow.symbol_id, lexical.depth
-                         FROM lexical
-                         JOIN symbols shadow ON shadow.parent_symbol_id = lexical.symbol_id
-                         WHERE shadow.name = selected_target.name
-                           AND shadow.kind IN ({NESTED_TYPE_KINDS})
-                           AND shadow.language = i.language
-                         UNION ALL
-                         SELECT shadow.symbol_id, 100
-                         FROM symbols shadow
-                         WHERE shadow.name = selected_target.name
-                           AND shadow.kind IN ({NESTED_TYPE_KINDS})
-                           AND shadow.language = i.language
-                           AND shadow.parent_symbol_id IS NULL
-                           AND replace(shadow.path, '\\', '/') = replace(i.path, '\\', '/')
-                     )
-                     SELECT 1 FROM visible_types nearest
-                     WHERE nearest.symbol_id != selected_target.symbol_id
-                       AND nearest.depth = (SELECT MIN(depth) FROM visible_types)
-                 )"
-            );
-            let receiver_match = receiver_match.replace("?3", "?1");
-            let language_match = identifier_language_matches("i", "selected_target");
-            let mut receiver_stmt = conn.prepare(&format!(
-                "SELECT {receiver_match}
-                 FROM (SELECT name, kind, path, start_line, start_column,
-                              containing_symbol_id AS from_symbol_id,
-                              CASE WHEN json_valid(metadata_json) THEN metadata_json ELSE '{{}}' END AS metadata_json,
-                              COALESCE(json_valid(metadata_json), 0) AS has_metadata,
-                              language,
-                              CASE WHEN json_valid(metadata_json) THEN json_extract(metadata_json, '$.receiver') END AS target_receiver,
-                              '[]' AS target_namespace_json
-                       FROM identifiers WHERE identifier_id = ?2) p
-                 LEFT JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id"
-            ))?;
-            let mut ident_stmt = conn.prepare(&format!(
-                "WITH raw AS MATERIALIZED (
-                     SELECT identifier_id, name, kind, path, start_line, start_column,
-                            containing_symbol_id, language,
-                            CASE WHEN json_valid(metadata_json) THEN metadata_json ELSE '{{}}' END AS metadata_json
-                     FROM identifiers WHERE name = ?1 AND kind IN ('type_usage', 'member_access')
-                 )
-                 SELECT i.identifier_id,
-                        COALESCE(s_from.name, ''),
-                        COALESCE(i.containing_symbol_id, ''),
-                        i.name,
-                        CASE WHEN json_valid(i.metadata_json)
-                                  AND json_extract(i.metadata_json, '$.role') = 'signal_handler'
-                             THEN CASE WHEN json_extract(i.metadata_json, '$.receiver') = (
-                                      SELECT CASE WHEN t.kind IN ('class', 'struct', 'enum', 'interface', 'trait', 'module', 'namespace')
-                                                  THEN t.name ELSE tp.name END
-                                      FROM symbols t
-                                      LEFT JOIN symbols tp ON tp.symbol_id = t.parent_symbol_id
-                                      WHERE t.symbol_id = ?2)
-                                  THEN 'handler' ELSE 'handler (candidate)' END
-                             ELSE i.kind END,
-                        i.path,
-                        i.start_line,
-                        i.start_column
-                 FROM raw i
-                 LEFT JOIN symbols s_from ON i.containing_symbol_id = s_from.symbol_id
-                 LEFT JOIN symbols selected_target ON selected_target.symbol_id = ?2
-                 WHERE i.name = ?1 AND i.kind IN ('type_usage', 'member_access')
-                   AND COALESCE(s_from.kind, '') != 'import'
-                   AND (?2 IS NULL OR {language_match})
-                   AND NOT ({type_usage_shadow})
-                   AND NOT EXISTS (
-                       SELECT 1 FROM relationships covered
-                       JOIN symbols covered_to ON covered.to_symbol_id = covered_to.symbol_id
-                       WHERE covered_to.name = i.name
-                         AND covered.path = i.path
-                         AND covered.start_line = i.start_line
-                         AND (?2 IS NULL OR covered.to_symbol_id = ?2)
-                   )
-                   AND NOT EXISTS (
-                       SELECT 1 FROM pending_relationships covered
-                       WHERE covered.target_terminal_name = i.name
-                         AND covered.path = i.path
-                         AND covered.start_line = i.start_line
-                   )
-                   AND (?2 IS NULL OR NOT EXISTS (
-                       SELECT 1 FROM symbols owner
-                       JOIN symbols member ON member.parent_symbol_id = owner.symbol_id
-                       WHERE owner.name = CASE WHEN json_valid(i.metadata_json) THEN json_extract(i.metadata_json, '$.receiver') END
-                         AND member.name = i.name
-                         AND owner.name IS NOT (SELECT parent.name FROM symbols target
-                                                JOIN symbols parent ON parent.symbol_id = target.parent_symbol_id
-                                                WHERE target.symbol_id = ?2)
-                   ))
-                   AND NOT (i.kind = 'member_access' AND EXISTS (
-                       SELECT 1 FROM symbols target
-                       LEFT JOIN symbols scope ON scope.symbol_id = target.parent_symbol_id
-                       WHERE target.symbol_id = ?2
-                         AND (scope.kind IN ('function', 'method', 'constructor')
-                              OR (scope.symbol_id IS NULL
-                                  AND target.path != i.path
-                                  AND target.language IN ('javascript', 'typescript', 'tsx')
-                                  AND COALESCE(target.visibility, 'private') = 'private'))
-                   ))
-                   AND NOT COALESCE((i.kind = 'member_access'
-                        AND json_valid(i.metadata_json)
-                        AND json_extract(i.metadata_json, '$.role') IS NOT 'signal_handler'
-                        AND json_extract(i.metadata_json, '$.receiver') GLOB '[A-Z]*'
-                        AND NOT EXISTS (SELECT 1 FROM symbols known
-                                        WHERE known.name = json_extract(i.metadata_json, '$.receiver')
-                                          AND known.kind NOT IN ('variable', 'parameter', 'method'))), 0)
-                 ORDER BY i.path, i.start_line, i.start_column, i.identifier_id"
-            ))?;
-            let mut supported = Vec::new();
-            let mut candidates = Vec::new();
-            let mut supported_keys = HashSet::new();
-            let mut candidate_keys = HashSet::new();
-            let site_key = |site: &ReferenceSite| {
-                (
-                    site.from_symbol_id.clone(),
-                    site.to_symbol_name.clone(),
-                    site.kind.clone(),
-                    site.path.clone(),
-                    site.start_line,
-                )
-            };
-            let mut ident_rows = ident_stmt.query(params![symbol_name, symbol_id])?;
-            while let Some(row) = ident_rows.next()? {
-                let identifier_id: String = row.get(0)?;
-                let mut site = ReferenceSite {
-                    from_symbol_name: row.get(1)?,
-                    from_symbol_id: row.get(2)?,
-                    to_symbol_name: row.get(3)?,
-                    kind: row.get(4)?,
-                    path: row.get::<_, String>(5)?.replace('\\', "/"),
-                    start_line: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
-                    start_column: row.get::<_, Option<i64>>(7)?.map(|v| v as usize),
-                    occurrences: None,
-                    target: None,
-                    enclosing_symbol_name: None,
-                };
-                let receiver_match: i64 =
-                    receiver_stmt.query_row(params![symbol_id, identifier_id], |row| row.get(0))?;
-                if receiver_match < 0 {
-                    continue;
-                }
-                if receiver_match == 0 && site.kind == "member_access" {
-                    site.kind = "member_access (candidate)".to_string();
-                }
-                if site.kind == "member_access (candidate)" {
-                    if candidates.len() < remaining && candidate_keys.insert(site_key(&site)) {
-                        candidates.push(site);
-                    }
-                } else if supported_keys.insert(site_key(&site)) {
-                    supported.push(site);
-                    if supported.len() >= remaining {
-                        break;
-                    }
-                }
-            }
-
-            let site_order = |a: &ReferenceSite, b: &ReferenceSite| {
-                a.path
-                    .cmp(&b.path)
-                    .then(a.start_line.cmp(&b.start_line))
-                    .then(a.start_column.cmp(&b.start_column))
-            };
-            supported.sort_by(site_order);
-            supported.truncate(remaining);
-            candidates.sort_by(site_order);
-            candidates.truncate(remaining - supported.len());
-            results.extend(supported);
-            results.extend(candidates);
-
+            let identifiers = direct_identifier_rows(conn, symbol_name, symbol_id, remaining)?;
+            results.extend(identifiers.into_iter().map(|row| row.site));
             if let Some(sid) = symbol_id.filter(|_| results.len() < limit) {
                 let remaining = limit - results.len();
-                let language_match = identifier_language_matches("i", "target");
-                let mut receiver_stmt = conn.prepare(&format!(
-                    "SELECT COALESCE(s.name, ''),
-                            COALESCE(i.containing_symbol_id, ''),
-                            i.name,
-                            i.kind,
-                            i.path,
-                            MIN(i.start_line),
-                            i.start_column,
-                            COUNT(*)
-                     FROM identifiers i
-                     LEFT JOIN symbols s ON i.containing_symbol_id = s.symbol_id
-                     JOIN symbols target ON target.symbol_id = ?2
-                     LEFT JOIN symbols target_parent ON target_parent.symbol_id = target.parent_symbol_id
-                     WHERE i.kind = 'member_access'
-                       AND i.name != target.name
-                       AND COALESCE(s.kind, '') != 'import'
-                       AND target.kind IN ('class', 'struct', 'enum', 'interface', 'trait', 'module', 'namespace')
-                       AND json_valid(i.metadata_json)
-                       AND json_extract(i.metadata_json, '$.receiver') = target.name
-                       AND (json_extract(i.metadata_json, '$.receiver_qualifier') IS NULL
-                            OR json_extract(i.metadata_json, '$.receiver_qualifier') = target_parent.name)
-                       AND {language_match}
-                       AND NOT EXISTS (
-                           SELECT 1 FROM symbols nearer
-                           WHERE nearer.name = target.name
-                             AND nearer.path = i.path
-                             AND nearer.symbol_id != target.symbol_id
-                             AND nearer.kind IN ({NESTED_TYPE_KINDS}, 'module', 'namespace')
-                       )
-                     GROUP BY i.path
-                     ORDER BY i.path, i.start_line
-                     LIMIT ?1"
-                ))?;
-                let rows = receiver_stmt.query_map(params![remaining as i64, sid], |row| {
-                    Ok(ReferenceSite {
-                        from_symbol_name: row.get(0)?,
-                        from_symbol_id: row.get(1)?,
-                        to_symbol_name: row.get(2)?,
-                        kind: row.get(3)?,
-                        path: row.get::<_, String>(4)?.replace('\\', "/"),
-                        start_line: row.get::<_, Option<i64>>(5)?.map(|v| v as usize),
-                        start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
-                        occurrences: Some(row.get::<_, i64>(7)? as usize),
-                        target: None,
-                        enclosing_symbol_name: None,
-                    })
-                })?;
-                for r in rows {
-                    results.push(r?);
-                }
+                results.extend(grouped_member_access_rows(conn, sid, remaining)?);
             }
         }
     } else {

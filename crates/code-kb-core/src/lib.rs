@@ -3,6 +3,7 @@ pub mod formatters;
 pub mod models;
 pub mod ops;
 pub mod queries;
+pub mod reference_report;
 pub mod slicer;
 pub mod sync;
 pub mod telemetry;
@@ -20,8 +21,10 @@ pub use formatters::{
     format_symbol_body, no_facts_heading,
 };
 pub use models::{
-    BlastRadiusResult, ContextSlice, FileFact, ImpactedSymbol, LiteralFact, ReferenceSite,
-    SearchExplain, StructuralFact, Symbol, SymbolSearchResult, TestTarget, TypeFact,
+    BlastRadiusResult, ContextSlice, FileFact, ImpactedSymbol, LabeledSite, LiteralFact,
+    ReferenceCounts, ReferenceReport, ReferenceSite, ReferenceTarget, SearchExplain, SiteLabel,
+    StructuralFact, Symbol, SymbolSearchResult, TestTarget, TextOnlyLines, TextScanSummary,
+    TypeFact,
 };
 pub use ops::{
     OpError, SymbolSelector, blast_radius_op, blast_radius_selected_op, codebase_outline_op,
@@ -43,6 +46,7 @@ pub use queries::{
     search_symbols, search_symbols_scoped, suggest_file_paths, suggest_symbol_names,
     workspace_name,
 };
+pub use reference_report::{reference_report, select_reference_target};
 pub use slicer::{SliceError, slice_symbol, slice_symbol_body};
 pub use sync::{
     PINNED_JULIE_VERSION, ReconcileReport, SyncError, create_index, delete_file, ensure_fresh_file,
