@@ -20,7 +20,11 @@ use crate::text_scan::scan_word;
 
 const RESOLVER_ROW_CAP: usize = 5_000;
 const OTHER_DEFINITION_CAP: usize = 12;
-const ACCOUNTING_BUDGET: Duration = Duration::from_millis(1_500);
+/// How long the per-site checks of one report may run; later sites keep the label their name gives.
+const ACCOUNTING_TIME_LIMIT: Duration = Duration::from_secs(3);
+/// Rows per judge query, so the time limit is checked between queries.
+const JUDGE_CHUNK: usize = 2_000;
+const NOT_CHECKED: &str = "not checked within the time limit";
 const TEXT_SCAN_BUDGET: Duration = Duration::from_secs(3);
 
 const CLASS_LIKE_KINDS: &[&str] = &[
@@ -67,6 +71,15 @@ pub fn reference_report(
     target: &Symbol,
     _include_external: bool,
 ) -> Result<ReferenceReport, QueryError> {
+    report_within(conn, root, target, ACCOUNTING_TIME_LIMIT)
+}
+
+fn report_within(
+    conn: &Connection,
+    root: &Path,
+    target: &Symbol,
+    time_limit: Duration,
+) -> Result<ReferenceReport, QueryError> {
     let class = constructor_class(conn, target)?;
     let mut specs = vec![Spec {
         name: target.name.clone(),
@@ -83,7 +96,7 @@ pub fn reference_report(
         });
     }
 
-    let mut accounting = Accounting::new(conn);
+    let mut accounting = Accounting::new(conn, root, time_limit);
     let mut site_rows = Vec::new();
     let mut cannot_see = Vec::new();
     for spec in &specs {
@@ -92,6 +105,17 @@ pub fn reference_report(
     let definitions_with_name = accounting.definition_count(&target.name)?;
 
     let mut sites = merge_site_rows(site_rows);
+    let unchecked = sites
+        .iter()
+        .filter(|site| site.basis.ends_with(NOT_CHECKED))
+        .count();
+    if unchecked > 0 {
+        cannot_see.push(format!(
+            "{unchecked} of {} sites were not checked within the {} s time limit",
+            sites.len(),
+            time_limit.as_secs()
+        ));
+    }
     let mut report_sites: Vec<ReferenceSite> = sites.iter().map(|row| row.site.clone()).collect();
     populate_lambda_enclosing_names(conn, &mut report_sites)?;
     for (row, site) in sites.iter_mut().zip(report_sites) {
@@ -341,11 +365,16 @@ struct NameRow {
     site_column: Option<usize>,
     consumed: bool,
     paired: bool,
+    /// The call is written on an expression (`getAsSingleElement().getAsInt()`), so it has a
+    /// receiver that julie did not record.
+    hidden_receiver: bool,
 }
 
 impl NameRow {
     fn has_qualifier(&self) -> bool {
-        self.receiver.as_deref().is_some_and(|r| !r.is_empty()) || !self.namespace.is_empty()
+        self.hidden_receiver
+            || self.receiver.as_deref().is_some_and(|r| !r.is_empty())
+            || !self.namespace.is_empty()
     }
 
     fn qualifier(&self) -> Option<&str> {
@@ -382,6 +411,24 @@ fn is_property_method(symbol: &Symbol) -> bool {
     symbol.kind == "method"
         && symbol.parent_symbol_id.is_none()
         && language_family(&symbol.language) == "js"
+}
+
+/// The type a C# extension method extends: `IEnumerable` for `Foo(this IEnumerable<T> source)`.
+fn extended_type(signature: &str) -> Option<String> {
+    let (_, rest) = signature.split_once("(this ")?;
+    let written = rest.split_whitespace().next()?;
+    let unqualified = written.split('<').next()?.rsplit('.').next()?;
+    Some(unqualified.trim_end_matches('?').to_string()).filter(|t| is_plain_identifier(t))
+}
+
+/// A test-framework call that julie names after its label (`test("strictObject")`): code
+/// never calls the label by name.
+fn is_test_label(signature: &str) -> bool {
+    signature.split_once('(').is_some_and(|(callee, rest)| {
+        !callee.is_empty()
+            && callee.split('.').all(is_plain_identifier)
+            && rest.trim_start().starts_with(['"', '\'', '`'])
+    })
 }
 
 fn is_plain_identifier(text: &str) -> bool {
@@ -482,6 +529,10 @@ impl TextOutcome {
 
 struct Accounting<'a> {
     conn: &'a Connection,
+    root: &'a Path,
+    /// The judge stops here, so the cheaper checks of the judged rows still fit in the limit.
+    judge_deadline: Instant,
+    deadline: Instant,
     judge_stmt: RefCell<Option<Statement<'a>>>,
     import_match_stmt: Option<Statement<'a>>,
     statements: RefCell<HashMap<&'static str, Statement<'a>>>,
@@ -491,15 +542,22 @@ struct Accounting<'a> {
 }
 
 impl<'a> Accounting<'a> {
-    fn new(conn: &'a Connection) -> Self {
+    fn new(conn: &'a Connection, root: &'a Path, time_limit: Duration) -> Self {
         Accounting {
             conn,
+            root,
+            judge_deadline: Instant::now() + time_limit / 2,
+            deadline: Instant::now() + time_limit,
             judge_stmt: RefCell::new(None),
             import_match_stmt: None,
             statements: RefCell::new(HashMap::new()),
             external_sources: HashMap::new(),
             import_matches: HashMap::new(),
         }
+    }
+
+    fn out_of_time(&self) -> bool {
+        Instant::now() >= self.deadline
     }
 
     /// Runs `run` on the statement for `sql`, preparing it on first use: preparing the larger
@@ -531,13 +589,17 @@ impl<'a> Accounting<'a> {
         };
         let mut stmt = self.conn.prepare(&format!(
             "SELECT s.symbol_id, s.name, s.kind, s.language, s.path, s.start_line,
-                    s.body_start_line, s.parent_symbol_id, par.name, par.kind, {decorated_start}
+                    s.body_start_line, s.parent_symbol_id, par.name, par.kind, {decorated_start},
+                    COALESCE(s.signature, '')
              FROM symbols s LEFT JOIN symbols par ON par.symbol_id = s.parent_symbol_id
              WHERE s.name = ?1 AND s.kind NOT IN ('import', 'export')
                AND s.language NOT IN ({})",
             documentation_language_list()
         ))?;
         let rows = stmt.query_map(params![name], |row| {
+            if is_test_label(&row.get::<_, String>(11)?) {
+                return Ok(None);
+            }
             let kind: String = row.get(2)?;
             let parent_kind: Option<String> = row.get(9)?;
             let parent_name: Option<String> = row.get(8)?;
@@ -546,7 +608,7 @@ impl<'a> Accounting<'a> {
                     && parent_kind
                         .as_deref()
                         .is_some_and(|k| matches!(k, "function" | "method" | "constructor"));
-            Ok(Definition {
+            Ok(Some(Definition {
                 symbol_id: row.get(0)?,
                 name: row.get(1)?,
                 path: row.get::<_, String>(4)?.replace('\\', "/"),
@@ -559,9 +621,11 @@ impl<'a> Accounting<'a> {
                         .is_some_and(|k| CLASS_LIKE_KINDS.contains(&k))
                 }),
                 local,
-            })
+            }))
         })?;
-        let mut definitions: Vec<Definition> = rows.collect::<Result<_, _>>()?;
+        let mut definitions: Vec<Definition> = rows
+            .filter_map(Result::transpose)
+            .collect::<Result<_, _>>()?;
         let writes =
             inherited_writes_among(self.conn, definitions.iter().map(|d| d.symbol_id.as_str()))?;
         definitions.retain(|d| !writes.contains(&d.symbol_id));
@@ -586,14 +650,28 @@ impl<'a> Accounting<'a> {
         let mut rows = self.load_rows(&spec.name, &definitions, spec.calls_only)?;
         pair_identifiers(&mut rows);
         rows.retain(|row| !row.consumed);
+        mark_hidden_receivers(self.root, &mut rows);
 
-        let claims = self.claims(spec, &rows, cannot_see)?;
+        let mut order: Vec<usize> = (0..rows.len()).collect();
+        order.sort_by(|&a, &b| {
+            let (a, b) = (&rows[a], &rows[b]);
+            shared_leading_segments(&b.path, &target.path)
+                .cmp(&shared_leading_segments(&a.path, &target.path))
+                .then_with(|| a.path.cmp(&b.path))
+                .then_with(|| a.line.cmp(&b.line))
+        });
+        let (claims, judged) = self.claims(spec, &rows, &order, cannot_see)?;
+        let mut unchecked: Vec<usize> = order[judged..].to_vec();
         let mut verdicts: HashMap<String, Verdict> = HashMap::new();
         let mut undecided: Vec<usize> = Vec::new();
-        for (index, row) in rows.iter().enumerate() {
-            match self.decide_cheap(row, spec, target, &group_ids, k, &claims)? {
+        for (position, &index) in order[..judged].iter().enumerate() {
+            if self.out_of_time() {
+                unchecked.extend_from_slice(&order[position..judged]);
+                break;
+            }
+            match self.decide_cheap(&rows[index], spec, target, &group_ids, k, &claims)? {
                 Some(verdict) => {
-                    verdicts.insert(row.key.clone(), verdict);
+                    verdicts.insert(rows[index].key.clone(), verdict);
                 }
                 None => undecided.push(index),
             }
@@ -611,47 +689,59 @@ impl<'a> Accounting<'a> {
             )
         });
         let mut checked = 0;
-        let others_started = Instant::now();
         for other in &others {
-            if undecided.is_empty() {
+            if undecided.is_empty() || checked >= OTHER_DEFINITION_CAP || self.out_of_time() {
                 break;
             }
-            if checked >= OTHER_DEFINITION_CAP || others_started.elapsed() >= ACCOUNTING_BUDGET {
+            let mut kept = Vec::with_capacity(undecided.len());
+            let mut complete = true;
+            for chunk in undecided.chunks(JUDGE_CHUNK) {
+                if self.out_of_time() {
+                    complete = false;
+                    kept.extend_from_slice(chunk);
+                    continue;
+                }
+                let chunk_rows: Vec<&NameRow> = chunk.iter().map(|&index| &rows[index]).collect();
+                let judged = self.judge(&spec.name, &other.symbol_id, &chunk_rows)?;
+                for &index in chunk {
+                    let row = &rows[index];
+                    if row.hidden_receiver {
+                        kept.push(index);
+                        continue;
+                    }
+                    let Some(Judged {
+                        claimed: true,
+                        basis: Some(basis),
+                    }) = judged.get(&row.key)
+                    else {
+                        kept.push(index);
+                        continue;
+                    };
+                    if basis == IMPORT_BASIS
+                        && row.language == "python"
+                        && !self.python_import_reaches(row, &spec.name, &other.path)?
+                    {
+                        kept.push(index);
+                        continue;
+                    }
+                    verdicts.insert(
+                        row.key.clone(),
+                        Verdict::new(SiteLabel::Excluded, other.resolves_to(), false),
+                    );
+                }
+            }
+            undecided = kept;
+            if !complete {
                 break;
             }
             checked += 1;
-            let judged = self.judge(&spec.name, &other.symbol_id)?;
-            let mut kept = Vec::with_capacity(undecided.len());
-            for index in undecided {
-                let row = &rows[index];
-                let Some(Judged {
-                    claimed: true,
-                    basis: Some(basis),
-                }) = judged.get(&row.key)
-                else {
-                    kept.push(index);
-                    continue;
-                };
-                if basis == IMPORT_BASIS
-                    && row.language == "python"
-                    && !self.python_import_reaches(row, &spec.name, &other.path)?
-                {
-                    kept.push(index);
-                    continue;
-                }
-                verdicts.insert(
-                    row.key.clone(),
-                    Verdict::new(SiteLabel::Excluded, other.resolves_to(), false),
-                );
-            }
-            undecided = kept;
         }
-        let unchecked = others.len() - checked;
-        if !undecided.is_empty() && unchecked > 0 {
-            cannot_see.push(if unchecked == 1 {
+        let unchecked_others = others.len() - checked;
+        if !undecided.is_empty() && unchecked_others > 0 {
+            cannot_see.push(if unchecked_others == 1 {
                 "1 other definition with this name was not checked".to_string()
             } else {
-                format!("{unchecked} other definitions with this name were not checked")
+                format!("{unchecked_others} other definitions with this name were not checked")
             });
         }
 
@@ -659,9 +749,29 @@ impl<'a> Accounting<'a> {
             let row = &rows[index];
             let verdict = match claims.get(&row.key) {
                 Some(claim) => claimed_verdict(row, claim, k, spec.builds_class),
-                None => self.decide_late(row, &group_ids, &others, k)?,
+                None if self.out_of_time() => {
+                    unchecked.push(index);
+                    continue;
+                }
+                None => self.decide_late(row, &spec.group, &others, k)?,
             };
             verdicts.insert(row.key.clone(), verdict);
+        }
+        for index in unchecked {
+            let verdict = if others.is_empty() {
+                Verdict::new(
+                    SiteLabel::Likely,
+                    format!("name only; {NOT_CHECKED}"),
+                    false,
+                )
+            } else {
+                Verdict::new(
+                    SiteLabel::Unresolved,
+                    format!("{k} definitions; {NOT_CHECKED}"),
+                    false,
+                )
+            };
+            verdicts.insert(rows[index].key.clone(), verdict);
         }
 
         for row in &rows {
@@ -731,6 +841,7 @@ impl<'a> Accounting<'a> {
                 site_column: row.get::<_, Option<i64>>(7)?.map(|v| v as usize),
                 consumed: false,
                 paired: false,
+                hidden_receiver: false,
             });
         }
 
@@ -766,6 +877,7 @@ impl<'a> Accounting<'a> {
                 site_column: row.get::<_, Option<i64>>(7)?.map(|v| v as usize),
                 consumed: false,
                 paired: false,
+                hidden_receiver: false,
             });
         }
 
@@ -801,6 +913,7 @@ impl<'a> Accounting<'a> {
                     site_column: row.get::<_, Option<i64>>(7)?.map(|v| v as usize),
                     consumed: false,
                     paired: false,
+                    hidden_receiver: false,
                 });
             }
         }
@@ -876,13 +989,28 @@ impl<'a> Accounting<'a> {
         Ok(spans)
     }
 
-    fn judge(&self, name: &str, target_id: &str) -> Result<HashMap<String, Judged>, QueryError> {
+    /// Judges `rows` (pending and identifier rows; relationship rows need no judge) for `target_id`.
+    fn judge(
+        &self,
+        name: &str,
+        target_id: &str,
+        rows: &[&NameRow],
+    ) -> Result<HashMap<String, Judged>, QueryError> {
+        let ids_of = |source: Source| -> String {
+            let ids: Vec<&str> = rows
+                .iter()
+                .filter(|row| row.source == source)
+                .filter_map(|row| row.key.split_once(':').map(|(_, id)| id))
+                .collect();
+            serde_json::to_string(&ids).unwrap_or_else(|_| "[]".to_string())
+        };
+        let (pending, identifiers) = (ids_of(Source::Pending), ids_of(Source::Identifier));
         let mut slot = self.judge_stmt.borrow_mut();
         if slot.is_none() {
             *slot = Some(self.conn.prepare(&judge_sql(self.conn))?);
         }
         let stmt = slot.as_mut().expect("judge statement was just prepared");
-        let mut rows = stmt.query(params![name, target_id])?;
+        let mut rows = stmt.query(params![name, target_id, pending, identifiers])?;
         let mut judged = HashMap::new();
         while let Some(row) = rows.next()? {
             let source: String = row.get(0)?;
@@ -898,15 +1026,18 @@ impl<'a> Accounting<'a> {
         Ok(judged)
     }
 
+    /// The claims of the target group on the rows of `order`, judged in chunks until the time
+    /// limit, and how many rows at the start of `order` were judged.
     fn claims(
         &self,
         spec: &Spec,
         rows: &[NameRow],
+        order: &[usize],
         cannot_see: &mut Vec<String>,
-    ) -> Result<HashMap<String, Claim>, QueryError> {
+    ) -> Result<(HashMap<String, Claim>, usize), QueryError> {
         let mut claims: HashMap<String, Claim> = HashMap::new();
+        let mut resolvers = Vec::with_capacity(spec.group.len());
         for member in &spec.group {
-            let judged = self.judge(&spec.name, &member.symbol_id)?;
             let resolver_ids: HashMap<String, bool> = direct_identifier_rows(
                 self.conn,
                 &spec.name,
@@ -926,52 +1057,72 @@ impl<'a> Accounting<'a> {
                     "the resolver listed {RESOLVER_ROW_CAP} identifier rows and may hold more; rows past that limit have no resolver evidence"
                 ));
             }
-            for row in rows {
-                let resolver_claim = resolver_ids.get(&row.key).copied();
-                let judged_row = judged.get(&row.key);
-                let claimed = match row.source {
-                    Source::Relationship => row
-                        .to_symbol_id
-                        .as_deref()
-                        .is_some_and(|id| id == member.symbol_id),
-                    Source::Identifier
-                        if matches!(row.kind.as_str(), "type_usage" | "member_access") =>
-                    {
-                        resolver_claim.is_some()
+            resolvers.push(resolver_ids);
+        }
+        let mut judged_rows = 0;
+        for chunk in order.chunks(JUDGE_CHUNK) {
+            if Instant::now() >= self.judge_deadline {
+                break;
+            }
+            let chunk_rows: Vec<&NameRow> = chunk
+                .iter()
+                .map(|&index| &rows[index])
+                .filter(|row| !row.hidden_receiver)
+                .collect();
+            for (member, resolver_ids) in spec.group.iter().zip(&resolvers) {
+                let judged = self.judge(&spec.name, &member.symbol_id, &chunk_rows)?;
+                for row in chunk_rows.iter().copied() {
+                    let resolver_claim = resolver_ids.get(&row.key).copied();
+                    let judged_row = judged.get(&row.key);
+                    let claimed = match row.source {
+                        Source::Relationship => row
+                            .to_symbol_id
+                            .as_deref()
+                            .is_some_and(|id| id == member.symbol_id),
+                        Source::Identifier
+                            if matches!(row.kind.as_str(), "type_usage" | "member_access") =>
+                        {
+                            resolver_claim.is_some()
+                        }
+                        _ => judged_row.is_some_and(|j| j.claimed),
+                    };
+                    if !claimed {
+                        continue;
                     }
-                    _ => judged_row.is_some_and(|j| j.claimed),
-                };
-                if !claimed {
-                    continue;
-                }
-                let basis = match row.source {
-                    // julie links a call inside a method to that method by name alone.
-                    Source::Relationship if row.caller_id == row.to_symbol_id => None,
-                    Source::Relationship => Some("same file".to_string()),
-                    _ => judged_row.and_then(|j| j.basis.clone()),
-                };
-                let basis = match basis {
-                    Some(basis)
-                        if basis == IMPORT_BASIS
-                            && row.language == "python"
-                            && !self.python_import_reaches(row, &spec.name, &member.path)? =>
-                    {
-                        None
+                    let basis = match row.source {
+                        // julie links a call inside a method to that method by name alone.
+                        Source::Relationship if row.caller_id == row.to_symbol_id => None,
+                        Source::Relationship => Some("same file".to_string()),
+                        _ => judged_row.and_then(|j| j.basis.clone()),
+                    };
+                    let basis = match basis {
+                        Some(basis)
+                            if basis == IMPORT_BASIS
+                                && row.language == "python"
+                                && !self.python_import_reaches(
+                                    row,
+                                    &spec.name,
+                                    &member.path,
+                                )? =>
+                        {
+                            None
+                        }
+                        basis => basis,
+                    };
+                    let candidate = resolver_claim.unwrap_or(false);
+                    let entry = claims.entry(row.key.clone()).or_insert(Claim {
+                        basis: None,
+                        candidate,
+                    });
+                    if entry.basis.is_none() {
+                        entry.basis = basis;
+                        entry.candidate = candidate;
                     }
-                    basis => basis,
-                };
-                let candidate = resolver_claim.unwrap_or(false);
-                let entry = claims.entry(row.key.clone()).or_insert(Claim {
-                    basis: None,
-                    candidate,
-                });
-                if entry.basis.is_none() {
-                    entry.basis = basis;
-                    entry.candidate = candidate;
                 }
             }
+            judged_rows += chunk.len();
         }
-        Ok(claims)
+        Ok((claims, judged_rows))
     }
 
     fn decide_cheap(
@@ -1023,6 +1174,7 @@ impl<'a> Accounting<'a> {
             )));
         }
         if let Some(to) = row.to_symbol_id.as_deref()
+            && !row.hidden_receiver
             && !group_ids.contains(to)
             && let Some(other) = self.definition_by_id(to)?
         {
@@ -1097,13 +1249,13 @@ impl<'a> Accounting<'a> {
     fn decide_late(
         &mut self,
         row: &NameRow,
-        group_ids: &HashSet<&str>,
+        group: &[Symbol],
         others: &[&Definition],
         k: usize,
     ) -> Result<Verdict, QueryError> {
         if let Some(receiver) = row.qualifier().filter(|_| row.namespace.len() <= 1)
             && let Some(type_name) = self.receiver_type(row, receiver)?
-            && !self.owner_related(&type_name, group_ids)?
+            && !self.owner_related(&type_name, group)?
         {
             return Ok(Verdict::new(
                 SiteLabel::Excluded,
@@ -1111,7 +1263,7 @@ impl<'a> Accounting<'a> {
                 false,
             ));
         }
-        if let Some(head) = self.foreign_type_head(row, group_ids)? {
+        if let Some(head) = self.foreign_type_head(row, group)? {
             return Ok(Verdict::new(
                 SiteLabel::Excluded,
                 format!("receiver `{head}` has type `{head}`"),
@@ -1204,8 +1356,14 @@ impl<'a> Accounting<'a> {
                 .expect("import match statement was just prepared");
             let matches = stmt
                 .query_map(params![row.path, receiver, name], |r| {
-                    Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+                    Ok((
+                        r.get::<_, String>(0)?,
+                        r.get::<_, String>(1)?,
+                        r.get::<_, String>(2)?,
+                    ))
                 })?
+                .filter(|m| !matches!(m, Ok((_, _, signature)) if is_test_label(signature)))
+                .map(|m| m.map(|(id, path, _)| (id, path)))
                 .collect::<Result<Vec<_>, _>>()?;
             self.import_matches.insert(key.clone(), matches);
         }
@@ -1405,14 +1563,13 @@ impl<'a> Accounting<'a> {
 
     /// True when `type_name` is an owner of the target group or shares an inheritance chain
     /// with one, so a call through it may still reach the target.
-    fn owner_related(
-        &self,
-        type_name: &str,
-        group_ids: &HashSet<&str>,
-    ) -> Result<bool, QueryError> {
-        let mut owners = Vec::new();
-        for id in group_ids {
-            if let Some(definition) = self.definition_by_id(id)? {
+    fn owner_related(&self, type_name: &str, group: &[Symbol]) -> Result<bool, QueryError> {
+        let mut owners: Vec<String> = group
+            .iter()
+            .filter_map(|member| member.signature.as_deref().and_then(extended_type))
+            .collect();
+        for member in group {
+            if let Some(definition) = self.definition_by_id(&member.symbol_id)? {
                 match definition.owner_name {
                     Some(owner) => owners.push(owner),
                     None => return Ok(true),
@@ -1463,7 +1620,7 @@ impl<'a> Accounting<'a> {
     fn foreign_type_head(
         &self,
         row: &NameRow,
-        group_ids: &HashSet<&str>,
+        group: &[Symbol],
     ) -> Result<Option<String>, QueryError> {
         let Some(head) = row
             .namespace
@@ -1488,7 +1645,7 @@ impl<'a> Accounting<'a> {
             let aliased = kinds
                 .iter()
                 .any(|k| matches!(k.as_str(), "type" | "type_alias" | "typedef"));
-            type_like && !aliased && !self.owner_related(head, group_ids)?
+            type_like && !aliased && !self.owner_related(head, group)?
         };
         Ok(foreign.then(|| head.to_string()))
     }
@@ -1639,6 +1796,36 @@ fn merge_site_rows(rows: Vec<SiteRow>) -> Vec<LabeledSite> {
         .collect()
 }
 
+/// Marks the calls without a recorded receiver whose name follows a `.` after a call or index
+/// result in the source (`single().getAsInt()`, `items[0]?.name()`).
+fn mark_hidden_receivers(root: &Path, rows: &mut [NameRow]) {
+    let mut by_path: HashMap<String, Vec<usize>> = HashMap::new();
+    for (index, row) in rows.iter().enumerate() {
+        // PHP writes string concatenation with `.`.
+        if row.is_call() && !row.has_qualifier() && row.language != "php" {
+            by_path.entry(row.path.clone()).or_default().push(index);
+        }
+    }
+    for (path, indices) in by_path {
+        let Ok(text) = std::fs::read_to_string(root.join(&path)) else {
+            continue;
+        };
+        let lines: Vec<&str> = text.lines().collect();
+        for index in indices {
+            let row = &mut rows[index];
+            let before = row
+                .site_column
+                .zip(row.site_line.checked_sub(1).and_then(|i| lines.get(i)))
+                .and_then(|(column, line)| line.get(..column))
+                .unwrap_or("")
+                .trim_end();
+            row.hidden_receiver = before
+                .strip_suffix('.')
+                .is_some_and(|before| before.trim_end_matches(['?', '!']).ends_with([')', ']']));
+        }
+    }
+}
+
 /// Gives each pending or relationship call the first unused call identifier of the same caller
 /// and name on or after its line, so a statement that starts above its call reports the line of
 /// the call.
@@ -1763,17 +1950,21 @@ fn judge_sql(conn: &Connection) -> String {
                     pr.start_line AS start_line, pr.start_column AS start_column,
                     pr.target_receiver AS target_receiver,
                     pr.target_namespace_json AS target_namespace_json,
-                    COALESCE((SELECT language FROM files WHERE file_id = pr.file_id), '') AS language
+                    COALESCE((SELECT language FROM files WHERE file_id = pr.file_id), '') AS language,
+                    NULL AS receiver_qualifier
              FROM pending_relationships pr
              WHERE pr.target_terminal_name = ?1 AND pr.kind != 'imports'
+               AND CAST(pr.rowid AS TEXT) IN (SELECT value FROM json_each(?3))
              UNION ALL
              SELECT 'I', i.identifier_id, i.containing_symbol_id, i.kind, i.path, i.start_line,
                     i.start_column,
                     CASE WHEN json_valid(i.metadata_json)
                          THEN json_extract(i.metadata_json, '$.receiver') END,
-                    '[]', i.language
+                    '[]', i.language,
+                    CASE WHEN json_valid(i.metadata_json)
+                         THEN json_extract(i.metadata_json, '$.receiver_qualifier') END
              FROM identifiers i
-             WHERE i.name = ?1
+             WHERE i.name = ?1 AND i.identifier_id IN (SELECT value FROM json_each(?4))
          ) p
          LEFT JOIN symbols s_from ON s_from.symbol_id = p.from_symbol_id
          JOIN symbols {target} ON {target}.symbol_id = ?2
@@ -1789,7 +1980,7 @@ fn import_match_sql() -> String {
     let receiver = module_import_binding_sql("t", "p.target_receiver");
     let bare = module_import_binding_sql("t", "t.name");
     format!(
-        "SELECT t.symbol_id, t.path
+        "SELECT t.symbol_id, t.path, COALESCE(t.signature, '')
          FROM (SELECT ?1 AS path, ?2 AS target_receiver) p
          JOIN symbols t ON t.name = ?3
          WHERE t.parent_symbol_id IS NULL AND t.kind NOT IN ('import', 'export')
@@ -1813,6 +2004,13 @@ fn evidence_sql(conn: &Connection, target: &str, parent: &str) -> String {
     let module_receiver = module_import_binding_sql(target, "p.target_receiver");
     let module_bare = module_import_binding_sql(target, &format!("{target}.name"));
     let receiver_type = receiver_type_sql(conn, parent);
+    let qualifier_reaches_owner = module_import_binding_sql(parent, "p.receiver_qualifier");
+    let foreign_qualifier = format!(
+        "(p.receiver_qualifier IS NOT NULL
+          AND EXISTS (SELECT 1 FROM symbols q WHERE q.kind = 'import' AND q.path = p.path
+                        AND q.name = p.receiver_qualifier)
+          AND NOT {qualifier_reaches_owner})"
+    );
     let package_proximity = path_proximity(&format!("{target}.path"), "p.path");
     let built = built_receiver_sql(conn, target)
         .map(|built| {
@@ -1832,7 +2030,8 @@ fn evidence_sql(conn: &Connection, target: &str, parent: &str) -> String {
                  AND s_from.parent_symbol_id = {target}.parent_symbol_id THEN 'class chain'
             WHEN {target}.parent_symbol_id IS NOT NULL
                  AND ({self_receiver} OR {names_self}) AND {receiver_chain} THEN 'class chain'
-            WHEN {has_receiver} AND {parent}.name = p.target_receiver THEN 'qualified path'
+            WHEN {has_receiver} AND {parent}.name = p.target_receiver AND NOT {foreign_qualifier}
+                 THEN 'qualified path'
             WHEN {has_receiver} AND {target}.parent_symbol_id IS NULL AND {module_receiver}
                  THEN 'import'
             WHEN {has_receiver} AND {target}.parent_symbol_id IS NOT NULL AND {receiver_type}
@@ -1855,4 +2054,51 @@ fn evidence_sql(conn: &Connection, target: &str, parent: &str) -> String {
                 END
          END"
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        Workspace, find_julie_extract_binary, open_read_only, safe_tempdir, scan_workspace,
+    };
+
+    #[test]
+    fn sites_past_the_time_limit_keep_the_label_their_name_gives() {
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+        let temp = safe_tempdir();
+        let root = temp.path();
+        std::fs::write(
+            root.join("a.py"),
+            "def helper():\n    return 1\n\n\ndef use():\n    return helper()\n",
+        )
+        .unwrap();
+        let db = root.join(".code-kb").join("artifact.db");
+        scan_workspace(&Workspace::new(root.to_path_buf()), &db, true).unwrap();
+        let conn = open_read_only(&db).unwrap();
+        let target = select_reference_target(&conn, "helper", None).unwrap();
+
+        let report = report_within(&conn, root, &target, Duration::ZERO).unwrap();
+
+        let labels: Vec<(SiteLabel, &str)> = report
+            .sites
+            .iter()
+            .map(|site| (site.label, site.basis.as_str()))
+            .collect();
+        assert_eq!(
+            labels,
+            [(
+                SiteLabel::Likely,
+                "name only; not checked within the time limit"
+            )]
+        );
+        assert!(
+            report
+                .cannot_see
+                .iter()
+                .any(|note| note == "1 of 1 sites were not checked within the 0 s time limit"),
+            "{:?}",
+            report.cannot_see
+        );
+    }
 }

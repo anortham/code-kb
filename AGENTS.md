@@ -224,8 +224,11 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   package, builds the class), `likely` (only the name ties them), `unresolved` (the index cannot
   choose among definitions), or `excluded` (evidence ties the site to another definition, to an
   unindexed import, to another type, or to another language). The other definitions of the name
-  are checked nearest first, at most 12 and for at most 1.5 s; the answer names the ones it did
-  not check. A whole-word text scan with a 3 s budget sorts every line of the name into a site, a
+  are checked nearest first, at most 12; the answer counts the ones it did not check. The checks
+  of one report stop after 3 s, and the target's own checks stop after half of that, nearest
+  sites first. A site left unchecked is `likely` when the name has one definition and
+  `unresolved` otherwise, with the basis `not checked within the time limit`, and the answer
+  counts those sites. A whole-word text scan with a 3 s budget sorts every line of the name into a site, a
   definition, an import, or text only. Counts are always complete, `limit` caps only the listed
   rows, and CLI `--json` prints the whole report. Callees keep the plain list.
   Proof rules: a package import proves a site only when it reaches no other top-level definition
@@ -238,7 +241,14 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   method assigned to a property (`req.accepts = function`). A call that julie links to its own
   caller is not proof, because julie links a call inside a method to that method by name alone. A
   subclass write to an inherited attribute (`self.debug = …`) is a site, not a definition, and
-  does not hide the base class's definition in a class chain.
+  does not hide the base class's definition in a class chain. A C# extension method counts the
+  type of its `this` parameter as an owner, so a receiver of that type does not exclude a call.
+  julie names a test call after its label (`test("strictObject", …)`); such a label is not a
+  definition. A receiver that names an object (`z.coerce.boolean()`) ties the call to a member of
+  that object only when the qualifier's import (`z`) reaches the object's file. julie records no
+  receiver for a call on a call result (`single().getAsInt()`), so a call whose name follows a
+  `.` after a call or index result in the source is never a bare call: scope, class chain, and
+  julie's same-file link neither prove nor exclude it.
 - Related tests (`get_symbol_context`): callers from relationships, pending calls, and references
   that are tests, test classes, or functions and methods in test files that are members of a test
   class or have a name that reads like a test (`names_a_test`), so a module-level app factory such

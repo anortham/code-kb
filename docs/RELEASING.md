@@ -81,7 +81,15 @@ Run the automated pre-flight script, or execute each check manually:
    - Check each gained and lost call-edge sample against its source line. A gained edge that is not
      a real call is a wrong caller in `find_references` and `blast_radius`. Fix it before release.
    - Open the changed tool outputs. Each change must come from a change in this release.
-7. **Harness Dogfood Round (preflight step 10 requires it): one round per release.**
+7. **Reach Gate (preflight step 10 requires it):** Score the `find_references` callers answers
+   of the release build against the adjudicated cases in `evals/reach/`.
+   ```bash
+   scripts/reach_gate.py run   # writes target/reach-gate/report.md
+   ```
+   The gate fails when a language has proven precision or accounted share under 0.98. Fix a wrong
+   proven site on a dev symbol only, and adjudicate a holdout disagreement without a fix for it.
+   `evals/reach/README.md` has the scoring rules.
+8. **Harness Dogfood Round (preflight step 11 requires it): one round per release.**
    The corpus check finds only output that changed since the previous release, so a defect that
    both releases share passes it. The dogfood round finds those wrong answers. Run exactly one
    round, on the release candidate, before the version bump.
@@ -106,7 +114,7 @@ Run the automated pre-flight script, or execute each check manually:
    release: the sessions always find something new, so a second round only delays the release.
    Preflight fails when the report is not `PASS`, lists an `[open]` defect, or tested a commit that
    is not an ancestor of `HEAD`. Commits after the round are allowed.
-8. **New julie-extract version:** Do not tag it in `julie-extractors` first. Copy the local
+9. **New julie-extract version:** Do not tag it in `julie-extractors` first. Copy the local
    release build to `.tools/julie-extract`, set the version in `scripts/julie-pins.json` and
    `PINNED_JULIE_VERSION`, and run the dogfood round on that code-kb build. Tag and publish julie
    when the round has no `[open]` line. Then restore the published binary, set its checksums in

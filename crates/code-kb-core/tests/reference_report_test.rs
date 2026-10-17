@@ -1210,3 +1210,132 @@ fn a_subclass_write_to_an_inherited_property_is_a_site_not_a_definition() {
         dump(&report)
     );
 }
+
+#[test]
+fn a_csharp_extension_method_call_through_the_extended_type_is_not_excluded() {
+    let repo = scanned_repo(&[
+        (
+            "src/AsyncUtils.cs",
+            "namespace N\n{\n    public static class AsyncUtils\n    {\n        public static int FromCanceled(this CancellationToken token)\n        {\n            return 0;\n        }\n    }\n}\n",
+        ),
+        (
+            "src/Writer.cs",
+            "namespace N\n{\n    public class Writer\n    {\n        public int Flush(CancellationToken cancellationToken)\n        {\n            return cancellationToken.FromCanceled();\n        }\n    }\n}\n",
+        ),
+    ]);
+    let report = report(&repo, "FromCanceled", None);
+
+    let line = line_of(&repo, "src/Writer.cs", "cancellationToken.FromCanceled()");
+    assert_site(
+        &report,
+        "src/Writer.cs",
+        line,
+        SiteLabel::Likely,
+        "name only",
+    );
+}
+
+#[test]
+fn a_test_label_is_not_a_definition_of_its_name() {
+    let repo = scanned_repo(&[
+        (
+            "packages/lib/src/schemas.ts",
+            "export function strictObject() {\n  return 1;\n}\n",
+        ),
+        ("packages/lib/src/index.ts", "export * from './schemas';\n"),
+        (
+            "packages/lib/src/tests/object.test.ts",
+            "import { test } from 'vitest';\nimport * as z from 'lib';\n\ntest('strictObject', () => {\n  z.strictObject();\n});\n",
+        ),
+        (
+            "packages/lib/src/tests/other.test.ts",
+            "import { test } from 'vitest';\nimport * as z from 'lib';\n\ntest('other', () => {\n  z.strictObject();\n});\n",
+        ),
+    ]);
+    let report = report(&repo, "strictObject", Some("packages/lib/src/schemas.ts"));
+
+    let line = line_of(
+        &repo,
+        "packages/lib/src/tests/other.test.ts",
+        "z.strictObject()",
+    );
+    assert_site(
+        &report,
+        "packages/lib/src/tests/other.test.ts",
+        line,
+        SiteLabel::Likely,
+        "name only",
+    );
+}
+
+#[test]
+fn an_object_member_does_not_claim_a_call_whose_qualifier_imports_another_package() {
+    let repo = scanned_repo(&[
+        (
+            "packages/v3/types.ts",
+            "export const coerce = {\n  boolean: () => 1,\n};\n",
+        ),
+        (
+            "packages/v4/coerce.ts",
+            "export function boolean() {\n  return 2;\n}\n",
+        ),
+        (
+            "packages/v4/index.ts",
+            "export * as coerce from './coerce';\n",
+        ),
+        (
+            "packages/app/use.ts",
+            "import * as z from 'v4';\n\nexport const b = z.coerce.boolean();\n",
+        ),
+    ]);
+    let report = report(&repo, "boolean", Some("packages/v4/coerce.ts"));
+
+    let line = line_of(&repo, "packages/app/use.ts", "z.coerce.boolean()");
+    assert_ne!(
+        site_at(&report, "packages/app/use.ts", line).label,
+        SiteLabel::Excluded,
+        "{}",
+        dump(&report)
+    );
+}
+
+#[test]
+fn a_java_call_on_a_call_result_is_not_a_bare_call() {
+    let repo = scanned_repo(&[
+        (
+            "src/p/Element.java",
+            "package p;\n\npublic abstract class Element {\n    public int getAsInt() {\n        return 0;\n    }\n}\n",
+        ),
+        (
+            "src/p/Array.java",
+            "package p;\n\npublic class Array extends Element {\n    private Element single() {\n        return null;\n    }\n\n    @Override\n    public int getAsInt() {\n        return single().getAsInt();\n    }\n}\n",
+        ),
+    ]);
+    let report = first_definition_report(&repo, "getAsInt", "src/p/Element.java");
+
+    let line = line_of(&repo, "src/p/Array.java", "single().getAsInt()");
+    assert_site(
+        &report,
+        "src/p/Array.java",
+        line,
+        SiteLabel::Unresolved,
+        "2 definitions",
+    );
+}
+
+#[test]
+fn a_python_self_call_that_julie_links_in_the_same_file_stays_proven() {
+    let repo = scanned_repo(&[(
+        "pkg/app.py",
+        "class App:\n    def ensure_sync(self, func):\n        return func\n\n    def run(self, func):\n        return self.ensure_sync(func)()\n",
+    )]);
+    let report = report(&repo, "ensure_sync", None);
+
+    let line = line_of(&repo, "pkg/app.py", "self.ensure_sync(func)");
+    assert_eq!(
+        site_at(&report, "pkg/app.py", line).label,
+        SiteLabel::Proven,
+        "{}",
+        dump(&report)
+    );
+}
