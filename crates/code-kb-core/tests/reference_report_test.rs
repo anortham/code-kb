@@ -363,7 +363,7 @@ fn an_untyped_receiver_of_the_only_definition_is_likely_by_name_only() {
 }
 
 #[test]
-fn a_bare_call_that_several_files_could_define_is_likely_the_nearest_of_k() {
+fn a_bare_call_that_several_files_could_define_is_unresolved() {
     let repo = scanned_repo(PY_MULTI);
     let report = report(&repo, "area", Some("shapes/a.py"));
 
@@ -371,9 +371,23 @@ fn a_bare_call_that_several_files_could_define_is_likely_the_nearest_of_k() {
         &report,
         "app/main.py",
         2,
-        SiteLabel::Likely,
-        "nearest of 3 definitions",
+        SiteLabel::Unresolved,
+        "3 definitions",
     );
+}
+
+#[test]
+fn a_bare_call_that_only_overloads_define_twice_is_likely_by_name_only() {
+    let repo = scanned_repo(&[
+        (
+            "lib/area.js",
+            "function area(x) {\n  return 1;\n}\nfunction area(x, y) {\n  return 2;\n}\n",
+        ),
+        ("app/main.js", "function call() {\n  return area(1);\n}\n"),
+    ]);
+    let report = first_definition_report(&repo, "area", "lib/area.js");
+
+    assert_site(&report, "app/main.js", 2, SiteLabel::Likely, "name only");
 }
 
 #[test]
@@ -1337,5 +1351,278 @@ fn a_python_self_call_that_julie_links_in_the_same_file_stays_proven() {
         SiteLabel::Proven,
         "{}",
         dump(&report)
+    );
+}
+
+const GO_FIELDS: &[(&str, &str)] = &[
+    (
+        "a/name.go",
+        "package a\n\nfunc Name() string {\n\treturn \"a\"\n}\n",
+    ),
+    (
+        "b/cmd.go",
+        "package b\n\ntype Command struct {\n\tName string\n}\n",
+    ),
+    (
+        "c/use.go",
+        "package c\n\nfunc call(x any) string {\n\treturn x.Name()\n}\n\nfunc read(x any) string {\n\treturn x.Name\n}\n",
+    ),
+];
+
+#[test]
+fn a_go_call_does_not_count_a_struct_field_as_a_rival() {
+    let repo = scanned_repo(GO_FIELDS);
+    let report = report(&repo, "Name", Some("a/name.go"));
+
+    let line = line_of(&repo, "c/use.go", "x.Name()");
+    assert_site(&report, "c/use.go", line, SiteLabel::Likely, "name only");
+}
+
+#[test]
+fn a_go_member_read_keeps_a_struct_field_as_a_rival() {
+    let repo = scanned_repo(GO_FIELDS);
+    let report = report(&repo, "Name", Some("a/name.go"));
+
+    let line = line_of(&repo, "c/use.go", "func read") + 1;
+    assert_site(
+        &report,
+        "c/use.go",
+        line,
+        SiteLabel::Unresolved,
+        "2 definitions",
+    );
+}
+
+#[test]
+fn a_go_field_of_a_func_type_stays_a_rival_of_a_call() {
+    let repo = scanned_repo(&[
+        (
+            "a/fns.go",
+            "package a\n\nfunc Run() {}\n\nfunc Handle() {}\n\nfunc Size() int {\n\treturn 1\n}\n",
+        ),
+        (
+            "b/cmd.go",
+            "package b\n\ntype HandlerFunc func(n int) error\n\ntype Command struct {\n\tRun    func(n int)\n\tHandle HandlerFunc\n\tSize   int\n}\n",
+        ),
+        (
+            "c/use.go",
+            "package c\n\nfunc call(x any) {\n\tx.Run(1)\n\tx.Handle(2)\n\tx.Size()\n}\n",
+        ),
+    ]);
+    let line = |needle: &str| line_of(&repo, "c/use.go", needle);
+
+    let run = report(&repo, "Run", Some("a/fns.go"));
+    assert_site(
+        &run,
+        "c/use.go",
+        line("x.Run"),
+        SiteLabel::Unresolved,
+        "2 definitions",
+    );
+    let handle = report(&repo, "Handle", Some("a/fns.go"));
+    assert_site(
+        &handle,
+        "c/use.go",
+        line("x.Handle"),
+        SiteLabel::Unresolved,
+        "2 definitions",
+    );
+    let size = report(&repo, "Size", Some("a/fns.go"));
+    assert_site(
+        &size,
+        "c/use.go",
+        line("x.Size"),
+        SiteLabel::Likely,
+        "name only",
+    );
+}
+
+#[test]
+fn a_java_call_does_not_count_a_property_as_a_rival() {
+    let repo = scanned_repo(&[
+        (
+            "p/A.java",
+            "package p;\n\npublic class A {\n    int size() {\n        return 1;\n    }\n\n    int size(int x) {\n        return x;\n    }\n}\n",
+        ),
+        (
+            "q/B.java",
+            "package q;\n\npublic class B {\n    int size;\n\n    int go() {\n        return make().size();\n    }\n}\n",
+        ),
+    ]);
+    let report = first_definition_report(&repo, "size", "p/A.java");
+
+    let line = line_of(&repo, "q/B.java", "make().size()");
+    assert_site(&report, "q/B.java", line, SiteLabel::Likely, "name only");
+}
+
+#[test]
+fn a_rust_call_does_not_count_a_field_as_a_rival() {
+    let repo = scanned_repo(&[(
+        "src/lib.rs",
+        "pub struct S {\n    pub name: String,\n}\n\nimpl S {\n    pub fn name(&self) -> &str {\n        &self.name\n    }\n}\n\nfn go() {\n    make().name();\n}\n",
+    )]);
+    let report = report(&repo, "name", Some("src/lib.rs"));
+
+    let line = line_of(&repo, "src/lib.rs", "make().name()");
+    assert_site(&report, "src/lib.rs", line, SiteLabel::Likely, "name only");
+}
+
+const JS_VIEW: (&str, &str) = (
+    "lib/view.js",
+    "class View {\n  render() {\n    return 1;\n  }\n}\n",
+);
+const JS_MEMBER_CALL: (&str, &str) = ("lib/use.js", "function go(v) {\n  return v.render();\n}\n");
+
+#[test]
+fn a_javascript_member_call_ignores_a_free_function_of_the_same_name() {
+    let repo = scanned_repo(&[
+        JS_VIEW,
+        JS_MEMBER_CALL,
+        (
+            "lib/util.js",
+            "function render(x) {\n  return x;\n}\nmodule.exports = {};\n",
+        ),
+    ]);
+    let report = report(&repo, "render", Some("lib/view.js"));
+
+    assert_site(&report, "lib/use.js", 2, SiteLabel::Likely, "name only");
+}
+
+#[test]
+fn a_javascript_member_call_keeps_an_exported_function_as_a_rival() {
+    let repo = scanned_repo(&[
+        JS_VIEW,
+        JS_MEMBER_CALL,
+        (
+            "lib/util.js",
+            "export function render(x) {\n  return x;\n}\n",
+        ),
+    ]);
+    let report = report(&repo, "render", Some("lib/view.js"));
+
+    assert_site(
+        &report,
+        "lib/use.js",
+        2,
+        SiteLabel::Unresolved,
+        "2 definitions",
+    );
+}
+
+#[test]
+fn a_javascript_member_call_keeps_a_function_assigned_on_an_object_as_a_rival() {
+    let repo = scanned_repo(&[
+        JS_VIEW,
+        JS_MEMBER_CALL,
+        (
+            "lib/app.js",
+            "var app = {};\napp.render = function render(name) {\n  return name;\n};\n",
+        ),
+    ]);
+    let report = report(&repo, "render", Some("lib/view.js"));
+
+    assert_site(
+        &report,
+        "lib/use.js",
+        2,
+        SiteLabel::Unresolved,
+        "2 definitions",
+    );
+}
+
+#[test]
+fn a_javascript_member_call_keeps_a_function_its_own_file_uses_as_a_member() {
+    let repo = scanned_repo(&[
+        JS_VIEW,
+        JS_MEMBER_CALL,
+        (
+            "lib/util.js",
+            "var api = {};\nfunction render(x) {\n  return x;\n}\napi.render = render;\nmodule.exports = {};\n",
+        ),
+    ]);
+    let report = report(&repo, "render", Some("lib/view.js"));
+
+    assert_site(
+        &report,
+        "lib/use.js",
+        2,
+        SiteLabel::Unresolved,
+        "2 definitions",
+    );
+}
+
+#[test]
+fn a_call_on_a_line_that_continues_a_chain_is_not_a_bare_call() {
+    let repo = scanned_repo(&[
+        (
+            "lib/schema.js",
+            "class Schema {\n  readonly() {\n    return this;\n  }\n}\n",
+        ),
+        (
+            "lib/use.js",
+            "function readonly(x) {\n  return x;\n}\n\nfunction build(schema) {\n  return make(schema)\n    .readonly();\n}\nmodule.exports = { build };\n",
+        ),
+    ]);
+    let report = report(&repo, "readonly", Some("lib/schema.js"));
+
+    let line = line_of(&repo, "lib/use.js", ".readonly()");
+    assert_site(&report, "lib/use.js", line, SiteLabel::Likely, "name only");
+}
+
+const JS_RESPONSE: (&str, &str) = (
+    "lib/response.js",
+    "var res = Object.create(proto);\nmodule.exports = res;\n\nres.redirect = function redirect(url) {\n  return url;\n};\n",
+);
+const JS_REDIRECTS: (&str, &str) = (
+    "lib/use.js",
+    "function go(res, r) {\n  res.redirect('/a');\n  r.redirect('/b');\n}\n",
+);
+
+#[test]
+fn a_javascript_receiver_named_for_the_object_a_function_is_assigned_on_is_likely() {
+    let repo = scanned_repo(&[
+        JS_RESPONSE,
+        JS_REDIRECTS,
+        (
+            "lib/mock.js",
+            "var mock = {};\nmock.redirect = function redirect(url) {\n  return url;\n};\n",
+        ),
+    ]);
+    let report = report(&repo, "redirect", Some("lib/response.js"));
+
+    assert_site(
+        &report,
+        "lib/use.js",
+        2,
+        SiteLabel::Likely,
+        "receiver `res` names the object `redirect` is assigned on",
+    );
+    assert_site(
+        &report,
+        "lib/use.js",
+        3,
+        SiteLabel::Unresolved,
+        "2 definitions",
+    );
+}
+
+#[test]
+fn a_receiver_named_for_the_object_stays_unresolved_when_a_rival_is_assigned_on_the_same_name() {
+    let repo = scanned_repo(&[
+        JS_RESPONSE,
+        JS_REDIRECTS,
+        (
+            "lib/other.js",
+            "var res = {};\nres.redirect = function redirect(url) {\n  return url;\n};\n",
+        ),
+    ]);
+    let report = report(&repo, "redirect", Some("lib/response.js"));
+
+    assert_site(
+        &report,
+        "lib/use.js",
+        2,
+        SiteLabel::Unresolved,
+        "2 definitions",
     );
 }

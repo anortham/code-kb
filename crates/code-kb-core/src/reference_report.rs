@@ -323,6 +323,17 @@ const OWNER_IN_PACKAGE_SQL: &str = "SELECT COUNT(*) FROM symbols
 const TYPE_HEAD_KINDS_SQL: &str =
     "SELECT DISTINCT kind FROM symbols WHERE name = ?1 AND kind != 'parameter'";
 
+const MEMBER_ACCESS_PATHS_SQL: &str =
+    "SELECT DISTINCT path FROM identifiers WHERE name = ?1 AND kind = 'member_access'";
+
+const GO_FUNC_TYPE_SQL: &str = "SELECT 1 FROM symbols
+     WHERE name = ?1 AND kind = 'type' AND language = 'go'
+       AND signature LIKE 'type ' || ?1 || ' func%' LIMIT 1";
+
+const TOP_LEVEL_VARIABLE_SQL: &str = "SELECT 1 FROM symbols
+     WHERE name = ?1 AND path = ?2 AND parent_symbol_id IS NULL
+       AND kind IN ('variable', 'constant') LIMIT 1";
+
 struct Spec {
     name: String,
     group: Vec<Symbol>,
@@ -403,6 +414,17 @@ impl NameRow {
             other => other.to_string(),
         }
     }
+
+    /// Whether the row can reach `definition`, another definition of the name: a call cannot
+    /// reach a field, and a member access cannot reach a function that only its scope names.
+    fn can_reach(&self, definition: &Definition) -> bool {
+        let call_of_a_field = self.is_call()
+            && !definition.callable
+            && languages_compatible(&self.language, &definition.language);
+        let member_of_a_scoped_function =
+            definition.free && language_family(&self.language) == "js" && self.has_qualifier();
+        !call_of_a_field && !member_of_a_scoped_function
+    }
 }
 
 /// A JavaScript method assigned to a property (`req.accepts = function`): no scope binds its name,
@@ -450,6 +472,18 @@ struct Definition {
     body_start_line: Option<usize>,
     owner_name: Option<String>,
     local: bool,
+    kind: String,
+    language: String,
+    signature: String,
+    /// The object a JavaScript function is assigned on (`res.redirect = function`).
+    class_name: Option<String>,
+    top_level: bool,
+    /// A call can reach it: false for a field, property, variable, or constant in Go, Java, or
+    /// Rust, except a Go one that holds a func.
+    callable: bool,
+    /// A JavaScript function, variable, or constant that only its own scope names: not exported,
+    /// not a member of an object, and never written as `object.name` in its file.
+    free: bool,
 }
 
 impl Definition {
@@ -590,24 +624,44 @@ impl<'a> Accounting<'a> {
         let mut stmt = self.conn.prepare(&format!(
             "SELECT s.symbol_id, s.name, s.kind, s.language, s.path, s.start_line,
                     s.body_start_line, s.parent_symbol_id, par.name, par.kind, {decorated_start},
-                    COALESCE(s.signature, '')
+                    COALESCE(s.signature, ''), s.visibility,
+                    CASE WHEN json_valid(s.metadata_json) THEN
+                        json_extract(s.metadata_json, '$.className') END,
+                    CASE WHEN json_valid(s.metadata_json) THEN
+                        json_extract(s.metadata_json, '$.isCommonJSExport') END
              FROM symbols s LEFT JOIN symbols par ON par.symbol_id = s.parent_symbol_id
              WHERE s.name = ?1 AND s.kind NOT IN ('import', 'export')
                AND s.language NOT IN ({})",
             documentation_language_list()
         ))?;
         let rows = stmt.query_map(params![name], |row| {
-            if is_test_label(&row.get::<_, String>(11)?) {
+            let signature: String = row.get(11)?;
+            if is_test_label(&signature) {
                 return Ok(None);
             }
             let kind: String = row.get(2)?;
+            let language: String = row.get(3)?;
+            let parent_id: Option<String> = row.get(7)?;
             let parent_kind: Option<String> = row.get(9)?;
             let parent_name: Option<String> = row.get(8)?;
-            let local = kind == "parameter"
-                || kind == "variable"
-                    && parent_kind
-                        .as_deref()
-                        .is_some_and(|k| matches!(k, "function" | "method" | "constructor"));
+            let class_name: Option<String> = row.get(13)?;
+            let in_function = parent_kind
+                .as_deref()
+                .is_some_and(|k| matches!(k, "function" | "method" | "constructor"));
+            let local = kind == "parameter" || kind == "variable" && in_function;
+            let exported = row.get::<_, Option<String>>(12)?.as_deref() == Some("public")
+                || row.get::<_, Option<i64>>(14)? == Some(1);
+            let free = language_family(&language) == "js"
+                && matches!(kind.as_str(), "function" | "variable" | "constant")
+                && class_name.is_none()
+                && !exported
+                && !local
+                && (parent_id.is_none() || in_function);
+            let callable = !(matches!(language.as_str(), "go" | "java" | "rust")
+                && matches!(
+                    kind.as_str(),
+                    "field" | "property" | "variable" | "constant"
+                ));
             Ok(Some(Definition {
                 symbol_id: row.get(0)?,
                 name: row.get(1)?,
@@ -621,6 +675,13 @@ impl<'a> Accounting<'a> {
                         .is_some_and(|k| CLASS_LIKE_KINDS.contains(&k))
                 }),
                 local,
+                top_level: parent_id.is_none(),
+                kind,
+                language,
+                signature,
+                class_name,
+                callable,
+                free,
             }))
         })?;
         let mut definitions: Vec<Definition> = rows
@@ -629,7 +690,45 @@ impl<'a> Accounting<'a> {
         let writes =
             inherited_writes_among(self.conn, definitions.iter().map(|d| d.symbol_id.as_str()))?;
         definitions.retain(|d| !writes.contains(&d.symbol_id));
+        let member_paths: HashSet<String> = if definitions.iter().any(|d| d.free)
+            && crate::queries::has_table(self.conn, "identifiers")
+        {
+            self.with_statement(MEMBER_ACCESS_PATHS_SQL, |stmt| {
+                stmt.query_map(params![name], |r| r.get::<_, String>(0))?
+                    .map(|path| path.map(|path| path.replace('\\', "/")))
+                    .collect()
+            })?
+        } else {
+            HashSet::new()
+        };
+        for definition in &mut definitions {
+            definition.free &= !member_paths.contains(&definition.path);
+            if !definition.callable && definition.language == "go" {
+                definition.callable = self.holds_func(definition)?;
+            }
+        }
         Ok(definitions)
+    }
+
+    /// Whether a Go field or variable is declared with a func type (`Run func(n int)`), written
+    /// out or through a project type (`Handler HandlerFunc`).
+    fn holds_func(&self, definition: &Definition) -> Result<bool, QueryError> {
+        let declared = definition
+            .signature
+            .split_once(definition.name.as_str())
+            .map_or("", |(_, rest)| rest)
+            .trim_start_matches(|c: char| c == '=' || c.is_whitespace());
+        if declared.starts_with("func") {
+            return Ok(true);
+        }
+        let type_name: String = declared
+            .chars()
+            .take_while(|c| c.is_alphanumeric() || *c == '_')
+            .collect();
+        if type_name.is_empty() {
+            return Ok(false);
+        }
+        self.with_statement(GO_FUNC_TYPE_SQL, |stmt| stmt.exists(params![type_name]))
     }
 
     fn definition_count(&self, name: &str) -> Result<usize, QueryError> {
@@ -745,15 +844,24 @@ impl<'a> Accounting<'a> {
             });
         }
 
+        let group_definitions: Vec<&Definition> = definitions
+            .iter()
+            .filter(|d| group_ids.contains(d.symbol_id.as_str()))
+            .collect();
         for index in undecided {
             let row = &rows[index];
+            let rivals: Vec<&Definition> = others
+                .iter()
+                .copied()
+                .filter(|other| row.can_reach(other))
+                .collect();
             let verdict = match claims.get(&row.key) {
-                Some(claim) => claimed_verdict(row, claim, k, spec.builds_class),
+                Some(claim) => claimed_verdict(row, claim, k, rivals.len(), spec.builds_class),
                 None if self.out_of_time() => {
                     unchecked.push(index);
                     continue;
                 }
-                None => self.decide_late(row, &spec.group, &others, k)?,
+                None => self.decide_late(row, &spec.group, &group_definitions, &rivals)?,
             };
             verdicts.insert(row.key.clone(), verdict);
         }
@@ -1164,7 +1272,7 @@ impl<'a> Accounting<'a> {
                     )));
                 }
             }
-            return Ok(Some(claimed_verdict(row, claim, k, spec.builds_class)));
+            return Ok(Some(claimed_verdict(row, claim, k, 0, spec.builds_class)));
         }
         if self.crate_path_names_owner(row, &spec.group)? {
             return Ok(Some(Verdict::new(
@@ -1250,8 +1358,8 @@ impl<'a> Accounting<'a> {
         &mut self,
         row: &NameRow,
         group: &[Symbol],
-        others: &[&Definition],
-        k: usize,
+        group_definitions: &[&Definition],
+        rivals: &[&Definition],
     ) -> Result<Verdict, QueryError> {
         if let Some(receiver) = row.qualifier().filter(|_| row.namespace.len() <= 1)
             && let Some(type_name) = self.receiver_type(row, receiver)?
@@ -1270,15 +1378,63 @@ impl<'a> Accounting<'a> {
                 false,
             ));
         }
-        if others.is_empty() {
+        if let Some(object) = self.object_assigned_on(row, group_definitions, rivals)? {
+            return Ok(Verdict::new(
+                SiteLabel::Likely,
+                format!(
+                    "receiver `{object}` names the object `{}` is assigned on",
+                    group[0].name
+                ),
+                false,
+            ));
+        }
+        if rivals.is_empty() {
             Ok(Verdict::new(SiteLabel::Likely, "name only", false))
         } else {
             Ok(Verdict::new(
                 SiteLabel::Unresolved,
-                format!("{k} definitions"),
+                format!("{} definitions", rivals.len() + 1),
                 false,
             ))
         }
+    }
+
+    /// The receiver of a JavaScript call that names the object the target is assigned on
+    /// (`res.redirect = function`), when no rival is assigned on an object of that name.
+    fn object_assigned_on(
+        &self,
+        row: &NameRow,
+        group: &[&Definition],
+        rivals: &[&Definition],
+    ) -> Result<Option<String>, QueryError> {
+        let Some(receiver) = row
+            .receiver
+            .as_deref()
+            .filter(|r| is_plain_identifier(r) && !SELF_RECEIVERS.contains(r))
+            .filter(|_| matches!(row.kind.as_str(), "calls" | "call" | "member_access"))
+        else {
+            return Ok(None);
+        };
+        let assigned_on_receiver = |d: &&Definition| {
+            language_family(&d.language) == "js"
+                && matches!(d.kind.as_str(), "method" | "function")
+                && d.top_level
+                && d.class_name.as_deref() == Some(receiver)
+        };
+        if !group.iter().all(assigned_on_receiver)
+            || rivals
+                .iter()
+                .any(|d| d.class_name.as_deref() == Some(receiver))
+        {
+            return Ok(None);
+        }
+        let Some(target) = group.first() else {
+            return Ok(None);
+        };
+        let has_object = self.with_statement(TOP_LEVEL_VARIABLE_SQL, |stmt| {
+            stmt.exists(params![receiver, target.path])
+        })?;
+        Ok(has_object.then(|| receiver.to_string()))
     }
 
     fn definition_by_id(&self, symbol_id: &str) -> Result<Option<Definition>, QueryError> {
@@ -1299,6 +1455,13 @@ impl<'a> Accounting<'a> {
                             .is_some_and(|k| CLASS_LIKE_KINDS.contains(&k))
                     }),
                     local: false,
+                    kind: row.get(2)?,
+                    language: row.get(3)?,
+                    signature: String::new(),
+                    class_name: None,
+                    top_level: row.get::<_, Option<String>>(7)?.is_none(),
+                    callable: true,
+                    free: false,
                 })
             })
             .optional()
@@ -1708,7 +1871,13 @@ impl<'a> Accounting<'a> {
 
 type SiteRowOut = LabeledSite;
 
-fn claimed_verdict(row: &NameRow, claim: &Claim, k: usize, builds_class: bool) -> Verdict {
+fn claimed_verdict(
+    row: &NameRow,
+    claim: &Claim,
+    k: usize,
+    rivals: usize,
+    builds_class: bool,
+) -> Verdict {
     if let Some(basis) = &claim.basis {
         if builds_class {
             return Verdict::new(SiteLabel::Proven, "builds the class", true);
@@ -1728,15 +1897,15 @@ fn claimed_verdict(row: &NameRow, claim: &Claim, k: usize, builds_class: bool) -
     if claim.candidate && k > 1 {
         return Verdict::new(SiteLabel::Unresolved, format!("{k} definitions"), true);
     }
-    if row.has_qualifier() {
-        return Verdict::new(SiteLabel::Likely, "receiver not typed", true);
-    }
-    if k > 1 {
+    if rivals > 0 {
         return Verdict::new(
-            SiteLabel::Likely,
-            format!("nearest of {k} definitions"),
+            SiteLabel::Unresolved,
+            format!("{} definitions", rivals + 1),
             true,
         );
+    }
+    if row.has_qualifier() {
+        return Verdict::new(SiteLabel::Likely, "receiver not typed", true);
     }
     Verdict::new(SiteLabel::Likely, "name only", true)
 }
@@ -1797,7 +1966,8 @@ fn merge_site_rows(rows: Vec<SiteRow>) -> Vec<LabeledSite> {
 }
 
 /// Marks the calls without a recorded receiver whose name follows a `.` after a call or index
-/// result in the source (`single().getAsInt()`, `items[0]?.name()`).
+/// result in the source (`single().getAsInt()`, `items[0]?.name()`), or starts a line that
+/// continues a chain (`    .readonly()`).
 fn mark_hidden_receivers(root: &Path, rows: &mut [NameRow]) {
     let mut by_path: HashMap<String, Vec<usize>> = HashMap::new();
     for (index, row) in rows.iter().enumerate() {
@@ -1819,9 +1989,10 @@ fn mark_hidden_receivers(root: &Path, rows: &mut [NameRow]) {
                 .and_then(|(column, line)| line.get(..column))
                 .unwrap_or("")
                 .trim_end();
-            row.hidden_receiver = before
-                .strip_suffix('.')
-                .is_some_and(|before| before.trim_end_matches(['?', '!']).ends_with([')', ']']));
+            row.hidden_receiver = matches!(before.trim_start(), "." | "?.")
+                || before.strip_suffix('.').is_some_and(|before| {
+                    before.trim_end_matches(['?', '!']).ends_with([')', ']'])
+                });
         }
     }
 }
