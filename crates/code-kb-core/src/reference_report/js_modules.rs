@@ -13,7 +13,7 @@ use serde::de::{self, Deserializer, MapAccess, SeqAccess, Visitor};
 
 use super::{
     Accounting, FILE_EXISTS_SQL, IMPORT_BASIS, NameRow, QueryError, Spec, Verdict, is_test_label,
-    language_family, shared_leading_segments, split_line,
+    is_word_char, language_family, shared_leading_segments, split_line,
 };
 use crate::models::SiteLabel;
 
@@ -21,6 +21,13 @@ const MAX_DEPTH: usize = 8;
 const MAX_TARGETS: usize = 8;
 const SCRIPT_EXTENSIONS: [&str; 8] = ["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"];
 const DECLARATION_EXTENSIONS: [&str; 3] = ["d.ts", "d.mts", "d.cts"];
+/// The scripts that a declaration file describes when they share its stem and folder.
+const DECLARATION_TWINS: [(&str, &[&str]); 3] = [
+    ("d.ts", &["js", "jsx", "ts", "tsx"]),
+    ("d.mts", &["mjs", "mts"]),
+    ("d.cts", &["cjs", "cts"]),
+];
+const MAX_EXTENDS: usize = 5;
 const COMPILED_EXTENSIONS: [(&str, &[&str]); 4] = [
     (".js", &["ts", "tsx"]),
     (".jsx", &["tsx"]),
@@ -56,8 +63,8 @@ const TOP_LEVEL_DEFINITIONS_SQL: &str =
      WHERE path = ?1 AND +name = ?2 AND parent_symbol_id IS NULL
        AND kind NOT IN ('import', 'export')";
 
-const LOCAL_SYMBOL_SQL: &str = "SELECT 1 FROM symbols
-     WHERE path = ?1 AND +name = ?2 AND kind NOT IN ('import', 'export') LIMIT 1";
+const LOCAL_SYMBOL_SQL: &str = "SELECT COALESCE(signature, '') FROM symbols
+     WHERE path = ?1 AND +name = ?2 AND kind NOT IN ('import', 'export')";
 
 /// A top-level definition that a name reaches.
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -71,9 +78,17 @@ pub(super) struct Reached {
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 enum Target {
-    Module(String),
+    /// The files that can be the module, best first.
+    Module(Vec<String>),
     Definition(Reached),
     Unknown,
+}
+
+/// How the importing file loads a module: `require()` and `import` pick different package entries.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum Kind {
+    Import,
+    Require,
 }
 
 struct ImportRow {
@@ -186,16 +201,27 @@ struct Package {
     dir: String,
     name: String,
     exports: Option<Exports>,
-    entries: Vec<String>,
+    entries: Vec<(Option<Kind>, String)>,
+}
+
+/// The module aliases of a `tsconfig.json` or `jsconfig.json`, `extends` included.
+#[derive(Default)]
+struct Aliases {
+    base_url: Option<String>,
+    /// The folder of the config that sets `paths`; without a `baseUrl` its targets start there.
+    paths_dir: String,
+    paths: Vec<(String, Vec<String>)>,
 }
 
 type ImportRows = Rc<[ImportRow]>;
+/// The `(line, column)` of each place a file binds a name.
+pub(super) type BindingSites = Rc<Vec<(usize, usize)>>;
 
 /// The per-report memory of module lookups.
 #[derive(Default)]
 pub(super) struct JsCaches {
     files: RefCell<HashMap<String, Option<String>>>,
-    modules: RefCell<HashMap<(String, String), Option<String>>>,
+    modules: RefCell<HashMap<(String, String, Kind), Vec<String>>>,
     imports: RefCell<HashMap<(String, String), ImportRows>>,
     exports: RefCell<HashMap<String, Rc<Vec<ExportRow>>>>,
     definitions: RefCell<HashMap<(String, String), Vec<Reached>>>,
@@ -203,6 +229,9 @@ pub(super) struct JsCaches {
     walks: RefCell<HashMap<(String, String), Vec<Target>>>,
     reaches: RefCell<HashMap<(String, String, String), Vec<Reached>>>,
     packages: RefCell<Option<Rc<Vec<Package>>>>,
+    aliases: RefCell<HashMap<String, Option<Rc<Aliases>>>>,
+    /// Where a file binds a name as a callback parameter, loop variable, or catch parameter.
+    pub(super) bindings: RefCell<HashMap<(String, String), BindingSites>>,
 }
 
 fn cached<K: Eq + Hash, V: Clone>(
@@ -273,10 +302,88 @@ fn is_declaration(path: &str) -> bool {
     })
 }
 
-/// The first of `files`, in order, that is not a declaration file, else the first file.
-fn first_script(files: Vec<String>) -> Option<String> {
-    let script = files.iter().find(|file| !is_declaration(file));
-    script.or(files.first()).cloned()
+/// Whether `a` and `b` are a declaration file and the script with its stem beside it.
+fn are_twins(a: &str, b: &str) -> bool {
+    let (declaration, script) = if is_declaration(a) { (a, b) } else { (b, a) };
+    DECLARATION_TWINS.iter().any(|(extension, scripts)| {
+        declaration
+            .strip_suffix(extension)
+            .and_then(|stem| script.strip_prefix(stem))
+            .is_some_and(|rest| scripts.contains(&rest))
+    })
+}
+
+/// The files of a package entry in the order to try them: scripts before declaration files.
+/// When more than one script is named, only those the importer's `kind` loads stay; if the
+/// index still cannot choose one script, it names no module.
+fn candidate_files(mut found: Vec<(Option<Kind>, String)>, kind: Kind) -> Vec<String> {
+    let distinct_scripts = |found: &[(Option<Kind>, String)]| {
+        found
+            .iter()
+            .filter(|(_, file)| !is_declaration(file))
+            .map(|(_, file)| file.as_str())
+            .collect::<BTreeSet<_>>()
+            .len()
+    };
+    if distinct_scripts(&found) > 1 {
+        found.retain(|(loads, _)| *loads == Some(kind));
+        if distinct_scripts(&found) != 1 {
+            return Vec::new();
+        }
+    }
+    let (declarations, scripts): (Vec<_>, Vec<_>) = found
+        .into_iter()
+        .map(|(_, file)| file)
+        .partition(|file| is_declaration(file));
+    let mut seen = HashSet::new();
+    scripts
+        .into_iter()
+        .chain(declarations)
+        .filter(|file| seen.insert(file.clone()))
+        .collect()
+}
+
+/// `text` as JSON: without `//` and `/* */` comments and without the commas before a closing
+/// bracket, which a `tsconfig.json` may hold.
+fn lenient_json(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '"' => {
+                out.push(c);
+                while let Some(inner) = chars.next() {
+                    out.push(inner);
+                    match inner {
+                        '\\' => out.extend(chars.next()),
+                        '"' => break,
+                        _ => {}
+                    }
+                }
+            }
+            '/' if chars.peek() == Some(&'/') => {
+                while chars.next_if(|&next| next != '\n').is_some() {}
+            }
+            '/' if chars.peek() == Some(&'*') => {
+                let mut previous = ' ';
+                for next in chars.by_ref() {
+                    if previous == '*' && next == '/' {
+                        break;
+                    }
+                    previous = next;
+                }
+            }
+            '}' | ']' => {
+                out.truncate(out.trim_end().len());
+                if out.ends_with(',') {
+                    out.pop();
+                }
+                out.push(c);
+            }
+            _ => out.push(c),
+        }
+    }
+    out
 }
 
 /// The package name and the subpath of a bare specifier (`@scope/name/sub` is `@scope/name`, `sub`).
@@ -295,12 +402,11 @@ fn split_package(specifier: &str) -> Option<(&str, &str)> {
 /// The names written before `before`'s end as `a.b.` pairs, `None` when a `.` follows something
 /// other than a name (`f().`, `x[0].`).
 fn written_qualifier(before: &str) -> Option<Vec<String>> {
-    let is_name = |c: char| c.is_alphanumeric() || c == '_' || c == '$';
     let mut rest = before.trim_end();
     let mut chain = Vec::new();
     while let Some(head) = rest.strip_suffix('.') {
         let head = head.trim_end();
-        let name = head.trim_end_matches(is_name);
+        let name = head.trim_end_matches(is_word_char);
         let written = &head[name.len()..];
         if written.is_empty() {
             return None;
@@ -365,18 +471,22 @@ impl Accounting<'_> {
         reached: Vec<Reached>,
     ) -> Result<Option<Verdict>, QueryError> {
         let target = &spec.group[0];
-        if !is_declaration(&target.path) && reached.iter().all(|found| is_declaration(&found.path))
+        let in_group = |found: &Reached| {
+            spec.group.iter().any(|member| {
+                let path = member.path.replace('\\', "/");
+                member.parent_symbol_id.is_none()
+                    && member.name == found.name
+                    && (path == found.path || are_twins(&path, &found.path))
+            })
+        };
+        if !is_declaration(&target.path)
+            && reached
+                .iter()
+                .all(|found| is_declaration(&found.path) && !in_group(found))
         {
             return Ok(None);
         }
         let reached = with_meaning(row, reached);
-        let in_group = |found: &Reached| {
-            spec.group.iter().any(|member| {
-                member.parent_symbol_id.is_none()
-                    && member.name == found.name
-                    && member.path.replace('\\', "/") == found.path
-            })
-        };
         let distinct = |keep: &dyn Fn(&Reached) -> bool| {
             reached
                 .iter()
@@ -440,7 +550,7 @@ impl Accounting<'_> {
                 let mut next: Vec<Target> = Vec::new();
                 for target in &targets {
                     match target {
-                        Target::Module(file) => next.extend(self.js_export(file, member)?),
+                        Target::Module(files) => next.extend(self.js_export(files, member)?),
                         _ => next.push(Target::Unknown),
                     }
                 }
@@ -487,11 +597,17 @@ impl Accounting<'_> {
         let Some(source) = &import.source else {
             return Ok(vec![Target::Unknown]);
         };
-        let Some(file) = self.js_module(importer, source)? else {
-            return Ok(vec![Target::Unknown]);
+        let kind = if import.commonjs {
+            Kind::Require
+        } else {
+            Kind::Import
         };
+        let files = self.js_module(importer, source, kind)?;
+        if files.is_empty() {
+            return Ok(vec![Target::Unknown]);
+        }
         if import.namespace {
-            return Ok(vec![Target::Module(file)]);
+            return Ok(vec![Target::Module(files)]);
         }
         let name = if import.default {
             "default"
@@ -502,14 +618,40 @@ impl Accounting<'_> {
         } else {
             binding
         };
-        self.walk_export(&file, name, depth + 1, seen)
+        self.walk_module(&files, name, depth + 1, seen)
     }
 
-    fn js_export(&self, file: &str, name: &str) -> Result<Vec<Target>, QueryError> {
-        let key = (file.to_string(), name.to_string());
+    fn js_export(&self, files: &[String], name: &str) -> Result<Vec<Target>, QueryError> {
+        let key = (files.join("\n"), name.to_string());
         cached(&self.js.walks, key, || {
-            self.walk_export(file, name, 0, &mut HashSet::new())
+            self.walk_module(files, name, 0, &mut HashSet::new())
         })
+    }
+
+    /// What `name` is when read from a module that any of `files` can be: the first file whose
+    /// walk ends in definitions or modules decides, and one that ends in nothing or in an
+    /// unknown (a shim whose target is not indexed) passes the module to the next file.
+    fn walk_module(
+        &self,
+        files: &[String],
+        name: &str,
+        depth: usize,
+        seen: &mut HashSet<(String, String)>,
+    ) -> Result<Vec<Target>, QueryError> {
+        if let [file] = files {
+            return self.walk_export(file, name, depth, seen);
+        }
+        let mut first = None;
+        for file in files {
+            let mut attempt = seen.clone();
+            let found = self.walk_export(file, name, depth, &mut attempt)?;
+            if !found.is_empty() && !found.contains(&Target::Unknown) {
+                *seen = attempt;
+                return Ok(found);
+            }
+            first.get_or_insert(found);
+        }
+        Ok(first.unwrap_or_default())
     }
 
     /// What `name` is when read from `file`: an explicit export row wins, and only without one
@@ -532,15 +674,15 @@ impl Accounting<'_> {
         let mut found = Vec::new();
         for row in &explicit {
             match (&row.source, &row.local) {
-                (Some(source), local) => match self.js_module(file, source)? {
-                    Some(target) if row.namespace => found.push(Target::Module(target)),
-                    Some(target) => found.extend(self.walk_export(
-                        &target,
+                (Some(source), local) => match self.js_module(file, source, Kind::Import)? {
+                    files if files.is_empty() => found.push(Target::Unknown),
+                    files if row.namespace => found.push(Target::Module(files)),
+                    files => found.extend(self.walk_module(
+                        &files,
                         local.as_deref().unwrap_or(name),
                         depth + 1,
                         seen,
                     )?),
-                    None => found.push(Target::Unknown),
                 },
                 (None, Some(local)) => found.extend(self.local_targets(file, local, depth, seen)?),
                 (None, None) => found.push(Target::Unknown),
@@ -548,15 +690,14 @@ impl Accounting<'_> {
         }
         if explicit.is_empty() && name != "default" {
             for row in rows.iter().filter(|row| row.star) {
-                let module = match &row.source {
-                    Some(source) => self.js_module(file, source)?,
-                    None => None,
+                let files = match &row.source {
+                    Some(source) => self.js_module(file, source, Kind::Import)?,
+                    None => Vec::new(),
                 };
-                match module {
-                    Some(target) => {
-                        found.extend(self.walk_export(&target, name, depth + 1, seen)?)
-                    }
-                    None => found.push(Target::Unknown),
+                if files.is_empty() {
+                    found.push(Target::Unknown);
+                } else {
+                    found.extend(self.walk_module(&files, name, depth + 1, seen)?);
                 }
             }
         }
@@ -585,14 +726,23 @@ impl Accounting<'_> {
         Ok(found)
     }
 
-    /// Whether `specifier` names a package outside the project: an alias or a workspace package
-    /// is not outside, and any other name takes the rule that does not read the packages.
-    pub(super) fn js_source_is_external(&mut self, specifier: &str) -> Result<bool, QueryError> {
+    /// Whether `specifier` names a package outside the project: a `node:` builtin always is, an
+    /// alias or a workspace package never is, and any other name takes the rule that does not
+    /// read the packages.
+    pub(super) fn js_source_is_external(
+        &mut self,
+        importer: &str,
+        specifier: &str,
+    ) -> Result<bool, QueryError> {
+        if specifier.starts_with("node:") {
+            return Ok(true);
+        }
         let alias = ALIAS_PREFIXES
             .iter()
             .any(|prefix| specifier.starts_with(prefix));
         Ok(!alias
             && !self.js_is_workspace_package(specifier)?
+            && self.js_aliases(importer, specifier)?.is_none()
             && self.source_is_external(specifier)?)
     }
 
@@ -610,33 +760,145 @@ impl Accounting<'_> {
             .any(|package| package.name == name))
     }
 
-    /// The indexed file the module `specifier` names from `importer`, when the index says.
-    fn js_module(&self, importer: &str, specifier: &str) -> Result<Option<String>, QueryError> {
-        let key = (importer.to_string(), specifier.to_string());
+    /// The indexed files the module `specifier` can name from `importer`, best first; none when
+    /// the index does not say.
+    fn js_module(
+        &self,
+        importer: &str,
+        specifier: &str,
+        kind: Kind,
+    ) -> Result<Vec<String>, QueryError> {
+        let key = (importer.to_string(), specifier.to_string(), kind);
         cached(&self.js.modules, key, || {
             if specifier.starts_with('.') {
                 return match normalize(&child(parent(importer), specifier)) {
-                    Some(base) => self.js_file(&base),
-                    None => Ok(None),
+                    Some(base) => Ok(self.js_file(&base)?.into_iter().collect()),
+                    None => Ok(Vec::new()),
                 };
             }
+            if let Some(files) = self.js_aliases(importer, specifier)? {
+                return Ok(files);
+            }
             let Some((name, subpath)) = split_package(specifier) else {
-                return Ok(None);
+                return Ok(Vec::new());
             };
             let packages = self.js_packages()?;
             let mut named = packages.iter().filter(|package| package.name == name);
             match (named.next(), named.next()) {
-                (Some(package), None) => self.package_entry(package, subpath),
-                _ => Ok(None),
+                (Some(package), None) => self.package_entry(package, subpath, kind),
+                _ => Ok(Vec::new()),
             }
         })
+    }
+
+    /// The files an alias of the nearest `tsconfig.json` or `jsconfig.json` gives `specifier`:
+    /// the first target of the best `paths` key that is an indexed file, or `baseUrl` itself.
+    /// `Some` with no file when a `paths` key matches and none of its targets is indexed; `None`
+    /// when no alias applies.
+    fn js_aliases(
+        &self,
+        importer: &str,
+        specifier: &str,
+    ) -> Result<Option<Vec<String>>, QueryError> {
+        let Some(aliases) = self.js_config(parent(importer))? else {
+            return Ok(None);
+        };
+        let base = aliases.base_url.as_deref().unwrap_or(&aliases.paths_dir);
+        let best = aliases
+            .paths
+            .iter()
+            .filter_map(|(pattern, targets)| match pattern.split_once('*') {
+                None => (pattern == specifier).then_some((usize::MAX, targets, "")),
+                Some((prefix, suffix)) => {
+                    let star = specifier.strip_prefix(prefix)?.strip_suffix(suffix)?;
+                    Some((prefix.len(), targets, star))
+                }
+            })
+            .max_by_key(|(rank, ..)| *rank);
+        if let Some((_, targets, star)) = best {
+            for target in targets {
+                if let Some(base) = normalize(&child(base, &target.replace('*', star)))
+                    && let Some(file) = self.js_file(&base)?
+                {
+                    return Ok(Some(vec![file]));
+                }
+            }
+            return Ok(Some(Vec::new()));
+        }
+        if let Some(base_url) = &aliases.base_url
+            && let Some(base) = normalize(&child(base_url, specifier))
+            && let Some(file) = self.js_file(&base)?
+        {
+            return Ok(Some(vec![file]));
+        }
+        Ok(None)
+    }
+
+    /// The aliases of the config in `dir` or the nearest folder above it that has one.
+    fn js_config(&self, dir: &str) -> Result<Option<Rc<Aliases>>, QueryError> {
+        cached(&self.js.aliases, dir.to_string(), || {
+            for file in ["tsconfig.json", "jsconfig.json"] {
+                if self.root.join(dir).join(file).is_file() {
+                    return Ok(self.read_config(dir, file, 0).map(Rc::new));
+                }
+            }
+            if dir.is_empty() {
+                Ok(None)
+            } else {
+                self.js_config(parent(dir))
+            }
+        })
+    }
+
+    fn read_config(&self, dir: &str, file: &str, depth: usize) -> Option<Aliases> {
+        let text = std::fs::read_to_string(self.root.join(dir).join(file)).ok()?;
+        let config: serde_json::Value = serde_json::from_str(&lenient_json(&text)).ok()?;
+        let inherited = config
+            .get("extends")
+            .and_then(serde_json::Value::as_str)
+            .filter(|extends| extends.starts_with('.') && depth < MAX_EXTENDS)
+            .and_then(|extends| normalize(&child(dir, extends)))
+            .and_then(|path| {
+                let path = if path.ends_with(".json") {
+                    path
+                } else {
+                    format!("{path}.json")
+                };
+                let (folder, name) = path.rsplit_once('/').unwrap_or(("", &path));
+                self.read_config(folder, name, depth + 1)
+            });
+        let mut aliases = inherited.unwrap_or_default();
+        let options = config.get("compilerOptions");
+        if let Some(base_url) = options
+            .and_then(|options| options.get("baseUrl"))
+            .and_then(serde_json::Value::as_str)
+        {
+            aliases.base_url = normalize(&child(dir, base_url));
+        }
+        if let Some(paths) = options
+            .and_then(|options| options.get("paths"))
+            .and_then(serde_json::Value::as_object)
+        {
+            aliases.paths_dir = dir.to_string();
+            aliases.paths = paths
+                .iter()
+                .map(|(pattern, targets)| {
+                    let targets = targets.as_array().into_iter().flatten();
+                    let targets = targets.filter_map(|target| target.as_str().map(String::from));
+                    (pattern.clone(), targets.collect())
+                })
+                .collect();
+        }
+        Some(aliases)
     }
 
     fn package_entry(
         &self,
         package: &Package,
         subpath: &str,
-    ) -> Result<Option<String>, QueryError> {
+        kind: Kind,
+    ) -> Result<Vec<String>, QueryError> {
+        let mut found = Vec::new();
         match &package.exports {
             Some(exports) => {
                 let key = if subpath.is_empty() {
@@ -644,62 +906,60 @@ impl Accounting<'_> {
                 } else {
                     format!("./{subpath}")
                 };
-                match exports.select(&key) {
-                    Some((value, star)) => self.first_indexed(value, &package.dir, star),
-                    None => Ok(None),
+                if let Some((value, star)) = exports.select(&key) {
+                    self.indexed_targets(value, &package.dir, star, None, &mut found)?;
                 }
             }
             None if subpath.is_empty() => {
-                let mut files = Vec::new();
-                for entry in package.entries.iter().map(String::as_str).chain(["index"]) {
+                let entries = package
+                    .entries
+                    .iter()
+                    .map(|(loads, entry)| (*loads, entry.as_str()));
+                for (loads, entry) in entries.chain([(None, "index")]) {
                     if let Some(base) = normalize(&child(&package.dir, entry)) {
-                        files.extend(self.js_file(&base)?);
+                        found.extend(self.js_file(&base)?.map(|file| (loads, file)));
                     }
                 }
-                Ok(first_script(files))
             }
-            None => match normalize(&child(&package.dir, subpath)) {
-                Some(base) => self.js_file(&base),
-                None => Ok(None),
-            },
+            None => {
+                if let Some(base) = normalize(&child(&package.dir, subpath)) {
+                    found.extend(self.js_file(&base)?.map(|file| (None, file)));
+                }
+            }
         }
+        Ok(candidate_files(found, kind))
     }
 
-    /// The first target of `exports`, in file order, that is an indexed file; a declaration file
-    /// only when no target is a script.
-    fn first_indexed(
-        &self,
-        exports: &Exports,
-        dir: &str,
-        star: Option<&str>,
-    ) -> Result<Option<String>, QueryError> {
-        let mut files = Vec::new();
-        self.indexed_targets(exports, dir, star, &mut files)?;
-        Ok(first_script(files))
-    }
-
+    /// The indexed files that the targets of `exports` name, in file order, with the kind of
+    /// importer the nearest `import` or `require` condition above each one selects.
     fn indexed_targets(
         &self,
         exports: &Exports,
         dir: &str,
         star: Option<&str>,
-        files: &mut Vec<String>,
+        loads: Option<Kind>,
+        files: &mut Vec<(Option<Kind>, String)>,
     ) -> Result<(), QueryError> {
         match exports {
             Exports::Target(target) => {
                 let target = star.map_or_else(|| target.clone(), |star| target.replace('*', star));
                 if let Some(base) = normalize(&child(dir, &target)) {
-                    files.extend(self.js_file(&base)?);
+                    files.extend(self.js_file(&base)?.map(|file| (loads, file)));
                 }
             }
             Exports::List(items) => {
                 for item in items {
-                    self.indexed_targets(item, dir, star, files)?;
+                    self.indexed_targets(item, dir, star, loads, files)?;
                 }
             }
             Exports::Conditions(entries) => {
-                for (_, value) in entries {
-                    self.indexed_targets(value, dir, star, files)?;
+                for (condition, value) in entries {
+                    let loads = match condition.as_str() {
+                        "import" => Some(Kind::Import),
+                        "require" => Some(Kind::Require),
+                        _ => loads,
+                    };
+                    self.indexed_targets(value, dir, star, loads, files)?;
                 }
             }
             Exports::Other => {}
@@ -741,7 +1001,14 @@ impl Accounting<'_> {
                     dir,
                     name,
                     exports,
-                    entries: [module, main, types].into_iter().flatten().collect(),
+                    entries: [
+                        (Some(Kind::Import), module),
+                        (Some(Kind::Require), main),
+                        (None, types),
+                    ]
+                    .into_iter()
+                    .filter_map(|(loads, entry)| Some((loads, entry?)))
+                    .collect(),
                 });
             }
         }
@@ -825,9 +1092,10 @@ impl Accounting<'_> {
     fn js_has_local_symbol(&self, path: &str, name: &str) -> Result<bool, QueryError> {
         let key = (path.to_string(), name.to_string());
         cached(&self.js.locals, key, || {
-            let rows =
-                self.rows_at_path(LOCAL_SYMBOL_SQL, path, &[&name], |row| row.get::<_, i64>(0))?;
-            Ok(!rows.is_empty())
+            let rows = self.rows_at_path(LOCAL_SYMBOL_SQL, path, &[&name], |row| {
+                row.get::<_, String>(0)
+            })?;
+            Ok(rows.iter().any(|signature| !is_test_label(signature)))
         })
     }
 }

@@ -2563,3 +2563,639 @@ fn the_import_resolver_reads_an_index_whose_paths_use_backslashes() {
         assert_site(&report, path, line, SiteLabel::Proven, "import");
     }
 }
+
+#[test]
+fn a_test_label_that_shares_the_name_of_an_import_does_not_shadow_it() {
+    let repo = scanned_repo(&[
+        ("package.json", "{\"name\":\"r\"}\n"),
+        ("m.ts", "export function mix(a: string) { return a }\n"),
+        (
+            "m.test.ts",
+            "import { mix } from './m'\ndescribe('mix', () => {\n  it('works', () => {\n    expect(mix('a')).toBe('a')\n  })\n})\n",
+        ),
+        (
+            "nested.test.ts",
+            "import { mix } from './m'\ndescribe('outer', () => {\n  describe('mix', () => {\n    it('works', () => {\n      expect(mix('a')).toBe('a')\n    })\n  })\n})\n",
+        ),
+    ]);
+    let report = report(&repo, "mix", Some("m.ts"));
+
+    assert_site(&report, "m.test.ts", 4, SiteLabel::Proven, "import");
+    assert_site(&report, "nested.test.ts", 5, SiteLabel::Proven, "import");
+}
+
+#[test]
+fn a_package_whose_script_entry_is_a_shim_falls_back_to_its_declaration_entry() {
+    let repo = scanned_repo(&[
+        ("package.json", "{\"name\":\"root\",\"private\":true}\n"),
+        ("app/package.json", "{\"name\":\"app\"}\n"),
+        (
+            "app/main.ts",
+            "import { foo } from \"@scope/lib\";\nexport function run() { return foo(); }\n",
+        ),
+        ("other/foo.ts", "export function foo() { return 2; }\n"),
+        (
+            "packages/lib/package.json",
+            "{ \"name\": \"@scope/lib\", \"exports\": { \".\": { \"types\": \"./index.d.ts\", \"default\": \"./index.js\" } } }\n",
+        ),
+        (
+            "packages/lib/index.d.ts",
+            "export { foo } from \"./src/foo\";\n",
+        ),
+        (
+            "packages/lib/index.js",
+            "export * from \"./dist/entry.js\";\n",
+        ),
+        (
+            "packages/lib/src/foo.ts",
+            "export function foo() { return 1; }\n",
+        ),
+    ]);
+
+    let real = report(&repo, "foo", Some("packages/lib/src/foo.ts"));
+    assert_site(&real, "app/main.ts", 2, SiteLabel::Proven, "import");
+    let other = report(&repo, "foo", Some("other/foo.ts"));
+    assert_site(
+        &other,
+        "app/main.ts",
+        2,
+        SiteLabel::Excluded,
+        "resolves to `foo` (packages/lib/src/foo.ts:1)",
+    );
+}
+
+#[test]
+fn a_call_after_a_line_that_ends_with_a_comment_or_a_signature_dot_is_a_bare_call() {
+    let repo = scanned_repo(&[
+        ("a.js", "export function helper() { return 1 }\n"),
+        (
+            "b.js",
+            "import { helper } from './a.js'\nexport function use() {\n  const x = 1 // set x.\n  helper()\n  const y = 2 // Done.\n  return helper()\n}\n",
+        ),
+        ("a.py", "def helper():\n    return 1\n"),
+        (
+            "b.py",
+            "from a import helper\n\n\nclass P:\n    def m(self) -> int: ...\n\n\nhelper()\n\n\ndef use():\n    x = 1  # set x.\n    helper()\n",
+        ),
+        ("a.ts", "export function helper() { return 1 }\n"),
+        (
+            "b.ts",
+            "import { helper } from './a'\nconst items = [...\n]\nexport const x = 1 // eslint-disable-line no-console.\nhelper()\n",
+        ),
+    ]);
+
+    let js = report(&repo, "helper", Some("a.js"));
+    assert_site(&js, "b.js", 4, SiteLabel::Proven, "import");
+    let py = report(&repo, "helper", Some("a.py"));
+    assert_site(&py, "b.py", 8, SiteLabel::Proven, "import");
+    assert_site(&py, "b.py", 13, SiteLabel::Proven, "import");
+    let ts = report(&repo, "helper", Some("a.ts"));
+    assert_site(&ts, "b.ts", 5, SiteLabel::Proven, "import");
+}
+
+#[test]
+fn a_call_after_a_line_that_ends_with_an_optional_or_non_null_member_dot_is_not_a_bare_call() {
+    let repo = scanned_repo(&[
+        ("m.ts", "export function foo() { return 1; }\n"),
+        (
+            "other.ts",
+            "export class K { foo() { return 3; } }\nexport function mk(): K | undefined { return new K(); }\n",
+        ),
+        (
+            "use.ts",
+            "import { foo } from \"./m\";\nimport { mk } from \"./other\";\nexport function i() { return mk()?.\n   foo(); }\nexport function j() { return mk()!.\n   foo(); }\nexport function k(xs: any[]) { return xs[0]?.\n   foo(); }\n",
+        ),
+    ]);
+    let report = report(&repo, "foo", Some("m.ts"));
+
+    for line in [4, 6, 8] {
+        assert_site(
+            &report,
+            "use.ts",
+            line,
+            SiteLabel::Unresolved,
+            "2 definitions",
+        );
+    }
+}
+
+#[test]
+fn a_java_record_with_an_annotation_before_it_keeps_its_component_as_a_rival() {
+    let repo = scanned_repo(&[
+        (
+            "p/A.java",
+            "package p;\n\npublic class A {\n    int x() {\n        return 1;\n    }\n}\n",
+        ),
+        (
+            "q/B.java",
+            "package q;\n\npublic class B {\n    int go() {\n        return make().x();\n    }\n}\n",
+        ),
+        (
+            "q/P.java",
+            "package q;\n\n@Deprecated(since = \"1\")\npublic record P(int x, int y) {\n}\n",
+        ),
+    ]);
+    let report = report(&repo, "x", Some("p/A.java"));
+
+    assert_site(
+        &report,
+        "q/B.java",
+        5,
+        SiteLabel::Unresolved,
+        "2 definitions",
+    );
+}
+
+#[test]
+fn a_go_field_of_an_alias_or_generic_func_type_stays_a_rival_of_a_call() {
+    for declaration in [
+        "type HF = func(int)\n\ntype S struct {\n\tHook HF\n}\n",
+        "type F[T any] func(T)\n\ntype S struct {\n\tHook F[int]\n}\n",
+    ] {
+        let repo = scanned_repo(&[
+            ("a/hook.go", "package a\n\nfunc Hook() {}\n"),
+            ("b/h.go", &format!("package b\n\n{declaration}")),
+            (
+                "c/use.go",
+                "package c\n\nfunc call(t any) {\n\tt.Hook()\n}\n",
+            ),
+        ]);
+        let report = report(&repo, "Hook", Some("a/hook.go"));
+
+        let site = site_at(&report, "c/use.go", 4);
+        assert_eq!(
+            (site.label, site.basis.as_str()),
+            (SiteLabel::Unresolved, "2 definitions"),
+            "{declaration}\n{}",
+            dump(&report)
+        );
+    }
+}
+
+#[test]
+fn a_rust_static_of_a_function_type_alias_stays_a_rival_of_a_call() {
+    let repo = scanned_repo(&[
+        (
+            "a/lib.rs",
+            "pub fn HOOK() {}\n\npub fn SPACED() {}\n\npub fn PLAIN() {}\n",
+        ),
+        (
+            "b/h.rs",
+            "type Cb = fn(i32);\n\npub static HOOK: Cb = identity;\n\npub static SPACED: fn (i32) = identity;\n\ntype Count = u32;\n\npub static PLAIN: Count = 1;\n",
+        ),
+        (
+            "c/use.rs",
+            "pub fn call() {\n    HOOK();\n    SPACED();\n    PLAIN();\n}\n",
+        ),
+    ]);
+    let line = |needle: &str| line_of(&repo, "c/use.rs", needle);
+
+    for name in ["HOOK", "SPACED"] {
+        let report = report(&repo, name, Some("a/lib.rs"));
+        assert_site(
+            &report,
+            "c/use.rs",
+            line(&format!("{name}()")),
+            SiteLabel::Unresolved,
+            "2 definitions",
+        );
+    }
+    let plain = report(&repo, "PLAIN", Some("a/lib.rs"));
+    assert_site(
+        &plain,
+        "c/use.rs",
+        line("PLAIN()"),
+        SiteLabel::Likely,
+        "name only",
+    );
+}
+
+#[test]
+fn a_comment_beside_a_shorthand_property_does_not_hide_the_object_value() {
+    for util in [
+        "function render(x) {\n  return x;\n}\nconst api = {\n  render // the renderer\n};\nmodule.exports = api;\n",
+        "function render(x) {\n  return x;\n}\nconst api = { render /* x */ };\nmodule.exports = api;\n",
+        "function render(x) {\n  return x;\n}\nconst api = { /* x */ render, other: 1 };\nmodule.exports = api;\n",
+        "function render(x) {\n  return x;\n}\nconst api = {\n  other: 1, // first\n  render, /* second */\n};\nmodule.exports = api;\n",
+    ] {
+        let repo = scanned_repo(&[JS_VIEW, JS_MEMBER_CALL, ("lib/util.js", util)]);
+        let report = report(&repo, "render", Some("lib/view.js"));
+
+        let site = site_at(&report, "lib/use.js", 2);
+        assert_eq!(
+            (site.label, site.basis.as_str()),
+            (SiteLabel::Unresolved, "2 definitions"),
+            "{util}\n{}",
+            dump(&report)
+        );
+    }
+}
+
+#[test]
+fn a_declaration_file_and_the_script_with_its_stem_describe_one_module() {
+    for (declaration, script) in [
+        ("lib.d.ts", "lib.js"),
+        ("lib.d.ts", "lib.ts"),
+        ("lib.d.mts", "lib.mjs"),
+        ("lib.d.cts", "lib.cjs"),
+    ] {
+        let repo = scanned_repo(&[
+            (declaration, "export declare function foo(): number;\n"),
+            (script, "export function foo() { return 1; }\n"),
+            (
+                "main.ts",
+                "import { foo } from \"./lib\";\nexport function run() { return foo(); }\n",
+            ),
+        ]);
+
+        for target in [declaration, script] {
+            let report = report(&repo, "foo", Some(target));
+            assert_site(&report, "main.ts", 2, SiteLabel::Proven, "import");
+        }
+    }
+}
+
+#[test]
+fn a_package_that_names_only_a_declaration_entry_proves_the_script_beside_it() {
+    let repo = scanned_repo(&[
+        ("package.json", "{\"name\":\"root\",\"private\":true}\n"),
+        ("app/package.json", "{\"name\":\"app\"}\n"),
+        (
+            "app/main.ts",
+            "import { foo } from \"lib3\";\nexport function run() { return foo(); }\n",
+        ),
+        (
+            "packages/lib3/package.json",
+            "{ \"name\": \"lib3\", \"exports\": { \".\": { \"types\": \"./index.d.ts\" } } }\n",
+        ),
+        (
+            "packages/lib3/index.d.ts",
+            "export declare function foo(): number;\n",
+        ),
+        (
+            "packages/lib3/index.js",
+            "export function foo() { return 1; }\n",
+        ),
+        ("other/foo.ts", "export function foo() { return 2; }\n"),
+    ]);
+
+    let script = report(&repo, "foo", Some("packages/lib3/index.js"));
+    assert_site(&script, "app/main.ts", 2, SiteLabel::Proven, "import");
+    let other = report(&repo, "foo", Some("other/foo.ts"));
+    assert_ne!(
+        site_at(&other, "app/main.ts", 2).label,
+        SiteLabel::Proven,
+        "{}",
+        dump(&other)
+    );
+}
+
+const DUAL_PACKAGE: &[(&str, &str)] = &[
+    ("package.json", "{\"name\":\"root\",\"private\":true}\n"),
+    ("app/package.json", "{\"name\":\"app\"}\n"),
+    (
+        "app/a.cjs",
+        "const { foo } = require('dual')\nmodule.exports = function run() { return foo() }\n",
+    ),
+    (
+        "app/b.mjs",
+        "import { foo } from 'dual'\nexport function run2() { return foo() }\n",
+    ),
+    (
+        "packages/dual/cjs/index.js",
+        "function foo() { return 1 }\nmodule.exports = { foo }\n",
+    ),
+    (
+        "packages/dual/esm/index.js",
+        "export function foo() { return 1 }\n",
+    ),
+];
+
+#[test]
+fn a_require_call_follows_the_require_condition_and_an_import_follows_the_import_condition() {
+    let mut files = DUAL_PACKAGE.to_vec();
+    files.push((
+        "packages/dual/package.json",
+        "{\"name\":\"dual\",\"exports\":{\".\":{\"import\":\"./esm/index.js\",\"require\":\"./cjs/index.js\"}}}\n",
+    ));
+    let repo = scanned_repo(&files);
+
+    let esm = report(&repo, "foo", Some("packages/dual/esm/index.js"));
+    assert_site(&esm, "app/b.mjs", 2, SiteLabel::Proven, "import");
+    assert_ne!(
+        site_at(&esm, "app/a.cjs", 2).label,
+        SiteLabel::Proven,
+        "{}",
+        dump(&esm)
+    );
+    let cjs = report(&repo, "foo", Some("packages/dual/cjs/index.js"));
+    assert_ne!(
+        site_at(&cjs, "app/a.cjs", 2).label,
+        SiteLabel::Excluded,
+        "{}",
+        dump(&cjs)
+    );
+    assert_site(
+        &cjs,
+        "app/b.mjs",
+        2,
+        SiteLabel::Excluded,
+        "resolves to `foo` (packages/dual/esm/index.js:1)",
+    );
+}
+
+#[test]
+fn a_package_with_two_scripts_and_no_kind_to_choose_by_is_left_to_the_name() {
+    let repo = scanned_repo(&[
+        ("package.json", "{\"name\":\"root\",\"private\":true}\n"),
+        ("app/package.json", "{\"name\":\"app\"}\n"),
+        (
+            "app/b.mjs",
+            "import { foo } from 'dual'\nexport function run2() { return foo() }\n",
+        ),
+        (
+            "packages/dual/package.json",
+            "{\"name\":\"dual\",\"exports\":{\".\":{\"node\":\"./node/index.js\",\"default\":\"./web/index.js\"}}}\n",
+        ),
+        (
+            "packages/dual/node/index.js",
+            "export function foo() { return 1 }\n",
+        ),
+        (
+            "packages/dual/web/index.js",
+            "export function foo() { return 1 }\n",
+        ),
+    ]);
+
+    for target in ["packages/dual/node/index.js", "packages/dual/web/index.js"] {
+        let report = report(&repo, "foo", Some(target));
+        let label = site_at(&report, "app/b.mjs", 2).label;
+        assert!(
+            label != SiteLabel::Proven && label != SiteLabel::Excluded,
+            "{target}\n{}",
+            dump(&report)
+        );
+    }
+}
+
+const SHARED_NAME_CONFLICT: &[(&str, &str)] = &[
+    ("package.json", "{\"name\":\"root\",\"private\":true}\n"),
+    (
+        "src/app.ts",
+        "import { helper } from 'shared/util'\nexport function run() { return helper() }\n",
+    ),
+    (
+        "src/shared/util.ts",
+        "export function helper() { return 1 }\n",
+    ),
+    ("tools/shared/package.json", "{\"name\":\"shared\"}\n"),
+    (
+        "tools/shared/util.ts",
+        "export function helper() { return 2 }\n",
+    ),
+];
+
+fn shared_name_conflict_with(tsconfig: &[(&str, &str)]) -> Repo {
+    let files: Vec<(&str, &str)> = SHARED_NAME_CONFLICT
+        .iter()
+        .chain(tsconfig)
+        .copied()
+        .collect();
+    scanned_repo(&files)
+}
+
+#[test]
+fn a_tsconfig_paths_alias_wins_over_a_workspace_package_of_the_same_prefix() {
+    let repo = shared_name_conflict_with(&[(
+        "tsconfig.json",
+        "{\"compilerOptions\":{\"baseUrl\":\".\",\"paths\":{\"shared/*\":[\"src/shared/*\"]}}}\n",
+    )]);
+
+    let aliased = report(&repo, "helper", Some("src/shared/util.ts"));
+    assert_site(&aliased, "src/app.ts", 2, SiteLabel::Proven, "import");
+    let package = report(&repo, "helper", Some("tools/shared/util.ts"));
+    assert_site(
+        &package,
+        "src/app.ts",
+        2,
+        SiteLabel::Excluded,
+        "resolves to `helper` (src/shared/util.ts:1)",
+    );
+}
+
+#[test]
+fn a_tsconfig_with_comments_trailing_commas_and_an_extends_chain_is_read_leniently() {
+    let repo = shared_name_conflict_with(&[
+        (
+            "tsconfig.json",
+            "{\n  // the project config\n  \"extends\": \"./config/base\",\n  \"compilerOptions\": { /* none here */ },\n}\n",
+        ),
+        (
+            "config/base.json",
+            "{\n  \"compilerOptions\": {\n    \"paths\": {\n      \"shared/*\": [\"../src/shared/*\",],\n    },\n  },\n}\n",
+        ),
+    ]);
+
+    let aliased = report(&repo, "helper", Some("src/shared/util.ts"));
+    assert_site(&aliased, "src/app.ts", 2, SiteLabel::Proven, "import");
+}
+
+#[test]
+fn the_nearest_tsconfig_decides_and_a_far_one_does_not() {
+    let repo = scanned_repo(&[
+        ("package.json", "{\"name\":\"root\",\"private\":true}\n"),
+        (
+            "tsconfig.json",
+            "{\"compilerOptions\":{\"paths\":{\"shared/*\":[\"src/shared/*\"]}}}\n",
+        ),
+        (
+            "app/tsconfig.json",
+            "{\"compilerOptions\":{\"paths\":{\"shared/*\":[\"lib/shared/*\"]}}}\n",
+        ),
+        (
+            "app/main.ts",
+            "import { helper } from 'shared/util'\nexport function run() { return helper() }\n",
+        ),
+        (
+            "src/shared/util.ts",
+            "export function helper() { return 1 }\n",
+        ),
+        (
+            "app/lib/shared/util.ts",
+            "export function helper() { return 2 }\n",
+        ),
+    ]);
+
+    let near = report(&repo, "helper", Some("app/lib/shared/util.ts"));
+    assert_site(&near, "app/main.ts", 2, SiteLabel::Proven, "import");
+    let far = report(&repo, "helper", Some("src/shared/util.ts"));
+    assert_site(
+        &far,
+        "app/main.ts",
+        2,
+        SiteLabel::Excluded,
+        "resolves to `helper` (app/lib/shared/util.ts:1)",
+    );
+}
+
+#[test]
+fn a_base_url_that_names_the_file_wins_over_a_workspace_package() {
+    let repo = shared_name_conflict_with(&[(
+        "tsconfig.json",
+        "{\"compilerOptions\":{\"baseUrl\":\"src\"}}\n",
+    )]);
+
+    let aliased = report(&repo, "helper", Some("src/shared/util.ts"));
+    assert_site(&aliased, "src/app.ts", 2, SiteLabel::Proven, "import");
+}
+
+#[test]
+fn a_paths_key_that_matches_no_indexed_file_leaves_the_module_unknown() {
+    let repo = shared_name_conflict_with(&[(
+        "tsconfig.json",
+        "{\"compilerOptions\":{\"paths\":{\"shared/*\":[\"gone/*\"]}}}\n",
+    )]);
+
+    for target in ["src/shared/util.ts", "tools/shared/util.ts"] {
+        let report = report(&repo, "helper", Some(target));
+        assert_ne!(
+            site_at(&report, "src/app.ts", 2).label,
+            SiteLabel::Excluded,
+            "{target}\n{}",
+            dump(&report)
+        );
+    }
+}
+
+#[test]
+fn a_bare_named_import_from_a_node_builtin_is_excluded_even_beside_a_folder_of_that_name() {
+    let repo = scanned_repo(&[
+        ("package.json", "{\"name\":\"r\"}\n"),
+        (
+            "src/fs/read.ts",
+            "export function readFile() { return 1 }\n",
+        ),
+        (
+            "src/fs/other.ts",
+            "export function readFile() { return 2 }\n",
+        ),
+        (
+            "src/use.ts",
+            "import { readFile } from 'node:fs'\nexport function c() { return readFile() }\n",
+        ),
+    ]);
+    let report = report(&repo, "readFile", Some("src/fs/read.ts"));
+
+    assert_site(
+        &report,
+        "src/use.ts",
+        2,
+        SiteLabel::Excluded,
+        "receiver `readFile` is imported from `node:fs`",
+    );
+}
+
+fn binding_note(line: usize) -> String {
+    format!(
+        "import; line {line} binds the name as a callback parameter, loop variable, or catch parameter"
+    )
+}
+
+#[test]
+fn a_callback_parameter_loop_variable_or_catch_parameter_downgrades_the_proof_to_likely() {
+    let repo = scanned_repo(&[
+        ("package.json", "{\"name\":\"r\"}\n"),
+        ("m.ts", "export function foo() { return 1 }\n"),
+        (
+            "use.ts",
+            "import { foo } from './m';\nexport function a(xs: any[]) { return xs.map(foo => foo()); }\nexport function b(xs: any[]) { return xs.map((n: number, foo: any) => foo()); }\nexport function c(xs: any[]) { return xs.map(({ foo }) => foo()); }\nexport function d(xs: any[]) { xs.forEach(function (foo) { foo() }) }\nexport function e(list: any[]) { for (const foo of list) foo() }\nexport function f(list: any) { for (const foo in list) { foo() } }\nexport function g(list: any[]) { for (const [k, foo] of list) { foo() } }\nexport function h() { try { x() } catch (foo) { foo() } }\nexport function i() { try { x() } catch ({ foo }) { foo() } }\nexport function j(xs: any[]) { xs.map(async (foo = 1) => foo()) }\n",
+        ),
+    ]);
+    let report = report(&repo, "foo", Some("m.ts"));
+
+    for line in 2..=11 {
+        assert_site(
+            &report,
+            "use.ts",
+            line,
+            SiteLabel::Likely,
+            &binding_note(line),
+        );
+    }
+}
+
+#[test]
+fn a_name_that_is_only_an_argument_or_a_default_value_keeps_its_proof() {
+    let repo = scanned_repo(&[
+        ("package.json", "{\"name\":\"r\"}\n"),
+        ("m.ts", "export function foo() { return 1 }\n"),
+        (
+            "use.ts",
+            "import { foo } from './m';\nexport function a(xs: any[]) { xs.map(foo); return foo(); }\nexport function b(xs: any[]) { xs.map((n = foo) => n); return foo(); }\nexport function c(xs: any[]) { for (const n of xs.map(foo)) n; return foo(); }\nexport function d(xs: any[]) { xs.map(({ foo: k }) => k); return xs.map(n => foo(n)); }\n",
+        ),
+    ]);
+    let report = report(&repo, "foo", Some("m.ts"));
+
+    for line in 2..=4 {
+        assert_site(&report, "use.ts", line, SiteLabel::Proven, "import");
+    }
+    assert_site(&report, "use.ts", 5, SiteLabel::Proven, "import");
+}
+
+#[test]
+fn a_binding_in_an_earlier_caller_does_not_downgrade_the_proof_of_a_later_one() {
+    let repo = scanned_repo(&[
+        ("package.json", "{\"name\":\"r\"}\n"),
+        ("m.ts", "export function foo() { return 1 }\n"),
+        (
+            "use.ts",
+            "import { foo } from './m';\nexport function a(xs: any[]) { return xs.map(foo => foo()); }\nexport function b() { return foo(); }\n",
+        ),
+    ]);
+    let report = report(&repo, "foo", Some("m.ts"));
+
+    assert_site(&report, "use.ts", 2, SiteLabel::Likely, &binding_note(2));
+    assert_site(&report, "use.ts", 3, SiteLabel::Proven, "import");
+}
+
+#[test]
+fn a_callback_parameter_never_excludes_the_site_for_the_other_definition() {
+    let repo = scanned_repo(&[
+        ("package.json", "{\"name\":\"r\"}\n"),
+        ("m.ts", "export function foo() { return 1 }\n"),
+        ("n.ts", "export function foo() { return 2 }\n"),
+        (
+            "use.ts",
+            "import { foo } from './m';\nexport function a(xs: any[]) { return xs.map(foo => foo()); }\n",
+        ),
+    ]);
+
+    let other = report(&repo, "foo", Some("n.ts"));
+    assert_ne!(
+        site_at(&other, "use.ts", 2).label,
+        SiteLabel::Proven,
+        "{}",
+        dump(&other)
+    );
+    let imported = report(&repo, "foo", Some("m.ts"));
+    assert_site(&imported, "use.ts", 2, SiteLabel::Likely, &binding_note(2));
+}
+
+#[test]
+fn a_callback_parameter_with_a_declared_type_keeps_the_receiver_type_proof() {
+    let repo = scanned_repo(&[
+        ("package.json", "{\"name\":\"r\"}\n"),
+        (
+            "def.ts",
+            "export interface Def { tx(value: number): number }\n",
+        ),
+        (
+            "use.ts",
+            "import type { Def } from './def';\nexport const run = (inst: object, def: Def) => {\n  return def.tx(1);\n};\nexport const wrap = (def: Def) => def.tx(2);\n",
+        ),
+    ]);
+    let report = report(&repo, "tx", Some("def.ts"));
+
+    assert_site(&report, "use.ts", 3, SiteLabel::Proven, "receiver type");
+    assert_site(&report, "use.ts", 5, SiteLabel::Proven, "receiver type");
+}

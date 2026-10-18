@@ -19,6 +19,7 @@ use crate::queries::{
 };
 use crate::text_scan::scan_word;
 
+mod js_bindings;
 mod js_modules;
 
 const RESOLVER_ROW_CAP: usize = 5_000;
@@ -45,6 +46,8 @@ const SELF_RECEIVERS: &[&str] = &["self", "this", "cls", "Self", "super"];
 const EXTERNAL_RUST_ROOTS: &[&str] = &["std", "core", "alloc"];
 /// The basis of a claim that rests on an import; a package import can match several files.
 const IMPORT_BASIS: &str = "import";
+/// The bases that rest on the written name alone, which a callback parameter of that name hides.
+const NAME_RESOLVED_BASES: &[&str] = &[IMPORT_BASIS, "same file", "enclosing scope"];
 
 /// Selects the callers target by name exactly as `find_references_scoped` does: the same
 /// `QueryError::SymbolNotFound` (built with `symbol_not_found_parts`) or ambiguity error.
@@ -257,7 +260,7 @@ const SHADOW_IN_CHAIN_SQL: &str = "WITH RECURSIVE chain(symbol_id, depth) AS (
          FROM symbols s JOIN chain ON s.symbol_id = chain.symbol_id
          WHERE s.parent_symbol_id IS NOT NULL AND chain.depth < 32
      )
-     SELECT d.symbol_id
+     SELECT d.symbol_id, COALESCE(d.signature, '')
      FROM chain
      JOIN symbols scope ON scope.symbol_id = chain.symbol_id
      JOIN symbols d ON d.parent_symbol_id = chain.symbol_id
@@ -265,13 +268,12 @@ const SHADOW_IN_CHAIN_SQL: &str = "WITH RECURSIVE chain(symbol_id, depth) AS (
        AND (d.kind IN ('variable', 'parameter', 'function', 'constant', 'class')
             OR ?4 AND d.kind IN ('type', 'interface', 'enum'))
        AND (chain.depth = 0 OR scope.kind IN ('function', 'method', 'constructor'))
-     ORDER BY chain.depth, d.start_line
-     LIMIT 1";
+     ORDER BY chain.depth, d.start_line";
 
-const SHADOW_TOP_LEVEL_SQL: &str = "SELECT symbol_id FROM symbols
+const SHADOW_TOP_LEVEL_SQL: &str = "SELECT symbol_id, COALESCE(signature, '') FROM symbols
      WHERE name = ?1 AND path = ?2 AND parent_symbol_id IS NULL
        AND kind NOT IN ('import', 'export', 'module', 'namespace')
-     ORDER BY start_line LIMIT 1";
+     ORDER BY start_line";
 
 const IMPORT_SOURCES_SQL: &str = "SELECT COALESCE(json_extract(metadata_json, '$.source'), '')
      FROM symbols
@@ -333,15 +335,14 @@ const MEMBER_ACCESS_PATHS_SQL: &str =
 const VARIABLE_REF_SITES_SQL: &str = "SELECT path, start_line, start_column FROM identifiers
      WHERE name = ?1 AND kind = 'variable_ref' AND start_column IS NOT NULL";
 
-const GO_FUNC_TYPE_SQL: &str = "SELECT 1 FROM symbols
-     WHERE name = ?1 AND kind = 'type' AND language = 'go'
-       AND signature LIKE 'type ' || ?1 || ' func%' LIMIT 1";
+const TYPE_DECLARATIONS_SQL: &str = "SELECT COALESCE(signature, '') FROM symbols
+     WHERE name = ?1 AND kind = 'type' AND language = ?2";
 
 const TOP_LEVEL_VARIABLE_SQL: &str = "SELECT 1 FROM symbols
      WHERE path = ?1 AND name = ?2 AND parent_symbol_id IS NULL
        AND kind IN ('variable', 'constant') LIMIT 1";
 
-const FN_TYPES: [&str; 4] = ["fn(", "Fn(", "FnMut(", "FnOnce("];
+const FN_TYPES: [&str; 5] = ["fn(", "fn (", "Fn(", "FnMut(", "FnOnce("];
 
 struct Spec {
     name: String,
@@ -478,13 +479,53 @@ fn is_plain_identifier(text: &str) -> bool {
     chars
         .next()
         .is_some_and(|c| c.is_alphabetic() || c == '_' || c == '$')
-        && chars.all(|c| c.is_alphanumeric() || c == '_' || c == '$')
+        && chars.all(is_word_char)
 }
 
-/// Whether a Java type signature declares a record (`public record Point(int x, int y)`).
+fn is_word_char(c: char) -> bool {
+    c.is_alphanumeric() || c == '_' || c == '$'
+}
+
+/// Whether a Java type signature declares a record (`@Deprecated(since = "1") public record
+/// Point(int x, int y)`): the word `record` followed by the type name.
 fn is_record(signature: &str) -> bool {
-    let head = signature.split(['(', '<']).next().unwrap_or("");
-    head.split_whitespace().any(|word| word == "record")
+    signature.match_indices("record").any(|(at, word)| {
+        let after = &signature[at + word.len()..];
+        !signature[..at].ends_with(is_word_char)
+            && after.starts_with(char::is_whitespace)
+            && after.trim_start().starts_with(is_word_char)
+    })
+}
+
+/// Whether the declaration `type Name func(...)`, `type Name = func(...)`, `type Name[T any]
+/// func(T)`, or Rust `type Name = fn(...)` declares a function type.
+fn is_function_type(signature: &str, name: &str, language: &str) -> bool {
+    let Some(declared) = signature
+        .trim_start()
+        .strip_prefix("type")
+        .and_then(|rest| rest.trim_start().strip_prefix(name))
+    else {
+        return false;
+    };
+    let declared = declared.trim_start();
+    let declared = match declared.chars().next() {
+        Some(open @ ('[' | '<')) => {
+            let close = if open == '[' { ']' } else { '>' };
+            let mut depth = 0;
+            let end = declared.char_indices().find(|&(_, c)| {
+                depth += i32::from(c == open) - i32::from(c == close);
+                depth == 0
+            });
+            end.map_or("", |(end, _)| &declared[end + 1..])
+        }
+        _ => declared,
+    };
+    let declared = declared.trim_start().trim_start_matches('=').trim_start();
+    if language == "go" {
+        declared.starts_with("func")
+    } else {
+        FN_TYPES.iter().any(|fn_type| declared.contains(fn_type))
+    }
 }
 
 /// `line` (1-based) split at the byte `column`.
@@ -492,21 +533,48 @@ fn split_line<'a>(lines: &[&'a str], line: usize, column: usize) -> Option<(&'a 
     lines.get(line.checked_sub(1)?)?.split_at_checked(column)
 }
 
+/// `text` without the blanks and `/* */` comments before it; a `//` comment ends the line.
+fn after_blanks_and_comments(mut text: &str) -> &str {
+    loop {
+        text = text.trim_start();
+        if text.starts_with("//") {
+            return "";
+        }
+        match text.strip_prefix("/*") {
+            Some(comment) => text = comment.split_once("*/").map_or("", |(_, rest)| rest),
+            None => return text,
+        }
+    }
+}
+
+/// `text` without the blanks and `/* */` comments at its end.
+fn before_blanks_and_comments(mut text: &str) -> &str {
+    loop {
+        text = text.trim_end();
+        match text
+            .strip_suffix("*/")
+            .and_then(|comment| comment.rsplit_once("/*"))
+        {
+            Some((rest, _)) => text = rest,
+            None => return text,
+        }
+    }
+}
+
 /// Whether `name` written at `line` and `column` stands where an object literal holds a value
 /// (`{ render }`, `{ key: render, other }`): `{`, `,`, `:`, or nothing before it, and `,`, `}`, or
-/// nothing after it. A call argument (`f(a, render)`) and a receiver (`render.use()`) do not.
+/// nothing after it, blanks and comments aside. A call argument (`f(a, render)`) and a receiver
+/// (`render.use()`) do not.
 fn is_object_value(lines: &[&str], line: usize, column: usize, name: &str) -> bool {
     let Some((before, rest)) = split_line(lines, line, column) else {
         return false;
     };
     let after = rest.get(name.len()..).unwrap_or("");
-    before
-        .trim_end()
+    before_blanks_and_comments(before)
         .chars()
         .next_back()
         .is_none_or(|c| matches!(c, '{' | ',' | ':'))
-        && after
-            .trim_start()
+        && after_blanks_and_comments(after)
             .chars()
             .next()
             .is_none_or(|c| matches!(c, ',' | '}'))
@@ -789,8 +857,12 @@ impl<'a> Accounting<'a> {
         };
         for definition in &mut definitions {
             definition.free &= !member_paths.contains(&definition.path);
-            if !definition.callable && definition.language == "go" {
-                definition.callable = self.holds_func(definition)?;
+            if !definition.callable {
+                definition.callable = match definition.language.as_str() {
+                    "go" => self.holds_func(definition)?,
+                    "rust" => self.holds_fn_alias(definition)?,
+                    _ => false,
+                };
             }
         }
         Ok(definitions)
@@ -872,7 +944,36 @@ impl<'a> Accounting<'a> {
         if type_name == "func" || declared[type_name.len()..].starts_with('.') {
             return Ok(true);
         }
-        self.with_statement(GO_FUNC_TYPE_SQL, |stmt| stmt.exists(params![type_name]))
+        self.declares_function_type(&type_name, "go")
+    }
+
+    /// Whether a Rust field or static is declared with a project type alias of a fn type
+    /// (`static HOOK: Callback` with `type Callback = fn(i32)`).
+    fn holds_fn_alias(&self, definition: &Definition) -> Result<bool, QueryError> {
+        let declared = definition
+            .signature
+            .split_once(definition.name.as_str())
+            .and_then(|(_, rest)| rest.trim_start().strip_prefix(':'))
+            .and_then(|declared| declared.split(['=', ';']).next())
+            .and_then(|declared| declared.rsplit("::").next())
+            .map(str::trim);
+        match declared {
+            Some(type_name) if is_plain_identifier(type_name) => {
+                self.declares_function_type(type_name, "rust")
+            }
+            _ => Ok(false),
+        }
+    }
+
+    /// Whether a project type named `type_name` is declared as a func (Go) or fn (Rust) type.
+    fn declares_function_type(&self, type_name: &str, language: &str) -> Result<bool, QueryError> {
+        let signatures = self.with_statement(TYPE_DECLARATIONS_SQL, |stmt| {
+            stmt.query_map(params![type_name, language], |r| r.get::<_, String>(0))?
+                .collect::<Result<Vec<_>, _>>()
+        })?;
+        Ok(signatures
+            .iter()
+            .any(|signature| is_function_type(signature, type_name, language)))
     }
 
     fn definition_count(&self, name: &str) -> Result<usize, QueryError> {
@@ -1031,9 +1132,19 @@ impl<'a> Accounting<'a> {
         }
 
         for row in &rows {
-            let Some(verdict) = verdicts.remove(&row.key) else {
+            let Some(mut verdict) = verdicts.remove(&row.key) else {
                 continue;
             };
+            if verdict.label == SiteLabel::Proven
+                && NAME_RESOLVED_BASES.contains(&verdict.basis.as_str())
+                && let Some(line) = self.js_binding_line(row, &spec.name)?
+            {
+                verdict.label = SiteLabel::Likely;
+                verdict.basis = format!(
+                    "{}; line {line} binds the name as a callback parameter, loop variable, or catch parameter",
+                    verdict.basis
+                );
+            }
             out.push(site_row(row, verdict, spec));
         }
         if !spec.calls_only {
@@ -1460,7 +1571,7 @@ impl<'a> Accounting<'a> {
                 false,
             )));
         }
-        if let Some((binding, source)) = self.external_binding(row)? {
+        if let Some((binding, source)) = self.external_binding(row, &spec.name)? {
             return Ok(Some(Verdict::new(
                 SiteLabel::Excluded,
                 format!("receiver `{binding}` is imported from `{source}`"),
@@ -1652,23 +1763,37 @@ impl<'a> Accounting<'a> {
         }
         let mut hit = None;
         if let Some(caller) = row.caller_id.as_deref() {
-            hit = self.with_statement(SHADOW_IN_CHAIN_SQL, |stmt| {
-                stmt.query_row(params![caller, name, row.path, type_use], |r| {
-                    r.get::<_, String>(0)
-                })
-                .optional()
-            })?;
+            hit = self.first_real_definition(
+                SHADOW_IN_CHAIN_SQL,
+                params![caller, name, row.path, type_use],
+            )?;
         }
         if hit.is_none() {
-            hit = self.with_statement(SHADOW_TOP_LEVEL_SQL, |stmt| {
-                stmt.query_row(params![name, row.path], |r| r.get::<_, String>(0))
-                    .optional()
-            })?;
+            hit = self.first_real_definition(SHADOW_TOP_LEVEL_SQL, params![name, row.path])?;
         }
         match hit {
             Some(id) if !group_ids.contains(id.as_str()) => self.definition_by_id(&id),
             _ => Ok(None),
         }
+    }
+
+    /// The first row of `sql` that is not a test label (`describe("mix")`), which julie indexes
+    /// as a function but code never reads by name.
+    fn first_real_definition(
+        &self,
+        sql: &'static str,
+        query: impl rusqlite::Params,
+    ) -> Result<Option<String>, QueryError> {
+        let rows = self.with_statement(sql, |stmt| {
+            stmt.query_map(query, |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+            })?
+            .collect::<Result<Vec<_>, _>>()
+        })?;
+        Ok(rows
+            .into_iter()
+            .find(|(_, signature)| !is_test_label(signature))
+            .map(|(id, _)| id))
     }
 
     /// How many top-level definitions outside the target group the import behind the row also
@@ -1783,12 +1908,18 @@ impl<'a> Accounting<'a> {
         }))
     }
 
-    /// The import that binds the qualifier of the call to a module outside the index.
-    fn external_binding(&mut self, row: &NameRow) -> Result<Option<(String, String)>, QueryError> {
+    /// The import that binds the qualifier of the call to a module outside the index; for a
+    /// JavaScript use, the first name written (`z` of `z.core.f()`, or `name` itself).
+    fn external_binding(
+        &mut self,
+        row: &NameRow,
+        name: &str,
+    ) -> Result<Option<(String, String)>, QueryError> {
         let javascript = language_family(&row.language) == "js";
-        let imported_head = match row.chain.as_ref().and_then(|chain| chain.first()) {
-            Some(head) if javascript && self.js_binds_import(&row.path, head)? => {
-                Some(head.as_str())
+        let imported_head = match row.chain.as_ref() {
+            Some(chain) if javascript => {
+                let head = chain.first().map_or(name, String::as_str);
+                self.js_binds_import(&row.path, head)?.then_some(head)
             }
             _ => None,
         };
@@ -1829,7 +1960,7 @@ impl<'a> Accounting<'a> {
         }
         for source in &sources {
             let external = if javascript {
-                self.js_source_is_external(source)?
+                self.js_source_is_external(&row.path, source)?
             } else {
                 self.source_is_external(source)?
             };
@@ -2158,22 +2289,29 @@ fn mark_hidden_receivers(root: &Path, rows: &mut [NameRow]) {
         let lines: Vec<&str> = text.lines().collect();
         for index in indices {
             let row = &mut rows[index];
-            let before = row
+            let Some((before, _)) = row
                 .site_column
                 .and_then(|column| split_line(&lines, row.site_line, column))
-                .map_or("", |(before, _)| before)
-                .trim_end();
+            else {
+                continue;
+            };
+            let before = before.trim_end();
             row.hidden_receiver = matches!(before.trim_start(), "." | "?.")
-                || before.strip_suffix('.').is_some_and(|before| {
-                    before.trim_end_matches(['?', '!']).ends_with([')', ']'])
-                })
+                || awaits_member(before)
                 || before.is_empty() && continues_chain(&lines, row.site_line);
         }
     }
 }
 
-/// Whether the last non-blank line above `line` (1-based) ends with a `.` that waits for the
-/// name on `line`: a line of code, not a comment.
+/// Whether `text` ends with a call or index result and a `.` (`make().`, `items[0]?.`,
+/// `make()!.`) that waits for a member name.
+fn awaits_member(text: &str) -> bool {
+    text.strip_suffix('.')
+        .is_some_and(|result| result.trim_end_matches(['?', '!']).ends_with([')', ']']))
+}
+
+/// Whether the last non-blank line above `line` (1-based) is a line of code, not a comment, that
+/// ends with a call or index result and a `.` that waits for the name on `line`.
 fn continues_chain(lines: &[&str], line: usize) -> bool {
     let above = lines
         .iter()
@@ -2182,7 +2320,7 @@ fn continues_chain(lines: &[&str], line: usize) -> bool {
         .map(|text| text.trim())
         .find(|text| !text.is_empty());
     above.is_some_and(|text| {
-        text.ends_with('.')
+        awaits_member(text)
             && !["//", "/*", "*", "#"]
                 .iter()
                 .any(|start| text.starts_with(start))
