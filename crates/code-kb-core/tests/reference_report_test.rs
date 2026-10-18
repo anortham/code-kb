@@ -1835,10 +1835,10 @@ fn a_relative_import_of_a_barrel_follows_its_star_reexports() {
 }
 
 #[test]
-fn a_package_the_workspace_does_not_define_is_excluded_even_when_its_last_segment_is_a_folder() {
+fn a_package_the_workspace_does_not_define_follows_the_plain_import_rule() {
     let repo = workspace_with(&[(
         "packages/app/src/ext.ts",
-        "import * as pad from \"left-pad/lib\";\n\nexport const e = pad.strictObject();\n",
+        "import * as pad from \"left-pad\";\nimport * as lib from \"left-pad/lib\";\n\nexport const e = pad.strictObject();\nexport const f = lib.strictObject();\n",
     )]);
     let report = report(
         &repo,
@@ -1846,41 +1846,66 @@ fn a_package_the_workspace_does_not_define_is_excluded_even_when_its_last_segmen
         Some("packages/lib/src/v4/schemas.ts"),
     );
 
-    let line = line_of(&repo, "packages/app/src/ext.ts", "pad.strictObject()");
+    let path = "packages/app/src/ext.ts";
     assert_site(
         &report,
-        "packages/app/src/ext.ts",
-        line,
+        path,
+        line_of(&repo, path, "pad.strictObject()"),
         SiteLabel::Excluded,
-        "receiver `pad` is imported from `left-pad/lib`",
+        "receiver `pad` is imported from `left-pad`",
     );
-}
-
-#[test]
-fn a_tsconfig_with_paths_turns_the_external_package_rule_off_for_its_folder() {
-    let repo = workspace_with(&[
-        (
-            "packages/aliased/tsconfig.json",
-            "{\n  \"compilerOptions\": {\n    \"paths\": { \"left-pad/*\": [\"../lib/src/*\"] }\n  }\n}\n",
-        ),
-        (
-            "packages/aliased/src/ext.ts",
-            "import * as pad from \"left-pad/lib\";\n\nexport const e = pad.strictObject();\n",
-        ),
-    ]);
-    let report = report(
-        &repo,
-        "strictObject",
-        Some("packages/lib/src/v4/schemas.ts"),
-    );
-
-    let line = line_of(&repo, "packages/aliased/src/ext.ts", "pad.strictObject()");
     assert_ne!(
-        site_at(&report, "packages/aliased/src/ext.ts", line).label,
+        site_at(&report, path, line_of(&repo, path, "lib.strictObject()")).label,
         SiteLabel::Excluded,
         "{}",
         dump(&report)
     );
+}
+
+#[test]
+fn a_tsconfig_alias_to_a_sibling_folder_keeps_the_proof_of_the_import() {
+    let repo = scanned_repo(&[
+        ("package.json", "{\"name\":\"alias\"}\n"),
+        (
+            "config/tsconfig.json",
+            "{ \"compilerOptions\": { \"baseUrl\": \"..\", \"paths\": { \"@app/*\": [\"src/*\"] } } }\n",
+        ),
+        (
+            "src/main.ts",
+            "import { helper } from \"@app/util\";\nexport function run() { return helper(); }\n",
+        ),
+        ("src/other.ts", "export function helper() { return 2; }\n"),
+        ("src/util.ts", "export function helper() { return 1; }\n"),
+    ]);
+    let report = report(&repo, "helper", Some("src/util.ts"));
+
+    assert_site(&report, "src/main.ts", 2, SiteLabel::Proven, "import");
+}
+
+#[test]
+fn a_bundler_alias_to_a_sibling_folder_keeps_the_proof_of_the_import() {
+    let repo = scanned_repo(&[
+        ("package.json", "{\"name\":\"alias\"}\n"),
+        (
+            "web/vite.config.js",
+            "export default { resolve: { alias: { \"@components\": \"/src/lib\", $lib: \"/src/lib\" } } };\n",
+        ),
+        (
+            "web/src/main.js",
+            "import { thing } from \"$lib/thing\";\nimport { thing as other } from \"@components/thing2\";\nexport function run() { return thing(); }\nexport function run2() { return other(); }\n",
+        ),
+        (
+            "web/src/lib/thing.js",
+            "export function thing() { return 1; }\n",
+        ),
+        (
+            "web/src/lib/thing2.js",
+            "export function thing() { return 2; }\n",
+        ),
+    ]);
+    let report = report(&repo, "thing", Some("web/src/lib/thing.js"));
+
+    assert_site(&report, "web/src/main.js", 3, SiteLabel::Proven, "import");
 }
 
 #[test]
@@ -2167,4 +2192,374 @@ fn a_member_chain_is_not_excluded_by_an_import_of_its_last_name() {
         "{}",
         dump(&report)
     );
+}
+
+const JS_OBJECT_LITERAL_HOLDERS: [&str; 6] = [
+    "function render(x) {\n  return x;\n}\nexport const api = { render };\n",
+    "function render(x) {\n  return x;\n}\nexport default { render };\n",
+    "function render(x) {\n  return x;\n}\nconst api = { render };\nmodule.exports = api;\n",
+    "function render(x) {\n  return x;\n}\nfunction make() {\n  return { render };\n}\nmodule.exports = make;\n",
+    "function render(x) {\n  return x;\n}\nconst api = { key: render, other: 1 };\nmodule.exports = api;\n",
+    "function render(x) {\n  return x;\n}\nconst api = {\n  render,\n  other: 1,\n};\nmodule.exports = api;\n",
+];
+
+#[test]
+fn a_javascript_member_call_keeps_a_function_an_object_literal_holds_as_a_rival() {
+    for util in JS_OBJECT_LITERAL_HOLDERS {
+        let repo = scanned_repo(&[JS_VIEW, JS_MEMBER_CALL, ("lib/util.js", util)]);
+        let report = report(&repo, "render", Some("lib/view.js"));
+
+        let site = site_at(&report, "lib/use.js", 2);
+        assert_eq!(
+            (site.label, site.basis.as_str()),
+            (SiteLabel::Unresolved, "2 definitions"),
+            "{util}\n{}",
+            dump(&report)
+        );
+    }
+}
+
+#[test]
+fn a_javascript_function_passed_as_an_argument_or_used_as_a_receiver_stays_free() {
+    let repo = scanned_repo(&[
+        JS_VIEW,
+        JS_MEMBER_CALL,
+        (
+            "lib/util.js",
+            "var render = make();\nregister('*', render);\nrender.use(1);\nmodule.exports = {};\n",
+        ),
+    ]);
+    let report = report(&repo, "render", Some("lib/view.js"));
+
+    assert_site(&report, "lib/use.js", 2, SiteLabel::Likely, "name only");
+}
+
+#[test]
+fn a_java_call_keeps_a_record_component_as_a_rival() {
+    let repo = scanned_repo(&[
+        (
+            "p/A.java",
+            "package p;\n\npublic class A {\n    int size() {\n        return 1;\n    }\n}\n",
+        ),
+        (
+            "q/R.java",
+            "package q;\n\npublic record R(int size, int other) {\n    static int count = 0;\n}\n",
+        ),
+        (
+            "q/B.java",
+            "package q;\n\npublic class B {\n    int go() {\n        return make().size();\n    }\n\n    int tally() {\n        return make().count();\n    }\n}\n",
+        ),
+        (
+            "p/C.java",
+            "package p;\n\npublic class C {\n    int count() {\n        return 1;\n    }\n}\n",
+        ),
+    ]);
+    let size = report(&repo, "size", Some("p/A.java"));
+    let count = report(&repo, "count", Some("p/C.java"));
+
+    let line = |needle: &str| line_of(&repo, "q/B.java", needle);
+    assert_site(
+        &size,
+        "q/B.java",
+        line("make().size()"),
+        SiteLabel::Unresolved,
+        "2 definitions",
+    );
+    assert_site(
+        &count,
+        "q/B.java",
+        line("make().count()"),
+        SiteLabel::Likely,
+        "name only",
+    );
+}
+
+#[test]
+fn a_go_declaration_that_may_hold_a_func_stays_a_rival_of_a_call() {
+    let repo = scanned_repo(&[
+        (
+            "lib/fns.go",
+            "package lib\n\nfunc Hook() {}\n\nfunc Serve() {}\n\nfunc Later() {}\n\nfunc Plain() {}\n",
+        ),
+        (
+            "store/decl.go",
+            "package store\n\nimport \"net/http\"\n\nvar Hook func(n int)\n\nvar Later = makeHook()\n\nvar Plain int\n\ntype Server struct {\n\tServe http.HandlerFunc\n}\n",
+        ),
+        (
+            "use/use.go",
+            "package use\n\nfunc call(x any) {\n\tx.Hook()\n\tx.Serve()\n\tx.Later()\n\tx.Plain()\n}\n",
+        ),
+    ]);
+    let line = |needle: &str| line_of(&repo, "use/use.go", needle);
+
+    for name in ["Hook", "Serve", "Later"] {
+        let report = report(&repo, name, Some("lib/fns.go"));
+        assert_site(
+            &report,
+            "use/use.go",
+            line(&format!("x.{name}()")),
+            SiteLabel::Unresolved,
+            "2 definitions",
+        );
+    }
+    let plain = report(&repo, "Plain", Some("lib/fns.go"));
+    assert_site(
+        &plain,
+        "use/use.go",
+        line("x.Plain()"),
+        SiteLabel::Likely,
+        "name only",
+    );
+}
+
+#[test]
+fn a_go_variable_named_with_a_letter_of_the_var_keyword_is_read_by_its_name() {
+    let repo = scanned_repo(&[
+        ("lib/fns.go", "package lib\n\nfunc v() {}\n\nfunc a() {}\n"),
+        (
+            "store/decl.go",
+            "package store\n\nvar v = func() int { return 1 }\n\nvar a, r int\n",
+        ),
+        (
+            "use/use.go",
+            "package use\n\nfunc call(x any) {\n\tx.v()\n\tx.a()\n}\n",
+        ),
+    ]);
+    let line = |needle: &str| line_of(&repo, "use/use.go", needle);
+
+    let v = report(&repo, "v", Some("lib/fns.go"));
+    assert_site(
+        &v,
+        "use/use.go",
+        line("x.v()"),
+        SiteLabel::Unresolved,
+        "2 definitions",
+    );
+    let a = report(&repo, "a", Some("lib/fns.go"));
+    assert_site(
+        &a,
+        "use/use.go",
+        line("x.a()"),
+        SiteLabel::Likely,
+        "name only",
+    );
+}
+
+#[test]
+fn a_rust_static_of_a_function_type_stays_a_rival_of_a_call() {
+    let repo = scanned_repo(&[
+        (
+            "src/run.rs",
+            "pub fn handler(x: i32) -> i32 {\n    x\n}\n\npub fn label() -> i32 {\n    1\n}\n",
+        ),
+        (
+            "src/table.rs",
+            "pub static handler: fn(i32) -> i32 = double;\n\npub static label: &str = \"b\";\n\nfn double(x: i32) -> i32 {\n    x * 2\n}\n",
+        ),
+        (
+            "src/use.rs",
+            "fn go() {\n    handler(1);\n    label();\n}\n",
+        ),
+    ]);
+    let line = |needle: &str| line_of(&repo, "src/use.rs", needle);
+
+    let handler = report(&repo, "handler", Some("src/run.rs"));
+    assert_site(
+        &handler,
+        "src/use.rs",
+        line("handler(1)"),
+        SiteLabel::Unresolved,
+        "2 definitions",
+    );
+    let label = report(&repo, "label", Some("src/run.rs"));
+    assert_site(
+        &label,
+        "src/use.rs",
+        line("label()"),
+        SiteLabel::Likely,
+        "name only",
+    );
+}
+
+#[test]
+fn a_member_read_of_a_method_that_only_overloads_define_is_likely_not_unresolved() {
+    let repo = scanned_repo(&[
+        (
+            "lib/view.ts",
+            "export class View {\n  render(a: string): void;\n  render(a: number): void;\n  render(a: any): void {}\n}\n",
+        ),
+        (
+            "lib/use.ts",
+            "export function go(v) {\n  const f = v.render;\n  return f;\n}\n",
+        ),
+    ]);
+    let report = first_definition_report(&repo, "render", "lib/view.ts");
+
+    assert_site(
+        &report,
+        "lib/use.ts",
+        2,
+        SiteLabel::Likely,
+        "receiver not typed",
+    );
+}
+
+#[test]
+fn a_declaration_file_does_not_take_an_import_from_the_script_next_to_it() {
+    let repo = scanned_repo(&[
+        ("lib.d.ts", "export declare function foo(): number;\n"),
+        ("lib.js", "export function foo() { return 1; }\n"),
+        (
+            "main.ts",
+            "import { foo } from \"./lib\";\nexport function run() { return foo(); }\n",
+        ),
+    ]);
+    let report = report(&repo, "foo", Some("lib.js"));
+
+    assert_site(&report, "main.ts", 2, SiteLabel::Proven, "import");
+}
+
+#[test]
+fn a_package_export_prefers_the_script_over_its_declaration_file() {
+    let repo = scanned_repo(&[
+        ("package.json", "{\"name\":\"root\",\"private\":true}\n"),
+        ("app/package.json", "{\"name\":\"app\"}\n"),
+        (
+            "app/main.ts",
+            "import { foo } from \"lib2\";\nexport function run() { return foo(); }\n",
+        ),
+        (
+            "packages/lib2/package.json",
+            "{ \"name\": \"lib2\", \"exports\": { \".\": { \"types\": \"./index.d.ts\", \"default\": \"./index.js\" } } }\n",
+        ),
+        (
+            "packages/lib2/index.d.ts",
+            "export declare function foo(): number;\n",
+        ),
+        (
+            "packages/lib2/index.js",
+            "export function foo() { return 1; }\n",
+        ),
+    ]);
+    let report = report(&repo, "foo", Some("packages/lib2/index.js"));
+
+    assert_site(&report, "app/main.ts", 2, SiteLabel::Proven, "import");
+}
+
+#[test]
+fn a_definition_only_a_declaration_file_holds_proves_nothing_for_another_definition() {
+    let repo = scanned_repo(&[
+        ("types/lib.d.ts", "export declare function foo(): number;\n"),
+        ("src/real.ts", "export function foo() { return 1; }\n"),
+        (
+            "src/main.ts",
+            "import { foo } from \"../types/lib\";\nexport function run() { return foo(); }\n",
+        ),
+    ]);
+
+    let real = report(&repo, "foo", Some("src/real.ts"));
+    assert_ne!(
+        site_at(&real, "src/main.ts", 2).label,
+        SiteLabel::Excluded,
+        "{}",
+        dump(&real)
+    );
+    let declared = report(&repo, "foo", Some("types/lib.d.ts"));
+    assert_site(&declared, "src/main.ts", 2, SiteLabel::Proven, "import");
+}
+
+#[test]
+fn a_call_after_a_line_that_ends_with_a_dot_is_not_a_bare_call() {
+    let repo = scanned_repo(&[
+        ("barrel.ts", "export * from \"./m\";\n"),
+        ("m.ts", "export function foo() { return 1; }\n"),
+        (
+            "other.ts",
+            "export class K { foo() { return 3; } }\nexport function mk(): K { return new K(); }\n",
+        ),
+        (
+            "use.ts",
+            "import { foo } from \"./barrel\";\nimport { mk } from \"./other\";\nexport function i() { return mk().\n   foo(); }\nexport function j() { return mk()\n   .foo(); }\n",
+        ),
+    ]);
+    let report = report(&repo, "foo", Some("m.ts"));
+
+    for line in [4, 6] {
+        assert_site(
+            &report,
+            "use.ts",
+            line,
+            SiteLabel::Unresolved,
+            "2 definitions",
+        );
+    }
+}
+
+#[test]
+fn an_import_named_like_a_path_keyword_prefix_is_still_a_package_outside_the_index() {
+    let repo = scanned_repo(&[
+        ("lib/agent.js", "export function get() {\n  return 1;\n}\n"),
+        (
+            "lib/use.js",
+            "import * as supertest from \"supertest\";\nimport * as selfsigned from \"selfsigned\";\n\nexport const a = supertest.get();\nexport const b = selfsigned.get();\n",
+        ),
+    ]);
+    let report = report(&repo, "get", Some("lib/agent.js"));
+
+    assert_site(
+        &report,
+        "lib/use.js",
+        4,
+        SiteLabel::Excluded,
+        "receiver `supertest` is imported from `supertest`",
+    );
+    assert_site(
+        &report,
+        "lib/use.js",
+        5,
+        SiteLabel::Excluded,
+        "receiver `selfsigned` is imported from `selfsigned`",
+    );
+}
+
+#[test]
+fn the_import_resolver_reads_an_index_whose_paths_use_backslashes() {
+    let repo = workspace_with(&[(
+        "packages/app/src/use.ts",
+        "import * as z from \"lib\";\n\nexport const deep = z.core.util.isPlainObject({});\nexport const shallow = z.util.isPlainObject({});\n",
+    )]);
+    let conn = open_read_only(&repo.db).unwrap();
+    let id: String = conn
+        .query_row(
+            "SELECT symbol_id FROM symbols WHERE name = 'isPlainObject' AND path = 'packages/lib/src/v4/util.ts'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    drop(conn);
+    let writable = rusqlite::Connection::open(&repo.db).unwrap();
+    for table in [
+        "symbols",
+        "files",
+        "identifiers",
+        "pending_relationships",
+        "relationships",
+    ] {
+        writable
+            .execute(
+                &format!("UPDATE {table} SET path = replace(path, '/', char(92))"),
+                [],
+            )
+            .unwrap();
+    }
+    drop(writable);
+    let conn = open_read_only(&repo.db).unwrap();
+    let target = get_symbol_by_id(&conn, &id).unwrap().unwrap();
+    let report = reference_report(&conn, &repo.root, &target, false).unwrap();
+
+    let path = "packages/app/src/use.ts";
+    for needle in ["z.core.util.isPlainObject", "z.util.isPlainObject"] {
+        let line = line_of(&repo, path, needle);
+        assert_site(&report, path, line, SiteLabel::Proven, "import");
+    }
 }

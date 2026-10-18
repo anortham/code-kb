@@ -3,7 +3,8 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use rusqlite::{Connection, OptionalExtension, Statement, params};
+use rusqlite::types::ToSql;
+use rusqlite::{Connection, OptionalExtension, Row, Statement, params, params_from_iter};
 
 use crate::models::{
     LabeledSite, ReferenceCounts, ReferenceReport, ReferenceSite, ReferenceTarget, SiteLabel,
@@ -18,7 +19,6 @@ use crate::queries::{
 };
 use crate::text_scan::scan_word;
 
-#[path = "js_modules.rs"]
 mod js_modules;
 
 const RESOLVER_ROW_CAP: usize = 5_000;
@@ -330,13 +330,18 @@ const TYPE_HEAD_KINDS_SQL: &str =
 const MEMBER_ACCESS_PATHS_SQL: &str =
     "SELECT DISTINCT path FROM identifiers WHERE name = ?1 AND kind = 'member_access'";
 
+const VARIABLE_REF_SITES_SQL: &str = "SELECT path, start_line, start_column FROM identifiers
+     WHERE name = ?1 AND kind = 'variable_ref' AND start_column IS NOT NULL";
+
 const GO_FUNC_TYPE_SQL: &str = "SELECT 1 FROM symbols
      WHERE name = ?1 AND kind = 'type' AND language = 'go'
        AND signature LIKE 'type ' || ?1 || ' func%' LIMIT 1";
 
 const TOP_LEVEL_VARIABLE_SQL: &str = "SELECT 1 FROM symbols
-     WHERE name = ?1 AND path = ?2 AND parent_symbol_id IS NULL
+     WHERE path = ?1 AND name = ?2 AND parent_symbol_id IS NULL
        AND kind IN ('variable', 'constant') LIMIT 1";
+
+const FN_TYPES: [&str; 4] = ["fn(", "Fn(", "FnMut(", "FnOnce("];
 
 struct Spec {
     name: String,
@@ -476,6 +481,37 @@ fn is_plain_identifier(text: &str) -> bool {
         && chars.all(|c| c.is_alphanumeric() || c == '_' || c == '$')
 }
 
+/// Whether a Java type signature declares a record (`public record Point(int x, int y)`).
+fn is_record(signature: &str) -> bool {
+    let head = signature.split(['(', '<']).next().unwrap_or("");
+    head.split_whitespace().any(|word| word == "record")
+}
+
+/// `line` (1-based) split at the byte `column`.
+fn split_line<'a>(lines: &[&'a str], line: usize, column: usize) -> Option<(&'a str, &'a str)> {
+    lines.get(line.checked_sub(1)?)?.split_at_checked(column)
+}
+
+/// Whether `name` written at `line` and `column` stands where an object literal holds a value
+/// (`{ render }`, `{ key: render, other }`): `{`, `,`, `:`, or nothing before it, and `,`, `}`, or
+/// nothing after it. A call argument (`f(a, render)`) and a receiver (`render.use()`) do not.
+fn is_object_value(lines: &[&str], line: usize, column: usize, name: &str) -> bool {
+    let Some((before, rest)) = split_line(lines, line, column) else {
+        return false;
+    };
+    let after = rest.get(name.len()..).unwrap_or("");
+    before
+        .trim_end()
+        .chars()
+        .next_back()
+        .is_none_or(|c| matches!(c, '{' | ',' | ':'))
+        && after
+            .trim_start()
+            .chars()
+            .next()
+            .is_none_or(|c| matches!(c, ',' | '}'))
+}
+
 #[derive(Clone)]
 struct Definition {
     symbol_id: String,
@@ -546,7 +582,6 @@ struct SiteRow {
 
 struct Claim {
     basis: Option<String>,
-    candidate: bool,
 }
 
 struct Judged {
@@ -628,6 +663,31 @@ impl<'a> Accounting<'a> {
         Ok(run(stmt)?)
     }
 
+    /// Runs `sql` with `path` as `?1` and `others` after it, once for each spelling of the path
+    /// the index can hold (`/` and `\`), and reads every row.
+    fn rows_at_path<T>(
+        &self,
+        sql: &'static str,
+        path: &str,
+        others: &[&dyn ToSql],
+        read: fn(&Row) -> rusqlite::Result<T>,
+    ) -> Result<Vec<T>, QueryError> {
+        let windows = path.replace('/', "\\");
+        let mut spellings = vec![path];
+        if windows != path {
+            spellings.push(&windows);
+        }
+        let mut rows = Vec::new();
+        for spelling in spellings {
+            let bound = std::iter::once(&spelling as &dyn ToSql).chain(others.iter().copied());
+            rows.extend(self.with_statement(sql, |stmt| {
+                stmt.query_map(params_from_iter(bound), read)?
+                    .collect::<Result<Vec<_>, _>>()
+            })?);
+        }
+        Ok(rows)
+    }
+
     fn definitions(&self, name: &str) -> Result<Vec<Definition>, QueryError> {
         let decorated_start = if has_column(self.conn, "structural_facts", "end_byte")
             && has_column(self.conn, "symbols", "end_byte")
@@ -645,7 +705,8 @@ impl<'a> Accounting<'a> {
                     CASE WHEN json_valid(s.metadata_json) THEN
                         json_extract(s.metadata_json, '$.className') END,
                     CASE WHEN json_valid(s.metadata_json) THEN
-                        json_extract(s.metadata_json, '$.isCommonJSExport') END
+                        json_extract(s.metadata_json, '$.isCommonJSExport') END,
+                    COALESCE(par.signature, '')
              FROM symbols s LEFT JOIN symbols par ON par.symbol_id = s.parent_symbol_id
              WHERE s.name = ?1 AND s.kind NOT IN ('import', 'export')
                AND s.language NOT IN ({})",
@@ -674,11 +735,20 @@ impl<'a> Accounting<'a> {
                 && !exported
                 && !local
                 && (parent_id.is_none() || in_function);
-            let callable = !(matches!(language.as_str(), "go" | "java" | "rust")
-                && matches!(
-                    kind.as_str(),
-                    "field" | "property" | "variable" | "constant"
-                ));
+            let record_component = language == "java"
+                && kind == "property"
+                && is_record(&row.get::<_, String>(15)?)
+                && !signature.split_whitespace().any(|word| word == "static");
+            let function_typed = language == "rust"
+                && matches!(kind.as_str(), "variable" | "constant")
+                && FN_TYPES.iter().any(|fn_type| signature.contains(fn_type));
+            let callable = record_component
+                || function_typed
+                || !(matches!(language.as_str(), "go" | "java" | "rust")
+                    && matches!(
+                        kind.as_str(),
+                        "field" | "property" | "variable" | "constant"
+                    ));
             Ok(Some(Definition {
                 symbol_id: row.get(0)?,
                 name: row.get(1)?,
@@ -707,16 +777,15 @@ impl<'a> Accounting<'a> {
         let writes =
             inherited_writes_among(self.conn, definitions.iter().map(|d| d.symbol_id.as_str()))?;
         definitions.retain(|d| !writes.contains(&d.symbol_id));
-        let member_paths: HashSet<String> = if definitions.iter().any(|d| d.free)
-            && crate::queries::has_table(self.conn, "identifiers")
-        {
-            self.with_statement(MEMBER_ACCESS_PATHS_SQL, |stmt| {
-                stmt.query_map(params![name], |r| r.get::<_, String>(0))?
-                    .map(|path| path.map(|path| path.replace('\\', "/")))
-                    .collect()
-            })?
-        } else {
+        let free_paths: HashSet<&str> = definitions
+            .iter()
+            .filter(|d| d.free)
+            .map(|d| d.path.as_str())
+            .collect();
+        let member_paths = if free_paths.is_empty() {
             HashSet::new()
+        } else {
+            self.paths_using_as_member(name, &free_paths)?
         };
         for definition in &mut definitions {
             definition.free &= !member_paths.contains(&definition.path);
@@ -727,15 +796,70 @@ impl<'a> Accounting<'a> {
         Ok(definitions)
     }
 
-    /// Whether a Go field or variable is declared with a func type (`Run func(n int)`), written
-    /// out or through a project type (`Handler HandlerFunc`).
+    /// The files among `paths` that use `name` as a member of an object: written `object.name`,
+    /// or placed in an object literal (`{ name }`, `{ key: name }`).
+    fn paths_using_as_member(
+        &self,
+        name: &str,
+        paths: &HashSet<&str>,
+    ) -> Result<HashSet<String>, QueryError> {
+        if !crate::queries::has_table(self.conn, "identifiers") {
+            return Ok(HashSet::new());
+        }
+        let normalized = |path: String| path.replace('\\', "/");
+        let mut found: HashSet<String> = self.with_statement(MEMBER_ACCESS_PATHS_SQL, |stmt| {
+            stmt.query_map(params![name], |r| r.get::<_, String>(0))?
+                .map(|path| path.map(normalized))
+                .collect()
+        })?;
+        let mut sites: HashMap<String, Vec<(usize, usize)>> = HashMap::new();
+        let rows = self.with_statement(VARIABLE_REF_SITES_SQL, |stmt| {
+            stmt.query_map(params![name], |r| {
+                Ok((
+                    normalized(r.get::<_, String>(0)?),
+                    r.get::<_, i64>(1)? as usize,
+                    r.get::<_, i64>(2)? as usize,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()
+        })?;
+        for (path, line, column) in rows {
+            if paths.contains(path.as_str()) && !found.contains(&path) {
+                sites.entry(path).or_default().push((line, column));
+            }
+        }
+        for (path, sites) in sites {
+            let Ok(text) = std::fs::read_to_string(self.root.join(&path)) else {
+                continue;
+            };
+            let lines: Vec<&str> = text.lines().collect();
+            if sites
+                .iter()
+                .any(|&(line, column)| is_object_value(&lines, line, column, name))
+            {
+                found.insert(path);
+            }
+        }
+        Ok(found)
+    }
+
+    /// Whether a Go field or variable may hold a func: it has no written type, a qualified type
+    /// (`http.HandlerFunc`), a func type, or a project type declared as `type X func(...)`.
     fn holds_func(&self, definition: &Definition) -> Result<bool, QueryError> {
-        let declared = definition
-            .signature
-            .split_once(definition.name.as_str())
-            .map_or("", |(_, rest)| rest)
-            .trim_start_matches(|c: char| c == '=' || c.is_whitespace());
-        if declared.starts_with("func") {
+        if definition.kind == "constant" {
+            return Ok(false);
+        }
+        let signature = definition.signature.trim_start();
+        let signature = ["var ", "const "]
+            .iter()
+            .find_map(|keyword| signature.strip_prefix(keyword))
+            .unwrap_or(signature);
+        let declared = signature
+            .trim_start()
+            .strip_prefix(definition.name.as_str())
+            .filter(|rest| !rest.starts_with(|c: char| c.is_alphanumeric() || c == '_'))
+            .map_or("", str::trim_start);
+        if declared.is_empty() || declared.starts_with('=') {
             return Ok(true);
         }
         let type_name: String = declared
@@ -744,6 +868,9 @@ impl<'a> Accounting<'a> {
             .collect();
         if type_name.is_empty() {
             return Ok(false);
+        }
+        if type_name == "func" || declared[type_name.len()..].starts_with('.') {
+            return Ok(true);
         }
         self.with_statement(GO_FUNC_TYPE_SQL, |stmt| stmt.exists(params![type_name]))
     }
@@ -760,7 +887,6 @@ impl<'a> Accounting<'a> {
     ) -> Result<(), QueryError> {
         let definitions = self.definitions(&spec.name)?;
         let group_ids: HashSet<&str> = spec.group.iter().map(|s| s.symbol_id.as_str()).collect();
-        let k = definitions.iter().filter(|d| !d.local).count();
         let target = &spec.group[0];
 
         let mut rows = self.load_rows(&spec.name, &definitions, spec.calls_only)?;
@@ -786,7 +912,7 @@ impl<'a> Accounting<'a> {
                 unchecked.extend_from_slice(&order[position..judged]);
                 break;
             }
-            match self.decide_cheap(&rows[index], spec, target, &group_ids, k, &claims)? {
+            match self.decide_cheap(&rows[index], spec, target, &group_ids, &claims)? {
                 Some(verdict) => {
                     verdicts.insert(rows[index].key.clone(), verdict);
                 }
@@ -866,15 +992,18 @@ impl<'a> Accounting<'a> {
             .iter()
             .filter(|d| group_ids.contains(d.symbol_id.as_str()))
             .collect();
-        for index in undecided {
-            let row = &rows[index];
-            let rivals: Vec<&Definition> = others
+        let rivals_of = |row: &NameRow| -> Vec<&Definition> {
+            others
                 .iter()
                 .copied()
                 .filter(|other| row.can_reach(other))
-                .collect();
+                .collect()
+        };
+        for index in undecided {
+            let row = &rows[index];
+            let rivals = rivals_of(row);
             let verdict = match claims.get(&row.key) {
-                Some(claim) => claimed_verdict(row, claim, k, rivals.len(), spec.builds_class),
+                Some(claim) => claimed_verdict(row, claim, rivals.len(), spec.builds_class),
                 None if self.out_of_time() => {
                     unchecked.push(index);
                     continue;
@@ -884,7 +1013,8 @@ impl<'a> Accounting<'a> {
             verdicts.insert(row.key.clone(), verdict);
         }
         for index in unchecked {
-            let verdict = if others.is_empty() {
+            let rivals = rivals_of(&rows[index]).len();
+            let verdict = if rivals == 0 {
                 Verdict::new(
                     SiteLabel::Likely,
                     format!("name only; {NOT_CHECKED}"),
@@ -893,7 +1023,7 @@ impl<'a> Accounting<'a> {
             } else {
                 Verdict::new(
                     SiteLabel::Unresolved,
-                    format!("{k} definitions; {NOT_CHECKED}"),
+                    format!("{} definitions; {NOT_CHECKED}", rivals + 1),
                     false,
                 )
             };
@@ -1191,19 +1321,14 @@ impl<'a> Accounting<'a> {
         let mut claims: HashMap<String, Claim> = HashMap::new();
         let mut resolvers = Vec::with_capacity(spec.group.len());
         for member in &spec.group {
-            let resolver_ids: HashMap<String, bool> = direct_identifier_rows(
+            let resolver_ids: HashSet<String> = direct_identifier_rows(
                 self.conn,
                 &spec.name,
                 Some(&member.symbol_id),
                 RESOLVER_ROW_CAP,
             )?
             .into_iter()
-            .map(|row| {
-                (
-                    format!("I:{}", row.identifier_id),
-                    row.site.kind.ends_with("(candidate)"),
-                )
-            })
+            .map(|row| format!("I:{}", row.identifier_id))
             .collect();
             if resolver_ids.len() >= RESOLVER_ROW_CAP {
                 cannot_see.push(format!(
@@ -1225,7 +1350,6 @@ impl<'a> Accounting<'a> {
             for (member, resolver_ids) in spec.group.iter().zip(&resolvers) {
                 let judged = self.judge(&spec.name, &member.symbol_id, &chunk_rows)?;
                 for row in chunk_rows.iter().copied() {
-                    let resolver_claim = resolver_ids.get(&row.key).copied();
                     let judged_row = judged.get(&row.key);
                     let claimed = match row.source {
                         Source::Relationship => row
@@ -1235,7 +1359,7 @@ impl<'a> Accounting<'a> {
                         Source::Identifier
                             if matches!(row.kind.as_str(), "type_usage" | "member_access") =>
                         {
-                            resolver_claim.is_some()
+                            resolver_ids.contains(&row.key)
                         }
                         _ => judged_row.is_some_and(|j| j.claimed),
                     };
@@ -1262,14 +1386,11 @@ impl<'a> Accounting<'a> {
                         }
                         basis => basis,
                     };
-                    let candidate = resolver_claim.unwrap_or(false);
-                    let entry = claims.entry(row.key.clone()).or_insert(Claim {
-                        basis: None,
-                        candidate,
-                    });
+                    let entry = claims
+                        .entry(row.key.clone())
+                        .or_insert(Claim { basis: None });
                     if entry.basis.is_none() {
                         entry.basis = basis;
-                        entry.candidate = candidate;
                     }
                 }
             }
@@ -1284,7 +1405,6 @@ impl<'a> Accounting<'a> {
         spec: &Spec,
         target: &Symbol,
         group_ids: &HashSet<&str>,
-        k: usize,
         claims: &HashMap<String, Claim>,
     ) -> Result<Option<Verdict>, QueryError> {
         if !languages_compatible(&row.language, &target.language) {
@@ -1320,7 +1440,7 @@ impl<'a> Accounting<'a> {
                     )));
                 }
             }
-            return Ok(Some(claimed_verdict(row, claim, k, 0, spec.builds_class)));
+            return Ok(Some(claimed_verdict(row, claim, 0, spec.builds_class)));
         }
         if self.crate_path_names_owner(row, &spec.group)? {
             return Ok(Some(Verdict::new(
@@ -1479,10 +1599,11 @@ impl<'a> Accounting<'a> {
         let Some(target) = group.first() else {
             return Ok(None);
         };
-        let has_object = self.with_statement(TOP_LEVEL_VARIABLE_SQL, |stmt| {
-            stmt.exists(params![receiver, target.path])
-        })?;
-        Ok(has_object.then(|| receiver.to_string()))
+        let objects =
+            self.rows_at_path(TOP_LEVEL_VARIABLE_SQL, &target.path, &[&receiver], |row| {
+                row.get::<_, i64>(0)
+            })?;
+        Ok((!objects.is_empty()).then(|| receiver.to_string()))
     }
 
     fn definition_by_id(&self, symbol_id: &str) -> Result<Option<Definition>, QueryError> {
@@ -1708,7 +1829,7 @@ impl<'a> Accounting<'a> {
         }
         for source in &sources {
             let external = if javascript {
-                self.js_source_is_external(&row.path, source)?
+                self.js_source_is_external(source)?
             } else {
                 self.source_is_external(source)?
             };
@@ -1934,13 +2055,7 @@ impl<'a> Accounting<'a> {
 
 type SiteRowOut = LabeledSite;
 
-fn claimed_verdict(
-    row: &NameRow,
-    claim: &Claim,
-    k: usize,
-    rivals: usize,
-    builds_class: bool,
-) -> Verdict {
+fn claimed_verdict(row: &NameRow, claim: &Claim, rivals: usize, builds_class: bool) -> Verdict {
     if let Some(basis) = &claim.basis {
         if builds_class {
             return Verdict::new(SiteLabel::Proven, "builds the class", true);
@@ -1956,9 +2071,6 @@ fn claimed_verdict(
             );
         }
         return Verdict::new(SiteLabel::Proven, basis, true);
-    }
-    if claim.candidate && k > 1 {
-        return Verdict::new(SiteLabel::Unresolved, format!("{k} definitions"), true);
     }
     if rivals > 0 {
         return Verdict::new(
@@ -2029,8 +2141,8 @@ fn merge_site_rows(rows: Vec<SiteRow>) -> Vec<LabeledSite> {
 }
 
 /// Marks the calls without a recorded receiver whose name follows a `.` after a call or index
-/// result in the source (`single().getAsInt()`, `items[0]?.name()`), or starts a line that
-/// continues a chain (`    .readonly()`).
+/// result in the source (`single().getAsInt()`, `items[0]?.name()`), starts a line that
+/// continues a chain (`    .readonly()`), or starts the line below a `.` (`make().` then `foo()`).
 fn mark_hidden_receivers(root: &Path, rows: &mut [NameRow]) {
     let mut by_path: HashMap<String, Vec<usize>> = HashMap::new();
     for (index, row) in rows.iter().enumerate() {
@@ -2048,16 +2160,33 @@ fn mark_hidden_receivers(root: &Path, rows: &mut [NameRow]) {
             let row = &mut rows[index];
             let before = row
                 .site_column
-                .zip(row.site_line.checked_sub(1).and_then(|i| lines.get(i)))
-                .and_then(|(column, line)| line.get(..column))
-                .unwrap_or("")
+                .and_then(|column| split_line(&lines, row.site_line, column))
+                .map_or("", |(before, _)| before)
                 .trim_end();
             row.hidden_receiver = matches!(before.trim_start(), "." | "?.")
                 || before.strip_suffix('.').is_some_and(|before| {
                     before.trim_end_matches(['?', '!']).ends_with([')', ']'])
-                });
+                })
+                || before.is_empty() && continues_chain(&lines, row.site_line);
         }
     }
+}
+
+/// Whether the last non-blank line above `line` (1-based) ends with a `.` that waits for the
+/// name on `line`: a line of code, not a comment.
+fn continues_chain(lines: &[&str], line: usize) -> bool {
+    let above = lines
+        .iter()
+        .take(line.saturating_sub(1))
+        .rev()
+        .map(|text| text.trim())
+        .find(|text| !text.is_empty());
+    above.is_some_and(|text| {
+        text.ends_with('.')
+            && !["//", "/*", "*", "#"]
+                .iter()
+                .any(|start| text.starts_with(start))
+    })
 }
 
 /// Gives each pending or relationship call the first unused call identifier of the same caller
@@ -2148,11 +2277,10 @@ fn languages_compatible(row: &str, target: &str) -> bool {
 /// The last segment of an import source, `None` for a relative path or a path inside the crate.
 fn import_segment(source: &str) -> Option<String> {
     let source = source.trim();
+    let first_segment = source.split([':', '.']).next().unwrap_or("");
     if source.is_empty()
         || source.starts_with('.')
-        || source.starts_with("crate")
-        || source.starts_with("self")
-        || source.starts_with("super")
+        || ["crate", "self", "super"].contains(&first_segment)
     {
         return None;
     }
@@ -2297,22 +2425,36 @@ mod tests {
         Workspace, find_julie_extract_binary, open_read_only, safe_tempdir, scan_workspace,
     };
 
-    #[test]
-    fn sites_past_the_time_limit_keep_the_label_their_name_gives() {
+    fn report_past_the_time_limit(
+        files: &[(&str, &str)],
+        name: &str,
+        path: Option<&str>,
+    ) -> ReferenceReport {
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
         let temp = safe_tempdir();
         let root = temp.path();
-        std::fs::write(
-            root.join("a.py"),
-            "def helper():\n    return 1\n\n\ndef use():\n    return helper()\n",
-        )
-        .unwrap();
+        for (relative, text) in files {
+            let full = root.join(relative);
+            std::fs::create_dir_all(full.parent().unwrap()).unwrap();
+            std::fs::write(full, text).unwrap();
+        }
         let db = root.join(".code-kb").join("artifact.db");
         scan_workspace(&Workspace::new(root.to_path_buf()), &db, true).unwrap();
         let conn = open_read_only(&db).unwrap();
-        let target = select_reference_target(&conn, "helper", None).unwrap();
+        let target = select_reference_target(&conn, name, path).unwrap();
+        report_within(&conn, root, &target, Duration::ZERO).unwrap()
+    }
 
-        let report = report_within(&conn, root, &target, Duration::ZERO).unwrap();
+    #[test]
+    fn sites_past_the_time_limit_keep_the_label_their_name_gives() {
+        let report = report_past_the_time_limit(
+            &[(
+                "a.py",
+                "def helper():\n    return 1\n\n\ndef use():\n    return helper()\n",
+            )],
+            "helper",
+            None,
+        );
 
         let labels: Vec<(SiteLabel, &str)> = report
             .sites
@@ -2333,6 +2475,55 @@ mod tests {
                 .any(|note| note == "1 of 1 sites were not checked within the 0 s time limit"),
             "{:?}",
             report.cannot_see
+        );
+    }
+
+    #[test]
+    fn sites_past_the_time_limit_count_only_the_definitions_that_can_reach_them() {
+        let report = report_past_the_time_limit(
+            &[
+                (
+                    "a/name.go",
+                    "package a\n\nfunc Name() string {\n\treturn \"a\"\n}\n",
+                ),
+                (
+                    "b/cmd.go",
+                    "package b\n\ntype Command struct {\n\tName string\n}\n",
+                ),
+                (
+                    "c/use.go",
+                    "package c\n\nfunc call(x any) string {\n\treturn x.Name()\n}\n\nfunc read(x any) string {\n\treturn x.Name\n}\n",
+                ),
+            ],
+            "Name",
+            Some("a/name.go"),
+        );
+
+        let labels: Vec<(usize, SiteLabel, &str)> = report
+            .sites
+            .iter()
+            .map(|site| {
+                (
+                    site.site.start_line.unwrap_or(0),
+                    site.label,
+                    site.basis.as_str(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            labels,
+            [
+                (
+                    4,
+                    SiteLabel::Likely,
+                    "name only; not checked within the time limit"
+                ),
+                (
+                    8,
+                    SiteLabel::Unresolved,
+                    "2 definitions; not checked within the time limit"
+                ),
+            ]
         );
     }
 }
