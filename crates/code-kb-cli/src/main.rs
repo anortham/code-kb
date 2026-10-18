@@ -5,13 +5,12 @@ use code_kb_core::workspace::NO_PROJECT_MARKER_REASON;
 use code_kb_core::{
     SymbolSelector, Workspace, WorkspaceError, blast_radius_selected_op, codebase_outline_op,
     ensure_fresh_file, ensure_fts_index_path, file_skeleton_op, find_references_for_symbol_ext,
-    format_context_slices, format_fact_categories, format_find_symbol_results,
-    format_reference_report, format_references, format_search_results, format_structural_facts,
-    format_symbol_bodies, fts_search_symbols_explained, fts_search_symbols_scoped,
-    get_context_slices_selected_op, get_symbol_bodies_selected_op,
-    list_structural_fact_categories_scoped, load_file_symbols, open_read_only, qualify_members,
-    queries, reference_report, resolve_symbol_op, scan_workspace, search_symbols_scoped,
-    select_reference_target,
+    format_context_slices, format_fact_categories, format_reference_report, format_references,
+    format_search_results, format_structural_facts, format_symbol_bodies,
+    fts_search_symbols_explained, get_context_slices_selected_op, get_symbol_bodies_selected_op,
+    list_structural_fact_categories_scoped, load_file_symbols, lookup_symbols_op, open_read_only,
+    qualify_members, queries, reference_report, render_symbol_lookup, resolve_symbol_op,
+    scan_workspace, select_reference_target,
 };
 
 mod logging;
@@ -74,7 +73,7 @@ pub enum Command {
     Outline(OutlineArgs),
     /// Render file skeleton containing symbol signatures with implementation bodies stripped.
     Skeleton(SkeletonArgs),
-    /// Search for symbols by exact identifier name or prefix.
+    /// Find symbols by name, qualified name, prefix, or concept. A query that names no symbol exactly also lists the ranked matches by name words, signatures, and docs.
     #[command(alias = "symbol")]
     Lookup(LookupArgs),
     /// Natural-language and identifier search over symbol names, signatures, and docstrings; substrings inside identifiers are found (`sha256` finds `parseSha256Sidecar`).
@@ -128,7 +127,7 @@ pub struct SkeletonArgs {
 
 #[derive(Debug, Args)]
 pub struct SymbolArgs {
-    /// Symbol name or prefix query.
+    /// Symbol name, qualified name, prefix, or a few words that describe the code.
     pub query: String,
     /// Optional file path or directory prefix to scope search.
     #[arg(long, alias = "file", alias = "file-path")]
@@ -562,49 +561,25 @@ fn main() -> anyhow::Result<()> {
             let rel_path = args.path.as_deref().map(|p| workspace.relativize_filter(p));
             let path_filter = rel_path.as_deref();
 
-            let matches = search_symbols_scoped(
+            let query = mcp::McpServer::sanitize_symbol_name(&args.query);
+            let lookup = lookup_symbols_op(
+                &db_path,
                 &conn,
-                &args.query,
+                &query,
                 args.kind.as_deref(),
                 path_filter,
                 args.include_tests,
                 args.limit,
             )?;
 
-            let (exact_matches, fts_matches) = if matches.is_empty() {
-                ensure_fts_index_path(&db_path)?;
-                let fts = fts_search_symbols_scoped(
-                    &conn,
-                    &args.query,
-                    args.kind.as_deref(),
-                    path_filter,
-                    args.include_tests,
-                    args.limit,
-                )?;
-                (Vec::new(), fts)
-            } else {
-                (matches, Vec::new())
-            };
-
             if cli.json {
-                if !exact_matches.is_empty() {
-                    println!("{}", serde_json::to_string_pretty(&exact_matches)?);
-                } else {
-                    println!("{}", serde_json::to_string_pretty(&fts_matches)?);
-                }
+                println!("{}", serde_json::to_string_pretty(&lookup)?);
             } else if args.limit == 0 {
                 println!("{ZERO_LIMIT_NOTICE}");
             } else {
-                let (mut exact_shown, mut fts_shown) = (exact_matches, fts_matches);
-                qualify_members(
-                    &conn,
-                    exact_shown
-                        .iter_mut()
-                        .chain(fts_shown.iter_mut().map(|hit| &mut hit.symbol)),
-                )?;
                 print!(
                     "{}",
-                    format_find_symbol_results(&args.query, &exact_shown, &fts_shown, args.limit)
+                    render_symbol_lookup(&conn, &query, &lookup, args.limit)?
                 );
             }
         }

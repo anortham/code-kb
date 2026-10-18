@@ -1,6 +1,6 @@
 You are testing the code-kb MCP tools. Work only in the project at PROJECT_ROOT and pass that path as project_root on every code-kb call. Do not edit any file.
 
-Task: use every code-kb tool at least once (codebase_outline, file_skeleton, lookup_symbol, search_symbols, get_symbol_body, get_symbol_context, find_references with direction callers and callees, find_structural_facts, blast_radius, telemetry_summary) to answer these questions:
+Task: use every code-kb tool at least once (file_skeleton on a file and on a folder, lookup_symbol with a name and with a few words that describe the code, get_symbol_body, get_symbol_context, find_references with direction callers and callees, blast_radius) to answer these questions:
 1. How does Flask turn an incoming WSGI request into a response, and where are errors handled?
 2. Which instance attributes does the Flask class set in __init__?
 3. Which tests should run after a change to Flask.handle_user_exception, and after a change to src/flask/cli.py?

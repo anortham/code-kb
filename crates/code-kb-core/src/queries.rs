@@ -5748,8 +5748,7 @@ pub fn compute_blast_radius_scoped_with_ids(
             QueryError::SymbolNotFound {
                 name: format!("symbol id {id}"),
                 workspace,
-                hint: "Run lookup_symbol or search_symbols again and select a current id."
-                    .to_string(),
+                hint: "Run lookup_symbol again and select a current id.".to_string(),
             }
         })?;
         resolved_seed_symbols.push(symbol);
@@ -5789,7 +5788,6 @@ pub fn compute_blast_radius_scoped_with_ids(
             likely_tests_truncated: false,
             impacted_symbols_truncated: false,
             traversal_ceiling_reached: false,
-            test_file_ceiling_reached: false,
             limit_at_maximum: false,
             likely_tests_found: 0,
             impacted_symbols_found: 0,
@@ -5834,7 +5832,6 @@ pub fn compute_blast_radius_scoped_with_ids(
     params_vec.push(rusqlite::types::Value::Integer(max_depth as i64));
 
     let mut traversal_ceiling_reached = false;
-    let mut test_file_ceiling_reached = false;
 
     let has_relationships: bool = conn
         .query_row(
@@ -5937,13 +5934,8 @@ pub fn compute_blast_radius_scoped_with_ids(
     };
     let mut fixtures = Vec::new();
     let mut setups = Vec::new();
-    let mut entry_classes = Vec::new();
     let mut constructor_only_test_keys = HashSet::new();
     let mut non_constructor_test_keys = HashSet::new();
-    let mut walked: Vec<String> = resolved_seed_symbols
-        .iter()
-        .map(|symbol| symbol.symbol_id.clone())
-        .collect();
     if !recursive_branches.is_empty() {
         let recursive_sql = recursive_branches.join("\n UNION \n");
         let not_documentation = not_documentation(conn, "s");
@@ -5958,7 +5950,7 @@ pub fn compute_blast_radius_scoped_with_ids(
 
                 {recursive_sql}
             )
-            SELECT s.symbol_id, s.name, s.kind, s.path, s.start_line, s.is_test, s.test_container,
+            SELECT s.name, s.kind, s.path, s.start_line, s.is_test, s.test_container,
                    MIN(iw.depth) as min_depth, MIN(iw.via) as min_via,
                    {lifecycle} AS is_fixture, s.parent_symbol_id,
                    EXISTS (SELECT 1 FROM symbols owner
@@ -5986,17 +5978,16 @@ pub fn compute_blast_radius_scoped_with_ids(
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1)?,
                 row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, i64>(4)? as usize,
+                row.get::<_, i64>(3)? as usize,
+                row.get::<_, bool>(4)?,
                 row.get::<_, bool>(5)?,
-                row.get::<_, bool>(6)?,
+                row.get::<_, i64>(6)? as usize,
                 row.get::<_, i64>(7)? as usize,
-                row.get::<_, i64>(8)? as usize,
-                row.get::<_, bool>(9)?,
-                row.get::<_, Option<String>>(10)?,
-                row.get::<_, bool>(11)?,
-                row.get::<_, String>(12)?,
-                row.get::<_, Option<String>>(13)?,
+                row.get::<_, bool>(8)?,
+                row.get::<_, Option<String>>(9)?,
+                row.get::<_, bool>(10)?,
+                row.get::<_, String>(11)?,
+                row.get::<_, Option<String>>(12)?,
             ))
         })?;
 
@@ -6006,7 +5997,6 @@ pub fn compute_blast_radius_scoped_with_ids(
                 break;
             }
             let (
-                sym_id,
                 name,
                 kind,
                 raw_path,
@@ -6021,19 +6011,12 @@ pub fn compute_blast_radius_scoped_with_ids(
                 language,
                 signature,
             ) = r?;
-            walked.push(sym_id);
             let path = raw_path.replace('\\', "/");
             let is_test_target = is_test
                 || test_container
                 || is_fixture
                 || (is_test_path(&path) && (in_test_class || names_a_test(&name)));
             let constructor_only = min_via > 0;
-            if name == "__call__"
-                && let Some(parent) = &parent
-            {
-                entry_classes.push(parent.clone());
-            }
-
             if is_test_target {
                 let key = format!("{}:{}", path, line);
                 let test_key = (path.clone(), line);
@@ -6148,191 +6131,6 @@ pub fn compute_blast_radius_scoped_with_ids(
     likely_tests.retain(|test| !replaced.contains(&(test.path.clone(), test.line)));
     constructor_only_test_keys.retain(|key| !non_constructor_test_keys.contains(key));
 
-    let mut test_name_terms = Vec::new();
-    let mut module_terms = Vec::new();
-    for path in seed_paths.iter().copied().chain(
-        resolved_seed_symbols
-            .iter()
-            .map(|symbol| symbol.path.as_str()),
-    ) {
-        let mut parts = path.rsplit(['/', '\\']);
-        let file = parts.next().unwrap_or(path);
-        if let Some(stem) = std::path::Path::new(file)
-            .file_stem()
-            .and_then(|s| s.to_str())
-            && stem.len() >= 3
-            && !test_name_terms.iter().any(|(name, _)| name == stem)
-        {
-            test_name_terms.push((stem.to_string(), "stem-matched test file"));
-        }
-        let module = parts.next();
-        if parts.next() == Some("src")
-            && let Some(module) = module
-            && module.len() >= 3
-            && !["test", "tests", "spec", "specs", "bin", "lib"]
-                .iter()
-                .any(|generic| module.eq_ignore_ascii_case(generic))
-            && !test_name_terms.iter().any(|(name, _)| name == module)
-            && !module_terms.iter().any(|name| name == module)
-        {
-            module_terms.push(module.to_string());
-        }
-    }
-    test_name_terms.extend(
-        module_terms
-            .into_iter()
-            .map(|module| (module, "module-matched test file")),
-    );
-
-    let has_files: bool = conn
-        .query_row(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='files'",
-            [],
-            |_| Ok(true),
-        )
-        .unwrap_or(false);
-
-    if has_files {
-        let doc_file = format!(
-            "EXISTS (SELECT 1 FROM symbols d WHERE d.path = files.path AND NOT {})",
-            not_documentation(conn, "d")
-        );
-        let slashed = "replace(path, '\\', '/')";
-        let file_name =
-            format!("replace({slashed}, rtrim({slashed}, replace({slashed}, '/', '')), '')");
-        let name_tokens =
-            format!("'_' || lower(replace(replace({file_name}, '-', '_'), '.', '_')) || '_'");
-        let names_or_holds_tests = format!(
-            "({name_tokens} LIKE '%\\_test\\_%' ESCAPE '\\' OR {name_tokens} LIKE '%\\_tests\\_%' ESCAPE '\\'
-              OR {name_tokens} LIKE '%\\_spec\\_%' ESCAPE '\\' OR {name_tokens} LIKE '%\\_specs\\_%' ESCAPE '\\'
-              OR {name_tokens} LIKE '%\\_tst\\_%' ESCAPE '\\'
-              OR {file_name} GLOB '*Test.*' OR {file_name} GLOB '*Tests.*'
-              OR {file_name} GLOB '*Spec.*' OR {file_name} GLOB '*Specs.*'
-              OR EXISTS (SELECT 1 FROM symbols t WHERE t.path = files.path AND t.is_test = 1))"
-        );
-        let mut test_files_stmt = conn.prepare(&format!(
-            "SELECT DISTINCT path FROM files
-             WHERE (path LIKE '%test%' OR path LIKE '%spec%') AND {file_name} LIKE ?1 ESCAPE '\\'
-               AND {names_or_holds_tests}
-               AND NOT {doc_file}
-             ORDER BY path ASC
-             LIMIT 201"
-        ))?;
-        let mut module_test_files_stmt = conn.prepare(&format!(
-            "SELECT DISTINCT path FROM files
-             WHERE (path LIKE '%test%' OR path LIKE '%spec%')
-               AND (path LIKE ?1 ESCAPE '\\' OR path LIKE ?2 ESCAPE '\\')
-               AND {names_or_holds_tests}
-               AND NOT {doc_file}
-             ORDER BY path ASC
-             LIMIT 201"
-        ))?;
-        for (term, reason) in test_name_terms {
-            let module_match = reason == "module-matched test file";
-            let escaped_term = escape_like(&term);
-            let mut rows = if module_match {
-                module_test_files_stmt.query(rusqlite::params![
-                    format!("%/{escaped_term}%"),
-                    format!("%/test\\_{escaped_term}%")
-                ])?
-            } else {
-                test_files_stmt.query([format!("%{escaped_term}%")])?
-            };
-            let mut candidates = 0;
-            let mut matches = 0;
-            while let Some(row) = rows.next()? {
-                candidates += 1;
-                if candidates == 201 {
-                    test_file_ceiling_reached = true;
-                    break;
-                }
-                let p: String = row.get(0)?;
-                let basename = p.rsplit(['/', '\\']).next().unwrap_or_default();
-                if !module_match && !has_word_run(&file_words(basename), &file_words(&term)) {
-                    continue;
-                }
-                if module_match {
-                    let basename = p
-                        .rsplit(['/', '\\'])
-                        .next()
-                        .unwrap_or_default()
-                        .to_lowercase();
-                    let term = term.to_lowercase();
-                    if !basename.starts_with(&term)
-                        && !basename.starts_with(&format!("test_{term}"))
-                    {
-                        continue;
-                    }
-                }
-                if matches == 10 {
-                    test_file_ceiling_reached = true;
-                    break;
-                }
-                matches += 1;
-                let p = p.replace('\\', "/");
-                let key = format!("{}:1", p);
-                if seen_test_keys.insert(key) {
-                    likely_tests.push(TestTarget {
-                        name: p.clone(),
-                        path: p,
-                        line: 1,
-                        reason: reason.to_string(),
-                    });
-                }
-            }
-        }
-    }
-
-    // A `__call__` one hop past the walk still makes its class an entry point: the runtime calls it.
-    if has_table(conn, "relationships") {
-        let mut entry_callers = conn.prepare(
-            "SELECT DISTINCT caller.parent_symbol_id
-         FROM relationships r
-         JOIN symbols caller ON caller.symbol_id = r.from_symbol_id
-         WHERE caller.name = '__call__' AND caller.parent_symbol_id IS NOT NULL
-           AND r.to_symbol_id IN (SELECT value FROM json_each(?1))",
-        )?;
-        let walked_json = serde_json::to_string(&walked).unwrap_or_else(|_| "[]".into());
-        for class_id in entry_callers.query_map([walked_json], |row| row.get::<_, String>(0))? {
-            let class_id = class_id?;
-            if !entry_classes.contains(&class_id) {
-                entry_classes.push(class_id);
-            }
-        }
-    }
-
-    let mut seed_words: Vec<String> = Vec::new();
-    for symbol in &resolved_seed_symbols {
-        let callees =
-            find_references_for_symbol(conn, &symbol.name, "callees", 50, &symbol.symbol_id)
-                .unwrap_or_default();
-        for name in std::iter::once(symbol.name.as_str())
-            .chain(callees.iter().map(|site| site.to_symbol_name.as_str()))
-        {
-            for word in name_words(name) {
-                if !seed_words.contains(&word) && !GENERIC_NAME_WORDS.contains(&word.as_str()) {
-                    seed_words.push(word);
-                }
-            }
-        }
-    }
-    let mut possible_tests = Vec::new();
-    for class_id in entry_classes {
-        for test in implicit_entry_tests(conn, &class_id, &seed_words)? {
-            if seen_test_keys.insert(format!("{}:{}", test.test.path, test.test.line)) {
-                possible_tests.push(test);
-            }
-        }
-    }
-    possible_tests.sort_by(|a, b| {
-        b.handler_evidence
-            .cmp(&a.handler_evidence)
-            .then_with(|| b.shared_word_score.cmp(&a.shared_word_score))
-            .then_with(|| a.test.path.cmp(&b.test.path))
-            .then_with(|| a.test.line.cmp(&b.test.line))
-    });
-    likely_tests.extend(possible_tests.into_iter().map(|test| test.test));
-
     qualify_test_methods(conn, &mut likely_tests)?;
     // A whole-file target often reaches many unrelated tests only because they construct an app;
     // keep that coverage visible while collapsing each affected test file to one run target.
@@ -6365,24 +6163,6 @@ pub fn compute_blast_radius_scoped_with_ids(
         }
         likely_tests = other_tests;
     }
-    let whole_files: HashSet<String> = likely_tests
-        .iter()
-        .filter(|test| test.reason.ends_with("matched test file"))
-        .map(|test| test.path.clone())
-        .collect();
-    likely_tests.retain(|test| {
-        test.reason.ends_with("matched test file") || !whole_files.contains(&test.path)
-    });
-    // Whole test files named for the target first, possible tests last, callers in between.
-    likely_tests.sort_by_key(|test| {
-        if test.reason.ends_with("matched test file") {
-            0
-        } else if test.reason.starts_with("possible:") {
-            2
-        } else {
-            1
-        }
-    });
     let likely_tests_found = likely_tests.len();
     let impacted_symbols_found = impacted_symbols.len();
     let likely_tests_truncated = likely_tests.len() > limit;
@@ -6402,7 +6182,6 @@ pub fn compute_blast_radius_scoped_with_ids(
         likely_tests_truncated,
         impacted_symbols_truncated,
         traversal_ceiling_reached,
-        test_file_ceiling_reached,
         limit_at_maximum: limit >= MAX_RESULT_LIMIT,
         likely_tests_found,
         impacted_symbols_found,
@@ -6549,310 +6328,6 @@ fn tests_in_class(conn: &Connection, class_id: &str) -> Result<Vec<TestTarget>, 
     Ok(rows.collect::<Result<_, _>>()?)
 }
 
-/// The lowercase words of a file name split at `_`, `-`, `.`, and case changes, of any length.
-fn file_words(name: &str) -> Vec<String> {
-    let mut words = Vec::new();
-    let mut word = String::new();
-    let mut previous_lower = false;
-    for c in name.chars() {
-        if (!c.is_alphanumeric() || (c.is_uppercase() && previous_lower)) && !word.is_empty() {
-            words.push(std::mem::take(&mut word).to_lowercase());
-        }
-        if c.is_alphanumeric() {
-            word.push(c);
-        }
-        previous_lower = c.is_lowercase() || c.is_ascii_digit();
-    }
-    if !word.is_empty() {
-        words.push(word.to_lowercase());
-    }
-    words
-}
-
-/// Whether `run` occurs in `words` as consecutive whole words.
-fn has_word_run(words: &[String], run: &[String]) -> bool {
-    !run.is_empty() && words.windows(run.len()).any(|window| window == run)
-}
-
-/// The lowercase words of an identifier split at `_`, `-`, and case changes, three letters or more.
-fn name_words(name: &str) -> Vec<String> {
-    let mut words = Vec::new();
-    let mut word = String::new();
-    let mut previous_lower = false;
-    for c in name.chars() {
-        if !c.is_alphanumeric() || (c.is_uppercase() && previous_lower) {
-            if word.len() >= 3 {
-                words.push(word.to_lowercase());
-            }
-            word.clear();
-        }
-        if c.is_alphanumeric() {
-            word.push(c);
-        }
-        previous_lower = c.is_lowercase();
-    }
-    if word.len() >= 3 {
-        words.push(word.to_lowercase());
-    }
-    words
-}
-
-/// Words too common in code names to link a test to a target.
-const GENERIC_NAME_WORDS: &[&str] = &[
-    "get", "set", "new", "the", "and", "for", "self", "init", "ensure", "sync", "find", "make",
-    "create", "load", "call", "add",
-];
-
-/// The number of leading characters two words share.
-fn common_prefix_len(a: &str, b: &str) -> usize {
-    a.chars().zip(b.chars()).take_while(|(x, y)| x == y).count()
-}
-
-/// The `seed_words` that the test's name or file name shares, with a count that credits the name
-/// and the file name separately, so a test in a file named for the target ranks first. A word
-/// matches when one of the two is a prefix of the other or they share five leading letters, so
-/// `handle` matches `handler` and `handling`.
-fn shared_words(seed_words: &[String], test: &TestTarget) -> (usize, Vec<String>) {
-    let mut found: Vec<String> = Vec::new();
-    let mut score = 0;
-    let file = test.path.rsplit('/').next().unwrap_or(&test.path);
-    for text in [test.name.as_str(), file] {
-        let words = name_words(text);
-        for seed in seed_words {
-            if words.iter().any(|word| {
-                word.starts_with(seed.as_str())
-                    || seed.starts_with(word.as_str())
-                    || common_prefix_len(word, seed) >= 5
-            }) {
-                score += 1;
-                if !found.contains(seed) {
-                    found.push(seed.clone());
-                }
-            }
-        }
-    }
-    (score, found)
-}
-
-#[derive(Default)]
-struct ImplicitHandlerEvidence {
-    registers_error_handler: bool,
-    calls_abort: bool,
-}
-
-impl ImplicitHandlerEvidence {
-    fn is_relevant(&self) -> bool {
-        self.registers_error_handler || self.calls_abort
-    }
-}
-
-struct RankedImplicitTest {
-    handler_evidence: bool,
-    shared_word_score: usize,
-    test: TestTarget,
-}
-
-/// Whether the test or one of its nested route/handler functions registers an error handler or
-/// calls `abort`. These calls can reach a runtime handler without a statically indexed edge.
-fn implicit_handler_evidence(
-    conn: &Connection,
-    test: &TestTarget,
-) -> Result<ImplicitHandlerEvidence, QueryError> {
-    let mut call_sources = Vec::new();
-    if has_table(conn, "pending_relationships") {
-        call_sources.push(
-            "SELECT lower(p.target_terminal_name) FROM candidate_scope d\n\
-             CROSS JOIN pending_relationships p ON p.from_symbol_id = d.symbol_id\n\
-             WHERE p.kind = 'calls'"
-                .to_string(),
-        );
-    }
-    if has_table(conn, "relationships") {
-        call_sources.push(
-            "SELECT lower(target.name) FROM candidate_scope d\n\
-             CROSS JOIN relationships r ON r.from_symbol_id = d.symbol_id\n\
-             JOIN symbols target ON target.symbol_id = r.to_symbol_id\n\
-             WHERE r.kind = 'calls'"
-                .to_string(),
-        );
-    }
-    if call_sources.is_empty() {
-        return Ok(ImplicitHandlerEvidence::default());
-    }
-
-    let sql = format!(
-        r#"WITH RECURSIVE candidate_scope(symbol_id) AS (
-               SELECT symbol_id FROM symbols
-               WHERE replace(path, char(92), '/') = ?1 AND start_line = ?2 AND name = ?3
-               UNION
-               SELECT child.symbol_id FROM symbols child
-               JOIN candidate_scope parent ON child.parent_symbol_id = parent.symbol_id
-           ), candidate_calls(name) AS (
-               {}
-           )
-           SELECT
-               EXISTS (SELECT 1 FROM candidate_calls
-                       WHERE name IN ('errorhandler', 'register_error_handler')),
-               EXISTS (SELECT 1 FROM candidate_calls WHERE name = 'abort')"#,
-        call_sources.join("\nUNION ALL\n")
-    );
-    conn.query_row(
-        &sql,
-        params![test.path, test.line as i64, test.name],
-        |row| {
-            Ok(ImplicitHandlerEvidence {
-                registers_error_handler: row.get(0)?,
-                calls_abort: row.get(1)?,
-            })
-        },
-    )
-    .map_err(QueryError::from)
-}
-
-/// Tests that build the class `class_id`, whose `__call__` the impact walk reached, or a subclass
-/// of it, directly or through a fixture. The runtime makes that call, so no call edge links them,
-/// and the index cannot see whether a test sends a call that reaches the target: each row is a
-/// possible test. Tests registering an error handler or calling `abort` rank first; other tests
-/// are kept and ranked by shared words in their name or file.
-fn implicit_entry_tests(
-    conn: &Connection,
-    class_id: &str,
-    seed_words: &[String],
-) -> Result<Vec<RankedImplicitTest>, QueryError> {
-    let Some(class) = get_symbol_by_id(conn, class_id)? else {
-        return Ok(Vec::new());
-    };
-    let lifecycle = if has_column(conn, "symbols", "test_lifecycle") {
-        "COALESCE(test_lifecycle, 0) != 0"
-    } else {
-        "0"
-    };
-    let mut classes = vec![class];
-    let mut sites_by_class = Vec::new();
-    let mut next = 0;
-    while next < classes.len() && classes.len() <= 50 {
-        let built = classes[next].clone();
-        next += 1;
-        let sites =
-            find_references_for_symbol(conn, &built.name, "callers", 200, &built.symbol_id)?;
-        for site in sites.iter().filter(|site| site.kind == "extends") {
-            if !classes.iter().any(|c| c.symbol_id == site.from_symbol_id)
-                && let Some(subclass) = get_symbol_by_id(conn, &site.from_symbol_id)?
-            {
-                classes.push(subclass);
-            }
-        }
-        sites_by_class.push((built, sites));
-    }
-    let mut builders = Vec::new();
-    for (built, sites) in &sites_by_class {
-        for site in sites {
-            if site.kind != "calls" {
-                continue;
-            }
-            let Some(builder) = get_symbol_by_id(conn, &site.from_symbol_id)? else {
-                continue;
-            };
-            if !(builder.is_test || is_test_path(&builder.path)) {
-                continue;
-            }
-            let is_fixture: bool = conn
-                .query_row(
-                    &format!("SELECT {lifecycle} FROM symbols WHERE symbol_id = ?1"),
-                    [&builder.symbol_id],
-                    |row| row.get(0),
-                )
-                .unwrap_or(false);
-            if is_fixture {
-                let via = format!(
-                    "builds `{}` through fixture `{}`",
-                    built.name,
-                    fixture_name(conn, &builder.name, &builder.path)
-                );
-                builders.extend(
-                    fixture_users(conn, &builder.name, &builder.path)?
-                        .into_iter()
-                        .map(|test| TestTarget {
-                            reason: via.clone(),
-                            ..test
-                        }),
-                );
-            } else if builder.is_test {
-                builders.push(TestTarget {
-                    name: builder.name,
-                    path: builder.path,
-                    line: builder.start_line,
-                    reason: format!("builds `{}`", built.name),
-                });
-            }
-        }
-    }
-    let mut ranked = Vec::new();
-    for test in builders
-        .into_iter()
-        .filter(|test| uses_a_client(conn, test))
-    {
-        let evidence = implicit_handler_evidence(conn, &test)?;
-        let (score, words) = shared_words(seed_words, &test);
-        if score == 0 && !evidence.is_relevant() {
-            continue;
-        }
-        let mut reasons = Vec::new();
-        if evidence.registers_error_handler {
-            reasons.push("registers an error handler".to_string());
-        }
-        if evidence.calls_abort {
-            reasons.push("calls `abort`".to_string());
-        }
-        if score > 0 {
-            let shared = words
-                .iter()
-                .map(|word| format!("`{word}`"))
-                .collect::<Vec<_>>()
-                .join(", ");
-            reasons.push(format!("shares {shared}"));
-        }
-        let reason = format!(
-            "possible: {}, and a test client calls its `__call__`, which can reach the target; {}",
-            test.reason,
-            reasons.join("; ")
-        );
-        ranked.push(RankedImplicitTest {
-            handler_evidence: evidence.is_relevant(),
-            shared_word_score: score,
-            test: TestTarget { reason, ..test },
-        });
-    }
-    Ok(ranked)
-}
-
-/// Whether `test` drives an app through a test client: it takes a parameter or holds a variable,
-/// or calls a function, method, class, or member of a receiver, whose name contains `client`. WSGI, ASGI, and Rack apps are called through
-/// such clients by convention (`app.test_client()`, `TestClient(app)`, a `client` fixture), and a
-/// test that only builds the app never reaches its `__call__`.
-fn uses_a_client(conn: &Connection, test: &TestTarget) -> bool {
-    conn.query_row(
-        "SELECT EXISTS (
-            SELECT 1 FROM symbols t
-            WHERE t.name = ?3 AND t.start_line = ?2 AND replace(t.path, '\\', '/') = ?1
-              AND (EXISTS (SELECT 1 FROM symbols p
-                           WHERE p.parent_symbol_id = t.symbol_id
-                             AND p.kind IN ('parameter', 'variable')
-                             AND lower(p.name) LIKE '%client%')
-                   OR EXISTS (SELECT 1 FROM pending_relationships pr
-                              WHERE pr.from_symbol_id = t.symbol_id
-                                AND (lower(pr.target_terminal_name) LIKE '%client%'
-                                     OR lower(COALESCE(pr.target_receiver, '')) LIKE '%client%'))
-                   OR EXISTS (SELECT 1 FROM relationships r
-                              JOIN symbols callee ON callee.symbol_id = r.to_symbol_id
-                              WHERE r.from_symbol_id = t.symbol_id
-                                AND lower(callee.name) LIKE '%client%')))",
-        params![test.path, test.line as i64, test.name],
-        |row| row.get(0),
-    )
-    .unwrap_or(false)
-}
-
 /// Compute blast radius and likely tests for given seed symbols or seed file paths.
 pub fn compute_blast_radius(
     conn: &Connection,
@@ -6961,42 +6436,6 @@ mod tests {
             super::declared_fixture_name("@pytest.fixture(params=[1]) def f(name='x')"),
             None
         );
-    }
-
-    #[test]
-    fn a_stem_matches_whole_words_of_a_test_file_name() {
-        let matches = |file: &str, stem: &str| {
-            super::has_word_run(&super::file_words(file), &super::file_words(stem))
-        };
-        assert!(matches("test_app.py", "app"));
-        assert!(matches("AppTest.java", "App"));
-        assert!(matches("test_user_error_handler.py", "user_error_handler"));
-        assert!(matches("widget_test_3.rs", "widget"));
-        assert!(!matches("test_appctx.py", "app"));
-        assert!(!matches("test_mapper.py", "app"));
-    }
-
-    #[test]
-    fn a_test_with_a_client_is_found_under_a_backslash_path() {
-        let conn = rusqlite::Connection::open_in_memory().unwrap();
-        conn.execute_batch(
-            "CREATE TABLE symbols (symbol_id TEXT, name TEXT, path TEXT, start_line INTEGER,
-                 parent_symbol_id TEXT, kind TEXT);
-             CREATE TABLE pending_relationships (from_symbol_id TEXT, target_terminal_name TEXT,
-                 target_receiver TEXT);
-             CREATE TABLE relationships (from_symbol_id TEXT, to_symbol_id TEXT);
-             INSERT INTO symbols VALUES ('t', 'test_user', 'tests\\test_user.py', 4, NULL, 'function');
-             INSERT INTO symbols VALUES ('c', 'client', 'tests\\test_user.py', 4, 't', 'parameter');",
-        )
-        .unwrap();
-        let test = crate::models::TestTarget {
-            name: "test_user".into(),
-            path: "tests/test_user.py".into(),
-            line: 4,
-            reason: String::new(),
-        };
-
-        assert!(super::uses_a_client(&conn, &test));
     }
 
     #[test]

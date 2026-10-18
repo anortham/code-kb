@@ -659,11 +659,7 @@ fn test_adversarial_mcp_schemas_have_no_blacklisted_workspace_parameter_and_requ
         .as_array()
         .expect("Tools array in response");
 
-    assert_eq!(
-        tools.len(),
-        10,
-        "MCP server must advertise exactly 10 tools"
-    );
+    assert_eq!(tools.len(), 6, "MCP server must advertise exactly 6 tools");
 
     let forbidden_param_blacklist = [
         "workspace",
@@ -720,25 +716,14 @@ fn test_adversarial_mcp_schemas_have_no_blacklisted_workspace_parameter_and_requ
             .as_array()
             .map(|names| names.iter().filter_map(Value::as_str).collect())
             .unwrap_or_default();
-        if name == "telemetry_summary" {
-            assert!(
-                schema["properties"].get("project_root").is_none(),
-                "Tool '{name}' must not list project_root"
-            );
-            assert!(
-                !required.contains(&"project_root"),
-                "Tool '{name}' must not require project_root"
-            );
-        } else {
-            assert_eq!(
-                schema["properties"]["project_root"]["description"], PROJECT_ROOT_DESCRIPTION,
-                "Tool '{name}' must list project_root with its contract description"
-            );
-            assert!(
-                required.contains(&"project_root"),
-                "Tool '{name}' must require project_root"
-            );
-        }
+        assert_eq!(
+            schema["properties"]["project_root"]["description"], PROJECT_ROOT_DESCRIPTION,
+            "Tool '{name}' must list project_root with its contract description"
+        );
+        assert!(
+            required.contains(&"project_root"),
+            "Tool '{name}' must require project_root"
+        );
 
         let property_descriptions = schema["properties"]
             .as_object()

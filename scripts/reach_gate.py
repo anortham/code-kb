@@ -301,6 +301,8 @@ def run_binary(binary, root, *args, timeout=CALL_TIMEOUT_SECONDS, as_json=False)
 
 def pick_symbol_id(rows, symbol):
     """Chooses the lookup row on the case line, else the nearest row with the case name in its file."""
+    if isinstance(rows, dict):
+        rows = rows.get("names", []) + rows.get("ranked", [])
     flat = [row["symbol"] if isinstance(row.get("symbol"), dict) else row for row in rows]
     here = [
         row for row in flat

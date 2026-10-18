@@ -5,18 +5,14 @@ use std::time::Duration;
 
 use code_kb_core::workspace::{NO_PROJECT_MARKER_REASON, paths_equal};
 use code_kb_core::{
-    Connection, SymbolSelector, TelemetryFilter, TimeWindow, WatcherHandle, Workspace,
-    WorkspaceError, blast_radius_selected_op, codebase_outline_op, create_index,
-    ensure_fts_index_path, ensure_index_matches_extractor, file_sizes_for_paths, file_skeleton_op,
-    find_references_for_symbol_ext, format_blast_radius, format_context_slices,
-    format_fact_categories, format_find_symbol_results, format_reference_report, format_references,
-    format_search_results, format_structural_facts, format_symbol_bodies, format_telemetry_summary,
-    fts_search_symbols_scoped, get_context_slices_selected_op, get_symbol_bodies_selected_op,
-    get_telemetry_summary, installed_extractor_version, is_project_root,
-    list_structural_fact_categories_scoped, open_global_telemetry_db, open_read_only,
-    qualify_members, reconcile_offline_edits, record_tool_call, record_tool_call_conn,
-    reference_report, resolve_symbol_op, search_symbols_scoped, select_reference_target,
-    start_watcher,
+    Connection, SymbolSelector, WatcherHandle, Workspace, WorkspaceError, blast_radius_selected_op,
+    create_index, ensure_fts_index_path, ensure_index_matches_extractor, file_sizes_for_paths,
+    file_skeleton_op, find_references_for_symbol_ext, format_blast_radius, format_context_slices,
+    format_reference_report, format_references, format_symbol_bodies,
+    get_context_slices_selected_op, get_symbol_bodies_selected_op, installed_extractor_version,
+    is_project_root, lookup_symbols_op, open_global_telemetry_db, open_read_only,
+    reconcile_offline_edits, record_tool_call, record_tool_call_conn, reference_report,
+    render_symbol_lookup, resolve_symbol_op, select_reference_target, start_watcher,
 };
 
 use super::protocol::{CallToolResult, JsonRpcRequest, JsonRpcResponse, Tool};
@@ -24,16 +20,6 @@ use super::protocol::{CallToolResult, JsonRpcRequest, JsonRpcResponse, Tool};
 const ZERO_LIMIT_NOTICE: &str = "Result limit is 0; increase it to check for matches.";
 const PROJECT_ROOT_DESCRIPTION: &str =
     "Absolute path of the project or git worktree you work in. Change it when you move to another.";
-
-/// Counts the tree lines a `codebase_outline` answer renders, ignoring the root header
-/// and the bracketed notices that follow the tree.
-fn rendered_outline_entries(outline: &str) -> usize {
-    outline
-        .lines()
-        .skip(1)
-        .filter(|line| !line.trim().is_empty() && !line.starts_with('['))
-        .count()
-}
 
 type IndexPrepare = std::thread::JoinHandle<Result<Option<WatcherHandle>, String>>;
 
@@ -263,7 +249,7 @@ impl McpServer {
                 format!("{e}. Pass the absolute path of the project or git worktree you are working in as project_root.")
             })?;
         let root = workspace.canonical_root.display();
-        for key in ["path", "file_path", "file", "subpath", "dir"] {
+        for key in ["path", "file_path", "file"] {
             let Some(path) = arguments.get(key).and_then(Value::as_str) else {
                 continue;
             };
@@ -287,23 +273,6 @@ impl McpServer {
     pub fn tool_definitions() -> Vec<Tool> {
         let mut tools = vec![
             Tool {
-                name: "codebase_outline".to_string(),
-                description: "Directory layout and main exports of the project or a subdirectory, in a few hundred tokens. Use instead of ls -R or find on unfamiliar code.".to_string(),
-                input_schema: json!({
-                    "type": "object",
-                    "properties": {
-                        "path": {
-                            "type": "string",
-                            "description": "Subdirectory (default: project_root)."
-                        },
-                        "depth": {
-                            "type": "integer",
-                            "description": "Depth (default: 2)."
-                        }
-                    }
-                }),
-            },
-            Tool {
                 name: "file_skeleton".to_string(),
                 description: "A file's types, functions, signatures, and docstrings with bodies stripped. Call this before you read a source file with Read, cat, or sed, then fetch the symbols you need with get_symbol_body; read the whole file only when you will change most of it. A directory returns its outline.".to_string(),
                 input_schema: json!({
@@ -319,45 +288,13 @@ impl McpServer {
             },
             Tool {
                 name: "lookup_symbol".to_string(),
-                description: "Find symbols by exact name, qualified name ('Type::method'), or prefix; returns kind, path, line, signature, and id. Use instead of grep on a name. For a concept, use search_symbols.".to_string(),
+                description: "Find symbols by name, qualified name ('Type::method'), prefix, or concept; returns kind, path, line, signature, and id. A query that names no symbol exactly also gets the ranked matches by name words, signatures, and docs. Use instead of grep on a name.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
                         "query": {
                             "type": "string",
-                            "description": "Identifier, qualified name, or prefix."
-                        },
-                        "path": {
-                            "type": "string",
-                            "description": "File or directory to search in."
-                        },
-                        "kind": {
-                            "type": "string",
-                            "description": "Kind, such as function or class."
-                        },
-                        "is_test": {
-                            "type": "boolean",
-                            "description": "Include rows from tests (default: false)."
-                        },
-                        "limit": {
-                            "type": "integer",
-                            "minimum": 0,
-                            "maximum": code_kb_core::queries::MAX_RESULT_LIMIT,
-                            "description": "Default: 20."
-                        }
-                    },
-                    "required": ["query"]
-                }),
-            },
-            Tool {
-                name: "search_symbols".to_string(),
-                description: "Keyword search over symbol names, signatures, and docstrings, for code found by concept ('retry backoff'); matches substrings inside names. For a known name, use lookup_symbol.".to_string(),
-                input_schema: json!({
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "Keywords."
+                            "description": "Identifier, qualified name, prefix, or a few words that describe the code."
                         },
                         "path": {
                             "type": "string",
@@ -391,7 +328,7 @@ impl McpServer {
                             "type": "string",
                             "description": "Name or qualified name; pass exactly one of this or symbol_id."
                         },
-                        "symbol_id": { "type": "string", "description": "The id from lookup or search; pass exactly one of this or symbol_name." },
+                        "symbol_id": { "type": "string", "description": "The id from lookup_symbol; pass exactly one of this or symbol_name." },
                         "file_path": {
                             "type": "string",
                             "description": "File or folder that holds the symbol."
@@ -409,7 +346,7 @@ impl McpServer {
                             "type": "string",
                             "description": "Name or qualified name; pass exactly one of this or symbol_id."
                         },
-                        "symbol_id": { "type": "string", "description": "The id from lookup or search; pass exactly one of this or symbol_name." },
+                        "symbol_id": { "type": "string", "description": "The id from lookup_symbol; pass exactly one of this or symbol_name." },
                         "file_path": {
                             "type": "string",
                             "description": "File or folder that holds the symbol."
@@ -431,7 +368,7 @@ impl McpServer {
                             "type": "string",
                             "description": "Name or qualified name; pass exactly one of this or symbol_id."
                         },
-                        "symbol_id": { "type": "string", "description": "The id from lookup or search; pass exactly one of this or symbol_name." },
+                        "symbol_id": { "type": "string", "description": "The id from lookup_symbol; pass exactly one of this or symbol_name." },
                         "file_path": {
                             "type": "string",
                             "description": "File that holds the symbol."
@@ -455,29 +392,6 @@ impl McpServer {
                 }),
             },
             Tool {
-                name: "find_structural_facts".to_string(),
-                description: "Framework facts such as routes, SQL, and config keys. With no category, lists the categories with counts.".to_string(),
-                input_schema: json!({
-                    "type": "object",
-                    "properties": {
-                        "category": {
-                            "type": "string",
-                            "description": "Category, such as route, query, model, or config."
-                        },
-                        "path": {
-                            "type": "string",
-                            "description": "File or directory."
-                        },
-                        "limit": {
-                            "type": "integer",
-                            "minimum": 0,
-                            "maximum": code_kb_core::queries::MAX_RESULT_LIMIT,
-                            "description": "Per section (default: 30)."
-                        }
-                    }
-                }),
-            },
-            Tool {
                 name: "blast_radius".to_string(),
                 description: "The symbols a change affects and the tests to run. With no symbol, symbol_id, or file, it reads the uncommitted git changes.".to_string(),
                 input_schema: json!({
@@ -487,7 +401,7 @@ impl McpServer {
                             "type": "string",
                             "description": "Symbol name."
                         },
-                        "symbol_id": { "type": "string", "description": "The id from lookup or search; pass one of this or symbol." },
+                        "symbol_id": { "type": "string", "description": "The id from lookup_symbol; pass one of this or symbol." },
                         "file": {
                             "type": "string",
                             "description": "File path."
@@ -505,36 +419,8 @@ impl McpServer {
                     }
                 }),
             },
-            Tool {
-                name: "telemetry_summary".to_string(),
-                description: "Summarizes code-kb tool usage, token consumption, and tokens saved across sessions and workspaces. Useful for diagnosing usage patterns and evaluating agent performance.".to_string(),
-                input_schema: json!({
-                    "type": "object",
-                    "properties": {
-                        "time_window": {
-                            "type": "string",
-                            "description": "Optional time window for metrics: 'today', '7d', '30d', 'month', 'year', or 'all' (default: 'all')."
-                        },
-                        "workspace_only": {
-                            "type": "boolean",
-                            "description": "If true, scopes metrics to the project of the most recent tool call instead of all workspaces (default: false)."
-                        },
-                        "version": {
-                            "type": "string",
-                            "description": "Filter metrics by code-kb version (e.g. '1.1.3'), 'current' (default), or 'all'."
-                        },
-                        "all_versions": {
-                            "type": "boolean",
-                            "description": "If true, includes telemetry across all historical versions (default: false)."
-                        }
-                    }
-                }),
-            },
         ];
-        for tool in tools
-            .iter_mut()
-            .filter(|tool| tool.name != "telemetry_summary")
-        {
+        for tool in tools.iter_mut() {
             let schema = &mut tool.input_schema;
             schema["properties"]["project_root"] =
                 json!({ "type": "string", "description": PROJECT_ROOT_DESCRIPTION });
@@ -662,108 +548,6 @@ impl McpServer {
         res
     }
 
-    fn handle_telemetry_summary(&mut self, arguments: &Value) -> CallToolResult {
-        let window_arg = arguments
-            .get("time_window")
-            .or_else(|| arguments.get("since"))
-            .or_else(|| arguments.get("window"))
-            .and_then(|v| v.as_str());
-
-        let time_window = match window_arg {
-            Some(s) => match TimeWindow::parse(s) {
-                Some(w) => w,
-                None => {
-                    return CallToolResult::error(format!(
-                        "Invalid time_window '{s}'. Supported values: today, 7d, 30d, month, year, all"
-                    ));
-                }
-            },
-            None => TimeWindow::AllTime,
-        };
-
-        let workspace_only = arguments
-            .get("workspace_only")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-
-        let all_versions = arguments
-            .get("all_versions")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-
-        let version_arg = arguments.get("version").and_then(|v| v.as_str());
-
-        let version = if all_versions || version_arg == Some("all") {
-            None
-        } else if let Some(v) = version_arg {
-            if v == "current" {
-                Some(env!("CARGO_PKG_VERSION").to_string())
-            } else {
-                Some(v.to_string())
-            }
-        } else {
-            Some(env!("CARGO_PKG_VERSION").to_string())
-        };
-
-        let filter = TelemetryFilter {
-            time_window,
-            workspace_root: if workspace_only {
-                Some(self.workspace.canonical_root.clone())
-            } else {
-                None
-            },
-            version: version.clone(),
-        };
-
-        let as_json = arguments
-            .get("json")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-
-        if self.telemetry_conn.is_none() {
-            self.telemetry_conn = open_global_telemetry_db().ok();
-        }
-
-        let conn = match self.telemetry_conn.as_ref() {
-            Some(c) => c,
-            None => {
-                return CallToolResult::error(
-                    "Failed to open global telemetry database".to_string(),
-                );
-            }
-        };
-
-        match get_telemetry_summary(conn, &filter) {
-            Ok(mut summary) => {
-                if !workspace_only {
-                    let ws_filter = TelemetryFilter {
-                        time_window,
-                        workspace_root: Some(self.workspace.canonical_root.clone()),
-                        version,
-                    };
-                    if let Ok(ws_summary) = get_telemetry_summary(conn, &ws_filter) {
-                        summary.recent_errors = ws_summary.recent_errors;
-                    } else {
-                        summary.recent_errors.clear();
-                    }
-                }
-
-                if as_json {
-                    match serde_json::to_string_pretty(&summary) {
-                        Ok(json_str) => CallToolResult::text(json_str),
-                        Err(e) => CallToolResult::error(format!(
-                            "Failed to serialize telemetry summary: {e}"
-                        )),
-                    }
-                } else {
-                    let text = format_telemetry_summary(&summary);
-                    CallToolResult::text(text)
-                }
-            }
-            Err(e) => CallToolResult::error(format!("Failed to query telemetry summary: {e}")),
-        }
-    }
-
     pub(crate) fn sanitize_symbol_name(raw: &str) -> String {
         let mut s = raw.trim();
         // Do not strip `()` if the string is literally `"()"` or ends with `"operator()"` (e.g., C++ operator())
@@ -782,7 +566,7 @@ impl McpServer {
         for p in prefixes {
             if let Some(rest) = s.strip_prefix(p) {
                 let trimmed = rest.trim();
-                if !trimmed.is_empty() {
+                if !trimmed.is_empty() && !trimmed.contains(char::is_whitespace) {
                     s = trimmed;
                 }
                 break;
@@ -831,18 +615,6 @@ impl McpServer {
 
     fn handle_call_tool_inner(&mut self, name: &str, arguments: &Value) -> CallToolResult {
         tracing::info!(tool = name, args = %arguments, "MCP tool called");
-
-        // telemetry_summary must run before the index wait: it must never create
-        // artifact.db on an unindexed repository.
-        if name == "telemetry_summary" {
-            let result = self.handle_telemetry_summary(arguments);
-            if result.is_error {
-                tracing::warn!(tool = name, "MCP tool returned error");
-            } else {
-                tracing::info!(tool = name, "MCP tool executed successfully");
-            }
-            return result;
-        }
 
         let rec_start = std::time::Instant::now();
         let (reconcile_ms, prepare_error) = match self.reconcile.take() {
@@ -939,26 +711,6 @@ impl McpServer {
 
         let query_start = std::time::Instant::now();
         let mut result = match name {
-            "codebase_outline" => {
-                let depth = arguments
-                    .get("max_depth")
-                    .or_else(|| arguments.get("depth"))
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(2) as usize;
-                let path_filter = arguments
-                    .get("path")
-                    .or_else(|| arguments.get("subpath"))
-                    .or_else(|| arguments.get("dir"))
-                    .and_then(|v| v.as_str());
-
-                match codebase_outline_op(&self.workspace, &conn, depth, path_filter) {
-                    Ok(text) => {
-                        let entries = rendered_outline_entries(&text);
-                        CallToolResult::text(text).with_logical_result_count(entries)
-                    }
-                    Err(e) => CallToolResult::error(e.to_string()),
-                }
-            }
             "file_skeleton" => {
                 let file_path = match arguments
                     .get("file_path")
@@ -1023,7 +775,8 @@ impl McpServer {
                     Err(error) => return error,
                 };
 
-                let matches = match search_symbols_scoped(
+                let lookup = match lookup_symbols_op(
+                    &self.db_path,
                     &conn,
                     query,
                     kind,
@@ -1031,117 +784,27 @@ impl McpServer {
                     include_tests,
                     limit,
                 ) {
-                    Ok(m) => m,
+                    Ok(lookup) => lookup,
                     Err(e) => return CallToolResult::error(e.to_string()),
                 };
 
-                let (exact_matches, fts_matches) = if matches.is_empty() {
-                    if let Err(e) = ensure_fts_index_path(&self.db_path) {
-                        return CallToolResult::error(format!("Search index is not ready: {e}"));
-                    }
-                    let fts = match fts_search_symbols_scoped(
-                        &conn,
-                        query,
-                        kind,
-                        path_filter,
-                        include_tests,
-                        limit,
-                    ) {
-                        Ok(fts) => fts,
-                        Err(e) => return CallToolResult::error(e.to_string()),
-                    };
-                    (Vec::new(), fts)
-                } else {
-                    (matches, Vec::new())
-                };
-
-                let baseline_paths = exact_matches
+                let baseline_paths = lookup
+                    .names
                     .iter()
                     .map(|symbol| symbol.path.clone())
-                    .chain(fts_matches.iter().map(|hit| hit.symbol.path.clone()))
+                    .chain(lookup.ranked.iter().map(|hit| hit.symbol.path.clone()))
                     .collect();
 
                 let output = if limit == 0 {
                     ZERO_LIMIT_NOTICE.to_string()
                 } else {
-                    let mut exact_shown = exact_matches.clone();
-                    let mut fts_shown = fts_matches.clone();
-                    if let Err(e) = qualify_members(
-                        &conn,
-                        exact_shown
-                            .iter_mut()
-                            .chain(fts_shown.iter_mut().map(|hit| &mut hit.symbol)),
-                    ) {
-                        return CallToolResult::error(e.to_string());
+                    match render_symbol_lookup(&conn, query, &lookup, limit) {
+                        Ok(text) => text,
+                        Err(e) => return CallToolResult::error(e.to_string()),
                     }
-                    format_find_symbol_results(query, &exact_shown, &fts_shown, limit)
                 };
                 CallToolResult::text(output)
-                    .with_logical_result_count(exact_matches.len() + fts_matches.len())
-                    .with_baseline_paths(baseline_paths)
-            }
-            "search_symbols" => {
-                let query = match arguments
-                    .get("query")
-                    .or_else(|| arguments.get("name"))
-                    .or_else(|| arguments.get("q"))
-                    .or_else(|| arguments.get("symbol_name"))
-                    .or_else(|| arguments.get("symbol"))
-                    .and_then(|v| v.as_str())
-                {
-                    Some(q) => q,
-                    None => return CallToolResult::error("Missing required parameter: query"),
-                };
-                let raw_path_filter = arguments
-                    .get("path")
-                    .or_else(|| arguments.get("file_path"))
-                    .or_else(|| arguments.get("file"))
-                    .and_then(|v| v.as_str());
-                let rel_path = raw_path_filter.map(|p| self.workspace.relativize_filter(p));
-                let path_filter = rel_path.as_deref();
-
-                let kind = arguments.get("kind").and_then(|v| v.as_str());
-                let include_tests = arguments
-                    .get("is_test")
-                    .or_else(|| arguments.get("include_tests"))
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
-                let limit = match result_limit(arguments, 20) {
-                    Ok(limit) => limit,
-                    Err(error) => return error,
-                };
-
-                if let Err(e) = ensure_fts_index_path(&self.db_path) {
-                    return CallToolResult::error(format!("Search index is not ready: {e}"));
-                }
-
-                let matches = match fts_search_symbols_scoped(
-                    &conn,
-                    query,
-                    kind,
-                    path_filter,
-                    include_tests,
-                    limit,
-                ) {
-                    Ok(m) => m,
-                    Err(e) => return CallToolResult::error(e.to_string()),
-                };
-
-                let baseline_paths = matches.iter().map(|hit| hit.symbol.path.clone()).collect();
-
-                let output = if limit == 0 {
-                    ZERO_LIMIT_NOTICE.to_string()
-                } else {
-                    let mut shown = matches.clone();
-                    if let Err(e) =
-                        qualify_members(&conn, shown.iter_mut().map(|hit| &mut hit.symbol))
-                    {
-                        return CallToolResult::error(e.to_string());
-                    }
-                    format_search_results(query, &shown, limit)
-                };
-                CallToolResult::text(output)
-                    .with_logical_result_count(matches.len())
+                    .with_logical_result_count(lookup.names.len() + lookup.ranked.len())
                     .with_baseline_paths(baseline_paths)
             }
             "get_symbol_body" => {
@@ -1319,93 +982,6 @@ impl McpServer {
                         .with_baseline_paths(baseline_paths)
                 }
             }
-            "find_structural_facts" => {
-                let raw_path = arguments
-                    .get("path")
-                    .or_else(|| arguments.get("file"))
-                    .or_else(|| arguments.get("file_path"))
-                    .and_then(|v| v.as_str());
-                let rel_path = raw_path.map(|p| self.workspace.relativize_filter(p));
-                let path_filter = rel_path.as_deref();
-
-                let category = arguments
-                    .get("category")
-                    .or_else(|| arguments.get("cat"))
-                    .or_else(|| arguments.get("type"))
-                    .or_else(|| arguments.get("kind"))
-                    .or_else(|| arguments.get("pattern"))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .trim();
-
-                let limit = match result_limit(arguments, 30) {
-                    Ok(limit) => limit,
-                    Err(error) => return error,
-                };
-
-                if category.is_empty() {
-                    let categories =
-                        match list_structural_fact_categories_scoped(&conn, path_filter) {
-                            Ok(c) => c,
-                            Err(e) => return CallToolResult::error(e.to_string()),
-                        };
-
-                    let mut out = format_fact_categories(&categories);
-                    if !categories.is_empty() {
-                        out.push_str(
-                            "\nCall find_structural_facts(category=\"<name>\") to query matches.",
-                        );
-                    }
-                    CallToolResult::text(out).with_logical_result_count(categories.len())
-                } else if limit == 0 {
-                    CallToolResult::text(ZERO_LIMIT_NOTICE.to_string())
-                } else {
-                    let facts = match code_kb_core::find_structural_facts_scoped(
-                        &conn,
-                        category,
-                        path_filter,
-                        limit,
-                    ) {
-                        Ok(f) => f,
-                        Err(e) => return CallToolResult::error(e.to_string()),
-                    };
-
-                    let literals = match code_kb_core::find_literals_scoped(
-                        &conn,
-                        category,
-                        path_filter,
-                        limit,
-                    ) {
-                        Ok(literals) => literals,
-                        Err(error) => return CallToolResult::error(error.to_string()),
-                    };
-
-                    if facts.is_empty()
-                        && literals.is_empty()
-                        && code_kb_core::is_category_alias(category)
-                    {
-                        let categories =
-                            match list_structural_fact_categories_scoped(&conn, path_filter) {
-                                Ok(c) => c,
-                                Err(e) => return CallToolResult::error(e.to_string()),
-                            };
-                        let out = code_kb_core::format_no_facts(category, path_filter, &categories);
-                        return CallToolResult::text(out).with_logical_result_count(0);
-                    }
-
-                    let baseline_paths = facts
-                        .iter()
-                        .map(|fact| fact.path.clone())
-                        .chain(literals.iter().map(|literal| literal.path.clone()))
-                        .collect();
-
-                    CallToolResult::text(format_structural_facts(
-                        &facts, &literals, category, limit,
-                    ))
-                    .with_logical_result_count(facts.len() + literals.len())
-                    .with_baseline_paths(baseline_paths)
-                }
-            }
             "blast_radius" | "impact" => {
                 let has_selector = ["symbol_name", "symbol", "name", "target", "symbol_id"]
                     .iter()
@@ -1546,7 +1122,7 @@ impl McpServer {
                         "name": "code-kb",
                         "version": env!("CARGO_PKG_VERSION")
                     },
-                    "instructions": "Pass project_root, the absolute path of the project or git worktree you work in, on every call except telemetry_summary. Call file_skeleton before you read a source file, then get_symbol_body or get_symbol_context for the symbols you need. Use lookup_symbol and find_references instead of grep on a name, search_symbols for a concept, and blast_radius to pick the tests to run."
+                    "instructions": "Pass project_root, the absolute path of the project or git worktree you work in, on every call. Call file_skeleton before you read a source file, then get_symbol_body or get_symbol_context for the symbols you need. Use lookup_symbol for a name or a concept and find_references instead of grep on a name, and blast_radius to pick the tests to run."
                 });
                 Some(JsonRpcResponse::success(id, init_result))
             }
@@ -1557,9 +1133,7 @@ impl McpServer {
                 // Claude Code defers MCP tools behind ToolSearch, and its agents almost never
                 // search for them, so every code tool asks to be loaded at session start.
                 for tool in tools.as_array_mut().into_iter().flatten() {
-                    if tool["name"] != "telemetry_summary" {
-                        tool["_meta"] = json!({ "anthropic/alwaysLoad": true });
-                    }
+                    tool["_meta"] = json!({ "anthropic/alwaysLoad": true });
                 }
                 Some(JsonRpcResponse::success(id, json!({ "tools": tools })))
             }
@@ -1817,6 +1391,14 @@ mod tests {
         assert_eq!(
             McpServer::sanitize_symbol_name("crate::module::symbol"),
             "crate::module::symbol"
+        );
+        assert_eq!(
+            McpServer::sanitize_symbol_name("function that retries"),
+            "function that retries"
+        );
+        assert_eq!(
+            McpServer::sanitize_symbol_name("def load config files"),
+            "def load config files"
         );
     }
 }

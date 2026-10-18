@@ -289,7 +289,6 @@ pub struct BlastRadiusResult {
     pub impacted_symbols_truncated: bool,
     #[serde(default)]
     pub traversal_ceiling_reached: bool,
-    pub test_file_ceiling_reached: bool,
     /// The request already used the largest `limit`, so a larger one cannot show more rows.
     #[serde(default)]
     pub limit_at_maximum: bool,

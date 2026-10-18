@@ -400,6 +400,12 @@ class PickSymbolIdTest(unittest.TestCase):
         self.assertEqual(reach_gate.pick_symbol_id(wrapped, self.symbol(10)), "near")
         self.assertIsNone(reach_gate.pick_symbol_id(LOOKUP_ROWS, {"name": "nope", "file": "f.py", "line": 1}))
 
+    def test_a_lookup_object_offers_its_name_rows_and_ranked_rows(self):
+        names_only = {"names": LOOKUP_ROWS[2:], "ranked": []}
+        ranked = {"names": [], "ranked": [{"symbol": row, "score": 1.0} for row in LOOKUP_ROWS]}
+        self.assertIsNone(reach_gate.pick_symbol_id(names_only, self.symbol(10)))
+        self.assertEqual(reach_gate.pick_symbol_id(ranked, self.symbol(10)), "near")
+
 
 STUB = """#!{python}
 import json

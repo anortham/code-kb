@@ -13,9 +13,9 @@ Backed by the rich AST fact tables produced by [`julie-extractors`](https://gith
 Traditional AI coding agents burn massive amounts of context loading entire source files into their prompt windows just to inspect a single type signature or implementation detail. 
 
 `code-kb` solves this with a **progressive disclosure** architecture:
-1. **Repository Orientation (`codebase_outline`):** Understand directory structures and key exports in a few hundred tokens.
+1. **Repository Orientation (`file_skeleton` on a folder):** Understand directory structures and key exports in a few hundred tokens.
 2. **File Skeletons (`file_skeleton`):** Inspect function signatures, types, traits, and docstrings with implementation bodies stripped.
-3. **Symbol Lookup & Discovery (`lookup_symbol` / `search_symbols`):** Instant exact/prefix identifier lookups and conceptual search over names, signatures, and docstrings; substrings inside identifiers are found (`sha256` finds `parseSha256Sidecar`).
+3. **Symbol Lookup & Discovery (`lookup_symbol`):** Instant exact/prefix identifier lookups. A query that names no symbol exactly also gets ranked conceptual matches over names, signatures, and docstrings; substrings inside identifiers are found (`sha256` finds `parseSha256Sidecar`).
 4. **Surgical Symbol Context (`get_symbol_context`):** In a single turn, fetch a target function's body along with its callee signatures, parameter types, and associated unit tests.
 5. **Fresh Indexes:** Filesystem edits automatically refresh indexed files, and target body and skeleton reads refresh their file before answering.
 
@@ -25,7 +25,7 @@ Traditional AI coding agents burn massive amounts of context loading entire sour
 
 - **Small Retained Memory:** Written in Rust, zero heavy runtimes (no web dashboard, no GPU models), retained process memory is about 25 MB. The plugin launcher is a small Node script that replaces itself with the native binary via `process.execve` on supported POSIX Node 22+ runtimes (or waits via `spawn` on Windows/older Node).
 - **Sub-5ms Query Latency:** Direct SQLite queries in WAL mode with zero in-memory heap bloat.
-- **One `project_root` on Every Call:** Every tool except `telemetry_summary` takes `project_root`, the absolute path of the project or git worktree the agent works in (`lookup_symbol(project_root="/path/to/project", query="...")`). A root in every call cannot go stale, so a move to a worktree never answers from the old index.
+- **One `project_root` on Every Call:** Every tool takes `project_root`, the absolute path of the project or git worktree the agent works in (`lookup_symbol(project_root="/path/to/project", query="...")`). A root in every call cannot go stale, so a move to a worktree never answers from the old index.
 - **CLI-First Parity:** Every MCP tool has an exact 1:1 CLI command for instantaneous terminal verification and dogfooding.
 - **Continuous 3-Tier Sync:** Tool-driven updates, JIT staleness guards before reads, and a debounced background watcher with a Git storm circuit breaker.
 
@@ -166,7 +166,7 @@ Every harness runs the same command: `code-kb serve`. Hooks run `code-kb hook <E
 
 #### How code-kb Finds Your Project
 
-Every tool except `telemetry_summary` takes a required `project_root`: the absolute path of the
+Every tool takes a required `project_root`: the absolute path of the
 project or git worktree the agent works in. The agent sends the same value on every call. It
 changes the value when it moves to a worktree or another project. The routing hook and the skill
 tell the agent to do this.
@@ -356,7 +356,7 @@ signature reads like a method. A method in a `Q_SLOTS:` section carries `qt_slot
 `Q_INVOKABLE` method carries `qt_invokable`. A class records the QML element name it declares with
 `QML_ELEMENT` or `QML_NAMED_ELEMENT`. A forward declaration such as `class ColumnView;`
 emits no row, so `lookup_symbol` of a class name returns one row, at its definition.
-`find_structural_facts` takes a `property` alias that covers the QML property
+`code-kb facts` takes a `property` alias that covers the QML property
 declarations and the Qt C++ `Q_PROPERTY` facts together, each fact naming its class.
 Property facts expose their available Qt metadata, including `property_type`, accessors,
 and the optional `designable`, `scriptable`, `stored`, `user`, and `revision` attributes.
@@ -437,22 +437,20 @@ code-kb facts property --path src/layouts/columnview.h --limit 5
 
 ## MCP Tool Catalog
 
-Every tool except `telemetry_summary` requires `project_root`, the absolute path of the project or
+Every tool requires `project_root`, the absolute path of the project or
 git worktree you work in. The table does not repeat it. `path` and `file_path` are relative to
 `project_root`, or absolute inside it.
 
 | Tool | Purpose | Key Parameters | Aliases |
 | :--- | :--- | :--- | :--- |
-| `codebase_outline` | High-level architectural orientation of directory layout & symbols. | `path` (opt), `depth` (opt, default 2) | `dir`, `subpath` |
-| `file_skeleton` | File outline with function & method bodies stripped (80–90% token savings); a directory returns its outline. | `file_path` (req) | `file`, `path` |
-| `lookup_symbol` | Fast identifier lookup (exact name or prefix) across repo or scoped path. Test functions, test containers, and rows from test files are hidden unless `is_test` is true, except a row whose name equals the query. | `query` (req), `path` (opt), `kind` (opt), `is_test` (opt), `limit` (opt) | `name`, `q` |
-| `search_symbols` | Conceptual search over symbol names, signatures & docstrings; substrings inside identifiers are found (`sha256` finds `parseSha256Sidecar`). Results are reranked by crediting each query term once from its strongest field (name, signature, docstring), weighted by the term's rarity across the index, plus kind and path priors; `score` is that rerank score. Test functions, test containers, and rows from test files are hidden unless `is_test` is true. | `query` (req), `path` (opt), `kind` (opt), `is_test` (opt), `limit` (opt) | `name`, `q` |
+| `file_skeleton` | File outline with function & method bodies stripped (80–90% token savings); a directory returns its layout and main exports. | `file_path` (req) | `file`, `path` |
+| `lookup_symbol` | Find symbols by name, qualified name (`Type::method`), prefix, or concept. A query that names no symbol exactly also lists the ranked matches under `No exact name match; N full-text matches`. The ranking credits each query term once from its strongest field (name, signature, docstring), weighted by the term's rarity across the index, plus kind and path priors; substrings inside identifiers are found (`sha256` finds `parseSha256Sidecar`). When nothing matches, the answer names the workspace and lists up to three similar names. Test functions, test containers, and rows from test files are hidden unless `is_test` is true, except a row whose name equals the query. | `query` (req), `path` (opt), `kind` (opt), `is_test` (opt), `limit` (opt) | `name`, `q` |
 | `get_symbol_body` | Slices the source of a symbol from disk as written, with its declaration and decorators; a name with overloads in one class returns each overload. | Exactly one `symbol_name` or current-index `symbol_id`; `file_path` (opt, a file or a folder) | `symbol`, `name`, `path` |
 | `get_symbol_context` | Surgical bundle: target body + callee signatures + parameter types + tests; up to four overloads in one class return a bundle each. | Exactly one `symbol_name` or current-index `symbol_id`; `file_path` (opt, a file or a folder), `include_external` (opt, def: false) | `symbol`, `name`, `path` |
 | `find_references` | Callers: every indexed site of the name, each labeled proven, likely, unresolved, or excluded with its evidence, plus a whole-word text count that accounts for every line of the name. Callees: the calls a symbol makes (filters external stdlib noise). Qualify overloaded names. | Exactly one `symbol_name` or current-index `symbol_id`; `file_path` (opt), `direction` ("callers" \| "callees", def: callers), `limit` (opt, def: 20, listed rows only), `include_external` (opt, def: false) | `symbol`, `name`, `file`, `path` |
-| `blast_radius` | Multi-hop reverse reachability (CTEs) & targeted test prediction. | `symbol` or current-index `symbol_id` (opt), `file` (opt guard for an ID), `depth` (opt, def: 2), `limit` (opt) | `name`, `path`, `impact` |
-| `find_structural_facts` | Queries framework facts (routes, SQL queries, config keys, tables). Lists all categories when omitted. | `category` (opt), `path` (opt), `limit` (opt) | `cat`, `kind`, `type`, `file`, `file_path` |
-| `telemetry_summary` | Token savings with their coverage, call counts, and error rates from `~/.code-kb/telemetry.db`, across all workspaces or scoped to the project of the most recent code-kb call. | `time_window` (opt, def: all), `workspace_only` (opt, def: false), `version` (opt, def: current; `all` for every version), `json` (opt) | `since`, `window` |
+| `blast_radius` | Multi-hop reverse reachability (CTEs). Lists the tests the call graph reaches; when none does, it says to run the full test suite. | `symbol` or current-index `symbol_id` (opt), `file` (opt guard for an ID), `depth` (opt, def: 2), `limit` (opt) | `name`, `path`, `impact` |
+
+Four CLI commands have no MCP tool: `outline` (a folder's layout; `file_skeleton` on a folder returns the same), `search` (the ranked search with `--explain`), `facts` (routes, SQL queries, models, and config keys), and `stats` (token savings and tool errors).
 
 ---
 
@@ -467,10 +465,10 @@ code-kb outline
 # Skeleton of a specific file (implementation bodies stripped)
 code-kb skeleton src/main.rs
 
-# Lookup symbols by exact name or prefix (alias: code-kb symbol)
+# Lookup symbols by name, prefix, or concept (alias: code-kb symbol)
 code-kb lookup Workspace --kind struct --path crates/code-kb-core
 
-# Conceptual search over names, signatures, and docstrings (sha256 finds parseSha256Sidecar)
+# The ranked search that lookup adds when no name matches (sha256 finds parseSha256Sidecar)
 code-kb search "syntax validation concurrency"
 
 # Same search with the rerank breakdown under each result (JSON: an `explain` object per result)
@@ -522,14 +520,13 @@ code-kb hook PreInvocation
 
 ## Telemetry and What "Saved" Means
 
-`code-kb` records every tool call in `~/.code-kb/telemetry.db`. `telemetry_summary` and
-`code-kb stats` report the calls, the latency, the error rate, the tokens served, and the
-tokens saved.
+`code-kb` records every MCP tool call in `~/.code-kb/telemetry.db`. `code-kb stats` reports
+the calls, the latency, the error rate, the tokens served, and the tokens saved.
 
 Saved is the size, in estimated tokens, of the files the answer points into, minus the tokens
-served. A skeleton, body, or context read is measured against its own file. A lookup, search,
-references, blast-radius, or facts answer is measured against the distinct files its rows name,
-at most 20 files. A call with no file to point at, such as an outline or a telemetry summary,
+served. A skeleton, body, or context read is measured against its own file. A lookup,
+references, or blast-radius answer is measured against the distinct files its rows name,
+at most 20 files. A call with no file to point at, such as a folder skeleton,
 records no baseline and is not counted as saved.
 
 The report states that coverage beside the number, so you can see how much of the window it

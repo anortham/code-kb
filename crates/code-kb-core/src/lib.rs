@@ -27,10 +27,10 @@ pub use models::{
     TypeFact,
 };
 pub use ops::{
-    OpError, SymbolSelector, blast_radius_op, blast_radius_selected_op, codebase_outline_op,
-    file_skeleton_op, get_context_slice_op, get_context_slice_selected_op,
+    OpError, SymbolLookup, SymbolSelector, blast_radius_op, blast_radius_selected_op,
+    codebase_outline_op, file_skeleton_op, get_context_slice_op, get_context_slice_selected_op,
     get_context_slices_selected_op, get_symbol_bodies_selected_op, get_symbol_body_op,
-    get_symbol_body_selected_op, resolve_symbol_op,
+    get_symbol_body_selected_op, lookup_symbols_op, render_symbol_lookup, resolve_symbol_op,
 };
 pub use queries::{
     QueryError, compute_blast_radius, compute_blast_radius_scoped,

@@ -1,4 +1,5 @@
 ---
 type: tool_used
-tool: mcp__plugin_code-kb_code-kb__telemetry_summary
+tool: Bash
+input_match: 'code-kb stats'
 ---

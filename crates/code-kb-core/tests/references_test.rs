@@ -1,8 +1,9 @@
 use code_kb_core::{
     Workspace, compute_blast_radius, file_skeleton_op, find_julie_extract_binary,
     find_references_for_symbol, find_references_scoped, format_blast_radius, format_references,
-    fts_search_symbols_scoped, get_symbol_by_name, open_read_only, open_read_write, safe_tempdir,
-    scan_workspace, search_symbols_scoped, update_file,
+    fts_search_symbols_scoped, get_symbol_by_name, lookup_symbols_op, open_read_only,
+    open_read_write, render_symbol_lookup, safe_tempdir, scan_workspace, search_symbols_scoped,
+    update_file,
 };
 use std::fs;
 
@@ -1735,7 +1736,7 @@ fn blast_radius_labels_a_test_class_setup_and_adds_the_tests_it_runs_before() {
 }
 
 #[test]
-fn blast_radius_reaches_tests_that_build_a_class_whose_call_method_reaches_the_target() {
+fn blast_radius_lists_no_test_that_reaches_the_target_only_through_dunder_call() {
     let (_repo, db_path) = scanned_repo(&[
         (
             "src/web/app.py",
@@ -1762,76 +1763,11 @@ fn blast_radius_reaches_tests_that_build_a_class_whose_call_method_reaches_the_t
 
     let result = compute_blast_radius(&conn, &["handle_user_exception"], &[], 3, 20).unwrap();
 
-    let names: Vec<&str> = result
-        .likely_tests
-        .iter()
-        .map(|t| t.name.as_str())
-        .collect();
-    let position = |name: &str| {
-        names
-            .iter()
-            .position(|n| *n == name)
-            .unwrap_or_else(|| panic!("{name} missing from {:?}", result.likely_tests))
-    };
-    assert!(position("test_user_error_is_handled") < position("test_exception_handling_renders"));
-    assert!(!names.contains(&"test_view_renders"), "{names:?}");
-    assert!(!names.contains(&"test_config_loads"), "{names:?}");
+    assert!(result.likely_tests.is_empty(), "{:?}", result.likely_tests);
     assert!(
-        !names.contains(&"test_user_exception_logger_is_set"),
-        "{names:?}"
+        format_blast_radius(&result)
+            .contains("No test reaches it through the index. Run the full test suite."),
     );
-    let reason = &result.likely_tests[position("test_exception_handling_renders")].reason;
-    assert!(
-        reason.starts_with(
-            "possible: builds `App`, and a test client calls its `__call__`, which can reach the target; shares"
-        ),
-        "{reason}"
-    );
-    let reason = &result.likely_tests[position("test_user_error_is_handled")].reason;
-    assert!(
-        reason.starts_with(
-            "possible: builds `App` through fixture `app`, and a test client calls its `__call__`, which can reach the target; shares"
-        ),
-        "{reason}"
-    );
-}
-
-#[test]
-fn blast_radius_rendering_keeps_handler_priority_across_file_groups_with_a_limit() {
-    let (_repo, db_path) = scanned_repo(&[
-        (
-            "src/web/app.py",
-            "class Flask:\n    def __call__(self, environ):\n        return self.handle_user_exception(environ)\n\n    def handle_user_exception(self, error):\n        return error\n\n    def errorhandler(self, error):\n        return error\n\n    def test_client(self):\n        return None\n",
-        ),
-        (
-            "tests/conftest.py",
-            "import pytest\nfrom web.app import Flask\n\n\n@pytest.fixture\ndef app():\n    return Flask()\n",
-        ),
-        (
-            "tests/test_basic.py",
-            "def test_error_handling(app):\n    app.errorhandler(Exception)\n    app.test_client().get('/')\n\n\ndef test_teardown_request_handler(app):\n    app.test_client().get('/')\n",
-        ),
-        (
-            "tests/test_regression.py",
-            "def test_aborting(app):\n    abort(403)\n    app.test_client().get('/')\n",
-        ),
-        (
-            "tests/test_extra.py",
-            "def test_exception_logging(app):\n    app.test_client().get('/')\n",
-        ),
-    ]);
-    let conn = open_read_only(&db_path).unwrap();
-
-    let result = compute_blast_radius(&conn, &["handle_user_exception"], &[], 3, 3).unwrap();
-    assert_eq!(result.likely_tests.len(), 3, "{:?}", result.likely_tests);
-    assert!(result.likely_tests_truncated, "{:?}", result.likely_tests);
-
-    let rendered = format_blast_radius(&result);
-    let handler = rendered.find("`test_error_handling`").unwrap();
-    let aborting = rendered.find("`test_aborting`").unwrap();
-    let name_only = rendered.find("`test_teardown_request_handler`").unwrap();
-    assert!(handler < aborting && aborting < name_only, "{rendered}");
-    assert!(!rendered.contains("`test_exception_logging`"), "{rendered}");
 }
 
 #[test]
@@ -2448,7 +2384,7 @@ fn a_subclass_write_to_an_attribute_its_base_defines_is_not_a_definition() {
 }
 
 #[test]
-fn a_whole_test_file_row_replaces_the_rows_of_the_tests_inside_it() {
+fn a_test_file_named_for_the_target_does_not_replace_the_tests_that_call_it() {
     let (_repo, db_path) = scanned_repo(&[
         ("src/store.py", "def path_for(root):\n    return root\n"),
         (
@@ -2472,8 +2408,8 @@ fn a_whole_test_file_row_replaces_the_rows_of_the_tests_inside_it() {
     assert_eq!(
         rows,
         [
-            ("tests/test_store.py", "tests/test_store.py"),
             ("tests/test_other.py", "test_other_path"),
+            ("tests/test_store.py", "test_path"),
         ]
     );
 }
@@ -3096,4 +3032,106 @@ fn rust_methods_in_an_impl_block_in_another_file_belong_to_their_type() {
             .is_some(),
         "the link survives a rewrite of the type's file"
     );
+}
+
+const RETRY_SOURCE: &str = "pub fn retry_count() -> u32 {\n    3\n}\n\n/// Send the request again; retry with backoff.\npub fn send_again() {}\n\npub fn backoff() {}\n";
+
+#[test]
+fn a_concept_that_a_name_contains_lists_the_name_row_and_the_ranked_row() {
+    let (_repo, db_path) = scanned_repo(&[("src/net.rs", RETRY_SOURCE)]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let lookup = lookup_symbols_op(&db_path, &conn, "retry", None, None, false, 20).unwrap();
+    let text = render_symbol_lookup(&conn, "retry", &lookup, 20).unwrap();
+
+    let names: Vec<_> = lookup.names.iter().map(|s| s.name.as_str()).collect();
+    let ranked: Vec<_> = lookup
+        .ranked
+        .iter()
+        .map(|r| r.symbol.name.as_str())
+        .collect();
+    assert_eq!(names, ["retry_count"]);
+    assert_eq!(ranked, ["send_again"]);
+    let header = text
+        .find("No exact name match; 1 full-text matches for \"retry\":")
+        .unwrap_or_else(|| panic!("{text}"));
+    assert!(text.find("`retry_count`").unwrap() < header, "{text}");
+    assert!(text.find("`send_again`").unwrap() > header, "{text}");
+}
+
+#[test]
+fn an_exact_name_lookup_runs_no_ranked_search() {
+    let (_repo, db_path) = scanned_repo(&[("src/net.rs", RETRY_SOURCE)]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let lookup = lookup_symbols_op(&db_path, &conn, "send_again", None, None, false, 20).unwrap();
+    let text = render_symbol_lookup(&conn, "send_again", &lookup, 20).unwrap();
+
+    assert_eq!(lookup.names.len(), 1);
+    assert!(lookup.ranked.is_empty());
+    assert!(!text.contains("No exact name match"), "{text}");
+}
+
+#[test]
+fn a_qualified_lookup_runs_no_ranked_search() {
+    let (_repo, db_path) = scanned_repo(&[(
+        "src/app.py",
+        "class App:\n    def run(self):\n        pass\n",
+    )]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let members = lookup_symbols_op(&db_path, &conn, "App.", None, None, false, 20).unwrap();
+    let missing = lookup_symbols_op(&db_path, &conn, "App.walk", None, None, false, 20).unwrap();
+
+    assert_eq!(members.names.len(), 1);
+    assert!(members.ranked.is_empty());
+    assert!(missing.ranked.is_empty());
+    assert!(missing.names.is_empty());
+}
+
+#[test]
+fn a_lookup_that_matches_nothing_suggests_close_names() {
+    let (_repo, db_path) = scanned_repo(&[("src/net.rs", RETRY_SOURCE)]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let typo = lookup_symbols_op(&db_path, &conn, "bakoff", None, None, false, 20).unwrap();
+    let typo_text = render_symbol_lookup(&conn, "bakoff", &typo, 20).unwrap();
+    let unknown = lookup_symbols_op(&db_path, &conn, "zzzqqq", None, None, false, 20).unwrap();
+    let unknown_text = render_symbol_lookup(&conn, "zzzqqq", &unknown, 20).unwrap();
+
+    assert!(typo.names.is_empty() && typo.ranked.is_empty());
+    assert!(
+        typo_text.starts_with("No symbols found matching \"bakoff\" in "),
+        "{typo_text}"
+    );
+    assert!(typo_text.contains("Did you mean one of:"), "{typo_text}");
+    assert!(typo_text.contains("`backoff`"), "{typo_text}");
+    assert!(
+        unknown_text.contains("No similar name is indexed; check the workspace and spelling."),
+        "{unknown_text}"
+    );
+}
+
+#[test]
+fn a_ranked_row_that_a_name_row_shows_is_listed_once() {
+    let (_repo, db_path) = scanned_repo(&[("src/net.rs", RETRY_SOURCE)]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let text = {
+        let lookup = lookup_symbols_op(&db_path, &conn, "retry", None, None, false, 20).unwrap();
+        render_symbol_lookup(&conn, "retry", &lookup, 20).unwrap()
+    };
+
+    assert_eq!(text.matches("`retry_count`").count(), 1, "{text}");
+}
+
+#[test]
+fn a_zero_limit_lookup_finds_nothing_and_suggests_nothing() {
+    let (_repo, db_path) = scanned_repo(&[("src/net.rs", RETRY_SOURCE)]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let lookup = lookup_symbols_op(&db_path, &conn, "retry", None, None, false, 0).unwrap();
+
+    assert!(lookup.names.is_empty() && lookup.ranked.is_empty());
+    assert!(lookup.miss.is_none());
 }

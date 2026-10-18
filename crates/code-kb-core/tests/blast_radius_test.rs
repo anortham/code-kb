@@ -120,7 +120,7 @@ fn test_blast_radius_multi_hop_and_likely_tests() {
 }
 
 #[test]
-fn test_blast_radius_op_file_seed_and_stem_matching() {
+fn a_file_seed_lists_no_test_file_that_only_shares_its_stem() {
     let temp = safe_tempdir();
     let workspace = Workspace::new(temp.path().to_path_buf());
     let conn = open_read_write(&temp.path().join("index.db")).unwrap();
@@ -136,13 +136,14 @@ fn test_blast_radius_op_file_seed_and_stem_matching() {
     .unwrap();
 
     let result = blast_radius_op(&workspace, &conn, None, Some("src/auth.rs"), 2, 20).unwrap();
+
     assert_eq!(result.seed_type, "file");
     assert_eq!(result.seeds, vec!["src/auth.rs"]);
-
-    // Even without an explicit call edge, stem-matched test file is found!
-    assert_eq!(result.likely_tests.len(), 1);
-    assert_eq!(result.likely_tests[0].path, "tests/test_auth.rs");
-    assert_eq!(result.likely_tests[0].reason, "stem-matched test file");
+    assert!(result.likely_tests.is_empty(), "{:?}", result.likely_tests);
+    assert!(
+        format_blast_radius(&result)
+            .contains("No test reaches it through the index. Run the full test suite.\n")
+    );
 }
 
 #[test]
@@ -168,73 +169,7 @@ fn related_tests_list_flagged_tests_before_helpers_in_the_same_test_file() {
 }
 
 #[test]
-fn a_stem_matches_test_file_names_not_the_folders_above_them() {
-    let temp = safe_tempdir();
-    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
-    setup_test_db(&conn);
-    conn.execute_batch(
-        "INSERT INTO files VALUES
-            ('f1', 'src/flask/app.py', 'python', 'h1', 100, 10, 'now'),
-            ('f2', 'tests/test_app.py', 'python', 'h2', 100, 10, 'now'),
-            ('f3', 'tests/test_apps/.flaskenv', 'dotenv', 'h3', 100, 10, 'now'),
-            ('f4', 'tests/test_apps/blueprintapp/__init__.py', 'python', 'h4', 100, 10, 'now'),
-            ('f5', 'tests/test_apps/blueprintapp/static/css/test.css', 'css', 'h5', 100, 10, 'now');",
-    )
-    .unwrap();
-
-    let result = compute_blast_radius(&conn, &[], &["src/flask/app.py"], 1, 20).unwrap();
-
-    let paths: Vec<&str> = result
-        .likely_tests
-        .iter()
-        .map(|t| t.path.as_str())
-        .collect();
-    assert_eq!(paths, ["tests/test_app.py"]);
-}
-
-#[test]
-fn a_matched_file_counts_as_a_test_only_when_its_name_or_symbols_say_so() {
-    let temp = safe_tempdir();
-    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
-    setup_test_db(&conn);
-    conn.execute_batch(
-        "INSERT INTO files VALUES
-            ('f1', 'src/flask/app.py', 'python', 'h1', 100, 10, 'now'),
-            ('f2', 'tests/test_app.py', 'python', 'h2', 100, 10, 'now'),
-            ('f3', 'tests/test_apps/cliapp/app.py', 'python', 'h3', 100, 10, 'now'),
-            ('f4', 'tests/test_apps/cliapp/multiapp.py', 'python', 'h4', 100, 10, 'now'),
-            ('f5', 'test/fixtures/app.tmpl', 'text', 'h5', 100, 10, 'now'),
-            ('f6', 'test/app.render.js', 'javascript', 'h6', 100, 10, 'now'),
-            ('f7', 'tests/test_apps/cliapp/inner1/inner2/flask.py', 'python', 'h7', 100, 10, 'now'),
-            ('f8', 'tests/app_inspect.py', 'python', 'h8', 100, 10, 'now'),
-            ('f9', 'src/test/java/AppTest.java', 'java', 'h9', 100, 10, 'now'),
-            ('f10', 'spec/app_spec.rb', 'ruby', 'h10', 100, 10, 'now');
-        INSERT INTO symbols VALUES
-            ('s_app', 'f3', 'tests/test_apps/cliapp/app.py', 'python', 'testapp', 'variable', NULL, NULL, NULL, NULL, 1, 0, 1, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0),
-            ('s_render', 'f6', 'test/app.render.js', 'javascript', 'should render', 'function', NULL, NULL, NULL, NULL, 5, 0, 9, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1, 0);",
-    )
-    .unwrap();
-
-    let result = compute_blast_radius(&conn, &[], &["src/flask/app.py"], 1, 20).unwrap();
-
-    let paths: Vec<&str> = result
-        .likely_tests
-        .iter()
-        .map(|t| t.path.as_str())
-        .collect();
-    assert_eq!(
-        paths,
-        [
-            "spec/app_spec.rb",
-            "src/test/java/AppTest.java",
-            "test/app.render.js",
-            "tests/test_app.py"
-        ]
-    );
-}
-
-#[test]
-fn file_seed_finds_test_named_after_its_module() {
+fn a_file_seed_lists_no_test_file_that_only_shares_its_module_name() {
     let temp = safe_tempdir();
     let workspace = Workspace::new(temp.path().to_path_buf());
     let conn = open_read_write(&temp.path().join("index.db")).unwrap();
@@ -249,40 +184,8 @@ fn file_seed_finds_test_named_after_its_module() {
 
     let result =
         blast_radius_op(&workspace, &conn, None, Some("src/mcp/server.rs"), 2, 20).unwrap();
-    assert_eq!(result.likely_tests.len(), 1);
-    assert_eq!(result.likely_tests[0].path, "tests/mcp_test.rs");
-    assert_eq!(result.likely_tests[0].reason, "module-matched test file");
-}
 
-#[test]
-fn file_seed_keeps_specific_tests_ahead_of_module_matches() {
-    let temp = safe_tempdir();
-    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
-    setup_test_db(&conn);
-    conn.execute_batch(
-        "INSERT INTO files VALUES
-            ('f1', 'crates/code-kb-cli/tests/unrelated_test.rs', 'rust', 'h1', 100, 10, 'now'),
-            ('f2', 'tests/cli_test.rs', 'rust', 'h2', 100, 10, 'now'),
-            ('f3', 'tests/target_test.rs', 'rust', 'h3', 100, 10, 'now'),
-            ('f4', 'tests/cli/unrelated_test.rs', 'rust', 'h4', 100, 10, 'now');",
-    )
-    .unwrap();
-
-    let seeds = [
-        "src/cli/first.rs",
-        "src/other/target.rs",
-        "src/test/unused.rs",
-    ];
-    let capped = compute_blast_radius(&conn, &[], &seeds, 2, 1).unwrap();
-    assert_eq!(capped.likely_tests[0].path, "tests/target_test.rs");
-
-    let full = compute_blast_radius(&conn, &[], &seeds, 2, 20).unwrap();
-    let paths: Vec<&str> = full
-        .likely_tests
-        .iter()
-        .map(|test| test.path.as_str())
-        .collect();
-    assert_eq!(paths, vec!["tests/target_test.rs", "tests/cli_test.rs"]);
+    assert!(result.likely_tests.is_empty(), "{:?}", result.likely_tests);
 }
 
 #[test]
@@ -360,7 +263,7 @@ fn unknown_symbol_id_error_uses_reselection_guidance_without_name_candidates() {
     .to_string();
 
     assert!(error.contains("symbol id missing-id"));
-    assert!(error.contains("Run lookup_symbol or search_symbols again"));
+    assert!(error.contains("Run lookup_symbol again"));
     assert!(!error.contains("Did you mean one of"));
 }
 
@@ -501,52 +404,6 @@ fn test_blast_radius_max_depth_clamped() {
 }
 
 #[test]
-fn stem_matched_test_files_skip_documentation() {
-    let temp = safe_tempdir();
-    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
-    conn.execute_batch(
-        "CREATE TABLE files (
-            file_id TEXT PRIMARY KEY, path TEXT, language TEXT, content_hash TEXT,
-            content_bytes INTEGER, line_count INTEGER, indexed_at TEXT
-        );
-        CREATE TABLE symbols (
-            symbol_id TEXT PRIMARY KEY, file_id TEXT, path TEXT, language TEXT, name TEXT, kind TEXT,
-            signature TEXT, doc_comment TEXT, visibility TEXT, parent_symbol_id TEXT,
-            start_line INTEGER, start_column INTEGER, end_line INTEGER, end_column INTEGER,
-            start_byte INTEGER, end_byte INTEGER, body_start_line INTEGER,
-            body_start_column INTEGER, body_end_line INTEGER, body_end_column INTEGER,
-            body_start_byte INTEGER, body_end_byte INTEGER, body_hash TEXT,
-            semantic_group TEXT, is_test INTEGER, test_container INTEGER, content_type TEXT
-        );
-        CREATE TABLE relationships (
-            from_symbol_id TEXT, to_symbol_id TEXT, kind TEXT, path TEXT,
-            start_line INTEGER, start_column INTEGER
-        );
-        CREATE TABLE pending_relationships (
-            from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT, path TEXT,
-            start_line INTEGER, start_column INTEGER
-        );
-        INSERT INTO files VALUES
-            ('f1', 'src/ledger.rs', 'rust', 'h1', 100, 10, 'now'),
-            ('f2', 'tests/ledger_test.rs', 'rust', 'h2', 100, 10, 'now'),
-            ('f3', 'docs/tests/ledger.md', 'markdown', 'h3', 100, 10, 'now');
-        INSERT INTO symbols VALUES
-            ('s_ledger', 'f1', 'src/ledger.rs', 'rust', 'post_entry', 'function', 'pub fn post_entry()', NULL, 'pub', NULL, 1, 0, 5, 0, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, NULL),
-            ('s_doc', 'f3', 'docs/tests/ledger.md', 'markdown', 'Ledger tests', 'module', 'Ledger tests', NULL, NULL, NULL, 1, 0, 5, 0, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 'documentation');",
-    )
-    .unwrap();
-
-    let result = compute_blast_radius(&conn, &["post_entry"], &[], 1, 20).unwrap();
-
-    let paths: Vec<&str> = result
-        .likely_tests
-        .iter()
-        .map(|t| t.path.as_str())
-        .collect();
-    assert_eq!(paths, vec!["tests/ledger_test.rs"]);
-}
-
-#[test]
 fn blast_radius_reports_requested_limit_truncation_before_output_truncation() {
     let temp = safe_tempdir();
     let conn = open_read_write(&temp.path().join("index.db")).unwrap();
@@ -599,11 +456,11 @@ fn blast_radius_reports_requested_limit_truncation_before_output_truncation() {
     assert!(zero.likely_tests.is_empty());
     assert!(zero.impacted_symbols.is_empty());
     assert!(zero_text.contains("Likely Tests to Run (0 returned)"));
-    assert!(!zero_text.contains("No direct or stem-matched tests found"));
+    assert!(!zero_text.contains("No test reaches it through the index"));
 }
 
 #[test]
-fn blast_radius_probes_traversal_and_test_file_ceilings() {
+fn blast_radius_probes_the_traversal_ceiling_and_ignores_test_files_that_share_a_stem() {
     for (count, expected_ceiling) in [(200, false), (201, true)] {
         let temp = safe_tempdir();
         let conn = open_read_write(&temp.path().join("index.db")).unwrap();
@@ -658,6 +515,11 @@ fn blast_radius_probes_traversal_and_test_file_ceilings() {
         .unwrap();
     }
     let result = compute_blast_radius(&conn, &[], &["src/widget.rs"], 1, 20).unwrap();
-    assert_eq!(result.likely_tests.len(), 10);
-    assert!(result.test_file_ceiling_reached);
+    assert!(result.likely_tests.is_empty(), "{:?}", result.likely_tests);
+    assert!(
+        serde_json::to_value(&result)
+            .unwrap()
+            .get("test_file_ceiling_reached")
+            .is_none()
+    );
 }

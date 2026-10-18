@@ -851,11 +851,7 @@ fn test_adversarial_core_invariant_1_mcp_tool_schemas_have_no_workspace_paramete
         .as_array()
         .expect("Expected tools array in tools/list response");
 
-    assert_eq!(
-        tools.len(),
-        10,
-        "Server must advertise exactly 10 MCP tools"
-    );
+    assert_eq!(tools.len(), 6, "Server must advertise exactly 6 MCP tools");
 
     // Exhaustive list of forbidden workspace-polluting parameters
     let forbidden_keys = [
@@ -906,25 +902,14 @@ fn test_adversarial_core_invariant_1_mcp_tool_schemas_have_no_workspace_paramete
             .as_array()
             .map(|names| names.iter().filter_map(Value::as_str).collect())
             .unwrap_or_default();
-        if tool_name == "telemetry_summary" {
-            assert!(
-                props.get("project_root").is_none(),
-                "Tool '{tool_name}' must not list project_root"
-            );
-            assert!(
-                !required.contains(&"project_root"),
-                "Tool '{tool_name}' must not require project_root"
-            );
-        } else {
-            assert_eq!(
-                props["project_root"]["description"], PROJECT_ROOT_DESCRIPTION,
-                "Tool '{tool_name}' must list project_root with its contract description"
-            );
-            assert!(
-                required.contains(&"project_root"),
-                "Tool '{tool_name}' must require project_root"
-            );
-        }
+        assert_eq!(
+            props["project_root"]["description"], PROJECT_ROOT_DESCRIPTION,
+            "Tool '{tool_name}' must list project_root with its contract description"
+        );
+        assert!(
+            required.contains(&"project_root"),
+            "Tool '{tool_name}' must require project_root"
+        );
 
         if let Some(props_obj) = props.as_object() {
             for (prop_name, prop_val) in props_obj {

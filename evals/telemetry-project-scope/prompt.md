@@ -1,6 +1,6 @@
 ---
 max_turns: 6
-allowed_tools: [Read, Glob, Grep, Skill]
+allowed_tools: [Read, Glob, Grep, Skill, Bash]
 tags: [telemetry]
 ---
 

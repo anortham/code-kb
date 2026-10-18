@@ -227,8 +227,7 @@ class PersistentMcpClient:
         return elapsed_ms
 
     def call_tool(self, name: str, arguments: dict[str, Any]) -> tuple[dict[str, Any], float]:
-        if name != "telemetry_summary":
-            arguments = {"project_root": self.cwd, **arguments}
+        arguments = {"project_root": self.cwd, **arguments}
         start = time.perf_counter()
         req_id = self.next_id
         self.next_id += 1
@@ -295,16 +294,14 @@ def measure_persistent_mcp(binary: str, cwd: str, iterations: int = 5) -> dict[s
         client.call_tool("lookup_symbol", {"query": "search_symbols_scoped"})
 
         tool_specs = [
-            ("codebase_outline", {"depth": 2}),
+            ("file_skeleton", {"file_path": "crates"}),
             ("file_skeleton", {"file_path": "crates/code-kb-core/src/queries.rs"}),
             ("lookup_symbol", {"query": "search_symbols_scoped"}),
-            ("search_symbols", {"query": "sanitize FTS5 query"}),
+            ("lookup_symbol", {"query": "sanitize FTS5 query"}),
             ("get_symbol_body", {"symbol_name": "sanitize_fts5_query"}),
             ("get_symbol_context", {"symbol_name": "search_symbols_scoped"}),
             ("find_references", {"symbol_name": "search_symbols_scoped"}),
             ("blast_radius", {"symbol": "find_callee_signatures"}),
-            ("find_structural_facts", {"category": "config", "limit": 10}),
-            ("telemetry_summary", {}),
         ]
 
         tool_results = []

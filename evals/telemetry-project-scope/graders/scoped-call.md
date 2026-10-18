@@ -1,5 +1,5 @@
 ---
 type: tool_used
-tool: mcp__plugin_code-kb_code-kb__telemetry_summary
-input_match: '^(?=.*"time_window"\s*:\s*"30d")(?=.*"workspace_only"\s*:\s*true)'
+tool: Bash
+input_match: '^(?=.*code-kb stats)(?=.*--since 30d)(?=.*--workspace)'
 ---

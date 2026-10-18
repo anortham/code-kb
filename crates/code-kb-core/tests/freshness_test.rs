@@ -87,7 +87,7 @@ fn symbol_id_refreshes_or_requires_reselection_without_name_fallback() {
     );
     let refresh_message = missing_after_refresh.to_string();
     assert!(refresh_message.contains("is no longer indexed"));
-    assert!(refresh_message.contains("run lookup_symbol or search_symbols"));
+    assert!(refresh_message.contains("run lookup_symbol and select a current id"));
     assert!(refresh_message.contains(repo.path().file_name().unwrap().to_str().unwrap()));
     assert!(!refresh_message.contains("same_name"));
     assert!(!refresh_message.contains("Did you mean one of"));
@@ -101,7 +101,7 @@ fn symbol_id_refreshes_or_requires_reselection_without_name_fallback() {
     .unwrap_err();
     let message = already_missing.to_string();
     assert!(message.contains("symbol_id 'absent-id' is no longer indexed"));
-    assert!(message.contains("run lookup_symbol or search_symbols"));
+    assert!(message.contains("run lookup_symbol and select a current id"));
     assert!(message.contains(repo.path().file_name().unwrap().to_str().unwrap()));
     assert!(!message.contains("Did you mean one of"));
 }
@@ -139,7 +139,7 @@ fn symbol_id_refresh_reloads_offsets_after_native_edit() {
             assert!(
                 error
                     .to_string()
-                    .contains("run lookup_symbol or search_symbols")
+                    .contains("run lookup_symbol and select a current id")
             );
         }
         Err(error) => panic!("unexpected result: {error}"),

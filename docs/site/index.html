@@ -47,7 +47,7 @@
     </p>
     <div class="hero-actions">
       <a class="btn btn-primary" href="#install">Install code-kb</a>
-      <a class="btn btn-secondary" href="#tools">See the ten tools</a>
+      <a class="btn btn-secondary" href="#tools">See the six tools</a>
     </div>
     <p class="compat">
       Works with Claude Code, Grok CLI, Antigravity, Codex CLI, and Cursor. Ships binaries for Windows, Linux, and macOS.
@@ -160,7 +160,7 @@ get_symbol_context("search_symbols_scoped")</pre>
         <dl class="features">
           <div>
             <dt>File outlines</dt>
-            <dd><code>file_skeleton</code> lists a file's types and function signatures without the implementation. <code>codebase_outline</code> gives a short directory overview.</dd>
+            <dd><code>file_skeleton</code> lists a file's types and function signatures without the implementation. On a folder, it gives a short directory overview.</dd>
           </div>
           <div>
             <dt>Function context</dt>
@@ -176,7 +176,7 @@ get_symbol_context("search_symbols_scoped")</pre>
           </div>
           <div>
             <dt>Usage stats</dt>
-            <dd><code>telemetry_summary</code> tracks estimated tokens saved, tool calls, and errors across sessions. Run <code>code-kb stats</code> to see the report.</dd>
+            <dd>Run <code>code-kb stats</code> to see estimated tokens saved, tool calls, and errors across sessions.</dd>
           </div>
           <div>
             <dt>Windows support</dt>
@@ -307,12 +307,12 @@ get_symbol_context("search_symbols_scoped")</pre>
         <ol class="steps">
           <li>
             <div><h3>Orient</h3><p>Directory tree and the main exports, in a few hundred tokens.</p></div>
-            <pre>codebase_outline(depth=2)</pre>
+            <pre>file_skeleton("src")</pre>
           </li>
           <li>
             <div><h3>Find the interface</h3><p>Signatures and traits with bodies removed. Search by concept when the name is unknown.</p></div>
             <pre>file_skeleton("src/server.rs")
-search_symbols("auth token validation")</pre>
+lookup_symbol("auth token validation")</pre>
           </li>
           <li>
             <div><h3>Get the context</h3><p>The target body, its callees' signatures, parameter types, and tests in one call.</p></div>
@@ -337,9 +337,9 @@ code-kb stats</pre>
     <section id="tools" class="section">
       <p class="margin-label">Tools</p>
       <div class="section-body">
-        <h2>Ten tools, each with a matching command</h2>
+        <h2>Six tools, each with a matching command</h2>
         <p>Every MCP tool has a one-to-one CLI command, so you can check any answer from the terminal.</p>
-        <p>Every tool except <code>telemetry_summary</code> also requires <code>project_root</code>, the absolute path of the project or git worktree you work in. The CLI takes the same value as <code>--root</code>, which defaults to the current directory.</p>
+        <p>Every tool also requires <code>project_root</code>, the absolute path of the project or git worktree you work in. The CLI takes the same value as <code>--root</code>, which defaults to the current directory.</p>
         <div class="table-wrapper">
           <table class="tool-table">
             <thead>
@@ -351,19 +351,16 @@ code-kb stats</pre>
               </tr>
             </thead>
             <tbody>
-              <tr><td><code>codebase_outline</code></td><td><code>code-kb outline [path]</code></td><td>Directory tree and main symbols</td><td><code>path</code>, <code>depth</code></td></tr>
-              <tr><td><code>file_skeleton</code></td><td><code>code-kb skeleton &lt;file&gt;</code></td><td>File outline, bodies removed</td><td><code>file_path</code></td></tr>
-              <tr><td><code>lookup_symbol</code></td><td><code>code-kb lookup &lt;query&gt;</code></td><td>Exact or prefix match; each result row includes <code>id=&lt;symbol_id&gt;</code></td><td><code>query</code>, <code>path</code></td></tr>
-              <tr><td><code>search_symbols</code></td><td><code>code-kb search &lt;query&gt;</code></td><td>Full-text search; each result row includes <code>id=&lt;symbol_id&gt;</code></td><td><code>query</code>, <code>path</code></td></tr>
+              <tr><td><code>file_skeleton</code></td><td><code>code-kb skeleton &lt;file&gt;</code><br>or <code>code-kb outline [path]</code> for a folder</td><td>File outline, bodies removed; a folder returns its layout</td><td><code>file_path</code></td></tr>
+              <tr><td><code>lookup_symbol</code></td><td><code>code-kb lookup &lt;query&gt;</code></td><td>Name, prefix, or concept; a query that names no symbol exactly also gets ranked matches; each result row includes <code>id=&lt;symbol_id&gt;</code></td><td><code>query</code>, <code>path</code></td></tr>
               <tr><td><code>get_symbol_body</code></td><td><code>code-kb body [symbol]</code><br>or <code>code-kb body --symbol-id &lt;id&gt;</code></td><td>Source of one symbol</td><td><code>symbol_name</code> or <code>symbol_id</code>, <code>file_path</code></td></tr>
               <tr><td><code>get_symbol_context</code></td><td><code>code-kb context [symbol]</code><br>or <code>code-kb context --symbol-id &lt;id&gt;</code></td><td>Body, callee signatures, types, tests</td><td><code>symbol_name</code> or <code>symbol_id</code>, <code>file_path</code></td></tr>
               <tr><td><code>find_references</code></td><td><code>code-kb refs [symbol]</code><br>or <code>code-kb refs --symbol-id &lt;id&gt;</code></td><td>Callers or callees, stdlib filtered</td><td><code>symbol_name</code> or <code>symbol_id</code>, <code>direction</code> (default <code>callers</code>)</td></tr>
               <tr><td><code>blast_radius</code></td><td><code>code-kb blast-radius [target]</code><br>or <code>code-kb blast-radius --symbol-id &lt;id&gt;</code></td><td>Multi-hop callers and tests to run</td><td><code>symbol</code>, <code>symbol_id</code>, <code>file</code>; omitted target reads git changes</td></tr>
-              <tr><td><code>find_structural_facts</code></td><td><code>code-kb facts [category]</code></td><td>Routes, queries, models, config keys</td><td>no category lists all</td></tr>
-              <tr><td><code>telemetry_summary</code></td><td><code>code-kb stats</code></td><td>Token savings, call counts, error rates</td><td><code>time_window</code>, <code>workspace_only</code></td></tr>
             </tbody>
           </table>
         </div>
+        <p>Three more commands have no MCP tool: <code>code-kb search &lt;query&gt;</code> prints the ranked search with its score breakdown, <code>code-kb facts [category]</code> lists routes, queries, models, and config keys, and <code>code-kb stats</code> reports token savings and tool errors.</p>
       </div>
     </section>
 

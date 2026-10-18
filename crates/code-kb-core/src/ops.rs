@@ -2,11 +2,12 @@ use rusqlite::Connection;
 use std::path::Path;
 use thiserror::Error;
 
+use crate::db::{DbError, ensure_fts_index_path};
 use crate::formatters::{
     OutlineNode, add_path_to_outline, add_unsupported_to_outline, format_file_skeleton,
-    render_outline_tree,
+    format_find_symbol_results, render_outline_tree,
 };
-use crate::models::{BlastRadiusResult, ContextSlice, Symbol};
+use crate::models::{BlastRadiusResult, ContextSlice, Symbol, SymbolSearchResult};
 use crate::queries::{self, QueryError};
 use crate::slicer::{self, SliceError};
 use crate::sync::{self, SyncError};
@@ -33,7 +34,7 @@ pub enum OpError {
         hint: String,
     },
     #[error(
-        "symbol_id '{id}' is no longer indexed in {workspace}; run lookup_symbol or search_symbols and select a current id"
+        "symbol_id '{id}' is no longer indexed in {workspace}; run lookup_symbol and select a current id"
     )]
     StaleSymbolId { id: String, workspace: String },
     #[error("A database path is required to refresh a symbol_id selector")]
@@ -46,8 +47,83 @@ pub enum OpError {
     Sync(#[from] SyncError),
     #[error("Query error: {0}")]
     Query(#[from] QueryError),
+    #[error("Search index is not ready: {0}")]
+    SearchIndex(#[from] DbError),
     #[error("Slice error: {0}")]
     Slice(#[from] SliceError),
+}
+
+/// What `lookup_symbol` found for one query.
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct SymbolLookup {
+    /// Rows named like the query, or the members of the owner it names.
+    pub names: Vec<Symbol>,
+    /// Ranked matches by name words, signatures, and docs that `names` does not already show.
+    pub ranked: Vec<SymbolSearchResult>,
+    /// The text for a query that finds nothing: the bound workspace and close names.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub miss: Option<String>,
+}
+
+/// Looks up `query` by name. A plain query that no row names exactly also gets the ranked search,
+/// so one call answers a name and a concept.
+pub fn lookup_symbols_op(
+    db_path: &Path,
+    conn: &Connection,
+    query: &str,
+    kind: Option<&str>,
+    path_filter: Option<&str>,
+    include_tests: bool,
+    limit: usize,
+) -> Result<SymbolLookup, OpError> {
+    let names =
+        queries::search_symbols_scoped(conn, query, kind, path_filter, include_tests, limit)?;
+    let plain = !query.contains('.') && !query.contains("::");
+    let named_exactly = names.iter().any(|s| s.name.eq_ignore_ascii_case(query));
+    let mut ranked = Vec::new();
+    if limit > 0 && plain && !named_exactly {
+        ensure_fts_index_path(db_path)?;
+        ranked = queries::fts_search_symbols_scoped(
+            conn,
+            query,
+            kind,
+            path_filter,
+            include_tests,
+            limit + names.len(),
+        )?;
+        ranked.retain(|hit| names.iter().all(|s| s.symbol_id != hit.symbol.symbol_id));
+        ranked.truncate(limit);
+    }
+    let miss = (limit > 0 && names.is_empty() && ranked.is_empty()).then(|| {
+        let (workspace, hint) = queries::symbol_not_found_parts(conn, query, path_filter);
+        format!("No symbols found matching \"{query}\" in {workspace}. {hint}\n")
+    });
+    Ok(SymbolLookup {
+        names,
+        ranked,
+        miss,
+    })
+}
+
+/// The text of a lookup. Members show as `Owner.name`; the rows in `lookup` keep their raw names.
+pub fn render_symbol_lookup(
+    conn: &Connection,
+    query: &str,
+    lookup: &SymbolLookup,
+    limit: usize,
+) -> Result<String, QueryError> {
+    if let Some(miss) = &lookup.miss {
+        return Ok(miss.clone());
+    }
+    let mut names = lookup.names.clone();
+    let mut ranked = lookup.ranked.clone();
+    queries::qualify_members(
+        conn,
+        names
+            .iter_mut()
+            .chain(ranked.iter_mut().map(|hit| &mut hit.symbol)),
+    )?;
+    Ok(format_find_symbol_results(query, &names, &ranked, limit))
 }
 
 fn stale_symbol_id(conn: &Connection, id: &str) -> OpError {

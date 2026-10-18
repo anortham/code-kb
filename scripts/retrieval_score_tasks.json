@@ -11,9 +11,9 @@
       "question": "I am new to this repository. What are the top-level areas?",
       "calls": [
         {
-          "tool": "codebase_outline",
-          "arguments": { "depth": 2 },
-          "cli": "code-kb --root <corpus> outline --depth 2"
+          "tool": "file_skeleton",
+          "arguments": { "file_path": "." },
+          "cli": "code-kb --root <corpus> skeleton ."
         }
       ]
     },
@@ -49,9 +49,9 @@
       "question": "Which code decides that a file is a test file? Show me enough to change it safely.",
       "calls": [
         {
-          "tool": "search_symbols",
+          "tool": "lookup_symbol",
           "arguments": { "query": "test path rule" },
-          "cli": "code-kb --root <corpus> search \"test path rule\""
+          "cli": "code-kb --root <corpus> lookup \"test path rule\""
         },
         {
           "tool": "get_symbol_context",
@@ -94,24 +94,13 @@
       ]
     },
     {
-      "id": "T08-structural-facts",
-      "question": "What SQL does this repository run?",
-      "calls": [
-        {
-          "tool": "find_structural_facts",
-          "arguments": { "category": "sql", "limit": 20 },
-          "cli": "code-kb --root <corpus> facts --category sql --limit 20"
-        }
-      ]
-    },
-    {
       "id": "T09-substring-search",
       "question": "Where does code-kb build the full-text search index, and what does that code do?",
       "calls": [
         {
-          "tool": "search_symbols",
+          "tool": "lookup_symbol",
           "arguments": { "query": "fts index" },
-          "cli": "code-kb --root <corpus> search \"fts index\""
+          "cli": "code-kb --root <corpus> lookup \"fts index\""
         },
         {
           "tool": "get_symbol_body",

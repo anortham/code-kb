@@ -81,7 +81,7 @@ fn cli_references_and_blast_radius_handle_lambdas_and_lambda_named_functions() {
 }
 
 #[test]
-fn cli_blast_radius_ranks_error_handler_and_abort_tests_before_name_matches() {
+fn cli_blast_radius_lists_no_test_that_builds_the_app_and_calls_it_through_a_client() {
     let repo = code_kb_core::safe_tempdir();
     let root = repo.path();
     for (path, source) in [
@@ -128,17 +128,7 @@ fn cli_blast_radius_ranks_error_handler_and_abort_tests_before_name_matches() {
         String::from_utf8_lossy(&output.stderr)
     );
     let result: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    let tests = result["likely_tests"].as_array().unwrap();
-    let position = |name: &str| {
-        tests
-            .iter()
-            .position(|test| test["name"] == name)
-            .unwrap_or_else(|| panic!("{name} missing from {tests:#?}"))
-    };
-
-    assert!(position("test_alpha") < position("test_handle_user_exception"));
-    assert!(position("test_beta") < position("test_handle_user_exception"));
-    assert!(position("test_gamma") < position("test_handle_user_exception"));
+    assert_eq!(result["likely_tests"], serde_json::json!([]), "{result:#}");
 
     let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
         .arg("--root")
@@ -152,56 +142,11 @@ fn cli_blast_radius_ranks_error_handler_and_abort_tests_before_name_matches() {
         String::from_utf8_lossy(&output.stderr)
     );
     let text = String::from_utf8(output.stdout).unwrap();
-    assert!(text.contains("registers an error handler"), "{text}");
-    assert!(text.contains("calls `abort`"), "{text}");
-    assert!(text.contains("rank ahead of name-only matches"), "{text}");
-}
-
-#[test]
-fn cli_blast_radius_globally_ranks_handler_tests_across_entry_classes_before_limit() {
-    let repo = code_kb_core::safe_tempdir();
-    let root = repo.path();
-    for (path, source) in [
-        (
-            "pyproject.toml",
-            "[project]\nname = 'global-handler-ranking'\nversion = '0.1.0'\n",
-        ),
-        (
-            "app.py",
-            "def dispatch_request():\n    return None\n\nclass Alpha:\n    def __call__(self, environ):\n        return dispatch_request()\n\nclass Beta:\n    def __call__(self, environ):\n        return dispatch_request()\n",
-        ),
-        (
-            "tests/test_runtime.py",
-            "from app import Alpha, Beta\nfrom flask import abort\n\ndef test_dispatch_request_alpha():\n    app = Alpha()\n    app.test_client().get('/')\n\ndef test_unrelated_beta():\n    app = Beta()\n    @app.errorhandler(ValueError)\n    def on_error(error):\n        return str(error)\n    @app.route('/')\n    def index():\n        abort(400)\n    app.test_client().get('/')\n",
-        ),
-    ] {
-        std::fs::create_dir_all(root.join(path).parent().unwrap_or(root)).unwrap();
-        std::fs::write(root.join(path), source).unwrap();
-    }
-
-    let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
-        .arg("--root")
-        .arg(root)
-        .args([
-            "--json",
-            "blast-radius",
-            "dispatch_request",
-            "--depth",
-            "3",
-            "--limit",
-            "1",
-        ])
-        .output()
-        .unwrap();
     assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
+        text.contains("No test reaches it through the index. Run the full test suite."),
+        "{text}"
     );
-    let result: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    let tests = result["likely_tests"].as_array().unwrap();
-    assert_eq!(tests.len(), 1, "{result:#}");
-    assert_eq!(tests[0]["name"], "test_unrelated_beta", "{result:#}");
+    assert!(!text.contains("possible"), "{text}");
 }
 
 #[test]
@@ -683,9 +628,9 @@ fn test_cli_symbol_and_search() {
 
     assert!(json_output.status.success());
     let json_val: serde_json::Value = serde_json::from_slice(&json_output.stdout).unwrap();
-    assert!(json_val.is_array());
-    assert_eq!(json_val.as_array().unwrap().len(), 1);
-    assert_eq!(json_val[0]["name"], "Workspace");
+    assert_eq!(json_val["names"].as_array().unwrap().len(), 1);
+    assert_eq!(json_val["names"][0]["name"], "Workspace");
+    assert!(json_val["ranked"].as_array().unwrap().is_empty());
 
     let search_output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
         .arg("--root")
@@ -701,7 +646,7 @@ fn test_cli_symbol_and_search() {
     assert!(!search_stdout.contains("Found 0 symbols"));
 }
 
-fn mcp_search_names(root: &std::path::Path, query: &str) -> Vec<String> {
+fn mcp_lookup_texts(root: &std::path::Path, queries: &[&str]) -> Vec<String> {
     use std::io::{BufRead, Write};
     let mut child = Command::new(env!("CARGO_BIN_EXE_code-kb"))
         .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
@@ -714,37 +659,126 @@ fn mcp_search_names(root: &std::path::Path, query: &str) -> Vec<String> {
         .expect("Failed to spawn code-kb serve");
     let mut stdin = child.stdin.take().unwrap();
     let mut reader = std::io::BufReader::new(child.stdout.take().unwrap());
-    let requests = [
+    let mut requests = vec![
         serde_json::json!({"jsonrpc": "2.0", "id": 1, "method": "initialize",
-            "params": {"protocolVersion": "2024-11-05", "capabilities": {},
-                       "clientInfo": {"name": "parity", "version": "1.0"}}}),
-        serde_json::json!({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
-            "params": {"name": "search_symbols", "arguments": {"query": query, "project_root": root}}}),
+        "params": {"protocolVersion": "2024-11-05", "capabilities": {},
+                   "clientInfo": {"name": "parity", "version": "1.0"}}}),
     ];
-    let mut text = String::new();
+    for (id, query) in queries.iter().enumerate() {
+        requests.push(serde_json::json!({"jsonrpc": "2.0", "id": id + 2, "method": "tools/call",
+            "params": {"name": "lookup_symbol", "arguments": {"query": query, "project_root": root}}}));
+    }
+    let mut texts = Vec::new();
     for request in requests {
         stdin.write_all(format!("{request}\n").as_bytes()).unwrap();
         stdin.flush().unwrap();
         let mut line = String::new();
         reader.read_line(&mut line).unwrap();
         let response: serde_json::Value = serde_json::from_str(&line).unwrap();
-        if response["id"] == 2 {
-            text = response["result"]["content"][0]["text"]
-                .as_str()
-                .unwrap()
-                .to_string();
+        if response["id"] != 1 {
+            texts.push(
+                response["result"]["content"][0]["text"]
+                    .as_str()
+                    .unwrap()
+                    .to_string(),
+            );
         }
     }
     drop(stdin);
     let _ = child.wait();
-    text.lines()
+    texts
+}
+
+fn mcp_lookup_names(root: &std::path::Path, query: &str) -> Vec<String> {
+    mcp_lookup_texts(root, &[query])
+        .remove(0)
+        .lines()
         .filter(|line| line.starts_with("- "))
         .map(|line| line.split('`').nth(1).unwrap().to_string())
         .collect()
 }
 
 #[test]
-fn test_cli_search_order_matches_mcp_search_symbols() {
+fn test_cli_lookup_prints_the_text_of_the_mcp_lookup_symbol_for_a_concept_an_exact_name_and_a_miss()
+{
+    let temp_dir = code_kb_core::safe_tempdir();
+    let root = temp_dir.path();
+    std::fs::create_dir_all(root.join(".git")).unwrap();
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(
+        root.join("src/net.rs"),
+        "pub fn retry_count() -> u32 {\n    3\n}\n\n/// Send the request again; retry with backoff.\npub fn send_again() {}\n\npub fn backoff() {}\n",
+    )
+    .unwrap();
+    let queries = [
+        "retry",
+        "send_again",
+        "bakoff",
+        "fn send_again()",
+        "function that retries",
+    ];
+
+    let cli_texts: Vec<String> = queries
+        .iter()
+        .map(|query| {
+            let out = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+                .arg("--root")
+                .arg(root)
+                .args(["lookup", query])
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            String::from_utf8_lossy(&out.stdout).to_string()
+        })
+        .collect();
+    let mcp_texts = mcp_lookup_texts(root, &queries);
+
+    assert_eq!(cli_texts.len(), 5);
+    for (query, (cli, mcp)) in queries.iter().zip(cli_texts.iter().zip(&mcp_texts)) {
+        assert_eq!(cli, mcp, "query {query}");
+    }
+    assert!(
+        mcp_texts[0].contains("No exact name match; 1 full-text matches for \"retry\":"),
+        "{}",
+        mcp_texts[0]
+    );
+    assert!(mcp_texts[0].contains("`retry_count`") && mcp_texts[0].contains("`send_again`"));
+    assert!(
+        !mcp_texts[1].contains("No exact name match"),
+        "{}",
+        mcp_texts[1]
+    );
+    assert!(
+        mcp_texts[2].contains("Did you mean one of:"),
+        "{}",
+        mcp_texts[2]
+    );
+    assert!(mcp_texts[2].contains("`backoff`"), "{}", mcp_texts[2]);
+    assert_eq!(mcp_texts[3], mcp_texts[1]);
+    assert!(
+        mcp_texts[4].contains("full-text matches for \"function that retries\":"),
+        "{}",
+        mcp_texts[4]
+    );
+
+    let json = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .args(["--json", "lookup", "retry"])
+        .output()
+        .unwrap();
+    assert!(json.status.success());
+    let lookup: serde_json::Value = serde_json::from_slice(&json.stdout).unwrap();
+    assert_eq!(lookup["names"][0]["name"], "retry_count");
+    assert_eq!(lookup["ranked"][0]["symbol"]["name"], "send_again");
+}
+
+#[test]
+fn test_cli_search_order_matches_the_mcp_lookup_symbol_fallback() {
     let repo = setup_test_repo();
     let root = repo.path();
     let query = "workspace task helper";
@@ -767,7 +801,7 @@ fn test_cli_search_order_matches_mcp_search_symbols() {
         .collect();
 
     assert_eq!(cli_names.len(), 3);
-    assert_eq!(cli_names, mcp_search_names(root, query));
+    assert_eq!(cli_names, mcp_lookup_names(root, query));
     assert!(
         cli_rows
             .as_array()
@@ -845,7 +879,7 @@ fn test_cli_body_and_slice() {
         ])
         .output()
         .unwrap();
-    let id = serde_json::from_slice::<serde_json::Value>(&lookup.stdout).unwrap()[0]["symbol_id"]
+    let id = serde_json::from_slice::<serde_json::Value>(&lookup.stdout).unwrap()["names"][0]["symbol_id"]
         .as_str()
         .unwrap()
         .to_string();
@@ -1073,7 +1107,8 @@ fn symbol_ids_select_same_parent_cpp_overloads_across_read_tools() {
         .output()
         .unwrap();
     assert!(lookup.status.success());
-    let rows: Vec<serde_json::Value> = serde_json::from_slice(&lookup.stdout).unwrap();
+    let lookup: serde_json::Value = serde_json::from_slice(&lookup.stdout).unwrap();
+    let rows = lookup["names"].as_array().unwrap();
     let ids: Vec<String> = rows
         .iter()
         .filter(|row| row["name"] == "run")
@@ -1319,7 +1354,7 @@ fn test_cli_blast_radius_zero_limit_reports_metadata() {
     assert_eq!(result["impacted_symbols"], serde_json::json!([]));
     assert_eq!(result["likely_tests_truncated"], false);
     assert_eq!(result["impacted_symbols_truncated"], true);
-    assert!(result["test_file_ceiling_reached"].is_boolean());
+    assert!(result.get("test_file_ceiling_reached").is_none());
 }
 
 #[test]
@@ -1831,7 +1866,12 @@ fn test_cli_hook_session_start() {
         .unwrap();
     assert!(ctx.contains("Code navigation: use the `code-kb` MCP tools first"));
     assert!(ctx.contains("`project_root`"));
-    assert!(ctx.contains("except `telemetry_summary`"));
+    assert!(ctx.contains("on every code-kb call."));
+    assert!(ctx.contains(
+        "- **To find code by concept**, call `lookup_symbol` with a few words; it adds ranked matches when no name matches."
+    ));
+    assert!(!ctx.contains("telemetry_summary"));
+    assert!(!ctx.contains("search_symbols"));
     assert!(!ctx.contains("EnterWorktree"));
     assert!(!ctx.contains("Binding is server-wide"));
 }
@@ -2461,6 +2501,91 @@ fn test_guidance_docs_use_canonical_parameter_names() {
             );
         }
     }
+}
+
+fn collect_guidance_files(path: &std::path::Path, files: &mut Vec<std::path::PathBuf>) {
+    if path.is_file() {
+        files.push(path.to_path_buf());
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(path) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let skipped = matches!(
+            entry.file_name().to_str(),
+            Some("__pycache__" | "reach" | "results")
+        );
+        if !skipped {
+            collect_guidance_files(&entry.path(), files);
+        }
+    }
+}
+
+fn names_removed_mcp_tool(line: &str) -> Option<&'static str> {
+    const REMOVED: [&str; 4] = [
+        "search_symbols",
+        "codebase_outline",
+        "find_structural_facts",
+        "telemetry_summary",
+    ];
+    let bytes = line.as_bytes();
+    REMOVED.into_iter().find(|tool| {
+        line.match_indices(tool).any(|(start, _)| {
+            let continues_after = bytes
+                .get(start + tool.len())
+                .is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'_');
+            let continues_before = start > 0
+                && (bytes[start - 1].is_ascii_alphanumeric()
+                    || (bytes[start - 1] == b'_' && !line[..start].ends_with("__")));
+            !continues_after && !continues_before
+        })
+    })
+}
+
+#[test]
+fn test_guidance_names_no_removed_mcp_tool_outside_a_removal_note() {
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let root = manifest_dir.parent().unwrap().parent().unwrap();
+    let mut files = Vec::new();
+    for entry in [
+        "README.md",
+        "CLAUDE.md",
+        "AGENTS.md",
+        "hooks",
+        "skills",
+        "evals",
+        "scripts",
+        "docs/site",
+        "docs/decisions",
+        "docs/toolkit-assessment.md",
+    ] {
+        collect_guidance_files(&root.join(entry), &mut files);
+    }
+    assert!(
+        files.len() > 20,
+        "guidance walk found {} files",
+        files.len()
+    );
+    let mut offenders = Vec::new();
+    for file in files {
+        let Ok(text) = std::fs::read_to_string(&file) else {
+            continue;
+        };
+        for (index, line) in text.lines().enumerate() {
+            if let Some(tool) = names_removed_mcp_tool(line)
+                && !line.contains("removed")
+                && !line.contains("pub fn ")
+            {
+                offenders.push(format!(
+                    "{}:{} names {tool}",
+                    file.strip_prefix(root).unwrap().display(),
+                    index + 1
+                ));
+            }
+        }
+    }
+    assert!(offenders.is_empty(), "{}", offenders.join("\n"));
 }
 
 #[test]

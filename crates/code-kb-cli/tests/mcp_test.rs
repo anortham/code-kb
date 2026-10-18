@@ -185,11 +185,7 @@ fn test_mcp_find_references_counts_sites_as_its_result_count() {
     );
     assert_ne!(with_sites["isError"], true, "{with_sites}");
 
-    let stats = session.call(
-        "telemetry_summary",
-        json!({"workspace_only": true, "json": true}),
-    );
-    let summary: Value = serde_json::from_str(result_text(&stats)).unwrap();
+    let summary = cli_stats_json(root, &root.join(".telemetry_test"), &["--workspace"]);
     let refs_stat = summary["tool_stats"]
         .as_array()
         .unwrap()
@@ -361,6 +357,14 @@ fn mcp_request(
     serde_json::from_str(&response).unwrap()
 }
 
+const REMAINING_TOOLS: [&str; 6] = [
+    "blast_radius",
+    "file_skeleton",
+    "find_references",
+    "get_symbol_body",
+    "get_symbol_context",
+    "lookup_symbol",
+];
 const PROJECT_ROOT_DESCRIPTION: &str =
     "Absolute path of the project or git worktree you work in. Change it when you move to another.";
 const MISSING_PROJECT_ROOT: &str = "Missing required parameter: project_root. Pass the absolute path of the project or git worktree you are working in.";
@@ -435,6 +439,28 @@ impl McpSession {
         drop(stdin);
         child.wait().unwrap();
     }
+}
+
+fn cli_stats(root: &Path, telemetry_dir: &Path, args: &[&str]) -> String {
+    let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .env("CODE_KB_TELEMETRY_DIR", telemetry_dir)
+        .arg("--root")
+        .arg(root)
+        .arg("stats")
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{args:?}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8(output.stdout).unwrap()
+}
+
+fn cli_stats_json(root: &Path, telemetry_dir: &Path, args: &[&str]) -> Value {
+    let args: Vec<&str> = args.iter().copied().chain(["--json"]).collect();
+    serde_json::from_str(&cli_stats(root, telemetry_dir, &args)).unwrap()
 }
 
 fn result_text(result: &Value) -> &str {
@@ -634,15 +660,6 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
         );",
     )
     .unwrap();
-    conn.execute_batch(
-        "INSERT INTO structural_facts VALUES
-            ('sf1', 'src/routes.rs', 'rust', 'axum.route.v1', 'route', 'call', 's1', 1, 1, 1.0, NULL),
-            ('sf2', 'src/routes.rs', 'rust', 'axum.route.v1', 'route', 'call', 's1', 2, 2, 1.0, NULL);
-         INSERT INTO literals VALUES
-            ('l1', 'src/routes.rs', '/first', 'route', 'string', 1, 's1'),
-            ('l2', 'src/routes.rs', '/second', 'route', 'string', 2, 's1');",
-    )
-    .unwrap();
     code_kb_core::db::ensure_fts_index(&conn).unwrap();
     drop(conn);
 
@@ -696,7 +713,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
     assert!(
         resp["result"]["instructions"]
             .as_str()
-            .is_some_and(|instructions| instructions.starts_with("Pass project_root, the absolute path of the project or git worktree you work in, on every call except telemetry_summary. Call file_skeleton before you read a source file,"))
+            .is_some_and(|instructions| instructions == "Pass project_root, the absolute path of the project or git worktree you work in, on every call. Call file_skeleton before you read a source file, then get_symbol_body or get_symbol_context for the symbols you need. Use lookup_symbol for a name or a concept and find_references instead of grep on a name, and blast_radius to pick the tests to run.")
     );
 
     // 2. Send tools/list
@@ -721,20 +738,10 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
     let tools = resp2["result"]["tools"]
         .as_array()
         .expect("Expected tools array");
-    assert_eq!(tools.len(), 10);
 
-    let tool_names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
-
-    assert!(tool_names.contains(&"codebase_outline"));
-    assert!(tool_names.contains(&"file_skeleton"));
-    assert!(tool_names.contains(&"lookup_symbol"));
-    assert!(tool_names.contains(&"search_symbols"));
-    assert!(tool_names.contains(&"get_symbol_body"));
-    assert!(tool_names.contains(&"get_symbol_context"));
-    assert!(tool_names.contains(&"find_references"));
-    assert!(tool_names.contains(&"find_structural_facts"));
-    assert!(tool_names.contains(&"blast_radius"));
-    assert!(tool_names.contains(&"telemetry_summary"));
+    let mut tool_names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
+    tool_names.sort_unstable();
+    assert_eq!(tool_names, REMAINING_TOOLS);
     assert!(!tool_names.contains(&"replace_symbol_body"));
     assert!(!tool_names.contains(&"edit_file"));
 
@@ -752,7 +759,14 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
         );
     }
 
-    for (id, name) in [(13, "edit_file"), (14, "replace_symbol_body")] {
+    for (id, name) in [
+        (13, "edit_file"),
+        (14, "replace_symbol_body"),
+        (15, "codebase_outline"),
+        (16, "search_symbols"),
+        (17, "find_structural_facts"),
+        (18, "telemetry_summary"),
+    ] {
         let request = json!({
             "jsonrpc": "2.0",
             "id": id,
@@ -883,13 +897,13 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
             .is_some_and(|text| text.contains("No symbols found"))
     );
 
-    // 4. Send tools/call search_symbols (FTS5 conceptual search)
+    // 4. Send tools/call lookup_symbol (FTS5 conceptual search)
     let search_req = json!({
         "jsonrpc": "2.0",
         "id": 4,
         "method": "tools/call",
         "params": {
-            "name": "search_symbols",
+            "name": "lookup_symbol",
             "arguments": { "project_root": root,
                 "query": "workspace discovery root"
             }
@@ -940,70 +954,10 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
             || refs_text.contains("Workspace")
     );
 
-    // 6. Test find_structural_facts with no category argument (lists categories)
-    let facts_req = json!({
-        "jsonrpc": "2.0",
-        "id": 6,
-        "method": "tools/call",
-        "params": {
-            "name": "find_structural_facts",
-            "arguments": { "project_root": root }
-        }
-    });
-    let mut line6 = serde_json::to_string(&facts_req).unwrap();
-    line6.push('\n');
-    stdin.write_all(line6.as_bytes()).unwrap();
-    stdin.flush().unwrap();
-
-    let mut response_line6 = String::new();
-    reader.read_line(&mut response_line6).unwrap();
-    let resp6: Value =
-        serde_json::from_str(&response_line6).expect("Failed to parse JSON response");
-    assert_eq!(resp6["id"], 6);
-    assert!(resp6["error"].is_null());
-    assert_ne!(resp6["result"]["isError"], true);
-    let facts_text = resp6["result"]["content"][0]["text"].as_str().unwrap();
-    assert!(facts_text.contains("categories") || facts_text.contains("No structural facts"));
-
-    let capped_facts_req = json!({
-        "jsonrpc": "2.0",
-        "id": 34,
-        "method": "tools/call",
-        "params": {
-            "name": "find_structural_facts",
-            "arguments": { "project_root": root, "category": "route", "limit": 3 }
-        }
-    });
-    let mut capped_facts_line = serde_json::to_string(&capped_facts_req).unwrap();
-    capped_facts_line.push('\n');
-    stdin.write_all(capped_facts_line.as_bytes()).unwrap();
-    stdin.flush().unwrap();
-
-    let mut capped_facts_response_line = String::new();
-    reader.read_line(&mut capped_facts_response_line).unwrap();
-    let capped_facts_response: Value = serde_json::from_str(&capped_facts_response_line).unwrap();
-    assert_eq!(capped_facts_response["id"], 34);
-    assert_ne!(capped_facts_response["result"]["isError"], true);
-    let capped_facts_text = capped_facts_response["result"]["content"][0]["text"]
-        .as_str()
-        .unwrap();
-    assert!(capped_facts_text.contains("Structural facts for 'route' (2 found):"));
-    assert!(capped_facts_text.contains("Matching literals (2 found):"));
-
     for (id, name, arguments) in [
-        (
-            80,
-            "find_structural_facts",
-            json!({"project_root": root, "category": "route", "limit": 0}),
-        ),
         (
             81,
             "lookup_symbol",
-            json!({"project_root": root, "query": "Workspace", "limit": 0}),
-        ),
-        (
-            82,
-            "search_symbols",
             json!({"project_root": root, "query": "Workspace", "limit": 0}),
         ),
         (
@@ -1254,44 +1208,6 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
             .unwrap()
             .contains("id=s1")
     );
-    let exact_search = mcp_request(
-        &mut stdin,
-        &mut reader,
-        &json!({"jsonrpc":"2.0","id":54,"method":"tools/call","params":{"name":"search_symbols","arguments":{"project_root":root,"query":"Workspace"}}}),
-    );
-    assert!(
-        exact_search["result"]["content"][0]["text"]
-            .as_str()
-            .unwrap()
-            .contains("id=s1")
-    );
-
-    // 11. Test telemetry_summary via MCP with time_window: "month"
-    let telem_req = json!({
-        "jsonrpc": "2.0",
-        "id": 11,
-        "method": "tools/call",
-        "params": {
-            "name": "telemetry_summary",
-            "arguments": {
-                "time_window": "month"
-            }
-        }
-    });
-    let mut telem_line = serde_json::to_string(&telem_req).unwrap();
-    telem_line.push('\n');
-    stdin.write_all(telem_line.as_bytes()).unwrap();
-    stdin.flush().unwrap();
-
-    let mut response_line_telem = String::new();
-    reader.read_line(&mut response_line_telem).unwrap();
-    let resp_telem: Value =
-        serde_json::from_str(&response_line_telem).expect("Failed to parse JSON response");
-    assert_eq!(resp_telem["id"], 11);
-    assert_ne!(resp_telem["result"]["isError"], true);
-    let telem_text = resp_telem["result"]["content"][0]["text"].as_str().unwrap();
-    assert!(telem_text.contains("Telemetry Summary"));
-
     let notification = json!({
         "jsonrpc": "2.0",
         "method": "notifications/roots/list_changed"
@@ -2302,7 +2218,7 @@ fn test_mcp_server_start_creates_missing_index() {
 }
 
 #[test]
-fn test_mcp_telemetry_summary_scoped_errors_no_cross_workspace_leak() {
+fn test_cli_stats_scoped_errors_no_cross_workspace_leak() {
     let telem_dir = code_kb_core::safe_tempdir();
     let telem_db_path = telem_dir.path().join("telemetry.db");
     let telem_conn = code_kb_core::Connection::open(&telem_db_path).unwrap();
@@ -2446,66 +2362,18 @@ fn test_mcp_telemetry_summary_scoped_errors_no_cross_workspace_leak() {
     let mut init_resp_line = String::new();
     reader.read_line(&mut init_resp_line).unwrap();
 
-    // 3. Call telemetry_summary with workspace_only: false (text output)
-    let call_telem_text = json!({
-        "jsonrpc": "2.0",
-        "id": 2,
-        "method": "tools/call",
-        "params": {
-            "name": "telemetry_summary",
-            "arguments": {
-                "workspace_only": false
-            }
-        }
-    });
-    let mut telem_line = serde_json::to_string(&call_telem_text).unwrap();
-    telem_line.push('\n');
-    stdin.write_all(telem_line.as_bytes()).unwrap();
-    stdin.flush().unwrap();
+    let summary_text = cli_stats(&root, telem_dir.path(), &[]);
 
-    let mut telem_resp_line = String::new();
-    reader.read_line(&mut telem_resp_line).unwrap();
-    let resp: Value = serde_json::from_str(&telem_resp_line).unwrap();
-    assert_eq!(resp["id"], 2);
-    let summary_text = resp["result"]["content"][0]["text"].as_str().unwrap();
-
-    // Verify global stats reflect total across both workspaces
     assert!(summary_text.contains("Total Tool Calls: 2"));
-    // Verify active workspace error is included
     assert!(summary_text.contains(local_error));
-    // Verify unrelated workspace secret error is NOT leaked
     assert!(
         !summary_text.contains(secret_error),
         "Global telemetry summary must not leak error messages from other workspaces"
     );
 
-    // 4. Call telemetry_summary with workspace_only: false and json: true
-    let call_telem_json = json!({
-        "jsonrpc": "2.0",
-        "id": 3,
-        "method": "tools/call",
-        "params": {
-            "name": "telemetry_summary",
-            "arguments": {
-                "workspace_only": false,
-                "json": true
-            }
-        }
-    });
-    let mut json_line = serde_json::to_string(&call_telem_json).unwrap();
-    json_line.push('\n');
-    stdin.write_all(json_line.as_bytes()).unwrap();
-    stdin.flush().unwrap();
+    let summary_data = cli_stats_json(&root, telem_dir.path(), &[]);
 
-    let mut json_resp_line = String::new();
-    reader.read_line(&mut json_resp_line).unwrap();
-    let resp_json: Value = serde_json::from_str(&json_resp_line).unwrap();
-    assert_eq!(resp_json["id"], 3);
-    let summary_json_str = resp_json["result"]["content"][0]["text"].as_str().unwrap();
-    let summary_data: Value = serde_json::from_str(summary_json_str).unwrap();
-
-    // total_calls is 3: the 2 inserted errors + the previous telemetry_summary call
-    assert_eq!(summary_data["total_calls"], 3);
+    assert_eq!(summary_data["total_calls"], 2);
     let recent_errors = summary_data["recent_errors"].as_array().unwrap();
     assert_eq!(recent_errors.len(), 1);
     assert_eq!(recent_errors[0]["error_message"], local_error);
@@ -2537,29 +2405,7 @@ fn test_mcp_telemetry_summary_scoped_errors_no_cross_workspace_leak() {
     let skel_tokens = skel_text.len() / 4;
     let expected_saved = ((file_bytes as usize) / 4).saturating_sub(skel_tokens);
 
-    // Query telemetry for workspace_only to inspect the recorded est_tokens_saved
-    let stats_req = json!({
-        "jsonrpc": "2.0",
-        "id": 5,
-        "method": "tools/call",
-        "params": {
-            "name": "telemetry_summary",
-            "arguments": {
-                "workspace_only": true,
-                "json": true
-            }
-        }
-    });
-    let mut stats_line = serde_json::to_string(&stats_req).unwrap();
-    stats_line.push('\n');
-    stdin.write_all(stats_line.as_bytes()).unwrap();
-    stdin.flush().unwrap();
-
-    let mut stats_resp_line = String::new();
-    reader.read_line(&mut stats_resp_line).unwrap();
-    let resp_stats: Value = serde_json::from_str(&stats_resp_line).unwrap();
-    let stats_json: Value =
-        serde_json::from_str(resp_stats["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    let stats_json = cli_stats_json(&root, telem_dir.path(), &["--workspace"]);
 
     let skel_stat = stats_json["tool_stats"]
         .as_array()
@@ -2574,7 +2420,7 @@ fn test_mcp_telemetry_summary_scoped_errors_no_cross_workspace_leak() {
 }
 
 #[test]
-fn test_mcp_telemetry_summary_does_not_switch_the_active_root_or_create_an_index() {
+fn test_mcp_removed_tool_call_does_not_switch_the_active_root_or_create_an_index() {
     let repo1 = setup_test_repo();
     let root1 = repo1.path();
 
@@ -2599,43 +2445,33 @@ fn test_mcp_telemetry_summary_does_not_switch_the_active_root_or_create_an_index
     );
     assert_ne!(lookup["isError"], true, "{lookup}");
 
-    let stats = session.call(
-        "telemetry_summary",
-        json!({
-            "project_root": root2,
-            "workspace": root2,
-            "file_path": root2.join("src").join("lib.rs")
-        }),
-    );
-    assert_ne!(stats["isError"], true, "{stats}");
+    for removed in ["telemetry_summary", "codebase_outline"] {
+        let answer = session.call(
+            removed,
+            json!({
+                "project_root": root2,
+                "workspace": root2,
+                "file_path": root2.join("src").join("lib.rs")
+            }),
+        );
+        assert_eq!(answer["isError"], true, "{answer}");
+        assert_eq!(result_text(&answer), format!("Unknown tool: '{removed}'"));
+    }
+    assert!(!root2.join(".code-kb").exists());
 
-    let scoped = session.call(
-        "telemetry_summary",
-        json!({ "workspace_only": true, "json": true }),
-    );
-    let scoped_json: Value = serde_json::from_str(result_text(&scoped)).unwrap();
+    let scoped = cli_stats_json(root1, telem_dir.path(), &["--workspace"]);
     assert!(
-        scoped_json["tool_stats"]
+        scoped["tool_stats"]
             .as_array()
             .unwrap()
             .iter()
             .any(|stat| stat["tool"] == "lookup_symbol"),
-        "{scoped_json}"
+        "{scoped}"
     );
-    assert!(!root2.join(".code-kb").exists());
-
-    let outline = session.call("codebase_outline", json!({ "project_root": root1 }));
-    assert_ne!(outline["isError"], true, "{outline}");
-
-    let invalid = session.call(
-        "telemetry_summary",
-        json!({ "time_window": "invalid_window_123" }),
-    );
-    assert_eq!(invalid["isError"], true, "{invalid}");
 }
 
 #[test]
-fn test_mcp_lookup_and_search_symbols_accept_symbol_name_and_symbol_aliases() {
+fn test_mcp_lookup_symbol_accepts_symbol_name_and_symbol_aliases() {
     let repo = setup_test_repo();
     let root = repo.path();
 
@@ -2711,50 +2547,6 @@ fn test_mcp_lookup_and_search_symbols_accept_symbol_name_and_symbol_aliases() {
         }
     });
     let mut line = serde_json::to_string(&lookup_symbol).unwrap();
-    line.push('\n');
-    stdin.write_all(line.as_bytes()).unwrap();
-    stdin.flush().unwrap();
-
-    let mut resp_line = String::new();
-    reader.read_line(&mut resp_line).unwrap();
-    let resp: Value = serde_json::from_str(&resp_line).unwrap();
-    assert_ne!(resp["result"]["isError"], true);
-
-    // 4. search_symbols using symbol_name alias
-    let search_symbol_name = json!({
-        "jsonrpc": "2.0",
-        "id": 4,
-        "method": "tools/call",
-        "params": {
-            "name": "search_symbols",
-            "arguments": { "project_root": root,
-                "symbol_name": "Workspace"
-            }
-        }
-    });
-    let mut line = serde_json::to_string(&search_symbol_name).unwrap();
-    line.push('\n');
-    stdin.write_all(line.as_bytes()).unwrap();
-    stdin.flush().unwrap();
-
-    let mut resp_line = String::new();
-    reader.read_line(&mut resp_line).unwrap();
-    let resp: Value = serde_json::from_str(&resp_line).unwrap();
-    assert_ne!(resp["result"]["isError"], true);
-
-    // 5. search_symbols using symbol alias
-    let search_symbol = json!({
-        "jsonrpc": "2.0",
-        "id": 5,
-        "method": "tools/call",
-        "params": {
-            "name": "search_symbols",
-            "arguments": { "project_root": root,
-                "symbol": "Workspace"
-            }
-        }
-    });
-    let mut line = serde_json::to_string(&search_symbol).unwrap();
     line.push('\n');
     stdin.write_all(line.as_bytes()).unwrap();
     stdin.flush().unwrap();
@@ -2869,12 +2661,7 @@ fn test_mcp_lookup_symbol_reports_a_broken_search_index() {
     assert!(text.contains("symbols_fts"), "{text}");
     assert!(!text.contains("No exact name match"), "{text}");
 
-    let summary = rpc(json!({
-        "jsonrpc": "2.0", "id": 3, "method": "tools/call",
-        "params": {"name": "telemetry_summary", "arguments": {"workspace_only": true, "json": true}}
-    }));
-    let summary_json: Value =
-        serde_json::from_str(summary["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    let summary_json = cli_stats_json(root, &root.join(".telemetry_test"), &["--workspace"]);
     let recent_errors = summary_json["recent_errors"].as_array().unwrap();
     assert!(
         recent_errors
@@ -2908,7 +2695,7 @@ fn reference_baseline_repo() -> tempfile::TempDir {
 }
 
 #[test]
-fn test_mcp_records_a_known_baseline_for_references_and_none_for_an_outline() {
+fn test_mcp_records_a_known_baseline_for_references_and_none_for_a_folder_skeleton() {
     let repo = reference_baseline_repo();
     let root = repo.path();
 
@@ -2964,31 +2751,18 @@ fn test_mcp_records_a_known_baseline_for_references_and_none_for_an_outline() {
     );
     assert_ne!(refs["result"]["isError"], true, "{refs}");
 
-    let outline = call(
+    let folder = call(
         3,
         json!({
             "jsonrpc": "2.0",
             "id": 3,
             "method": "tools/call",
-            "params": { "name": "codebase_outline", "arguments": { "project_root": root } }
+            "params": { "name": "file_skeleton", "arguments": { "project_root": root, "file_path": "src" } }
         }),
     );
-    assert_ne!(outline["result"]["isError"], true, "{outline}");
+    assert_ne!(folder["result"]["isError"], true, "{folder}");
 
-    let stats = call(
-        4,
-        json!({
-            "jsonrpc": "2.0",
-            "id": 4,
-            "method": "tools/call",
-            "params": {
-                "name": "telemetry_summary",
-                "arguments": { "workspace_only": true, "json": true }
-            }
-        }),
-    );
-    let summary: Value =
-        serde_json::from_str(stats["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    let summary = cli_stats_json(root, &root.join(".telemetry_test"), &["--workspace"]);
 
     let refs_stat = summary["tool_stats"]
         .as_array()
@@ -3002,14 +2776,14 @@ fn test_mcp_records_a_known_baseline_for_references_and_none_for_an_outline() {
         "{refs_stat}"
     );
 
-    let outline_stat = summary["tool_stats"]
+    let folder_stat = summary["tool_stats"]
         .as_array()
         .unwrap()
         .iter()
-        .find(|s| s["tool"] == "codebase_outline")
-        .expect("codebase_outline stat should be present");
-    assert_eq!(outline_stat["saved_known_count"], 0, "{outline_stat}");
-    assert_eq!(outline_stat["tokens_saved"], 0, "{outline_stat}");
+        .find(|s| s["tool"] == "file_skeleton")
+        .expect("file_skeleton stat should be present");
+    assert_eq!(folder_stat["saved_known_count"], 0, "{folder_stat}");
+    assert_eq!(folder_stat["tokens_saved"], 0, "{folder_stat}");
     assert_eq!(summary["saved_known_calls"], 1, "{summary}");
 
     drop(stdin);
@@ -3076,13 +2850,7 @@ fn test_mcp_lookup_baseline_counts_only_the_files_its_answer_shows() {
     assert!(text.contains("WidgetFactory"), "{text}");
     assert!(!text.contains("src/factory.rs"), "{text}");
 
-    let stats = call(
-        3,
-        "tools/call",
-        json!({ "name": "telemetry_summary", "arguments": { "workspace_only": true, "json": true } }),
-    );
-    let summary: Value =
-        serde_json::from_str(stats["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    let summary = cli_stats_json(root, &root.join(".telemetry_test"), &["--workspace"]);
     let lookup_stat = summary["tool_stats"]
         .as_array()
         .unwrap()
@@ -3164,7 +2932,7 @@ fn mcp_read_tool_handlers_validate_selectors_and_preserve_git_discovery() {
     let search = mcp_request(
         &mut stdin,
         &mut reader,
-        &json!({"jsonrpc":"2.0","id":15,"method":"tools/call","params":{"name":"search_symbols","arguments":{"project_root":root,"query":"run_task"}}}),
+        &json!({"jsonrpc":"2.0","id":15,"method":"tools/call","params":{"name":"lookup_symbol","arguments":{"project_root":root,"query":"run task"}}}),
     );
     assert_ne!(search["result"]["isError"], true, "{search}");
     assert!(
@@ -3348,13 +3116,18 @@ fn file_uri(dir: &Path) -> String {
 }
 
 #[test]
-fn test_mcp_tools_list_requires_project_root_on_every_tool_except_telemetry_summary() {
+fn test_mcp_tools_list_requires_project_root_on_every_tool() {
     let repo = setup_test_repo();
     let mut session = McpSession::start(serve_command(repo.path()));
 
     let listed = session.request("tools/list", json!({}));
     let tools = listed["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 10);
+    let mut names: Vec<&str> = tools
+        .iter()
+        .filter_map(|tool| tool["name"].as_str())
+        .collect();
+    names.sort_unstable();
+    assert_eq!(names, REMAINING_TOOLS);
     for tool in tools {
         let name = tool["name"].as_str().unwrap();
         let schema = &tool["inputSchema"];
@@ -3362,20 +3135,15 @@ fn test_mcp_tools_list_requires_project_root_on_every_tool_except_telemetry_summ
             .as_array()
             .map(|names| names.iter().filter_map(Value::as_str).collect())
             .unwrap_or_default();
-        if name == "telemetry_summary" {
-            assert!(schema["properties"].get("project_root").is_none(), "{tool}");
-            assert!(!required.contains(&"project_root"), "{tool}");
-        } else {
-            assert_eq!(
-                schema["properties"]["project_root"]["type"], "string",
-                "{tool}"
-            );
-            assert_eq!(
-                schema["properties"]["project_root"]["description"], PROJECT_ROOT_DESCRIPTION,
-                "{tool}"
-            );
-            assert!(required.contains(&"project_root"), "{tool}");
-        }
+        assert_eq!(
+            schema["properties"]["project_root"]["type"], "string",
+            "{tool}"
+        );
+        assert_eq!(
+            schema["properties"]["project_root"]["description"], PROJECT_ROOT_DESCRIPTION,
+            "{tool}"
+        );
+        assert!(required.contains(&"project_root"), "{tool}");
         for forbidden in ["workspace", "workspace_id", "repo_path", "root_dir"] {
             assert!(
                 schema["properties"].get(forbidden).is_none(),
@@ -3386,18 +3154,42 @@ fn test_mcp_tools_list_requires_project_root_on_every_tool_except_telemetry_summ
 }
 
 #[test]
+fn test_mcp_lookup_symbol_is_described_as_the_one_tool_for_a_name_or_a_concept() {
+    let repo = setup_test_repo();
+    let mut session = McpSession::start(serve_command(repo.path()));
+
+    let listed = session.request("tools/list", json!({}));
+    let lookup = listed["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|tool| tool["name"] == "lookup_symbol")
+        .unwrap();
+
+    assert_eq!(
+        lookup["description"],
+        "Find symbols by name, qualified name ('Type::method'), prefix, or concept; returns kind, path, line, signature, and id. A query that names no symbol exactly also gets the ranked matches by name words, signatures, and docs. Use instead of grep on a name."
+    );
+    assert_eq!(
+        lookup["inputSchema"]["properties"]["query"]["description"],
+        "Identifier, qualified name, prefix, or a few words that describe the code."
+    );
+}
+
+#[test]
 fn test_mcp_tools_list_asks_claude_to_load_every_code_tool_at_start() {
     let repo = setup_test_repo();
     let mut session = McpSession::start(serve_command(repo.path()));
 
     let listed = session.request("tools/list", json!({}));
-    for tool in listed["result"]["tools"].as_array().unwrap() {
-        let always_load = &tool["_meta"]["anthropic/alwaysLoad"];
-        if tool["name"] == "telemetry_summary" {
-            assert!(tool.get("_meta").is_none(), "{tool}");
-        } else {
-            assert_eq!(always_load, &json!(true), "{tool}");
-        }
+    let tools = listed["result"]["tools"].as_array().unwrap();
+    assert_eq!(tools.len(), REMAINING_TOOLS.len());
+    for tool in tools {
+        assert_eq!(
+            &tool["_meta"]["anthropic/alwaysLoad"],
+            &json!(true),
+            "{tool}"
+        );
     }
 }
 
@@ -3507,7 +3299,10 @@ fn test_mcp_filesystem_root_project_root_is_refused() {
     let filesystem_root = launch.path().ancestors().last().unwrap().to_path_buf();
     let mut session = McpSession::start(serve_command(launch.path()));
 
-    let result = session.call("codebase_outline", json!({"project_root": filesystem_root}));
+    let result = session.call(
+        "file_skeleton",
+        json!({"project_root": filesystem_root, "file_path": "src"}),
+    );
     assert_eq!(result["isError"], true, "{result}");
     assert!(
         result_text(&result).contains("is refused: it is a filesystem root"),
@@ -3526,7 +3321,10 @@ fn test_mcp_home_directory_project_root_is_refused_without_creating_an_index() {
         .env("USERPROFILE", home.path());
     let mut session = McpSession::start(command);
 
-    let result = session.call("codebase_outline", json!({"project_root": home.path()}));
+    let result = session.call(
+        "file_skeleton",
+        json!({"project_root": home.path(), "file_path": "src"}),
+    );
     assert_eq!(result["isError"], true, "{result}");
     assert!(
         result_text(&result).contains("is refused: it is the home directory"),
@@ -3689,19 +3487,6 @@ fn test_mcp_symbol_id_from_lookup_resolves_in_get_symbol_body_for_the_same_proje
     );
     assert_ne!(body["isError"], true, "{body}");
     assert!(result_text(&body).contains("pub struct Beta"), "{body}");
-}
-
-#[test]
-fn test_mcp_telemetry_summary_needs_no_project_root() {
-    let repo = setup_test_repo();
-    let mut session = McpSession::start(serve_command(repo.path()));
-
-    let result = session.call("telemetry_summary", json!({}));
-    assert_ne!(result["isError"], true, "{result}");
-    assert!(
-        result_text(&result).contains("Telemetry Summary"),
-        "{result}"
-    );
 }
 
 #[test]
@@ -4101,10 +3886,18 @@ fn test_mcp_unknown_tool_without_project_root_is_reported_as_unknown() {
     let launch = fixture_repo("Alpha");
     let mut session = McpSession::start(serve_command(launch.path()));
 
-    let result = session.call("edit_file", json!({"file_path": "src/lib.rs"}));
+    for name in [
+        "edit_file",
+        "codebase_outline",
+        "search_symbols",
+        "find_structural_facts",
+        "telemetry_summary",
+    ] {
+        let result = session.call(name, json!({"file_path": "src/lib.rs"}));
 
-    assert_eq!(result["isError"], true, "{result}");
-    assert_eq!(result_text(&result), "Unknown tool: 'edit_file'");
+        assert_eq!(result["isError"], true, "{result}");
+        assert_eq!(result_text(&result), format!("Unknown tool: '{name}'"));
+    }
 }
 
 #[cfg(unix)]

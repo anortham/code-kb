@@ -4,33 +4,6 @@
       "_meta": {
         "anthropic/alwaysLoad": true
       },
-      "description": "Directory layout and main exports of the project or a subdirectory, in a few hundred tokens. Use instead of ls -R or find on unfamiliar code.",
-      "inputSchema": {
-        "properties": {
-          "depth": {
-            "description": "Depth (default: 2).",
-            "type": "integer"
-          },
-          "path": {
-            "description": "Subdirectory (default: project_root).",
-            "type": "string"
-          },
-          "project_root": {
-            "description": "Absolute path of the project or git worktree you work in. Change it when you move to another.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "project_root"
-        ],
-        "type": "object"
-      },
-      "name": "codebase_outline"
-    },
-    {
-      "_meta": {
-        "anthropic/alwaysLoad": true
-      },
       "description": "A file's types, functions, signatures, and docstrings with bodies stripped. Call this before you read a source file with Read, cat, or sed, then fetch the symbols you need with get_symbol_body; read the whole file only when you will change most of it. A directory returns its outline.",
       "inputSchema": {
         "properties": {
@@ -55,7 +28,7 @@
       "_meta": {
         "anthropic/alwaysLoad": true
       },
-      "description": "Find symbols by exact name, qualified name ('Type::method'), or prefix; returns kind, path, line, signature, and id. Use instead of grep on a name. For a concept, use search_symbols.",
+      "description": "Find symbols by name, qualified name ('Type::method'), prefix, or concept; returns kind, path, line, signature, and id. A query that names no symbol exactly also gets the ranked matches by name words, signatures, and docs. Use instead of grep on a name.",
       "inputSchema": {
         "properties": {
           "is_test": {
@@ -81,7 +54,7 @@
             "type": "string"
           },
           "query": {
-            "description": "Identifier, qualified name, or prefix.",
+            "description": "Identifier, qualified name, prefix, or a few words that describe the code.",
             "type": "string"
           }
         },
@@ -92,48 +65,6 @@
         "type": "object"
       },
       "name": "lookup_symbol"
-    },
-    {
-      "_meta": {
-        "anthropic/alwaysLoad": true
-      },
-      "description": "Keyword search over symbol names, signatures, and docstrings, for code found by concept ('retry backoff'); matches substrings inside names. For a known name, use lookup_symbol.",
-      "inputSchema": {
-        "properties": {
-          "is_test": {
-            "description": "Include rows from tests (default: false).",
-            "type": "boolean"
-          },
-          "kind": {
-            "description": "Kind, such as function or class.",
-            "type": "string"
-          },
-          "limit": {
-            "description": "Default: 20.",
-            "maximum": 200,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "path": {
-            "description": "File or directory to search in.",
-            "type": "string"
-          },
-          "project_root": {
-            "description": "Absolute path of the project or git worktree you work in. Change it when you move to another.",
-            "type": "string"
-          },
-          "query": {
-            "description": "Keywords.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "query",
-          "project_root"
-        ],
-        "type": "object"
-      },
-      "name": "search_symbols"
     },
     {
       "_meta": {
@@ -151,7 +82,7 @@
             "type": "string"
           },
           "symbol_id": {
-            "description": "The id from lookup or search; pass exactly one of this or symbol_name.",
+            "description": "The id from lookup_symbol; pass exactly one of this or symbol_name.",
             "type": "string"
           },
           "symbol_name": {
@@ -186,7 +117,7 @@
             "type": "string"
           },
           "symbol_id": {
-            "description": "The id from lookup or search; pass exactly one of this or symbol_name.",
+            "description": "The id from lookup_symbol; pass exactly one of this or symbol_name.",
             "type": "string"
           },
           "symbol_name": {
@@ -235,7 +166,7 @@
             "type": "string"
           },
           "symbol_id": {
-            "description": "The id from lookup or search; pass exactly one of this or symbol_name.",
+            "description": "The id from lookup_symbol; pass exactly one of this or symbol_name.",
             "type": "string"
           },
           "symbol_name": {
@@ -249,39 +180,6 @@
         "type": "object"
       },
       "name": "find_references"
-    },
-    {
-      "_meta": {
-        "anthropic/alwaysLoad": true
-      },
-      "description": "Framework facts such as routes, SQL, and config keys. With no category, lists the categories with counts.",
-      "inputSchema": {
-        "properties": {
-          "category": {
-            "description": "Category, such as route, query, model, or config.",
-            "type": "string"
-          },
-          "limit": {
-            "description": "Per section (default: 30).",
-            "maximum": 200,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "path": {
-            "description": "File or directory.",
-            "type": "string"
-          },
-          "project_root": {
-            "description": "Absolute path of the project or git worktree you work in. Change it when you move to another.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "project_root"
-        ],
-        "type": "object"
-      },
-      "name": "find_structural_facts"
     },
     {
       "_meta": {
@@ -313,7 +211,7 @@
             "type": "string"
           },
           "symbol_id": {
-            "description": "The id from lookup or search; pass one of this or symbol.",
+            "description": "The id from lookup_symbol; pass one of this or symbol.",
             "type": "string"
           }
         },
@@ -323,31 +221,6 @@
         "type": "object"
       },
       "name": "blast_radius"
-    },
-    {
-      "description": "Summarizes code-kb tool usage, token consumption, and tokens saved across sessions and workspaces. Useful for diagnosing usage patterns and evaluating agent performance.",
-      "inputSchema": {
-        "properties": {
-          "all_versions": {
-            "description": "If true, includes telemetry across all historical versions (default: false).",
-            "type": "boolean"
-          },
-          "time_window": {
-            "description": "Optional time window for metrics: 'today', '7d', '30d', 'month', 'year', or 'all' (default: 'all').",
-            "type": "string"
-          },
-          "version": {
-            "description": "Filter metrics by code-kb version (e.g. '1.1.3'), 'current' (default), or 'all'.",
-            "type": "string"
-          },
-          "workspace_only": {
-            "description": "If true, scopes metrics to the project of the most recent tool call instead of all workspaces (default: false).",
-            "type": "boolean"
-          }
-        },
-        "type": "object"
-      },
-      "name": "telemetry_summary"
     }
   ]
 }

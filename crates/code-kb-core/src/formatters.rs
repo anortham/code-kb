@@ -1156,114 +1156,129 @@ fn doc_summary(doc: &str) -> Option<String> {
 
 pub fn format_find_symbol_results(
     query: &str,
-    exact_matches: &[Symbol],
-    fts_matches: &[SymbolSearchResult],
+    name_rows: &[Symbol],
+    ranked_rows: &[SymbolSearchResult],
     limit: usize,
 ) -> String {
-    if !exact_matches.is_empty() {
-        let dotted = query.replace("::", ".");
-        let is_exact = |s: &Symbol| s.name == dotted || s.name.ends_with(&format!(".{dotted}"));
-        let named_exactly = exact_matches.iter().filter(|s| is_exact(s)).count();
-        let exact_note = if named_exactly < exact_matches.len() {
-            format!(" ({named_exactly} named exactly `{query}`; the rest start with or contain it)")
-        } else {
-            String::new()
-        };
-        let owner = query
-            .strip_suffix("::")
-            .or_else(|| query.strip_suffix('.'))
-            .filter(|owner| !owner.is_empty());
-        let mut out = match owner {
-            Some(owner) => format!("Found {} members of `{owner}`:\n\n", exact_matches.len()),
-            None => format!(
-                "Found {} symbols matching \"{query}\"{exact_note}:\n\n",
-                exact_matches.len()
-            ),
-        };
-        let has_definition = exact_matches.iter().any(|s| s.kind != "import");
-        let folds = |s: &Symbol| crate::queries::folds_into_import_line(query, s, has_definition);
-        let imports: Vec<&Symbol> = exact_matches.iter().filter(|s| folds(s)).collect();
-        let (shown, others): (Vec<&Symbol>, Vec<&Symbol>) = exact_matches
-            .iter()
-            .filter(|s| !folds(s))
-            .partition(|s| named_exactly == 0 || is_exact(s));
-        for s in shown {
-            let sig = s.signature.as_deref().unwrap_or(&s.name);
-            out.push_str(&format!(
-                "- {} `{}` [{}:{}-{}] id={}\n",
-                display_kind(s),
-                s.name,
-                s.path,
-                s.start_line,
-                s.end_line,
-                s.symbol_id
-            ));
-            out.push_str(&format!("  Signature: {sig}\n"));
-            if let Some(doc) = s.doc_comment.as_deref().and_then(doc_summary) {
-                out.push_str(&format!("  Doc: {doc}\n"));
-            }
-        }
-        if !imports.is_empty() {
-            let shown = imports
-                .iter()
-                .take(3)
-                .map(|s| format!("{}:{}", s.path, s.start_line))
-                .collect::<Vec<_>>()
-                .join(", ");
-            let more = if imports.len() > 3 { ", …" } else { "" };
-            let cut_inside_exact_names = exact_matches
-                .last()
-                .is_some_and(|s| s.name.eq_ignore_ascii_case(query) || folds(s));
-            let capped = if exact_matches.len() - imports.len() >= limit && cut_inside_exact_names {
-                "at least "
-            } else {
-                ""
-            };
-            out.push_str(&format!(
-                "- {capped}{} {} of `{query}`: {shown}{more} (lookup_symbol with kind=\"import\" lists them)\n",
-                imports.len(),
-                plural(imports.len(), "import")
-            ));
-        }
-        if !others.is_empty() {
-            out.push_str(&other_names_line(query, &others));
-        }
-        if exact_matches.len() - imports.len() >= limit {
-            out.push_str(&cap_notice(exact_matches.len() - imports.len(), limit));
-        }
-        out
-    } else if !fts_matches.is_empty() {
-        let mut out = format!(
-            "No exact name match; {} full-text matches for \"{query}\":\n\n",
-            fts_matches.len()
-        );
-        for r in fts_matches {
-            let s = &r.symbol;
-            let sig = s.signature.as_deref().unwrap_or(&s.name);
-            out.push_str(&format!(
-                "- {} `{}` [{}:{}-{}] (score: {:.2}) id={}\n",
-                display_kind(s),
-                s.name,
-                s.path,
-                s.start_line,
-                s.end_line,
-                r.score,
-                s.symbol_id
-            ));
-            out.push_str(&format!("  Signature: {sig}\n"));
-            if let Some(line) = r.snippet.as_deref().and_then(|m| match_line(m, sig)) {
-                out.push_str(&format!("  Match: {line}\n"));
-            } else if let Some(doc) = s.doc_comment.as_deref().and_then(doc_summary) {
-                out.push_str(&format!("  Doc: {doc}\n"));
-            }
-        }
-        if fts_matches.len() >= limit {
-            out.push_str(&cap_notice(fts_matches.len(), limit));
-        }
-        out
-    } else {
-        format!("No symbols found matching \"{query}\".\n")
+    let mut out = String::new();
+    if !name_rows.is_empty() {
+        out.push_str(&format_name_rows(query, name_rows, limit));
     }
+    if !ranked_rows.is_empty() {
+        if !out.is_empty() {
+            out.push('\n');
+        }
+        out.push_str(&format_ranked_rows(query, ranked_rows, limit));
+    }
+    if out.is_empty() {
+        out.push_str(&format!("No symbols found matching \"{query}\".\n"));
+    }
+    out
+}
+
+fn format_name_rows(query: &str, exact_matches: &[Symbol], limit: usize) -> String {
+    let dotted = query.replace("::", ".");
+    let is_exact = |s: &Symbol| s.name == dotted || s.name.ends_with(&format!(".{dotted}"));
+    let named_exactly = exact_matches.iter().filter(|s| is_exact(s)).count();
+    let exact_note = if named_exactly < exact_matches.len() {
+        format!(" ({named_exactly} named exactly `{query}`; the rest start with or contain it)")
+    } else {
+        String::new()
+    };
+    let owner = query
+        .strip_suffix("::")
+        .or_else(|| query.strip_suffix('.'))
+        .filter(|owner| !owner.is_empty());
+    let mut out = match owner {
+        Some(owner) => format!("Found {} members of `{owner}`:\n\n", exact_matches.len()),
+        None => format!(
+            "Found {} symbols matching \"{query}\"{exact_note}:\n\n",
+            exact_matches.len()
+        ),
+    };
+    let has_definition = exact_matches.iter().any(|s| s.kind != "import");
+    let folds = |s: &Symbol| crate::queries::folds_into_import_line(query, s, has_definition);
+    let imports: Vec<&Symbol> = exact_matches.iter().filter(|s| folds(s)).collect();
+    let (shown, others): (Vec<&Symbol>, Vec<&Symbol>) = exact_matches
+        .iter()
+        .filter(|s| !folds(s))
+        .partition(|s| named_exactly == 0 || is_exact(s));
+    for s in shown {
+        let sig = s.signature.as_deref().unwrap_or(&s.name);
+        out.push_str(&format!(
+            "- {} `{}` [{}:{}-{}] id={}\n",
+            display_kind(s),
+            s.name,
+            s.path,
+            s.start_line,
+            s.end_line,
+            s.symbol_id
+        ));
+        out.push_str(&format!("  Signature: {sig}\n"));
+        if let Some(doc) = s.doc_comment.as_deref().and_then(doc_summary) {
+            out.push_str(&format!("  Doc: {doc}\n"));
+        }
+    }
+    if !imports.is_empty() {
+        let shown = imports
+            .iter()
+            .take(3)
+            .map(|s| format!("{}:{}", s.path, s.start_line))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let more = if imports.len() > 3 { ", …" } else { "" };
+        let cut_inside_exact_names = exact_matches
+            .last()
+            .is_some_and(|s| s.name.eq_ignore_ascii_case(query) || folds(s));
+        let capped = if exact_matches.len() - imports.len() >= limit && cut_inside_exact_names {
+            "at least "
+        } else {
+            ""
+        };
+        out.push_str(&format!(
+            "- {capped}{} {} of `{query}`: {shown}{more} (lookup_symbol with kind=\"import\" lists them)\n",
+            imports.len(),
+            plural(imports.len(), "import")
+        ));
+    }
+    if !others.is_empty() {
+        out.push_str(&other_names_line(query, &others));
+    }
+    if exact_matches.len() - imports.len() >= limit {
+        out.push_str(&cap_notice(exact_matches.len() - imports.len(), limit));
+    }
+    out
+}
+
+fn format_ranked_rows(query: &str, fts_matches: &[SymbolSearchResult], limit: usize) -> String {
+    let mut out = format!(
+        "No exact name match; {} full-text matches for \"{query}\":\n\n",
+        fts_matches.len()
+    );
+    for r in fts_matches {
+        let s = &r.symbol;
+        let sig = s.signature.as_deref().unwrap_or(&s.name);
+        out.push_str(&format!(
+            "- {} `{}` [{}:{}-{}] (score: {:.2}) id={}\n",
+            display_kind(s),
+            s.name,
+            s.path,
+            s.start_line,
+            s.end_line,
+            r.score,
+            s.symbol_id
+        ));
+        out.push_str(&format!("  Signature: {sig}\n"));
+        if let Some(line) = r.snippet.as_deref().and_then(|m| match_line(m, sig)) {
+            out.push_str(&format!("  Match: {line}\n"));
+        } else if let Some(doc) = s.doc_comment.as_deref().and_then(doc_summary) {
+            out.push_str(&format!("  Doc: {doc}\n"));
+        }
+    }
+    if fts_matches.len() >= limit {
+        out.push_str(&cap_notice(fts_matches.len(), limit));
+    }
+    out
 }
 
 /// Format available structural fact & literal categories.
@@ -1603,9 +1618,6 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
     if result.traversal_ceiling_reached {
         out.push_str("Traversal stopped at the 200-row discovery ceiling; narrow the target because increasing limit cannot raise this ceiling.\n\n");
     }
-    if result.test_file_ceiling_reached {
-        out.push_str("Name-matched test discovery hit its fixed ceiling; narrow the target because increasing limit cannot raise it.\n\n");
-    }
 
     if !result.likely_tests.is_empty() {
         let total = result.likely_tests.len();
@@ -1624,22 +1636,12 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
             ));
         }
 
-        if result
-            .likely_tests
-            .iter()
-            .any(|t| t.reason.starts_with("possible:"))
-        {
-            out.push_str("`possible` rows build the class and use a test client, so a runtime call to `__call__` may reach the target. Tests that register an error handler or call `abort` rank ahead of name-only matches; other rows are ranked by shared words. The index cannot prove a request reaches the target; run the whole suite for full coverage.\n");
-        }
         out.push('\n');
-    } else if result.likely_tests_truncated
-        || result.traversal_ceiling_reached
-        || result.test_file_ceiling_reached
-    {
+    } else if result.likely_tests_truncated || result.traversal_ceiling_reached {
         out.push_str("### Likely Tests to Run (0 returned)\n\n");
     } else {
         out.push_str(
-            "### Likely Tests to Run (0 returned)\nNo direct or name-matched tests found.\n\n",
+            "### Likely Tests to Run (0 returned)\nNo test reaches it through the index. Run the full test suite.\n\n",
         );
     }
 
@@ -2586,6 +2588,27 @@ mod tests {
     }
 
     #[test]
+    fn lookup_lists_name_rows_before_the_ranked_rows_under_their_own_header() {
+        let names = vec![sample_symbol("retry_count")];
+        let ranked = vec![SymbolSearchResult {
+            symbol: sample_symbol("send_again"),
+            score: 7.5,
+            snippet: None,
+            explain: None,
+        }];
+
+        let out = format_find_symbol_results("retry", &names, &ranked, 20);
+
+        let name_header = out.find("Found 1 symbols matching \"retry\"").unwrap();
+        let ranked_header = out
+            .find("\nNo exact name match; 1 full-text matches for \"retry\":\n\n")
+            .unwrap();
+        assert!(name_header < out.find("`retry_count`").unwrap(), "{out}");
+        assert!(out.find("`retry_count`").unwrap() < ranked_header, "{out}");
+        assert!(ranked_header < out.find("`send_again`").unwrap(), "{out}");
+    }
+
+    #[test]
     fn every_printed_part_of_the_explain_line_sums_to_the_score() {
         let e = SearchExplain {
             bm25: Some(-3.21),
@@ -2727,7 +2750,6 @@ mod tests {
             traversal_ceiling_reached: false,
             likely_tests_truncated: false,
             impacted_symbols_truncated: false,
-            test_file_ceiling_reached: false,
             limit_at_maximum: false,
             likely_tests_found: 0,
             impacted_symbols_found: 0,
@@ -2789,7 +2811,6 @@ mod tests {
             traversal_ceiling_reached: false,
             likely_tests_truncated: false,
             impacted_symbols_truncated: false,
-            test_file_ceiling_reached: false,
             limit_at_maximum: false,
             likely_tests_found: 0,
             impacted_symbols_found: 0,
@@ -2939,7 +2960,6 @@ mod tests {
             traversal_ceiling_reached: true,
             likely_tests_truncated: false,
             impacted_symbols_truncated: false,
-            test_file_ceiling_reached: false,
             limit_at_maximum: false,
             likely_tests_found: 0,
             impacted_symbols_found: 0,
@@ -2950,7 +2970,7 @@ mod tests {
     }
 
     #[test]
-    fn blast_radius_does_not_claim_no_results_after_discovery_ceiling() {
+    fn blast_radius_does_not_claim_no_results_after_the_traversal_ceiling() {
         let res = BlastRadiusResult {
             seed_type: "file".into(),
             seeds: vec!["src/widget.rs".into()],
@@ -2959,7 +2979,6 @@ mod tests {
             likely_tests_truncated: false,
             impacted_symbols_truncated: false,
             traversal_ceiling_reached: true,
-            test_file_ceiling_reached: true,
             limit_at_maximum: false,
             likely_tests_found: 0,
             impacted_symbols_found: 0,
@@ -2968,26 +2987,17 @@ mod tests {
         let formatted = format_blast_radius(&res);
         assert!(formatted.contains("Likely Tests to Run (0 returned)"));
         assert!(formatted.contains("Downstream Impact (0 returned)"));
-        assert!(formatted.contains("Name-matched test discovery hit its fixed ceiling"));
-        assert!(!formatted.contains("No direct or name-matched tests found"));
+        assert!(!formatted.contains("No test reaches it through the index"));
         assert!(!formatted.contains("No downstream callers found within depth"));
 
         let no_ceiling = BlastRadiusResult {
             traversal_ceiling_reached: false,
-            test_file_ceiling_reached: false,
-            limit_at_maximum: false,
-            ..res.clone()
-        };
-        assert!(format_blast_radius(&no_ceiling).contains("No direct or name-matched tests found"));
-
-        let traversal_only = BlastRadiusResult {
-            traversal_ceiling_reached: true,
-            test_file_ceiling_reached: false,
-            limit_at_maximum: false,
             ..res
         };
-        let traversal_only_text = format_blast_radius(&traversal_only);
-        assert!(!traversal_only_text.contains("No direct or name-matched tests found"));
+        assert!(
+            format_blast_radius(&no_ceiling)
+                .contains("No test reaches it through the index. Run the full test suite.\n")
+        );
     }
 
     fn skeleton_row(
