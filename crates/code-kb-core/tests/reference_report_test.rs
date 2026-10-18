@@ -1139,8 +1139,12 @@ fn a_python_absolute_import_proves_only_a_file_of_its_top_package() {
 }
 
 #[test]
-fn a_package_import_that_matches_two_definitions_is_unresolved() {
+fn a_package_import_that_reaches_two_definitions_is_unresolved() {
     let repo = scanned_repo(&[
+        (
+            "packages/lib/package.json",
+            "{\n  \"name\": \"lib\",\n  \"main\": \"./src/index.ts\"\n}\n",
+        ),
         (
             "packages/lib/src/schemas.ts",
             "export function boolean() {\n  return 1;\n}\n",
@@ -1151,7 +1155,7 @@ fn a_package_import_that_matches_two_definitions_is_unresolved() {
         ),
         (
             "packages/lib/src/index.ts",
-            "export * from './schemas';\nexport * as coerce from './coerce';\n",
+            "export * from './schemas';\nexport * from './coerce';\n",
         ),
         (
             "packages/app/use.ts",
@@ -1166,7 +1170,7 @@ fn a_package_import_that_matches_two_definitions_is_unresolved() {
         "packages/app/use.ts",
         line,
         SiteLabel::Unresolved,
-        "the import matches 2 definitions",
+        "the import reaches 2 definitions",
     );
 }
 
@@ -1253,6 +1257,10 @@ fn a_csharp_extension_method_call_through_the_extended_type_is_not_excluded() {
 fn a_test_label_is_not_a_definition_of_its_name() {
     let repo = scanned_repo(&[
         (
+            "packages/lib/package.json",
+            "{\n  \"name\": \"lib\",\n  \"main\": \"./src/index.ts\"\n}\n",
+        ),
+        (
             "packages/lib/src/schemas.ts",
             "export function strictObject() {\n  return 1;\n}\n",
         ),
@@ -1268,18 +1276,13 @@ fn a_test_label_is_not_a_definition_of_its_name() {
     ]);
     let report = report(&repo, "strictObject", Some("packages/lib/src/schemas.ts"));
 
-    let line = line_of(
-        &repo,
+    for path in [
+        "packages/lib/src/tests/object.test.ts",
         "packages/lib/src/tests/other.test.ts",
-        "z.strictObject()",
-    );
-    assert_site(
-        &report,
-        "packages/lib/src/tests/other.test.ts",
-        line,
-        SiteLabel::Likely,
-        "name only",
-    );
+    ] {
+        let line = line_of(&repo, path, "z.strictObject()");
+        assert_site(&report, path, line, SiteLabel::Proven, "import");
+    }
 }
 
 #[test]
@@ -1288,6 +1291,10 @@ fn an_object_member_does_not_claim_a_call_whose_qualifier_imports_another_packag
         (
             "packages/v3/types.ts",
             "export const coerce = {\n  boolean: () => 1,\n};\n",
+        ),
+        (
+            "packages/v4/package.json",
+            "{\n  \"name\": \"v4\",\n  \"main\": \"./index.ts\"\n}\n",
         ),
         (
             "packages/v4/coerce.ts",
@@ -1305,11 +1312,12 @@ fn an_object_member_does_not_claim_a_call_whose_qualifier_imports_another_packag
     let report = report(&repo, "boolean", Some("packages/v4/coerce.ts"));
 
     let line = line_of(&repo, "packages/app/use.ts", "z.coerce.boolean()");
-    assert_ne!(
-        site_at(&report, "packages/app/use.ts", line).label,
-        SiteLabel::Excluded,
-        "{}",
-        dump(&report)
+    assert_site(
+        &report,
+        "packages/app/use.ts",
+        line,
+        SiteLabel::Proven,
+        "import",
     );
 }
 
@@ -1624,5 +1632,539 @@ fn a_receiver_named_for_the_object_stays_unresolved_when_a_rival_is_assigned_on_
         2,
         SiteLabel::Unresolved,
         "2 definitions",
+    );
+}
+
+const JS_WORKSPACE: &[(&str, &str)] = &[
+    (
+        "packages/lib/package.json",
+        r#"{
+  "name": "lib",
+  "exports": {
+    ".": { "@lib/source": "./src/index.ts", "types": "./index.d.ts", "import": "./index.js" },
+    "./v3": { "@lib/source": "./src/v3/index.ts" },
+    "./sub/*": { "@lib/source": "./src/sub/*.ts" }
+  }
+}
+"#,
+    ),
+    (
+        "packages/lib/src/index.ts",
+        "export * from \"./v4/index.js\";\nexport { make as build } from \"./v4/make.js\";\nexport { z, z as default };\nimport * as z from \"./v4/index.js\";\n",
+    ),
+    (
+        "packages/lib/src/v4/index.ts",
+        "export * from \"./external.js\";\nexport * as core from \"./core.js\";\n",
+    ),
+    (
+        "packages/lib/src/v4/external.ts",
+        "export * from \"./schemas.js\";\nexport * as util from \"./util.js\";\n",
+    ),
+    (
+        "packages/lib/src/v4/core.ts",
+        "export * as util from \"./util.js\";\n",
+    ),
+    (
+        "packages/lib/src/v4/schemas.ts",
+        "export function strictObject() {\n  return 1;\n}\n\nexport function boolean() {\n  return 2;\n}\n",
+    ),
+    (
+        "packages/lib/src/v4/util.ts",
+        "export function isPlainObject() {\n  return true;\n}\n",
+    ),
+    (
+        "packages/lib/src/v4/make.ts",
+        "export function make() {\n  return 1;\n}\n",
+    ),
+    (
+        "packages/lib/src/v3/index.ts",
+        "export * from \"./types.js\";\n",
+    ),
+    (
+        "packages/lib/src/v3/types.ts",
+        "export function strictObject() {\n  return 3;\n}\n\nexport function boolean() {\n  return 4;\n}\n\nexport function build() {\n  return 5;\n}\n\nexport function isPlainObject() {\n  return false;\n}\n",
+    ),
+    (
+        "packages/lib/src/v3/extras.ts",
+        "export function extra() {\n  return 7;\n}\n",
+    ),
+    (
+        "packages/lib/src/sub/extras.ts",
+        "export function extra() {\n  return 6;\n}\n",
+    ),
+    ("packages/app/package.json", "{\n  \"name\": \"app\"\n}\n"),
+];
+
+fn workspace_with(extra: &[(&str, &str)]) -> Repo {
+    let files: Vec<(String, String)> = JS_WORKSPACE
+        .iter()
+        .chain(extra)
+        .map(|(path, text)| (path.to_string(), text.to_string()))
+        .collect();
+    scanned_owned(&files)
+}
+
+#[test]
+fn a_workspace_package_import_follows_exports_and_star_reexports_to_the_definition() {
+    let repo = workspace_with(&[(
+        "packages/app/src/use.ts",
+        "import * as z from \"lib\";\nimport * as legacy from \"lib/v3\";\n\nexport const current = z.strictObject();\nexport const old = legacy.strictObject();\n",
+    )]);
+    let report = report(
+        &repo,
+        "strictObject",
+        Some("packages/lib/src/v4/schemas.ts"),
+    );
+
+    let path = "packages/app/src/use.ts";
+    let current = line_of(&repo, path, "z.strictObject()");
+    assert_site(&report, path, current, SiteLabel::Proven, "import");
+    let old = line_of(&repo, path, "legacy.strictObject()");
+    assert_site(
+        &report,
+        path,
+        old,
+        SiteLabel::Excluded,
+        "resolves to `strictObject` (packages/lib/src/v3/types.ts:1)",
+    );
+}
+
+#[test]
+fn a_chain_of_namespace_reexports_reaches_the_member_definition() {
+    let repo = workspace_with(&[(
+        "packages/app/src/use.ts",
+        "import * as z from \"lib\";\n\nexport const deep = z.core.util.isPlainObject({});\nexport const shallow = z.util.isPlainObject({});\n",
+    )]);
+    let report = report(&repo, "isPlainObject", Some("packages/lib/src/v4/util.ts"));
+
+    let path = "packages/app/src/use.ts";
+    for needle in ["z.core.util.isPlainObject", "z.util.isPlainObject"] {
+        let line = line_of(&repo, path, needle);
+        assert_site(&report, path, line, SiteLabel::Proven, "import");
+    }
+}
+
+#[test]
+fn an_aliased_reexport_resolves_to_the_original_definition() {
+    let repo = workspace_with(&[(
+        "packages/app/src/use.ts",
+        "import * as z from \"lib\";\n\nexport const built = z.build();\n",
+    )]);
+    let report = report(&repo, "build", None);
+
+    let line = line_of(&repo, "packages/app/src/use.ts", "z.build()");
+    assert_site(
+        &report,
+        "packages/app/src/use.ts",
+        line,
+        SiteLabel::Excluded,
+        "resolves to `make` (packages/lib/src/v4/make.ts:1)",
+    );
+}
+
+#[test]
+fn a_default_import_and_a_renamed_named_import_follow_the_export_rows() {
+    let repo = workspace_with(&[(
+        "packages/app/src/use.ts",
+        "import def from \"lib\";\nimport { z as named } from \"lib\";\n\nexport const a = def.boolean();\nexport const b = named.boolean();\n",
+    )]);
+    let report = report(&repo, "boolean", Some("packages/lib/src/v4/schemas.ts"));
+
+    let path = "packages/app/src/use.ts";
+    for needle in ["def.boolean()", "named.boolean()"] {
+        let line = line_of(&repo, path, needle);
+        assert_site(&report, path, line, SiteLabel::Proven, "import");
+    }
+}
+
+#[test]
+fn a_package_that_imports_itself_by_name_is_followed() {
+    let repo = workspace_with(&[(
+        "packages/lib/src/self.ts",
+        "import * as z from \"lib\";\n\nexport const s = z.strictObject();\n",
+    )]);
+    let report = report(
+        &repo,
+        "strictObject",
+        Some("packages/lib/src/v4/schemas.ts"),
+    );
+
+    let line = line_of(&repo, "packages/lib/src/self.ts", "z.strictObject()");
+    assert_site(
+        &report,
+        "packages/lib/src/self.ts",
+        line,
+        SiteLabel::Proven,
+        "import",
+    );
+}
+
+#[test]
+fn an_exports_pattern_resolves_the_subpath_to_its_file() {
+    let repo = workspace_with(&[(
+        "packages/app/src/use.ts",
+        "import * as s from \"lib/sub/extras\";\n\nexport const e = s.extra();\n",
+    )]);
+    let report = report(&repo, "extra", Some("packages/lib/src/sub/extras.ts"));
+
+    let line = line_of(&repo, "packages/app/src/use.ts", "s.extra()");
+    assert_site(
+        &report,
+        "packages/app/src/use.ts",
+        line,
+        SiteLabel::Proven,
+        "import",
+    );
+}
+
+#[test]
+fn a_relative_import_of_a_barrel_follows_its_star_reexports() {
+    let repo = workspace_with(&[(
+        "packages/lib/src/v4/tests/barrel.test.ts",
+        "import * as z from \"../index.js\";\n\nexport const s = z.strictObject();\n",
+    )]);
+    let report = report(
+        &repo,
+        "strictObject",
+        Some("packages/lib/src/v4/schemas.ts"),
+    );
+
+    let path = "packages/lib/src/v4/tests/barrel.test.ts";
+    let line = line_of(&repo, path, "z.strictObject()");
+    assert_site(&report, path, line, SiteLabel::Proven, "import");
+}
+
+#[test]
+fn a_package_the_workspace_does_not_define_is_excluded_even_when_its_last_segment_is_a_folder() {
+    let repo = workspace_with(&[(
+        "packages/app/src/ext.ts",
+        "import * as pad from \"left-pad/lib\";\n\nexport const e = pad.strictObject();\n",
+    )]);
+    let report = report(
+        &repo,
+        "strictObject",
+        Some("packages/lib/src/v4/schemas.ts"),
+    );
+
+    let line = line_of(&repo, "packages/app/src/ext.ts", "pad.strictObject()");
+    assert_site(
+        &report,
+        "packages/app/src/ext.ts",
+        line,
+        SiteLabel::Excluded,
+        "receiver `pad` is imported from `left-pad/lib`",
+    );
+}
+
+#[test]
+fn a_tsconfig_with_paths_turns_the_external_package_rule_off_for_its_folder() {
+    let repo = workspace_with(&[
+        (
+            "packages/aliased/tsconfig.json",
+            "{\n  \"compilerOptions\": {\n    \"paths\": { \"left-pad/*\": [\"../lib/src/*\"] }\n  }\n}\n",
+        ),
+        (
+            "packages/aliased/src/ext.ts",
+            "import * as pad from \"left-pad/lib\";\n\nexport const e = pad.strictObject();\n",
+        ),
+    ]);
+    let report = report(
+        &repo,
+        "strictObject",
+        Some("packages/lib/src/v4/schemas.ts"),
+    );
+
+    let line = line_of(&repo, "packages/aliased/src/ext.ts", "pad.strictObject()");
+    assert_ne!(
+        site_at(&report, "packages/aliased/src/ext.ts", line).label,
+        SiteLabel::Excluded,
+        "{}",
+        dump(&report)
+    );
+}
+
+#[test]
+fn an_import_alias_the_index_cannot_resolve_is_never_excluded() {
+    let repo = workspace_with(&[(
+        "packages/app/src/alias.ts",
+        "import * as a from \"#lib\";\nimport * as b from \"@/lib\";\nimport * as c from \"~/lib\";\n\nexport const x = a.strictObject();\nexport const y = b.strictObject();\nexport const w = c.strictObject();\n",
+    )]);
+    let report = report(
+        &repo,
+        "strictObject",
+        Some("packages/lib/src/v4/schemas.ts"),
+    );
+
+    for needle in ["a.strictObject()", "b.strictObject()", "c.strictObject()"] {
+        let line = line_of(&repo, "packages/app/src/alias.ts", needle);
+        assert_ne!(
+            site_at(&report, "packages/app/src/alias.ts", line).label,
+            SiteLabel::Excluded,
+            "{needle}\n{}",
+            dump(&report)
+        );
+    }
+}
+
+#[test]
+fn a_workspace_package_without_an_indexed_export_target_is_never_excluded() {
+    let repo = workspace_with(&[
+        (
+            "packages/built/package.json",
+            "{\n  \"name\": \"dist-only\",\n  \"exports\": { \".\": \"./dist/index.js\" }\n}\n",
+        ),
+        (
+            "packages/app/src/built.ts",
+            "import * as d from \"dist-only\";\n\nexport const e = d.strictObject();\n",
+        ),
+    ]);
+    let report = report(
+        &repo,
+        "strictObject",
+        Some("packages/lib/src/v4/schemas.ts"),
+    );
+
+    let line = line_of(&repo, "packages/app/src/built.ts", "d.strictObject()");
+    assert_ne!(
+        site_at(&report, "packages/app/src/built.ts", line).label,
+        SiteLabel::Excluded,
+        "{}",
+        dump(&report)
+    );
+}
+
+#[test]
+fn a_parameter_named_like_the_import_binding_turns_the_import_rule_off() {
+    let repo = workspace_with(&[(
+        "packages/app/src/shadow.ts",
+        "import * as z from \"lib\";\n\nexport function wrap(z) {\n  return z.strictObject();\n}\n",
+    )]);
+    let report = report(
+        &repo,
+        "strictObject",
+        Some("packages/lib/src/v4/schemas.ts"),
+    );
+
+    let line = line_of(&repo, "packages/app/src/shadow.ts", "z.strictObject()");
+    assert_ne!(
+        site_at(&report, "packages/app/src/shadow.ts", line).label,
+        SiteLabel::Proven,
+        "{}",
+        dump(&report)
+    );
+}
+
+#[test]
+fn a_member_read_of_an_imported_object_keeps_its_object_member_label() {
+    let repo = workspace_with(&[
+        (
+            "packages/lib/src/api.ts",
+            "export const api = {\n  strictObject: () => 1,\n};\n",
+        ),
+        (
+            "packages/app/src/members.ts",
+            "import { api } from \"../../lib/src/api.js\";\n\nexport const m = api.strictObject();\n",
+        ),
+    ]);
+    let report = report(
+        &repo,
+        "strictObject",
+        Some("packages/lib/src/v4/schemas.ts"),
+    );
+
+    let line = line_of(&repo, "packages/app/src/members.ts", "api.strictObject()");
+    assert_site(
+        &report,
+        "packages/app/src/members.ts",
+        line,
+        SiteLabel::Excluded,
+        "resolves to `strictObject` (packages/lib/src/api.ts:2)",
+    );
+}
+
+const JS_MERGED_TYPE: &[(&str, &str)] = &[
+    (
+        "packages/lib/package.json",
+        "{\n  \"name\": \"lib\",\n  \"exports\": { \".\": \"./src/index.ts\" }\n}\n",
+    ),
+    (
+        "packages/lib/src/index.ts",
+        "export * from \"./in-out.js\";\n",
+    ),
+    (
+        "packages/lib/src/in-out.ts",
+        "export type output<T> = T;\n\nexport function output() {\n  return 1;\n}\n",
+    ),
+];
+
+#[test]
+fn a_declaration_merged_type_and_function_count_as_one_definition() {
+    let mut files: Vec<(&str, &str)> = JS_MERGED_TYPE.to_vec();
+    files.push((
+        "packages/app/src/use.ts",
+        "import * as z from \"lib\";\n\nexport type A = z.output<number>;\nexport const b = z.output();\n",
+    ));
+    let repo = scanned_repo(&files);
+    let report = first_definition_report(&repo, "output", "packages/lib/src/in-out.ts");
+
+    let path = "packages/app/src/use.ts";
+    for needle in ["z.output<number>", "z.output()"] {
+        let line = line_of(&repo, path, needle);
+        assert_site(&report, path, line, SiteLabel::Proven, "import");
+    }
+}
+
+#[test]
+fn a_bare_type_usage_is_shadowed_by_a_type_in_its_file_or_enclosing_function() {
+    let mut files: Vec<(String, String)> = JS_MERGED_TYPE
+        .iter()
+        .map(|(path, text)| (path.to_string(), text.to_string()))
+        .collect();
+    for n in 1..=13 {
+        files.push((
+            format!("packages/lib/src/decoys/d{n:02}.ts"),
+            "export type output<T> = T;\n".to_string(),
+        ));
+    }
+    files.push((
+        "packages/app/src/shadow-type.ts".to_string(),
+        "import * as z from \"lib\";\n\ntype output<T> = T;\n\nexport type A = output<number>;\nexport type B = z.output<number>;\n\nexport function f() {\n  type output<T> = T[];\n  return null as output<string>;\n}\n".to_string(),
+    ));
+    let repo = scanned_owned(&files);
+    let report = first_definition_report(&repo, "output", "packages/lib/src/in-out.ts");
+
+    let path = "packages/app/src/shadow-type.ts";
+    assert_site(
+        &report,
+        path,
+        line_of(&repo, path, "A = output<number>"),
+        SiteLabel::Excluded,
+        "resolves to `output` (packages/app/src/shadow-type.ts:3)",
+    );
+    assert_site(
+        &report,
+        path,
+        line_of(&repo, path, "as output<string>"),
+        SiteLabel::Excluded,
+        "resolves to `output` (packages/app/src/shadow-type.ts:9)",
+    );
+    assert_site(
+        &report,
+        path,
+        line_of(&repo, path, "z.output<number>"),
+        SiteLabel::Proven,
+        "import",
+    );
+}
+
+#[test]
+fn an_excluded_use_names_the_definition_that_has_the_meaning_of_the_use() {
+    let mut files: Vec<(&str, &str)> = JS_MERGED_TYPE.to_vec();
+    files.push((
+        "packages/other/src/box.ts",
+        "export class Box {\n  output() {\n    return 1;\n  }\n}\n",
+    ));
+    files.push((
+        "packages/app/src/use.ts",
+        "import * as z from \"lib\";\n\nexport type A = z.output<number>;\nexport const b = z.output();\n",
+    ));
+    let repo = scanned_repo(&files);
+    let report = report(&repo, "output", Some("packages/other/src/box.ts"));
+
+    let path = "packages/app/src/use.ts";
+    assert_site(
+        &report,
+        path,
+        line_of(&repo, path, "z.output<number>"),
+        SiteLabel::Excluded,
+        "resolves to `output` (packages/lib/src/in-out.ts:1)",
+    );
+    assert_site(
+        &report,
+        path,
+        line_of(&repo, path, "z.output()"),
+        SiteLabel::Excluded,
+        "resolves to `output` (packages/lib/src/in-out.ts:3)",
+    );
+}
+
+#[test]
+fn an_explicit_export_hides_the_same_name_from_a_star_reexport() {
+    let repo = scanned_repo(&[
+        (
+            "packages/lib/src/pick/index.ts",
+            "export * from \"./left.js\";\nexport { pick } from \"./right.js\";\n",
+        ),
+        (
+            "packages/lib/src/pick/left.ts",
+            "export function pick() {\n  return 1;\n}\n",
+        ),
+        (
+            "packages/lib/src/pick/right.ts",
+            "export function pick() {\n  return 2;\n}\n",
+        ),
+        (
+            "packages/app/src/pick.ts",
+            "import * as p from \"../../lib/src/pick/index.js\";\n\nexport const v = p.pick();\n",
+        ),
+    ]);
+    let report = report(&repo, "pick", Some("packages/lib/src/pick/right.ts"));
+
+    let line = line_of(&repo, "packages/app/src/pick.ts", "p.pick()");
+    assert_site(
+        &report,
+        "packages/app/src/pick.ts",
+        line,
+        SiteLabel::Proven,
+        "import",
+    );
+}
+
+#[test]
+fn star_reexports_that_form_a_cycle_leave_the_label_to_the_name() {
+    let repo = scanned_repo(&[
+        ("packages/lib/src/cycle/a.ts", "export * from \"./b.js\";\n"),
+        ("packages/lib/src/cycle/b.ts", "export * from \"./a.js\";\n"),
+        (
+            "packages/lib/src/cycle/real.ts",
+            "export function thing() {\n  return 1;\n}\n",
+        ),
+        (
+            "packages/app/src/cycle.ts",
+            "import * as c from \"../../lib/src/cycle/a.js\";\n\nexport const v = c.thing();\n",
+        ),
+    ]);
+    let report = report(&repo, "thing", None);
+
+    let line = line_of(&repo, "packages/app/src/cycle.ts", "c.thing()");
+    assert_ne!(
+        site_at(&report, "packages/app/src/cycle.ts", line).label,
+        SiteLabel::Excluded,
+        "{}",
+        dump(&report)
+    );
+}
+
+#[test]
+fn a_member_chain_is_not_excluded_by_an_import_of_its_last_name() {
+    let repo = scanned_repo(&[
+        (
+            "lib/request.js",
+            "var req = module.exports = {};\n\nreq.accepts = function () {\n  return 1;\n};\n",
+        ),
+        ("index.js", "exports.request = require('./lib/request');\n"),
+        (
+            "test/exports.js",
+            "var express = require('../');\nvar request = require('left-pad');\n\nmodule.exports = typeof express.request.accepts;\n",
+        ),
+    ]);
+    let report = report(&repo, "accepts", Some("lib/request.js"));
+
+    let line = line_of(&repo, "test/exports.js", "express.request.accepts");
+    assert_ne!(
+        site_at(&report, "test/exports.js", line).label,
+        SiteLabel::Excluded,
+        "{}",
+        dump(&report)
     );
 }
