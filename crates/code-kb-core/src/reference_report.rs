@@ -18,6 +18,9 @@ use crate::queries::{
 };
 use crate::text_scan::scan_word;
 
+#[path = "js_modules.rs"]
+mod js_modules;
+
 const RESOLVER_ROW_CAP: usize = 5_000;
 const OTHER_DEFINITION_CAP: usize = 12;
 /// How long the per-site checks of one report may run; later sites keep the label their name gives.
@@ -259,7 +262,8 @@ const SHADOW_IN_CHAIN_SQL: &str = "WITH RECURSIVE chain(symbol_id, depth) AS (
      JOIN symbols scope ON scope.symbol_id = chain.symbol_id
      JOIN symbols d ON d.parent_symbol_id = chain.symbol_id
      WHERE d.name = ?2 AND d.path = ?3
-       AND d.kind IN ('variable', 'parameter', 'function', 'constant', 'class')
+       AND (d.kind IN ('variable', 'parameter', 'function', 'constant', 'class')
+            OR ?4 AND d.kind IN ('type', 'interface', 'enum'))
        AND (chain.depth = 0 OR scope.kind IN ('function', 'method', 'constructor'))
      ORDER BY chain.depth, d.start_line
      LIMIT 1";
@@ -368,6 +372,9 @@ struct NameRow {
     /// The call is written on an expression (`getAsSingleElement().getAsInt()`), so it has a
     /// receiver that julie did not record.
     hidden_receiver: bool,
+    /// The names written before the used name (`["z", "core"]` for `z.core.f()`), `None` when
+    /// the row does not say.
+    chain: Option<Vec<String>>,
 }
 
 impl NameRow {
@@ -395,6 +402,14 @@ impl NameRow {
                 self.kind.as_str(),
                 "calls" | "call" | "variable_ref" | "references"
             )
+    }
+
+    /// A JavaScript type usage written without a qualifier (`output<T>`), which a type of that
+    /// name in an enclosing scope shadows.
+    fn is_bare_type_use(&self) -> bool {
+        self.kind == "type_usage"
+            && language_family(&self.language) == "js"
+            && self.chain.as_ref().is_some_and(Vec::is_empty)
     }
 
     fn display_kind(&self) -> String {
@@ -539,6 +554,7 @@ struct Accounting<'a> {
     external_sources: HashMap<String, bool>,
     /// Definitions an import reaches, by caller file, receiver, and name.
     import_matches: HashMap<(String, String, String), Vec<(String, String)>>,
+    js: js_modules::JsCaches,
 }
 
 impl<'a> Accounting<'a> {
@@ -553,6 +569,7 @@ impl<'a> Accounting<'a> {
             statements: RefCell::new(HashMap::new()),
             external_sources: HashMap::new(),
             import_matches: HashMap::new(),
+            js: js_modules::JsCaches::default(),
         }
     }
 
@@ -651,6 +668,7 @@ impl<'a> Accounting<'a> {
         pair_identifiers(&mut rows);
         rows.retain(|row| !row.consumed);
         mark_hidden_receivers(self.root, &mut rows);
+        js_modules::complete_js_chains(self.root, &mut rows);
 
         let mut order: Vec<usize> = (0..rows.len()).collect();
         order.sort_by(|&a, &b| {
@@ -823,6 +841,12 @@ impl<'a> Accounting<'a> {
                 .get::<_, Option<String>>(10)?
                 .and_then(|json| serde_json::from_str(&json).ok())
                 .unwrap_or_default();
+            let receiver: Option<String> = row.get(9)?;
+            let chain = namespace
+                .iter()
+                .chain(receiver.as_ref().filter(|r| !r.is_empty()))
+                .cloned()
+                .collect();
             rows.push(NameRow {
                 key: format!("P:{}", row.get::<_, i64>(0)?),
                 source: Source::Pending,
@@ -834,7 +858,7 @@ impl<'a> Accounting<'a> {
                 line: row.get::<_, i64>(6)? as usize,
                 column: row.get::<_, Option<i64>>(7)?.map(|v| v as usize),
                 end_line: row.get::<_, Option<i64>>(8)?.map(|v| v as usize),
-                receiver: row.get(9)?,
+                receiver,
                 namespace,
                 to_symbol_id: None,
                 site_line: row.get::<_, i64>(6)? as usize,
@@ -842,6 +866,7 @@ impl<'a> Accounting<'a> {
                 consumed: false,
                 paired: false,
                 hidden_receiver: false,
+                chain: Some(chain),
             });
         }
 
@@ -878,6 +903,7 @@ impl<'a> Accounting<'a> {
                 consumed: false,
                 paired: false,
                 hidden_receiver: false,
+                chain: None,
             });
         }
 
@@ -886,7 +912,9 @@ impl<'a> Accounting<'a> {
                 "SELECT i.identifier_id, i.containing_symbol_id, COALESCE(s.name, ''), i.kind,
                         i.path, i.language, i.start_line, i.start_column,
                         CASE WHEN json_valid(i.metadata_json)
-                             THEN json_extract(i.metadata_json, '$.receiver') END
+                             THEN json_extract(i.metadata_json, '$.receiver') END,
+                        CASE WHEN json_valid(i.metadata_json)
+                             THEN json_extract(i.metadata_json, '$.receiver_qualifier') END
                  FROM identifiers i
                  LEFT JOIN symbols s ON s.symbol_id = i.containing_symbol_id
                  WHERE i.name = ?1 AND COALESCE(s.kind, '') != 'import'
@@ -895,6 +923,22 @@ impl<'a> Accounting<'a> {
             let mut query = stmt.query(params![name])?;
             while let Some(row) = query.next()? {
                 let line = row.get::<_, i64>(6)? as usize;
+                let kind: String = row.get(3)?;
+                let receiver: Option<String> = row.get(8)?;
+                let qualifier: Option<String> = row.get(9)?;
+                let written = receiver.as_deref().filter(|r| !r.is_empty());
+                let chain = match kind.as_str() {
+                    "type_usage" => None,
+                    "member_access" if written.is_none() => None,
+                    _ => Some(
+                        qualifier
+                            .iter()
+                            .flat_map(|q| q.split('.'))
+                            .chain(written)
+                            .map(str::to_string)
+                            .collect(),
+                    ),
+                };
                 rows.push(NameRow {
                     key: format!("I:{}", row.get::<_, String>(0)?),
                     source: Source::Identifier,
@@ -902,11 +946,11 @@ impl<'a> Accounting<'a> {
                     caller_name: row.get(2)?,
                     path: row.get::<_, String>(4)?.replace('\\', "/"),
                     language: row.get(5)?,
-                    kind: row.get(3)?,
+                    kind,
                     line,
                     column: row.get::<_, Option<i64>>(7)?.map(|v| v as usize),
                     end_line: None,
-                    receiver: row.get(8)?,
+                    receiver,
                     namespace: Vec::new(),
                     to_symbol_id: None,
                     site_line: line,
@@ -914,6 +958,7 @@ impl<'a> Accounting<'a> {
                     consumed: false,
                     paired: false,
                     hidden_receiver: false,
+                    chain,
                 });
             }
         }
@@ -1151,6 +1196,9 @@ impl<'a> Accounting<'a> {
         if row.is_bare_use() && spec.group.iter().all(is_property_method) {
             return Ok(Some(self.bare_use_of_property_method(row, &spec.name)?));
         }
+        if let Some(verdict) = self.js_verdict(row, spec)? {
+            return Ok(Some(verdict));
+        }
         if let Some(claim) = claims.get(&row.key)
             && let Some(basis) = &claim.basis
         {
@@ -1314,14 +1362,17 @@ impl<'a> Accounting<'a> {
         name: &str,
         group_ids: &HashSet<&str>,
     ) -> Result<Option<Definition>, QueryError> {
-        if !row.is_bare_use() {
+        let type_use = row.is_bare_type_use();
+        if !row.is_bare_use() && !type_use {
             return Ok(None);
         }
         let mut hit = None;
         if let Some(caller) = row.caller_id.as_deref() {
             hit = self.with_statement(SHADOW_IN_CHAIN_SQL, |stmt| {
-                stmt.query_row(params![caller, name, row.path], |r| r.get::<_, String>(0))
-                    .optional()
+                stmt.query_row(params![caller, name, row.path, type_use], |r| {
+                    r.get::<_, String>(0)
+                })
+                .optional()
             })?;
         }
         if hit.is_none() {
@@ -1450,7 +1501,14 @@ impl<'a> Accounting<'a> {
 
     /// The import that binds the qualifier of the call to a module outside the index.
     fn external_binding(&mut self, row: &NameRow) -> Result<Option<(String, String)>, QueryError> {
-        let Some(qualifier) = row.qualifier() else {
+        let javascript = language_family(&row.language) == "js";
+        let imported_head = match row.chain.as_ref().and_then(|chain| chain.first()) {
+            Some(head) if javascript && self.js_binds_import(&row.path, head)? => {
+                Some(head.as_str())
+            }
+            _ => None,
+        };
+        let Some(qualifier) = imported_head.or_else(|| row.qualifier()) else {
             return Ok(None);
         };
         if SELF_RECEIVERS.contains(&qualifier) || qualifier == "crate" {
@@ -1486,7 +1544,12 @@ impl<'a> Accounting<'a> {
             };
         }
         for source in &sources {
-            if !self.source_is_external(source)? {
+            let external = if javascript {
+                self.js_source_is_external(&row.path, source)?
+            } else {
+                self.source_is_external(source)?
+            };
+            if !external {
                 return Ok(None);
             }
         }
