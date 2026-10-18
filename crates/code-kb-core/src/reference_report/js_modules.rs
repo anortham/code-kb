@@ -36,6 +36,10 @@ const COMPILED_EXTENSIONS: [(&str, &[&str]); 4] = [
 ];
 /// Sources that name an alias or a subpath import of a package, never a package outside it.
 const ALIAS_PREFIXES: [&str; 4] = ["#", "@/", "~/", "/"];
+/// The TypeScript 5.5 template for the folder of the config in use.
+const CONFIG_DIR: &str = "${configDir}";
+/// The top-level modules of Node, which a bare import reaches before any package.
+const NODE_BUILTINS: &str = "assert async_hooks buffer child_process cluster console constants crypto dgram diagnostics_channel dns domain events fs http http2 https inspector module net os path perf_hooks process punycode querystring readline repl stream string_decoder sys timers tls trace_events tty url util v8 vm worker_threads zlib";
 
 const PROJECT_DIRECTORIES_SQL: &str = "SELECT DISTINCT rtrim(p, replace(p, '/', ''))
      FROM (SELECT replace(path, char(92), '/') AS p FROM files)";
@@ -63,6 +67,13 @@ const TOP_LEVEL_DEFINITIONS_SQL: &str =
      WHERE path = ?1 AND +name = ?2 AND parent_symbol_id IS NULL
        AND kind NOT IN ('import', 'export')";
 
+/// julie writes no export row for `exports.name = …` or `module.exports.name = …`; the
+/// signature of the definition it records names the export.
+const COMMONJS_EXPORTS_SQL: &str = "SELECT symbol_id, kind, start_line, COALESCE(signature, '')
+     FROM symbols
+     WHERE path = ?1 AND +name = ?2 AND parent_symbol_id IS NULL
+       AND instr(signature, 'exports.' || ?2 || ' =') IN (1, 8)";
+
 const LOCAL_SYMBOL_SQL: &str = "SELECT COALESCE(signature, '') FROM symbols
      WHERE path = ?1 AND +name = ?2 AND kind NOT IN ('import', 'export')";
 
@@ -89,6 +100,15 @@ enum Target {
 enum Kind {
     Import,
     Require,
+}
+
+/// Which importers load a package entry.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Loads {
+    Anyone,
+    Only(Kind),
+    /// Read by the type checker, never run.
+    Types,
 }
 
 struct ImportRow {
@@ -201,16 +221,20 @@ struct Package {
     dir: String,
     name: String,
     exports: Option<Exports>,
-    entries: Vec<(Option<Kind>, String)>,
+    entries: Vec<(Loads, String)>,
 }
 
 /// The module aliases of a `tsconfig.json` or `jsconfig.json`, `extends` included.
 #[derive(Default)]
 struct Aliases {
+    /// The folder of the config the importer uses, which `${configDir}` names.
+    config_dir: String,
     base_url: Option<String>,
     /// The folder of the config that sets `paths`; without a `baseUrl` its targets start there.
     paths_dir: String,
     paths: Vec<(String, Vec<String>)>,
+    /// The config file exists but could not be read, so its aliases are unknown.
+    unreadable: bool,
 }
 
 type ImportRows = Rc<[ImportRow]>;
@@ -221,6 +245,7 @@ pub(super) type BindingSites = Rc<Vec<(usize, usize)>>;
 #[derive(Default)]
 pub(super) struct JsCaches {
     files: RefCell<HashMap<String, Option<String>>>,
+    on_disk: RefCell<HashMap<String, bool>>,
     modules: RefCell<HashMap<(String, String, Kind), Vec<String>>>,
     imports: RefCell<HashMap<(String, String), ImportRows>>,
     exports: RefCell<HashMap<String, Rc<Vec<ExportRow>>>>,
@@ -252,6 +277,17 @@ fn child(dir: &str, name: &str) -> String {
         name.to_string()
     } else {
         format!("{dir}/{name}")
+    }
+}
+
+/// `value` as a path from the project root: a `${configDir}` prefix starts at `leaf`, anything
+/// else at `dir`.
+fn anchored(leaf: &str, dir: &str, value: &str) -> String {
+    match value.get(..CONFIG_DIR.len()) {
+        Some(prefix) if prefix.eq_ignore_ascii_case(CONFIG_DIR) => {
+            child(leaf, &value[CONFIG_DIR.len()..])
+        }
+        _ => child(dir, value),
     }
 }
 
@@ -313,11 +349,15 @@ fn are_twins(a: &str, b: &str) -> bool {
     })
 }
 
-/// The files of a package entry in the order to try them: scripts before declaration files.
-/// When more than one script is named, only those the importer's `kind` loads stay; if the
-/// index still cannot choose one script, it names no module.
-fn candidate_files(mut found: Vec<(Option<Kind>, String)>, kind: Kind) -> Vec<String> {
-    let distinct_scripts = |found: &[(Option<Kind>, String)]| {
+/// The files of a package entry in the order to try them: scripts before declaration files, and
+/// the entries only the type checker reads last. When more than one script is named, only those
+/// the importer's `kind` loads stay, or the ones every importer loads when none is its own; if
+/// the index still cannot choose one script, it names no module.
+fn candidate_files(found: Vec<(Loads, String)>, kind: Kind) -> Vec<String> {
+    let (types, mut found): (Vec<_>, Vec<_>) = found
+        .into_iter()
+        .partition(|(loads, _)| *loads == Loads::Types);
+    let distinct_scripts = |found: &[(Loads, String)]| {
         found
             .iter()
             .filter(|(_, file)| !is_declaration(file))
@@ -326,7 +366,12 @@ fn candidate_files(mut found: Vec<(Option<Kind>, String)>, kind: Kind) -> Vec<St
             .len()
     };
     if distinct_scripts(&found) > 1 {
-        found.retain(|(loads, _)| *loads == Some(kind));
+        let chosen = if found.iter().any(|(loads, _)| *loads == Loads::Only(kind)) {
+            Loads::Only(kind)
+        } else {
+            Loads::Anyone
+        };
+        found.retain(|(loads, _)| *loads == chosen);
         if distinct_scripts(&found) != 1 {
             return Vec::new();
         }
@@ -339,6 +384,7 @@ fn candidate_files(mut found: Vec<(Option<Kind>, String)>, kind: Kind) -> Vec<St
     scripts
         .into_iter()
         .chain(declarations)
+        .chain(types.into_iter().map(|(_, file)| file))
         .filter(|file| seen.insert(file.clone()))
         .collect()
 }
@@ -701,6 +747,13 @@ impl Accounting<'_> {
                 }
             }
         }
+        if found.is_empty() {
+            found.extend(
+                self.reached_by(COMMONJS_EXPORTS_SQL, file, name)?
+                    .into_iter()
+                    .map(Target::Definition),
+            );
+        }
         Ok(found)
     }
 
@@ -727,8 +780,8 @@ impl Accounting<'_> {
     }
 
     /// Whether `specifier` names a package outside the project: a `node:` builtin always is, an
-    /// alias or a workspace package never is, and any other name takes the rule that does not
-    /// read the packages.
+    /// alias or a workspace package never is, a bare Node builtin is, and any other name takes
+    /// the rule that does not read the packages.
     pub(super) fn js_source_is_external(
         &mut self,
         importer: &str,
@@ -740,10 +793,14 @@ impl Accounting<'_> {
         let alias = ALIAS_PREFIXES
             .iter()
             .any(|prefix| specifier.starts_with(prefix));
+        let builtin = specifier
+            .split('/')
+            .next()
+            .is_some_and(|module| NODE_BUILTINS.split(' ').any(|name| name == module));
         Ok(!alias
             && !self.js_is_workspace_package(specifier)?
             && self.js_aliases(importer, specifier)?.is_none()
-            && self.source_is_external(specifier)?)
+            && (builtin || self.source_is_external(specifier)?))
     }
 
     pub(super) fn js_binds_import(&self, path: &str, name: &str) -> Result<bool, QueryError> {
@@ -793,8 +850,9 @@ impl Accounting<'_> {
 
     /// The files an alias of the nearest `tsconfig.json` or `jsconfig.json` gives `specifier`:
     /// the first target of the best `paths` key that is an indexed file, or `baseUrl` itself.
-    /// `Some` with no file when a `paths` key matches and none of its targets is indexed; `None`
-    /// when no alias applies.
+    /// `Some` with no file when a `paths` key matches a target that exists on disk but is not
+    /// indexed, or when the config cannot be read and `specifier` names a workspace package;
+    /// `None` when no alias applies, which includes a `paths` key whose targets do not exist.
     fn js_aliases(
         &self,
         importer: &str,
@@ -803,6 +861,9 @@ impl Accounting<'_> {
         let Some(aliases) = self.js_config(parent(importer))? else {
             return Ok(None);
         };
+        if aliases.unreadable {
+            return Ok(self.js_is_workspace_package(specifier)?.then(Vec::new));
+        }
         let base = aliases.base_url.as_deref().unwrap_or(&aliases.paths_dir);
         let best = aliases
             .paths
@@ -816,14 +877,21 @@ impl Accounting<'_> {
             })
             .max_by_key(|(rank, ..)| *rank);
         if let Some((_, targets, star)) = best {
+            let mut unindexed = false;
             for target in targets {
-                if let Some(base) = normalize(&child(base, &target.replace('*', star)))
-                    && let Some(file) = self.js_file(&base)?
-                {
-                    return Ok(Some(vec![file]));
+                let written = anchored(&aliases.config_dir, base, &target.replace('*', star));
+                if written.contains("${") {
+                    unindexed = true;
+                } else if let Some(base) = normalize(&written) {
+                    if let Some(file) = self.js_file(&base)? {
+                        return Ok(Some(vec![file]));
+                    }
+                    unindexed |= self.js_file_on_disk(&base)?;
                 }
             }
-            return Ok(Some(Vec::new()));
+            if unindexed {
+                return Ok(Some(Vec::new()));
+            }
         }
         if let Some(base_url) = &aliases.base_url
             && let Some(base) = normalize(&child(base_url, specifier))
@@ -839,7 +907,13 @@ impl Accounting<'_> {
         cached(&self.js.aliases, dir.to_string(), || {
             for file in ["tsconfig.json", "jsconfig.json"] {
                 if self.root.join(dir).join(file).is_file() {
-                    return Ok(self.read_config(dir, file, 0).map(Rc::new));
+                    let unreadable = Aliases {
+                        unreadable: true,
+                        ..Aliases::default()
+                    };
+                    return Ok(Some(Rc::new(
+                        self.read_config(dir, dir, file, 0).unwrap_or(unreadable),
+                    )));
                 }
             }
             if dir.is_empty() {
@@ -850,30 +924,48 @@ impl Accounting<'_> {
         })
     }
 
-    fn read_config(&self, dir: &str, file: &str, depth: usize) -> Option<Aliases> {
+    /// The aliases of `file` in `dir`, which `leaf` (the folder of the config in use) extends.
+    fn read_config(&self, leaf: &str, dir: &str, file: &str, depth: usize) -> Option<Aliases> {
         let text = std::fs::read_to_string(self.root.join(dir).join(file)).ok()?;
-        let config: serde_json::Value = serde_json::from_str(&lenient_json(&text)).ok()?;
-        let inherited = config
-            .get("extends")
-            .and_then(serde_json::Value::as_str)
+        let text = text.trim_start_matches('\u{feff}');
+        let config: serde_json::Value = serde_json::from_str(&lenient_json(text)).ok()?;
+        let extended = match config.get("extends") {
+            Some(serde_json::Value::Array(entries)) => entries.iter().collect(),
+            Some(entry) => vec![entry],
+            None => Vec::new(),
+        };
+        let mut aliases = Aliases {
+            config_dir: leaf.to_string(),
+            ..Aliases::default()
+        };
+        for extends in extended
+            .into_iter()
+            .filter_map(serde_json::Value::as_str)
             .filter(|extends| extends.starts_with('.') && depth < MAX_EXTENDS)
-            .and_then(|extends| normalize(&child(dir, extends)))
-            .and_then(|path| {
-                let path = if path.ends_with(".json") {
-                    path
-                } else {
-                    format!("{path}.json")
-                };
-                let (folder, name) = path.rsplit_once('/').unwrap_or(("", &path));
-                self.read_config(folder, name, depth + 1)
-            });
-        let mut aliases = inherited.unwrap_or_default();
+        {
+            let Some(path) = normalize(&child(dir, extends)) else {
+                continue;
+            };
+            let path = if path.ends_with(".json") {
+                path
+            } else {
+                format!("{path}.json")
+            };
+            let (folder, name) = path.rsplit_once('/').unwrap_or(("", &path));
+            if let Some(inherited) = self.read_config(leaf, folder, name, depth + 1) {
+                aliases.base_url = inherited.base_url.or(aliases.base_url);
+                if !inherited.paths.is_empty() {
+                    aliases.paths_dir = inherited.paths_dir;
+                    aliases.paths = inherited.paths;
+                }
+            }
+        }
         let options = config.get("compilerOptions");
         if let Some(base_url) = options
             .and_then(|options| options.get("baseUrl"))
             .and_then(serde_json::Value::as_str)
         {
-            aliases.base_url = normalize(&child(dir, base_url));
+            aliases.base_url = normalize(&anchored(leaf, dir, base_url));
         }
         if let Some(paths) = options
             .and_then(|options| options.get("paths"))
@@ -907,15 +999,19 @@ impl Accounting<'_> {
                     format!("./{subpath}")
                 };
                 if let Some((value, star)) = exports.select(&key) {
-                    self.indexed_targets(value, &package.dir, star, None, &mut found)?;
+                    self.indexed_targets(value, &package.dir, star, Loads::Anyone, &mut found)?;
                 }
             }
             None if subpath.is_empty() => {
-                let entries = package
+                let entries: Vec<_> = package
                     .entries
                     .iter()
-                    .map(|(loads, entry)| (*loads, entry.as_str()));
-                for (loads, entry) in entries.chain([(None, "index")]) {
+                    .filter(|(loads, _)| !matches!(loads, Loads::Only(only) if *only != kind))
+                    .map(|(loads, entry)| (*loads, entry.as_str()))
+                    .collect();
+                let runs = entries.iter().any(|(loads, _)| *loads != Loads::Types);
+                let fallback = (!runs).then_some((Loads::Anyone, "index"));
+                for (loads, entry) in entries.into_iter().chain(fallback) {
                     if let Some(base) = normalize(&child(&package.dir, entry)) {
                         found.extend(self.js_file(&base)?.map(|file| (loads, file)));
                     }
@@ -923,22 +1019,22 @@ impl Accounting<'_> {
             }
             None => {
                 if let Some(base) = normalize(&child(&package.dir, subpath)) {
-                    found.extend(self.js_file(&base)?.map(|file| (None, file)));
+                    found.extend(self.js_file(&base)?.map(|file| (Loads::Anyone, file)));
                 }
             }
         }
         Ok(candidate_files(found, kind))
     }
 
-    /// The indexed files that the targets of `exports` name, in file order, with the kind of
-    /// importer the nearest `import` or `require` condition above each one selects.
+    /// The indexed files that the targets of `exports` name, in file order, with the importers the
+    /// nearest `import`, `require`, or `types` condition above each one selects.
     fn indexed_targets(
         &self,
         exports: &Exports,
         dir: &str,
         star: Option<&str>,
-        loads: Option<Kind>,
-        files: &mut Vec<(Option<Kind>, String)>,
+        loads: Loads,
+        files: &mut Vec<(Loads, String)>,
     ) -> Result<(), QueryError> {
         match exports {
             Exports::Target(target) => {
@@ -954,9 +1050,10 @@ impl Accounting<'_> {
             }
             Exports::Conditions(entries) => {
                 for (condition, value) in entries {
-                    let loads = match condition.as_str() {
-                        "import" => Some(Kind::Import),
-                        "require" => Some(Kind::Require),
+                    let loads = match (condition.as_str(), loads) {
+                        ("types", _) | (_, Loads::Types) => Loads::Types,
+                        ("import", _) => Loads::Only(Kind::Import),
+                        ("require", _) => Loads::Only(Kind::Require),
                         _ => loads,
                     };
                     self.indexed_targets(value, dir, star, loads, files)?;
@@ -1002,9 +1099,9 @@ impl Accounting<'_> {
                     name,
                     exports,
                     entries: [
-                        (Some(Kind::Import), module),
-                        (Some(Kind::Require), main),
-                        (None, types),
+                        (Loads::Only(Kind::Import), module),
+                        (Loads::Anyone, main),
+                        (Loads::Types, types),
                     ]
                     .into_iter()
                     .filter_map(|(loads, entry)| Some((loads, entry?)))
@@ -1029,6 +1126,15 @@ impl Accounting<'_> {
                 }
             }
             Ok(None)
+        })
+    }
+
+    /// Whether any file `base` can name exists on disk, indexed or not.
+    fn js_file_on_disk(&self, base: &str) -> Result<bool, QueryError> {
+        cached(&self.js.on_disk, base.to_string(), || {
+            Ok(file_candidates(base)
+                .iter()
+                .any(|candidate| self.root.join(candidate).is_file()))
         })
     }
 
@@ -1067,26 +1173,37 @@ impl Accounting<'_> {
     fn js_definitions(&self, path: &str, name: &str) -> Result<Vec<Reached>, QueryError> {
         let key = (path.to_string(), name.to_string());
         cached(&self.js.definitions, key, || {
-            let rows = self.rows_at_path(TOP_LEVEL_DEFINITIONS_SQL, path, &[&name], |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, i64>(2)?,
-                    row.get::<_, String>(3)?,
-                ))
-            })?;
-            Ok(rows
-                .into_iter()
-                .filter(|(.., signature)| !is_test_label(signature))
-                .map(|(symbol_id, kind, line, _)| Reached {
-                    symbol_id,
-                    path: path.to_string(),
-                    name: name.to_string(),
-                    kind,
-                    line: line as usize,
-                })
-                .collect())
+            self.reached_by(TOP_LEVEL_DEFINITIONS_SQL, path, name)
         })
+    }
+
+    /// The definitions `sql` selects as `(symbol_id, kind, start_line, signature)` for `name` in
+    /// `path`, test labels left out.
+    fn reached_by(
+        &self,
+        sql: &'static str,
+        path: &str,
+        name: &str,
+    ) -> Result<Vec<Reached>, QueryError> {
+        let rows = self.rows_at_path(sql, path, &[&name], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, String>(3)?,
+            ))
+        })?;
+        Ok(rows
+            .into_iter()
+            .filter(|(.., signature)| !is_test_label(signature))
+            .map(|(symbol_id, kind, line, _)| Reached {
+                symbol_id,
+                path: path.to_string(),
+                name: name.to_string(),
+                kind,
+                line: line as usize,
+            })
+            .collect())
     }
 
     fn js_has_local_symbol(&self, path: &str, name: &str) -> Result<bool, QueryError> {

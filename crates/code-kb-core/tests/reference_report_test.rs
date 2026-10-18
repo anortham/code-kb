@@ -3050,11 +3050,13 @@ fn a_base_url_that_names_the_file_wins_over_a_workspace_package() {
 }
 
 #[test]
-fn a_paths_key_that_matches_no_indexed_file_leaves_the_module_unknown() {
+fn a_paths_key_that_matches_an_unindexed_file_on_disk_leaves_the_module_unknown() {
     let repo = shared_name_conflict_with(&[(
         "tsconfig.json",
         "{\"compilerOptions\":{\"paths\":{\"shared/*\":[\"gone/*\"]}}}\n",
     )]);
+    fs::create_dir_all(repo.root.join("gone")).unwrap();
+    fs::write(repo.root.join("gone/util.ts"), "export const unseen = 1;\n").unwrap();
 
     for target in ["src/shared/util.ts", "tools/shared/util.ts"] {
         let report = report(&repo, "helper", Some(target));
@@ -3198,4 +3200,1034 @@ fn a_callback_parameter_with_a_declared_type_keeps_the_receiver_type_proof() {
 
     assert_site(&report, "use.ts", 3, SiteLabel::Proven, "receiver type");
     assert_site(&report, "use.ts", 5, SiteLabel::Proven, "receiver type");
+}
+
+const KERNEL_FILES: &[(&str, &str)] = &[
+    ("package.json", "{\"name\":\"root\",\"private\":true}\n"),
+    (
+        "app/main.js",
+        "import { foo } from '@x/pkg'\nexport function run() { return foo() }\n",
+    ),
+    (
+        "packages/kernel/index.js",
+        "export * from './lib/entry.js'\n",
+    ),
+    (
+        "packages/kernel/lib/entry.js",
+        "export function foo() { return 1 }\n",
+    ),
+];
+
+fn kernel_with(manifest: &str, extra: &[(&str, &str)]) -> Repo {
+    let files: Vec<(&str, &str)> = KERNEL_FILES
+        .iter()
+        .chain(extra)
+        .copied()
+        .chain([("packages/kernel/package.json", manifest)])
+        .collect();
+    scanned_repo(&files)
+}
+
+#[test]
+fn a_main_entry_beside_an_index_file_is_the_only_script_of_the_package() {
+    let manifest = "{\"name\":\"@x/pkg\",\"main\":\"lib/entry.js\"}\n";
+
+    let alone = kernel_with(manifest, &[]);
+    let report_alone = report(&alone, "foo", Some("packages/kernel/lib/entry.js"));
+    assert_site(&report_alone, "app/main.js", 2, SiteLabel::Proven, "import");
+
+    let rivalled = kernel_with(
+        manifest,
+        &[(
+            "packages/other/foo.js",
+            "export function foo() { return 2 }\n",
+        )],
+    );
+    let entry = report(&rivalled, "foo", Some("packages/kernel/lib/entry.js"));
+    assert_site(&entry, "app/main.js", 2, SiteLabel::Proven, "import");
+    let other = report(&rivalled, "foo", Some("packages/other/foo.js"));
+    assert_site(
+        &other,
+        "app/main.js",
+        2,
+        SiteLabel::Excluded,
+        "resolves to `foo` (packages/kernel/lib/entry.js:1)",
+    );
+}
+
+#[test]
+fn a_types_entry_never_counts_as_a_second_script() {
+    let types_files = [("packages/kernel/src/types.ts", "export type Id = number;\n")];
+    for manifest in [
+        "{\"name\":\"@x/pkg\",\"main\":\"lib/entry.js\",\"types\":\"src/types.ts\"}\n",
+        "{\"name\":\"@x/pkg\",\"exports\":{\".\":{\"types\":\"./src/types.ts\",\"default\":\"./lib/entry.js\"}}}\n",
+    ] {
+        let repo = kernel_with(manifest, &types_files);
+        let report = report(&repo, "foo", Some("packages/kernel/lib/entry.js"));
+
+        assert_site(&report, "app/main.js", 2, SiteLabel::Proven, "import");
+    }
+}
+
+#[test]
+fn an_es_import_follows_the_module_entry_and_a_require_follows_main() {
+    let repo = scanned_repo(&[
+        ("package.json", "{\"name\":\"root\",\"private\":true}\n"),
+        ("app/package.json", "{\"name\":\"app\"}\n"),
+        (
+            "app/a.cjs",
+            "const { foo } = require('dual')\nmodule.exports = function run() { return foo() }\n",
+        ),
+        (
+            "app/b.mjs",
+            "import { foo } from 'dual'\nexport function run2() { return foo() }\n",
+        ),
+        (
+            "packages/dual/package.json",
+            "{\"name\":\"dual\",\"module\":\"esm/index.js\",\"main\":\"cjs/index.js\"}\n",
+        ),
+        (
+            "packages/dual/cjs/index.js",
+            "export function foo() { return 1 }\n",
+        ),
+        (
+            "packages/dual/esm/index.js",
+            "export function foo() { return 2 }\n",
+        ),
+    ]);
+
+    let esm = report(&repo, "foo", Some("packages/dual/esm/index.js"));
+    assert_site(&esm, "app/b.mjs", 2, SiteLabel::Proven, "import");
+    assert_site(
+        &esm,
+        "app/a.cjs",
+        2,
+        SiteLabel::Excluded,
+        "resolves to `foo` (packages/dual/cjs/index.js:1)",
+    );
+    let cjs = report(&repo, "foo", Some("packages/dual/cjs/index.js"));
+    assert_site(&cjs, "app/a.cjs", 2, SiteLabel::Proven, "import");
+    assert_site(
+        &cjs,
+        "app/b.mjs",
+        2,
+        SiteLabel::Excluded,
+        "resolves to `foo` (packages/dual/esm/index.js:1)",
+    );
+}
+
+const PATHS_TO_SRC: &str =
+    "{\"compilerOptions\":{\"baseUrl\":\".\",\"paths\":{\"shared/*\":[\"src/shared/*\"]}}}\n";
+
+fn assert_src_helper_wins(repo: &Repo) {
+    let aliased = report(repo, "helper", Some("src/shared/util.ts"));
+    assert_site(&aliased, "src/app.ts", 2, SiteLabel::Proven, "import");
+    let package = report(repo, "helper", Some("tools/shared/util.ts"));
+    assert_site(
+        &package,
+        "src/app.ts",
+        2,
+        SiteLabel::Excluded,
+        "resolves to `helper` (src/shared/util.ts:1)",
+    );
+}
+
+#[test]
+fn a_tsconfig_with_a_byte_order_mark_is_read() {
+    let with_mark = format!("\u{feff}{PATHS_TO_SRC}");
+    let repo = shared_name_conflict_with(&[("tsconfig.json", &with_mark)]);
+
+    assert_src_helper_wins(&repo);
+}
+
+#[test]
+fn a_tsconfig_extends_array_is_followed_in_order_and_the_last_paths_win() {
+    let repo = shared_name_conflict_with(&[
+        (
+            "tsconfig.json",
+            "{\"extends\":[\"./a.json\",\"./b.json\"]}\n",
+        ),
+        (
+            "a.json",
+            "{\"compilerOptions\":{\"baseUrl\":\".\",\"paths\":{\"shared/*\":[\"tools/shared/*\"]}}}\n",
+        ),
+        (
+            "b.json",
+            "{\"compilerOptions\":{\"paths\":{\"shared/*\":[\"src/shared/*\"]}}}\n",
+        ),
+    ]);
+
+    assert_src_helper_wins(&repo);
+}
+
+#[test]
+fn a_tsconfig_that_cannot_be_read_leaves_a_workspace_package_unknown() {
+    let repo = shared_name_conflict_with(&[("tsconfig.json", "{\"compilerOptions\":")]);
+
+    for target in ["src/shared/util.ts", "tools/shared/util.ts"] {
+        let report = report(&repo, "helper", Some(target));
+        let label = site_at(&report, "src/app.ts", 2).label;
+        assert!(
+            label != SiteLabel::Proven && label != SiteLabel::Excluded,
+            "{target}\n{}",
+            dump(&report)
+        );
+    }
+}
+
+#[test]
+fn a_paths_key_that_matches_no_file_on_disk_falls_back_to_the_workspace_package() {
+    let repo = shared_name_conflict_with(&[(
+        "tsconfig.json",
+        "{\"compilerOptions\":{\"paths\":{\"shared/*\":[\"gone/*\"]}}}\n",
+    )]);
+
+    let package = report(&repo, "helper", Some("tools/shared/util.ts"));
+    assert_site(&package, "src/app.ts", 2, SiteLabel::Proven, "import");
+    let other = report(&repo, "helper", Some("src/shared/util.ts"));
+    assert_site(
+        &other,
+        "src/app.ts",
+        2,
+        SiteLabel::Excluded,
+        "resolves to `helper` (tools/shared/util.ts:1)",
+    );
+}
+
+#[test]
+fn a_catch_all_paths_key_does_not_stop_an_external_package_from_being_excluded() {
+    let repo = scanned_repo(&[
+        ("package.json", "{\"name\":\"root\",\"private\":true}\n"),
+        (
+            "tsconfig.json",
+            "{\"compilerOptions\":{\"baseUrl\":\".\",\"paths\":{\"*\":[\"node_modules/*\",\"src/types/*\"]}}}\n",
+        ),
+        (
+            "lib/mine.ts",
+            "export function debounce(f: () => void) { return f }\n",
+        ),
+        (
+            "src/app.ts",
+            "import { debounce } from 'lodash'\nexport function run() { return debounce(() => 1) }\n",
+        ),
+    ]);
+    let report = report(&repo, "debounce", Some("lib/mine.ts"));
+
+    assert_site(
+        &report,
+        "src/app.ts",
+        2,
+        SiteLabel::Excluded,
+        "receiver `debounce` is imported from `lodash`",
+    );
+}
+
+#[test]
+fn a_named_import_from_a_node_builtin_subpath_is_excluded_beside_a_folder_of_its_last_segment() {
+    let repo = scanned_repo(&[
+        ("package.json", "{\"name\":\"r\"}\n"),
+        (
+            "src/promises/read.ts",
+            "export function readFile() { return 1 }\n",
+        ),
+        (
+            "src/other/read.ts",
+            "export function readFile() { return 2 }\n",
+        ),
+        (
+            "src/use.ts",
+            "import { readFile } from 'node:fs/promises'\nexport function c() { return readFile() }\n",
+        ),
+    ]);
+    for target in ["src/other/read.ts", "src/promises/read.ts"] {
+        let report = report(&repo, "readFile", Some(target));
+
+        assert_site(
+            &report,
+            "src/use.ts",
+            2,
+            SiteLabel::Excluded,
+            "receiver `readFile` is imported from `node:fs/promises`",
+        );
+    }
+}
+
+#[test]
+fn a_bare_import_of_a_node_builtin_subpath_is_excluded_beside_a_folder_of_its_last_segment() {
+    let repo = scanned_repo(&[
+        ("package.json", "{\"name\":\"r\"}\n"),
+        (
+            "src/promises/read.ts",
+            "export function readFile() { return 1 }\n",
+        ),
+        (
+            "src/use.ts",
+            "import { readFile } from 'fs/promises'\nexport function c() { return readFile() }\n",
+        ),
+    ]);
+    let report = report(&repo, "readFile", Some("src/promises/read.ts"));
+
+    assert_site(
+        &report,
+        "src/use.ts",
+        2,
+        SiteLabel::Excluded,
+        "receiver `readFile` is imported from `fs/promises`",
+    );
+}
+
+#[test]
+fn a_promise_catch_method_is_not_a_catch_clause() {
+    let repo = scanned_repo(&[
+        ("package.json", "{\"name\":\"r\"}\n"),
+        ("h.js", "export function handle(e) { return e }\n"),
+        (
+            "use.js",
+            "import { handle } from './h.js';\nexport async function a(p) {\n  await p.catch(handle);\n  return handle(1);\n}\nexport async function b(p) {\n  await p?.catch(handle);\n  return handle(2);\n}\nexport async function c(p) {\n  try { await p } catch (handle) { handle(3) }\n}\n",
+        ),
+    ]);
+    let report = report(&repo, "handle", Some("h.js"));
+
+    assert_site(&report, "use.js", 4, SiteLabel::Proven, "import");
+    assert_site(&report, "use.js", 8, SiteLabel::Proven, "import");
+    assert_site(&report, "use.js", 11, SiteLabel::Likely, &binding_note(11));
+}
+
+#[test]
+fn names_in_grouping_parentheses_of_a_ternary_are_not_arrow_parameters() {
+    let repo = scanned_repo(&[
+        ("package.json", "{\"name\":\"r\"}\n"),
+        ("spinner.tsx", "export function Spinner() { return null }\n"),
+        (
+            "view.tsx",
+            "import { Spinner } from './spinner';\nexport function View({ items, loading }: any) {\n  return (\n    <div>\n      {loading ? (\n        <Spinner />\n      ) : items.map((item: any) => (\n        <span>{item}</span>\n      ))}\n      <Spinner />\n    </div>\n  );\n}\nexport const w = (xs: any[]) => xs.map((Spinner): number => Spinner());\n",
+        ),
+    ]);
+    let report = report(&repo, "Spinner", Some("spinner.tsx"));
+
+    assert_site(&report, "view.tsx", 6, SiteLabel::Proven, "import");
+    assert_site(&report, "view.tsx", 10, SiteLabel::Proven, "import");
+    assert_site(
+        &report,
+        "view.tsx",
+        14,
+        SiteLabel::Likely,
+        &binding_note(14),
+    );
+}
+
+#[test]
+fn a_callback_parameter_hides_a_qualified_path_proof_too() {
+    let repo = scanned_repo(&[
+        ("package.json", "{\"name\":\"r\"}\n"),
+        ("zmod.ts", "export const o = { g() { return 2 } };\n"),
+        (
+            "use.ts",
+            "import { o } from './zmod';\nexport function a(xs: any[]) { return xs.map(o => o.g()); }\nexport function b() { return o.g(); }\n",
+        ),
+    ]);
+    let report = report(&repo, "g", Some("zmod.ts"));
+
+    assert_site(
+        &report,
+        "use.ts",
+        2,
+        SiteLabel::Likely,
+        "qualified path; line 2 binds the name as a callback parameter, loop variable, or catch parameter",
+    );
+    assert_site(&report, "use.ts", 3, SiteLabel::Proven, "qualified path");
+}
+
+#[test]
+fn a_call_on_a_string_literal_is_not_a_bare_call() {
+    let repo = scanned_repo(&[
+        ("package.json", "{\"name\":\"r\"}\n"),
+        ("a.js", "export function trim() { return 1 }\n"),
+        (
+            "b.js",
+            "import { trim } from './a.js'\nexport function use() {\n  'abc'.trim()\n  `x`.\n    trim()\n  \"abc\".\n    trim()\n  return trim()\n}\n",
+        ),
+    ]);
+    let report = report(&repo, "trim", Some("a.js"));
+
+    for line in [3, 5, 7] {
+        assert_site(&report, "b.js", line, SiteLabel::Likely, "name only");
+    }
+    assert_site(&report, "b.js", 8, SiteLabel::Proven, "import");
+}
+
+#[test]
+fn a_record_word_inside_an_annotation_string_does_not_make_a_class_a_record() {
+    let repo = scanned_repo(&[
+        (
+            "p/A.java",
+            "package p;\n\npublic class A {\n    int price() {\n        return 1;\n    }\n}\n",
+        ),
+        (
+            "q/B.java",
+            "package q;\n\npublic class B {\n    int go() {\n        return make().price();\n    }\n}\n",
+        ),
+        (
+            "q/Trade.java",
+            "package q;\n\n@Schema(description = \"A record of the trade\")\npublic class Trade {\n    private int price;\n}\n",
+        ),
+    ]);
+    let report = report(&repo, "price", Some("p/A.java"));
+
+    assert_site(&report, "q/B.java", 5, SiteLabel::Likely, "name only");
+}
+
+#[test]
+fn a_require_of_a_package_with_only_a_module_field_reads_the_index_file() {
+    let repo = scanned_repo(&[
+        ("package.json", "{\"name\":\"root\",\"private\":true}\n"),
+        (
+            "app/a.cjs",
+            "const { foo } = require('modonly')\nmodule.exports = function run() { return foo() }\n",
+        ),
+        (
+            "app/b.mjs",
+            "import { foo } from 'modonly'\nexport function run2() { return foo() }\n",
+        ),
+        (
+            "packages/modonly/package.json",
+            "{\"name\":\"modonly\",\"module\":\"esm/index.js\"}\n",
+        ),
+        (
+            "packages/modonly/index.js",
+            "exports.foo = function foo() { return 2 }\n",
+        ),
+        (
+            "packages/modonly/esm/index.js",
+            "export function foo() { return 1 }\n",
+        ),
+    ]);
+
+    let index = report(&repo, "foo", Some("packages/modonly/index.js"));
+    assert_site(&index, "app/a.cjs", 2, SiteLabel::Proven, "import");
+    assert_site(
+        &index,
+        "app/b.mjs",
+        2,
+        SiteLabel::Excluded,
+        "resolves to `foo` (packages/modonly/esm/index.js:1)",
+    );
+    let esm = report(&repo, "foo", Some("packages/modonly/esm/index.js"));
+    assert_site(&esm, "app/b.mjs", 2, SiteLabel::Proven, "import");
+    assert_site(
+        &esm,
+        "app/a.cjs",
+        2,
+        SiteLabel::Excluded,
+        "resolves to `foo` (packages/modonly/index.js:1)",
+    );
+}
+
+#[test]
+fn a_types_entry_in_another_folder_never_hides_the_main_script() {
+    let repo = kernel_with(
+        "{\"name\":\"@x/pkg\",\"main\":\"lib/entry.js\",\"types\":\"types/index.d.ts\"}\n",
+        &[(
+            "packages/kernel/types/index.d.ts",
+            "export declare function foo(): number;\n",
+        )],
+    );
+    let report = report(&repo, "foo", Some("packages/kernel/lib/entry.js"));
+
+    assert_site(&report, "app/main.js", 2, SiteLabel::Proven, "import");
+}
+
+#[test]
+fn a_package_with_only_a_types_entry_runs_its_index_file() {
+    let repo = scanned_repo(&[
+        ("package.json", "{\"name\":\"root\",\"private\":true}\n"),
+        (
+            "app/use.js",
+            "import { foo } from 'tonly'\nexport function run() { return foo() }\n",
+        ),
+        ("lib/other.js", "export function foo() { return 2 }\n"),
+        (
+            "packages/tonly/package.json",
+            "{\"name\":\"tonly\",\"types\":\"types.d.ts\"}\n",
+        ),
+        (
+            "packages/tonly/index.js",
+            "export function foo() { return 1 }\n",
+        ),
+        (
+            "packages/tonly/types.d.ts",
+            "export declare function foo(): number;\n",
+        ),
+    ]);
+    let report = report(&repo, "foo", Some("packages/tonly/index.js"));
+
+    assert_site(&report, "app/use.js", 2, SiteLabel::Proven, "import");
+}
+
+fn module_only_package_with(index: &str) -> Repo {
+    scanned_repo(&[
+        ("package.json", "{\"name\":\"root\",\"private\":true}\n"),
+        (
+            "app/a.cjs",
+            "const { foo } = require('pkg')\nmodule.exports = function run() { return foo() }\n",
+        ),
+        (
+            "packages/pkg/package.json",
+            "{\"name\":\"pkg\",\"module\":\"esm/index.js\"}\n",
+        ),
+        ("packages/pkg/index.js", index),
+        (
+            "packages/pkg/esm/index.js",
+            "export function foo() { return 1 }\n",
+        ),
+    ])
+}
+
+#[test]
+fn a_module_exports_property_assignment_is_an_export_of_its_file() {
+    let repo = module_only_package_with("module.exports.foo = function foo() { return 2 }\n");
+
+    let index = report(&repo, "foo", Some("packages/pkg/index.js"));
+    assert_site(&index, "app/a.cjs", 2, SiteLabel::Proven, "import");
+    let esm = report(&repo, "foo", Some("packages/pkg/esm/index.js"));
+    assert_site(
+        &esm,
+        "app/a.cjs",
+        2,
+        SiteLabel::Excluded,
+        "resolves to `foo` (packages/pkg/index.js:1)",
+    );
+}
+
+#[test]
+fn a_property_of_an_object_named_like_exports_is_not_an_export_of_its_file() {
+    let repo = module_only_package_with(
+        "const reexports = {}\nreexports.foo = function foo() { return 2 }\n",
+    );
+
+    let index = report(&repo, "foo", Some("packages/pkg/index.js"));
+    assert_ne!(
+        site_at(&index, "app/a.cjs", 2).label,
+        SiteLabel::Proven,
+        "{}",
+        dump(&index)
+    );
+    let esm = report(&repo, "foo", Some("packages/pkg/esm/index.js"));
+    assert_site(
+        &esm,
+        "app/a.cjs",
+        2,
+        SiteLabel::Unresolved,
+        "the import matches 2 definitions",
+    );
+}
+
+const CONFIG_DIR_ENGINE_FILES: &[(&str, &str)] = &[
+    ("package.json", "{\"name\":\"root\",\"private\":true}\n"),
+    (
+        "packages/app/src/app.ts",
+        "import { helper } from 'core'\nexport function run() { return helper() }\n",
+    ),
+    (
+        "packages/app/src/engine/index.ts",
+        "export function helper() { return 1 }\n",
+    ),
+    (
+        "packages/app/src/other/util.ts",
+        "export function helper() { return 2 }\n",
+    ),
+];
+
+fn assert_engine_helper_wins(repo: &Repo) {
+    let engine = report(repo, "helper", Some("packages/app/src/engine/index.ts"));
+    assert_site(
+        &engine,
+        "packages/app/src/app.ts",
+        2,
+        SiteLabel::Proven,
+        "import",
+    );
+    let other = report(repo, "helper", Some("packages/app/src/other/util.ts"));
+    assert_site(
+        &other,
+        "packages/app/src/app.ts",
+        2,
+        SiteLabel::Excluded,
+        "resolves to `helper` (packages/app/src/engine/index.ts:1)",
+    );
+}
+
+fn config_dir_engine_with(configs: &[(&str, &str)]) -> Repo {
+    let files: Vec<(&str, &str)> = CONFIG_DIR_ENGINE_FILES
+        .iter()
+        .chain(configs)
+        .copied()
+        .collect();
+    scanned_repo(&files)
+}
+
+#[test]
+fn a_config_dir_template_in_a_paths_target_starts_at_the_folder_of_the_config() {
+    let repo = config_dir_engine_with(&[(
+        "packages/app/tsconfig.json",
+        "{ \"compilerOptions\": { \"paths\": { \"core\": [\"${configDir}/src/engine/index.ts\"] } } }\n",
+    )]);
+
+    assert_engine_helper_wins(&repo);
+}
+
+#[test]
+fn a_config_dir_template_in_the_base_url_of_an_extended_config_starts_at_the_folder_of_the_config_in_use()
+ {
+    let repo = scanned_repo(&[
+        ("package.json", "{\"name\":\"root\",\"private\":true}\n"),
+        (
+            "packages/app/tsconfig.json",
+            "{ \"extends\": \"../../tsconfig.base.json\" }\n",
+        ),
+        (
+            "tsconfig.base.json",
+            "{ \"compilerOptions\": { \"baseUrl\": \"${configDir}/src\" } }\n",
+        ),
+        (
+            "packages/app/src/app.ts",
+            "import { helper } from 'engine'\nexport function run() { return helper() }\n",
+        ),
+        (
+            "packages/app/src/engine/index.ts",
+            "export function helper() { return 1 }\n",
+        ),
+        (
+            "legacy/engine/index.ts",
+            "export function helper() { return 2 }\n",
+        ),
+    ]);
+
+    let engine = report(&repo, "helper", Some("packages/app/src/engine/index.ts"));
+    assert_site(
+        &engine,
+        "packages/app/src/app.ts",
+        2,
+        SiteLabel::Proven,
+        "import",
+    );
+}
+
+#[test]
+fn a_config_dir_template_in_an_extended_config_starts_at_the_folder_of_the_config_in_use() {
+    let repo = config_dir_engine_with(&[
+        (
+            "packages/app/tsconfig.json",
+            "{ \"extends\": \"../../tsconfig.base.json\" }\n",
+        ),
+        (
+            "tsconfig.base.json",
+            "{ \"compilerOptions\": { \"paths\": { \"core\": [\"${configDir}/src/engine/index.ts\"] } } }\n",
+        ),
+    ]);
+
+    assert_engine_helper_wins(&repo);
+}
+
+#[test]
+fn a_config_dir_template_in_a_base_url_starts_at_the_folder_of_the_config() {
+    let repo = scanned_repo(&[
+        ("package.json", "{\"name\":\"root\",\"private\":true}\n"),
+        (
+            "tsconfig.json",
+            "{ \"compilerOptions\": { \"baseUrl\": \"${configDir}/src\" } }\n",
+        ),
+        (
+            "src/app.ts",
+            "import { helper } from 'engine'\nexport function run() { return helper() }\n",
+        ),
+        (
+            "src/engine/index.ts",
+            "export function helper() { return 1 }\n",
+        ),
+        (
+            "legacy/engine/index.ts",
+            "export function helper() { return 2 }\n",
+        ),
+    ]);
+
+    let engine = report(&repo, "helper", Some("src/engine/index.ts"));
+    assert_site(&engine, "src/app.ts", 2, SiteLabel::Proven, "import");
+    let legacy = report(&repo, "helper", Some("legacy/engine/index.ts"));
+    assert_site(
+        &legacy,
+        "src/app.ts",
+        2,
+        SiteLabel::Excluded,
+        "resolves to `helper` (src/engine/index.ts:1)",
+    );
+}
+
+#[test]
+fn any_other_template_in_a_paths_target_leaves_the_module_unknown() {
+    let repo = config_dir_engine_with(&[(
+        "packages/app/tsconfig.json",
+        "{ \"compilerOptions\": { \"paths\": { \"core\": [\"${other}/src/engine/index.ts\"] } } }\n",
+    )]);
+
+    for target in [
+        "packages/app/src/engine/index.ts",
+        "packages/app/src/other/util.ts",
+    ] {
+        let report = report(&repo, "helper", Some(target));
+        assert_ne!(
+            site_at(&report, "packages/app/src/app.ts", 2).label,
+            SiteLabel::Excluded,
+            "{target}\n{}",
+            dump(&report)
+        );
+    }
+}
+
+#[test]
+fn a_typed_arrow_in_either_branch_of_a_ternary_binds_its_parameters() {
+    let repo = scanned_repo(&[
+        ("package.json", "{\"name\":\"r\"}\n"),
+        ("m.ts", "export function f() { return 1 }\n"),
+        (
+            "use.ts",
+            "import { f } from './m';\nexport function consequent(c: boolean) {\n  return c ? (f: () => number): number => f() : 2;\n}\nexport function alternate(c: boolean) {\n  return c ? 1 : (f: () => number): number => f();\n}\nexport function plain() { return f(); }\n",
+        ),
+    ]);
+    let report = report(&repo, "f", Some("m.ts"));
+
+    assert_site(&report, "use.ts", 3, SiteLabel::Likely, &binding_note(3));
+    assert_site(&report, "use.ts", 6, SiteLabel::Likely, &binding_note(6));
+    assert_site(&report, "use.ts", 8, SiteLabel::Proven, "import");
+}
+
+fn proven_after_parentheses(body: &str) -> Repo {
+    scanned_repo(&[
+        ("package.json", "{\"name\":\"r\"}\n"),
+        ("m.ts", "export function foo() { return 1 }\n"),
+        (
+            "use.ts",
+            &format!(
+                "import {{ foo }} from './m';\nexport function use(z: any, c: boolean, p: any) {{\n{body}\n  return foo();\n}}\n"
+            ),
+        ),
+    ])
+}
+
+fn assert_return_proven(repo: &Repo) {
+    let report = report(repo, "foo", Some("m.ts"));
+    let line = line_of(repo, "use.ts", "return foo()");
+    assert_site(&report, "use.ts", line, SiteLabel::Proven, "import");
+}
+
+#[test]
+fn an_object_given_to_a_method_named_function_does_not_bind_its_values() {
+    assert_return_proven(&proven_after_parentheses(
+        "  const fn = z.function({ input: foo, output: 1 });",
+    ));
+}
+
+#[test]
+fn a_property_named_function_times_a_group_does_not_bind_the_names_in_it() {
+    assert_return_proven(&proven_after_parentheses(
+        "  const n = z.function * (foo ? 1 : 2);",
+    ));
+}
+
+#[test]
+fn a_for_method_call_is_not_a_loop_head() {
+    assert_return_proven(&proven_after_parentheses("  z.for(const foo of p);"));
+}
+
+#[test]
+fn a_group_followed_by_an_arrow_past_the_return_type_bound_is_not_a_typed_arrow() {
+    let far = "a".repeat(220);
+    let near = "a".repeat(150);
+    let rest = "a".repeat(100);
+    assert_return_proven(&proven_after_parentheses(&format!(
+        "  const v = c ? (foo) : {far} => 0;\n  const w = c ? (foo) : '{near} => {rest}';"
+    )));
+}
+
+#[test]
+fn a_group_in_a_ternary_before_a_nested_ternary_is_not_a_typed_arrow() {
+    assert_return_proven(&proven_after_parentheses(
+        "  const v = c ? (foo) : p ? 1 : (n: number) => n;",
+    ));
+}
+
+#[test]
+fn a_group_in_a_ternary_before_an_object_of_arrows_is_not_a_typed_arrow() {
+    assert_return_proven(&proven_after_parentheses(
+        "  const v = c ? (foo) : { run: (n: number) => n };",
+    ));
+}
+
+#[test]
+fn a_group_after_a_logical_operator_is_not_a_typed_arrow() {
+    assert_return_proven(&proven_after_parentheses(
+        "  const a = c ? p && (foo) : (n: number) => n;\n  const b = c ? p || (foo) : (n: number) => n;\n  const d = c ? p ?? (foo) : (n: number) => n;",
+    ));
+}
+
+#[test]
+fn a_group_in_a_ternary_inside_a_call_is_not_a_typed_arrow_of_the_next_call() {
+    assert_return_proven(&proven_after_parentheses(
+        "  wrap(c ? (foo) : 1).then((r: number) => r);",
+    ));
+}
+
+#[test]
+fn a_group_in_a_ternary_before_an_arrow_on_the_next_line_is_not_a_typed_arrow() {
+    assert_return_proven(&proven_after_parentheses(
+        "  const a = c ? (foo || 1) : null\n  const f = (n: number) => n",
+    ));
+}
+
+#[test]
+fn a_group_in_a_ternary_before_a_statement_end_is_not_a_typed_arrow() {
+    assert_return_proven(&proven_after_parentheses(
+        "  const v = c ? (foo) : 1; const f = (n: number) => n;",
+    ));
+}
+
+#[test]
+fn a_method_named_like_a_keyword_does_not_make_a_group_of_its_arguments() {
+    assert_return_proven(&proven_after_parentheses(
+        "  const a = c ? z.return(foo) : (n: number): number => n;\n  const b = c ? z.delete(foo) : (n: number): number => n;",
+    ));
+}
+
+#[test]
+fn a_group_in_a_ternary_at_the_end_of_an_object_is_not_a_typed_arrow() {
+    assert_return_proven(&proven_after_parentheses(
+        "  wrap({ a: c ? (foo) : 1 }, { run: (n: number) => n });",
+    ));
+}
+
+#[test]
+fn a_group_after_an_operator_keyword_in_a_ternary_is_not_a_typed_arrow() {
+    assert_return_proven(&proven_after_parentheses(
+        "  const a = c ? await (foo) : (n: number) => n;\n  const b = c ? typeof (foo) : (n: number) => n;\n  const d = c ? void (foo) : (n: number) => n;\n  const e = c ? delete (foo) : (n: number) => n;\n  const g = c ? 'k' in (foo) : (n: number) => n;\n  const h = c ? of(foo) : (n: number) => n;\n  switch (p) { case (foo): z.cb = (n: number) => n; }",
+    ));
+}
+
+#[test]
+fn a_group_in_a_ternary_before_a_later_argument_is_not_a_typed_arrow() {
+    assert_return_proven(&proven_after_parentheses(
+        "  wrap(c ? (foo) : { a: 1 }, (n: number) => n);\n  const o = { a: c ? (foo) : { b: 1 }, f: (n: number) => n };",
+    ));
+}
+
+#[test]
+fn a_group_in_a_ternary_before_a_closing_bracket_or_a_comparison_is_not_a_typed_arrow() {
+    assert_return_proven(&proven_after_parentheses(
+        "  p[c ? (foo) : 1] = [(n: number) => n];\n  const v = c ? (foo) : p > 1 && [(n: number) => n];",
+    ));
+}
+
+#[test]
+fn a_group_in_a_line_comment_is_not_a_typed_arrow() {
+    assert_return_proven(&proven_after_parentheses(
+        "  // keep foo (foo):\n  const f = (n: number) => n;\n  const u = 'http://x', v = c ? of(foo) : (n: number) => n;",
+    ));
+}
+
+#[test]
+fn a_call_on_an_index_result_in_a_ternary_is_not_a_typed_arrow() {
+    assert_return_proven(&proven_after_parentheses(
+        "  const v = c ? p[0](foo) : (n: number) => n;",
+    ));
+}
+
+#[test]
+fn a_typed_arrow_binds_its_parameters_whatever_shape_its_return_type_has() {
+    let calls = [
+        "items.map((foo: () => number): Promise<\n    Array<number>\n  > => Promise.resolve([foo()]))",
+        "items.map((foo: () => number):\n    | number\n    | string => foo())",
+        "items.map((foo: () => number): number |\n    string => foo())",
+        "items.map((foo: () => number): Map<\n    string,\n    number\n  > => new Map([['k', foo()]]))",
+        "items.map((foo: () => number): Map<string, number> => new Map([['k', foo()]]))",
+        "items.map((foo: () => number): [number, string?] => [foo(), ''])",
+        "items.map((foo: () => number): Array<() => number> => [() => foo()])",
+        "items.map((foo: () => number): 'a?' | \"(\" | `b,${number}` | '?\"' => (foo() ? 'a?' : '('))",
+        "items.map((foo: () => number): 'it\\'s' | 'x' => (foo() ? 'x' : 'x'))",
+        "items.map((foo: () => number): {\n    // the user's id\n    v: number;\n  } => ({ v: foo() }))",
+        "items.map((foo: () => number): {\n    /** x < y */\n    v: number;\n  } => ({ v: foo() }))",
+        "items.map((foo: () => number): number /* don't, ever */ => foo())",
+        "items.map((foo: () => number): \r\n    number => foo())",
+        "items.map((foo: () => number): Base &\n    Extra => foo() as any)",
+        "items.map((foo: () => number): Base\n    & Extra => foo() as any)",
+        "items.length\n    ? 1\n    : // see http://x.org/a#b\n      // and the note\n      (foo: () => number): number => foo()",
+        "items.map((foo: () => number):\n    number => foo())",
+        "items.map(async (foo: () => number): Promise<number> => foo())",
+    ];
+    let mut source = String::from("import { foo } from './m';\n");
+    let mut expected = Vec::new();
+    for (index, call) in calls.iter().enumerate() {
+        let first = source.lines().count() + 2;
+        let line_with =
+            |needle| first + call.lines().position(|line| line.contains(needle)).unwrap();
+        expected.push((line_with("foo()"), line_with("(foo")));
+        source.push_str(&format!(
+            "export function f{index}(items: Array<() => number>) {{\n  return {call};\n}}\n"
+        ));
+    }
+    source.push_str("export function plain() { return foo(); }\n");
+    let repo = scanned_repo(&[
+        ("package.json", "{\"name\":\"r\"}\n"),
+        ("m.ts", "export function foo() { return 1 }\n"),
+        ("use.ts", &source),
+    ]);
+    let report = report(&repo, "foo", Some("m.ts"));
+
+    for (call, binding) in expected {
+        assert_site(
+            &report,
+            "use.ts",
+            call,
+            SiteLabel::Likely,
+            &binding_note(binding),
+        );
+    }
+    assert_site(
+        &report,
+        "use.ts",
+        source.lines().count(),
+        SiteLabel::Proven,
+        "import",
+    );
+}
+
+#[test]
+fn a_typed_arrow_after_a_statement_keyword_binds_its_parameters() {
+    let statements = [
+        "return (foo: () => number): number => foo();",
+        "if (flag) return (foo: () => number): number => foo();",
+        "yield (foo: () => number): number => foo();",
+        "throw (foo: () => number): number => foo();",
+        "if (flag) { return 1; } else (foo: () => number): number => foo();",
+        "do (foo: () => number): number => foo(); while (flag);",
+    ];
+    let mut source = String::from("import { foo } from './m';\n");
+    for (index, statement) in statements.iter().enumerate() {
+        source.push_str(&format!(
+            "export async function* f{index}(flag: boolean) {{\n  {statement}\n}}\n"
+        ));
+    }
+    source.push_str("export function plain() { return foo(); }\n");
+    let repo = scanned_repo(&[
+        ("package.json", "{\"name\":\"r\"}\n"),
+        ("m.ts", "export function foo() { return 1 }\n"),
+        ("use.ts", &source),
+    ]);
+    let report = report(&repo, "foo", Some("m.ts"));
+
+    for index in 0..statements.len() {
+        let line = 3 + 3 * index;
+        assert_site(
+            &report,
+            "use.ts",
+            line,
+            SiteLabel::Likely,
+            &binding_note(line),
+        );
+    }
+    assert_site(
+        &report,
+        "use.ts",
+        2 + 3 * statements.len(),
+        SiteLabel::Proven,
+        "import",
+    );
+}
+
+#[test]
+fn a_typed_arrow_with_an_object_return_type_binds_its_parameters() {
+    let long_type = "v: number; ".repeat(14);
+    let repo = scanned_repo(&[
+        ("package.json", "{\"name\":\"r\"}\n"),
+        ("m.ts", "export function foo() { return 1 }\n"),
+        (
+            "use.ts",
+            &format!(
+                "import {{ foo }} from './m';\nexport function a(items: Array<() => number>) {{\n  return items.map((foo: () => number): {{ v: number }} => ({{ v: foo() }}));\n}}\nexport function b(items: Array<() => number>) {{\n  return items.map((foo: () => number): {{ v?: number; w: string }} => ({{ v: foo(), w: '' }}));\n}}\nexport function c(items: Array<() => number>) {{\n  return items.map((foo: () => number): {{\n    v: number;\n  }} => ({{ v: foo() }}));\n}}\nexport function d(items: Array<() => number>) {{\n  return items.map((foo: () => number): {{ {long_type}}} => ({{ v: foo() }}));\n}}\nexport function plain() {{ return foo(); }}\n"
+            ),
+        ),
+    ]);
+    let report = report(&repo, "foo", Some("m.ts"));
+
+    for (call, binding) in [(3, 3), (6, 6), (11, 9), (14, 14)] {
+        assert_site(
+            &report,
+            "use.ts",
+            call,
+            SiteLabel::Likely,
+            &binding_note(binding),
+        );
+    }
+    assert_site(&report, "use.ts", 16, SiteLabel::Proven, "import");
+}
+
+#[test]
+fn a_java_read_of_a_local_variable_is_still_hidden_by_it() {
+    let repo = scanned_repo(&[(
+        "q/Trade.java",
+        "package q;\n\npublic class Trade {\n    private int price;\n\n    int total() {\n        int price = 2;\n        return price;\n    }\n}\n",
+    )]);
+    let report = report(&repo, "price", Some("q/Trade.java"));
+
+    assert_site(
+        &report,
+        "q/Trade.java",
+        8,
+        SiteLabel::Excluded,
+        "resolves to `price` (q/Trade.java:7)",
+    );
+}
+
+#[test]
+fn a_java_call_is_not_shadowed_by_a_field_of_its_name() {
+    let repo = scanned_repo(&[
+        (
+            "p/A.java",
+            "package p;\n\npublic class A {\n    protected int price() {\n        return 1;\n    }\n}\n",
+        ),
+        (
+            "q/Trade.java",
+            "package q;\n\nimport p.A;\n\npublic class Trade extends A {\n    private int price;\n\n    int total() {\n        return price();\n    }\n}\n",
+        ),
+    ]);
+    let report = report(&repo, "price", Some("p/A.java"));
+
+    assert_ne!(
+        site_at(&report, "q/Trade.java", 9).label,
+        SiteLabel::Excluded,
+        "{}",
+        dump(&report)
+    );
+}
+
+#[test]
+fn a_java_call_is_not_shadowed_by_a_local_variable_or_parameter_of_its_name() {
+    let repo = scanned_repo(&[
+        (
+            "p/A.java",
+            "package p;\n\npublic class A {\n    protected int price() {\n        return 1;\n    }\n}\n",
+        ),
+        (
+            "q/Trade.java",
+            "package q;\n\nimport p.A;\n\npublic class Trade extends A {\n    int local() {\n        int price = 2;\n        return price();\n    }\n\n    int param(int price) {\n        return price();\n    }\n}\n",
+        ),
+    ]);
+    let report = report(&repo, "price", Some("p/A.java"));
+
+    for line in [8, 12] {
+        assert_ne!(
+            site_at(&report, "q/Trade.java", line).label,
+            SiteLabel::Excluded,
+            "{line}\n{}",
+            dump(&report)
+        );
+    }
 }

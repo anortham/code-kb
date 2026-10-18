@@ -224,12 +224,22 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   and identifiers; never an import row or a definition line, and a definition line includes its
   decorators) and gives each site one label and a basis: `proven` (index evidence ties the site to
   the target: same file, qualified path, receiver type, class chain, import, enclosing scope, same
-  package, builds the class), `likely` (only the name ties them), `unresolved` (the index cannot
-  choose among definitions), or `excluded` (evidence ties the site to another definition, to an
-  unindexed import, to another type, or to another language). The other definitions of the name
+  package, builds the class), `likely` (only the name ties them, and no other definition can reach
+  the site), `unresolved` (another definition can reach the site, and the index cannot choose), or
+  `excluded` (evidence ties the site to another definition, to an unindexed import, to another
+  type, or to another language). A site counts only the other definitions it can reach, and the
+  target's own overloads never count. A call never reaches a Go, Java, or Rust field, property,
+  variable, or constant, except a Java record component, a Go field or variable with no written
+  type, a qualified type, or a func type (written, or a project `type X func`, alias, or generic
+  form), and a Rust static, constant, or variable of a function type (written, or a project type
+  alias of one). A Java field, variable, or parameter never hides a method from a call, so it
+  never excludes the call. A member access never reaches a JavaScript function, variable, or constant that
+  is not exported, not in a class, not a local, and not used as a member or placed in an object
+  literal (`{ render }`) in its own file. An `unresolved` basis `N definitions` counts the target
+  and the definitions that can reach the site. The other definitions of the name
   are checked nearest first, at most 12; the answer counts the ones it did not check. The checks
   of one report stop after 3 s, and the target's own checks stop after half of that, nearest
-  sites first. A site left unchecked is `likely` when the name has one definition and
+  sites first. A site left unchecked is `likely` when no other definition can reach it and
   `unresolved` otherwise, with the basis `not checked within the time limit`, and the answer
   counts those sites. A whole-word text scan with a 3 s budget sorts every line of the name into a site, a
   definition, an import, or text only. Counts are always complete, `limit` caps only the listed
@@ -249,9 +259,40 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   julie names a test call after its label (`test("strictObject", …)`); such a label is not a
   definition. A receiver that names an object (`z.coerce.boolean()`) ties the call to a member of
   that object only when the qualifier's import (`z`) reaches the object's file. julie records no
-  receiver for a call on a call result (`single().getAsInt()`), so a call whose name follows a
-  `.` after a call or index result in the source is never a bare call: scope, class chain, and
-  julie's same-file link neither prove nor exclude it.
+  receiver for a call on a call result (`single().getAsInt()`) or on a string literal, so a call
+  whose name follows a `.` after a call result, an index result, or a closing quote, a call on a
+  line that starts with `.` (`    .readonly()`), and a call that starts the line below such a `.`
+  are never bare calls: scope, class chain, and julie's same-file link neither prove nor exclude
+  them. A JavaScript call whose receiver names the top-level object that the target is assigned
+  on in its file (`res.redirect()` for `res.redirect = function`) is `likely` with the basis
+  ``receiver `res` names the object `redirect` is assigned on`` when no other definition is
+  assigned on an object of that name.
+  JavaScript and TypeScript imports go through the resolver in `reference_report/js_modules.rs`. It
+  follows `export … from`, `export * from`, and namespace re-exports to a relative file (any
+  script extension or an `index` file) or to a workspace package by its `package.json`
+  `exports`, `module`, `main`, and `types`, scripts before declaration files, and it takes the
+  next candidate when a walk reaches nothing. `require()` follows the `require` condition and
+  `main`, never `module`; an ES import follows the `import` condition, `module`, and `main`. A
+  package with no entry for the importer falls back to its `index` file. `types` comes after the
+  scripts and never counts as a second script; a package that still names two scripts proves
+  nothing. `exports.name = …` and `module.exports.name = …` count as exports. The nearest
+  `tsconfig.json` or `jsconfig.json` (`paths`, `baseUrl`, and relative `extends`, one or a list;
+  `${configDir}` is the folder of that config) decides before the workspace packages. A `paths`
+  key whose targets do not exist on disk falls through, as in TypeScript; a target on disk that
+  is not indexed leaves the module unknown, and so does a workspace package when the config
+  cannot be read. A declaration file
+  and the script with its stem in the same folder are one module. The resolver proves a site when
+  every definition it reaches is the target, gives `unresolved` when it reaches the target and
+  others, and excludes the site when it reaches only others. An import it cannot follow (an
+  alias, an unindexed file) takes the import rules above. A `node:` source, a bare Node builtin
+  (`fs/promises`), and a package whose last segment names no project folder or file are outside
+  the project: the site is excluded, and no import claim proves a project definition. A test
+  label (`describe('mix', …)`) never hides an import. A bare JavaScript or TypeScript type use (`output<T>`) is hidden by a type, interface,
+  or enum of that name in an enclosing function. julie records no symbol for a callback
+  parameter, a `for … of` or `for … in` variable, or a `catch` parameter, so
+  `reference_report/js_bindings.rs` reads them from the source: when one of them between the
+  start of the caller and the site has the name, an `import`, `same file`, `enclosing scope`, or
+  `qualified path` proof becomes `likely` and names that line.
 - Related tests (`get_symbol_context`): callers from relationships, pending calls, and references
   that are tests, test classes, or functions and methods in test files that are members of a test
   class or have a name that reads like a test (`names_a_test`), so a module-level app factory such

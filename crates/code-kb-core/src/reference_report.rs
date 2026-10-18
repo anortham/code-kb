@@ -47,7 +47,12 @@ const EXTERNAL_RUST_ROOTS: &[&str] = &["std", "core", "alloc"];
 /// The basis of a claim that rests on an import; a package import can match several files.
 const IMPORT_BASIS: &str = "import";
 /// The bases that rest on the written name alone, which a callback parameter of that name hides.
-const NAME_RESOLVED_BASES: &[&str] = &[IMPORT_BASIS, "same file", "enclosing scope"];
+const NAME_RESOLVED_BASES: &[&str] = &[
+    IMPORT_BASIS,
+    "same file",
+    "enclosing scope",
+    "qualified path",
+];
 
 /// Selects the callers target by name exactly as `find_references_scoped` does: the same
 /// `QueryError::SymbolNotFound` (built with `symbol_not_found_parts`) or ambiguity error.
@@ -260,7 +265,7 @@ const SHADOW_IN_CHAIN_SQL: &str = "WITH RECURSIVE chain(symbol_id, depth) AS (
          FROM symbols s JOIN chain ON s.symbol_id = chain.symbol_id
          WHERE s.parent_symbol_id IS NOT NULL AND chain.depth < 32
      )
-     SELECT d.symbol_id, COALESCE(d.signature, '')
+     SELECT d.symbol_id, COALESCE(d.signature, ''), d.kind
      FROM chain
      JOIN symbols scope ON scope.symbol_id = chain.symbol_id
      JOIN symbols d ON d.parent_symbol_id = chain.symbol_id
@@ -270,7 +275,7 @@ const SHADOW_IN_CHAIN_SQL: &str = "WITH RECURSIVE chain(symbol_id, depth) AS (
        AND (chain.depth = 0 OR scope.kind IN ('function', 'method', 'constructor'))
      ORDER BY chain.depth, d.start_line";
 
-const SHADOW_TOP_LEVEL_SQL: &str = "SELECT symbol_id, COALESCE(signature, '') FROM symbols
+const SHADOW_TOP_LEVEL_SQL: &str = "SELECT symbol_id, COALESCE(signature, ''), kind FROM symbols
      WHERE name = ?1 AND path = ?2 AND parent_symbol_id IS NULL
        AND kind NOT IN ('import', 'export', 'module', 'namespace')
      ORDER BY start_line";
@@ -413,6 +418,17 @@ impl NameRow {
         matches!(self.kind.as_str(), "calls" | "call" | "instantiates")
     }
 
+    /// Whether a definition of `kind` never hides the name from this row: a Java call names a
+    /// method, so a field, variable, or parameter of that name is another thing.
+    fn is_not_named_by(&self, kind: &str) -> bool {
+        self.language == "java"
+            && matches!(self.kind.as_str(), "calls" | "call")
+            && matches!(
+                kind,
+                "field" | "property" | "variable" | "constant" | "parameter"
+            )
+    }
+
     fn is_bare_use(&self) -> bool {
         !self.has_qualifier()
             && matches!(
@@ -489,12 +505,49 @@ fn is_word_char(c: char) -> bool {
 /// Whether a Java type signature declares a record (`@Deprecated(since = "1") public record
 /// Point(int x, int y)`): the word `record` followed by the type name.
 fn is_record(signature: &str) -> bool {
-    signature.match_indices("record").any(|(at, word)| {
-        let after = &signature[at + word.len()..];
-        !signature[..at].ends_with(is_word_char)
+    let declaration = outside_quotes_and_parentheses(signature);
+    declaration.match_indices("record").any(|(at, word)| {
+        let after = &declaration[at + word.len()..];
+        !declaration[..at].ends_with(is_word_char)
             && after.starts_with(char::is_whitespace)
             && after.trim_start().starts_with(is_word_char)
     })
+}
+
+/// `text` without string literals and without the text inside parentheses, each replaced by a
+/// space (`@Schema(description = "a record") public class T` is `@Schema  public class T`).
+fn outside_quotes_and_parentheses(text: &str) -> String {
+    let mut outside = String::with_capacity(text.len());
+    let mut depth = 0usize;
+    let mut chars = text.chars();
+    while let Some(c) = chars.next() {
+        match c {
+            '"' | '\'' => {
+                while let Some(inner) = chars.next() {
+                    match inner {
+                        '\\' => {
+                            chars.next();
+                        }
+                        _ if inner == c => break,
+                        _ => {}
+                    }
+                }
+                if depth == 0 {
+                    outside.push(' ');
+                }
+            }
+            '(' => depth += 1,
+            ')' => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    outside.push(' ');
+                }
+            }
+            _ if depth == 0 => outside.push(c),
+            _ => {}
+        }
+    }
+    outside
 }
 
 /// Whether the declaration `type Name func(...)`, `type Name = func(...)`, `type Name[T any]
@@ -1049,7 +1102,7 @@ impl<'a> Accounting<'a> {
                 let judged = self.judge(&spec.name, &other.symbol_id, &chunk_rows)?;
                 for &index in chunk {
                     let row = &rows[index];
-                    if row.hidden_receiver {
+                    if row.hidden_receiver || row.language == "java" && !row.can_reach(other) {
                         kept.push(index);
                         continue;
                     }
@@ -1542,6 +1595,11 @@ impl<'a> Accounting<'a> {
             && let Some(basis) = &claim.basis
         {
             if basis == IMPORT_BASIS {
+                if language_family(&row.language) == "js"
+                    && let Some(verdict) = self.external_import(row, &spec.name)?
+                {
+                    return Ok(Some(verdict));
+                }
                 let others = self.other_import_matches(row, &spec.name, group_ids)?;
                 if others > 0 {
                     return Ok(Some(Verdict::new(
@@ -1571,14 +1629,21 @@ impl<'a> Accounting<'a> {
                 false,
             )));
         }
-        if let Some((binding, source)) = self.external_binding(row, &spec.name)? {
-            return Ok(Some(Verdict::new(
+        self.external_import(row, &spec.name)
+    }
+
+    fn external_import(
+        &mut self,
+        row: &NameRow,
+        name: &str,
+    ) -> Result<Option<Verdict>, QueryError> {
+        Ok(self.external_binding(row, name)?.map(|(binding, source)| {
+            Verdict::new(
                 SiteLabel::Excluded,
                 format!("receiver `{binding}` is imported from `{source}`"),
                 false,
-            )));
-        }
-        Ok(None)
+            )
+        }))
     }
 
     /// A Rust path call `krate::module::Owner::name()` whose leading segments name the crate and
@@ -1766,10 +1831,11 @@ impl<'a> Accounting<'a> {
             hit = self.first_real_definition(
                 SHADOW_IN_CHAIN_SQL,
                 params![caller, name, row.path, type_use],
+                row,
             )?;
         }
         if hit.is_none() {
-            hit = self.first_real_definition(SHADOW_TOP_LEVEL_SQL, params![name, row.path])?;
+            hit = self.first_real_definition(SHADOW_TOP_LEVEL_SQL, params![name, row.path], row)?;
         }
         match hit {
             Some(id) if !group_ids.contains(id.as_str()) => self.definition_by_id(&id),
@@ -1777,23 +1843,28 @@ impl<'a> Accounting<'a> {
         }
     }
 
-    /// The first row of `sql` that is not a test label (`describe("mix")`), which julie indexes
-    /// as a function but code never reads by name.
+    /// The first row of `sql` that `row` can name and that is not a test label
+    /// (`describe("mix")`), which julie indexes as a function but code never reads by name.
     fn first_real_definition(
         &self,
         sql: &'static str,
         query: impl rusqlite::Params,
+        row: &NameRow,
     ) -> Result<Option<String>, QueryError> {
         let rows = self.with_statement(sql, |stmt| {
             stmt.query_map(query, |r| {
-                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                ))
             })?
             .collect::<Result<Vec<_>, _>>()
         })?;
         Ok(rows
             .into_iter()
-            .find(|(_, signature)| !is_test_label(signature))
-            .map(|(id, _)| id))
+            .find(|(_, signature, kind)| !is_test_label(signature) && !row.is_not_named_by(kind))
+            .map(|(id, ..)| id))
     }
 
     /// How many top-level definitions outside the target group the import behind the row also
@@ -2303,11 +2374,14 @@ fn mark_hidden_receivers(root: &Path, rows: &mut [NameRow]) {
     }
 }
 
-/// Whether `text` ends with a call or index result and a `.` (`make().`, `items[0]?.`,
-/// `make()!.`) that waits for a member name.
+/// Whether `text` ends with a call result, an index result, or a string literal and a `.`
+/// (`make().`, `items[0]?.`, `make()!.`, `'abc'.`) that waits for a member name.
 fn awaits_member(text: &str) -> bool {
-    text.strip_suffix('.')
-        .is_some_and(|result| result.trim_end_matches(['?', '!']).ends_with([')', ']']))
+    text.strip_suffix('.').is_some_and(|result| {
+        result
+            .trim_end_matches(['?', '!'])
+            .ends_with([')', ']', '\'', '"', '`'])
+    })
 }
 
 /// Whether the last non-blank line above `line` (1-based) is a line of code, not a comment, that

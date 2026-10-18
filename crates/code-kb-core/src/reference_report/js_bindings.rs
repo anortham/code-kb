@@ -9,6 +9,11 @@ use super::{Accounting, NameRow, QueryError, is_word_char, language_family};
 
 /// The longest parameter list or loop head read, in bytes.
 const MAX_LIST: usize = 400;
+/// The longest return type read before the `=>` of a typed arrow function, in bytes.
+const MAX_RETURN_TYPE: usize = 200;
+/// Keywords after which a `(` can open the parameters of an arrow function, not the arguments of
+/// a call.
+const ARROW_KEYWORDS: &[&str] = &["return", "throw", "yield", "else", "do"];
 
 struct Level<'a> {
     open: u8,
@@ -143,28 +148,139 @@ fn ends_with_word(text: &str, word: &str) -> bool {
         .is_some_and(|rest| !rest.ends_with(is_word_char))
 }
 
+/// Whether `text` ends with the keyword `word`, not a method of that name (`p.catch(`).
+fn ends_with_keyword(text: &str, word: &str) -> bool {
+    ends_with_word(text, word) && !text[..text.len() - word.len()].trim_end().ends_with('.')
+}
+
+/// Whether `text`, which follows the `:` of a return type, reaches the `=>` of an arrow function
+/// within `MAX_RETURN_TYPE` bytes. `<` and `>` nest like brackets, and comments and quoted text
+/// are skipped. A `;`, `?`, or `,` outside brackets stops the look-ahead, and so do a closing
+/// bracket with no opening one before it, a quote that does not close, and a line end that the
+/// type does not go on past.
+fn returns_to_arrow(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    let end = bytes.len().min(MAX_RETURN_TYPE);
+    let mut depth = 0;
+    let mut last = None;
+    let mut at = 0;
+    while at < end {
+        if let Some(after) = comment_end(bytes, at, end) {
+            at = after;
+            continue;
+        }
+        let byte = bytes[at];
+        match byte {
+            b'\'' | b'"' | b'`' => match quote_end(bytes, at, end) {
+                Some(close) => at = close,
+                None => return false,
+            },
+            b'=' if bytes.get(at + 1) == Some(&b'>') => {
+                if depth == 0 {
+                    return true;
+                }
+                at += 1;
+            }
+            b'(' | b'{' | b'[' | b'<' => depth += 1,
+            b')' | b'}' | b']' | b'>' if depth == 0 => return false,
+            b')' | b'}' | b']' | b'>' => depth -= 1,
+            b';' | b'?' | b',' if depth == 0 => return false,
+            b'\n' if depth == 0 && !type_continues(last, &text[at + 1..]) => return false,
+            _ => {}
+        }
+        if !byte.is_ascii_whitespace() {
+            last = Some(byte);
+        }
+        at += 1;
+    }
+    false
+}
+
+/// The index after the comment that starts at `at`. A line comment ends before its line end.
+fn comment_end(bytes: &[u8], at: usize, end: usize) -> Option<usize> {
+    let rest = &bytes[at..end];
+    match rest {
+        [b'/', b'/', ..] => Some(
+            at + rest
+                .iter()
+                .position(|&byte| byte == b'\n')
+                .unwrap_or(rest.len()),
+        ),
+        [b'/', b'*', ..] => Some(
+            rest[2..]
+                .windows(2)
+                .position(|pair| pair == b"*/")
+                .map_or(end, |close| at + close + 4),
+        ),
+        _ => None,
+    }
+}
+
+/// The index of the quote that closes the one at `at`, past any escaped character.
+fn quote_end(bytes: &[u8], at: usize, end: usize) -> Option<usize> {
+    let mut index = at + 1;
+    while index < end {
+        match bytes[index] {
+            b'\\' => index += 1,
+            byte if byte == bytes[at] => return Some(index),
+            _ => {}
+        }
+        index += 1;
+    }
+    None
+}
+
+/// Whether a return type goes on past a line end: no code of it comes before the line end, or a
+/// `|` or `&` ends the line or starts the next one.
+fn type_continues(last: Option<u8>, after: &str) -> bool {
+    matches!(last, None | Some(b'|' | b'&')) || after.trim_start().starts_with(['|', '&'])
+}
+
+/// The code before a group that starts at the end of `text`. When the group starts its line, the
+/// line comments on the lines above it are left out.
+fn code_before(text: &str) -> &str {
+    let mut before = text.trim_end();
+    let line = text.rfind('\n').map_or(0, |at| at + 1);
+    if !text[line..].trim().is_empty() {
+        return before;
+    }
+    loop {
+        let line = before.rfind('\n').map_or(0, |at| at + 1);
+        match before[line..].find("//") {
+            Some(at) => before = before[..line + at].trim_end(),
+            None => return before,
+        }
+    }
+}
+
 /// The text of the parentheses `open..close` that declares names, when they are the parameters
 /// of an unnamed function or an arrow function, a catch clause, or the declaration of a `for`
 /// loop head. julie records the parameters of a named function itself.
 fn declared_region(text: &str, open: usize, close: usize) -> Option<&str> {
-    let before = text[..open].trim_end();
+    let before = code_before(&text[..open]);
     let inner = &text[open + 1..close];
     let after = text[close + 1..].trim_start();
-    let function = ends_with_word(before, "function")
+    let function = ends_with_keyword(before, "function")
         || before
             .strip_suffix('*')
-            .is_some_and(|generator| ends_with_word(generator.trim_end(), "function"));
-    let call_like = before.ends_with([')', ']']) || before.ends_with(is_word_char);
-    let typed_arrow = after.starts_with(':')
-        && (!call_like || ends_with_word(before, "async"))
-        && after
-            .split_once("=>")
-            .is_some_and(|(returns, _)| !returns.contains([';', '{', '}']));
-    if ends_with_word(before, "catch") || function || after.starts_with("=>") || typed_arrow {
+            .is_some_and(|generator| ends_with_keyword(generator.trim_end(), "function"));
+    let call_like = before.ends_with([')', ']'])
+        || (before.ends_with(is_word_char)
+            && !ARROW_KEYWORDS
+                .iter()
+                .any(|word| ends_with_keyword(before, word)));
+    let in_expression = ["&&", "||", "??"]
+        .iter()
+        .any(|operator| before.ends_with(operator));
+    let typed_arrow = after
+        .strip_prefix(':')
+        .is_some_and(|returns| !in_expression && returns_to_arrow(returns))
+        && (!call_like || ends_with_word(before, "async"));
+    if ends_with_keyword(before, "catch") || function || after.starts_with("=>") || typed_arrow {
         return Some(inner);
     }
     let head = before.strip_suffix("await").map_or(before, str::trim_end);
-    if !ends_with_word(head, "for") {
+    if !ends_with_keyword(head, "for") {
         return None;
     }
     let declaration = ["const", "let", "var"].iter().find_map(|keyword| {
