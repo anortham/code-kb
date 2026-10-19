@@ -898,6 +898,22 @@ fn check_without_a_base_compares_with_the_session_base_and_says_so() {
 }
 
 #[test]
+fn check_outside_a_git_repository_is_an_error() {
+    let repo = indexed_repo(&[("a.py", "def f():\n    return 1\n")], false);
+    let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .env("CODE_KB_TELEMETRY_DIR", repo.root.join(".telemetry_test"))
+        .envs(without_parent_repository(&repo.root))
+        .arg("--root")
+        .arg(&repo.root)
+        .arg("check")
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("not a git repository"), "{stderr}");
+}
+
+#[test]
 fn check_with_an_unknown_base_prints_the_revision_sentence_once() {
     let repo = rust_function_repo();
     let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))

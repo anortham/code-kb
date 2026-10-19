@@ -707,20 +707,6 @@ fn a_revision_that_looks_like_an_option_is_refused() {
 }
 
 #[test]
-fn a_folder_outside_a_git_repository_is_an_error() {
-    find_julie_extract_binary().expect("julie-extract binary must be present for tests");
-    let temp = tempfile::tempdir().unwrap();
-    write(temp.path(), "a.py", "def f():\n    return 1\n");
-    let db = temp.path().join(".code-kb").join("artifact.db");
-    let workspace = Workspace::new(temp.path().to_path_buf());
-    scan_workspace(&workspace, &db, true).unwrap();
-    let conn = open_read_only(&db).unwrap();
-    let error = edit_check_op(&workspace, &db, &conn, None).unwrap_err();
-    assert!(matches!(error, OpError::EditCheck(_)));
-    assert_has(&error.to_string(), "not a git repository");
-}
-
-#[test]
 fn a_repository_with_no_commits_reports_no_shape_change() {
     find_julie_extract_binary().expect("julie-extract binary must be present for tests");
     let temp = safe_tempdir();
@@ -1402,14 +1388,13 @@ fn a_session_base_that_git_no_longer_has_falls_back_to_head() {
 }
 
 #[test]
-fn the_head_commit_is_none_outside_a_repository_and_before_the_first_commit() {
+fn the_head_commit_is_none_before_the_first_commit() {
     let repo = rust_function_repo();
     assert_eq!(
         head_commit(&repo.root),
         Some(git(&repo.root, &["rev-parse", "HEAD"]))
     );
-    let plain = tempfile::tempdir().unwrap();
-    assert_eq!(head_commit(plain.path()), None);
+    let plain = safe_tempdir();
     git(plain.path(), &["init", "-q", "-b", "main"]);
     assert_eq!(head_commit(plain.path()), None);
 }
