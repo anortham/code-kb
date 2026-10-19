@@ -1,4 +1,5 @@
 pub mod db;
+pub mod edit_check;
 pub mod formatters;
 pub mod models;
 pub mod ops;
@@ -15,11 +16,17 @@ pub mod workspace;
 pub use db::{
     Connection, DbError, ensure_fts_index, ensure_fts_index_path, open_read_only, open_read_write,
 };
+pub use edit_check::{
+    BaseRequest, BaseSource, EditCheck, EditCheckError, EditLimits, EditSite, PendingCheck,
+    SessionLock, SessionState, ShapeChange, head_commit, is_session_id, latest_session_base,
+    lock_session, prune_sessions, read_session, record_session_base, write_session,
+};
 pub use formatters::{
-    format_blast_radius, format_context_slice, format_context_slices, format_fact_categories,
-    format_file_skeleton, format_find_symbol_results, format_import_summary, format_no_facts,
-    format_reference_report, format_references, format_search_results, format_structural_facts,
-    format_symbol_bodies, format_symbol_body, no_facts_heading,
+    format_blast_radius, format_context_slice, format_context_slices, format_edit_check,
+    format_fact_categories, format_file_skeleton, format_find_symbol_results,
+    format_import_summary, format_no_facts, format_reference_report, format_references,
+    format_search_results, format_stop_reason, format_structural_facts, format_symbol_bodies,
+    format_symbol_body, no_facts_heading,
 };
 pub use models::{
     BlastRadiusResult, CallingTest, ConstructionSite, ContextSlice, FileFact, ImpactedSymbol,
@@ -29,7 +36,8 @@ pub use models::{
 };
 pub use ops::{
     OpError, SymbolLookup, SymbolSelector, blast_radius_op, blast_radius_selected_op,
-    codebase_outline_op, file_skeleton_op, get_context_slice_op, get_context_slice_selected_op,
+    codebase_outline_op, edit_check_op, edit_check_session_diff, edit_check_session_op,
+    edit_check_with, file_skeleton_op, get_context_slice_op, get_context_slice_selected_op,
     get_context_slices_selected_op, get_symbol_bodies_selected_op, get_symbol_body_op,
     get_symbol_body_selected_op, lookup_symbols_op, render_symbol_lookup, resolve_symbol_op,
 };
@@ -47,12 +55,12 @@ pub use queries::{
     search_symbols, search_symbols_scoped, suggest_file_paths, suggest_symbol_names,
     workspace_name,
 };
-pub use reference_report::{reference_report, select_reference_target};
+pub use reference_report::{reference_report, reference_report_for_edit, select_reference_target};
 pub use slicer::{SliceError, slice_symbol, slice_symbol_body};
 pub use sync::{
     PINNED_JULIE_VERSION, ReconcileReport, SyncError, create_index, delete_file, ensure_fresh_file,
-    ensure_index_matches_extractor, find_julie_extract_binary, installed_extractor_version,
-    reconcile_offline_edits, scan_workspace, update_file,
+    ensure_index_matches_extractor, find_julie_extract_binary, index_written_by_other_extractor,
+    installed_extractor_version, reconcile_offline_edits, scan_workspace, update_file,
 };
 pub use telemetry::{
     BugReportBundle, IndexFacts, TelemetryErrorRecord, TelemetryFilter, TelemetrySummary,

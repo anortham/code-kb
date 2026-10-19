@@ -14,6 +14,7 @@ use crate::queries::{
 };
 use crate::test_commands::{CommandFinder, TestClass, TestSpec};
 
+use super::variant_names::{bare_names, code_only, follows_case, imported_variants};
 use super::{Accounting, is_constructor};
 
 const MAX_DEPTH: usize = 8;
@@ -187,7 +188,10 @@ pub(super) fn reach_sections<'a>(
         "class" | "struct" | "record" => {
             sections.constructions = constructions(root, &target.name, sites);
         }
-        "enum" => sections.variant_uses = variant_uses(conn, root, target, sites)?,
+        "enum" => {
+            let variants = enum_variant_names(conn, target)?;
+            sections.variant_uses = uses_of_variants(conn, root, target, sites, &variants)?;
+        }
         _ => {}
     }
     sections.registrations = registrations(conn, target, sites)?;
@@ -738,7 +742,7 @@ fn blank_non_code(text: &str, nested_comments: bool) -> String {
 }
 
 /// The byte after the `*/` that closes the block comment opened at `open`, or the end of `bytes`.
-fn block_comment_end(bytes: &[u8], open: usize, nested: bool) -> usize {
+pub(super) fn block_comment_end(bytes: &[u8], open: usize, nested: bool) -> usize {
     let mut depth = 1;
     let mut at = open + 2;
     while at + 1 < bytes.len() {
@@ -761,7 +765,7 @@ fn block_comment_end(bytes: &[u8], open: usize, nested: bool) -> usize {
 }
 
 /// The byte after the quote that closes the literal opened at `open`, or the line end.
-fn quoted_end(bytes: &[u8], open: usize) -> usize {
+pub(super) fn quoted_end(bytes: &[u8], open: usize) -> usize {
     let mut at = open + 1;
     while at < bytes.len() && bytes[at] != b'\n' {
         match bytes[at] {
@@ -1790,6 +1794,53 @@ fn constructions(root: &Path, name: &str, sites: &[LabeledSite]) -> Vec<Construc
         .collect()
 }
 
+/// The lines where a Rust type use opens braces that close into a pattern (`let Foo { a, b } =
+/// x;`, `Foo { a, .. } => …`), one row per line. The `Constructions` section leaves them out.
+/// Excluded sites never count.
+pub(crate) fn destructurings(
+    root: &Path,
+    name: &str,
+    sites: &[LabeledSite],
+) -> Vec<ConstructionSite> {
+    let mut candidates: BTreeMap<&str, Vec<(usize, usize)>> = BTreeMap::new();
+    for labeled in sites.iter().filter(|labeled| {
+        labeled.label != SiteLabel::Excluded
+            && matches!(labeled.site.kind.as_str(), "type_usage" | "variable_ref")
+            && braced_language(&labeled.site.path) == Some(BracedLanguage::Rust)
+    }) {
+        if let (Some(line), Some(column)) = (labeled.site.start_line, labeled.site.start_column) {
+            candidates
+                .entry(&labeled.site.path)
+                .or_default()
+                .push((line, column));
+        }
+    }
+    let mut found: Vec<ConstructionSite> = Vec::new();
+    for (path, positions) in candidates {
+        let Ok(text) = std::fs::read_to_string(root.join(path)) else {
+            continue;
+        };
+        let starts = line_starts(&text);
+        for (line, column) in positions {
+            let opens_pattern = line
+                .checked_sub(1)
+                .and_then(|index| starts.get(index))
+                .is_some_and(|&start| {
+                    name_columns(&text, start, column, name, BracedLanguage::Rust)
+                        .into_iter()
+                        .any(|at| opens_a_pattern(&text, start, at, name))
+                });
+            if opens_pattern && !found.iter().any(|row| row.path == path && row.line == line) {
+                found.push(ConstructionSite {
+                    path: path.to_string(),
+                    line,
+                });
+            }
+        }
+    }
+    found
+}
+
 /// Whether the site of `name` at byte `column` of the line that starts at `line_start` builds a
 /// value: any whole-word `name` in code on that line opens a literal.
 fn line_builds(
@@ -1804,13 +1855,13 @@ fn line_builds(
         .any(|at| opens_a_literal(text, line_start, at, name, language))
 }
 
-fn line_starts(text: &str) -> Vec<usize> {
+pub(super) fn line_starts(text: &str) -> Vec<usize> {
     std::iter::once(0)
         .chain(text.match_indices('\n').map(|(at, _)| at + 1))
         .collect()
 }
 
-fn is_identifier_char(c: char) -> bool {
+pub(crate) fn is_identifier_char(c: char) -> bool {
     c.is_alphanumeric() || c == '_'
 }
 
@@ -1880,7 +1931,7 @@ fn non_code_end(line: &str, open: usize, language: BracedLanguage) -> Option<usi
 
 /// The byte after the character literal (`'x'`, `'"'`, `'\''`, `'\u{22}'`) that opens at `open`;
 /// `None` for a Rust lifetime (`'a`, `'static`).
-fn char_literal_end(line: &str, open: usize) -> Option<usize> {
+pub(super) fn char_literal_end(line: &str, open: usize) -> Option<usize> {
     let mut chars = line[open + 1..].chars();
     let first = chars.next()?;
     let escaped = first == '\\';
@@ -1896,7 +1947,7 @@ fn char_literal_end(line: &str, open: usize) -> Option<usize> {
 
 /// The byte after the Rust raw string (`r"…"`, `br#"…"#`, `cr##"…"##`) that opens at `open`, or
 /// `None` when the text there is not one.
-fn raw_string_end(line: &str, open: usize) -> Option<usize> {
+pub(super) fn raw_string_end(line: &str, open: usize) -> Option<usize> {
     let after_prefix = line[open..]
         .strip_prefix(['b', 'c'])
         .unwrap_or(&line[open..]);
@@ -1920,16 +1971,38 @@ fn opens_a_literal(
     name: &str,
     language: BracedLanguage,
 ) -> bool {
+    brace_after_name(text, line_start, column, name, language).is_some_and(|brace_at| {
+        !(language == BracedLanguage::Rust
+            && closes_into_a_pattern(&text[brace_at..], &text[..line_start + column]))
+    })
+}
+
+/// Whether `name` at byte `column` of the line that starts at `line_start` opens the braces of a
+/// Rust pattern (`let Foo { a, b } = x;`, `Foo { a, .. } => …`): the same text as a literal, but
+/// its braces close into a pattern.
+fn opens_a_pattern(text: &str, line_start: usize, column: usize, name: &str) -> bool {
+    brace_after_name(text, line_start, column, name, BracedLanguage::Rust).is_some_and(|brace_at| {
+        closes_into_a_pattern(&text[brace_at..], &text[..line_start + column])
+    })
+}
+
+/// The byte of the `{` that follows `name` at byte `column` of the line that starts at
+/// `line_start`, after the generic arguments, when `name` stands where a value is built or
+/// matched and not where a type is declared or named.
+fn brace_after_name(
+    text: &str,
+    line_start: usize,
+    column: usize,
+    name: &str,
+    language: BracedLanguage,
+) -> Option<usize> {
     let at = line_start + column;
-    let Some(after) = text
+    let after = text
         .get(at..)
         .and_then(|rest| rest.strip_prefix(name))
-        .and_then(|rest| rest.split('\n').next())
-    else {
-        return false;
-    };
+        .and_then(|rest| rest.split('\n').next())?;
     if names_a_type(&text[line_start..at], language) {
-        return false;
+        return None;
     }
     let (open, close) = match language {
         BracedLanguage::Rust => ('<', '>'),
@@ -1941,16 +2014,10 @@ fn opens_a_literal(
         BracedLanguage::Go => rest,
     };
     if arguments.starts_with(open) {
-        let Some(remainder) = after_balanced(arguments, open, close) else {
-            return false;
-        };
-        rest = remainder.trim_start();
+        rest = after_balanced(arguments, open, close)?.trim_start();
     }
-    if !rest.starts_with('{') {
-        return false;
-    }
-    let brace_at = at + name.len() + (after.len() - rest.len());
-    !(language == BracedLanguage::Rust && closes_into_a_pattern(&text[brace_at..], &text[..at]))
+    rest.starts_with('{')
+        .then(|| at + name.len() + (after.len() - rest.len()))
 }
 
 /// The text after the group that opens `text` with `open` and closes with the matching `close`;
@@ -2210,6 +2277,12 @@ impl Around {
     }
 }
 
+/// The text of `line` (1-based) before byte `column`.
+fn text_before<'t>(text: &'t str, starts: &[usize], line: usize, column: usize) -> Option<&'t str> {
+    let &start = line.checked_sub(1).and_then(|index| starts.get(index))?;
+    text.get(start..start + column)
+}
+
 /// Whether the name at byte `column` of `line` follows the enum's name and `::` or `.` on its line,
 /// after any path prefix.
 fn follows_the_enum_name(
@@ -2219,10 +2292,7 @@ fn follows_the_enum_name(
     column: usize,
     enum_name: &str,
 ) -> bool {
-    let Some(&start) = line.checked_sub(1).and_then(|index| starts.get(index)) else {
-        return false;
-    };
-    let Some(before) = text.get(start..start + column) else {
+    let Some(before) = text_before(text, starts, line, column) else {
         return false;
     };
     let before = before.trim_end();
@@ -2237,6 +2307,131 @@ struct CallerTally {
     caller: String,
     first_line: usize,
     used: BTreeSet<String>,
+}
+
+fn tally_use(
+    callers: &mut BTreeMap<(String, String), CallerTally>,
+    path: &str,
+    caller_id: String,
+    caller: String,
+    line: usize,
+    name: String,
+) {
+    let tally = callers
+        .entry((path.to_string(), caller_id))
+        .or_insert_with(|| CallerTally {
+            caller,
+            first_line: line,
+            used: BTreeSet::new(),
+        });
+    tally.first_line = tally.first_line.min(line);
+    tally.used.insert(name);
+}
+
+const ENCLOSING_SCOPES_SQL: &str = "WITH RECURSIVE up(id, depth) AS (
+        SELECT ?1, 0
+        UNION ALL
+        SELECT s.parent_symbol_id, up.depth + 1 FROM symbols s JOIN up ON s.symbol_id = up.id
+        WHERE s.parent_symbol_id IS NOT NULL AND up.depth < 8)
+    SELECT up.id, COALESCE(s.kind, '') FROM up LEFT JOIN symbols s ON s.symbol_id = up.id
+    ORDER BY up.depth";
+
+/// The `(function id, function name, line, variant)` of each variant of the Rust enum `target`
+/// that a function among `candidates` names bare, in the code of its lines. julie writes no row
+/// for a bare name in a pattern. A name counts when an import in the function's scope brings it
+/// in: a `use` inside the function, in the module that holds it, or at the top of a file with no
+/// module around it.
+fn rust_bare_variants(
+    conn: &Connection,
+    root: &Path,
+    target: &Symbol,
+    variants: &[String],
+    path: &str,
+    candidates: &BTreeSet<&String>,
+) -> Result<Vec<(String, String, usize, String)>, QueryError> {
+    if candidates.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut import_rows = conn.prepare(
+        "SELECT parent_symbol_id, COALESCE(signature, '') FROM symbols
+         WHERE path IN (?1, ?2) AND kind = 'import' AND instr(signature, ?3) > 0",
+    )?;
+    let imports: Vec<(Option<String>, Vec<String>)> = import_rows
+        .query_map(params![path, path.replace('/', "\\"), target.name], |row| {
+            Ok((row.get(0)?, row.get::<_, String>(1)?))
+        })?
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .map(|(parent, signature)| {
+            (
+                parent,
+                imported_variants(&signature, &target.name, variants),
+            )
+        })
+        .filter(|(_, names)| !names.is_empty())
+        .collect();
+    let Ok(text) = std::fs::read_to_string(root.join(path)) else {
+        return Ok(Vec::new());
+    };
+    if imports.is_empty() {
+        return Ok(Vec::new());
+    }
+    let code = code_only(&text, "rust");
+    let starts = line_starts(&code);
+    let mut span =
+        conn.prepare("SELECT name, kind, start_line, end_line FROM symbols WHERE symbol_id = ?1")?;
+    let mut scopes = conn.prepare(ENCLOSING_SCOPES_SQL)?;
+    let mut hits = Vec::new();
+    for &id in candidates {
+        let Some((name, kind, first, last)) = span
+            .query_row([id], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)? as usize,
+                    row.get::<_, i64>(3)? as usize,
+                ))
+            })
+            .optional()?
+        else {
+            continue;
+        };
+        if !matches!(kind.as_str(), "function" | "method" | "constructor") || first == 0 {
+            continue;
+        }
+        let mut in_scope = BTreeSet::new();
+        let mut inside_module = false;
+        for row in scopes.query_map([id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })? {
+            let (scope, scope_kind) = row?;
+            in_scope.insert(scope);
+            if matches!(scope_kind.as_str(), "module" | "namespace") {
+                inside_module = true;
+                break;
+            }
+        }
+        let imported: BTreeSet<&str> = imports
+            .iter()
+            .filter(|(parent, _)| match parent {
+                Some(parent) => in_scope.contains(parent),
+                None => !inside_module,
+            })
+            .flat_map(|(_, names)| names.iter().map(String::as_str))
+            .collect();
+        if imported.is_empty() {
+            continue;
+        }
+        let from = starts.get(first - 1).copied().unwrap_or(code.len());
+        let to = starts.get(last).copied().unwrap_or(code.len());
+        if to < from {
+            continue;
+        }
+        for (variant, offset) in bare_names(&code[from..to], &imported) {
+            hits.push((id.clone(), name.clone(), first + offset, variant));
+        }
+    }
+    Ok(hits)
 }
 
 /// Whether `target` is a C or C++ enum whose enumerators are visible as bare names: its
@@ -2258,29 +2453,45 @@ fn is_unscoped_c_enum(root: &Path, target: &Symbol) -> bool {
     words.by_ref().any(|word| word == "enum") && !matches!(words.next(), Some("class" | "struct"))
 }
 
-/// The functions that name variants of the enum `target`, most variants first, then by path. A
-/// name counts when it is a variant and stands right after the enum's name and `::` or `.` on the
+/// The names of the variants of the enum `target`. julie stores the enumerators of a C enum as
+/// `constant` rows.
+pub(crate) fn enum_variant_names(
+    conn: &Connection,
+    target: &Symbol,
+) -> Result<Vec<String>, QueryError> {
+    let mut members = conn.prepare(
+        "SELECT DISTINCT name FROM symbols
+         WHERE parent_symbol_id = ?1 AND (kind = 'enum_member' OR (kind = 'constant' AND ?2 = 'c'))",
+    )?;
+    let names = members
+        .query_map(params![target.symbol_id, target.language], |row| {
+            row.get::<_, String>(0)
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(names)
+}
+
+/// The functions that name one of `variants` of the enum `target`, most variants first, then by
+/// path. The report passes the variants the enum has; the edit check passes the names of removed
+/// ones. A name counts when it is a variant and stands right after the enum's name and `::` or `.` on the
 /// line of a site of the enum, or is a member access on the enum's name in a file that holds such
 /// a site. A bare enumerator of an unscoped C or C++ enum also counts when it is a variable read
 /// in a C or C++ file, on the line of a site of the enum or inside a function that holds a site
 /// of the enum. A function that declares a symbol of that name (a parameter or a local) never
 /// counts the enumerator, also on the line of a site. julie stores the enumerators of a C enum
-/// as `constant` rows, so a C enum takes those as its variants.
-fn variant_uses(
+/// as `constant` rows, so a C enum takes those as its variants. Three more spellings count. In
+/// Rust, `Self::V` in a method of an impl of the enum, and a bare `V` that the function's scope
+/// imports with `use …Enum::*` or `use …Enum::{V}` in a function that holds a site of the enum
+/// or is a method of the enum; julie writes no row for a bare name in a pattern, so the
+/// function's source is read. In Java, a `case V` label in a function that holds a site of the
+/// enum.
+pub(crate) fn uses_of_variants(
     conn: &Connection,
     root: &Path,
     target: &Symbol,
     sites: &[LabeledSite],
+    variants: &[String],
 ) -> Result<Vec<VariantUse>, QueryError> {
-    let mut members = conn.prepare(
-        "SELECT DISTINCT name FROM symbols
-         WHERE parent_symbol_id = ?1 AND (kind = 'enum_member' OR (kind = 'constant' AND ?2 = 'c'))",
-    )?;
-    let variants = members
-        .query_map(params![target.symbol_id, target.language], |row| {
-            row.get::<_, String>(0)
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
     if variants.is_empty() || !has_table(conn, "identifiers") {
         return Ok(Vec::new());
     }
@@ -2297,6 +2508,9 @@ fn variant_uses(
          WHERE f.path IN (?1, ?2) AND i.name = ?3 AND i.containing_symbol_id IS NOT NULL
            AND i.start_line IN (SELECT value FROM json_each(?4))",
     )?;
+    let mut enum_member_ids = conn.prepare(
+        "SELECT symbol_id FROM symbols WHERE parent_symbol_id = ?1 AND path IN (?2, ?3)",
+    )?;
     let mut stmt = conn.prepare(
         "SELECT i.name, i.kind, i.start_line, i.start_column, COALESCE(i.containing_symbol_id, ''),
                 COALESCE(s.name, ''),
@@ -2308,11 +2522,13 @@ fn variant_uses(
          LEFT JOIN symbols s ON s.symbol_id = i.containing_symbol_id
          WHERE f.path IN (?1, ?2) AND i.name IN (SELECT value FROM json_each(?3))",
     )?;
-    let names = serde_json::to_string(&variants).unwrap_or_default();
+    let names = serde_json::to_string(variants).unwrap_or_default();
     let bare_enumerators = is_unscoped_c_enum(root, target);
+    let rust_enum = target.language == "rust";
+    let java_enum = target.language == "java";
     let mut callers: BTreeMap<(String, String), CallerTally> = BTreeMap::new();
     for (path, site_lines) in &lines {
-        let site_functions: BTreeSet<String> = if bare_enumerators {
+        let site_functions: BTreeSet<String> = if bare_enumerators || rust_enum || java_enum {
             site_function_ids
                 .query_map(
                     params![
@@ -2321,6 +2537,16 @@ fn variant_uses(
                         target.name,
                         serde_json::to_string(site_lines).unwrap_or_default()
                     ],
+                    |row| row.get(0),
+                )?
+                .collect::<Result<_, _>>()?
+        } else {
+            BTreeSet::new()
+        };
+        let own_methods: BTreeSet<String> = if rust_enum {
+            enum_member_ids
+                .query_map(
+                    params![target.symbol_id, path, path.replace('/', "\\")],
                     |row| row.get(0),
                 )?
                 .collect::<Result<_, _>>()?
@@ -2347,12 +2573,15 @@ fn variant_uses(
             let bare = bare_enumerators
                 && kind == "variable_ref"
                 && matches!(language.as_str(), "c" | "cpp");
+            let case_label = java_enum && kind == "variable_ref" && language == "java";
             if !qualified {
-                if bare && declares_name.exists(params![caller_id, name])? {
+                if (bare || case_label) && declares_name.exists(params![caller_id, name])? {
                     continue;
                 }
-                let in_site_function = bare && site_functions.contains(&caller_id);
-                if !site_lines.contains(&line) && !in_site_function {
+                let in_site_function = (bare || case_label) && site_functions.contains(&caller_id);
+                let eligible = site_lines.contains(&line) || in_site_function;
+                let in_own_method = own_methods.contains(&caller_id) && language == "rust";
+                if !eligible && !in_own_method {
                     continue;
                 }
                 let named_by_enum = bare
@@ -2364,21 +2593,28 @@ fn variant_uses(
                         })
                         .as_ref()
                         .is_some_and(|(text, starts)| {
-                            follows_the_enum_name(text, starts, line, column, &target.name)
+                            (eligible
+                                && follows_the_enum_name(text, starts, line, column, &target.name))
+                                || (in_own_method
+                                    && follows_the_enum_name(text, starts, line, column, "Self"))
+                                || (case_label
+                                    && in_site_function
+                                    && text_before(text, starts, line, column)
+                                        .is_some_and(follows_case))
                         });
                 if !named_by_enum {
                     continue;
                 }
             }
-            let tally = callers
-                .entry((path.to_string(), caller_id))
-                .or_insert_with(|| CallerTally {
-                    caller,
-                    first_line: line,
-                    used: BTreeSet::new(),
-                });
-            tally.first_line = tally.first_line.min(line);
-            tally.used.insert(name);
+            tally_use(&mut callers, path, caller_id, caller, line, name);
+        }
+        if rust_enum && path.ends_with(".rs") {
+            let candidates: BTreeSet<&String> = site_functions.iter().chain(&own_methods).collect();
+            for (caller_id, caller, line, name) in
+                rust_bare_variants(conn, root, target, variants, path, &candidates)?
+            {
+                tally_use(&mut callers, path, caller_id, caller, line, name);
+            }
         }
     }
     let mut rows: Vec<VariantUse> = callers

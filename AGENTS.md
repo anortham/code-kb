@@ -360,6 +360,26 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   constructor or a Python `setUp` or `tearDown` method, is replaced by the tests of its class. A
   fixture or setup member with no such tests stays, labelled `fixture` or `setup`. Every test row is a test that the call graph reaches: a caller, a fixture user, a test of a setup member's class, or a test that reaches the target through a constructor. The index guesses no test from a shared word in a name, a stem in a file name, or an error handler, and it adds no `possible` row for a call that the runtime makes. When no test is found, the answer says `No test reaches it through the index. Run the full test suite.`; a list that `limit` or the 200-row discovery ceiling cut does not say it. For a file target, the tests in one test file that reach the target only through a constructor fold into one row for that file, `constructor-only callers (N targets)`. When `limit` cuts a list,
   the answer says how many rows it shows of how many it found.
+- Edit check: `check_edit` (CLI `code-kb check [--base REV]`, `edit_check_op` in `ops.rs`) compares the
+  working tree with a base revision (the given `base`, else the session base, else `HEAD`) and lists each
+  symbol whose shape changed: removed or renamed, its parameters or signature, the fields of a class,
+  struct, or record, or the variants of an enum. Each change lists the sites the diff reached, the
+  `proven` and `likely` sites it did not reach, a count of the `unresolved` ones, and the tests to run.
+  The base symbols come from a `julie-extract scan` of the base content of the changed files into
+  `<root>/.code-kb/check/<pid>/`, removed after the call; the main index changes only by the refresh
+  of the changed files. A check covers at most 200 files and 10 symbols and starts no step after 20 s, and the
+  answer states each cut. `code-kb hook SessionStart` reads the hook JSON on stdin and writes
+  `<root>/.code-kb/sessions/<session_id>.json` with `{"base": "<HEAD sha>"}` when the root is a git
+  repository with a commit, with or without an index; a file that has a base keeps it, and files
+  older than 7 days are removed. `code-kb hook Stop` and `code-kb hook SubagentStop` run the check
+  against that base and print `{"decision":"block","reason":…}` when a `proven` or `likely` site is
+  outside the diff, never when `stop_hook_active` is true, and nothing on any
+  error or when another `julie-extract` wrote the index (the server or the CLI rebuilds it; a hook
+  never does). The session file keeps the last checked and the last blocked diff hash
+  (`checked_diff`, `blocked_diff`): a Stop on either runs no scan and prints nothing, and a
+  `<session_id>.lock` file makes parallel hooks of one session wait up to 2 s, so they block once.
+  `hooks/claude-codex-hooks.json` wires them. The text, every rule, and the known limits are in
+  `docs/edit-check.md`; change that file with the code.
 - Continuous testing and editing stay in native agent terminal commands. `code-kb` predicts the
   targeted test targets to run before or after a change; filesystem changes automatically refresh indexed files.
 - Self-cleaning workspaces: Every repository and git worktree maintains its own isolated database at
@@ -369,6 +389,8 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
 - Cross-platform agent hooks: `code-kb hook [SessionStart|SubagentStart|PreInvocation]` outputs agent routing instructions
   directly from the native binary without external runtime dependencies (Node.js, bash, python), formatting JSON
   natively for Claude Code/Cursor (`SessionStart`), Copilot, and Antigravity (`PreInvocation` injectSteps).
+  `code-kb hook SessionStart` also records the session base, and `code-kb hook [Stop|SubagentStop]` runs the
+  edit check from the hook JSON on stdin (Edit check bullet above).
 
 ### 6. Index Freshness
 - A debounced watcher refreshes filesystem changes, startup reconciles changes made while no server ran,
@@ -395,7 +417,7 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
 ### 8. Dynamic MCP Discovery & Zero Ghost Compatibility
 - **An MCP server is an ephemeral, agent-facing discovery surface, not a frozen REST API.**
 - Agents discover tools dynamically via `tools/list` on session start and carry zero state across sessions. There is no concept of "backward compatibility" for tool names across sessions.
-- `tools/list` sets `_meta["anthropic/alwaysLoad"]: true` on every tool, and lists six: `file_skeleton`, `lookup_symbol`, `get_symbol_body`, `get_symbol_context`, `find_references`, and `blast_radius`. Accuracy phase 2 removed `codebase_outline` (`file_skeleton` on a folder replaces it), `search_symbols` (`lookup_symbol` adds the ranked matches), `find_structural_facts`, and `telemetry_summary`; the CLI keeps `outline`, `search`, `facts`, and `stats`.
+- `tools/list` sets `_meta["anthropic/alwaysLoad"]: true` on every tool, and lists seven: `file_skeleton`, `lookup_symbol`, `get_symbol_body`, `get_symbol_context`, `find_references`, `blast_radius`, and `check_edit` (CLI `check`). Accuracy phase 2 removed `codebase_outline` (`file_skeleton` on a folder replaces it), `search_symbols` (`lookup_symbol` adds the ranked matches), `find_structural_facts`, and `telemetry_summary`; the CLI keeps `outline`, `search`, `facts`, and `stats`.
   Claude Code otherwise defers MCP tools behind `ToolSearch`, and in a 2026-10 test no Claude agent
   called `ToolSearch` for them: 0 of 24 runs used code-kb, against 22 of 24 with the tools loaded.
   A routing-block line that told agents to call `ToolSearch` changed nothing.

@@ -2,9 +2,10 @@
 //! definitions, and the exclusion of a call whose argument count no definition of the target
 //! accepts. A target the index cannot describe exactly gets no range, so no call is excluded.
 
+use std::ops::Range;
 use std::path::Path;
 
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{Accounting, QueryError, sections};
 use crate::models::Symbol;
@@ -24,7 +25,7 @@ const SIGNATURE_KEEPING_DECORATORS: &[&str] = &[
     "typing.overload",
 ];
 
-const PARAMETER_ROWS_SQL: &str = "SELECT name, COALESCE(start_byte, 0) FROM symbols
+const PARAMETER_ROWS_SQL: &str = "SELECT name, COALESCE(start_byte, 0), signature FROM symbols
      WHERE parent_symbol_id = ?1
        AND CASE WHEN json_valid(metadata_json)
                 THEN json_extract(metadata_json, '$.role') END = 'parameter'
@@ -59,7 +60,7 @@ fn rule_language(language: &str) -> Option<&'static str> {
 
 /// How many arguments a call to one definition or a group of overloads may pass.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct Arity {
+pub(crate) struct Arity {
     language: &'static str,
     min: u32,
     /// The most arguments a bound call passes, `None` when a parameter takes any number.
@@ -81,12 +82,21 @@ impl Arity {
     }
 
     /// The text of the range a bound call to the definition satisfies.
-    fn range_text(&self) -> String {
+    pub(crate) fn range_text(&self) -> String {
         match self.max {
             Some(max) if max == self.min => self.min.to_string(),
             Some(max) => format!("{}-{max}", self.min),
             None => format!("{} or more", self.min),
         }
+    }
+
+    /// Whether a call written in `site_language` with `count` arguments passes a number of
+    /// arguments the target takes, `None` when the arity rule does not judge that language. Unlike
+    /// the callers report, a Go call with one argument is judged: `f(g())` may spread, but the
+    /// edit check still names a call that passes one.
+    pub(crate) fn accepts(&self, site_language: &str, count: u32) -> Option<bool> {
+        (rule_language(site_language) == Some(self.language))
+            .then(|| count >= self.min && self.accepted_max.is_none_or(|max| count <= max))
     }
 
     /// The basis of an exclusion when `count` arguments fit no definition of the target, `None`
@@ -117,15 +127,47 @@ impl Arity {
 /// The range of arguments the overloads in `group` accept together, `None` when one of them has no
 /// exact range. `constructing` is set for the calls that build the class (`Foo(a)`), which never
 /// pass the receiver.
-pub(super) fn group_arity(
+pub(crate) fn group_arity(
     conn: &Connection,
     root: &Path,
     group: &[Symbol],
     constructing: bool,
 ) -> Result<Option<Arity>, QueryError> {
+    group_arity_of(conn, root, group, constructing, false)
+}
+
+/// Like [`group_arity`] for overloads that a removal leaves behind or takes away, where the
+/// constructors of a Java or Kotlin class have a range when every constructor of the class is in
+/// the index.
+pub(crate) fn declared_group_arity(
+    conn: &Connection,
+    root: &Path,
+    group: &[Symbol],
+) -> Result<Option<Arity>, QueryError> {
+    group_arity_of(conn, root, group, false, true)
+}
+
+/// Whether the Java or Kotlin class of `constructor` has a constructor that the index lists no
+/// symbol for: the canonical constructor of a record, a Kotlin primary constructor, or the
+/// implicit constructor of a class that declares none.
+pub(crate) fn has_unlisted_constructor(
+    conn: &Connection,
+    constructor: &Symbol,
+) -> Result<bool, QueryError> {
+    Ok(matches!(constructor.language.as_str(), "java" | "kotlin")
+        && !declared_constructors_are_complete(conn, constructor, &constructor.language)?)
+}
+
+fn group_arity_of(
+    conn: &Connection,
+    root: &Path,
+    group: &[Symbol],
+    constructing: bool,
+    declared: bool,
+) -> Result<Option<Arity>, QueryError> {
     let mut union: Option<Arity> = None;
     for member in group {
-        let Some(arity) = definition_arity(conn, root, member, constructing)? else {
+        let Some(arity) = definition_arity(conn, root, member, constructing, declared)? else {
             return Ok(None);
         };
         union = Some(match union {
@@ -155,7 +197,7 @@ pub(super) fn widened_by_ancestors(
     let (conn, root) = (accounting.conn, accounting.root);
     let mut range = own;
     for method in &inherited {
-        let Some(arity) = definition_arity(conn, root, method, false)? else {
+        let Some(arity) = definition_arity(conn, root, method, false, false)? else {
             return Ok(None);
         };
         range = range.union(arity);
@@ -180,6 +222,7 @@ fn definition_arity(
     root: &Path,
     symbol: &Symbol,
     constructing: bool,
+    declared: bool,
 ) -> Result<Option<Arity>, QueryError> {
     let Some(language) = rule_language(&symbol.language) else {
         return Ok(None);
@@ -190,10 +233,30 @@ fn definition_arity(
     let Some(signature) = symbol.signature.as_deref() else {
         return Ok(None);
     };
-    if symbol.kind == "constructor" && !constructor_is_complete(conn, symbol, language)? {
-        return Ok(None);
+    if symbol.kind == "constructor" {
+        let complete = if declared {
+            declared_constructors_are_complete(conn, symbol, language)?
+        } else {
+            constructor_is_complete(conn, symbol, language)?
+        };
+        if !complete {
+            return Ok(None);
+        }
     }
-    let Some(list) = parameter_list(signature, &symbol.name, language) else {
+    let kotlin_constructor;
+    let (symbol, name) = match (language, symbol.kind.as_str()) {
+        // julie starts the body of a Kotlin secondary constructor at its parameter list, so the
+        // body cut would drop every parameter row.
+        ("kotlin", "constructor") => {
+            kotlin_constructor = Symbol {
+                body_start_byte: None,
+                ..symbol.clone()
+            };
+            (&kotlin_constructor, "constructor")
+        }
+        _ => (symbol, symbol.name.as_str()),
+    };
+    let Some(list) = parameter_list(signature, name, language) else {
         return Ok(None);
     };
     if language == "typescript" && !is_written_as_function(root, symbol) {
@@ -265,15 +328,42 @@ fn parameter_names(
     symbol: &Symbol,
     list: &str,
 ) -> Result<Vec<String>, QueryError> {
+    let mut rows = parameter_rows(conn, symbol)?;
+    rows.sort_by_key(|row| (row.start, word_position(list, &row.name)));
+    Ok(rows.into_iter().map(|row| row.name).collect())
+}
+
+/// One parameter row of a callable: its name, its start byte, and its own signature text (`b: i32`,
+/// `int a`, `v, k int`, `b=1`).
+pub(crate) struct ParameterRow {
+    pub name: String,
+    pub start: usize,
+    pub signature: Option<String>,
+}
+
+/// The parameter rows of `symbol`, without the rows after its body starts (the parameters of a
+/// lambda in the body).
+pub(crate) fn parameter_rows(
+    conn: &Connection,
+    symbol: &Symbol,
+) -> Result<Vec<ParameterRow>, QueryError> {
     let mut stmt = conn.prepare(PARAMETER_ROWS_SQL)?;
     let mut rows = stmt
         .query_map(params![symbol.symbol_id], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as usize))
+            Ok(ParameterRow {
+                name: row.get(0)?,
+                start: row.get::<_, i64>(1)? as usize,
+                signature: row.get(2)?,
+            })
         })?
         .collect::<Result<Vec<_>, _>>()?;
-    rows.retain(|(_, start)| symbol.body_start_byte.is_none_or(|body| *start < body));
-    rows.sort_by_key(|(name, start)| (*start, word_position(list, name)));
-    Ok(rows.into_iter().map(|(name, _)| name).collect())
+    rows.retain(|row| symbol.body_start_byte.is_none_or(|body| row.start < body));
+    Ok(rows)
+}
+
+/// How many parameter rows `symbol` has.
+pub(crate) fn parameter_count(conn: &Connection, symbol: &Symbol) -> Result<usize, QueryError> {
+    Ok(parameter_rows(conn, symbol)?.len())
 }
 
 /// How a call reaches the first parameter of the definition: `None` for a definition whose
@@ -345,12 +435,15 @@ fn is_bound_as_class_attribute(conn: &Connection, function: &Symbol) -> Result<b
 }
 
 fn python_decorators(conn: &Connection, symbol: &Symbol) -> Result<Vec<String>, QueryError> {
-    let metadata: Option<String> = conn.query_row(
-        "SELECT CASE WHEN json_valid(metadata_json) THEN metadata_json END
-         FROM symbols WHERE symbol_id = ?1",
-        params![symbol.symbol_id],
-        |row| row.get(0),
-    )?;
+    let metadata: Option<String> = conn
+        .query_row(
+            "SELECT CASE WHEN json_valid(metadata_json) THEN metadata_json END
+             FROM symbols WHERE symbol_id = ?1",
+            params![symbol.symbol_id],
+            |row| row.get(0),
+        )
+        .optional()?
+        .flatten();
     let decorators = metadata
         .and_then(|json| serde_json::from_str::<serde_json::Value>(&json).ok())
         .and_then(|value| value.get("decorators").cloned())
@@ -389,6 +482,32 @@ fn constructor_is_complete(
         }
         _ => Ok(false),
     }
+}
+
+/// Whether the constructors in the index are all the constructors the class has, for the group of
+/// a removal. A Java class that declares a constructor has no implicit one, and a Java record
+/// has an implicit canonical one. A Kotlin class has no primary constructor when its header holds
+/// no parenthesis: no parameter list and no call of a superclass.
+fn declared_constructors_are_complete(
+    conn: &Connection,
+    constructor: &Symbol,
+    language: &str,
+) -> Result<bool, QueryError> {
+    if !matches!(language, "java" | "kotlin") {
+        return constructor_is_complete(conn, constructor, language);
+    }
+    let owner = match &constructor.parent_symbol_id {
+        Some(owner_id) => crate::queries::get_symbol_by_id(conn, owner_id)?,
+        None => None,
+    };
+    Ok(owner.is_some_and(|owner| {
+        let header = owner.signature.as_deref().unwrap_or_default();
+        owner.kind == "class"
+            && match language {
+                "java" => !contains_word(header, "record"),
+                _ => !header.contains('('),
+            }
+    }))
 }
 
 /// Whether the source declares the symbol with its own parameter list (`name(a: number)`). julie
@@ -548,9 +667,14 @@ fn is_marked_optional(segment: &str) -> bool {
     segment.trim_end().ends_with('?')
 }
 
-/// Whether a parameter has a default value: an `=` outside brackets and quotes that is no part of
-/// `==`, `=>`, `<=`, `>=`, or `!=`.
+/// Whether a parameter has a default value.
 fn has_default(segment: &str) -> bool {
+    default_start(segment).is_some()
+}
+
+/// The byte of the `=` that starts the default value of a parameter or field: an `=` outside
+/// brackets and quotes that is no part of `==`, `=>`, `<=`, `>=`, or `!=`.
+pub(crate) fn default_start(segment: &str) -> Option<usize> {
     let mut scanner = Scanner::new("");
     let mut previous = None;
     for (index, c) in segment.char_indices() {
@@ -560,12 +684,25 @@ fn has_default(segment: &str) -> bool {
             && !matches!(next, Some('=' | '>'))
             && !matches!(previous, Some('=' | '!' | '<' | '>'))
         {
-            return true;
+            return Some(index);
         }
         scanner.step(c, next);
         previous = Some(c);
     }
-    false
+    None
+}
+
+/// The byte range of the parameter list inside `signature` (between the parentheses) and its
+/// top-level pieces, `None` when the signature has no list after the name.
+pub(crate) fn parameter_segments<'a>(
+    signature: &'a str,
+    name: &str,
+    language: &str,
+) -> Option<(Range<usize>, Vec<&'a str>)> {
+    let language = rule_language(language).unwrap_or(language);
+    let list = parameter_list(signature, name, language)?;
+    let start = list.as_ptr() as usize - signature.as_ptr() as usize;
+    Some((start..start + list.len(), split_top_level(list, language)))
 }
 
 /// The text inside the first parenthesis group that follows `name` (and an optional list of

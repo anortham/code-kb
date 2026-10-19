@@ -357,8 +357,9 @@ fn mcp_request(
     serde_json::from_str(&response).unwrap()
 }
 
-const REMAINING_TOOLS: [&str; 6] = [
+const TOOLS: [&str; 7] = [
     "blast_radius",
+    "check_edit",
     "file_skeleton",
     "find_references",
     "get_symbol_body",
@@ -741,7 +742,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
 
     let mut tool_names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
     tool_names.sort_unstable();
-    assert_eq!(tool_names, REMAINING_TOOLS);
+    assert_eq!(tool_names, TOOLS);
     assert!(!tool_names.contains(&"replace_symbol_body"));
     assert!(!tool_names.contains(&"edit_file"));
 
@@ -3127,7 +3128,7 @@ fn test_mcp_tools_list_requires_project_root_on_every_tool() {
         .filter_map(|tool| tool["name"].as_str())
         .collect();
     names.sort_unstable();
-    assert_eq!(names, REMAINING_TOOLS);
+    assert_eq!(names, TOOLS);
     for tool in tools {
         let name = tool["name"].as_str().unwrap();
         let schema = &tool["inputSchema"];
@@ -3177,13 +3178,187 @@ fn test_mcp_lookup_symbol_is_described_as_the_one_tool_for_a_name_or_a_concept()
 }
 
 #[test]
+fn test_mcp_check_edit_is_described_and_takes_an_optional_base() {
+    let repo = setup_test_repo();
+    let mut session = McpSession::start(serve_command(repo.path()));
+
+    let listed = session.request("tools/list", json!({}));
+    let check = listed["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|tool| tool["name"] == "check_edit")
+        .unwrap();
+
+    assert_eq!(
+        check["description"],
+        "After you edit: the symbols whose shape changed against the session base (or base, or HEAD) and every site of each that your diff did not reach. Run it before you say a change is done."
+    );
+    let properties = check["inputSchema"]["properties"].as_object().unwrap();
+    let mut names: Vec<&str> = properties.keys().map(String::as_str).collect();
+    names.sort_unstable();
+    assert_eq!(names, ["base", "project_root"]);
+    assert_eq!(properties["base"]["type"], "string");
+    assert_eq!(
+        properties["base"]["description"],
+        "Git revision to compare with (default: the session base, else HEAD)."
+    );
+    assert_eq!(check["inputSchema"]["required"], json!(["project_root"]));
+}
+
+fn git_in(root: &Path, args: &[&str]) -> String {
+    let output = Command::new("git")
+        .args(["-c", "core.autocrlf=false", "-c", "commit.gpgsign=false"])
+        .args(["-c", "user.name=Test", "-c", "user.email=test@example.com"])
+        .args(args)
+        .current_dir(root)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8_lossy(&output.stdout).trim().to_string()
+}
+
+fn committed_area_repo() -> tempfile::TempDir {
+    let repo = code_kb_core::safe_tempdir();
+    let root = repo.path();
+    git_in(root, &["init", "-q", "-b", "main"]);
+    for (path, source) in [
+        (
+            "Cargo.toml",
+            "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        ),
+        (
+            "src/lib.rs",
+            "pub mod geometry;\npub mod first;\npub mod second;\n",
+        ),
+        (
+            "src/geometry.rs",
+            "pub fn area(w: i32, h: i32) -> i32 {\n    w * h\n}\n",
+        ),
+        (
+            "src/first.rs",
+            "use crate::geometry::area;\n\npub fn first() -> i32 {\n    area(2, 3)\n}\n",
+        ),
+        (
+            "src/second.rs",
+            "use crate::geometry::area;\n\npub fn second() -> i32 {\n    area(4, 5)\n}\n",
+        ),
+    ] {
+        let full = root.join(path);
+        std::fs::create_dir_all(full.parent().unwrap()).unwrap();
+        std::fs::write(full, source).unwrap();
+    }
+    git_in(root, &["add", "."]);
+    git_in(root, &["commit", "-q", "-m", "base"]);
+    cli_stdout(root, &["scan"]);
+    repo
+}
+
+fn add_depth_parameter_to_area(root: &Path) {
+    std::fs::write(
+        root.join("src/geometry.rs"),
+        "pub fn area(w: i32, h: i32, depth: i32) -> i32 {\n    w * h * depth\n}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("src/first.rs"),
+        "use crate::geometry::area;\n\npub fn first() -> i32 {\n    area(2, 3, 1)\n}\n",
+    )
+    .unwrap();
+}
+
+#[test]
+fn mcp_and_cli_print_byte_identical_check_text_for_the_same_call() {
+    let repo = committed_area_repo();
+    let root = repo.path();
+    let base = git_in(root, &["rev-parse", "HEAD"]);
+
+    let quiet_cli = cli_stdout(root, &["check"]);
+    assert!(
+        quiet_cli.contains("no symbol changed shape."),
+        "{quiet_cli}"
+    );
+
+    add_depth_parameter_to_area(root);
+    let default_cli = cli_stdout(root, &["check"]);
+    let base_cli = cli_stdout(root, &["check", "--base", &base]);
+    assert!(
+        default_cli.contains("function `area` (src/geometry.rs): parameters 2 → 3"),
+        "{default_cli}"
+    );
+    assert!(
+        default_cli.contains("src/second.rs:4  `second`  passes 2 args; takes 3"),
+        "{default_cli}"
+    );
+
+    let mut session = McpSession::start(serve_command(root));
+    let default_mcp = session.call("check_edit", json!({"project_root": root}));
+    let base_mcp = session.call("check_edit", json!({"project_root": root, "base": base}));
+    assert_ne!(default_mcp["isError"], true, "{default_mcp}");
+    assert_eq!(result_text(&default_mcp), default_cli);
+    assert_eq!(result_text(&base_mcp), base_cli);
+    session.finish();
+}
+
+#[test]
+fn mcp_and_cli_name_a_revision_that_does_not_exist() {
+    let repo = committed_area_repo();
+    let root = repo.path();
+
+    let mut session = McpSession::start(serve_command(root));
+    let result = session.call(
+        "check_edit",
+        json!({"project_root": root, "base": "no-such-revision"}),
+    );
+    assert_eq!(result["isError"], true, "{result}");
+    assert!(result_text(&result).contains("no-such-revision"));
+    session.finish();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+        .arg("--root")
+        .arg(root)
+        .args(["check", "--base", "no-such-revision"])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("no-such-revision"));
+}
+
+#[test]
+fn cli_check_json_prints_the_whole_check() {
+    let repo = committed_area_repo();
+    let root = repo.path();
+    add_depth_parameter_to_area(root);
+
+    let check: Value = serde_json::from_str(&cli_stdout(root, &["--json", "check"])).unwrap();
+    assert_eq!(check["source"], "head");
+    assert_eq!(check["files_changed"], 2);
+    let change = &check["changes"][0];
+    assert_eq!(change["display"], "area");
+    assert_eq!(change["change"], "parameters 2 → 3");
+    assert_eq!(change["in_diff"][0]["path"], "src/first.rs");
+    let outside: Vec<&Value> = ["proven", "likely"]
+        .iter()
+        .flat_map(|label| change[label].as_array().unwrap())
+        .collect();
+    assert_eq!(outside.len(), 1);
+    assert_eq!(outside[0]["path"], "src/second.rs");
+    assert!(check["diff_hash"].as_str().is_some_and(|h| !h.is_empty()));
+}
+
+#[test]
 fn test_mcp_tools_list_asks_claude_to_load_every_code_tool_at_start() {
     let repo = setup_test_repo();
     let mut session = McpSession::start(serve_command(repo.path()));
 
     let listed = session.request("tools/list", json!({}));
     let tools = listed["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), REMAINING_TOOLS.len());
+    assert_eq!(tools.len(), TOOLS.len());
     for tool in tools {
         assert_eq!(
             &tool["_meta"]["anthropic/alwaysLoad"],

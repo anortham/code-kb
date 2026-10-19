@@ -6,4 +6,5 @@
 - **To find a definition or its uses**, call `lookup_symbol` or `find_references`, not `rg` or `grep` on the name.
 - **To find code by concept**, call `lookup_symbol` with a few words; it adds ranked matches when no name matches.
 - **Before you change a symbol**, call `get_symbol_context`; to pick the tests to run, call `blast_radius`.
+- **After you edit**, call `check_edit` before you say the change is done.
 - Use `rg` for literal text: string literals, error messages, comments, and config values. `code-kb` indexes symbol names, signatures, and docstrings, not file contents.

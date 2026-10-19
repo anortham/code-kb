@@ -14,16 +14,20 @@ use crate::queries::{
     QueryError, built_receiver_sql, class_chain_sql, constructed_class, direct_identifier_rows,
     documentation_language_list, enclosing_scope_sql, get_symbol_by_name,
     grouped_member_access_rows, has_column, implicit_receiver_language_list, import_sites,
-    inherited_writes_among, module_import_binding_sql, path_proximity, pending_target_predicate,
-    populate_lambda_enclosing_names, receiver_type_sql, symbol_not_found_parts,
+    import_sites_of_absent, inherited_writes_among, module_import_binding_sql, path_proximity,
+    pending_target_predicate, populate_lambda_enclosing_names, receiver_type_sql,
+    symbol_not_found_parts,
 };
 use crate::text_scan::scan_word;
 
-mod arity;
+pub(crate) mod arity;
 mod js_bindings;
 mod js_modules;
 mod receiver_types;
 mod sections;
+pub(crate) mod variant_names;
+
+pub(crate) use sections::{destructurings, enum_variant_names, uses_of_variants};
 
 const RESOLVER_ROW_CAP: usize = 5_000;
 const OTHER_DEFINITION_CAP: usize = 12;
@@ -88,18 +92,68 @@ pub fn reference_report(
     report_within(conn, root, target, ACCOUNTING_TIME_LIMIT)
 }
 
+/// The report the post-edit check reads: the labeled sites and the reach sections of `target`,
+/// without the whole-word text scan and without the exclusion of a call whose argument count the
+/// target does not accept, so a call that still passes the old count keeps its label. `target`
+/// may be a symbol the index no longer holds; the report then judges the sites of its name as if
+/// the symbol were still there, with its owner (`parent_symbol_id`) taken from the index.
+pub fn reference_report_for_edit(
+    conn: &Connection,
+    root: &Path,
+    target: &Symbol,
+) -> Result<ReferenceReport, QueryError> {
+    report_with(
+        conn,
+        root,
+        target,
+        ACCOUNTING_TIME_LIMIT,
+        ReportMode {
+            text_scan: false,
+            arity_exclusion: false,
+            absent_target: crate::queries::get_symbol_by_id(conn, &target.symbol_id)?.is_none(),
+        },
+    )
+}
+
+/// What a report computes besides the labeled sites.
+#[derive(Clone, Copy)]
+struct ReportMode {
+    text_scan: bool,
+    arity_exclusion: bool,
+    /// The index does not hold the target, so its row cannot be joined by id.
+    absent_target: bool,
+}
+
 fn report_within(
     conn: &Connection,
     root: &Path,
     target: &Symbol,
     time_limit: Duration,
 ) -> Result<ReferenceReport, QueryError> {
+    let mode = ReportMode {
+        text_scan: true,
+        arity_exclusion: true,
+        absent_target: false,
+    };
+    report_with(conn, root, target, time_limit, mode)
+}
+
+fn report_with(
+    conn: &Connection,
+    root: &Path,
+    target: &Symbol,
+    time_limit: Duration,
+    mode: ReportMode,
+) -> Result<ReferenceReport, QueryError> {
     let class = constructor_class(conn, target)?;
     let group = overload_group(conn, target)?;
     let mut accounting = Accounting::new(conn, root, time_limit);
+    accounting.absent = mode.absent_target.then(|| target.clone());
     let target_arity = match arity::group_arity(conn, root, &group, false)? {
-        Some(own) => arity::widened_by_ancestors(&mut accounting, target, own)?,
-        None => None,
+        Some(own) if mode.arity_exclusion => {
+            arity::widened_by_ancestors(&mut accounting, target, own)?
+        }
+        _ => None,
     };
     accounting.restart_clock(time_limit);
     let mut specs = vec![Spec {
@@ -119,7 +173,11 @@ fn report_within(
             group: vec![class.clone()],
             scope: RowScope::Calls,
             builds_class: true,
-            arity: arity::group_arity(conn, root, &specs[0].group, true)?,
+            arity: if mode.arity_exclusion {
+                arity::group_arity(conn, root, &specs[0].group, true)?
+            } else {
+                None
+            },
         });
     }
 
@@ -157,6 +215,7 @@ fn report_within(
     });
 
     let text = match &class {
+        _ if !mode.text_scan => TextOutcome::not_run(),
         Some(class) => TextOutcome::skipped(class),
         None => accounting.text_outcome(root, &target.name, &sites)?,
     };
@@ -184,7 +243,11 @@ fn report_within(
         text_only: text.text_only,
         text_scan: text.summary,
         cannot_see,
-        imports: import_sites(conn, &target.name, Some(&target.path))?,
+        imports: match mode.absent_target {
+            true if target.parent_symbol_id.is_some() => Vec::new(),
+            true => import_sites_of_absent(conn, &target.name, &target.path)?,
+            false => import_sites(conn, &target.name, Some(&target.path))?,
+        },
         overrides: reach.overrides,
         overridden: reach.overridden,
         constructions: reach.constructions,
@@ -250,7 +313,10 @@ fn constructor_class(conn: &Connection, target: &Symbol) -> Result<Option<Symbol
 }
 
 /// The selected symbol and its overloads: the symbols with its name, owner, kind, and file.
-fn overload_group(conn: &Connection, target: &Symbol) -> Result<Vec<Symbol>, QueryError> {
+pub(crate) fn overload_group(
+    conn: &Connection,
+    target: &Symbol,
+) -> Result<Vec<Symbol>, QueryError> {
     let mut stmt = conn.prepare(
         "SELECT symbol_id FROM symbols
          WHERE name = ?1 AND path = ?2 AND kind = ?3 AND parent_symbol_id IS ?4
@@ -783,6 +849,20 @@ struct TextOutcome {
 }
 
 impl TextOutcome {
+    fn not_run() -> Self {
+        TextOutcome {
+            counts: ReferenceCounts::default(),
+            text_only: Vec::new(),
+            summary: TextScanSummary {
+                files_scanned: 0,
+                files_total: 0,
+                complete: true,
+                elapsed_ms: 0,
+                skipped: None,
+            },
+        }
+    }
+
     fn skipped(class: &Symbol) -> Self {
         TextOutcome {
             counts: ReferenceCounts::default(),
@@ -808,6 +888,10 @@ struct Accounting<'a> {
     judge_deadline: Instant,
     deadline: Instant,
     judge_stmt: RefCell<Option<Statement<'a>>>,
+    /// The target when the index no longer holds it, and the judge that reads its columns from
+    /// the symbol instead of joining its row.
+    absent: Option<Symbol>,
+    absent_judge_stmt: RefCell<Option<Statement<'a>>>,
     definitions_stmt: RefCell<Option<Statement<'a>>>,
     import_match_stmt: Option<Statement<'a>>,
     statements: RefCell<HashMap<&'static str, Statement<'a>>>,
@@ -826,6 +910,8 @@ impl<'a> Accounting<'a> {
             judge_deadline: Instant::now() + time_limit / 2,
             deadline: Instant::now() + time_limit,
             judge_stmt: RefCell::new(None),
+            absent: None,
+            absent_judge_stmt: RefCell::new(None),
             definitions_stmt: RefCell::new(None),
             import_match_stmt: None,
             statements: RefCell::new(HashMap::new()),
@@ -1602,12 +1688,34 @@ impl<'a> Accounting<'a> {
             serde_json::to_string(&ids).unwrap_or_else(|_| "[]".to_string())
         };
         let (pending, identifiers) = (ids_of(Source::Pending), ids_of(Source::Identifier));
-        let mut slot = self.judge_stmt.borrow_mut();
+        let absent = self
+            .absent
+            .as_ref()
+            .filter(|symbol| symbol.symbol_id == target_id);
+        let mut slot = if absent.is_some() {
+            self.absent_judge_stmt.borrow_mut()
+        } else {
+            self.judge_stmt.borrow_mut()
+        };
         if slot.is_none() {
-            *slot = Some(self.conn.prepare(&judge_sql(self.conn))?);
+            *slot = Some(self.conn.prepare(&judge_sql(self.conn, absent.is_some()))?);
         }
         let stmt = slot.as_mut().expect("judge statement was just prepared");
-        let mut rows = stmt.query(params![name, target_id, pending, identifiers])?;
+        let mut rows = match absent {
+            Some(symbol) => stmt.query(params![
+                name,
+                target_id,
+                pending,
+                identifiers,
+                symbol.name,
+                symbol.kind,
+                symbol.language,
+                symbol.path,
+                symbol.start_line as i64,
+                symbol.parent_symbol_id
+            ])?,
+            None => stmt.query(params![name, target_id, pending, identifiers])?,
+        };
         let mut judged = HashMap::new();
         while let Some(row) = rows.next()? {
             let source: String = row.get(0)?;
@@ -1978,6 +2086,9 @@ impl<'a> Accounting<'a> {
     }
 
     fn definition_by_id(&self, symbol_id: &str) -> Result<Option<Definition>, QueryError> {
+        if let Some(absent) = self.absent.as_ref().filter(|s| s.symbol_id == symbol_id) {
+            return self.absent_definition(absent).map(Some);
+        }
         self.with_statement(DEFINITION_BY_ID_SQL, |stmt| {
             stmt.query_row(params![symbol_id], |row| {
                 let parent_kind: Option<String> = row.get(9)?;
@@ -2005,6 +2116,34 @@ impl<'a> Accounting<'a> {
                 })
             })
             .optional()
+        })
+    }
+
+    /// The definition of the target the index no longer holds, with the owner its
+    /// `parent_symbol_id` names.
+    fn absent_definition(&self, symbol: &Symbol) -> Result<Definition, QueryError> {
+        let owner = match &symbol.parent_symbol_id {
+            Some(parent) => crate::queries::get_symbol_by_id(self.conn, parent)?,
+            None => None,
+        };
+        Ok(Definition {
+            symbol_id: symbol.symbol_id.clone(),
+            name: symbol.name.clone(),
+            path: symbol.path.replace('\\', "/"),
+            start_line: symbol.start_line,
+            decorated_start_line: None,
+            body_start_line: symbol.body_start_line,
+            owner_name: owner
+                .filter(|owner| CLASS_LIKE_KINDS.contains(&owner.kind.as_str()))
+                .map(|owner| owner.name),
+            local: false,
+            kind: symbol.kind.clone(),
+            language: symbol.language.clone(),
+            signature: String::new(),
+            class_name: None,
+            top_level: symbol.parent_symbol_id.is_none(),
+            callable: true,
+            free: false,
         })
     }
 
@@ -2795,9 +2934,17 @@ fn import_segment(source: &str) -> Option<String> {
 
 /// SQL that returns, for every pending or identifier row with the name `?1`, whether the
 /// predicate of the resolver ties it to the symbol `?2` and the positive evidence for it.
-fn judge_sql(conn: &Connection) -> String {
+fn judge_sql(conn: &Connection, absent_target: bool) -> String {
     let target = "s_target";
     let parent = "s_target_parent";
+    let target_join = if absent_target {
+        format!(
+            "JOIN (SELECT ?2 AS symbol_id, ?5 AS name, ?6 AS kind, ?7 AS language, ?8 AS path,
+                          ?9 AS start_line, ?10 AS parent_symbol_id) {target}"
+        )
+    } else {
+        format!("JOIN symbols {target} ON {target}.symbol_id = ?2")
+    };
     let predicate = pending_target_predicate(conn, target, parent);
     let evidence = evidence_sql(conn, target, parent);
     format!(
@@ -2828,7 +2975,7 @@ fn judge_sql(conn: &Connection) -> String {
              WHERE i.name = ?1 AND i.identifier_id IN (SELECT value FROM json_each(?4))
          ) p
          LEFT JOIN symbols s_from ON s_from.symbol_id = p.from_symbol_id
-         JOIN symbols {target} ON {target}.symbol_id = ?2
+         {target_join}
          LEFT JOIN symbols {parent} ON {parent}.symbol_id = {target}.parent_symbol_id
          WHERE {predicate}
             OR (p.src = 'I' AND p.kind IN ('type_usage', 'member_access'))"

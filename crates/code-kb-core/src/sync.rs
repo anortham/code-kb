@@ -341,25 +341,9 @@ pub fn ensure_index_matches_extractor(
         .and_then(|file| file.lock().map(|()| file))
         .map_err(|e| warn!(db = %db_path.display(), "Index rebuild lock unavailable: {e}"))
         .ok();
-    let metadata = |key: &str| -> Option<String> {
-        let conn = crate::db::open_read_only(db_path).ok()?;
-        conn.query_row(
-            "SELECT value FROM artifact_metadata WHERE key = ?1",
-            [key],
-            |r| r.get(0),
-        )
-        .ok()
-    };
-    let Some(recorded) = metadata("binary_version") else {
+    let Some((recorded, level)) = other_writer(db_path, extractor_version) else {
         return Ok(false);
     };
-    let level = metadata("index_level").unwrap_or_else(|| "full".to_string());
-    if recorded == extractor_version
-        && level == EXTRACTION_LEVEL
-        && !has_file_written_by_another_extractor(db_path, extractor_version)
-    {
-        return Ok(false);
-    }
     if let Some(newer) = newest_writer_version(db_path, &recorded)
         .filter(|newest| version_is_older(extractor_version, newest))
     {
@@ -379,6 +363,32 @@ pub fn ensure_index_matches_extractor(
     );
     rebuild_index(workspace, db_path)?;
     Ok(true)
+}
+
+/// True when the index records a `julie-extract` version or extraction level other than the ones
+/// in use, or holds a file row that another version wrote. A hook checks this before it reads
+/// or writes the index, because the first write would rescan the whole index in place.
+pub fn index_written_by_other_extractor(db_path: &Path, extractor_version: &str) -> bool {
+    other_writer(db_path, extractor_version).is_some()
+}
+
+/// The recorded version and level of an index that [`index_written_by_other_extractor`] flags.
+fn other_writer(db_path: &Path, extractor_version: &str) -> Option<(String, String)> {
+    let metadata = |key: &str| -> Option<String> {
+        let conn = crate::db::open_read_only(db_path).ok()?;
+        conn.query_row(
+            "SELECT value FROM artifact_metadata WHERE key = ?1",
+            [key],
+            |r| r.get(0),
+        )
+        .ok()
+    };
+    let recorded = metadata("binary_version")?;
+    let level = metadata("index_level").unwrap_or_else(|| "full".to_string());
+    let current = recorded == extractor_version
+        && level == EXTRACTION_LEVEL
+        && !has_file_written_by_another_extractor(db_path, extractor_version);
+    (!current).then_some((recorded, level))
 }
 
 /// Scans into a side file and swaps it in only after the scan succeeds, so a failed rebuild
@@ -590,7 +600,7 @@ pub fn create_index(workspace: &Workspace, db_path: &Path) -> Result<(), SyncErr
 /// hides it from git, so no project `.gitignore` edit is ever needed. Any other
 /// directory is left alone: a `*` ignore file there would hide the user's own files
 /// from the extractor and from git.
-fn ensure_index_dir(db_path: &Path) -> std::io::Result<()> {
+pub(crate) fn ensure_index_dir(db_path: &Path) -> std::io::Result<()> {
     let Some(dir) = db_path.parent() else {
         return Ok(());
     };

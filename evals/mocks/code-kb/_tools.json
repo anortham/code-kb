@@ -221,6 +221,29 @@
         "type": "object"
       },
       "name": "blast_radius"
+    },
+    {
+      "_meta": {
+        "anthropic/alwaysLoad": true
+      },
+      "description": "After you edit: the symbols whose shape changed against the session base (or base, or HEAD) and every site of each that your diff did not reach. Run it before you say a change is done.",
+      "inputSchema": {
+        "properties": {
+          "base": {
+            "description": "Git revision to compare with (default: the session base, else HEAD).",
+            "type": "string"
+          },
+          "project_root": {
+            "description": "Absolute path of the project or git worktree you work in. Change it when you move to another.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_root"
+        ],
+        "type": "object"
+      },
+      "name": "check_edit"
     }
   ]
 }

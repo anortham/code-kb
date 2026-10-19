@@ -3,6 +3,7 @@ use std::path::Path;
 use thiserror::Error;
 
 use crate::db::{DbError, ensure_fts_index_path};
+use crate::edit_check::{self, BaseRequest, EditCheck, EditCheckError, EditLimits, PendingCheck};
 use crate::formatters::{
     OutlineNode, add_path_to_outline, add_unsupported_to_outline, format_file_skeleton,
     format_find_symbol_results, render_outline_tree,
@@ -51,6 +52,8 @@ pub enum OpError {
     SearchIndex(#[from] DbError),
     #[error("Slice error: {0}")]
     Slice(#[from] SliceError),
+    #[error(transparent)]
+    EditCheck(#[from] EditCheckError),
 }
 
 /// What `lookup_symbol` found for one query.
@@ -540,6 +543,73 @@ pub fn codebase_outline_op(
     }
 
     Ok(out)
+}
+
+/// Checks the working tree against `base`, else the session base of the project, else `HEAD`:
+/// the symbols whose shape changed and the sites of each that the diff did not reach.
+pub fn edit_check_op(
+    workspace: &Workspace,
+    db_path: &Path,
+    conn: &Connection,
+    base: Option<&str>,
+) -> Result<EditCheck, OpError> {
+    match base.map(str::trim).filter(|rev| !rev.is_empty()) {
+        Some(rev) => edit_check_with(
+            workspace,
+            db_path,
+            conn,
+            BaseRequest::Given(rev),
+            EditLimits::default(),
+        ),
+        None => {
+            let session_base = edit_check::latest_session_base(&workspace.canonical_root);
+            edit_check_session_op(workspace, db_path, conn, session_base.as_deref())
+        }
+    }
+}
+
+/// Checks the working tree against the base a session recorded, else `HEAD`. A recorded base
+/// that git no longer has counts as none.
+pub fn edit_check_session_op(
+    workspace: &Workspace,
+    db_path: &Path,
+    conn: &Connection,
+    session_base: Option<&str>,
+) -> Result<EditCheck, OpError> {
+    Ok(edit_check_session_diff(workspace, conn, session_base)?.run(workspace, db_path, conn)?)
+}
+
+/// The first half of [`edit_check_session_op`]: the diff against the session base and its hash,
+/// before any scan of the base. [`PendingCheck::run`] finishes the check.
+pub fn edit_check_session_diff(
+    workspace: &Workspace,
+    conn: &Connection,
+    session_base: Option<&str>,
+) -> Result<PendingCheck, OpError> {
+    let limits = EditLimits::default();
+    if let Some(base) = session_base {
+        match edit_check::prepare(workspace, conn, BaseRequest::Session(base), limits) {
+            Err(EditCheckError::UnknownRevision(_)) => {}
+            prepared => return Ok(prepared?),
+        }
+    }
+    Ok(edit_check::prepare(
+        workspace,
+        conn,
+        BaseRequest::Head,
+        limits,
+    )?)
+}
+
+/// Like [`edit_check_op`], with the base named by its source and the cuts given.
+pub fn edit_check_with(
+    workspace: &Workspace,
+    db_path: &Path,
+    conn: &Connection,
+    request: BaseRequest<'_>,
+    limits: EditLimits,
+) -> Result<EditCheck, OpError> {
+    Ok(edit_check::run(workspace, db_path, conn, request, limits)?)
 }
 
 /// Compute blast radius and likely tests for a symbol, file, or uncommitted git changes.

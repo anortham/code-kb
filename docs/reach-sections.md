@@ -143,6 +143,9 @@ the pattern of an arm never counts (`1 | 2 => Foo { a: 1 },` followed by `3 | 4 
 literal). In the parameters of a closure with more than one parameter, a single `|` ends the
 parameters. The second argument of `matches!` is a pattern.
 The scan stops after 4096 bytes and takes the braces as a literal.
+The edit check reads the other half: `destructurings` in `sections.rs` lists the lines of a
+Rust type use whose braces close into a pattern, one row per line, and the report prints none of
+them (`docs/edit-check.md`, "Fields: which constructions break").
 
 ## Variant uses
 
@@ -155,7 +158,8 @@ variant`). A function names a variant when it holds an identifier whose name is 
 the enum's name that is not `excluded`, or that is a `member_access` on a receiver with the
 enum's name in a file that holds such a site. A name that is not a member access counts only
 when `Enum::` or `Enum.` stands before it, so a variant name with no enum name before it
-(`Ok(n)` next to `Status::Warn`) does not count. One exception: in a C or C++ file, a bare
+(`Ok(n)` next to `Status::Warn`) does not count. The exceptions are the C and C++ rule here
+and the three spellings after it. In a C or C++ file, a bare
 enumerator of an unscoped enum counts when it is a variable read on the line of a site of the
 enum (`enum Color c = RED;`). It also counts when it is a variable read in a function that
 holds a site of the enum, as found from the identifier rows of that function (`case RED:` in a
@@ -166,6 +170,35 @@ whole function. An enum is unscoped when
 the source at its start does not read `enum class` or `enum struct`; a scoped C++ enum and
 every other language keep the qualified rule. julie stores the enumerators of a C enum as `constant` rows, so a C enum takes its
 `constant` children as its variants. Code outside any symbol shows as `(no enclosing symbol)`.
+The edit check (`docs/edit-check.md`) runs the same finder with the old names of a removed variant.
+
+Three more spellings count.
+
+- Rust `Self::V` counts in a method of an impl of the enum, an inherent impl or a trait impl.
+  The method is found as a symbol whose parent is the enum. julie writes a `type_usage` row for
+  `V`. `Self::V` in an impl of another type, or in a free function, does not count.
+- A bare Rust `V` counts when an import in the function's scope names the variant (`use
+  …Enum::*;` or `use …Enum::{…V…};`) and the function holds a site of the enum that is not
+  `excluded`, or is a method of the enum. A parameter or a local typed as the enum is such a
+  site. An item renamed with `as` brings in no name. julie writes no row for a bare name in a
+  pattern, so the lines of the function are read, with comments, strings, and character
+  literals blanked. The name must stand bare: not after `::` or `.`, not before `::` or `!`,
+  not after `struct`, `enum`, `fn`, `type`, `mod`, `trait`, `union`, or `as`, and not inside a
+  `use` item. An import is in scope when it is inside the function, or in the module that
+  holds the function, or, for a function with no module around it, at the top of the file. So
+  a `use` at the top of a file does not reach a function in a `mod` block, and a `use` in a
+  `mod` block does not reach a function outside it. The scope of a method of the enum is the
+  scope of the enum.
+- A Java bare `V` counts when `case` comes right before it on its line, or before a
+  comma-separated list of names that ends with it (`case A, B ->`), in a function that holds a
+  site of the enum that is not `excluded`. A parameter or a local typed as the enum is such a
+  site. julie writes a `variable_ref` row for it. A function that declares a symbol of that
+  name does not count it, as for a C enumerator. A bare name that does not follow `case` does
+  not count.
+
+Not read: a Rust `use` item that renames a variant, a `mod` block that holds an impl but not
+the enum, a local type or explicit import that hides a glob-imported name, and a bare name in
+a `when` or `switch` of any other language. Those languages keep the qualified rule.
 
 ## Registrations
 

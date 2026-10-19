@@ -24,6 +24,28 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/code-kb-launcher.cjs\" hook Stop",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/code-kb-launcher.cjs\" hook SubagentStop",
+            "timeout": 60
+          }
+        ]
+      }
     ]
   }
 }

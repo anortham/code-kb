@@ -4,15 +4,17 @@ use std::path::{Path, PathBuf};
 use code_kb_core::workspace::NO_PROJECT_MARKER_REASON;
 use code_kb_core::{
     SymbolSelector, Workspace, WorkspaceError, blast_radius_selected_op, codebase_outline_op,
-    ensure_fresh_file, ensure_fts_index_path, file_skeleton_op, find_references_for_symbol_ext,
-    format_context_slices, format_fact_categories, format_reference_report, format_references,
-    format_search_results, format_structural_facts, format_symbol_bodies,
-    fts_search_symbols_explained, get_context_slices_selected_op, get_symbol_bodies_selected_op,
+    edit_check_op, ensure_fresh_file, ensure_fts_index_path, file_skeleton_op,
+    find_references_for_symbol_ext, format_context_slices, format_edit_check,
+    format_fact_categories, format_reference_report, format_references, format_search_results,
+    format_structural_facts, format_symbol_bodies, fts_search_symbols_explained,
+    get_context_slices_selected_op, get_symbol_bodies_selected_op,
     list_structural_fact_categories_scoped, load_file_symbols, lookup_symbols_op, open_read_only,
     qualify_members, queries, reference_report, render_symbol_lookup, resolve_symbol_op,
     scan_workspace, select_reference_target,
 };
 
+mod hooks;
 mod logging;
 mod mcp;
 
@@ -87,6 +89,8 @@ pub enum Command {
     Refs(RefsArgs),
     /// Predict downstream impact and which tests to run before or after changes.
     BlastRadius(BlastRadiusArgs),
+    /// After you edit: the symbols whose shape changed against the session base (or --base, or HEAD) and every site of each that your diff did not reach.
+    Check(CheckArgs),
     /// Alias for blast-radius.
     Impact(BlastRadiusArgs),
     /// Query framework-level structural facts (routes, tables, models, config keys).
@@ -103,7 +107,7 @@ pub enum Command {
     BugReport(BugReportArgs),
     /// Start Model Context Protocol (MCP) server on stdio.
     Serve(ServeArgs),
-    /// Output agent lifecycle hook payload (SessionStart, SubagentStart, PreInvocation).
+    /// Output agent lifecycle hook payload (SessionStart, SubagentStart, PreInvocation), or run the edit check for Stop and SubagentStop.
     Hook(HookArgs),
 }
 
@@ -231,6 +235,13 @@ pub struct BlastRadiusArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct CheckArgs {
+    /// Git revision to compare with (default: the session base, else HEAD).
+    #[arg(long)]
+    pub base: Option<String>,
+}
+
+#[derive(Debug, Args)]
 pub struct FactsArgs {
     /// Category or pattern (e.g. route, query, model, config). If omitted, lists available categories.
     #[arg(long, short = 'c')]
@@ -311,7 +322,7 @@ pub struct BugReportArgs {
 
 #[derive(Debug, Args)]
 pub struct HookArgs {
-    /// Hook event name (default: "SessionStart", or "SubagentStart", "PreInvocation").
+    /// Hook event name (default: "SessionStart", or "SubagentStart", "PreInvocation", "Stop", "SubagentStop").
     #[arg(default_value = "SessionStart")]
     pub event: String,
 }
@@ -323,6 +334,11 @@ fn main() -> anyhow::Result<()> {
     if let Command::Hook(args) = &cli.command {
         let is_copilot = std::env::var("COPILOT_PLUGIN_DATA").is_ok();
         let event = args.event.as_str();
+
+        if hooks::is_stop_event(event) {
+            hooks::run_stop();
+            return Ok(());
+        }
 
         let content = if let Ok(custom) = std::fs::read_to_string("hooks/code-kb-routing-block.md")
         {
@@ -359,6 +375,9 @@ fn main() -> anyhow::Result<()> {
         };
 
         println!("{}", serde_json::to_string(&output)?);
+        if event.eq_ignore_ascii_case("SessionStart") {
+            hooks::record_session_start();
+        }
         return Ok(());
     }
 
@@ -753,6 +772,14 @@ fn main() -> anyhow::Result<()> {
                 println!("{}", serde_json::to_string_pretty(&result)?);
             } else {
                 println!("{}", code_kb_core::format_blast_radius(&result));
+            }
+        }
+        Command::Check(args) => {
+            let check = edit_check_op(&workspace, &db_path, &conn, args.base.as_deref())?;
+            if cli.json {
+                println!("{}", serde_json::to_string_pretty(&check)?);
+            } else {
+                print!("{}", format_edit_check(&check));
             }
         }
         Command::Facts(args) => {

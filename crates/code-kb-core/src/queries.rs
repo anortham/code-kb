@@ -4788,9 +4788,62 @@ pub fn import_sites(
     name: &str,
     path_filter: Option<&str>,
 ) -> Result<Vec<(String, usize)>, QueryError> {
+    import_sites_from(conn, name, path_filter, false)
+}
+
+/// The import statements of the top-level name `name` that the index no longer defines in the file
+/// `path`: the same rows as [`import_sites`], for a definition that an edit removed or renamed.
+pub fn import_sites_of_absent(
+    conn: &Connection,
+    name: &str,
+    path: &str,
+) -> Result<Vec<(String, usize)>, QueryError> {
+    let mut sites = import_sites_from(conn, name, Some(path), true)?;
+    sites.extend(rust_use_lines(conn, name, path)?);
+    sites.sort();
+    sites.dedup();
+    Ok(sites)
+}
+
+/// The Rust `use` lines of `name` whose last module segment is the stem of the file `path` or the
+/// folder of its `mod.rs`. A Rust import row carries no source, so the pending `imports` rows give
+/// the module.
+fn rust_use_lines(
+    conn: &Connection,
+    name: &str,
+    path: &str,
+) -> Result<Vec<(String, usize)>, QueryError> {
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT replace(pr.path, '\\', '/'), pr.start_line
+         FROM pending_relationships pr
+         JOIN files f ON f.file_id = pr.file_id AND f.language = 'rust'
+         WHERE pr.kind = 'imports' AND pr.target_terminal_name = ?1
+           AND pr.start_line IS NOT NULL AND json_valid(pr.target_namespace_json)
+           AND json_extract(pr.target_namespace_json, '$[#-1]') NOT IN ('crate', 'self', 'super')
+           AND (?2 GLOB '*/' || json_extract(pr.target_namespace_json, '$[#-1]') || '.rs'
+                OR ?2 GLOB '*/' || json_extract(pr.target_namespace_json, '$[#-1]') || '/mod.rs')",
+    )?;
+    let target_path = format!("/{}", path.replace('\\', "/"));
+    let rows = stmt.query_map(params![name, target_path], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as usize))
+    })?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
+fn import_sites_from(
+    conn: &Connection,
+    name: &str,
+    path_filter: Option<&str>,
+    absent: bool,
+) -> Result<Vec<(String, usize)>, QueryError> {
     if !has_column(conn, "symbols", "metadata_json") {
         return Ok(Vec::new());
     }
+    let targets = if absent {
+        "(SELECT ?1 AS name, ?2 AS path, NULL AS parent_symbol_id, 'function' AS kind)"
+    } else {
+        "symbols"
+    };
     let dotted = "replace(module_path.value, '/', '.')";
     let segment = format!("replace({dotted}, rtrim({dotted}, replace({dotted}, '.', '')), '')");
     let target_path = "('/' || replace(target.path, '\\', '/'))";
@@ -4801,7 +4854,7 @@ pub fn import_sites(
     let (import_dir, target_dir) = (dir("i.path"), dir("target.path"));
     let mut stmt = conn.prepare(&format!(
         "SELECT DISTINCT replace(i.path, '\\', '/'), i.start_line
-         FROM symbols target
+         FROM {targets} target
          JOIN symbols i ON i.name = target.name AND i.kind = 'import'
          CROSS JOIN json_each(json_array(json_extract(i.metadata_json, '$.source'))) module_path
          WHERE target.name = ?1

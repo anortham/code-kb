@@ -7300,7 +7300,7 @@ fn qualified_member_accesses_of_python_typescript_csharp_and_java_enums_are_vari
     assert_eq!(rows(&python, "Color"), ["pick 3 of 3"]);
     assert_eq!(rows(&typescript, "Shade"), ["flip 2 of 2"]);
     assert_eq!(rows(&csharp, "Mode"), ["Run 1 of 2"]);
-    assert_eq!(rows(&java, "Level"), ["score 1 of 2"]);
+    assert_eq!(rows(&java, "Level"), ["score 2 of 2"]);
 }
 
 #[test]
@@ -7506,6 +7506,201 @@ fn a_cpp_scoped_enum_counts_only_the_qualified_enumerator() {
         dump(&report(&class, "Shade", None))
     );
     assert!(variant_rows(&record, "Mode").is_empty());
+}
+
+const RS_SELF: &str = "pub enum Kind {
+    Circle,
+    Square,
+    Triangle,
+}
+
+impl Kind {
+    pub fn label(&self) -> i32 {
+        match self {
+            Self::Circle => 1,
+            Self::Square => 2,
+            Self::Triangle => 3,
+        }
+    }
+
+    pub fn closure(&self) -> i32 {
+        let f = |x: i32| match self {
+            Self::Circle => x,
+            _ => 0,
+        };
+        f(1)
+    }
+}
+
+impl std::fmt::Display for Kind {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::Square => write!(f, \"s\"),
+            _ => Ok(()),
+        }
+    }
+}
+
+pub struct Other;
+
+impl Other {
+    const Circle: i32 = 1;
+
+    pub fn circle() -> i32 {
+        Self::Circle
+    }
+}
+";
+
+#[test]
+fn a_rust_self_variant_in_an_impl_of_the_enum_is_a_variant_use() {
+    let repo = scanned_repo(&[("src/lib.rs", RS_SELF)]);
+
+    assert_eq!(
+        variant_rows(&repo, "Kind"),
+        ["label 3 of 3", "closure 1 of 3", "fmt 1 of 3"],
+        "{}",
+        dump(&report(&repo, "Kind", None))
+    );
+}
+
+const RS_GLOB: &str = "pub enum Kind {
+    Circle,
+    Square,
+    Triangle,
+}
+
+use Kind::*;
+
+pub fn glob(k: Kind) -> i32 {
+    match k {
+        Circle => 1,
+        Square => 2,
+        Triangle => 3,
+    }
+}
+
+pub fn no_site() -> i32 {
+    Circle as i32
+}
+
+pub fn texts(k: Kind) -> &'static str {
+    let _ = k;
+    // Circle
+    \"Square\"
+}
+
+mod named {
+    use super::Kind;
+    use super::Kind::{Circle, Square};
+
+    pub fn pick(k: Kind) -> i32 {
+        match k {
+            Circle => 1,
+            Square => 2,
+            _ => 3,
+        }
+    }
+
+    pub fn other_module(k: Kind) -> i32 {
+        match k {
+            Triangle => 1,
+            _ => 0,
+        }
+    }
+}
+";
+
+#[test]
+fn a_bare_rust_variant_counts_where_the_scope_imports_it_in_a_function_that_holds_a_site() {
+    let repo = scanned_repo(&[("src/lib.rs", RS_GLOB)]);
+
+    assert_eq!(
+        variant_rows(&repo, "Kind"),
+        ["glob 3 of 3", "pick 2 of 3"],
+        "{}",
+        dump(&report(&repo, "Kind", None))
+    );
+}
+
+const RS_LOCAL_GLOB: &str = "pub enum Kind {
+    Circle,
+    Square,
+}
+
+impl Kind {
+    pub fn within(&self) -> i32 {
+        use Kind::*;
+        match self {
+            Circle => 1,
+            Square => 2,
+        }
+    }
+}
+
+pub fn local_use(k: Kind) -> i32 {
+    use Kind::*;
+    match k {
+        Circle => 1,
+        Square => 2,
+    }
+}
+
+pub fn unimported(k: Kind) -> i32 {
+    match k {
+        Circle => 1,
+        _ => 0,
+    }
+}
+";
+
+#[test]
+fn a_rust_import_inside_a_function_or_method_scopes_the_bare_variants_to_it() {
+    let repo = scanned_repo(&[("src/lib.rs", RS_LOCAL_GLOB)]);
+
+    assert_eq!(
+        variant_rows(&repo, "Kind"),
+        ["within 2 of 2", "local_use 2 of 2"],
+        "{}",
+        dump(&report(&repo, "Kind", None))
+    );
+}
+
+#[test]
+fn a_bare_rust_variant_with_no_import_in_scope_is_not_a_variant_use() {
+    let repo = scanned_repo(&[(
+        "src/lib.rs",
+        "pub enum Kind {\n    Circle,\n    Square,\n}\n\npub fn shadow(k: Kind) -> i32 {\n    let Circle = 1;\n    Circle + k as i32\n}\n",
+    )]);
+
+    assert!(
+        variant_rows(&repo, "Kind").is_empty(),
+        "{}",
+        dump(&report(&repo, "Kind", None))
+    );
+}
+
+const JAVA_CASES: &[(&str, &str)] = &[
+    (
+        "src/Kind.java",
+        "package p;\n\npublic enum Kind {\n    CIRCLE,\n    SQUARE,\n    TRIANGLE\n}\n",
+    ),
+    (
+        "src/Use.java",
+        "package p;\n\npublic class Use {\n    static final int CIRCLE = 1;\n    static final int SQUARE = 2;\n\n    static int multi(Kind k) {\n        switch (k) {\n            case CIRCLE, SQUARE:\n                return 1;\n            default:\n                return 0;\n        }\n    }\n\n    static int arrow(Kind k) {\n        return switch (k) {\n            case CIRCLE, SQUARE -> 1;\n            case TRIANGLE -> 2;\n        };\n    }\n\n    static int no_site(int x) {\n        switch (x) {\n            case CIRCLE:\n                return 1;\n            default:\n                return 0;\n        }\n    }\n\n    static int not_after_case(Kind k) {\n        int y = SQUARE;\n        return y + k.ordinal();\n    }\n}\n",
+    ),
+];
+
+#[test]
+fn a_java_case_label_counts_a_variant_in_a_function_that_holds_a_site_of_the_enum() {
+    let repo = scanned_repo(JAVA_CASES);
+
+    assert_eq!(
+        variant_rows(&repo, "Kind"),
+        ["arrow 3 of 3", "multi 2 of 3"],
+        "{}",
+        dump(&report(&repo, "Kind", None))
+    );
 }
 
 const FLASK_VIEW: (&str, &str) = (

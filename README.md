@@ -52,8 +52,9 @@ Requirements:
 ```
 *(Send as two separate prompts.)* The plugin registers the MCP server, the progressive
 disclosure skill, a `/code-kb:code-kb-telemetry` command for usage and token-savings reports, a
-`/code-kb:report-issue` command that files a bug with a diagnostic bundle, and
-SessionStart and SubagentStart hooks that inject routing instructions.
+`/code-kb:report-issue` command that files a bug with a diagnostic bundle, SessionStart and
+SubagentStart hooks that inject routing instructions, and Stop and SubagentStop hooks that run the
+edit check (see [After you edit](#after-you-edit-check_edit-and-the-stop-hooks)).
 
 ### Codex
 
@@ -61,7 +62,7 @@ SessionStart and SubagentStart hooks that inject routing instructions.
 codex plugin marketplace add anortham/code-kb
 codex plugin add code-kb@code-kb
 ```
-Run `codex`, open `/hooks`, and trust the two code-kb hooks.
+Run `codex`, open `/hooks`, and trust the four code-kb hooks.
 
 To update, refresh the marketplace snapshot first. `codex plugin remove` followed by
 `codex plugin add` reinstalls the version already in the snapshot:
@@ -449,8 +450,37 @@ git worktree you work in. The table does not repeat it. `path` and `file_path` a
 | `get_symbol_context` | Surgical bundle: target body + callee signatures + parameter types + tests; up to four overloads in one class return a bundle each. | Exactly one `symbol_name` or current-index `symbol_id`; `file_path` (opt, a file or a folder), `include_external` (opt, def: false) | `symbol`, `name`, `path` |
 | `find_references` | Callers: every indexed site of the name, each labeled proven, likely, unresolved, or excluded with its evidence and, for a call, its argument count (a count that no definition of the target accepts excludes a `likely` or `unresolved` Python, Java, C#, Go, Rust, Kotlin, or TypeScript call), plus a whole-word text count that accounts for every line of the name. After the sites, up to six sections list what else a change may reach: `Overrides` and `Overrides of` (same-named methods in subtypes and in ancestors), `Constructions` (lines that build a class, struct, or record), `Variant uses` (functions that name variants of an enum), `Registrations` (route facts that register a function as a handler), and `Tests that call it` (each with the command that runs it). The sections never change a label or a count; CLI `refs --json` adds them as arrays. Callees: the calls a symbol makes (filters external stdlib noise). Qualify overloaded names. | Exactly one `symbol_name` or current-index `symbol_id`; `file_path` (opt), `direction` ("callers" \| "callees", def: callers), `limit` (opt, def: 20, listed rows only), `include_external` (opt, def: false) | `symbol`, `name`, `file`, `path` |
 | `blast_radius` | Multi-hop reverse reachability (CTEs). Lists the tests the call graph reaches; when none does, it says to run the full test suite. | `symbol` or current-index `symbol_id` (opt), `file` (opt guard for an ID), `depth` (opt, def: 2), `limit` (opt) | `name`, `path`, `impact` |
+| `check_edit` | After you edit: the symbols whose shape changed against the session base (or `base`, or `HEAD`) and every site of each that your diff did not reach. Run it before you say a change is done. | `base` (opt, a git revision) | |
 
 Four CLI commands have no MCP tool: `outline` (a folder's layout; `file_skeleton` on a folder returns the same), `search` (the ranked search with `--explain`), `facts` (routes, SQL queries, models, and config keys), and `stats` (token savings and tool errors).
+
+### After you edit: `check_edit` and the Stop hooks
+
+`check_edit` (CLI `code-kb check [--base REV]`) compares the working tree with a base revision:
+`base`, else the commit the session started at, else `HEAD`. It lists each symbol whose shape
+changed (removed or renamed, new parameters or signature, new or lost fields, new or lost enum
+variants) and the sites of it that your diff did not reach, with the tests to run:
+
+```text
+check_edit: working tree against fb5628e809 (HEAD), 2 files changed
+1 shape change:
+  function `area` (src/geometry.rs): parameters 2 → 3
+    In your diff (1): src/lib.rs:4
+    Not in your diff, likely (1):
+      src/lib.rs:8  `second`  passes 2 args; takes 3
+Not checked: calls inside macro arguments, functions passed as values.
+```
+
+- `code-kb hook SessionStart` records the session base in
+  `<project>/.code-kb/sessions/<session_id>.json`, also when the project has no index yet. That
+  folder is inside `.code-kb/`, which git ignores.
+- `code-kb hook Stop` and `code-kb hook SubagentStop` run the check when the agent stops. The
+  Claude Code and Codex plugins wire them. If a `proven` or `likely` site is outside the diff,
+  the hook blocks the stop and lists up to 15 sites. It stays silent when nothing changed shape,
+  for the diff it checked last or blocked on last, when `stop_hook_active` is true,
+  outside a git repository, when another `julie-extract` wrote the index, and on any error.
+- A check reads at most 200 files and 10 symbols and starts no new step after 20 s. The answer states each cut.
+- The rules and the known limits are in [docs/edit-check.md](docs/edit-check.md).
 
 ---
 
@@ -493,6 +523,10 @@ code-kb blast-radius compute_blast_radius
 code-kb blast-radius
 # (alias: code-kb impact)
 
+# After you edit: the symbols whose shape changed and the sites your diff did not reach
+code-kb check
+code-kb check --base main
+
 # Query framework structural facts (or omit category to list all detected categories)
 code-kb facts
 code-kb facts config --path Cargo.toml
@@ -514,6 +548,10 @@ code-kb bug-report --title "lookup returns nothing" --description "what went wro
 code-kb hook SessionStart
 code-kb hook SubagentStart
 code-kb hook PreInvocation
+# Stop and SubagentStop read the hook JSON on stdin and run the edit check;
+# SessionStart reads it too and records the session base
+code-kb hook Stop
+code-kb hook SubagentStop
 ```
 
 ---

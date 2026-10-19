@@ -659,7 +659,7 @@ fn test_adversarial_mcp_schemas_have_no_blacklisted_workspace_parameter_and_requ
         .as_array()
         .expect("Tools array in response");
 
-    assert_eq!(tools.len(), 6, "MCP server must advertise exactly 6 tools");
+    assert_eq!(tools.len(), 7, "MCP server must advertise exactly 7 tools");
 
     let forbidden_param_blacklist = [
         "workspace",

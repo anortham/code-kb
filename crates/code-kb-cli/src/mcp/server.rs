@@ -6,13 +6,14 @@ use std::time::Duration;
 use code_kb_core::workspace::{NO_PROJECT_MARKER_REASON, paths_equal};
 use code_kb_core::{
     Connection, SymbolSelector, WatcherHandle, Workspace, WorkspaceError, blast_radius_selected_op,
-    create_index, ensure_fts_index_path, ensure_index_matches_extractor, file_sizes_for_paths,
-    file_skeleton_op, find_references_for_symbol_ext, format_blast_radius, format_context_slices,
-    format_reference_report, format_references, format_symbol_bodies,
-    get_context_slices_selected_op, get_symbol_bodies_selected_op, installed_extractor_version,
-    is_project_root, lookup_symbols_op, open_global_telemetry_db, open_read_only,
-    reconcile_offline_edits, record_tool_call, record_tool_call_conn, reference_report,
-    render_symbol_lookup, resolve_symbol_op, select_reference_target, start_watcher,
+    create_index, edit_check_op, ensure_fts_index_path, ensure_index_matches_extractor,
+    file_sizes_for_paths, file_skeleton_op, find_references_for_symbol_ext, format_blast_radius,
+    format_context_slices, format_edit_check, format_reference_report, format_references,
+    format_symbol_bodies, get_context_slices_selected_op, get_symbol_bodies_selected_op,
+    installed_extractor_version, is_project_root, lookup_symbols_op, open_global_telemetry_db,
+    open_read_only, reconcile_offline_edits, record_tool_call, record_tool_call_conn,
+    reference_report, render_symbol_lookup, resolve_symbol_op, select_reference_target,
+    start_watcher,
 };
 
 use super::protocol::{CallToolResult, JsonRpcRequest, JsonRpcResponse, Tool};
@@ -415,6 +416,19 @@ impl McpServer {
                             "minimum": 0,
                             "maximum": code_kb_core::queries::MAX_RESULT_LIMIT,
                             "description": "Per section (default: 20)."
+                        }
+                    }
+                }),
+            },
+            Tool {
+                name: "check_edit".to_string(),
+                description: "After you edit: the symbols whose shape changed against the session base (or base, or HEAD) and every site of each that your diff did not reach. Run it before you say a change is done.".to_string(),
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "base": {
+                            "type": "string",
+                            "description": "Git revision to compare with (default: the session base, else HEAD)."
                         }
                     }
                 }),
@@ -1032,6 +1046,18 @@ impl McpServer {
                             )
                             .with_baseline_paths(baseline_paths)
                     }
+                    Err(e) => CallToolResult::error(e.to_string()),
+                }
+            }
+            "check_edit" => {
+                let base = match arguments.get("base") {
+                    None | Some(Value::Null) => None,
+                    Some(Value::String(rev)) => Some(rev.as_str()),
+                    Some(_) => return CallToolResult::error("base must be a string"),
+                };
+                match edit_check_op(&self.workspace, &self.db_path, &conn, base) {
+                    Ok(check) => CallToolResult::text(format_edit_check(&check))
+                        .with_logical_result_count(check.changes.len()),
                     Err(e) => CallToolResult::error(e.to_string()),
                 }
             }

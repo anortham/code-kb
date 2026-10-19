@@ -65,11 +65,23 @@ test('the Claude plugin starts the server and hooks through the launcher', () =>
   assert.equal(plugin.hooks, './hooks/claude-codex-hooks.json');
 
   const hooks = read('hooks/claude-codex-hooks.json').hooks;
-  for (const event of ['SessionStart', 'SubagentStart']) {
+  for (const event of ['SessionStart', 'SubagentStart', 'Stop', 'SubagentStop']) {
     const command = hooks[event][0].hooks[0].command;
     assert.equal(command, `node "\${CLAUDE_PLUGIN_ROOT}/bin/code-kb-launcher.cjs" hook ${event}`);
     assert.ok(hooks[event][0].hooks[0].timeout >= 60, `${event} hook must allow a first-run download`);
   }
+});
+
+test('the Stop and SubagentStop hooks run the edit check on every stop', () => {
+  const hooks = read('hooks/claude-codex-hooks.json').hooks;
+  for (const event of ['Stop', 'SubagentStop']) {
+    assert.equal(hooks[event].length, 1);
+    assert.equal(hooks[event][0].matcher, undefined, `${event} takes no matcher`);
+    assert.equal(hooks[event][0].hooks.length, 1);
+    assert.equal(hooks[event][0].hooks[0].type, 'command');
+    assert.equal(hooks[event][0].hooks[0].timeout, 60);
+  }
+  assert.deepEqual(Object.keys(hooks).sort(), ['Stop', 'SessionStart', 'SubagentStart', 'SubagentStop'].sort());
 });
 
 test('the Codex plugin starts the server through the launcher', () => {

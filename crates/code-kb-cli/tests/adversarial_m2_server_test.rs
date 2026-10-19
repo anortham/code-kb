@@ -851,7 +851,7 @@ fn test_adversarial_core_invariant_1_mcp_tool_schemas_have_no_workspace_paramete
         .as_array()
         .expect("Expected tools array in tools/list response");
 
-    assert_eq!(tools.len(), 6, "Server must advertise exactly 6 MCP tools");
+    assert_eq!(tools.len(), 7, "Server must advertise exactly 7 MCP tools");
 
     // Exhaustive list of forbidden workspace-polluting parameters
     let forbidden_keys = [

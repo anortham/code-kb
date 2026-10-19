@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
 
+use crate::edit_check::{BaseSource, EditCheck, EditSite, ShapeChange};
 use crate::models::{
     BlastRadiusResult, CallingTest, ConstructionSite, ContextSlice, ImpactedSymbol, LabeledSite,
     OverrideRow, ReferenceReport, ReferenceSite, Registration, SearchExplain, SiteLabel, Symbol,
@@ -1266,7 +1267,7 @@ fn text_only_section(report: &ReferenceReport) -> String {
     out
 }
 
-fn displayed_symbol_name(name: &str, enclosing_symbol_name: Option<&str>) -> String {
+pub(crate) fn displayed_symbol_name(name: &str, enclosing_symbol_name: Option<&str>) -> String {
     if let Some(enclosing_symbol_name) = enclosing_symbol_name {
         format!("<lambda> in {enclosing_symbol_name}")
     } else {
@@ -1791,6 +1792,158 @@ fn explain_line(score: f64, e: &SearchExplain) -> String {
         line.push_str(&format!(" terms {}", terms.join(" ")));
     }
     line
+}
+
+const EDIT_SITES_LISTED: usize = 12;
+const EDIT_TESTS_LISTED: usize = 8;
+const STOP_SITES_LISTED: usize = 15;
+
+/// The post-edit answer: the base, each symbol whose shape changed with its sites split by
+/// whether the diff reached them, the tests to run, and the blind spots of the index.
+pub fn format_edit_check(check: &EditCheck) -> String {
+    let source = match check.source {
+        BaseSource::Given => "given",
+        BaseSource::Session => "session base",
+        BaseSource::Head => "HEAD",
+    };
+    let mut out = String::new();
+    if check.changes.is_empty() {
+        out.push_str(&format!(
+            "check_edit: working tree against {} ({source}): no symbol changed shape.\n",
+            check.rev
+        ));
+        push_edit_cuts(&mut out, check);
+        return out;
+    }
+    out.push_str(&format!(
+        "check_edit: working tree against {} ({source}), {} {} changed\n{} shape {}:\n",
+        check.rev,
+        check.files_changed,
+        plural(check.files_changed, "file"),
+        check.changes.len(),
+        plural(check.changes.len(), "change"),
+    ));
+    for change in &check.changes {
+        push_shape_change(&mut out, change);
+    }
+    push_edit_cuts(&mut out, check);
+    if !check.tests.is_empty() {
+        let shown = check.tests.len().min(EDIT_TESTS_LISTED);
+        out.push_str(&format!(
+            "Tests to run: {}",
+            check.tests[..shown].join("; ")
+        ));
+        if shown < check.tests.len() {
+            out.push_str(&format!("; … {} more", check.tests.len() - shown));
+        }
+        out.push('\n');
+    }
+    out.push_str("Not checked: calls inside macro arguments, functions passed as values.\n");
+    out
+}
+
+/// The reason a Stop hook gives for a check: how many sites outside the diff still use the old
+/// shape of which symbols, then the first of them, proven ones first. `None` when no changed
+/// symbol has such a site.
+pub fn format_stop_reason(check: &EditCheck) -> Option<String> {
+    let mut rows: Vec<(u8, &EditSite, &ShapeChange)> = Vec::new();
+    for change in &check.changes {
+        rows.extend(change.proven.iter().map(|site| (0, site, change)));
+        rows.extend(change.likely.iter().map(|site| (1, site, change)));
+    }
+    if rows.is_empty() {
+        return None;
+    }
+    rows.sort_by(|a, b| {
+        (a.0, &a.1.path, a.1.line, &a.2.display).cmp(&(b.0, &b.1.path, b.1.line, &b.2.display))
+    });
+    let mut names: Vec<String> = Vec::new();
+    for (_, _, change) in &rows {
+        let name = format!("`{}`", change.display);
+        if !names.contains(&name) {
+            names.push(name);
+        }
+    }
+    let mut out = format!(
+        "Before you finish: {} sites still use the old shape of {}.\n",
+        rows.len(),
+        names.join(", ")
+    );
+    for (_, site, change) in rows.iter().take(STOP_SITES_LISTED) {
+        out.push_str(&format!(
+            "{}:{}  {}: {}\n",
+            site.path, site.line, change.display, change.change
+        ));
+    }
+    out.push_str("Edit them or say why they need no change.");
+    Some(out)
+}
+
+fn push_edit_cuts(out: &mut String, check: &EditCheck) {
+    for cut in &check.cuts {
+        out.push_str(&format!("Cut: {cut}\n"));
+    }
+}
+
+fn push_shape_change(out: &mut String, change: &ShapeChange) {
+    out.push_str(&format!(
+        "  {} `{}` ({}): {}\n",
+        change.kind, change.display, change.path, change.change
+    ));
+    if !change.in_diff.is_empty() {
+        let shown = change.in_diff.len().min(EDIT_SITES_LISTED);
+        let places: Vec<String> = change.in_diff[..shown]
+            .iter()
+            .map(|site| format!("{}:{}", site.path, site.line))
+            .collect();
+        out.push_str(&format!(
+            "    In your diff ({}): {}",
+            change.in_diff.len(),
+            places.join(", ")
+        ));
+        if shown < change.in_diff.len() {
+            out.push_str(&format!(", … {} more", change.in_diff.len() - shown));
+        }
+        out.push('\n');
+    }
+    for (label, sites) in [("proven", &change.proven), ("likely", &change.likely)] {
+        if sites.is_empty() {
+            continue;
+        }
+        out.push_str(&format!(
+            "    Not in your diff, {label} ({}):\n",
+            sites.len()
+        ));
+        for site in &sites[..sites.len().min(EDIT_SITES_LISTED)] {
+            out.push_str(&edit_site_row(site));
+        }
+        if sites.len() > EDIT_SITES_LISTED {
+            out.push_str(&format!(
+                "      … {} more {label}\n",
+                sites.len() - EDIT_SITES_LISTED
+            ));
+        }
+    }
+    if change.unresolved > 0 {
+        out.push_str(&format!(
+            "    Unresolved outside the diff: {}\n",
+            change.unresolved
+        ));
+    }
+}
+
+fn edit_site_row(site: &EditSite) -> String {
+    let caller = if site.caller.is_empty() {
+        "(no enclosing symbol)".to_string()
+    } else {
+        format!("`{}`", site.caller)
+    };
+    let note = site
+        .note
+        .as_deref()
+        .map(|note| format!("  {note}"))
+        .unwrap_or_default();
+    format!("      {}:{}  {caller}{note}\n", site.path, site.line)
 }
 
 /// Format blast radius and likely test targets into token-dense markdown.

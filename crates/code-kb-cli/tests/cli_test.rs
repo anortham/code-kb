@@ -1870,6 +1870,9 @@ fn test_cli_hook_session_start() {
     assert!(ctx.contains(
         "- **To find code by concept**, call `lookup_symbol` with a few words; it adds ranked matches when no name matches."
     ));
+    assert!(
+        ctx.contains("- **After you edit**, call `check_edit` before you say the change is done.")
+    );
     assert!(!ctx.contains("telemetry_summary"));
     assert!(!ctx.contains("search_symbols"));
     assert!(!ctx.contains("EnterWorktree"));
@@ -2586,6 +2589,50 @@ fn test_guidance_names_no_removed_mcp_tool_outside_a_removal_note() {
         }
     }
     assert!(offenders.is_empty(), "{}", offenders.join("\n"));
+}
+
+#[test]
+fn test_guidance_documents_the_edit_check() {
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let root = manifest_dir.parent().unwrap().parent().unwrap();
+    let read = |doc: &str| std::fs::read_to_string(root.join(doc)).unwrap();
+    for doc in [
+        "hooks/code-kb-routing-block.md",
+        "skills/code-kb/SKILL.md",
+        "README.md",
+        "CLAUDE.md",
+        "AGENTS.md",
+        "docs/site/index.html",
+        "docs/edit-check.md",
+    ] {
+        assert!(read(doc).contains("check_edit"), "{doc} omits check_edit");
+    }
+    for doc in [
+        "skills/code-kb/SKILL.md",
+        "README.md",
+        "docs/site/index.html",
+        "docs/edit-check.md",
+    ] {
+        assert!(
+            read(doc).contains("code-kb check"),
+            "{doc} omits code-kb check"
+        );
+    }
+    for doc in ["README.md", "docs/site/index.html", "docs/edit-check.md"] {
+        let text = read(doc);
+        assert!(text.contains("hook Stop"), "{doc} omits the Stop hook");
+        assert!(
+            text.contains("SubagentStop"),
+            "{doc} omits the SubagentStop hook"
+        );
+    }
+    for doc in ["CLAUDE.md", "AGENTS.md"] {
+        assert!(
+            read(doc).contains("docs/edit-check.md"),
+            "{doc} omits the path of the edit check rules"
+        );
+    }
+    assert!(read("docs/release-notes/v2.7.0.md").contains("check_edit"));
 }
 
 #[test]

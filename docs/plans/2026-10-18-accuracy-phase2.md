@@ -102,10 +102,10 @@ Commit mode: `serial-worker-commit` is off. Workers hand the verified diff to th
 
 **What to build:** Delete the four tool definitions and handlers, the `telemetry_summary` exceptions (no `project_root`, no `alwaysLoad`, dispatch before the index wait), and the imports that become unused. `file_skeleton` on a folder keeps calling `codebase_outline_op`. The `initialize` instructions text loses the two names: it becomes, exactly: `Pass project_root, the absolute path of the project or git worktree you work in, on every call. Call file_skeleton before you read a source file, then get_symbol_body or get_symbol_context for the symbols you need. Use lookup_symbol for a name or a concept and find_references instead of grep on a name, and blast_radius to pick the tests to run.`
 
-- [ ] `tools/list` has 6 tools, each with `project_root` required and `alwaysLoad`.
-- [ ] Tests that used a removed tool as a probe use a remaining tool; tests that read telemetry through `telemetry_summary` read it with `code-kb stats --json` or SQLite.
-- [ ] `test_cli_search_order_matches_mcp_search_symbols` is replaced by a test that `code-kb search` and the MCP `lookup_symbol` fallback list the same ranked rows for a concept query.
-- [ ] Worker scope green; diff handed to the lead.
+- [x] `tools/list` has 6 tools, each with `project_root` required and `alwaysLoad`.
+- [x] Tests that used a removed tool as a probe use a remaining tool; tests that read telemetry through `telemetry_summary` read it with `code-kb stats --json` or SQLite.
+- [x] `test_cli_search_order_matches_mcp_search_symbols` is replaced by a test that `code-kb search` and the MCP `lookup_symbol` fallback list the same ranked rows for a concept query.
+- [x] Worker scope green; diff handed to the lead.
 
 ### Task 1.2: One search tool
 
@@ -117,11 +117,11 @@ Commit mode: `serial-worker-commit` is off. Workers hand the verified diff to th
 
 **What to build:** When the query is a plain query (not a qualified name and not a member listing ending in `.` or `::`) and no listed row has exactly the query's name, the answer runs the ranked search (`fts_search_symbols_scoped`, same filters and limit) and appends the ranked rows that the name rows do not already show, under the existing header `No exact name match; N full-text matches for "q":`. When both lists are empty, the answer is the `symbol_not_found_parts` text (bound workspace, `Did you mean one of:` or `No similar name is indexed; check the workspace and spelling.`). The CLI `lookup` prints the same text. `code-kb search` stays as it is.
 
-- [ ] A one-word concept that some name contains (`retry` in a fixture with `retry_count` and a function documented "retry with backoff") lists the name row and the ranked row.
-- [ ] An exact-name query prints no ranked section.
-- [ ] A total miss prints the suggestions text.
-- [ ] MCP and CLI text are equal for the three cases.
-- [ ] Worker scope green; diff handed to the lead.
+- [x] A one-word concept that some name contains (`retry` in a fixture with `retry_count` and a function documented "retry with backoff") lists the name row and the ranked row.
+- [x] An exact-name query prints no ranked section.
+- [x] A total miss prints the suggestions text.
+- [x] MCP and CLI text are equal for the three cases.
+- [x] Worker scope green; diff handed to the lead.
 
 ### Task 1.3: Drop the word-guess test rows
 
@@ -133,10 +133,10 @@ Commit mode: `serial-worker-commit` is off. Workers hand the verified diff to th
 
 **What to build:** Delete the stem-matched and module-matched file rows, shared seed words, `possible` rows, handler evidence, and the whole-file row merge, with every helper only they use. Keep `fixture_users`, `tests_in_class`, `names_a_test`, `is_test_path`, and `find_related_tests` unchanged. Tests that asserted the removed rows are deleted or rewritten to assert their absence; tests of rules A-D keep their meaning.
 
-- [ ] A Flask-shaped fixture where a test reaches the target only through `__call__` lists no `possible` row.
-- [ ] A file seed whose test file only shares the stem lists no `stem-matched test file` row.
-- [ ] Fixture, setup, and constructor rows still appear in their existing tests.
-- [ ] Worker scope green; diff handed to the lead.
+- [x] A Flask-shaped fixture where a test reaches the target only through `__call__` lists no `possible` row.
+- [x] A file seed whose test file only shares the stem lists no `stem-matched test file` row.
+- [x] Fixture, setup, and constructor rows still appear in their existing tests.
+- [x] Worker scope green; diff handed to the lead.
 
 ### Task 1.4: Docs and guidance
 
@@ -146,11 +146,11 @@ Commit mode: `serial-worker-commit` is off. Workers hand the verified diff to th
 **File ownership:** as in the table.
 **Serialization required:** Yes. **Dependency reason:** describes 1.1-1.3.
 
-- [ ] `rg -n 'search_symbols|codebase_outline|find_structural_facts|telemetry_summary'` outside history files names only CLI commands or the removal note.
-- [ ] Invariant 1 says every MCP tool requires `project_root`; invariant 5 and the blast-radius paragraph describe the new behavior; the alwaysLoad paragraph has no exception.
-- [ ] The telemetry skill and its four evals use `code-kb stats`.
-- [ ] `cmp AGENTS.md CLAUDE.md` and the routing-block sync test pass; the routing block stays under 3 KB.
-- [ ] Worker scope green; diff handed to the lead.
+- [x] `rg -n 'search_symbols|codebase_outline|find_structural_facts|telemetry_summary'` outside history files names only CLI commands or the removal note.
+- [x] Invariant 1 says every MCP tool requires `project_root`; invariant 5 and the blast-radius paragraph describe the new behavior; the alwaysLoad paragraph has no exception.
+- [x] The telemetry skill and its four evals use `code-kb stats`.
+- [x] `cmp AGENTS.md CLAUDE.md` and the routing-block sync test pass; the routing block stays under 3 KB.
+- [x] Worker scope green; diff handed to the lead.
 
 **Slice 1 gate:** branch gate; the reach gate report is identical to the previous one except the Commit and Generated lines.
 
@@ -333,9 +333,21 @@ Follow `docs/release.md` in julie-extractors: version 3.8.0 in the three crates,
 6. Sites per change, from the callers report of the current symbol (or, for a removed symbol, of every remaining definition with the old name and the name's unresolved sites): calls for parameter and signature changes (a site whose `arg_count` already fits the new range is dropped), constructions for field changes, variant uses for variant changes, all sites for removals. A site inside a new-side hunk is "in your diff"; the rest, with label `proven` or `likely`, are "not in your diff"; `unresolved` sites outside the diff are counted.
 7. Budget: 20 s and 10 changed symbols (most sites first); a cut is stated.
 **Contract inputs:** post-edit map sections 2-4.
-- [ ] Temp-repo fixtures (git init in a tempdir): a Rust function gains a parameter and one caller is updated (the other caller is listed); a struct gains a field (an unchanged construction is listed); an enum gains a variant (the function with the `match` is listed); a removed Python function (its caller is listed); a renamed function (`renamed to`); a body-only edit lists nothing.
-- [ ] The main index file is unchanged by a check (its mtime and row counts).
-- [ ] Worker scope green; diff handed to the lead.
+- [x] Temp-repo fixtures (git init in a tempdir): a Rust function gains a parameter and one caller is updated (the other caller is listed); a struct gains a field (an unchanged construction is listed); an enum gains a variant (the function with the `match` is listed); a removed Python function (its caller is listed); a renamed function (`renamed to`); a body-only edit lists nothing.
+- [x] The main index file is unchanged by a check (its mtime and row counts).
+- [x] Worker scope green; diff handed to the lead.
+
+**Deviations from the plan text (task 4.1):**
+- `edit_check_op(workspace, db_path, conn, base)` takes the index path and connection like the other ops and returns `Result`. `edit_check_with(..., BaseRequest, EditLimits)` serves the session base and the tests. `EditCheck` gains `diff_hash`, which the once-per-diff rule of 4.2 reads.
+- The revision shows as a 10-character short sha, or `no commits` for a repository with none; the source labels are `given`, `session base`, and `HEAD`.
+- The count text is `fields +1 (z), -0`. A parameter change shows the `Arity` range text (`1-2`) when both sides have a range, and the parameter row counts otherwise. Singular forms are used (`1 shape change`, `1 file changed`). A cut prints as `Cut: …`. The in-diff list shows 12 sites and the tests line 8; the check keeps 50 commands.
+- The callers report used here (`reference_report_for_edit`) runs no text scan and no argument-count exclusion, because the exclusion would hide a caller that still passes the old count. A call whose count fits the new range is dropped.
+- A variant counts as "in your diff" when a changed line inside the caller names an added variant. A struct literal counts as "in your diff" when any line of its bracket extent changed.
+- A rename pairs one-to-one by julie's `body_hash`, within the same parents and kind. Git rename detection is the default `-M` (50% similarity), and base files are read with `git cat-file blob`.
+- A file that is not indexed and has no indexed extension is ignored. Check folders older than 1 hour are removed.
+- A Python class counts fields only when it is a `@dataclass`, and only annotated class-body variables.
+- Callers of a Rust function imported with `use` come out `likely`, not `proven`; that is the report engine's rule. The tests accept either.
+- No unit test covers `format_edit_check` itself (the integration tests cover its output), no run covers a very large repository, and the time budget is tested only with a zero budget.
 
 ### Task 4.2: Tool, CLI, and hooks
 
@@ -360,13 +372,63 @@ Follow `docs/release.md` in julie-extractors: version 3.8.0 in the three crates,
 - `code-kb hook SessionStart` reads the hook JSON on stdin when present and writes `<root>/.code-kb/sessions/{session_id}.json` with `{"base": "<HEAD sha>"}` (no file when the root has no git repo or no index); its stdout does not change.
 - `code-kb hook Stop` and `code-kb hook SubagentStop` read the hook JSON on stdin (`session_id`, `cwd`, `stop_hook_active`), run the check with the session base, and print `{"decision":"block","reason":…}` only when some change has sites not in the diff, at most once per diff hash (the hash is stored in the session file), and never when `stop_hook_active` is true. The reason, exactly: `Before you finish: {n} sites still use the old shape of {names}.` then at most 15 site lines, then `Edit them or say why they need no change.` Otherwise they print nothing and exit 0. Any error prints nothing and exits 0.
 - `hooks/claude-codex-hooks.json` adds `Stop` and `SubagentStop` entries with `node "${CLAUDE_PLUGIN_ROOT}/bin/code-kb-launcher.cjs" hook Stop` (and `SubagentStop`), timeout 60.
-- [ ] MCP and CLI text equal on a fixture; the tool list has 7 tools.
-- [ ] Hook tests over stdin: block once, silent the second time with the same diff, silent with `stop_hook_active`, silent with no change, silent outside a repo.
-- [ ] Plugin manifest test covers the new entries.
-- [ ] Worker scope green; diff handed to the lead.
+- [x] MCP and CLI text equal on a fixture; the tool list has 7 tools.
+- [x] Hook tests over stdin: block once, silent the second time with the same diff, silent with `stop_hook_active`, silent with no change, silent outside a repo.
+- [x] Plugin manifest test covers the new entries.
+- [x] Worker scope green; diff handed to the lead.
+
+**Deviations from the plan text (task 4.2):**
+- Hook payloads were checked against the Claude Code hooks page (`code.claude.com/docs/en/hooks`) and the Codex hooks page (`developers.openai.com/codex/hooks`). Both run `Stop`, `SubagentStop`, and `SessionStart`, and both read `{"decision":"block","reason":…}` on stdout with exit 0. Plain text on Stop stdout is invalid in Codex, so the hook prints nothing otherwise. The pages do not say that stdin is always provided, and they do not confirm that Codex loads a Claude hooks file unchanged; `.codex-plugin/plugin.json` already points `hooks` at the shared file.
+- `SessionStart` writes the session file only when it does not exist, so a resume or a compaction does not move the base. The file also holds `"blocked_diff": "<hash>"`. A Stop that blocks and finds no session file checks against `HEAD` and creates a file that holds only that hash.
+- With no session id, `check_edit` and `code-kb check` use the newest session file written in the past 24 h. `SessionStart` removes session files older than 7 days. Risk: two sessions on one root can see each other's base.
+- `edit_check_session_op` falls back to `HEAD` when git no longer has the recorded base. An empty `base` string means no base.
+- Stop blocks only on `proven` and `likely` sites. `unresolved` sites are counted and never block.
+- Site lines read `{path}:{line}  {display}: {change}`, `proven` first. The header keeps the plan's literal "{n} sites", so one site reads "1 sites".
+- A stdin that stays open is cut off after 2 s. A bad `session_id`, a missing index, or any error gives silence.
+- The four new `mcp_test.rs` tests were not run before the code; they were checked afterwards to fail with the tool or handler removed.
+- Not done: the `instructions` string of the MCP `initialize` reply does not name `check_edit` (task 1.1 fixes its exact text); no run in a live Claude Code or Codex; no run of the hooks on Windows or macOS.
 
 ### Task 4.3: Docs and release prep
 
 **Files:** `CLAUDE.md`, `AGENTS.md`, `README.md`, routing blocks (one line: `- **After you edit**, call \`check_edit\` before you say the change is done.`), `skills/code-kb/SKILL.md`, `docs/site/index.html`, `docs/release-notes/v2.7.0.md` (draft, not released).
-- [ ] Docs describe the tool, the hooks, and the session file.
+- [x] Docs describe the tool, the hooks, and the session file.
 - [ ] Branch gate green; the owner is asked about the merge and the 2.7.0 release.
+
+**Deviations from the plan text (task 4.3):**
+- The rules, the text, and the known limits live in `docs/edit-check.md`; `CLAUDE.md` and `AGENTS.md` keep one summary bullet and the changed hooks bullet, because every session in this repository loads them.
+- `docs/release-notes/v2.7.0.md` starts with an HTML comment that marks it as a draft and lists what must happen before the tag. No version file changed.
+- The Codex install text now says "the four code-kb hooks".
+- `docs/site/index.html` gets a feature entry, the hooks tab text, and the two new hook entries, besides the tool row that 4.2 added.
+
+**Fix round (2026-10-19):** The end-to-end check of slice 4 (about 120 probe repositories in Rust, Python, TypeScript, Java, and Go) found the defects below. Each fix has a test in `edit_check_test.rs` or `edit_hook_test.rs`.
+- Fixed, sites: a removed or renamed method lists the callers that reach it through a typed receiver or a class qualifier (Rust, TypeScript, Java, Go), because the report now judges the old name, kind, file, and owner. A removed or renamed top-level symbol lists the import lines of its old name. A changed method lists the overriding members of its subtypes. A Go call with one argument is listed when a function gains a second parameter. A call that still passes the old count, in an untracked file or on an edited line, is never "in your diff" and has the note `passes N args; takes R`.
+- Fixed, false sites: a variant is a site only in a `match`, `switch`, or `when` that names it and has no fallback arm (`Self::`, `use Enum::*`, and Java `case NAME:` are read); a function that only builds the variant is neither listed nor counted, and one with a fallback arm is counted as unresolved. An added field lists only the constructions that must name it: Rust and Go literals, a Python dataclass call when the field has no default, and a Java record call. A parameter name, a default value, or an annotation is no `signature changed`; `parameter renamed` lists the calls that name the old parameter in Python, Kotlin, C#, and Swift. A change with equal range texts prints the row counts, or `parameters changed`, and not `1 → 1`. An unknown base prints its error once.
+- Fixed, hooks: `SessionStart` records the base in any git repository with a commit, also with no index yet; it creates `.code-kb/`, its `.gitignore`, and the session file, and no index. This replaces the task 4.2 text "no file when the root has no index". `Stop` and `SubagentStop` print nothing and start no scan when another `julie-extract` version or level wrote the index (`index_written_by_other_extractor`, the rule of the version guard in `sync.rs`); before, the first `Stop` after an upgrade rescanned the index in place (9.26 s on zod).
+- Fixed, docs: the release notes now say that the SessionStart routing text gains a line, list the reach gate rerun in the draft comment, give the timings recorded in the end-to-end check, and describe what blocks a stop.
+- Kept as known limits (`docs/edit-check.md`): fields of a TypeScript `interface` or `type` alias are not detected; the reads of a removed field are not listed; a renamed parameter is listed only in Python, Kotlin, C#, and Swift; a plain `mv` without `git add` reports the functions as removed; a `SubagentStop` block uses the once-per-diff hash, so a later `Stop` on the same diff is silent; two sessions on one root can see each other's base; the hooks check nothing after a `julie-extract` upgrade until the server or a `code-kb` command rebuilds the index.
+- Not run in the fix round: the reach gate and `lost_proven`, although `reference_report.rs` changed.
+
+**Fix round 2 (2026-10-19):** A recheck of the first fix round (about 165 probe scenarios in Rust, Python, TypeScript, Java, Go, and C#, plus hook, payload, and timing probes) found the defects below. Each fix has a test in `edit_check_test.rs`, `edit_hook_test.rs`, or next to the code. `code-kb --json refs` was compared before and after the report changes on probe repositories, and the output did not change.
+- Fixed, variants: a Rust `match` whose arms hold a sub-pattern wildcard (`Some(_)`, `(_, _)`), a C# arm that binds a name (`var other`), and a Python `case (_, _):` are no longer sites; they count as unresolved. A function that holds no `match` over the enum (a dictionary or `Record` keyed by variants, an `if` chain, a value that builds or compares a variant) is counted as unresolved and never listed, so the total stays honest. A removed variant runs the `Variant uses` finder again with its old name: the functions that still name it are sites at the line of their first use, and a function that names only other variants is not.
+- Fixed, signatures: an `async`, `suspend`, or `static` that came or went is `signature changed: async added` and lists every call. A Go result list with names, a Java or Kotlin parameter annotation, and a Rust `_` parameter that gets a name are no shape change.
+- Fixed, removed overloads: when overloads of a removed or renamed method remain, a call is listed only when the removed overload took it and no remaining overload does; a call with no known count is unresolved, and no import line is listed.
+- Fixed, fields: a Rust `Self { … }` literal in a method of the struct and a destructuring pattern without `..` are judged like a literal; a Go slice, array, or map literal of a package-qualified type is judged by its elements; a Python `ClassVar` is no field, and a `field(…)` call has a default only with `default=` or `default_factory=`; a Java record with an extra constructor lists only the calls with the old component count, and a `this(` line is no site.
+- Fixed, calls: a call that spreads its arguments is unresolved when the parameters change, and a named argument of another call on the same line no longer lists the call.
+- Fixed, hooks: `Stop` and `SubagentStop` compute the diff hash first (`PendingCheck` in `edit_check.rs`: the base, the changed files, and their content, with no scan of the base) and end with no output when it equals `checked_diff` or `blocked_diff` in the session file. Before, every turn end ran the whole check: 9.3 s warm on a 75-file shape change in Newtonsoft.Json. Now a repeat costs 0.07 to 0.08 s (zod copy, 17 changed files; the first check took 5.35 s). `checked_diff` holds the last diff a hook checked, blocked or not, and the rule "block at most once per diff hash" is kept. A `<session_id>.lock` file, created exclusively, makes the hooks of one session take turns: a hook that cannot get it within 2 s prints nothing, and a lock older than 60 s is taken over. Before, four parallel hooks of one session all blocked.
+- Fixed, docs: `docs/edit-check.md` and the release notes give the fold text (`… N more likely`, `… N more proven`), no longer claim that a TypeScript bound change is detected, state what blocks a stop, and list the known limits below. The release notes carry the recorded timings: a warm check on a small two-file change takes 0.15 to 0.17 s (0.19 to 0.25 s the first time); zod shape edits of 1, 5, and 30 files took 0.23, 0.82, and 4.89 s; Newtonsoft.Json shape edits of 30 and 75 files took 13.4 and 12.5 s; the worst first check was 17.5 s, a 39-file change of this repository, 14.6 s of it the CLI reconcile of the index before the check (a hook in a running server does not pay it).
+- Kept as known limits (`docs/edit-check.md`): fields of a TypeScript `interface` or `type` alias; the reads of a removed field; a call through an alias of a removed symbol (`import x as y`, Rust `use … as`) and the Java `import` and `import static` lines; a Rust tuple struct whose element count changes; a field added to an enum variant's payload; a new method on a trait or interface (the implementors are not listed); TypeScript type parameters and bounds (julie's TypeScript signature holds neither); a renamed parameter outside Python, Kotlin, C#, and Swift; a plain `mv` without `git add`; the once-per-diff hash shared by `Stop` and `SubagentStop`; two sessions on one root that see each other's base; the hooks that check nothing after a `julie-extract` upgrade.
+- Found and not fixed: removing a function that nothing references prints `no symbol changed shape` and `Cut: The sites of … could not be listed: Database query error: Query returned no rows.` The same text came from the binaries before both fix rounds. It never blocks a stop.
+- Not run in fix round 2: the reach gate and `lost_proven`, although `reference_report.rs` changed; a hook run inside a live Claude Code or Codex.
+
+**Fix round 3 (2026-10-19):** A recheck of the second fix round found the defects below. Each fix has a test in `edit_check_test.rs`, `edit_hook_test.rs`, or next to the code. The change to `reference_report/arity.rs` was checked with `code-kb --json refs` before and after on 248 names in the probe repositories, and the output did not change. The other fixes touch no report code.
+- Fixed, sites: a removed function, method, or class that nothing uses is a change with no site and no cut; before, it printed `Cut: The sites of … could not be listed: Database query error: Query returned no rows.` (`a_removed_function_that_nothing_calls_has_no_sites_and_no_cut`). When overloads of a removed method remain, a call that both the removed overload and a remaining one take is counted as unresolved, never dropped and never listed (`a_call_that_the_removed_and_a_remaining_overload_both_take_is_counted_as_unresolved`); a site that the report labels `unresolved` is counted and not listed; and no import line is listed while an overload of the name remains (`an_import_of_a_name_is_not_listed_when_an_overload_of_it_remains`). A Java or Kotlin constructor has a range when the index lists every constructor of its class; a Java record (canonical constructor) and a Kotlin class with a primary constructor give no range, so their sites are unresolved (five tests with `constructor` in their names). The body cut of a Kotlin secondary constructor no longer drops its parameter rows.
+- Fixed, calls: a named argument lists a call only when the argument stands in the arguments of the call itself, or in a nested call that has the name of the changed function (`f(f(old=1))`); `f(g(old=1))` and `f(1, b=[g(old=1)])` no longer list `f` (`a_named_argument_counts_only_in_the_calls_own_arguments_or_in_a_nested_call_of_the_same_name` and a unit test in `signatures.rs`). A Java record `this(…)` line is a site when its count equals the old component count and no site with another count, and the argument count splits at commas outside round, square, and curly brackets (`a_java_record_with_an_extra_constructor_lists_the_calls_and_this_calls_with_the_old_component_count`, `a_this_call_with_the_old_component_count_is_a_site_of_a_record_that_loses_a_component`, and a unit test in `fields.rs`).
+- Fixed, signatures: a C# attribute (`[Obsolete]`, `[HttpGet("/a")]`, a parameter attribute `[Range(0, 1)] int a`) and a PHP `#[Pure]` are dropped from the head of the signature and from each parameter before the compare, with balanced brackets (a string inside the group is skipped). The same strip runs before the `async` and `static` words are read, so an attribute that holds the method's name (`[Authorize] public async Task Authorize()`) no longer hides the word. Before, every attribute change read as `signature changed` and listed every call. A C++ `static` counts as a call-shape word only for a member of a class or struct; at file scope or in a namespace it gives internal linkage, and the toggle `static int helper(int)` ↔ `int helper(int)` is no shape change. The row in `docs/edit-check.md` that claimed C++ toggles is fixed. Tests: `a_csharp_attribute_added_removed_or_on_a_parameter_is_no_shape_change`, `a_csharp_attribute_that_holds_the_name_of_the_method_does_not_hide_an_async`, `a_php_attribute_added_or_on_a_parameter_is_no_shape_change`, `a_cpp_static_is_a_call_shape_word_only_for_a_member_of_a_class_or_struct`, and a unit test in `signatures.rs`.
+- Fixed, variants: a C# pattern that starts with `not` (`not Kind.Circle =>`, `not (A or B)`, `case not Kind.Circle:`) matches every other value, so it names no variant and its construct makes the function unresolved. Before, it read as an arm that names a variant, and the function was listed as a site (`a_csharp_pattern_that_starts_with_not_names_no_variant` in `arms.rs`).
+- Fixed, hooks: a session file that a `Stop` created before `SessionStart` has no `base`; the next `SessionStart` now adds it under the session lock and keeps `checked_diff` and `blocked_diff`. A file that has a base keeps it. A `SessionStart` that cannot get the lock within 2 s writes nothing. Before, `record_session_base` returned `Ok` on `AlreadyExists`, so that session compared with `HEAD` for good (`a_record_adds_the_base_to_a_file_that_has_none_and_keeps_its_other_fields`, `session_start_adds_the_base_to_a_session_file_that_a_stop_created`, `session_start_that_cannot_take_the_session_lock_within_two_seconds_adds_no_base`).
+- Fixed, docs: "the same diff never blocks twice" was false. A hook skips only the last checked diff and the last blocked diff, so a block on one diff, a block on a second, and a return to the first blocks again. No hash set was added. "The whole check stops after 20 s" was false too: the clock is read between steps (the file list, each file refresh, the shape comparison, each changed symbol), so a scan of the base, a refresh, or the sites of one symbol that already runs can pass 20 s. Both claims are fixed in `docs/edit-check.md`, the release notes, `CLAUDE.md`, `AGENTS.md`, the README, and the site.
+- Kept as known limits (`docs/edit-check.md`): a Rust `Self { … }` literal in an associated `const`, a `for Point { x, y } in v` pattern, and a Go struct-keyed map literal (`map[Point]int{{1, 2}: 3}`) are neither listed nor counted; a removed unit variant that a function names only in a `match` arm as `Kind::Circle { .. }` is not found; a Python `@staticmethod` or `@classmethod` toggle, `KW_ONLY`, and `InitVar` are not read (listed since round 2).
+- Fixed after the round 3 recheck (lead): the Java argument count read from the source skipped no type argument list, so `new Pair<>("a", 1)` and `new Box<String>("a", 1)` got a wrong count and a real site was dropped from a record change and from a removed constructor overload. `call_counts` now skips a `<…>` group after the name and reads a call only when `(` follows (`a_generic_java_record_lists_the_constructions_with_type_arguments` and the unit test in `fields.rs`). The recheck's 99 probe scripts were rerun on the fixed build: every difference is this fix or noise (hashes, paths, times).
+- Not run in fix round 3: a hook run inside a live Claude Code or Codex.
+
+**Slice 4 task 4.3 result (2026-10-19):** fmt, clippy, 1471 tests (after fix round 3), plugin tests (20), and `cmp` of `AGENTS.md`/`CLAUDE.md` and of the two routing blocks (1070 bytes each) pass. The reach gate passes with a report equal to slice 3 (`phase2/s4/gate/gate/report.md`), `lost_proven` finds no lost proven site in the 7 repositories against the slice 3 binary, and a live `serve` gives the same `refs` latency (zod `parse` 726 ms against 734 ms, hermes-agent `get` 3.32 s against 3.18 s within noise) and memory (47 MB peak against 43 MB). A warm `code-kb check` takes 0.15 to 0.17 s on a two-file change in a small repository. In the recheck, a shape change in 1, 5, and 30 files of zod (205 MB index) took 0.23, 0.82, and 4.89 s cold; a 400-file change on Newtonsoft.Json, cut to 200 files, took 6.10 s; the worst case was 17.5 s (a 39-file change of this repository, 14.6 s of it the CLI reconcile), under the 20 s budget. Open before the owner can release: task 3.2 (julie 3.8.0 is not published, and `scripts/julie-pins.json` still holds the 3.7.2 `sha256` values), the owner's answer on the merge and on 2.7.0, and the corpus check and the dogfood round.
