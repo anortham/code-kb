@@ -19,8 +19,10 @@ import ast
 import collections
 import datetime
 import hashlib
+import itertools
 import json
 import math
+import posixpath
 import re
 import subprocess
 import sys
@@ -44,8 +46,10 @@ CATCH_MARK = 0.80
 OUTSIDE_PRECISION_MARK = 0.90
 MIN_TRUTH_SITES = 10
 OUTSIDE_JUDGED_CAP = 50
-MISS_CAUSES = ("shape not seen", "site not indexed", "site labeled unresolved", "site excluded",
-               "cut by a limit", "other")
+MISS_CAUSES = ("shape not seen", "site not indexed", "import not listed", "site labeled unresolved", "site excluded",
+               "not a call", "fits the new shape", "cut by a limit", "other")
+CALL_KINDS = {"calls", "call", "instantiates"}
+CHECKED_KINDS = {"function", "method", "constructor", "class", "struct", "interface", "trait", "enum", "record"}
 
 LANGUAGE_OF_EXTENSION = {
     ".py": "python",
@@ -64,7 +68,7 @@ DEFINITIONS = {
     ],
     "script": [
         ("callable", re.compile(r"^\s*(?:export\s+)?(?:default\s+)?(?:declare\s+)?(?:async\s+)?function\s*\*?\s*"
-                                r"(?P<name>\w+)\s*(?:<[^()]*>)?\s*(?P<rest>\(.*)$")),
+                                r"(?P<name>\w+)\s*(?:<[^()]*>)?\s*(?:(?P<rest>\(.*)|<[^()>]*)$")),
         ("callable", re.compile(r"=\s*(?:async\s+)?function\s*\*?\s*(?P<name>\w+)\s*(?P<rest>\(.*)$")),
         ("type", re.compile(r"^\s*(?:export\s+)?(?:default\s+)?(?:declare\s+)?(?:abstract\s+)?"
                             r"(?:class|interface|enum|const\s+enum)\s+(?P<name>\w+)")),
@@ -72,22 +76,39 @@ DEFINITIONS = {
     ],
     "java": [
         ("type", re.compile(r"^\s*" + MODIFIERS + r"(?:class|interface|enum|record|struct)\s+(?P<name>\w+)")),
-        ("callable", re.compile(r"^\s*" + MODIFIERS + r"(?:<[^()]+>\s+)?(?P<type>[\w.?\[\]]+(?:<[^()]*>)?(?:\[\])*)\s+"
-                                r"(?P<name>\w+)\s*(?:<[^()]*>)?\s*(?P<rest>\(.*)$")),
+        ("callable", re.compile(r"^\s*" + MODIFIERS + r"(?:<[^()=;]+>\s+)?(?P<type>[\w.?\[\]]+(?:<[^()=;]*>)?(?:\[\])*)\s+"
+                                r"(?P<name>\w+)\s*(?:<[^()=;]*>)?\s*(?P<rest>\(.*)$")),
     ],
     "go": [
         ("callable", re.compile(r"^func\s+(?:\([^)]*\)\s*)?(?P<name>\w+)\s*(?:\[[^\]]*\])?\s*(?P<rest>\(.*)$")),
         ("type", re.compile(r"^type\s+(?P<name>\w+)\b")),
     ],
     "rust": [
-        ("callable", re.compile(RUST_PREFIX + r"fn\s+(?P<name>\w+)\s*(?:<[^()]*>)?\s*(?P<rest>\(.*)$")),
+        ("callable", re.compile(RUST_PREFIX + r"fn\s+(?P<name>\w+)\s*(?:<[^()]*>)?\s*(?:(?P<rest>\(.*)|<[^()>]*)$")),
         ("type", re.compile(r"^\s*(?:pub(?:\([^)]*\))?\s+)?(?:struct|enum|trait|type|union)\s+(?P<name>\w+)")),
     ],
 }
 DEFINITIONS["csharp"] = DEFINITIONS["java"]
 NOT_A_METHOD = {"return", "new", "throw", "else", "case", "await", "yield", "if", "for", "while", "switch", "catch",
-                "using", "lock", "foreach", "sizeof", "typeof", "nameof", "goto", "do", "try", "in", "is", "as"}
+                "using", "lock", "foreach", "sizeof", "typeof", "nameof", "goto", "do", "try", "in", "is", "as",
+                "public", "private", "protected", "internal", "static", "final", "abstract", "synchronized", "native",
+                "virtual", "override", "sealed", "async", "extern", "unsafe", "partial", "default", "strictfp",
+                "readonly"}
+STRING_LITERAL = re.compile(r"""(["'`])(?:\\.|(?!\1)[^\\])*\1""")
+IMPORT_LINE = re.compile(r"^\s*(?:import\b|from\s+\S+\s+import\b|export\s+.*\bfrom\b)|\brequire\s*\(")
+SCRIPT_IMPORTS = (
+    re.compile(r"""\b(?:import|export)\s+(?:type\s+)?(?P<clause>\{[^}]*\}|\*(?:\s+as\s+\w+)?|\w+(?:\s*,\s*(?:\{[^}]*\}|"""
+               r"""\*\s+as\s+\w+))?)\s+from\s+["'](?P<source>[^"'\n]+)["']"""),
+    re.compile(r"""(?:(?:\b(?:const|let|var)\s+|,\s*)(?P<clause>\{[^}]*\}|\w+)\s*=\s*)?\brequire\s*\(\s*["'](?P<source>[^"'\n]+)["']\s*\)"""),
+)
+SCRIPT_EXTENSION = re.compile(r"\.(?:[cm]?[jt]sx?)$")
+RECEIVER = re.compile(r"(?:(?P<receiver>\w+)|[)\]]|^)\s*\??\.\s*$")
+KEY_BEFORE = re.compile(r"(?:^|[{,(])\s*$")
+KEY_AFTER = re.compile(r"\s*\??:(?!:)")
 COMMENT_START = ("#", "//", "/*", "*", '"""', "'''")
+IMPORT_START = re.compile(r"^\s*(?:(?:pub(?:\([^)]*\))?\s+)?use\s|import\s|from\s+\S+\s+import\b|export\s.*\bfrom\b|"
+                          r"export\s*\{|using\s)")
+LONG_LINE = 2000
 
 
 def split_of(sha):
@@ -95,7 +116,7 @@ def split_of(sha):
 
 
 def git(cwd, *args):
-    done = subprocess.run(["git", "-C", str(cwd), *args], capture_output=True, text=True, check=False)
+    done = subprocess.run(["git", "-C", str(cwd), *args], capture_output=True, text=True, errors="replace", check=False)
     if done.returncode != 0:
         raise RuntimeError(f"git {' '.join(args)} failed in {cwd}: {done.stderr.strip()}")
     return done.stdout.strip()
@@ -521,8 +542,46 @@ def balanced(text, start):
     return text[start:]
 
 
+def top_level_parts(text):
+    parts, depth, start = [], 0, 0
+    for index, char in enumerate(text):
+        if char in "([{<":
+            depth += 1
+        elif char in ")]}>":
+            depth -= 1
+        elif char == "," and depth == 0:
+            parts.append(text[start:index])
+            start = index + 1
+    return parts + [text[start:]]
+
+
+def blank_name(family, part, grouped):
+    if family == "rust":
+        return re.sub(r"^[^:]*?(?=:(?!:))", "_", part, count=1)
+    if family == "go":
+        return re.sub(r"^\s*\w+", "_", part, count=1) if grouped else part
+    head = re.split(r"[?:=]", part, maxsplit=1)[0] if family == "script" else part
+    name = re.search(r"\w+(?=\W*$)", head)
+    if not name or not re.match(r"\W*$", head[name.end():]):
+        return part
+    return part[:name.start()] + "_" + part[name.end():]
+
+
+def parameter_shape(family, params):
+    """The parameter text with spaces removed. Where a caller cannot pass an argument by its name (all
+    but Python and C#), each top-level parameter name is blanked, so a rename alone is no change."""
+    if family in ("python", "csharp") or not params.startswith("("):
+        return re.sub(r"\s+", "", params)
+    inner = params[1:-1] if params.endswith(")") else params[1:]
+    parts = top_level_parts(inner.replace("=>", "\0"))
+    grouped = any(re.match(r"\s*\w+\s+\S", part) for part in parts)
+    blanked = ",".join(blank_name(family, part, grouped) for part in parts)
+    return re.sub(r"\s+", "", "(" + blanked + ")").replace("\0", "=>")
+
+
 def definitions(language, text):
-    """The definitions one source line holds, as (kind, name, parameter text with no spaces)."""
+    """The definitions one source line holds, as (kind, name, parameter text with no spaces). A
+    callable head whose type parameters go on to the next line has no parameter text (None)."""
     found = []
     for kind, pattern in DEFINITIONS.get(family_of(language), []):
         match = pattern.search(text)
@@ -531,7 +590,7 @@ def definitions(language, text):
         if "type" in pattern.groupindex and match["type"] in NOT_A_METHOD:
             continue
         rest = match.groupdict().get("rest")
-        params = re.sub(r"\s+", "", balanced(rest, 0)) if rest else ""
+        params = parameter_shape(family_of(language), balanced(rest, 0)) if rest else (None if kind == "callable" else "")
         found.append((kind, match["name"], params))
         break
     return found
@@ -541,16 +600,16 @@ def shape_changes(language, file_diff):
     """Definitions the diff removes or whose parameters it changes, read from the diff lines only.
     A type counts only when the diff removes it; a field change is not a definition line."""
     added = collections.defaultdict(set)
-    for _, text in file_diff["added"]:
+    for _, text in (row for row in file_diff["added"] if len(row[1]) <= LONG_LINE):
         for kind, name, params in definitions(language, text):
             added[(kind, name)].add(params)
     changes = {}
-    for line, text in file_diff["removed"]:
+    for line, text in (row for row in file_diff["removed"] if len(row[1]) <= LONG_LINE):
         for kind, name, params in definitions(language, text):
             kept = added.get((kind, name))
             if kept is None:
                 change = "removed or renamed"
-            elif kind == "callable" and params not in kept:
+            elif kind == "callable" and params not in kept and params is not None and None not in kept:
                 change = "parameters changed"
             else:
                 continue
@@ -558,10 +617,17 @@ def shape_changes(language, file_diff):
     return list(changes.values())
 
 
-def use_snippets(text, name):
-    """Each use of `name` on a line: the name with its argument text when a call follows, else the name."""
+def use_snippets(text, name, reaches=None):
+    """Each use of `name` on a line: the name with its argument text when a call follows, else the name.
+    A key, label, or named argument (`{name: v}`, `f(name: v)`) is no use, and neither is a use that
+    `reaches(text, start)` rejects."""
     snippets = []
+    text = STRING_LITERAL.sub('""', text)
     for match in re.finditer(r"\b" + re.escape(name) + r"\b", text):
+        if KEY_BEFORE.search(text[:match.start()]) and KEY_AFTER.match(text, match.end()):
+            continue
+        if reaches and not reaches(text, match.start()):
+            continue
         after = match.end()
         while after < len(text) and text[after] in " \t":
             after += 1
@@ -576,19 +642,144 @@ def is_comment(text):
     return text.strip().startswith(COMMENT_START)
 
 
-def truth_lines(file_diff, name):
+def is_code_line(text):
+    """A line a person wrote: not a comment, and not a generated line longer than `LONG_LINE`."""
+    return len(text) <= LONG_LINE and not is_comment(text)
+
+
+def block_comment_lines(language, text):
+    """Line numbers (from 1) that start inside a block comment, in Python inside a triple-quoted
+    string, or in Go inside a raw string (a template)."""
+    family = family_of(language)
+    inside = False
+    lines = set()
+    for number, line in enumerate((text or "").splitlines(), 1):
+        if inside:
+            lines.add(number)
+        if family == "python":
+            inside ^= (line.count('"""') + line.count("'''")) % 2 == 1
+            continue
+        if family == "go":
+            code = line if not inside else (line[line.index("`") + 1:] if "`" in line else None)
+            if code is not None:
+                inside = STRING_LITERAL.sub('""', code).count("`") % 2 == 1
+            continue
+        code = line if inside else STRING_LITERAL.sub('""', line)
+        position = 0
+        while True:
+            if inside:
+                end = code.find("*/", position)
+                if end < 0:
+                    break
+                inside, position = False, end + 2
+            else:
+                start, slashes = code.find("/*", position), code.find("//", position)
+                if start < 0 or 0 <= slashes < start:
+                    break
+                inside, position = True, start + 2
+    return lines
+
+
+def truth_lines(file_diff, name, reaches=None):
     """Removed lines that name `name` and whose use of it the commit changed: a use whose text the
-    file's added lines do not keep. A line that changed for another reason keeps its use."""
-    removed = [(line, text) for line, text in file_diff["removed"] if not is_comment(text)]
-    kept = collections.Counter(s for _, text in file_diff["added"] for s in use_snippets(text, name))
-    lost = collections.Counter(s for _, text in removed for s in use_snippets(text, name))
+    file's added lines do not keep. A line that changed for another reason keeps its use, and a line
+    that assigns the name binds a local, not a use. `reaches` filters the removed uses (see
+    `script_use_filter`)."""
+    binding = re.compile(r"^\s*(?:(?:const|let|var|val|auto|mut)\s+)*" + re.escape(name) + r"\s*(?::[^=]+)?=(?!=)")
+    removed = [(line, text) for line, text in file_diff["removed"] if is_code_line(text) and not binding.match(text)]
+    kept = collections.Counter(s for _, text in file_diff["added"] if len(text) <= LONG_LINE
+                               for s in use_snippets(text, name))
+    lost = collections.Counter(s for _, text in removed for s in use_snippets(text, name, reaches))
     changed = {s for s, count in lost.items() if count > kept[s]}
-    return [line for line, text in removed if changed.intersection(use_snippets(text, name))]
+    return [line for line, text in removed if changed.intersection(use_snippets(text, name, reaches))]
 
 
-def holdback_cases(repo, language_hint, commit, parent, diff_text):
+def calls_or_reads_member(text, name):
+    """True when the line calls `name` or reads it as a member: the uses a parameter change can break.
+    An import or a type use cannot."""
+    text = STRING_LITERAL.sub('""', text)
+    return bool(re.search(r"\b" + re.escape(name) + r"\s*\(", text) or re.search(r"\.\s*" + re.escape(name) + r"\b", text))
+
+
+def import_start(lines, number):
+    """The first line (from 1) of the import or `use` statement that holds line `number`, or None:
+    the lines above it that end in `,`, `{`, or `(` continue one statement."""
+    start = number
+    while start > 1 and number - start < 50 and re.search(r"[,{(\\]\s*$", lines[start - 2]):
+        start -= 1
+    return start if IMPORT_START.match(lines[start - 1]) else None
+
+
+def script_imports(text):
+    """(clause, source) of each import, re-export, and `require` in a JavaScript or TypeScript file."""
+    return [(match["clause"] or "", match["source"]) for pattern in SCRIPT_IMPORTS for match in pattern.finditer(text)]
+
+
+def source_reaches(source, use_path, defining_path, module):
+    """True when an import source can name the defining file: a relative source that resolves to it
+    or to a folder or `index` file above it (which can re-export it), or a package source that names
+    its module."""
+    if not source.startswith("."):
+        return bool(re.search(r"\b" + re.escape(module) + r"\b", source))
+    resolved = SCRIPT_EXTENSION.sub("", posixpath.normpath(posixpath.join(posixpath.dirname(use_path), source)))
+    target = SCRIPT_EXTENSION.sub("", defining_path)
+    folder = resolved.removesuffix("/index")
+    return target == resolved or target.startswith(folder + "/")
+
+
+def module_of(defining_path):
+    stem = Path(defining_path).stem
+    return Path(defining_path).parent.name if stem in ("index", "__init__", "mod") else stem
+
+
+def script_use_filter(text, name, defining_path, use_path):
+    """For a JavaScript or TypeScript function or type statement, which only an import reaches: a
+    `reaches(line, start)` predicate that takes a bare use when an import that can reach the defining
+    file names it, and `recv.name` when `recv` is bound by such an import of the whole module or by
+    any import from a package (which can re-export it)."""
+    module = module_of(defining_path)
+    word = re.compile(r"\b" + re.escape(name) + r"\b")
+    named = False
+    receivers = set()
+    for clause, source in script_imports(text or ""):
+        reaches = source_reaches(source, use_path, defining_path, module)
+        named = named or (reaches and bool(word.search(clause)))
+        if not source.startswith(".") or (reaches and not clause.startswith("{")):
+            receivers.update(alias or binding for binding, alias in re.findall(r"(\w+)(?:\s+as\s+(\w+))?", clause)
+                             if binding not in ("as", "type"))
+
+    def use_reaches(line, start):
+        receiver = RECEIVER.search(line[:start])
+        if receiver:
+            return receiver["receiver"] in receivers
+        return named
+    return use_reaches
+
+
+def binds_name_elsewhere(language, text, name, defining_path, use_path=""):
+    """True when the file defines `name` itself, or (Python, JavaScript, TypeScript) imports it only
+    from sources that do not name the defining module."""
+    text = text or ""
+    lines = [line for line in text.splitlines() if len(line) <= LONG_LINE and name in line]
+    if any(found == name for line in lines for _, found, _ in definitions(language, line)):
+        return True
+    if family_of(language) not in ("python", "script"):
+        return False
+    module = module_of(defining_path)
+    word = re.compile(r"\b" + re.escape(name) + r"\b")
+    if family_of(language) == "python":
+        imports = [line for line in lines if IMPORT_LINE.search(line) and word.search(line)]
+        return bool(imports) and not any(re.search(r"\b" + re.escape(module) + r"\b", line) for line in imports)
+    imports = script_imports(text)
+    named = [source for clause, source in imports if word.search(clause)]
+    return bool(named) and not any(source_reaches(source, use_path, defining_path, module) for source in named)
+
+
+def holdback_cases(repo, commit, parent, diff_text, read_parent):
     """The holdback cases of one commit: a definition change in one file and the lines in other
-    files of its language family whose use of the name the commit changed."""
+    files of its language family whose use of the name the commit changed. A file that defines the
+    name itself in the parent (`read_parent(path)`), or imports it from another module, gives no
+    truth: its uses name another definition. A dunder name is skipped, since its callers name the class."""
     files = parse_diff(diff_text)
     cases = []
     for defining in files:
@@ -597,6 +788,11 @@ def holdback_cases(repo, language_hint, commit, parent, diff_text):
         if not path or language is None or (defining["new"] not in (None, path)):
             continue
         for change in shape_changes(language, defining):
+            name = change["symbol"]
+            if name.startswith("__") and name.endswith("__"):
+                continue
+            head = dict(defining["removed"]).get(change["line"], "")
+            statement = family_of(language) == "script" and not re.search(r"=\s*(?:async\s+)?function\b", head)
             truth = []
             for other in files:
                 other_path = other["old"]
@@ -605,7 +801,15 @@ def holdback_cases(repo, language_hint, commit, parent, diff_text):
                 other_language = language_of(other_path)
                 if other_language is None or family_of(other_language) != family_of(language):
                     continue
-                truth.extend({"path": other_path, "line": line} for line in truth_lines(other, change["symbol"]))
+                parent_text = read_parent(other_path)
+                reaches = script_use_filter(parent_text, name, path, other_path) if statement else None
+                comments = block_comment_lines(other_language, parent_text)
+                lines = [line for line in truth_lines(other, name, reaches) if line not in comments]
+                if change["change"] == "parameters changed":
+                    removed = dict(other["removed"])
+                    lines = [line for line in lines if calls_or_reads_member(removed[line], name)]
+                if lines and not binds_name_elsewhere(other_language, parent_text, name, path, other_path):
+                    truth.extend({"path": other_path, "line": line} for line in lines)
             if truth:
                 cases.append({
                     "id": f"{commit[:12]}:{path}:{change['symbol']}",
@@ -629,7 +833,12 @@ def cmd_select_holdback(args):
             diff = git(clone, "diff", "-U0", "--no-color", "--no-ext-diff", "-M", parent, commit, "--",
                        *[f"*{extension}" for extension in LANGUAGE_OF_EXTENSION])
             in_commit = 0
-            for case in holdback_cases(entry["name"], entry["language"], commit, parent, diff):
+            def read_parent(path, parent=parent):
+                done = subprocess.run(["git", "-C", str(clone), "show", f"{parent}:{path}"], capture_output=True,
+                                      text=True, errors="replace", check=False)
+                return done.stdout if done.returncode == 0 else None
+
+            for case in holdback_cases(entry["name"], commit, parent, diff, read_parent):
                 if per_name[case["symbol"]] >= args.per_symbol or in_commit >= args.per_commit:
                     continue
                 per_name[case["symbol"]] += 1
@@ -658,8 +867,11 @@ def symbol_changes(record_changes, case):
             if change["path"] == case["file"] and re.split(r"\.|::", change["display"])[-1] == case["symbol"]]
 
 
-def miss_cause(answer, cuts, path, line):
-    """The cause of a truth site the check did not list, from the parent tree's callers report."""
+def miss_cause(answer, changes, path, line, overloads=1):
+    """The cause of a truth site that a reported change did not list, from the parent tree's callers
+    report. A call change lists only calls, a parameter change drops a call whose count the new
+    range accepts, a parameter rename lists only calls that pass an old name, and a removal that
+    leaves `overloads` lists only calls that no remaining overload takes."""
     covering = [site for site in answer["sites"] if reach_gate.site_covers(site, path, line)]
     if not covering:
         return "site not indexed", None
@@ -668,7 +880,50 @@ def miss_cause(answer, cuts, path, line):
         if labels == {label}:
             site = next(s for s in covering if s["label"] == label)
             return cause, site.get("basis")
-    return ("cut by a limit" if cuts else "other"), "/".join(sorted(labels))
+    texts = [change["change"] for change in changes]
+    if any(text.startswith(("parameters", "signature changed", "parameter renamed")) for text in texts):
+        if not any(site.get("kind") in CALL_KINDS for site in covering):
+            return "not a call", "/".join(sorted({site.get("kind") or "?" for site in covering}))
+        if all(text.startswith("parameter renamed") for text in texts):
+            return "fits the new shape", "passes no old name"
+        counts = {site["arg_count"] for site in covering if site.get("arg_count") is not None}
+        ranges = [new_range(text) for text in texts]
+        if counts and all(ranges) and any(low <= count <= high for low, high in ranges for count in counts):
+            return "fits the new shape", "/".join(f"{count} args" for count in sorted(counts))
+    elif overloads > 1 and any(text.startswith(("removed", "renamed")) for text in texts):
+        return "fits the new shape", "an overload remains"
+    return "other", "/".join(sorted(labels))
+
+
+def new_range(text):
+    """(low, high) of the accepted argument counts after `→` in a `parameters` change, else None."""
+    match = re.fullmatch(r"parameters .*→\s*(\d+)(?:-(\d+)|( or more))?", text)
+    if not match:
+        return None
+    low = int(match[1])
+    return low, math.inf if match[3] else int(match[2] or low)
+
+
+def parent_kinds(binary, tree, case):
+    """The kinds of the definitions of the case name in the defining file of the parent tree, or None
+    when the lookup fails. It leaves the parent's defining file in the tree."""
+    git(tree, "checkout", case["parent"], "--", case["file"])
+    try:
+        rows = reach_gate.run_binary(binary, tree, "lookup", case["symbol"], "--path", case["file"], "--limit", "50",
+                                     as_json=True)
+    except (RuntimeError, ValueError, subprocess.TimeoutExpired):
+        return None
+    rows = rows.get("names", []) if isinstance(rows, dict) else rows
+    return [row["kind"] for row in (r["symbol"] if isinstance(r.get("symbol"), dict) else r for r in rows)
+            if row["path"] == case["file"] and row["name"] == case["symbol"] and row["kind"] != "import"]
+
+
+def unchecked_cause(kinds, cuts):
+    """The cause when the check reports no change of the name: `cut by a limit` when a cut stopped it
+    and the parent tree defines the name with a kind the check compares, else `shape not seen`."""
+    if not cuts:
+        return "shape not seen"
+    return "cut by a limit" if kinds is None or CHECKED_KINDS.intersection(kinds) else "shape not seen"
 
 
 def apply_defining_file(tree, case):
@@ -685,25 +940,44 @@ def run_holdback_case(binary, tree, case):
     record |= run_check(binary, tree, case["parent"])
     if record["status"] != "ok":
         return record
-    changes = symbol_changes(record.pop("changes"), case)
+    in_file = [change for change in record.pop("changes") if change["path"] == case["file"]]
+    changes = symbol_changes(in_file, case)
     listed = {(site["path"], site["line"]): label for change in changes for site, label in listed_rows(change)}
+    reached = {(site["path"], site["line"]): label for change in in_file for site, label in listed_rows(change)}
     truth = {(row["path"], row["line"]) for row in case["truth"]}
     record["changes"] = changes
     record["shape_seen"] = bool(changes)
     record["unresolved"] = sum(change["unresolved"] for change in changes)
-    record["caught"] = [{"path": p, "line": n, "label": listed[(p, n)]} for p, n in sorted(truth & listed.keys())]
-    record["outside"] = [{"path": p, "line": n, "label": listed[(p, n)]} for p, n in sorted(listed.keys() - truth)]
-    missed = sorted(truth - listed.keys())
+    sources = {}
+
+    def import_line(path, line):
+        if path not in sources:
+            file = Path(tree) / path
+            sources[path] = file.read_text(errors="replace").splitlines() if file.is_file() else []
+        lines = sources[path]
+        return import_start(lines, line) if 0 < line <= len(lines) else None
+
+    starts = {(p, n): import_line(p, n) for p, n in truth}
+    covered = truth | {(p, starts[(p, n)]) for p, n in truth if starts[(p, n)]}
+    record["outside"] = [{"path": p, "line": n, "label": listed[(p, n)]} for p, n in sorted(listed.keys() - covered)]
+    caught = {site for site in truth if site in reached or (site[0], starts[site]) in reached}
+    record["caught"] = [{"path": p, "line": n, "label": reached.get((p, n)) or reached[(p, starts[(p, n)])]}
+                        for p, n in sorted(caught)]
+    missed = sorted(truth - caught)
     record["missed"] = []
+    if missed:
+        kinds = parent_kinds(binary, tree, case)
     if missed and not changes:
-        cause = "cut by a limit" if record["cuts"] else "shape not seen"
+        cause = unchecked_cause(kinds, record["cuts"])
         record["missed"] = [{"path": p, "line": n, "cause": cause} for p, n in missed]
     elif missed:
-        git(tree, "checkout", case["parent"], "--", case["file"])
         status, detail, answer = reach_gate.fetch_answer(
             binary, tree, {"name": case["symbol"], "file": case["file"], "line": case["line"]})
         for path, line in missed:
-            cause, basis = miss_cause(answer, record["cuts"], path, line) if status == "ok" else ("other", detail)
+            cause, basis = (miss_cause(answer, changes, path, line, len(kinds or [])) if status == "ok"
+                            else ("other", detail))
+            if cause == "site not indexed" and starts[(path, line)]:
+                cause = "import not listed"
             record["missed"].append({"path": path, "line": line, "cause": cause, "basis": basis})
     return record
 
@@ -767,9 +1041,22 @@ def score_holdback(records, cases):
             if mark:
                 tally[f"outside_{mark}"] += 1
             else:
-                todo.append({key: record[key] for key in ("id", "repo", "commit", "parent", "split", "file", "symbol")}
-                            | row)
-    return tallies, causes, todo
+                todo.append({key: record[key] for key in ("id", "repo", "language", "commit", "parent", "split", "file",
+                                                          "symbol")} | row)
+    return tallies, causes, spread(todo)
+
+
+def round_robin(groups):
+    return [row for batch in itertools.zip_longest(*groups) for row in batch if row is not None]
+
+
+def spread(rows):
+    """The rows taken in turn from each language, and within a language in turn from each case, so a
+    capped sample reaches every language and case."""
+    by_language = collections.defaultdict(lambda: collections.defaultdict(list))
+    for row in rows:
+        by_language[row["language"]][row["id"]].append(row)
+    return round_robin([round_robin(list(cases.values())) for _, cases in sorted(by_language.items())])
 
 
 def render_holdback(tallies, causes, split, version):
@@ -1090,7 +1377,7 @@ def replay_edits(clone, commit, edits, roots, cwd):
             continue
         if rel not in overlay:
             done = subprocess.run(["git", "-C", str(clone), "show", f"{commit}:{rel}"], capture_output=True,
-                                  text=True, check=False)
+                                  text=True, errors="replace", check=False)
             overlay[rel] = done.stdout if done.returncode == 0 else None
         text = apply_edit(overlay[rel], edit)
         if text is None:
@@ -1226,7 +1513,7 @@ def run_session_case(binary, out, case):
         for t in truth:
             if t["line"] is None:
                 continue
-            cause, _ = miss_cause(answer, record["cuts"], t["path"], t["line"])
+            cause, _ = miss_cause(answer, [change], t["path"], t["line"])
             if cause != "site not indexed":
                 record["cause"] = cause
                 return record

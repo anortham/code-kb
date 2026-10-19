@@ -72,25 +72,50 @@ scripts/edit_replay.py verdicts holdback --from FILE
   `enum`, `record`, `struct` (Java and C#); `func` and `type` (Go); `fn`, `struct`, `enum`,
   `trait`, `type`, `union` (Rust). A method of a JavaScript or TypeScript class is not read.
 - The definition changed when the diff removes it from the file, or when the added head of a
-  callable with that name has other parameter text. A type counts only when the diff removes it.
-  A definition whose head spans lines is seen only when its first line changes.
+  callable with that name has other parameter text. In every language but Python and C#, where a
+  caller can pass an argument by its name, the parameter names are blanked first, so a rename alone
+  is no change. A type counts only when the diff removes it. A definition whose head spans lines is
+  seen only when its first line changes, and a head whose type parameters go on to the next line
+  (`function pick<`) is neither removed nor changed.
 - The truth is the removed lines of other files in the same language family (JavaScript and
   TypeScript are one family) that use the name and whose use the commit changed: the name with
   its argument text (or the bare name) is on fewer added lines than removed lines of that file.
   A line that changed for another reason keeps its use and is not truth. Comment lines are not
-  truth. Truth lines carry their line numbers in the parent.
+  truth, and neither is a line inside a block comment, a Python triple-quoted string, or a Go raw
+  string (a template), a name
+  inside a string literal, a line that assigns the name (a local), or a key, label, or named
+  argument (`{name: v}`, `f(name: v)`). For a parameter change, only a line that calls the name or
+  reads it as a member is truth; an import or a type use needs no edit. A file that defines the name itself in the
+  parent gives no truth, since its uses name its own definition; so an override in another file is
+  not truth either. A Python, JavaScript, or TypeScript file that imports the name only from sources
+  that cannot name the defining file gives no truth. A JavaScript or TypeScript source can name it
+  when it is a package that names its module, or a relative path that resolves to the file or to a
+  folder or `index` file above it, so a generated copy of a folder (zod's `deno/lib`) is apart from
+  its source. A JavaScript or TypeScript function or type statement (not `x.name = function name(`)
+  reaches another file only through an import: a bare use counts when such an import names it, and
+  `recv.name` when `recv` is bound by such an import of the whole module or by any package import.
+  A dunder name (`__init__`) makes no case, since its callers name the class. Truth lines carry their
+  line numbers in the parent.
 - A case is the commit, the defining file, and the name. A file renamed by the commit is skipped.
   A name gets at most `--per-symbol` cases per project, and a commit at most `--per-commit`, so one
   large refactor cannot fill the set.
 - `run` checks out the parent, applies the commit's change to the defining file only, and runs
-  `code-kb check --base <parent>`. A truth site is caught when a `proven` or `likely` row of a
-  change of that name in the defining file has its path and line. Each miss gets one cause:
-  `shape not seen` (the check reports no change of that name), `cut by a limit`, or, from
-  `code-kb refs` of the name on the parent tree, `site not indexed`, `site labeled unresolved`,
-  `site excluded`, or `other`.
+  `code-kb check --base <parent>`. A truth site is caught when a `proven` or `likely` row of any
+  change in the defining file has its path and line, since the check sends the edit there (a member
+  of a removed class is listed under its class). A line of an import or `use` statement that spans
+  lines is caught by a row on the statement's first line. Each miss gets one cause: `shape not seen` (the
+  check reports no change of that name, and no cut, or the name has no kind the check compares),
+  `cut by a limit` (a cut, and the name is a function, method, constructor, class, struct,
+  interface, trait, enum, or record), or, from `code-kb refs` of the name on the parent tree,
+  `site not indexed`, `import not listed` (an import line, which the callers report never lists),
+  `site labeled unresolved`, `site excluded`, `not a call` (a parameter or
+  signature change lists only calls), `fits the new shape` (the call's argument count fits the new
+  range, it passes no renamed parameter by name, or a removed overload leaves another, so the check
+  drops it), or `other`.
 - `score` prints per language: truth sites, the ones caught, the misses, the unresolved counts,
-  cases with no shape change found, and the listed rows outside the truth. A row outside the truth
-  is true when its site refers to the changed definition (not another one with that name).
+  cases with no shape change found, and the listed rows of the changes of that name outside the
+  truth. A row outside the truth is true when its site refers to the changed definition (not
+  another one with that name).
   `--todo` writes at most 50 unjudged rows.
 - The marks: a catch share of at least 80% in each language with at least 10 truth sites, and at
   least 90% of the judged rows outside the truth true.

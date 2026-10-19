@@ -130,11 +130,11 @@ Each task in this slice measures. No task changes a rule.
 
 **Approach:** The selector reads git diffs only and never calls `code-kb` (Architecture Quality). A removed line in the defining file holds a definition when it matches the definition keyword of its language (`def`, `fn`, `func`, `class`, `struct`, `enum`, `interface`, `type`, a Java or C# method head); the name on that line is the symbol. A commit qualifies when hunks in at least one other code file remove a line that names it. Keep at most 3 commits per symbol name.
 
-- [ ] `holdback.json` holds at least 20 cases per language for at least 5 languages, each with the defining file, the symbol, the truth lines, and the split.
-- [ ] `score holdback` prints per language: truth sites, sites listed as `proven` or `likely`, sites listed in neither, the `unresolved` counts, cases with no shape change found (the check missed the shape), and listed rows outside the truth.
-- [ ] Each miss gets a cause from a fixed list: `shape not seen`, `site not indexed`, `site labeled unresolved`, `site excluded`, `cut by a limit`, `other`. The cause comes from the check JSON and `code-kb refs --json` on the parent tree, never from a holdout case.
-- [ ] A Sonnet reviewer hand-checks up to 50 listed rows outside the truth on dev cases, and the verdicts go into the case file.
-- [ ] Unit tests cover the selector on a fixture git repository and the truth-line rule. Worker commits.
+- [x] `holdback.json` holds at least 20 cases per language for at least 5 languages, each with the defining file, the symbol, the truth lines, and the split.
+- [x] `score holdback` prints per language: truth sites, sites listed as `proven` or `likely`, sites listed in neither, the `unresolved` counts, cases with no shape change found (the check missed the shape), and listed rows outside the truth.
+- [x] Each miss gets a cause from a fixed list: `shape not seen`, `site not indexed`, `site labeled unresolved`, `site excluded`, `cut by a limit`, `other`. The cause comes from the check JSON and `code-kb refs --json` on the parent tree, never from a holdout case. The list gained `import not listed`, `not a call`, and `fits the new shape` (lead decision, 2026-10-19): without them, `site not indexed`, `other`, and `cut by a limit` named sites that the check leaves out by its documented rules.
+- [x] A Sonnet reviewer hand-checks up to 50 listed rows outside the truth on dev cases, and the verdicts go into the case file.
+- [x] Unit tests cover the selector on a fixture git repository and the truth-line rule. Worker commits.
 
 ### Task 1.3: Session set
 

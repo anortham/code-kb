@@ -269,14 +269,14 @@ class DefinitionTest(unittest.TestCase):
         samples = [
             ("python", "    def area(self, w, h):", ("callable", "area", "(self,w,h)")),
             ("python", "class Shape(Base):", ("type", "Shape", "")),
-            ("javascript", "res.send = function send(body) {", ("callable", "send", "(body)")),
-            ("typescript", "export function parse<T>(input: string, opts?: O): T {", ("callable", "parse", "(input:string,opts?:O)")),
+            ("javascript", "res.send = function send(body) {", ("callable", "send", "(_)")),
+            ("typescript", "export function parse<T>(input: string, opts?: O): T {", ("callable", "parse", "(_:string,_?:O)")),
             ("typescript", "export type Infer<T> = T;", ("type", "Infer", "")),
             ("java", "  public static <T> T fromJson(String json, Class<T> type) throws X {",
-             ("callable", "fromJson", "(Stringjson,Class<T>type)")),
+             ("callable", "fromJson", "(String_,Class<T>_)")),
             ("csharp", "    public override string ToString()", ("callable", "ToString", "()")),
-            ("go", "func (c *Command) AddCommand(cmds ...*Command) {", ("callable", "AddCommand", "(cmds...*Command)")),
-            ("rust", "pub(crate) async fn check(root: &Path) -> Result<()> {", ("callable", "check", "(root:&Path)")),
+            ("go", "func (c *Command) AddCommand(cmds ...*Command) {", ("callable", "AddCommand", "(_...*Command)")),
+            ("rust", "pub(crate) async fn check(root: &Path) -> Result<()> {", ("callable", "check", "(_:&Path)")),
             ("rust", "pub enum Kind {", ("type", "Kind", "")),
         ]
         for language, line, expected in samples:
@@ -285,7 +285,8 @@ class DefinitionTest(unittest.TestCase):
 
     def test_statements_are_not_method_heads(self):
         for line in ("    return compute(a);", "    throw new IllegalStateException(x);", "  } else if (ok) {",
-                     "    String s = compute(a);", "    foo.bar(x);", "    yield return Next(x);"):
+                     "    String s = compute(a);", "    foo.bar(x);", "    yield return Next(x);",
+                     "    private final LinkedList<Filter> filters = new LinkedList<>();"):
             with self.subTest(line=line):
                 self.assertEqual(edit_replay.definitions("java", line), [])
 
@@ -299,6 +300,19 @@ class ShapeChangeTest(unittest.TestCase):
         diff = file_diff(["def old(a):", "def area(w, h):"], ["def area(w, h, d):"])
         got = {c["symbol"]: c["change"] for c in edit_replay.shape_changes("python", diff)}
         self.assertEqual(got, {"old": "removed or renamed", "area": "parameters changed"})
+
+    def test_a_parameter_rename_is_a_change_only_where_a_caller_can_name_the_parameter(self):
+        go = file_diff(["func check(t *testing.T, found, want string) {"], ["func check(t *testing.T, got, want string) {"])
+        self.assertEqual(edit_replay.shape_changes("go", go), [])
+        java = file_diff(["  public Builder setVersion(double after) {"], ["  public Builder setVersion(float after) {"])
+        self.assertEqual([c["change"] for c in edit_replay.shape_changes("java", java)], ["parameters changed"])
+        python = file_diff(["def area(w, h):"], ["def area(width, h):"])
+        self.assertEqual([c["change"] for c in edit_replay.shape_changes("python", python)], ["parameters changed"])
+
+    def test_a_head_whose_type_parameters_move_to_the_next_line_is_not_a_change(self):
+        diff = file_diff(["export function pick<T extends A>(a: T, b?: B) {", "export function drop(a) {"],
+                         ["export function pick<", "export function drop<"])
+        self.assertEqual(edit_replay.shape_changes("typescript", diff), [])
 
     def test_a_moved_definition_and_a_changed_class_head_are_not_changes(self):
         diff = file_diff(["def area(w, h):", "class Shape(A):"], ["def area(w, h):  # moved", "class Shape(B):"])
@@ -314,9 +328,101 @@ class TruthLineTest(unittest.TestCase):
         diff = file_diff(["v = d.get(k) + 1"], ["v = d.get(k) + 2"])
         self.assertEqual(edit_replay.truth_lines(diff, "get"), [])
 
+    def test_a_line_that_assigns_the_name_is_not_a_use(self):
+        diff = file_diff(["    env = os.environ.get('E')", "    const env = load()"], ["    mode = os.environ.get('E')"])
+        self.assertEqual(edit_replay.truth_lines(diff, "env"), [])
+
+    def test_a_name_inside_a_string_is_not_a_use(self):
+        diff = file_diff(["calls.push('render')"], ["calls.push('draw')"])
+        self.assertEqual(edit_replay.truth_lines(diff, "render"), [])
+
     def test_a_renamed_use_and_a_bare_reference_are_truth_but_a_comment_is_not(self):
         diff = file_diff(["from geo import area", "# area is old", "f = area"], ["from geo import surface", "f = surface"])
         self.assertEqual(edit_replay.truth_lines(diff, "area"), [1, 3])
+
+
+class BlockCommentTest(unittest.TestCase):
+    def test_lines_that_start_inside_a_block_comment_or_a_python_string_are_listed(self):
+        script = 'a("/*");\n/*\nuse(1)\n*/ use(2)\nuse(3) /* x */\n'
+        self.assertEqual(edit_replay.block_comment_lines("typescript", script), {3, 4})
+        python = 'x = 1\n"""Doc\nuse(1)\n"""\nuse(2)\n'
+        self.assertEqual(edit_replay.block_comment_lines("python", python), {3, 4})
+        go = 'var t = `a\n{{use}}\n` + "`"\nuse()\n'
+        self.assertEqual(edit_replay.block_comment_lines("go", go), {2, 3})
+
+
+class ImportStartTest(unittest.TestCase):
+    def test_a_line_of_a_use_list_belongs_to_the_statement_that_opens_it(self):
+        lines = ["fn f() {}", "pub use queries::{", "    a, b,", "    c,", "};", "def test(", "    a,", "):"]
+        self.assertEqual([edit_replay.import_start(lines, n) for n in (1, 2, 3, 4, 7)], [None, 2, 2, 2, None])
+
+
+class HoldbackTruthFilterTest(unittest.TestCase):
+    def diff(self):
+        return ("diff --git a/geo.py b/geo.py\n--- a/geo.py\n+++ b/geo.py\n@@ -1 +1 @@\n-def area(w, h):\n+def area(w, h, d):\n"
+                "diff --git a/own.py b/own.py\n--- a/own.py\n+++ b/own.py\n@@ -3 +3 @@\n-x = area(1, 2)\n+x = area(1, 2, 3)\n"
+                "diff --git a/use.py b/use.py\n--- a/use.py\n+++ b/use.py\n@@ -2 +2 @@\n-y = area(1, 2)\n+y = area(1, 2, 3)\n")
+
+    def test_a_file_that_defines_the_name_itself_gives_no_truth(self):
+        parents = {"own.py": "def area(a):\n    pass\nx = area(1, 2)\n", "use.py": "import geo\ny = area(1, 2)\n"}
+        cases = edit_replay.holdback_cases("demo", DEV_SHA, "p", self.diff(), parents.get)
+        self.assertEqual(cases[0]["truth"], [{"path": "use.py", "line": 2}])
+
+    def test_a_script_that_imports_the_name_from_another_module_gives_no_truth(self):
+        parents = {"own.py": "x = area(1, 2)\n", "use.py": "from shapes.other import area\ny = area(1, 2)\n"}
+        cases = edit_replay.holdback_cases("demo", DEV_SHA, "p", self.diff(), parents.get)
+        self.assertEqual(cases[0]["truth"], [{"path": "own.py", "line": 3}])
+
+    def test_an_import_from_the_defining_module_keeps_the_truth(self):
+        parents = {"own.py": "x = area(1, 2)\n", "use.py": "from geo import area\ny = area(1, 2)\n"}
+        cases = edit_replay.holdback_cases("demo", DEV_SHA, "p", self.diff(), parents.get)
+        self.assertEqual(cases[0]["truth"], [{"path": "own.py", "line": 3}, {"path": "use.py", "line": 2}])
+
+    def script_diff(self, head="export function area(w, h) {", uses=("y = area(1, 2)",)):
+        removed = "".join(f"-{use}\n" for use in uses)
+        added = "".join(f"+{use.replace('1, 2', '1, 2, 3')}\n" for use in uses)
+        return (f"diff --git a/src/geo.ts b/src/geo.ts\n--- a/src/geo.ts\n+++ b/src/geo.ts\n@@ -1 +1 @@\n-{head}\n"
+                f"+{head.replace('w, h', 'w, h, d')}\n"
+                f"diff --git a/src/use.ts b/src/use.ts\n--- a/src/use.ts\n+++ b/src/use.ts\n@@ -4 +4 @@\n{removed}{added}"
+                "diff --git a/lib/use.ts b/lib/use.ts\n--- a/lib/use.ts\n+++ b/lib/use.ts\n@@ -4 +4 @@\n"
+                "-y = area(1, 2)\n+y = area(1, 2, 3)\n")
+
+    def test_a_script_import_counts_only_when_its_relative_source_resolves_to_the_defining_file(self):
+        parents = {"src/use.ts": 'import {\n  area,\n} from "./geo";\n',
+                   "lib/use.ts": 'import {\n  area,\n} from "./geo";\n'}
+        cases = edit_replay.holdback_cases("demo", DEV_SHA, "p", self.script_diff(), parents.get)
+        self.assertEqual(cases[0]["truth"], [{"path": "src/use.ts", "line": 4}])
+
+    def test_a_script_with_no_import_that_reaches_a_function_statement_gives_no_truth(self):
+        parents = {"src/use.ts": 'import { other } from "../lib/other";\n', "lib/use.ts": 'import * as geo from "./geo";\n'}
+        cases = edit_replay.holdback_cases("demo", DEV_SHA, "p", self.script_diff(), parents.get)
+        self.assertEqual(cases, [])
+
+    def test_a_function_statement_is_reached_only_through_a_receiver_that_an_import_binds(self):
+        uses = ("y = geo.area(1, 2)", "y = area(1, 2)", "y = s.check().area(1, 2)", "y = { area: f(1, 2) }",
+                "y = z.area(1, 2)")
+        parents = {"src/use.ts": 'import * as geo from "./index.ts";\nimport { z } from "zod";\n',
+                   "lib/use.ts": 'var a = require("./a")\n  , area = require("../src/geo");\n'}
+        cases = edit_replay.holdback_cases("demo", DEV_SHA, "p", self.script_diff(uses=uses), parents.get)
+        self.assertEqual(cases[0]["truth"], [{"path": "src/use.ts", "line": 4}, {"path": "src/use.ts", "line": 8},
+                                             {"path": "lib/use.ts", "line": 4}])
+
+    def test_every_use_but_a_key_counts_for_a_function_assigned_to_a_property(self):
+        uses = ("y = s.check().area(1, 2)", "y = { area: f(1, 2) }")
+        head = "s.area = function area(w, h) {"
+        cases = edit_replay.holdback_cases("demo", DEV_SHA, "p", self.script_diff(head, uses), {}.get)
+        self.assertEqual(cases[0]["truth"], [{"path": "src/use.ts", "line": 4}, {"path": "lib/use.ts", "line": 4}])
+
+    def test_an_import_or_a_type_use_is_no_truth_for_a_parameter_change(self):
+        diff = self.diff().replace("-y = area(1, 2)\n+y = area(1, 2, 3)\n",
+                                   "-from geo import area\n-def f(a: area) -> area:\n+from geo import area as a2\n+def f(a): \n")
+        parents = {"own.py": "x = area(1, 2)\n", "use.py": "from geo import area\n"}
+        cases = edit_replay.holdback_cases("demo", DEV_SHA, "p", diff, parents.get)
+        self.assertEqual(cases[0]["truth"], [{"path": "own.py", "line": 3}])
+
+    def test_a_dunder_name_makes_no_case(self):
+        diff = self.diff().replace("area", "__init__")
+        self.assertEqual(edit_replay.holdback_cases("demo", DEV_SHA, "p", diff, lambda path: ""), [])
 
 
 class HoldbackSelectorTest(unittest.TestCase):
@@ -335,7 +441,8 @@ class HoldbackSelectorTest(unittest.TestCase):
             git(repo, "commit", "-q", "-am", "two")
             commit, parent = next(edit_replay.walk_commits(repo, "HEAD", 1))
             diff = edit_replay.git(repo, "diff", "-U0", "--no-color", parent, commit, "--", "*.py")
-            cases = edit_replay.holdback_cases("demo", "python", commit, parent, diff)
+            read = lambda path: edit_replay.git(repo, "show", f"{parent}:{path}")
+            cases = edit_replay.holdback_cases("demo", commit, parent, diff, read)
             self.assertEqual(len(cases), 1)
             got = cases[0]
             self.assertEqual((got["file"], got["symbol"], got["line"], got["change"]),
@@ -360,8 +467,28 @@ class HoldbackScoreTest(unittest.TestCase):
         self.assertEqual(edit_replay.miss_cause(answer, [], "u.py", 4), ("site labeled unresolved", "2 definitions"))
         self.assertEqual(edit_replay.miss_cause(answer, [], "v.py", 9), ("site excluded", "another type"))
         self.assertEqual(edit_replay.miss_cause(answer, [], "x.py", 1), ("site not indexed", None))
-        self.assertEqual(edit_replay.miss_cause(answer, [], "w.py", 2), ("other", "proven"))
-        self.assertEqual(edit_replay.miss_cause(answer, ["10 symbols"], "w.py", 2)[0], "cut by a limit")
+        self.assertEqual(edit_replay.miss_cause(answer, [{"change": "removed"}], "w.py", 2), ("other", "proven"))
+
+    def test_a_call_change_names_a_proven_miss_that_is_no_call_or_fits_the_new_range(self):
+        answer = {"sites": [{"path": "t.py", "start_line": 3, "label": "proven", "kind": "member_access"},
+                            {"path": "c.py", "start_line": 5, "label": "proven", "kind": "calls", "arg_count": 1}]}
+        params = [{"change": "parameters 0-1 → 1-2"}]
+        signature = [{"change": "signature changed"}]
+        self.assertEqual(edit_replay.miss_cause(answer, signature, "t.py", 3), ("not a call", "member_access"))
+        self.assertEqual(edit_replay.miss_cause(answer, params, "c.py", 5), ("fits the new shape", "1 args"))
+        self.assertEqual(edit_replay.miss_cause(answer, signature, "c.py", 5), ("other", "proven"))
+        self.assertEqual(edit_replay.miss_cause(answer, [{"change": "parameters 3 → 2"}], "c.py", 5), ("other", "proven"))
+        self.assertEqual(edit_replay.miss_cause(answer, [{"change": "parameters 2 → 0 or more"}], "c.py", 5)[0],
+                         "fits the new shape")
+        self.assertEqual(edit_replay.miss_cause(answer, [{"change": "removed"}], "c.py", 5, overloads=2),
+                         ("fits the new shape", "an overload remains"))
+        renamed = [{"change": "parameter renamed: a → b"}]
+        self.assertEqual(edit_replay.miss_cause(answer, renamed, "c.py", 5), ("fits the new shape", "passes no old name"))
+
+    def test_a_cut_explains_a_missing_change_only_for_a_kind_the_check_compares(self):
+        self.assertEqual(edit_replay.unchecked_cause(["method"], []), "shape not seen")
+        self.assertEqual(edit_replay.unchecked_cause(["method"], ["Checked 10 of 18"]), "cut by a limit")
+        self.assertEqual(edit_replay.unchecked_cause(["constant", "type"], ["Checked 10 of 18"]), "shape not seen")
 
     def test_score_counts_caught_sites_misses_by_cause_and_outside_verdicts(self):
         cases = [
@@ -385,6 +512,11 @@ class HoldbackScoreTest(unittest.TestCase):
         self.assertEqual([(row["path"], row["line"]) for row in todo], [("o.py", 2)])
         text = edit_replay.render_holdback(tallies, causes, "dev", "code-kb test")
         self.assertIn("Result: INCOMPLETE", text)
+
+    def test_the_todo_takes_rows_in_turn_from_each_language_and_case(self):
+        rows = [{"language": language, "id": case, "line": line}
+                for language, case, line in [("go", "g1", 1), ("go", "g1", 2), ("go", "g2", 3), ("rust", "r1", 4)]]
+        self.assertEqual([row["line"] for row in edit_replay.spread(rows)], [1, 4, 3, 2])
 
     def test_a_language_with_ten_truth_sites_under_the_catch_mark_fails(self):
         cases = [{"id": f"c{n}", "split": "dev", "truth": [{"path": "u.py", "line": n}], "verdicts": []} for n in range(10)]
