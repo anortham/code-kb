@@ -164,9 +164,9 @@ Each task in this slice measures. No task changes a rule.
 
 **What to build:** The baseline: each pass mark against the 2.7.0 binary, the miss causes ranked by count on dev, and the false blocks by rule. This is the one time the holdout halves are scored before task 2.3.
 
-- [ ] The report states each pass mark as PASS or FAIL with its numbers, in aggregate counts only.
+- [x] The report states each pass mark as PASS or FAIL with its numbers, in aggregate counts only.
 - [ ] The lead tells the owner the clean-set result before slice 2 starts. A FAIL there is a question about a patch release.
-- [ ] Worker commits.
+- [x] Worker commits.
 
 ## Slice 2: Fixes
 
