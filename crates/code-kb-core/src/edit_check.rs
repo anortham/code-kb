@@ -25,6 +25,7 @@ use crate::db::{DbError, ensure_fts_index_path, open_read_only};
 use crate::formatters::displayed_symbol_name;
 use crate::models::{
     ConstructionSite, LabeledSite, ReferenceReport, SiteLabel, Symbol, VariantUse,
+    is_generated_lambda_name,
 };
 use crate::queries::{QueryError, escape_like, load_file_symbols};
 use crate::reference_report::arity::{self, Arity};
@@ -684,9 +685,17 @@ impl Row {
         }
     }
 
+    /// A julie lambda is named after its line, so a line shift would read as a rename.
     fn is_shape(&self) -> bool {
-        let kind = self.symbol.kind.as_str();
-        CALLABLE_KINDS.contains(&kind) || TYPE_KINDS.contains(&kind)
+        let symbol = &self.symbol;
+        let kind = symbol.kind.as_str();
+        (CALLABLE_KINDS.contains(&kind) || TYPE_KINDS.contains(&kind))
+            && !is_generated_lambda_name(
+                &symbol.name,
+                &symbol.language,
+                kind,
+                symbol.signature.as_deref(),
+            )
     }
 
     fn display(&self) -> String {

@@ -3279,6 +3279,21 @@ fn a_java_record_with_an_extra_constructor_lists_only_the_calls_with_the_old_com
 }
 
 #[test]
+fn a_python_lambda_that_moved_to_another_line_is_no_rename() {
+    let text = edited_text(
+        &[(
+            "app.py",
+            "def helper():\n    return 1\n\n\ndef build(register):\n    register(lambda value: value)\n    return register\n",
+        )],
+        "app.py",
+        "def helper():\n    return 1\n\n\n",
+        "",
+    );
+    assert_has(&text, "function `helper` (app.py): removed");
+    assert_lacks(&text, "lambda_");
+}
+
+#[test]
 fn a_generic_java_record_lists_the_constructions_with_type_arguments() {
     let text = edited_text(
         &[

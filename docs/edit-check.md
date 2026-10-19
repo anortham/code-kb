@@ -52,7 +52,7 @@ Not checked: calls inside macro arguments, functions passed as values.
 
 ## Shape changes
 
-Symbols of both sides are keyed by the names of their parents, their kind, and their name. When the counts of a key are equal, they pair in source order. Otherwise symbols with an equal signature pair first, so a new overload does not shift the others. A symbol that stays unpaired is removed or added. An added symbol is never a change. Local variables and parameters are not symbols for this step.
+Symbols of both sides are keyed by the names of their parents, their kind, and their name. When the counts of a key are equal, they pair in source order. Otherwise symbols with an equal signature pair first, so a new overload does not shift the others. A symbol that stays unpaired is removed or added. An added symbol is never a change. Local variables and parameters are not symbols for this step, and neither is a Python lambda, because julie names it after its line (`lambda_363`) and a line shift would read as a rename.
 
 | Change | Symbols | Rule |
 |---|---|---|
@@ -243,6 +243,7 @@ Shapes the check does not see:
 - A TypeScript type parameter or bound (`<T extends string>` to `<T extends number>`, or `<T>` added) is no shape change: the TypeScript signature in the index leaves both out. A bound change is seen in Rust, Java, C#, and Kotlin.
 - A parameter rename is listed (with the call sites that name the old parameter) only in Python, Kotlin, C#, and Swift. In any other language with named arguments (Ruby keywords, Scala, PHP, Dart) it is no shape change, and a call that names the old parameter is not listed. A Dart list of named parameters (`{required int w}`) reads as `signature changed` instead.
 - A change of a Python `@staticmethod` or `@classmethod` decorator is not seen: the normal form drops decorators. A toggle of `static` is seen in the languages above, where it is a keyword (in C++ only for a member of a class or struct).
+- A removed class attribute or `self.` attribute of a class that is not a field owner here (a plain Python class: `Flask.session_interface`, `AppContext._after_request_functions`) is no shape change, and its reads are not listed.
 - A Python class counts fields only when it is a `@dataclass`. Other field forms are not read in every language. The dataclass reader knows `ClassVar` and `field(default=, default_factory=, init=False)`. It does not know `KW_ONLY`, `InitVar`, or a field that a base class declares.
 - A C# record, a Kotlin data class, a Scala case class, and a Swift struct build every field by position or name, but only Rust, Go, a Python dataclass, and a Java record list constructions.
 - A Rust lifetime rename (`<'a>` to `<'b>`) is a signature change. Only the forms in "Signatures: the normal form" are dropped.
