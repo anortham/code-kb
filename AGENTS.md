@@ -295,6 +295,17 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   `reference_report/js_bindings.rs` reads them from the source: when one of them between the
   start of the caller and the site has the name, an `import`, `same file`, `enclosing scope`, or
   `qualified path` proof becomes `likely` and names that line.
+  Reach sections: `reach_sections` in `reference_report/sections.rs` adds up to six sections
+  after the sites are labeled: `Overrides`, `Overrides of`, `Constructions`, `Variant uses`,
+  `Registrations`, and `Tests that call it`, where each test has a run command from
+  `test_commands.rs` or no command when no runner can run it alone. They print after the site
+  groups and before the text-only lines, each only when it has rows. They never change a site's
+  label or basis or a count, so the reach gate scores the same labels. `limit` caps the listed
+  rows of a section. CLI `--json` adds the arrays `overrides`, `overridden`, `constructions`,
+  `variant_uses`, `registrations`, and `tests`, and leaves out an empty one. A section reads
+  indexed rows and opens source only for the files it needs. Every rule of each section, its
+  known limits, and the run-command forms are in `docs/reach-sections.md`; change that file
+  with the code.
 - Related tests (`get_symbol_context`): callers from relationships, pending calls, and references
   that are tests, test classes, or functions and methods in test files that are members of a test
   class or have a name that reads like a test (`names_a_test`), so a module-level app factory such

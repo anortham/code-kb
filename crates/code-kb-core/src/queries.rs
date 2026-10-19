@@ -5041,7 +5041,7 @@ pub fn find_callee_signatures(
 
 const SQL_FAMILIES: &[&str] = &["sql."];
 
-const ROUTE_FAMILIES: &[&str] = &[
+pub(crate) const ROUTE_FAMILIES: &[&str] = &[
     ".route.",
     ".attribute_route.",
     ".scope_route.",
@@ -5118,7 +5118,7 @@ fn category_families(category: &str) -> Option<&'static [&'static str]> {
         .map(|(_, families)| *families)
 }
 
-fn matches_family(pattern_id: &str, rule: &str) -> bool {
+pub(crate) fn matches_family(pattern_id: &str, rule: &str) -> bool {
     if rule.starts_with('.') {
         pattern_id.contains(rule)
     } else if rule.ends_with('.') {
@@ -5631,7 +5631,7 @@ fn enclosing_test(conn: &Connection, row: Symbol) -> Result<Symbol, QueryError> 
     })
 }
 
-fn names_a_test(name: &str) -> bool {
+pub(crate) fn names_a_test(name: &str) -> bool {
     let lowered = name.to_ascii_lowercase();
     lowered.starts_with("test")
         || ["test", "tests", "spec", "specs"]

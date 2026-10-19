@@ -19,4 +19,4 @@ Text only (5): docs, comments, strings, or code the index did not record
   crates/code-kb-core/src/reference_report.rs: 43
   docs/plans/2026-10-02-skill-authoring-alignment.md: 119
   docs/plans/2026-10-17-accuracy-base.md: 268
-Not visible to this index: calls inside macro bodies; calls through dynamic dispatch reach overrides that this list does not show.
+Not visible to this index: calls inside macro bodies.

@@ -2,8 +2,9 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
 
 use crate::models::{
-    BlastRadiusResult, ContextSlice, ImpactedSymbol, LabeledSite, ReferenceReport, ReferenceSite,
-    SearchExplain, SiteLabel, Symbol, SymbolSearchResult,
+    BlastRadiusResult, CallingTest, ConstructionSite, ContextSlice, ImpactedSymbol, LabeledSite,
+    OverrideRow, ReferenceReport, ReferenceSite, Registration, SearchExplain, SiteLabel, Symbol,
+    SymbolSearchResult, VariantUse,
 };
 
 /// Format progressive disclosure file skeleton with implementation bodies stripped.
@@ -910,6 +911,11 @@ pub fn format_reference_report(report: &ReferenceReport, limit: usize) -> String
     }
 
     let mut body = site_groups(&report.sites, limit);
+    body.push_str(&override_sections(report, limit));
+    body.push_str(&construction_section(&report.constructions, limit));
+    body.push_str(&variant_section(&report.variant_uses, limit));
+    body.push_str(&registration_section(&report.registrations, limit));
+    body.push_str(&test_section(&report.tests, limit));
     body.push_str(&text_only_section(report));
     if !report.cannot_see.is_empty() {
         body.push_str(&format!(
@@ -983,9 +989,22 @@ fn site_groups(sites: &[LabeledSite], limit: usize) -> String {
 }
 
 fn fold_line(label: SiteLabel, hidden: &[&LabeledSite]) -> String {
+    let (files, named) = files_by_count(hidden.iter().map(|labeled| labeled.site.path.as_str()));
+    format!(
+        "… {} more {} {} in {files} {}: {named}\n",
+        hidden.len(),
+        label.as_str(),
+        plural(hidden.len(), "site"),
+        plural(files, "file"),
+    )
+}
+
+/// How many files hold `paths`, and the first `FOLD_FILES_NAMED` of them as `path (count)`,
+/// most rows first, with `, …` when more files follow.
+fn files_by_count<'a>(paths: impl Iterator<Item = &'a str>) -> (usize, String) {
     let mut per_file: BTreeMap<&str, usize> = BTreeMap::new();
-    for labeled in hidden {
-        *per_file.entry(labeled.site.path.as_str()).or_default() += 1;
+    for path in paths {
+        *per_file.entry(path).or_default() += 1;
     }
     let mut files: Vec<(&str, usize)> = per_file.into_iter().collect();
     files.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(b.0)));
@@ -999,15 +1018,200 @@ fn fold_line(label: SiteLabel, hidden: &[&LabeledSite]) -> String {
     } else {
         ""
     };
+    (files.len(), format!("{}{more}", named.join(", ")))
+}
+
+fn override_sections(report: &ReferenceReport, limit: usize) -> String {
+    let name = &report.target.display_name;
+    let mut out = method_section(
+        &format!(
+            "Overrides ({}): calls through `{name}` can reach these",
+            report.overrides.len()
+        ),
+        &report.overrides,
+        limit,
+    );
+    out.push_str(&method_section(
+        &format!(
+            "Overrides of ({}): calls to these can reach `{name}`",
+            report.overridden.len()
+        ),
+        &report.overridden,
+        limit,
+    ));
+    out
+}
+
+fn construction_section(rows: &[ConstructionSite], limit: usize) -> String {
+    if rows.is_empty() {
+        return String::new();
+    }
+    let shown = limit.min(rows.len());
+    let mut per_file: Vec<(&str, Vec<String>)> = Vec::new();
+    for row in &rows[..shown] {
+        match per_file.last_mut() {
+            Some((path, lines)) if *path == row.path => lines.push(row.line.to_string()),
+            _ => per_file.push((&row.path, vec![row.line.to_string()])),
+        }
+    }
+    let listed: Vec<String> = per_file
+        .iter()
+        .map(|(path, lines)| format!("{path}: {}", lines.join(", ")))
+        .collect();
+    let mut out = format!("Constructions ({}):", rows.len());
+    if !listed.is_empty() {
+        out.push_str(&format!(" {}", listed.join(" · ")));
+    }
+    out.push('\n');
+    if shown < rows.len() {
+        out.push_str(&section_fold(
+            rows[shown..].iter().map(|row| row.path.as_str()),
+            "construction",
+        ));
+    }
+    out
+}
+
+fn variant_section(rows: &[VariantUse], limit: usize) -> String {
+    if rows.is_empty() {
+        return String::new();
+    }
+    let mut out = format!(
+        "Variant uses ({} {}): a match in them may need a new arm\n",
+        rows.len(),
+        plural(rows.len(), "function")
+    );
+    let shown = limit.min(rows.len());
+    for row in &rows[..shown] {
+        let caller = if row.caller.is_empty() {
+            "(no enclosing symbol)".to_string()
+        } else {
+            format!("`{}`", row.caller)
+        };
+        out.push_str(&format!(
+            "- {caller} [{}:{}] names {} of {} {}\n",
+            row.path,
+            row.line,
+            row.variants_used,
+            row.variants_total,
+            plural(row.variants_total, "variant"),
+        ));
+    }
+    if shown < rows.len() {
+        out.push_str(&section_fold(
+            rows[shown..].iter().map(|row| row.path.as_str()),
+            "function",
+        ));
+    }
+    out
+}
+
+fn registration_section(rows: &[Registration], limit: usize) -> String {
+    if rows.is_empty() {
+        return String::new();
+    }
+    let mut out = format!("Registrations ({}):\n", rows.len());
+    let shown = limit.min(rows.len());
+    for row in &rows[..shown] {
+        out.push_str(&format!(
+            "- {} [{}:{}]{}\n",
+            registration_label(row),
+            row.path,
+            row.line,
+            if row.by_name { " (by name)" } else { "" }
+        ));
+    }
+    if shown < rows.len() {
+        out.push_str(&section_fold(
+            rows[shown..].iter().map(|row| row.path.as_str()),
+            "registration",
+        ));
+    }
+    out
+}
+
+fn registration_label(row: &Registration) -> String {
+    if !row.pattern_id.contains(".route.") {
+        return row.pattern_id.clone();
+    }
+    let template = row.template.as_deref().unwrap_or(&row.pattern_id);
+    match row.verb.as_deref() {
+        Some(verb) => format!("route {verb} {template}"),
+        None => format!("route {template}"),
+    }
+}
+
+fn section_fold<'a>(hidden: impl ExactSizeIterator<Item = &'a str>, word: &str) -> String {
+    let count = hidden.len();
+    let (files, named) = files_by_count(hidden);
     format!(
-        "… {} more {} {} in {} {}: {}{more}\n",
-        hidden.len(),
-        label.as_str(),
-        plural(hidden.len(), "site"),
-        files.len(),
-        plural(files.len(), "file"),
-        named.join(", ")
+        "… {count} more {} in {files} {}: {named}\n",
+        plural(count, word),
+        plural(files, "file"),
     )
+}
+
+fn test_section(rows: &[CallingTest], limit: usize) -> String {
+    if rows.is_empty() {
+        return String::new();
+    }
+    let mut out = format!("Tests that call it ({}):\n", rows.len());
+    let shown = limit.min(rows.len());
+    for row in &rows[..shown] {
+        let run = row
+            .command
+            .as_ref()
+            .map(|command| format!(" run: {command}"))
+            .unwrap_or_default();
+        out.push_str(&format!(
+            "- `{}` [{}:{}]{run}\n",
+            on_one_line(&row.name),
+            row.path,
+            row.line
+        ));
+    }
+    if shown < rows.len() {
+        out.push_str(&section_fold(
+            rows[shown..].iter().map(|row| row.path.as_str()),
+            "test",
+        ));
+    }
+    out
+}
+
+/// `text` with each control character and Unicode line separator written as an escape (`\n`,
+/// `\t`), so a test name never breaks a line of the report.
+fn on_one_line(text: &str) -> String {
+    text.chars()
+        .map(|c| {
+            if c.is_control() || matches!(c, '\u{2028}' | '\u{2029}') {
+                c.escape_default().to_string()
+            } else {
+                c.to_string()
+            }
+        })
+        .collect()
+}
+
+fn method_section(title: &str, rows: &[OverrideRow], limit: usize) -> String {
+    if rows.is_empty() {
+        return String::new();
+    }
+    let mut out = format!("{title}\n");
+    let shown = limit.min(rows.len());
+    for row in &rows[..shown] {
+        out.push_str(&format!(
+            "- `{}.{}` ({}:{})\n",
+            row.owner, row.name, row.path, row.line
+        ));
+    }
+    if shown < rows.len() {
+        out.push_str(&section_fold(
+            rows[shown..].iter().map(|row| row.path.as_str()),
+            "method",
+        ));
+    }
+    out
 }
 
 fn text_only_section(report: &ReferenceReport) -> String {
@@ -3385,6 +3589,12 @@ mod tests {
             },
             cannot_see: Vec::new(),
             imports: Vec::new(),
+            overrides: Vec::new(),
+            overridden: Vec::new(),
+            constructions: Vec::new(),
+            variant_uses: Vec::new(),
+            registrations: Vec::new(),
+            tests: Vec::new(),
         }
     }
 
@@ -3647,6 +3857,39 @@ mod tests {
     }
 
     #[test]
+    fn a_registration_without_a_verb_or_template_or_route_pattern_prints_what_it_has() {
+        let registration =
+            |pattern_id: &str, verb: Option<&str>, template: Option<&str>| Registration {
+                pattern_id: pattern_id.into(),
+                verb: verb.map(Into::into),
+                template: template.map(Into::into),
+                path: "app.py".into(),
+                line: 3,
+                by_name: false,
+            };
+        let mut report = report_of(Vec::new());
+        report.registrations = vec![
+            registration("flask.route.v1", Some("GET"), Some("/a")),
+            registration("axum.route.v1", None, Some("/b")),
+            registration("hapi.route.v1", Some("PUT"), None),
+            registration("rocket.mount.v1", Some("GET"), Some("/c")),
+        ];
+
+        let text = format_reference_report(&report, 20);
+
+        assert!(
+            text.contains(
+                "Registrations (4):\n\
+                 - route GET /a [app.py:3]\n\
+                 - route /b [app.py:3]\n\
+                 - route PUT hapi.route.v1 [app.py:3]\n\
+                 - rocket.mount.v1 [app.py:3]\n"
+            ),
+            "{text}"
+        );
+    }
+
+    #[test]
     fn a_constructor_report_replaces_the_text_line_with_the_skip_line() {
         let mut report = report_of(Vec::new());
         report.text_scan.skipped = Some("Flask".into());
@@ -3674,7 +3917,7 @@ mod tests {
         )]);
         report.cannot_see = vec![
             "calls through getattr() or names built at runtime".into(),
-            "calls through dynamic dispatch reach overrides that this list does not show".into(),
+            "calls inside macro bodies".into(),
         ];
         report.imports = vec![("b.py".into(), 1), ("c.py".into(), 4)];
 
@@ -3682,7 +3925,7 @@ mod tests {
 
         assert!(
             text.ends_with(
-                "Not visible to this index: calls through getattr() or names built at runtime; calls through dynamic dispatch reach overrides that this list does not show.\n\
+                "Not visible to this index: calls through getattr() or names built at runtime; calls inside macro bodies.\n\
                  Imported 2 times in 2 files: b.py:1, c.py:4 (lookup_symbol with kind=\"import\" lists them)\n"
             ),
             "{text}"

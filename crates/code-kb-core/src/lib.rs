@@ -7,6 +7,7 @@ pub mod reference_report;
 pub mod slicer;
 pub mod sync;
 pub mod telemetry;
+pub mod test_commands;
 pub mod text_scan;
 pub mod watcher;
 pub mod workspace;
@@ -21,10 +22,10 @@ pub use formatters::{
     format_symbol_bodies, format_symbol_body, no_facts_heading,
 };
 pub use models::{
-    BlastRadiusResult, ContextSlice, FileFact, ImpactedSymbol, LabeledSite, LiteralFact,
-    ReferenceCounts, ReferenceReport, ReferenceSite, ReferenceTarget, SearchExplain, SiteLabel,
-    StructuralFact, Symbol, SymbolSearchResult, TestTarget, TextOnlyLines, TextScanSummary,
-    TypeFact,
+    BlastRadiusResult, CallingTest, ConstructionSite, ContextSlice, FileFact, ImpactedSymbol,
+    LabeledSite, LiteralFact, OverrideRow, ReferenceCounts, ReferenceReport, ReferenceSite,
+    ReferenceTarget, Registration, SearchExplain, SiteLabel, StructuralFact, Symbol,
+    SymbolSearchResult, TestTarget, TextOnlyLines, TextScanSummary, TypeFact, VariantUse,
 };
 pub use ops::{
     OpError, SymbolLookup, SymbolSelector, blast_radius_op, blast_radius_selected_op,

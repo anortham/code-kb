@@ -1,7 +1,7 @@
 use code_kb_core::{
-    LabeledSite, ReferenceReport, SiteLabel, Workspace, find_julie_extract_binary,
-    find_references_scoped, get_symbol_by_id, open_read_only, reference_report, safe_tempdir,
-    scan_workspace, select_reference_target,
+    LabeledSite, OverrideRow, ReferenceReport, SiteLabel, Workspace, find_julie_extract_binary,
+    find_references_scoped, format_reference_report, get_symbol_by_id, open_read_only,
+    reference_report, safe_tempdir, scan_workspace, select_reference_target,
 };
 use std::fs;
 use std::path::PathBuf;
@@ -813,10 +813,7 @@ fn the_report_lists_what_the_index_cannot_see_for_the_language() {
 
     assert_eq!(
         report.cannot_see,
-        vec![
-            "calls through getattr() or names built at runtime",
-            "calls through dynamic dispatch reach overrides that this list does not show",
-        ]
+        vec!["calls through getattr() or names built at runtime"]
     );
     assert_eq!(report.target.display_name, "helper");
     assert_eq!(report.target.definitions_with_name, 1);
@@ -4228,6 +4225,5098 @@ fn a_java_call_is_not_shadowed_by_a_local_variable_or_parameter_of_its_name() {
             SiteLabel::Excluded,
             "{line}\n{}",
             dump(&report)
+        );
+    }
+}
+
+const PY_OVERRIDES: &[(&str, &str)] = &[
+    (
+        "pkg/base.py",
+        "class Base:\n    def render(self):\n        return 1\n\n\nclass Mid(Base):\n    def render(self):\n        return 2\n",
+    ),
+    (
+        "pkg/leaf.py",
+        "from pkg.base import Mid\n\n\nclass Leaf(Mid):\n    def render(self):\n        return 3\n\n    def other(self):\n        return 4\n\n\ndef free():\n    return 5\n",
+    ),
+];
+
+fn listed(rows: &[OverrideRow]) -> Vec<String> {
+    rows.iter()
+        .map(|row| format!("{}.{} {}:{}", row.owner, row.name, row.path, row.line))
+        .collect()
+}
+
+fn report_at(repo: &Repo, name: &str, path: &str, line: usize) -> ReferenceReport {
+    let conn = open_read_only(&repo.db).unwrap();
+    let id: String = conn
+        .query_row(
+            "SELECT symbol_id FROM symbols WHERE name = ?1 AND path = ?2 AND start_line = ?3",
+            rusqlite::params![name, path, line as i64],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let target = get_symbol_by_id(&conn, &id).unwrap().unwrap();
+    reference_report(&conn, &repo.root, &target, false).unwrap()
+}
+
+#[test]
+fn a_python_method_lists_the_overrides_in_every_subclass_and_the_methods_it_overrides() {
+    let repo = scanned_repo(PY_OVERRIDES);
+
+    let base = report(&repo, "Base.render", None);
+    assert_eq!(
+        listed(&base.overrides),
+        ["Mid.render pkg/base.py:7", "Leaf.render pkg/leaf.py:5"],
+        "{}",
+        dump(&base)
+    );
+    assert!(base.overridden.is_empty());
+
+    let leaf = report(&repo, "Leaf.render", None);
+    assert_eq!(
+        listed(&leaf.overridden),
+        ["Mid.render pkg/base.py:7", "Base.render pkg/base.py:2"]
+    );
+    assert!(leaf.overrides.is_empty());
+
+    let mid = report(&repo, "Mid.render", None);
+    assert_eq!(listed(&mid.overrides), ["Leaf.render pkg/leaf.py:5"]);
+    assert_eq!(listed(&mid.overridden), ["Base.render pkg/base.py:2"]);
+}
+
+#[test]
+fn override_rows_carry_the_symbol_id_of_the_method() {
+    let repo = scanned_repo(PY_OVERRIDES);
+
+    let base = report(&repo, "Base.render", None);
+
+    let conn = open_read_only(&repo.db).unwrap();
+    let symbol = get_symbol_by_id(&conn, &base.overrides[0].symbol_id)
+        .unwrap()
+        .unwrap();
+    assert_eq!((symbol.name.as_str(), symbol.start_line), ("render", 7));
+}
+
+#[test]
+fn a_method_nobody_overrides_and_a_free_function_print_neither_section() {
+    let repo = scanned_repo(PY_OVERRIDES);
+
+    for name in ["Leaf.other", "free"] {
+        let report = report(&repo, name, None);
+        assert!(report.overrides.is_empty() && report.overridden.is_empty());
+        let text = format_reference_report(&report, 20);
+        assert!(!text.contains("Overrides"), "{text}");
+        let json = serde_json::to_value(&report).unwrap();
+        assert!(json.get("overrides").is_none() && json.get("overridden").is_none());
+    }
+}
+
+#[test]
+fn the_override_sections_print_after_the_sites_and_before_the_text_only_lines() {
+    let repo = scanned_repo(&[
+        PY_OVERRIDES[0],
+        PY_OVERRIDES[1],
+        (
+            "pkg/use.py",
+            "from pkg.base import Base\n\n\ndef go(b: Base):\n    return b.render()\n",
+        ),
+        ("notes.md", "render is documented here\n"),
+    ]);
+
+    let base = format_reference_report(&report(&repo, "Base.render", None), 20);
+    assert!(
+        base.contains(
+            "- `go` [pkg/use.py:5] (kind: calls; receiver type)\n\
+             Overrides (2): calls through `Base.render` can reach these\n\
+             - `Mid.render` (pkg/base.py:7)\n\
+             - `Leaf.render` (pkg/leaf.py:5)\n\
+             Text only (1): "
+        ),
+        "{base}"
+    );
+
+    let mid = format_reference_report(&report(&repo, "Mid.render", None), 20);
+    assert!(
+        mid.contains(
+            "Overrides (1): calls through `Mid.render` can reach these\n\
+             - `Leaf.render` (pkg/leaf.py:5)\n\
+             Overrides of (1): calls to these can reach `Mid.render`\n\
+             - `Base.render` (pkg/base.py:2)\n\
+             Text only (1): "
+        ),
+        "{mid}"
+    );
+}
+
+#[test]
+fn override_rows_fold_after_the_limit_with_the_full_count() {
+    let mut files = vec![(
+        "pkg/base.py".to_string(),
+        "class Base:\n    def run(self):\n        return 0\n".to_string(),
+    )];
+    for n in 1..=3 {
+        files.push((
+            format!("pkg/sub{n}.py"),
+            format!("from pkg.base import Base\n\n\nclass Sub{n}(Base):\n    def run(self):\n        return {n}\n"),
+        ));
+    }
+    let repo = scanned_owned(&files);
+
+    let report = report(&repo, "Base.run", None);
+    let text = format_reference_report(&report, 2);
+
+    assert_eq!(report.overrides.len(), 3);
+    assert!(
+        text.contains(
+            "Overrides (3): calls through `Base.run` can reach these\n\
+             - `Sub1.run` (pkg/sub1.py:5)\n\
+             - `Sub2.run` (pkg/sub2.py:5)\n\
+             … 1 more method in 1 file: pkg/sub3.py (1)\n"
+        ),
+        "{text}"
+    );
+}
+
+#[test]
+fn a_subclass_that_a_nearer_class_of_the_same_name_shadows_is_not_counted() {
+    let repo = scanned_repo(&[
+        (
+            "a/base.py",
+            "class Base:\n    def run(self):\n        return 1\n",
+        ),
+        (
+            "b/base.py",
+            "class Base:\n    def run(self):\n        return 2\n",
+        ),
+        (
+            "b/sub.py",
+            "from base import Base\n\n\nclass Sub(Base):\n    def run(self):\n        return 3\n",
+        ),
+    ]);
+
+    let far = first_definition_report(&repo, "run", "a/base.py");
+    let near = first_definition_report(&repo, "run", "b/base.py");
+
+    assert!(far.overrides.is_empty(), "{:?}", far.overrides);
+    assert_eq!(listed(&near.overrides), ["Sub.run b/sub.py:5"]);
+}
+
+#[test]
+fn a_base_class_that_a_nearer_class_of_the_same_name_shadows_is_not_listed() {
+    let repo = scanned_repo(&[
+        (
+            "a/base.py",
+            "class Base:\n    def run(self):\n        return 1\n",
+        ),
+        (
+            "b/base.py",
+            "class Base:\n    def run(self):\n        return 2\n",
+        ),
+        (
+            "b/sub.py",
+            "from base import Base\n\n\nclass Sub(Base):\n    def run(self):\n        return 3\n",
+        ),
+    ]);
+
+    let report = first_definition_report(&repo, "run", "b/sub.py");
+
+    assert_eq!(listed(&report.overridden), ["Base.run b/base.py:2"]);
+}
+
+#[test]
+fn typescript_interface_and_abstract_class_methods_list_their_implementations() {
+    let repo = scanned_repo(&[(
+        "src/shapes.ts",
+        "export interface Shape {\n  area(): number;\n}\nexport abstract class Poly implements Shape {\n  abstract area(): number;\n}\nexport class Square extends Poly {\n  area(): number { return 1; }\n}\n",
+    )]);
+
+    let shape = report(&repo, "Shape.area", None);
+    assert_eq!(
+        listed(&shape.overrides),
+        ["Poly.area src/shapes.ts:5", "Square.area src/shapes.ts:8"]
+    );
+
+    let square = report(&repo, "Square.area", None);
+    assert_eq!(
+        listed(&square.overridden),
+        ["Poly.area src/shapes.ts:5", "Shape.area src/shapes.ts:2"]
+    );
+}
+
+#[test]
+fn java_interface_methods_list_the_methods_of_implementing_classes() {
+    let repo = scanned_repo(&[
+        (
+            "Animal.java",
+            "public interface Animal {\n    String speak();\n}\n",
+        ),
+        (
+            "Dog.java",
+            "public class Dog implements Animal {\n    public String speak() { return \"woof\"; }\n}\n",
+        ),
+    ]);
+
+    let animal = report(&repo, "Animal.speak", None);
+    assert_eq!(listed(&animal.overrides), ["Dog.speak Dog.java:2"]);
+
+    let dog = report(&repo, "Dog.speak", None);
+    assert_eq!(listed(&dog.overridden), ["Animal.speak Animal.java:2"]);
+}
+
+#[test]
+fn csharp_virtual_methods_list_their_overrides() {
+    let repo = scanned_repo(&[(
+        "Shapes.cs",
+        "public class Shape {\n    public virtual double Area() { return 0; }\n}\npublic class Circle : Shape {\n    public override double Area() { return 1; }\n}\n",
+    )]);
+
+    let shape = report(&repo, "Shape.Area", None);
+    assert_eq!(listed(&shape.overrides), ["Circle.Area Shapes.cs:5"]);
+
+    let circle = report(&repo, "Circle.Area", None);
+    assert_eq!(listed(&circle.overridden), ["Shape.Area Shapes.cs:2"]);
+}
+
+#[test]
+fn a_rust_trait_method_lists_the_impl_methods_and_an_impl_method_lists_the_trait_method() {
+    let repo = scanned_repo(&[(
+        "src/lib.rs",
+        "pub trait Shape {\n    fn area(&self) -> f64;\n}\npub struct Square;\nimpl Shape for Square {\n    fn area(&self) -> f64 { 1.0 }\n}\nimpl Square {\n    pub fn side(&self) -> f64 { 1.0 }\n}\n",
+    )]);
+
+    let shape = report(&repo, "Shape.area", None);
+    assert_eq!(listed(&shape.overrides), ["Square.area src/lib.rs:6"]);
+
+    let square = report(&repo, "Square.area", None);
+    assert_eq!(listed(&square.overridden), ["Shape.area src/lib.rs:2"]);
+
+    let side = report(&repo, "Square.side", None);
+    assert!(side.overrides.is_empty() && side.overridden.is_empty());
+}
+
+const RS_INHERENT_AND_TRAIT_AREA: &str = r#"pub trait Shape {
+    fn area(&self) -> f64;
+}
+
+pub struct Circle {
+    pub r: f64,
+}
+
+pub struct Square {
+    pub s: f64,
+}
+
+impl Circle {
+    pub fn area(&self) -> f64 {
+        self.r * 3.0
+    }
+}
+
+impl Shape for Circle {
+    fn area(&self) -> f64 {
+        self.r * 3.14
+    }
+}
+
+impl Shape for Square {
+    fn area(&self) -> f64 {
+        self.s * self.s
+    }
+}
+
+impl Square {
+    pub fn area(&self) -> f64 {
+        self.s
+    }
+}
+"#;
+
+#[test]
+fn a_rust_inherent_method_is_not_an_override_of_a_trait_method_of_the_same_name() {
+    let repo = scanned_repo(&[("src/lib.rs", RS_INHERENT_AND_TRAIT_AREA)]);
+
+    let shape = report(&repo, "Shape.area", None);
+
+    assert_eq!(
+        listed(&shape.overrides),
+        ["Circle.area src/lib.rs:20", "Square.area src/lib.rs:26"],
+        "{}",
+        dump(&shape)
+    );
+}
+
+#[test]
+fn a_rust_inherent_method_overrides_nothing_and_a_trait_impl_method_lists_its_trait() {
+    let repo = scanned_repo(&[("src/lib.rs", RS_INHERENT_AND_TRAIT_AREA)]);
+
+    for line in [14, 32] {
+        let inherent = report_at(&repo, "area", "src/lib.rs", line);
+        assert!(
+            inherent.overrides.is_empty() && inherent.overridden.is_empty(),
+            "line {line}: {:?}",
+            inherent.overridden
+        );
+    }
+    for line in [20, 26] {
+        let implemented = report_at(&repo, "area", "src/lib.rs", line);
+        assert_eq!(
+            listed(&implemented.overridden),
+            ["Shape.area src/lib.rs:2"],
+            "line {line}"
+        );
+    }
+}
+
+const RS_TWO_TRAITS: &str = r#"pub trait A {
+    fn go(&self) -> i32;
+}
+
+pub trait B {
+    fn go(&self) -> i32;
+}
+
+pub struct X;
+
+impl A for X {
+    fn go(&self) -> i32 {
+        1
+    }
+}
+
+impl<T> B for Wrapper<T>
+where
+    T: Clone,
+{
+    fn go(&self) -> i32 {
+        3
+    }
+}
+
+pub struct Wrapper<T>(T);
+
+impl B for X {
+    fn go(&self) -> i32 {
+        2
+    }
+}
+"#;
+
+#[test]
+fn a_rust_method_belongs_to_the_trait_of_its_own_impl_block_only() {
+    let repo = scanned_repo(&[("src/lib.rs", RS_TWO_TRAITS)]);
+
+    let a = report(&repo, "A.go", None);
+    let b = report(&repo, "B.go", None);
+
+    assert_eq!(listed(&a.overrides), ["X.go src/lib.rs:12"], "{}", dump(&a));
+    assert_eq!(
+        listed(&b.overrides),
+        ["Wrapper.go src/lib.rs:21", "X.go src/lib.rs:29"],
+        "{}",
+        dump(&b)
+    );
+    for (line, expected) in [
+        (12, "A.go src/lib.rs:2"),
+        (21, "B.go src/lib.rs:6"),
+        (29, "B.go src/lib.rs:6"),
+    ] {
+        let implemented = report_at(&repo, "go", "src/lib.rs", line);
+        assert_eq!(listed(&implemented.overridden), [expected], "line {line}");
+    }
+}
+
+#[test]
+fn a_rust_subtrait_declaration_and_the_impl_of_a_subtrait_are_not_overrides() {
+    let repo = scanned_repo(&[(
+        "src/lib.rs",
+        "pub trait Base {\n    fn go(&self) -> i32;\n}\n\npub trait Sub: Base {\n    fn go(&self) -> i32;\n}\n\npub struct X;\n\nimpl Base for X {\n    fn go(&self) -> i32 {\n        1\n    }\n}\n\nimpl Sub for X {\n    fn go(&self) -> i32 {\n        2\n    }\n}\n",
+    )]);
+
+    let base = first_definition_report(&repo, "go", "src/lib.rs");
+
+    assert_eq!(
+        listed(&base.overrides),
+        ["X.go src/lib.rs:12"],
+        "{}",
+        dump(&base)
+    );
+}
+
+const RS_QUALIFIED_TRAIT: &[(&str, &str)] = &[
+    ("src/lib.rs", "pub mod ovr;\n"),
+    (
+        "src/ovr.rs",
+        "pub mod a;\n\npub trait Draw {\n    fn draw(&self) -> i32;\n}\n\npub struct Circle;\npub struct Tri;\n\nimpl Draw for Circle {\n    fn draw(&self) -> i32 {\n        1\n    }\n}\n\nimpl crate::ovr::a::Draw for Tri {\n    fn draw(&self) -> i32 {\n        8\n    }\n}\n",
+    ),
+    (
+        "src/ovr/a.rs",
+        "pub trait Draw {\n    fn draw(&self) -> i32;\n}\n",
+    ),
+];
+
+#[test]
+fn a_rust_impl_with_a_qualified_trait_path_overrides_only_the_trait_in_that_file() {
+    let repo = scanned_repo(RS_QUALIFIED_TRAIT);
+
+    let near = report(&repo, "Draw.draw", Some("src/ovr.rs"));
+    let named = report(&repo, "Draw.draw", Some("src/ovr/a.rs"));
+
+    assert_eq!(
+        listed(&near.overrides),
+        ["Circle.draw src/ovr.rs:11"],
+        "{}",
+        dump(&near)
+    );
+    assert_eq!(
+        listed(&named.overrides),
+        ["Tri.draw src/ovr.rs:17"],
+        "{}",
+        dump(&named)
+    );
+}
+
+#[test]
+fn a_rust_impl_method_with_a_qualified_trait_path_lists_the_trait_in_that_file() {
+    let repo = scanned_repo(RS_QUALIFIED_TRAIT);
+
+    let qualified = report_at(&repo, "draw", "src/ovr.rs", 17);
+    let plain = report_at(&repo, "draw", "src/ovr.rs", 11);
+
+    assert_eq!(
+        listed(&qualified.overridden),
+        ["Draw.draw src/ovr/a.rs:2"],
+        "{}",
+        dump(&qualified)
+    );
+    assert_eq!(
+        listed(&plain.overridden),
+        ["Draw.draw src/ovr.rs:4"],
+        "{}",
+        dump(&plain)
+    );
+}
+
+#[test]
+fn a_rust_trait_path_through_a_mod_rs_folder_names_that_file() {
+    let repo = scanned_repo(&[
+        ("src/lib.rs", "pub mod shapes;\npub mod other;\n"),
+        (
+            "src/shapes/mod.rs",
+            "pub trait Draw {\n    fn draw(&self) -> i32;\n}\n",
+        ),
+        (
+            "src/other.rs",
+            "pub trait Draw {\n    fn draw(&self) -> i32;\n}\n\npub struct Tri;\n\nimpl crate::shapes::Draw for Tri {\n    fn draw(&self) -> i32 {\n        8\n    }\n}\n",
+        ),
+    ]);
+
+    let shapes = report(&repo, "Draw.draw", Some("src/shapes/mod.rs"));
+    let other = report(&repo, "Draw.draw", Some("src/other.rs"));
+    let tri = report_at(&repo, "draw", "src/other.rs", 8);
+
+    assert_eq!(
+        listed(&shapes.overrides),
+        ["Tri.draw src/other.rs:8"],
+        "{}",
+        dump(&shapes)
+    );
+    assert!(other.overrides.is_empty(), "{:?}", other.overrides);
+    assert_eq!(
+        listed(&tri.overridden),
+        ["Draw.draw src/shapes/mod.rs:2"],
+        "{}",
+        dump(&tri)
+    );
+}
+
+#[test]
+fn a_rust_trait_path_that_starts_with_a_crate_name_names_that_package() {
+    let repo = scanned_repo(&[
+        (
+            "pkg_a/src/lib.rs",
+            "pub trait Draw {\n    fn draw(&self) -> i32;\n}\n\npub struct A;\n\nimpl Draw for A {\n    fn draw(&self) -> i32 {\n        1\n    }\n}\n",
+        ),
+        (
+            "pkg_b/src/lib.rs",
+            "pub trait Draw {\n    fn draw(&self) -> i32;\n}\n\npub struct B;\n\nimpl pkg_a::Draw for B {\n    fn draw(&self) -> i32 {\n        2\n    }\n}\n",
+        ),
+    ]);
+
+    let in_a = report(&repo, "Draw.draw", Some("pkg_a/src/lib.rs"));
+    let in_b = report(&repo, "Draw.draw", Some("pkg_b/src/lib.rs"));
+
+    assert_eq!(
+        listed(&in_a.overrides),
+        ["A.draw pkg_a/src/lib.rs:8", "B.draw pkg_b/src/lib.rs:8"],
+        "{}",
+        dump(&in_a)
+    );
+    assert!(in_b.overrides.is_empty(), "{:?}", in_b.overrides);
+}
+
+#[test]
+fn a_rust_type_that_implements_two_same_named_traits_by_path_has_one_method_for_each() {
+    let repo = scanned_repo(&[
+        ("src/lib.rs", "pub mod a;\npub mod b;\npub mod x;\n"),
+        (
+            "src/a.rs",
+            "pub trait Draw {\n    fn draw(&self) -> i32;\n}\n",
+        ),
+        (
+            "src/b.rs",
+            "pub trait Draw {\n    fn draw(&self) -> i32;\n}\n",
+        ),
+        (
+            "src/x.rs",
+            "pub struct X;\n\nimpl crate::a::Draw for X {\n    fn draw(&self) -> i32 {\n        1\n    }\n}\n\nimpl crate::b::Draw for X {\n    fn draw(&self) -> i32 {\n        2\n    }\n}\n",
+        ),
+    ]);
+
+    let in_a = report(&repo, "Draw.draw", Some("src/a.rs"));
+    let in_b = report(&repo, "Draw.draw", Some("src/b.rs"));
+    let first = report_at(&repo, "draw", "src/x.rs", 4);
+    let second = report_at(&repo, "draw", "src/x.rs", 10);
+
+    assert_eq!(
+        listed(&in_a.overrides),
+        ["X.draw src/x.rs:4"],
+        "{}",
+        dump(&in_a)
+    );
+    assert_eq!(
+        listed(&in_b.overrides),
+        ["X.draw src/x.rs:10"],
+        "{}",
+        dump(&in_b)
+    );
+    assert_eq!(
+        listed(&first.overridden),
+        ["Draw.draw src/a.rs:2"],
+        "{}",
+        dump(&first)
+    );
+    assert_eq!(
+        listed(&second.overridden),
+        ["Draw.draw src/b.rs:2"],
+        "{}",
+        dump(&second)
+    );
+}
+
+const RS_INLINE_MOD_TRAIT: &[(&str, &str)] = &[
+    (
+        "src/lib.rs",
+        "pub mod shapes {\n    pub trait Draw {\n        fn draw(&self) -> i32;\n    }\n}\n\npub mod impls;\n\npub struct C;\npub struct D;\n\nimpl shapes::Draw for C {\n    fn draw(&self) -> i32 {\n        1\n    }\n}\n\nimpl self::shapes::Draw for D {\n    fn draw(&self) -> i32 {\n        2\n    }\n}\n",
+    ),
+    (
+        "src/impls.rs",
+        "use crate::shapes;\n\npub struct E;\npub struct F;\n\nimpl shapes::Draw for E {\n    fn draw(&self) -> i32 {\n        3\n    }\n}\n\nimpl crate::shapes::Draw for F {\n    fn draw(&self) -> i32 {\n        4\n    }\n}\n",
+    ),
+];
+
+#[test]
+fn a_rust_trait_path_through_an_inline_mod_overrides_the_trait_in_that_mod() {
+    let repo = scanned_repo(RS_INLINE_MOD_TRAIT);
+
+    let draw = report(&repo, "Draw.draw", Some("src/lib.rs"));
+
+    assert_eq!(
+        listed(&draw.overrides),
+        [
+            "E.draw src/impls.rs:7",
+            "F.draw src/impls.rs:13",
+            "C.draw src/lib.rs:13",
+            "D.draw src/lib.rs:19",
+        ],
+        "{}",
+        dump(&draw)
+    );
+}
+
+#[test]
+fn a_rust_impl_method_with_a_trait_path_through_an_inline_mod_lists_the_trait_in_that_mod() {
+    let repo = scanned_repo(RS_INLINE_MOD_TRAIT);
+
+    for (path, line) in [
+        ("src/lib.rs", 13),
+        ("src/lib.rs", 19),
+        ("src/impls.rs", 7),
+        ("src/impls.rs", 13),
+    ] {
+        let method = report_at(&repo, "draw", path, line);
+        assert_eq!(
+            listed(&method.overridden),
+            ["Draw.draw src/lib.rs:3"],
+            "{path}:{line}\n{}",
+            dump(&method)
+        );
+    }
+}
+
+const RS_SUPER_IN_INLINE_MOD: &[(&str, &str)] = &[
+    (
+        "src/lib.rs",
+        "pub mod a;\n\npub trait Draw {\n    fn draw(&self) -> i32;\n}\n\npub mod inner {\n    pub struct G;\n\n    impl super::Draw for G {\n        fn draw(&self) -> i32 {\n            1\n        }\n    }\n}\n",
+    ),
+    (
+        "src/a.rs",
+        "pub trait Draw {\n    fn draw(&self) -> i32;\n}\n",
+    ),
+];
+
+#[test]
+fn a_rust_super_path_in_an_inline_mod_overrides_the_trait_of_the_parent_module() {
+    let repo = scanned_repo(RS_SUPER_IN_INLINE_MOD);
+
+    let parent = report(&repo, "Draw.draw", Some("src/lib.rs"));
+    let sibling = report(&repo, "Draw.draw", Some("src/a.rs"));
+
+    assert_eq!(
+        listed(&parent.overrides),
+        ["G.draw src/lib.rs:11"],
+        "{}",
+        dump(&parent)
+    );
+    assert!(sibling.overrides.is_empty(), "{:?}", sibling.overrides);
+}
+
+#[test]
+fn a_rust_impl_method_with_a_super_path_in_an_inline_mod_lists_the_trait_of_the_parent_module() {
+    let repo = scanned_repo(RS_SUPER_IN_INLINE_MOD);
+
+    let method = report_at(&repo, "draw", "src/lib.rs", 11);
+
+    assert_eq!(
+        listed(&method.overridden),
+        ["Draw.draw src/lib.rs:4"],
+        "{}",
+        dump(&method)
+    );
+}
+
+const RS_EXACT_MODULE_PATH: &[(&str, &str)] = &[
+    ("src/lib.rs", "pub mod ovr;\n"),
+    (
+        "src/ovr.rs",
+        "pub mod a;\n\npub trait Draw {\n    fn draw(&self) -> i32;\n}\n\npub struct Q;\n\nimpl crate::ovr::Draw for Q {\n    fn draw(&self) -> i32 {\n        11\n    }\n}\n",
+    ),
+    (
+        "src/ovr/a.rs",
+        "pub trait Draw {\n    fn draw(&self) -> i32;\n}\n",
+    ),
+];
+
+#[test]
+fn a_rust_trait_path_names_only_the_trait_whose_module_path_it_spells() {
+    let repo = scanned_repo(RS_EXACT_MODULE_PATH);
+
+    let in_ovr = report(&repo, "Draw.draw", Some("src/ovr.rs"));
+    let in_a = report(&repo, "Draw.draw", Some("src/ovr/a.rs"));
+
+    assert_eq!(
+        listed(&in_ovr.overrides),
+        ["Q.draw src/ovr.rs:10"],
+        "{}",
+        dump(&in_ovr)
+    );
+    assert!(in_a.overrides.is_empty(), "{:?}", in_a.overrides);
+}
+
+#[test]
+fn a_rust_impl_method_with_a_trait_path_lists_only_the_trait_whose_module_path_it_spells() {
+    let repo = scanned_repo(RS_EXACT_MODULE_PATH);
+
+    let method = report_at(&repo, "draw", "src/ovr.rs", 10);
+
+    assert_eq!(
+        listed(&method.overridden),
+        ["Draw.draw src/ovr.rs:4"],
+        "{}",
+        dump(&method)
+    );
+}
+
+const RS_RELATIVE_TRAIT_PATH: &[(&str, &str)] = &[
+    ("src/lib.rs", "pub mod ovr;\npub mod a;\n"),
+    (
+        "src/a.rs",
+        "pub trait Draw {\n    fn draw(&self) -> i32;\n}\n",
+    ),
+    (
+        "src/ovr.rs",
+        "pub mod a;\n\npub struct R;\n\nimpl a::Draw for R {\n    fn draw(&self) -> i32 {\n        5\n    }\n}\n",
+    ),
+    (
+        "src/ovr/a.rs",
+        "pub trait Draw {\n    fn draw(&self) -> i32;\n}\n",
+    ),
+];
+
+#[test]
+fn a_rust_trait_path_without_a_prefix_names_the_module_of_the_impl_before_the_crate_root() {
+    let repo = scanned_repo(RS_RELATIVE_TRAIT_PATH);
+
+    let nested = report(&repo, "Draw.draw", Some("src/ovr/a.rs"));
+    let root = report(&repo, "Draw.draw", Some("src/a.rs"));
+
+    assert_eq!(
+        listed(&nested.overrides),
+        ["R.draw src/ovr.rs:6"],
+        "{}",
+        dump(&nested)
+    );
+    assert!(root.overrides.is_empty(), "{:?}", root.overrides);
+}
+
+#[test]
+fn a_rust_impl_method_with_a_trait_path_without_a_prefix_lists_the_trait_of_its_own_module() {
+    let repo = scanned_repo(RS_RELATIVE_TRAIT_PATH);
+
+    let method = report_at(&repo, "draw", "src/ovr.rs", 6);
+
+    assert_eq!(
+        listed(&method.overridden),
+        ["Draw.draw src/ovr/a.rs:2"],
+        "{}",
+        dump(&method)
+    );
+}
+
+const RS_UNIQUE_SUFFIX: &[(&str, &str)] = &[
+    ("src/lib.rs", "pub mod ovr;\npub mod other;\n"),
+    ("src/ovr.rs", "pub mod a;\npub mod b;\n"),
+    (
+        "src/ovr/a.rs",
+        "pub trait Draw {\n    fn draw(&self) -> i32;\n}\n",
+    ),
+    (
+        "src/ovr/b.rs",
+        "use super::a;\n\npub struct B;\n\nimpl a::Draw for B {\n    fn draw(&self) -> i32 {\n        6\n    }\n}\n",
+    ),
+    (
+        "src/other.rs",
+        "pub trait Draw {\n    fn draw(&self) -> i32;\n}\n",
+    ),
+];
+
+#[test]
+fn a_rust_trait_path_that_only_one_trait_ends_with_names_that_trait() {
+    let repo = scanned_repo(RS_UNIQUE_SUFFIX);
+
+    let in_a = report(&repo, "Draw.draw", Some("src/ovr/a.rs"));
+    let other = report(&repo, "Draw.draw", Some("src/other.rs"));
+    let method = report_at(&repo, "draw", "src/ovr/b.rs", 6);
+
+    assert_eq!(
+        listed(&in_a.overrides),
+        ["B.draw src/ovr/b.rs:6"],
+        "{}",
+        dump(&in_a)
+    );
+    assert!(other.overrides.is_empty(), "{:?}", other.overrides);
+    assert_eq!(
+        listed(&method.overridden),
+        ["Draw.draw src/ovr/a.rs:2"],
+        "{}",
+        dump(&method)
+    );
+}
+
+const RS_AMBIGUOUS_SUFFIX: &[(&str, &str)] = &[
+    ("src/lib.rs", "pub mod m;\npub mod n;\npub mod k;\n"),
+    ("src/m.rs", "pub mod a;\n"),
+    (
+        "src/m/a.rs",
+        "pub trait Draw {\n    fn draw(&self) -> i32;\n}\n",
+    ),
+    ("src/n.rs", "pub mod a;\n"),
+    (
+        "src/n/a.rs",
+        "pub trait Draw {\n    fn draw(&self) -> i32;\n}\n",
+    ),
+    (
+        "src/k.rs",
+        "use crate::m::a;\n\npub struct K;\n\nimpl a::Draw for K {\n    fn draw(&self) -> i32 {\n        7\n    }\n}\n",
+    ),
+];
+
+#[test]
+fn a_rust_trait_path_that_several_traits_end_with_names_none_of_them() {
+    let repo = scanned_repo(RS_AMBIGUOUS_SUFFIX);
+
+    let in_m = report(&repo, "Draw.draw", Some("src/m/a.rs"));
+    let in_n = report(&repo, "Draw.draw", Some("src/n/a.rs"));
+    let method = report_at(&repo, "draw", "src/k.rs", 6);
+
+    assert!(in_m.overrides.is_empty(), "{:?}", in_m.overrides);
+    assert!(in_n.overrides.is_empty(), "{:?}", in_n.overrides);
+    assert!(method.overridden.is_empty(), "{:?}", method.overridden);
+}
+
+const RS_REEXPORTED_TRAIT: &[(&str, &str)] = &[
+    (
+        "src/lib.rs",
+        "pub mod a;\npub mod x;\npub mod y;\n\npub trait Draw {\n    fn draw(&self) -> i32;\n}\n\npub struct T2;\npub struct T3;\n\nimpl crate::x::Draw for T2 {\n    fn draw(&self) -> i32 {\n        2\n    }\n}\n\nimpl crate::y::Draw for T3 {\n    fn draw(&self) -> i32 {\n        3\n    }\n}\n",
+    ),
+    (
+        "src/a.rs",
+        "pub trait Draw {\n    fn draw(&self) -> i32;\n}\n",
+    ),
+    ("src/x.rs", "pub use crate::a::Draw;\n"),
+    ("src/y.rs", "pub use crate::x::Draw;\n"),
+];
+
+#[test]
+fn a_rust_trait_path_through_a_reexport_names_the_trait_it_reexports_for_one_hop() {
+    let repo = scanned_repo(RS_REEXPORTED_TRAIT);
+
+    let exported = report(&repo, "Draw.draw", Some("src/a.rs"));
+    let root = report(&repo, "Draw.draw", Some("src/lib.rs"));
+
+    assert_eq!(
+        listed(&exported.overrides),
+        ["T2.draw src/lib.rs:13"],
+        "{}",
+        dump(&exported)
+    );
+    assert!(root.overrides.is_empty(), "{:?}", root.overrides);
+}
+
+#[test]
+fn a_rust_impl_method_with_a_trait_path_through_a_reexport_lists_the_reexported_trait() {
+    let repo = scanned_repo(RS_REEXPORTED_TRAIT);
+
+    let one_hop = report_at(&repo, "draw", "src/lib.rs", 13);
+    let two_hops = report_at(&repo, "draw", "src/lib.rs", 19);
+
+    assert_eq!(
+        listed(&one_hop.overridden),
+        ["Draw.draw src/a.rs:2"],
+        "{}",
+        dump(&one_hop)
+    );
+    assert!(two_hops.overridden.is_empty(), "{:?}", two_hops.overridden);
+}
+
+#[test]
+fn a_rust_impl_of_a_std_trait_is_not_an_override_of_a_project_trait_of_the_same_name() {
+    let repo = scanned_repo(&[(
+        "src/lib.rs",
+        "pub trait Display {\n    fn fmt(&self) -> i32;\n}\n\npub struct X;\n\nimpl std::fmt::Display for X {\n    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {\n        Ok(())\n    }\n}\n",
+    )]);
+
+    let project = report(&repo, "Display.fmt", Some("src/lib.rs"));
+    let std_impl = report_at(&repo, "fmt", "src/lib.rs", 8);
+
+    assert!(project.overrides.is_empty(), "{:?}", project.overrides);
+    assert!(std_impl.overridden.is_empty(), "{:?}", std_impl.overridden);
+}
+
+#[test]
+fn a_rust_bare_trait_name_that_a_use_row_binds_to_std_is_not_an_override_of_a_project_trait() {
+    let repo = scanned_repo(&[
+        ("src/lib.rs", "pub mod mine;\npub mod out;\n"),
+        (
+            "src/mine.rs",
+            "pub trait Write {\n    fn write(&mut self, data: &[u8]) -> usize;\n}\n\npub struct Sink;\n\nimpl Write for Sink {\n    fn write(&mut self, data: &[u8]) -> usize {\n        data.len()\n    }\n}\n",
+        ),
+        (
+            "src/out.rs",
+            "use std::io::Write;\n\npub struct Out;\n\nimpl Write for Out {\n    fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {\n        Ok(data.len())\n    }\n}\n",
+        ),
+    ]);
+
+    let project = report(&repo, "Write.write", Some("src/mine.rs"));
+    let out = report_at(&repo, "write", "src/out.rs", 6);
+
+    assert_eq!(
+        listed(&project.overrides),
+        ["Sink.write src/mine.rs:8"],
+        "{}",
+        dump(&project)
+    );
+    assert!(out.overridden.is_empty(), "{:?}", out.overridden);
+}
+
+const RS_EXTERNAL_TRAIT: &str = "pub trait Serialize {\n    fn serialize(&self) -> String;\n}\n\npub struct Mine;\n\nimpl Serialize for Mine {\n    fn serialize(&self) -> String {\n        String::new()\n    }\n}\n";
+
+fn rs_use_serialize(source: &str) -> String {
+    format!(
+        "use {source}::Serialize;\n\npub struct S;\n\nimpl Serialize for S {{\n    fn serialize(&self) -> String {{\n        String::new()\n    }}\n}}\n"
+    )
+}
+
+#[test]
+fn a_rust_bare_trait_name_that_a_use_row_binds_to_a_dependency_is_not_an_override() {
+    let manifest = "[package]\nname = \"app\"\nversion = \"0.1.0\"\n\n[dependencies]\nserde = \"1\"\nmy-dep = { version = \"1\" }\nrenamed = { package = \"real-name\", version = \"1\" }\ninherited.workspace = true\n\n[dev-dependencies]\ndev_only = \"1\"\n\n[target.'cfg(unix)'.dependencies]\nunix_only = \"1\"\n\n[build-dependencies.build_dep]\nversion = \"1\"\n";
+    let modules = [
+        ("a", "serde"),
+        ("b", "my_dep"),
+        ("c", "renamed"),
+        ("d", "dev_only"),
+        ("e", "unix_only"),
+        ("f", "build_dep"),
+        ("g", "inherited"),
+        ("h", "undeclared"),
+    ];
+    let sources: Vec<(String, String)> = modules
+        .iter()
+        .map(|(module, source)| (format!("src/{module}.rs"), rs_use_serialize(source)))
+        .collect();
+    let mut files: Vec<(&str, &str)> = vec![
+        ("Cargo.toml", manifest),
+        (
+            "src/lib.rs",
+            "pub mod mine;\npub mod a;\npub mod b;\npub mod c;\npub mod d;\npub mod e;\npub mod f;\npub mod g;\npub mod h;\n",
+        ),
+        ("src/mine.rs", RS_EXTERNAL_TRAIT),
+    ];
+    files.extend(
+        sources
+            .iter()
+            .map(|(path, text)| (path.as_str(), text.as_str())),
+    );
+    let repo = scanned_repo(&files);
+
+    let project = report(&repo, "Serialize.serialize", Some("src/mine.rs"));
+    let external = report_at(&repo, "serialize", "src/a.rs", 6);
+    let undeclared = report_at(&repo, "serialize", "src/h.rs", 6);
+
+    assert_eq!(
+        listed(&project.overrides),
+        ["S.serialize src/h.rs:6", "Mine.serialize src/mine.rs:8"],
+        "{}",
+        dump(&project)
+    );
+    assert!(external.overridden.is_empty(), "{:?}", external.overridden);
+    assert_eq!(
+        listed(&undeclared.overridden),
+        ["Serialize.serialize src/mine.rs:2"],
+        "{}",
+        dump(&undeclared)
+    );
+}
+
+#[test]
+fn a_rust_dependency_name_that_a_project_module_package_or_crate_also_has_stays_unknown() {
+    let manifest = "[package]\nname = \"app\"\nversion = \"0.1.0\"\n\n[dependencies]\nserde = \"1\"\nlocal = \"1\"\nmy-core = { workspace = true }\nfolder-dep = \"1\"\n";
+    let by_serde = rs_use_serialize("serde");
+    let by_module = rs_use_serialize("local");
+    let by_crate = rs_use_serialize("my_core");
+    let by_folder = rs_use_serialize("folder_dep");
+    let files: Vec<(&str, &str)> = vec![
+        ("Cargo.toml", manifest),
+        (
+            "src/lib.rs",
+            "pub mod mine;\npub mod local;\npub mod by_serde;\npub mod by_module;\npub mod by_crate;\npub mod by_folder;\n",
+        ),
+        ("src/mine.rs", RS_EXTERNAL_TRAIT),
+        ("src/local.rs", "pub fn nothing() {}\n"),
+        ("src/by_serde.rs", &by_serde),
+        ("src/by_module.rs", &by_module),
+        ("src/by_crate.rs", &by_crate),
+        ("src/by_folder.rs", &by_folder),
+        (
+            "crates/core/Cargo.toml",
+            "[package]\nname = \"my-core\"\nversion = \"0.1.0\"\n",
+        ),
+        ("crates/core/src/lib.rs", "pub fn nothing() {}\n"),
+        ("crates/folder-dep/src/lib.rs", "pub fn nothing() {}\n"),
+    ];
+    let repo = scanned_repo(&files);
+
+    let project = report(&repo, "Serialize.serialize", Some("src/mine.rs"));
+
+    assert_eq!(
+        listed(&project.overrides),
+        [
+            "S.serialize src/by_crate.rs:6",
+            "S.serialize src/by_folder.rs:6",
+            "S.serialize src/by_module.rs:6",
+            "Mine.serialize src/mine.rs:8",
+        ],
+        "{}",
+        dump(&project)
+    );
+}
+
+#[test]
+fn a_rust_bare_trait_name_bound_to_a_project_crate_by_a_path_dependency_is_still_read_from_that_crate()
+ {
+    let repo = scanned_repo(&[
+        (
+            "serde/Cargo.toml",
+            "[package]\nname = \"serde\"\nversion = \"0.1.0\"\n",
+        ),
+        ("serde/src/lib.rs", RS_EXTERNAL_TRAIT),
+        (
+            "app/Cargo.toml",
+            "[package]\nname = \"app\"\nversion = \"0.1.0\"\n\n[dependencies]\nserde = { path = \"../serde\" }\n",
+        ),
+        (
+            "app/src/lib.rs",
+            "pub mod ext;\n\npub trait Serialize {\n    fn serialize(&self) -> String;\n}\n",
+        ),
+        ("app/src/ext.rs", &rs_use_serialize("serde")),
+    ]);
+
+    let theirs = report(&repo, "Serialize.serialize", Some("serde/src/lib.rs"));
+    let ours = report(&repo, "Serialize.serialize", Some("app/src/lib.rs"));
+
+    assert_eq!(
+        listed(&theirs.overrides),
+        [
+            "S.serialize app/src/ext.rs:6",
+            "Mine.serialize serde/src/lib.rs:8"
+        ],
+        "{}",
+        dump(&theirs)
+    );
+    assert!(ours.overrides.is_empty(), "{}", dump(&ours));
+}
+
+const RS_BARE_TRAIT: &[(&str, &str)] = &[
+    (
+        "src/lib.rs",
+        "pub mod shapes;\npub mod other;\npub mod bare;\npub mod glob;\npub mod both;\npub mod local;\npub mod parent;\n",
+    ),
+    (
+        "src/shapes.rs",
+        "pub trait Draw {\n    fn draw(&self) -> i32;\n}\n",
+    ),
+    (
+        "src/other.rs",
+        "pub trait Draw {\n    fn draw(&self) -> i32;\n}\n",
+    ),
+    (
+        "src/bare.rs",
+        "use crate::other::Draw;\n\npub struct F;\n\nimpl Draw for F {\n    fn draw(&self) -> i32 {\n        1\n    }\n}\n",
+    ),
+    (
+        "src/glob.rs",
+        "use crate::shapes::*;\n\npub struct I;\n\nimpl Draw for I {\n    fn draw(&self) -> i32 {\n        2\n    }\n}\n",
+    ),
+    (
+        "src/both.rs",
+        "use crate::shapes::*;\nuse crate::other::Draw;\n\npub struct B;\n\nimpl Draw for B {\n    fn draw(&self) -> i32 {\n        3\n    }\n}\n",
+    ),
+    (
+        "src/local.rs",
+        "use crate::shapes::*;\n\npub trait Draw {\n    fn draw(&self) -> i32;\n}\n\npub struct L;\n\nimpl Draw for L {\n    fn draw(&self) -> i32 {\n        4\n    }\n}\n",
+    ),
+    (
+        "src/parent.rs",
+        "use crate::other::Draw;\n\npub struct P;\n\nimpl Draw for P {\n    fn draw(&self) -> i32 {\n        5\n    }\n}\n\nmod tests {\n    use super::*;\n\n    struct T;\n\n    impl Draw for T {\n        fn draw(&self) -> i32 {\n            6\n        }\n    }\n}\n",
+    ),
+];
+
+#[test]
+fn a_rust_bare_trait_name_is_read_from_the_use_row_glob_or_trait_of_its_module() {
+    let repo = scanned_repo(RS_BARE_TRAIT);
+
+    let shapes = report(&repo, "Draw.draw", Some("src/shapes.rs"));
+    let other = report(&repo, "Draw.draw", Some("src/other.rs"));
+    let local = report(&repo, "Draw.draw", Some("src/local.rs"));
+
+    assert_eq!(
+        listed(&shapes.overrides),
+        ["I.draw src/glob.rs:6"],
+        "{}",
+        dump(&shapes)
+    );
+    assert_eq!(
+        listed(&other.overrides),
+        [
+            "F.draw src/bare.rs:6",
+            "B.draw src/both.rs:7",
+            "P.draw src/parent.rs:6",
+            "T.draw src/parent.rs:17",
+        ],
+        "{}",
+        dump(&other)
+    );
+    assert_eq!(
+        listed(&local.overrides),
+        ["L.draw src/local.rs:10"],
+        "{}",
+        dump(&local)
+    );
+}
+
+#[test]
+fn a_rust_impl_method_with_a_bare_trait_name_lists_the_trait_its_module_reads() {
+    let repo = scanned_repo(RS_BARE_TRAIT);
+
+    let expected = [
+        ("src/bare.rs", 6, "Draw.draw src/other.rs:2"),
+        ("src/glob.rs", 6, "Draw.draw src/shapes.rs:2"),
+        ("src/both.rs", 7, "Draw.draw src/other.rs:2"),
+        ("src/local.rs", 10, "Draw.draw src/local.rs:4"),
+        ("src/parent.rs", 6, "Draw.draw src/other.rs:2"),
+        ("src/parent.rs", 17, "Draw.draw src/other.rs:2"),
+    ];
+    for (path, line, trait_method) in expected {
+        let method = report_at(&repo, "draw", path, line);
+        assert_eq!(
+            listed(&method.overridden),
+            [trait_method],
+            "{path}:{line}\n{}",
+            dump(&method)
+        );
+    }
+}
+
+#[test]
+fn a_rust_bare_trait_name_with_no_use_row_glob_or_local_trait_matches_by_name() {
+    let repo = scanned_repo(&[
+        (
+            "src/lib.rs",
+            "pub mod shapes;\npub mod other;\npub mod plain;\n",
+        ),
+        (
+            "src/shapes.rs",
+            "pub trait Draw {\n    fn draw(&self) -> i32;\n}\n",
+        ),
+        (
+            "src/other.rs",
+            "pub trait Draw {\n    fn draw(&self) -> i32;\n}\n",
+        ),
+        (
+            "src/plain.rs",
+            "pub struct N;\n\nimpl Draw for N {\n    fn draw(&self) -> i32 {\n        7\n    }\n}\n",
+        ),
+    ]);
+
+    let shapes = report(&repo, "Draw.draw", Some("src/shapes.rs"));
+    let other = report(&repo, "Draw.draw", Some("src/other.rs"));
+
+    assert_eq!(
+        listed(&shapes.overrides),
+        ["N.draw src/plain.rs:4"],
+        "{}",
+        dump(&shapes)
+    );
+    assert_eq!(
+        listed(&other.overrides),
+        ["N.draw src/plain.rs:4"],
+        "{}",
+        dump(&other)
+    );
+}
+
+#[test]
+fn a_rust_bare_trait_name_whose_use_row_the_index_cannot_follow_matches_by_name() {
+    let repo = scanned_repo(&[
+        (
+            "src/lib.rs",
+            "pub mod shapes;\npub mod other;\npub mod hub;\npub mod mid;\npub mod chain;\n",
+        ),
+        (
+            "src/shapes.rs",
+            "pub trait Draw {\n    fn draw(&self) -> i32;\n}\n",
+        ),
+        (
+            "src/other.rs",
+            "pub trait Draw {\n    fn draw(&self) -> i32;\n}\n",
+        ),
+        ("src/hub.rs", "pub use crate::mid::Draw;\n"),
+        ("src/mid.rs", "pub use crate::shapes::Draw;\n"),
+        (
+            "src/chain.rs",
+            "use crate::hub::Draw;\n\npub struct C;\n\nimpl Draw for C {\n    fn draw(&self) -> i32 {\n        8\n    }\n}\n",
+        ),
+    ]);
+
+    let shapes = report(&repo, "Draw.draw", Some("src/shapes.rs"));
+    let other = report(&repo, "Draw.draw", Some("src/other.rs"));
+
+    assert_eq!(
+        listed(&shapes.overrides),
+        ["C.draw src/chain.rs:6"],
+        "{}",
+        dump(&shapes)
+    );
+    assert_eq!(
+        listed(&other.overrides),
+        ["C.draw src/chain.rs:6"],
+        "{}",
+        dump(&other)
+    );
+}
+
+#[test]
+fn a_rust_leading_crate_name_is_the_package_name_of_its_cargo_toml() {
+    let repo = scanned_repo(&[
+        (
+            "Cargo.toml",
+            "[package]\nname = \"my-app\"\nversion = \"0.1.0\"\n",
+        ),
+        ("src/lib.rs", "pub mod shapes;\n"),
+        (
+            "src/shapes.rs",
+            "pub trait Draw {\n    fn draw(&self) -> i32;\n}\n",
+        ),
+        (
+            "src/main.rs",
+            "pub struct M;\n\nimpl my_app::shapes::Draw for M {\n    fn draw(&self) -> i32 {\n        1\n    }\n}\n",
+        ),
+        (
+            "src/bin/tool.rs",
+            "pub struct U;\n\nimpl my_app::shapes::Draw for U {\n    fn draw(&self) -> i32 {\n        2\n    }\n}\n",
+        ),
+        (
+            "tests/it.rs",
+            "pub struct T;\n\nimpl my_app::shapes::Draw for T {\n    fn draw(&self) -> i32 {\n        3\n    }\n}\n",
+        ),
+        (
+            "benches/b.rs",
+            "pub struct B;\n\nimpl my_app::shapes::Draw for B {\n    fn draw(&self) -> i32 {\n        4\n    }\n}\n",
+        ),
+        (
+            "examples/e.rs",
+            "pub struct E;\n\nimpl my_app::shapes::Draw for E {\n    fn draw(&self) -> i32 {\n        5\n    }\n}\n",
+        ),
+    ]);
+
+    let draw = report(&repo, "Draw.draw", Some("src/shapes.rs"));
+    let test = report_at(&repo, "draw", "tests/it.rs", 4);
+
+    assert_eq!(
+        listed(&draw.overrides),
+        [
+            "B.draw benches/b.rs:4",
+            "E.draw examples/e.rs:4",
+            "U.draw src/bin/tool.rs:4",
+            "M.draw src/main.rs:4",
+            "T.draw tests/it.rs:4",
+        ],
+        "{}",
+        dump(&draw)
+    );
+    assert_eq!(
+        listed(&test.overridden),
+        ["Draw.draw src/shapes.rs:2"],
+        "{}",
+        dump(&test)
+    );
+}
+
+#[test]
+fn a_rust_package_name_in_cargo_toml_replaces_the_folder_name_as_the_crate_name() {
+    let repo = scanned_repo(&[
+        (
+            "Cargo.toml",
+            "[workspace]\nmembers = [\"crates/shared\", \"crates/app\"]\n",
+        ),
+        (
+            "crates/shared/Cargo.toml",
+            "[package]\nname = \"myapp-core\"\nversion = \"0.1.0\"\n",
+        ),
+        (
+            "crates/shared/src/lib.rs",
+            "pub trait Draw {\n    fn draw(&self) -> i32;\n}\n",
+        ),
+        (
+            "crates/app/Cargo.toml",
+            "[package]\nname = \"myapp\"\nversion = \"0.1.0\"\n",
+        ),
+        (
+            "crates/app/src/main.rs",
+            "pub struct A;\n\nimpl myapp_core::Draw for A {\n    fn draw(&self) -> i32 {\n        1\n    }\n}\n\npub struct B;\n\nimpl shared::Draw for B {\n    fn draw(&self) -> i32 {\n        2\n    }\n}\n",
+        ),
+    ]);
+
+    let draw = report(&repo, "Draw.draw", Some("crates/shared/src/lib.rs"));
+
+    assert_eq!(
+        listed(&draw.overrides),
+        ["A.draw crates/app/src/main.rs:4"],
+        "{}",
+        dump(&draw)
+    );
+}
+
+const PY_SAME_BASE_NAME: &[(&str, &str)] = &[
+    (
+        "pkg_a/base.py",
+        "class Base:\n    def run(self):\n        return 1\n",
+    ),
+    (
+        "pkg_b/base.py",
+        "class Base:\n    def run(self):\n        return 2\n",
+    ),
+    (
+        "pkg_a/sub.py",
+        "from pkg_a.base import Base\n\n\nclass Sub(Base):\n    def run(self):\n        return 3\n",
+    ),
+    (
+        "c/sub.py",
+        "from pkg_b.base import Base\n\n\nclass ImportedSub(Base):\n    def run(self):\n        return 4\n",
+    ),
+];
+
+#[test]
+fn a_python_subclass_that_imports_another_base_of_the_same_name_is_not_an_override() {
+    let repo = scanned_repo(PY_SAME_BASE_NAME);
+
+    let near = first_definition_report(&repo, "run", "pkg_a/base.py");
+    let far = first_definition_report(&repo, "run", "pkg_b/base.py");
+
+    assert_eq!(listed(&near.overrides), ["Sub.run pkg_a/sub.py:5"]);
+    assert_eq!(listed(&far.overrides), ["ImportedSub.run c/sub.py:5"]);
+}
+
+#[test]
+fn a_python_method_lists_only_the_base_its_import_names() {
+    let repo = scanned_repo(PY_SAME_BASE_NAME);
+
+    let imported = first_definition_report(&repo, "run", "c/sub.py");
+    let near = first_definition_report(&repo, "run", "pkg_a/sub.py");
+
+    assert_eq!(listed(&imported.overridden), ["Base.run pkg_b/base.py:2"]);
+    assert_eq!(listed(&near.overridden), ["Base.run pkg_a/base.py:2"]);
+}
+
+#[test]
+fn an_import_of_a_far_base_wins_over_a_nearer_base_of_the_same_name() {
+    let repo = scanned_repo(&[
+        (
+            "a/base.py",
+            "class Base:\n    def run(self):\n        return 1\n",
+        ),
+        (
+            "b/base.py",
+            "class Base:\n    def run(self):\n        return 2\n",
+        ),
+        (
+            "b/sub.py",
+            "from a.base import Base\n\n\nclass Sub(Base):\n    def run(self):\n        return 3\n",
+        ),
+    ]);
+
+    let far = first_definition_report(&repo, "run", "a/base.py");
+    let near = first_definition_report(&repo, "run", "b/base.py");
+    let sub = first_definition_report(&repo, "run", "b/sub.py");
+
+    assert_eq!(
+        listed(&far.overrides),
+        ["Sub.run b/sub.py:5"],
+        "{}",
+        dump(&far)
+    );
+    assert!(near.overrides.is_empty(), "{:?}", near.overrides);
+    assert_eq!(listed(&sub.overridden), ["Base.run a/base.py:2"]);
+}
+
+const CROSS_LANGUAGE_BASES: &[(&str, &str)] = &[
+    (
+        "pkg_b/base.py",
+        "class Base:\n    def run(self):\n        return 2\n",
+    ),
+    (
+        "c/sub.py",
+        "from pkg_b.base import Base\n\n\nclass ImportedSub(Base):\n    def run(self):\n        return 4\n",
+    ),
+    (
+        "web/base.ts",
+        "export class Base {\n  run(): number {\n    return 1;\n  }\n}\n",
+    ),
+    (
+        "web/derived.ts",
+        "import { Base } from './base';\n\nexport class Derived extends Base {\n  run(): number {\n    return 2;\n  }\n}\n",
+    ),
+];
+
+#[test]
+fn a_subclass_in_another_language_is_not_an_override() {
+    let repo = scanned_repo(CROSS_LANGUAGE_BASES);
+
+    let python = first_definition_report(&repo, "run", "pkg_b/base.py");
+    let typescript = first_definition_report(&repo, "run", "web/base.ts");
+
+    assert_eq!(listed(&python.overrides), ["ImportedSub.run c/sub.py:5"]);
+    assert_eq!(
+        listed(&typescript.overrides),
+        ["Derived.run web/derived.ts:4"]
+    );
+}
+
+#[test]
+fn a_base_class_in_another_language_is_not_listed_as_overridden() {
+    let repo = scanned_repo(CROSS_LANGUAGE_BASES);
+
+    let python = first_definition_report(&repo, "run", "c/sub.py");
+    let typescript = first_definition_report(&repo, "run", "web/derived.ts");
+
+    assert_eq!(listed(&python.overridden), ["Base.run pkg_b/base.py:2"]);
+    assert_eq!(listed(&typescript.overridden), ["Base.run web/base.ts:2"]);
+}
+
+const JAVA_SAME_BASE_NAME: &[(&str, &str)] = &[
+    (
+        "a/Base.java",
+        "package a;\n\npublic class Base {\n    public int run(int x) {\n        return x;\n    }\n}\n",
+    ),
+    (
+        "b/Base.java",
+        "package b;\n\npublic class Base {\n    public int run(int x) {\n        return -x;\n    }\n}\n",
+    ),
+    (
+        "a/Kid.java",
+        "package a;\n\npublic class Kid extends Base {\n    public int run(int x) {\n        return x + 1;\n    }\n}\n",
+    ),
+    (
+        "c/Third.java",
+        "package c;\n\nimport b.Base;\n\npublic class Third extends Base {\n    public int run(int x) {\n        return x * 3;\n    }\n}\n",
+    ),
+];
+
+#[test]
+fn a_java_subclass_that_imports_another_base_of_the_same_name_is_not_an_override() {
+    let repo = scanned_repo(JAVA_SAME_BASE_NAME);
+
+    let a = first_definition_report(&repo, "run", "a/Base.java");
+    let b = first_definition_report(&repo, "run", "b/Base.java");
+
+    assert_eq!(
+        listed(&a.overrides),
+        ["Kid.run a/Kid.java:4"],
+        "{}",
+        dump(&a)
+    );
+    assert_eq!(
+        listed(&b.overrides),
+        ["Third.run c/Third.java:6"],
+        "{}",
+        dump(&b)
+    );
+}
+
+#[test]
+fn a_java_method_lists_only_the_base_its_import_names() {
+    let repo = scanned_repo(JAVA_SAME_BASE_NAME);
+
+    let third = first_definition_report(&repo, "run", "c/Third.java");
+    let kid = first_definition_report(&repo, "run", "a/Kid.java");
+
+    assert_eq!(listed(&third.overridden), ["Base.run b/Base.java:4"]);
+    assert_eq!(listed(&kid.overridden), ["Base.run a/Base.java:4"]);
+}
+
+const RS_ENUM_AND_UNION_IMPLS: &str = "pub trait Draw {\n    fn draw(&self) -> i32;\n}\n\npub enum Color {\n    Red,\n}\n\nimpl Draw for Color {\n    fn draw(&self) -> i32 {\n        1\n    }\n}\n\npub union Bits {\n    pub a: u32,\n}\n\nimpl Draw for Bits {\n    fn draw(&self) -> i32 {\n        2\n    }\n}\n\npub struct Dot;\n\nimpl Draw for Dot {\n    fn draw(&self) -> i32 {\n        3\n    }\n}\n";
+
+#[test]
+fn a_rust_enum_and_union_that_implement_a_trait_override_its_methods() {
+    let repo = scanned_repo(&[("src/lib.rs", RS_ENUM_AND_UNION_IMPLS)]);
+
+    let draw = report(&repo, "Draw.draw", None);
+    let color = report_at(&repo, "draw", "src/lib.rs", 10);
+    let bits = report_at(&repo, "draw", "src/lib.rs", 20);
+
+    assert_eq!(
+        listed(&draw.overrides),
+        [
+            "Color.draw src/lib.rs:10",
+            "Bits.draw src/lib.rs:20",
+            "Dot.draw src/lib.rs:28"
+        ],
+        "{}",
+        dump(&draw)
+    );
+    assert_eq!(listed(&color.overridden), ["Draw.draw src/lib.rs:2"]);
+    assert_eq!(listed(&bits.overridden), ["Draw.draw src/lib.rs:2"]);
+}
+
+const JAVA_ENUM_IMPLEMENTS: &[(&str, &str)] = &[
+    (
+        "a/Handler.java",
+        "package a;\n\npublic interface Handler {\n    void run();\n}\n",
+    ),
+    (
+        "b/Handler.java",
+        "package b;\n\npublic interface Handler {\n    void run();\n}\n",
+    ),
+    (
+        "p/E.java",
+        "package p;\n\nimport b.Handler;\n\npublic enum E implements Handler {\n    X;\n    public void run() {}\n}\n",
+    ),
+];
+
+#[test]
+fn a_java_enum_that_implements_an_interface_overrides_the_interface_it_imports() {
+    let repo = scanned_repo(JAVA_ENUM_IMPLEMENTS);
+
+    let imported = first_definition_report(&repo, "run", "b/Handler.java");
+    let other = first_definition_report(&repo, "run", "a/Handler.java");
+    let method = first_definition_report(&repo, "run", "p/E.java");
+
+    assert_eq!(
+        listed(&imported.overrides),
+        ["E.run p/E.java:7"],
+        "{}",
+        dump(&imported)
+    );
+    assert!(other.overrides.is_empty(), "{}", dump(&other));
+    assert_eq!(listed(&method.overridden), ["Handler.run b/Handler.java:4"]);
+}
+
+const KOTLIN_ENUM_IMPLEMENTS: &[(&str, &str)] = &[
+    ("Handler.kt", "interface Handler {\n    fun run(): Int\n}\n"),
+    (
+        "Color.kt",
+        "enum class Color : Handler {\n    RED;\n    override fun run(): Int = 1\n}\n",
+    ),
+];
+
+#[test]
+fn a_kotlin_enum_class_that_implements_an_interface_overrides_its_methods() {
+    let repo = scanned_repo(KOTLIN_ENUM_IMPLEMENTS);
+
+    let handler = report(&repo, "Handler.run", None);
+
+    assert_eq!(
+        listed(&handler.overrides),
+        ["Color.run Color.kt:3"],
+        "{}",
+        dump(&handler)
+    );
+}
+
+const PY_ENUM_EXTENDS: &[(&str, &str)] = &[
+    (
+        "pkg/mixin.py",
+        "class Describes:\n    def describe(self):\n        return 'base'\n",
+    ),
+    (
+        "pkg/kinds.py",
+        "from enum import Enum\n\nfrom pkg.mixin import Describes\n\n\nclass Shade(Describes, Enum):\n    LIGHT = 1\n\n    def describe(self):\n        return 'shade'\n\n\nclass Tone(Enum):\n    def tell(self):\n        return 'tone'\n\n\nclass Pitch(Tone):\n    def tell(self):\n        return 'pitch'\n",
+    ),
+];
+
+#[test]
+fn a_python_enum_can_extend_a_class_and_be_extended_when_it_has_no_members() {
+    let repo = scanned_repo(PY_ENUM_EXTENDS);
+
+    let describes = report(&repo, "Describes.describe", None);
+    let tone = report(&repo, "Tone.tell", None);
+    let pitch = report(&repo, "Pitch.tell", None);
+
+    assert_eq!(
+        listed(&describes.overrides),
+        ["Shade.describe pkg/kinds.py:9"],
+        "{}",
+        dump(&describes)
+    );
+    assert_eq!(
+        listed(&tone.overrides),
+        ["Pitch.tell pkg/kinds.py:19"],
+        "{}",
+        dump(&tone)
+    );
+    assert_eq!(listed(&pitch.overridden), ["Tone.tell pkg/kinds.py:14"]);
+}
+
+const JAVA_SUB_PACKAGES: &[(&str, &str)] = &[
+    (
+        "b/Base.java",
+        "package b;\n\npublic class Base {\n    public int run(int x) {\n        return x;\n    }\n}\n",
+    ),
+    (
+        "b/x/Base.java",
+        "package b.x;\n\npublic class Base {\n    public int run(int x) {\n        return -x;\n    }\n}\n",
+    ),
+    (
+        "p/K1.java",
+        "package p;\n\nimport b.Base;\n\npublic class K1 extends Base {\n    public int run(int x) {\n        return 1;\n    }\n}\n",
+    ),
+    (
+        "q/K11.java",
+        "package q;\n\nimport b.x.Base;\n\npublic class K11 extends Base {\n    public int run(int x) {\n        return 11;\n    }\n}\n",
+    ),
+];
+
+#[test]
+fn a_java_import_of_a_sub_package_class_does_not_tie_the_class_of_the_parent_package() {
+    let repo = scanned_repo(JAVA_SUB_PACKAGES);
+
+    let parent = first_definition_report(&repo, "run", "b/Base.java");
+    let child = first_definition_report(&repo, "run", "b/x/Base.java");
+
+    assert_eq!(
+        listed(&parent.overrides),
+        ["K1.run p/K1.java:6"],
+        "{}",
+        dump(&parent)
+    );
+    assert_eq!(
+        listed(&child.overrides),
+        ["K11.run q/K11.java:6"],
+        "{}",
+        dump(&child)
+    );
+}
+
+#[test]
+fn a_java_method_lists_only_the_sub_package_base_its_import_names() {
+    let repo = scanned_repo(JAVA_SUB_PACKAGES);
+
+    let nested = first_definition_report(&repo, "run", "q/K11.java");
+    let plain = first_definition_report(&repo, "run", "p/K1.java");
+
+    assert_eq!(listed(&nested.overridden), ["Base.run b/x/Base.java:4"]);
+    assert_eq!(listed(&plain.overridden), ["Base.run b/Base.java:4"]);
+}
+
+const JAVA_NESTED_BASES: &[(&str, &str)] = &[
+    (
+        "b/Inner.java",
+        "package b;\n\npublic class Inner {\n    public int run(int x) {\n        return x;\n    }\n}\n",
+    ),
+    (
+        "b/Outer.java",
+        "package b;\n\npublic class Outer {\n    public static class Inner {\n        public int run(int x) {\n            return x;\n        }\n    }\n}\n",
+    ),
+    (
+        "c/Outer.java",
+        "package c;\n\npublic class Outer {\n    public static class Inner {\n        public int run(int x) {\n            return x;\n        }\n    }\n}\n",
+    ),
+    (
+        "q/K14.java",
+        "package q;\n\nimport b.Outer.Inner;\n\npublic class K14 extends Inner {\n    public int run(int x) {\n        return 14;\n    }\n}\n",
+    ),
+];
+
+#[test]
+fn a_java_import_of_a_nested_class_ties_only_the_class_nested_in_the_named_type() {
+    let repo = scanned_repo(JAVA_NESTED_BASES);
+
+    let top_level = first_definition_report(&repo, "run", "b/Inner.java");
+    let nested = first_definition_report(&repo, "run", "b/Outer.java");
+    let other = first_definition_report(&repo, "run", "c/Outer.java");
+
+    assert!(top_level.overrides.is_empty(), "{:?}", top_level.overrides);
+    assert_eq!(
+        listed(&nested.overrides),
+        ["K14.run q/K14.java:6"],
+        "{}",
+        dump(&nested)
+    );
+    assert!(other.overrides.is_empty(), "{:?}", other.overrides);
+}
+
+const JAVA_WRITTEN_PACKAGES: &[(&str, &str)] = &[
+    (
+        "a/Base.java",
+        "package a;\n\npublic class Base {\n    public int run(int x) {\n        return x;\n    }\n}\n",
+    ),
+    (
+        "b/Base.java",
+        "package b;\n\npublic class Base {\n    public int run(int x) {\n        return -x;\n    }\n}\n",
+    ),
+    (
+        "c/Base.java",
+        "package c;\n\npublic class Base {\n    public int run(int x) {\n        return 0;\n    }\n}\n",
+    ),
+    (
+        "b/x/Base.java",
+        "package b.x;\n\npublic class Base {\n    public int run(int x) {\n        return 1;\n    }\n}\n",
+    ),
+    (
+        "p/K3.java",
+        "package p;\n\npublic class K3 extends b.Base {\n    public int run(int x) {\n        return 3;\n    }\n}\n",
+    ),
+    (
+        "p/K4.java",
+        "package p;\n\nimport b.Base;\n\npublic class K4 extends c.Base {\n    public int run(int x) {\n        return 4;\n    }\n}\n",
+    ),
+    (
+        "p/K12.java",
+        "package p;\n\npublic class K12 extends b.x.Base {\n    public int run(int x) {\n        return 12;\n    }\n}\n",
+    ),
+];
+
+#[test]
+fn a_java_base_written_with_its_package_is_listed_only_under_that_package() {
+    let repo = scanned_repo(JAVA_WRITTEN_PACKAGES);
+
+    let a = first_definition_report(&repo, "run", "a/Base.java");
+    let b = first_definition_report(&repo, "run", "b/Base.java");
+    let deep = first_definition_report(&repo, "run", "b/x/Base.java");
+
+    assert!(a.overrides.is_empty(), "{:?}", a.overrides);
+    assert_eq!(listed(&b.overrides), ["K3.run p/K3.java:4"], "{}", dump(&b));
+    assert_eq!(
+        listed(&deep.overrides),
+        ["K12.run p/K12.java:4"],
+        "{}",
+        dump(&deep)
+    );
+}
+
+#[test]
+fn a_java_package_written_before_the_base_wins_over_an_import_of_its_name() {
+    let repo = scanned_repo(JAVA_WRITTEN_PACKAGES);
+
+    let imported = first_definition_report(&repo, "run", "b/Base.java");
+    let written = first_definition_report(&repo, "run", "c/Base.java");
+
+    assert_eq!(
+        listed(&written.overrides),
+        ["K4.run p/K4.java:6"],
+        "{}",
+        dump(&written)
+    );
+    assert!(
+        !listed(&imported.overrides).contains(&"K4.run p/K4.java:6".to_string()),
+        "{:?}",
+        imported.overrides
+    );
+}
+
+#[test]
+fn a_java_method_lists_only_the_base_written_with_its_package() {
+    let repo = scanned_repo(JAVA_WRITTEN_PACKAGES);
+
+    let plain = first_definition_report(&repo, "run", "p/K3.java");
+    let deep = first_definition_report(&repo, "run", "p/K12.java");
+    let imported_elsewhere = first_definition_report(&repo, "run", "p/K4.java");
+
+    assert_eq!(listed(&plain.overridden), ["Base.run b/Base.java:4"]);
+    assert_eq!(listed(&deep.overridden), ["Base.run b/x/Base.java:4"]);
+    assert_eq!(
+        listed(&imported_elsewhere.overridden),
+        ["Base.run c/Base.java:4"]
+    );
+}
+
+const JAVA_WRITTEN_OUTER: &[(&str, &str)] = &[
+    (
+        "b/Outer.java",
+        "package b;\n\npublic class Outer {\n    public static class Inner {\n        public int run(int x) {\n            return x;\n        }\n    }\n}\n",
+    ),
+    (
+        "c/Outer.java",
+        "package c;\n\npublic class Outer {\n    public static class Inner {\n        public int run(int x) {\n            return x;\n        }\n    }\n}\n",
+    ),
+    (
+        "q/K13.java",
+        "package q;\n\nimport b.Outer;\n\npublic class K13 extends Outer.Inner {\n    public int run(int x) {\n        return 13;\n    }\n}\n",
+    ),
+    (
+        "q/K15.java",
+        "package q;\n\npublic class K15 extends c.Outer.Inner {\n    public int run(int x) {\n        return 15;\n    }\n}\n",
+    ),
+];
+
+#[test]
+fn a_java_base_written_with_its_outer_type_is_listed_only_under_the_type_that_name_reaches() {
+    let repo = scanned_repo(JAVA_WRITTEN_OUTER);
+
+    let b = first_definition_report(&repo, "run", "b/Outer.java");
+    let c = first_definition_report(&repo, "run", "c/Outer.java");
+
+    assert_eq!(
+        listed(&b.overrides),
+        ["K13.run q/K13.java:6"],
+        "{}",
+        dump(&b)
+    );
+    assert_eq!(
+        listed(&c.overrides),
+        ["K15.run q/K15.java:4"],
+        "{}",
+        dump(&c)
+    );
+}
+
+const JAVA_STAR_IMPORTS: &[(&str, &str)] = &[
+    (
+        "a/Base.java",
+        "package a;\n\npublic class Base {\n    public int run(int x) {\n        return x;\n    }\n}\n",
+    ),
+    (
+        "b/Base.java",
+        "package b;\n\npublic class Base {\n    public int run(int x) {\n        return -x;\n    }\n}\n",
+    ),
+    (
+        "c/Base.java",
+        "package c;\n\npublic class Base {\n    public int run(int x) {\n        return 0;\n    }\n}\n",
+    ),
+    (
+        "q/K2.java",
+        "package q;\n\nimport b.*;\n\npublic class K2 extends Base {\n    public int run(int x) {\n        return 2;\n    }\n}\n",
+    ),
+    (
+        "q/K18.java",
+        "package q;\n\nimport c.*;\nimport b.Base;\n\npublic class K18 extends Base {\n    public int run(int x) {\n        return 18;\n    }\n}\n",
+    ),
+];
+
+#[test]
+fn a_java_star_import_ties_the_base_only_to_the_package_it_names() {
+    let repo = scanned_repo(JAVA_STAR_IMPORTS);
+
+    let a = first_definition_report(&repo, "run", "a/Base.java");
+    let b = first_definition_report(&repo, "run", "b/Base.java");
+    let c = first_definition_report(&repo, "run", "c/Base.java");
+
+    assert!(a.overrides.is_empty(), "{:?}", a.overrides);
+    assert!(
+        listed(&b.overrides).contains(&"K2.run q/K2.java:6".to_string()),
+        "{}",
+        dump(&b)
+    );
+    assert!(
+        !listed(&c.overrides).contains(&"K2.run q/K2.java:6".to_string()),
+        "{:?}",
+        c.overrides
+    );
+}
+
+#[test]
+fn a_java_explicit_import_wins_over_a_star_import_of_another_package() {
+    let repo = scanned_repo(JAVA_STAR_IMPORTS);
+
+    let b = first_definition_report(&repo, "run", "b/Base.java");
+    let c = first_definition_report(&repo, "run", "c/Base.java");
+
+    assert_eq!(
+        listed(&b.overrides),
+        ["K18.run q/K18.java:7", "K2.run q/K2.java:6"],
+        "{}",
+        dump(&b)
+    );
+    assert!(c.overrides.is_empty(), "{:?}", c.overrides);
+}
+
+#[test]
+fn a_java_method_lists_only_the_base_in_the_package_its_star_import_names() {
+    let repo = scanned_repo(JAVA_STAR_IMPORTS);
+
+    let star = first_definition_report(&repo, "run", "q/K2.java");
+
+    assert_eq!(listed(&star.overridden), ["Base.run b/Base.java:4"]);
+}
+
+#[test]
+fn a_java_star_import_in_a_block_comment_or_a_text_block_is_not_read() {
+    let repo = scanned_repo(&[
+        (
+            "b/Base.java",
+            "package b;\n\npublic class Base {\n    public int run(int x) {\n        return -x;\n    }\n}\n",
+        ),
+        (
+            "c/Base.java",
+            "package c;\n\npublic class Base {\n    public int run(int x) {\n        return 0;\n    }\n}\n",
+        ),
+        (
+            "q/K20.java",
+            "package q;\n\n/*\nimport b.*;\n*/\nimport c.*;\n\npublic class K20 extends Base {\n    public int run(int x) {\n        return 20;\n    }\n}\n",
+        ),
+        (
+            "q/K21.java",
+            "package q;\n\nimport c.*;\n\npublic class K21 extends Base {\n    static final String T = \"\"\"\nimport b.*;\n\"\"\";\n\n    public int run(int x) {\n        return 21;\n    }\n}\n",
+        ),
+    ]);
+
+    let b = first_definition_report(&repo, "run", "b/Base.java");
+    let c = first_definition_report(&repo, "run", "c/Base.java");
+
+    assert!(b.overrides.is_empty(), "{:?}", b.overrides);
+    assert_eq!(
+        listed(&c.overrides),
+        ["K20.run q/K20.java:9", "K21.run q/K21.java:10"],
+        "{}",
+        dump(&c)
+    );
+}
+
+#[test]
+fn a_java_class_of_the_same_package_wins_over_a_star_import() {
+    let repo = scanned_repo(&[
+        (
+            "b/Base.java",
+            "package b;\n\npublic class Base {\n    public int run(int x) {\n        return -x;\n    }\n}\n",
+        ),
+        (
+            "p/Base.java",
+            "package p;\n\npublic class Base {\n    public int run(int x) {\n        return x;\n    }\n}\n",
+        ),
+        (
+            "p/K16.java",
+            "package p;\n\nimport b.*;\n\npublic class K16 extends Base {\n    public int run(int x) {\n        return 16;\n    }\n}\n",
+        ),
+    ]);
+
+    let imported_package = first_definition_report(&repo, "run", "b/Base.java");
+    let same_package = first_definition_report(&repo, "run", "p/Base.java");
+    let sub = first_definition_report(&repo, "run", "p/K16.java");
+
+    assert!(
+        imported_package.overrides.is_empty(),
+        "{:?}",
+        imported_package.overrides
+    );
+    assert_eq!(
+        listed(&same_package.overrides),
+        ["K16.run p/K16.java:6"],
+        "{}",
+        dump(&same_package)
+    );
+    assert_eq!(listed(&sub.overridden), ["Base.run p/Base.java:4"]);
+}
+
+#[test]
+fn a_java_star_import_of_an_outer_type_ties_the_class_nested_in_it() {
+    let repo = scanned_repo(&[
+        (
+            "b/Outer.java",
+            "package b;\n\npublic class Outer {\n    public static class Inner {\n        public int run(int x) {\n            return x;\n        }\n    }\n}\n",
+        ),
+        (
+            "c/Outer.java",
+            "package c;\n\npublic class Outer {\n    public static class Inner {\n        public int run(int x) {\n            return x;\n        }\n    }\n}\n",
+        ),
+        (
+            "q/K17.java",
+            "package q;\n\nimport b.Outer.*;\n\npublic class K17 extends Inner {\n    public int run(int x) {\n        return 17;\n    }\n}\n",
+        ),
+    ]);
+
+    let b = first_definition_report(&repo, "run", "b/Outer.java");
+    let c = first_definition_report(&repo, "run", "c/Outer.java");
+
+    assert_eq!(
+        listed(&b.overrides),
+        ["K17.run q/K17.java:6"],
+        "{}",
+        dump(&b)
+    );
+    assert!(c.overrides.is_empty(), "{:?}", c.overrides);
+}
+
+#[test]
+fn a_kotlin_base_is_tied_by_its_written_package_its_import_or_its_star_import() {
+    let repo = scanned_repo(&[
+        (
+            "b/Base.kt",
+            "package b\n\nopen class Base {\n    open fun run(x: Int): Int {\n        return x\n    }\n}\n",
+        ),
+        (
+            "c/Base.kt",
+            "package c\n\nopen class Base {\n    open fun run(x: Int): Int {\n        return x\n    }\n}\n",
+        ),
+        (
+            "p/K1.kt",
+            "package p\n\nclass K1 : b.Base() {\n    override fun run(x: Int): Int {\n        return 1\n    }\n}\n",
+        ),
+        (
+            "p/K2.kt",
+            "package p\n\nimport b.Base\nimport c.*\n\nclass K2 : Base() {\n    override fun run(x: Int): Int {\n        return 2\n    }\n}\n",
+        ),
+        (
+            "p/K3.kt",
+            "package p\n\nimport c.*\n\nclass K3 : Base() {\n    override fun run(x: Int): Int {\n        return 3\n    }\n}\n",
+        ),
+    ]);
+
+    let b = first_definition_report(&repo, "run", "b/Base.kt");
+    let c = first_definition_report(&repo, "run", "c/Base.kt");
+
+    assert_eq!(
+        listed(&b.overrides),
+        ["K1.run p/K1.kt:4", "K2.run p/K2.kt:7"],
+        "{}",
+        dump(&b)
+    );
+    assert_eq!(listed(&c.overrides), ["K3.run p/K3.kt:6"], "{}", dump(&c));
+}
+
+#[test]
+fn a_scala_base_is_tied_by_its_written_package_its_import_or_its_star_import() {
+    let repo = scanned_repo(&[
+        (
+            "b/Base.scala",
+            "package b\n\nclass Base {\n  def run(x: Int): Int = x\n}\n",
+        ),
+        (
+            "c/Base.scala",
+            "package c\n\nclass Base {\n  def run(x: Int): Int = x\n}\n",
+        ),
+        (
+            "p/K1.scala",
+            "package p\n\nclass K1 extends b.Base {\n  override def run(x: Int): Int = 1\n}\n",
+        ),
+        (
+            "p/K2.scala",
+            "package p\n\nimport b.Base\nimport c._\n\nclass K2 extends Base {\n  override def run(x: Int): Int = 2\n}\n",
+        ),
+        (
+            "p/K3.scala",
+            "package p\n\nimport c._\n\nclass K3 extends Base {\n  override def run(x: Int): Int = 3\n}\n",
+        ),
+    ]);
+
+    let b = first_definition_report(&repo, "run", "b/Base.scala");
+    let c = first_definition_report(&repo, "run", "c/Base.scala");
+
+    assert_eq!(
+        listed(&b.overrides),
+        ["K1.run p/K1.scala:4", "K2.run p/K2.scala:7"],
+        "{}",
+        dump(&b)
+    );
+    assert_eq!(
+        listed(&c.overrides),
+        ["K3.run p/K3.scala:6"],
+        "{}",
+        dump(&c)
+    );
+}
+
+const PY_TWO_BASES: &[(&str, &str)] = &[
+    ("pkg_a/__init__.py", ""),
+    (
+        "pkg_a/base.py",
+        "class Base:\n    def run(self, x):\n        return x\n",
+    ),
+    ("pkg_b/__init__.py", ""),
+    (
+        "pkg_b/base.py",
+        "class Base:\n    def run(self, x):\n        return -x\n",
+    ),
+    ("apps/__init__.py", ""),
+    (
+        "apps/s4.py",
+        "from pkg_a.base import Base\n\n\nclass S4(Base):\n    def run(self, x):\n        return 4\n",
+    ),
+];
+
+#[test]
+fn a_python_base_imported_from_a_module_outside_the_project_ties_no_project_class() {
+    let files = [
+        PY_TWO_BASES,
+        &[(
+            "apps/s9.py",
+            "from external_lib import Base\n\n\nclass S9(Base):\n    def run(self, x):\n        return 9\n",
+        )],
+    ]
+    .concat();
+    let repo = scanned_repo(&files);
+
+    let a = first_definition_report(&repo, "run", "pkg_a/base.py");
+    let b = first_definition_report(&repo, "run", "pkg_b/base.py");
+    let sub = first_definition_report(&repo, "run", "apps/s9.py");
+
+    assert_eq!(
+        listed(&a.overrides),
+        ["S4.run apps/s4.py:5"],
+        "{}",
+        dump(&a)
+    );
+    assert!(b.overrides.is_empty(), "{:?}", b.overrides);
+    assert!(sub.overridden.is_empty(), "{:?}", sub.overridden);
+}
+
+#[test]
+fn a_python_base_written_with_its_module_path_is_listed_only_under_that_module() {
+    let files = [
+        PY_TWO_BASES,
+        &[
+            (
+                "apps/s5.py",
+                "import pkg_a.base\n\n\nclass S5(pkg_a.base.Base):\n    def run(self, x):\n        return 5\n",
+            ),
+            (
+                "apps/t5.py",
+                "import pkg_b.base\n\n\nclass T5(pkg_b.base.Base):\n    def run(self, x):\n        return 15\n",
+            ),
+        ],
+    ]
+    .concat();
+    let repo = scanned_repo(&files);
+
+    let a = first_definition_report(&repo, "run", "pkg_a/base.py");
+    let b = first_definition_report(&repo, "run", "pkg_b/base.py");
+
+    assert_eq!(
+        listed(&a.overrides),
+        ["S4.run apps/s4.py:5", "S5.run apps/s5.py:5"],
+        "{}",
+        dump(&a)
+    );
+    assert_eq!(
+        listed(&b.overrides),
+        ["T5.run apps/t5.py:5"],
+        "{}",
+        dump(&b)
+    );
+}
+
+#[test]
+fn a_python_base_written_through_a_module_alias_is_listed_only_under_that_module() {
+    let files = [
+        PY_TWO_BASES,
+        &[
+            (
+                "apps/s1.py",
+                "import pkg_b.base as pb\n\n\nclass S1(pb.Base):\n    def run(self, x):\n        return 1\n",
+            ),
+            (
+                "apps/s2.py",
+                "from pkg_b import base\n\n\nclass S2(base.Base):\n    def run(self, x):\n        return 2\n",
+            ),
+        ],
+    ]
+    .concat();
+    let repo = scanned_repo(&files);
+
+    let a = first_definition_report(&repo, "run", "pkg_a/base.py");
+    let b = first_definition_report(&repo, "run", "pkg_b/base.py");
+
+    assert_eq!(
+        listed(&a.overrides),
+        ["S4.run apps/s4.py:5"],
+        "{}",
+        dump(&a)
+    );
+    assert_eq!(
+        listed(&b.overrides),
+        ["S1.run apps/s1.py:5", "S2.run apps/s2.py:5"],
+        "{}",
+        dump(&b)
+    );
+}
+
+#[test]
+fn a_python_method_lists_only_the_base_written_with_its_module_path() {
+    let files = [
+        PY_TWO_BASES,
+        &[(
+            "apps/s5.py",
+            "import pkg_a.base\n\n\nclass S5(pkg_a.base.Base):\n    def run(self, x):\n        return 5\n",
+        )],
+    ]
+    .concat();
+    let repo = scanned_repo(&files);
+
+    let sub = first_definition_report(&repo, "run", "apps/s5.py");
+
+    assert_eq!(listed(&sub.overridden), ["Base.run pkg_a/base.py:2"]);
+}
+
+#[test]
+fn a_python_star_import_ties_the_base_only_to_the_module_or_package_it_names() {
+    let files = [
+        PY_TWO_BASES,
+        &[
+            (
+                "apps/s6.py",
+                "from pkg_b.base import *\n\n\nclass S6(Base):\n    def run(self, x):\n        return 6\n",
+            ),
+            (
+                "apps/t6.py",
+                "from pkg_a.base import *\n\n\nclass T6(Base):\n    def run(self, x):\n        return 16\n",
+            ),
+            (
+                "apps/u6.py",
+                "from pkg_b import *\n\n\nclass U6(Base):\n    def run(self, x):\n        return 26\n",
+            ),
+        ],
+    ]
+    .concat();
+    let repo = scanned_repo(&files);
+
+    let a = first_definition_report(&repo, "run", "pkg_a/base.py");
+    let b = first_definition_report(&repo, "run", "pkg_b/base.py");
+    let s6 = first_definition_report(&repo, "run", "apps/s6.py");
+
+    assert_eq!(
+        listed(&a.overrides),
+        ["S4.run apps/s4.py:5", "T6.run apps/t6.py:5"],
+        "{}",
+        dump(&a)
+    );
+    assert_eq!(
+        listed(&b.overrides),
+        ["S6.run apps/s6.py:5", "U6.run apps/u6.py:5"],
+        "{}",
+        dump(&b)
+    );
+    assert_eq!(listed(&s6.overridden), ["Base.run pkg_b/base.py:2"]);
+}
+
+#[test]
+fn an_explicit_python_import_wins_over_a_star_import_of_another_module() {
+    let files = [
+        PY_TWO_BASES,
+        &[(
+            "apps/v6.py",
+            "from pkg_a.base import Base\nfrom pkg_b.base import *\n\n\nclass V6(Base):\n    def run(self, x):\n        return 36\n",
+        )],
+    ]
+    .concat();
+    let repo = scanned_repo(&files);
+
+    let a = first_definition_report(&repo, "run", "pkg_a/base.py");
+    let b = first_definition_report(&repo, "run", "pkg_b/base.py");
+
+    assert_eq!(
+        listed(&a.overrides),
+        ["S4.run apps/s4.py:5", "V6.run apps/v6.py:6"],
+        "{}",
+        dump(&a)
+    );
+    assert!(b.overrides.is_empty(), "{:?}", b.overrides);
+}
+
+#[test]
+fn a_constructor_lists_no_overrides() {
+    let repo = scanned_repo(&[(
+        "pkg/base.py",
+        "class Base:\n    def __init__(self):\n        self.a = 1\n\n\nclass Sub(Base):\n    def __init__(self):\n        super().__init__()\n",
+    )]);
+
+    let report = report(&repo, "Base.__init__", None);
+
+    assert!(report.overrides.is_empty() && report.overridden.is_empty());
+}
+
+#[test]
+fn the_subtype_walk_stops_at_fifty_types_and_says_so() {
+    let mut text = String::from("class Base:\n    def run(self):\n        return 0\n");
+    for n in 0..52 {
+        text.push_str(&format!(
+            "\n\nclass S{n:02}(Base):\n    def run(self):\n        return {n}\n"
+        ));
+    }
+    let repo = scanned_repo(&[("pkg/many.py", text.as_str())]);
+
+    let report = report(&repo, "Base.run", None);
+
+    assert_eq!(report.overrides.len(), 50);
+    assert!(
+        report
+            .cannot_see
+            .iter()
+            .any(|note| note.contains("first 50 subtypes of `Base`")),
+        "{:?}",
+        report.cannot_see
+    );
+}
+
+#[test]
+fn the_dispatch_note_is_kept_only_for_go_targets() {
+    let go = report(&scanned_repo(GO), "Use", Some("svc/b.go"));
+    assert_eq!(
+        go.cannot_see,
+        vec![
+            "calls through a Go interface that the index does not record reach methods this list does not show"
+        ]
+    );
+
+    for (language, repo, name) in [
+        ("python", scanned_repo(PY_OVERRIDES), "Base.render"),
+        ("java", scanned_repo(JAVA), "Util.help"),
+    ] {
+        let report = report(&repo, name, None);
+        assert!(
+            report.cannot_see.iter().all(
+                |note| !note.contains("dispatch") && !note.contains("interface that the index")
+            ),
+            "{language}: {:?}",
+            report.cannot_see
+        );
+    }
+}
+
+const RS_STRUCTS: &str = r#"pub struct Foo {
+    pub a: i32,
+}
+
+pub struct Wrapper<T> {
+    pub v: T,
+}
+
+pub trait Tr {
+    fn t(&self);
+}
+
+impl Foo {
+    pub fn plain() -> Foo {
+        Foo { a: 1 }
+    }
+}
+
+impl Tr for Foo {
+    fn t(&self) {}
+}
+
+impl<T> Wrapper<T> {
+    pub fn get(&self) -> &T {
+        &self.v
+    }
+}
+
+pub fn by_ref() -> i32 {
+    let f = &Foo { a: 2 };
+    f.a
+}
+
+pub fn generic() -> Wrapper<i32> {
+    Wrapper::<i32> { v: 1 }
+}
+
+pub fn destructure(x: Foo) -> i32 {
+    let Foo { a } = x;
+    match x {
+        Foo { a: 7 } => 1,
+        _ => a,
+    }
+}
+
+pub fn destructure_across_lines(x: Foo) -> i32 {
+    let Foo {
+        a,
+    } = x;
+    a
+}
+
+pub fn make() -> Foo {
+    Foo { a: 3 }
+}
+
+pub fn make_across_lines() -> Foo {
+    let made = Foo {
+        a: 9,
+    };
+    made
+}
+
+pub struct Holder {
+    pub inner: Foo,
+}
+
+pub fn nested() -> (Holder, Vec<Foo>) {
+    (
+        Holder {
+            inner: Foo { a: 11 },
+        },
+        vec![Foo { a: 12 }],
+    )
+}
+"#;
+
+fn constructed(report: &ReferenceReport) -> Vec<String> {
+    report
+        .constructions
+        .iter()
+        .map(|site| format!("{}:{}", site.path, site.line))
+        .collect()
+}
+
+fn at(repo: &Repo, path: &str, needle: &str) -> String {
+    format!("{path}:{}", line_of(repo, path, needle))
+}
+
+#[test]
+fn rust_struct_literals_are_constructions_and_type_positions_before_a_brace_are_not() {
+    let repo = scanned_repo(&[("src/lib.rs", RS_STRUCTS)]);
+
+    let foo = report(&repo, "Foo", None);
+
+    assert_eq!(
+        constructed(&foo),
+        [
+            at(&repo, "src/lib.rs", "Foo { a: 1 }"),
+            at(&repo, "src/lib.rs", "&Foo { a: 2 }"),
+            at(&repo, "src/lib.rs", "Foo { a: 3 }"),
+            at(&repo, "src/lib.rs", "let made = Foo {"),
+            at(&repo, "src/lib.rs", "inner: Foo { a: 11 }"),
+            at(&repo, "src/lib.rs", "vec![Foo { a: 12 }]"),
+        ],
+        "{}",
+        dump(&foo)
+    );
+}
+
+#[test]
+fn a_rust_generic_struct_counts_a_turbofish_literal_and_not_its_impl_or_return_type() {
+    let repo = scanned_repo(&[("src/lib.rs", RS_STRUCTS)]);
+
+    let wrapper = report(&repo, "Wrapper", None);
+
+    assert_eq!(
+        constructed(&wrapper),
+        [at(&repo, "src/lib.rs", "Wrapper::<i32> { v: 1 }")],
+        "{}",
+        dump(&wrapper)
+    );
+}
+
+#[test]
+fn a_rust_path_qualified_struct_literal_is_a_construction_and_its_return_type_is_not() {
+    let repo = scanned_repo(&[
+        (
+            "src/lib.rs",
+            "pub mod shapes;\n\npub fn top() -> shapes::Foo {\n    shapes::Foo { a: 5 }\n}\n",
+        ),
+        ("src/shapes.rs", "pub struct Foo {\n    pub a: i32,\n}\n"),
+    ]);
+
+    let foo = report(&repo, "Foo", Some("src/shapes.rs"));
+
+    assert_eq!(
+        constructed(&foo),
+        [at(&repo, "src/lib.rs", "shapes::Foo { a: 5 }")],
+        "{}",
+        dump(&foo)
+    );
+}
+
+const RS_PATTERN_LIB: &str =
+    "pub mod pats;\npub mod shapes;\n\npub struct Foo {\n    pub a: i32,\n    pub b: i32,\n}\n";
+
+const RS_PATTERNS: &str = "use crate::Foo;
+
+pub struct Outer {
+    pub inner: Foo,
+}
+
+pub fn nested(o: Option<Foo>) -> i32 {
+    if let Some(Foo { a, .. }) = o {
+        return a;
+    }
+    0
+}
+
+pub fn nested_match(o: Option<Foo>) -> i32 {
+    match o {
+        Some(Foo { a, .. }) => a,
+        None => 0,
+    }
+}
+
+pub fn tuple_pat(p: (Foo, i32)) -> i32 {
+    let (Foo { a, .. }, y) = p;
+    a + y
+}
+
+pub fn closure() -> i32 {
+    let f = |Foo { a, b }: Foo| a + b;
+    f(Foo { a: 1, b: 2 })
+}
+
+pub fn matches_it(f: &Foo) -> bool {
+    matches!(f, Foo { a: 1, .. })
+}
+
+pub fn wrapped() -> Outer {
+    Outer { inner: Foo { a: 1, b: 2 } }
+}
+
+pub fn ref_pat(f: &Foo) -> i32 {
+    match f {
+        &Foo { a, .. } => a,
+    }
+}
+
+pub fn while_let(mut it: std::vec::IntoIter<Foo>) -> i32 {
+    let mut s = 0;
+    while let Some(Foo { a, .. }) = it.next() {
+        s += a;
+    }
+    s
+}
+";
+
+const RS_SHAPES: &str = "use crate::Foo;
+
+pub fn make() -> Foo {
+    Foo { a: 1, b: 2 }
+}
+
+pub fn make_ref() -> &'static Foo {
+    &Foo { a: 1, b: 2 }
+}
+
+pub fn sum_it(f: Foo) -> i32 {
+    match f {
+        Foo { a, .. } => a,
+    }
+}
+
+pub fn destruct(f: &Foo) -> i32 {
+    let Foo { a, b } = f;
+    a + b
+}
+
+pub fn many() -> Vec<Foo> {
+    vec![Foo { a: 1, b: 1 }, Foo { a: 2, b: 2 }]
+}
+
+impl Foo {
+    pub fn default_one() -> Foo {
+        Foo { a: 0, b: 0 }
+    }
+}
+";
+
+#[test]
+fn rust_patterns_nested_in_groups_are_not_constructions_and_literals_in_calls_are() {
+    let repo = scanned_repo(&[
+        ("src/lib.rs", RS_PATTERN_LIB),
+        ("src/pats.rs", RS_PATTERNS),
+        ("src/shapes.rs", RS_SHAPES),
+    ]);
+
+    let foo = report(&repo, "Foo", Some("src/lib.rs"));
+
+    let mut expected = vec![
+        at(&repo, "src/pats.rs", "f(Foo { a: 1, b: 2 })"),
+        at(&repo, "src/pats.rs", "Outer { inner: Foo { a: 1, b: 2 } }"),
+        format!(
+            "src/shapes.rs:{}",
+            line_of(&repo, "src/shapes.rs", "pub fn make() -> Foo") + 1
+        ),
+        at(&repo, "src/shapes.rs", "&Foo { a: 1, b: 2 }"),
+        at(&repo, "src/shapes.rs", "vec![Foo { a: 1, b: 1 }"),
+        at(&repo, "src/shapes.rs", "Foo { a: 0, b: 0 }"),
+    ];
+    expected.sort();
+    let mut built = constructed(&foo);
+    built.sort();
+    assert_eq!(built, expected, "{}", dump(&foo));
+}
+
+const RS_PATTERN_BESIDE_LITERAL: &str = r#"pub struct Foo {
+    pub a: i32,
+}
+
+pub fn closure(v: Vec<Foo>) -> Vec<Foo> {
+    v.into_iter().map(|Foo { a }| Foo { a: a + 1 }).collect()
+}
+
+pub fn arm(f: Foo) -> Foo {
+    match f {
+        Foo { a } => Foo { a: a + 1 },
+    }
+}
+
+pub fn if_let(f: Foo) -> Foo {
+    if let Foo { a } = f { Foo { a: a + 1 } } else { f }
+}
+
+pub fn alternation(f: Foo) -> Foo {
+    match f {
+        Foo { a: 1 } | Foo { a: 3 } => Foo { a: 9 },
+        other => other,
+    }
+}
+
+pub fn pattern_only(f: Foo) -> i32 {
+    let Foo { a } = f;
+    a
+}
+
+pub fn text_beside_a_pattern(f: Foo) -> String {
+    let Foo { a } = f; let s = "Foo { a: 1 }";
+    let Foo { a } = f; // Foo { a: 2 }
+    s
+}
+"#;
+
+#[test]
+fn a_rust_literal_on_the_line_of_a_pattern_of_the_same_type_is_a_construction() {
+    let repo = scanned_repo(&[("src/lib.rs", RS_PATTERN_BESIDE_LITERAL)]);
+
+    let foo = report(&repo, "Foo", None);
+
+    assert_eq!(
+        constructed(&foo),
+        [
+            at(&repo, "src/lib.rs", "map(|Foo { a }|"),
+            at(&repo, "src/lib.rs", "Foo { a } => Foo { a: a + 1 }"),
+            at(&repo, "src/lib.rs", "if let Foo { a } = f { Foo"),
+            at(&repo, "src/lib.rs", "Foo { a: 1 } | Foo { a: 3 }"),
+        ],
+        "{}",
+        dump(&foo)
+    );
+}
+
+#[test]
+fn a_go_literal_on_the_line_of_a_parameter_of_the_same_type_is_a_construction() {
+    let repo = scanned_repo(&[
+        ("go.mod", "module example.com/m\n\ngo 1.21\n"),
+        (
+            "a.go",
+            "package m\n\ntype Foo struct{ A int }\n\nfunc Bump(f Foo) Foo { return Foo{A: f.A + 1} }\n\nfunc Keep(f Foo) Foo { return f }\n",
+        ),
+    ]);
+
+    let foo = report(&repo, "Foo", None);
+
+    assert_eq!(
+        constructed(&foo),
+        [at(&repo, "a.go", "func Bump")],
+        "{}",
+        dump(&foo)
+    );
+}
+
+#[test]
+fn python_java_and_typescript_calls_to_a_class_are_constructions() {
+    let python = scanned_repo(&[
+        ("pkg/foo.py", "class Foo:\n    pass\n"),
+        (
+            "pkg/use.py",
+            "from pkg.foo import Foo\n\n\ndef make():\n    return Foo()\n\n\ndef pair(x: Foo):\n    return (Foo(), Foo())\n",
+        ),
+    ]);
+    let java = scanned_repo(&[
+        ("Foo.java", "public class Foo {\n}\n"),
+        (
+            "Main.java",
+            "public class Main {\n    Foo make() {\n        return new Foo();\n    }\n\n    void take(Foo f) {\n    }\n}\n",
+        ),
+    ]);
+    let typescript = scanned_repo(&[
+        ("src/foo.ts", "export class Foo {}\n"),
+        (
+            "src/use.ts",
+            "import { Foo } from './foo';\n\nexport function make() {\n  return new Foo();\n}\n\nexport function take(f: Foo) {}\n",
+        ),
+    ]);
+
+    assert_eq!(
+        constructed(&report(&python, "Foo", None)),
+        ["pkg/use.py:5", "pkg/use.py:9"]
+    );
+    assert_eq!(constructed(&report(&java, "Foo", None)), ["Main.java:3"]);
+    assert_eq!(
+        constructed(&report(&typescript, "Foo", None)),
+        ["src/use.ts:4"]
+    );
+}
+
+const GO_STRUCTS: &str = "package m
+
+type Foo struct {
+	A int
+}
+
+type Box[T any] struct {
+	V T
+}
+
+func (f Foo) Get() int {
+	return f.A
+}
+
+func New() Foo {
+	return Foo{A: 1}
+}
+
+func NewPtr() *Foo {
+	return &Foo{A: 2}
+}
+
+func Many() []Foo {
+	return []Foo{{A: 3}}
+}
+
+func Pair() (Foo, error) {
+	return Foo{A: 4}, nil
+}
+
+func Gen() Box[int] {
+	return Box[int]{V: 5}
+}
+
+func lit() {
+	var y Foo
+	_ = y
+	f := func() Foo {
+		return Foo{A: 6}
+	}
+	_ = f
+}
+";
+
+#[test]
+fn go_composite_literals_are_constructions_and_return_types_are_not() {
+    let repo = scanned_repo(&[
+        ("go.mod", "module example.com/m\n\ngo 1.21\n"),
+        ("a.go", GO_STRUCTS),
+    ]);
+
+    let foo = report(&repo, "Foo", None);
+    let boxed = report(&repo, "Box", None);
+
+    assert_eq!(
+        constructed(&foo),
+        [
+            at(&repo, "a.go", "Foo{A: 1}"),
+            at(&repo, "a.go", "&Foo{A: 2}"),
+            at(&repo, "a.go", "[]Foo{{A: 3}}"),
+            at(&repo, "a.go", "Foo{A: 4}"),
+            at(&repo, "a.go", "Foo{A: 6}"),
+        ],
+        "{}",
+        dump(&foo)
+    );
+    assert_eq!(
+        constructed(&boxed),
+        [at(&repo, "a.go", "Box[int]{V: 5}")],
+        "{}",
+        dump(&boxed)
+    );
+}
+
+const GO_LITERALS_AMONG_TEXT: &str = "package main
+
+type Foo struct{ A int }
+
+func raw() Foo { s := `http://x`; _ = s; return Foo{A: 1} }
+
+func plain(f Foo) int { s := \"http://x\"; _ = s; return f.A }
+
+func rune_quote(f Foo) Foo { r := '\"'; _ = r; return Foo{A: 3} }
+
+func in_raw(f Foo) int { s := `Foo{A: 1} \"`; return len(s) + f.A }
+";
+
+#[test]
+fn a_go_raw_string_or_rune_literal_does_not_hide_a_later_composite_literal() {
+    let repo = scanned_repo(&[
+        ("go.mod", "module example.com/m\n\ngo 1.21\n"),
+        ("a.go", GO_LITERALS_AMONG_TEXT),
+    ]);
+
+    let foo = report(&repo, "Foo", None);
+
+    assert_eq!(
+        constructed(&foo),
+        [
+            at(&repo, "a.go", "func raw()"),
+            at(&repo, "a.go", "func rune_quote"),
+        ],
+        "{}",
+        dump(&foo)
+    );
+}
+
+const RS_LITERALS_AMONG_TEXT: &str = r####"pub struct Foo {
+    pub a: i32,
+}
+
+pub fn in_comment(x: Foo) -> i32 { let Foo { a } = x; /* Foo { a: 1 } */ a }
+
+pub fn after_char(x: Foo, c: char) -> Foo { let Foo { a } = x; if c == '"' { Foo { a } } else { Foo { a: 0 } } }
+
+pub fn in_raw(x: Foo) -> i32 { let Foo { a } = x; let s = r#"say "Foo { a: 1 }" ok"#; a + s.len() as i32 }
+
+pub fn after_comment(x: Foo) -> Foo { let Foo { a } = x; /* done */ Foo { a } }
+"####;
+
+#[test]
+fn a_rust_comment_or_raw_string_holds_no_construction_and_a_char_quote_hides_none() {
+    let repo = scanned_repo(&[("src/lib.rs", RS_LITERALS_AMONG_TEXT)]);
+
+    let foo = report(&repo, "Foo", None);
+
+    assert_eq!(
+        constructed(&foo),
+        [
+            at(&repo, "src/lib.rs", "pub fn after_char"),
+            at(&repo, "src/lib.rs", "pub fn after_comment"),
+        ],
+        "{}",
+        dump(&foo)
+    );
+}
+
+#[test]
+fn a_call_that_the_report_excludes_is_not_a_construction() {
+    let repo = scanned_repo(&[
+        ("a/foo.py", "class Foo:\n    pass\n"),
+        (
+            "a/use.py",
+            "from a.foo import Foo\n\n\ndef make():\n    return Foo()\n",
+        ),
+        (
+            "b/other.py",
+            "class Foo:\n    pass\n\n\ndef make():\n    return Foo()\n",
+        ),
+    ]);
+
+    let far = first_definition_report(&repo, "Foo", "a/foo.py");
+
+    assert_eq!(constructed(&far), ["a/use.py:5"], "{}", dump(&far));
+    assert_site(
+        &far,
+        "b/other.py",
+        6,
+        SiteLabel::Excluded,
+        "resolves to `Foo` (b/other.py:1)",
+    );
+}
+
+#[test]
+fn constructions_print_one_line_with_the_lines_folded_per_file() {
+    let repo = scanned_repo(&[
+        ("pkg/models.py", "class Foo:\n    pass\n"),
+        (
+            "pkg/a.py",
+            "from pkg.models import Foo\n\n\ndef one():\n    return Foo()\n\n\ndef two():\n    return Foo()\n",
+        ),
+        (
+            "pkg/b.py",
+            "from pkg.models import Foo\n\n\ndef three():\n    return Foo()\n",
+        ),
+        ("notes.md", "Foo is documented here\n"),
+    ]);
+    let foo = report(&repo, "Foo", None);
+
+    let text = format_reference_report(&foo, 20);
+    let folded = format_reference_report(&foo, 2);
+
+    assert!(
+        text.contains("Constructions (3): pkg/a.py: 5, 9 · pkg/b.py: 5\nText only (1): "),
+        "{text}"
+    );
+    assert!(
+        folded.contains(
+            "Constructions (3): pkg/a.py: 5, 9\n… 1 more construction in 1 file: pkg/b.py (1)\n"
+        ),
+        "{folded}"
+    );
+    assert_eq!(
+        serde_json::to_value(&foo).unwrap()["constructions"],
+        serde_json::json!([
+            {"path": "pkg/a.py", "line": 5},
+            {"path": "pkg/a.py", "line": 9},
+            {"path": "pkg/b.py", "line": 5},
+        ])
+    );
+}
+
+#[test]
+fn a_type_with_no_construction_and_a_function_print_no_construction_section() {
+    let repo = scanned_repo(&[
+        (
+            "pkg/models.py",
+            "class Foo:\n    pass\n\n\ndef helper():\n    return 1\n",
+        ),
+        (
+            "pkg/use.py",
+            "from pkg.models import helper\n\n\ndef go():\n    return helper()\n",
+        ),
+    ]);
+
+    for name in ["Foo", "helper"] {
+        let report = report(&repo, name, None);
+        assert!(report.constructions.is_empty());
+        assert!(!format_reference_report(&report, 20).contains("Constructions"));
+        assert!(
+            serde_json::to_value(&report)
+                .unwrap()
+                .get("constructions")
+                .is_none()
+        );
+    }
+}
+
+const RS_ENUM: &str = "pub enum Kind {
+    A,
+    B,
+    C(i32),
+}
+
+pub fn classify(k: Kind) -> i32 {
+    match k {
+        Kind::A => 1,
+        Kind::B => 2,
+        Kind::C(n) => n,
+    }
+}
+
+pub fn single() -> Kind {
+    Kind::B
+}
+";
+
+#[test]
+fn a_rust_enum_lists_the_functions_that_name_its_variants_most_variants_first() {
+    let repo = scanned_repo(&[("src/lib.rs", RS_ENUM)]);
+
+    let kind = report(&repo, "Kind", None);
+
+    let rows: Vec<(String, usize, usize, usize)> = kind
+        .variant_uses
+        .iter()
+        .map(|row| {
+            (
+                row.caller.clone(),
+                row.line,
+                row.variants_used,
+                row.variants_total,
+            )
+        })
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            (
+                "classify".to_string(),
+                line_of(&repo, "src/lib.rs", "Kind::A"),
+                3,
+                3
+            ),
+            (
+                "single".to_string(),
+                line_of(&repo, "src/lib.rs", "fn single") + 1,
+                1,
+                3
+            ),
+        ],
+        "{}",
+        dump(&kind)
+    );
+    assert!(kind.constructions.is_empty());
+}
+
+#[test]
+fn variant_uses_print_after_the_sites_with_the_function_count_and_fold_after_the_limit() {
+    let repo = scanned_repo(&[
+        ("src/lib.rs", RS_ENUM),
+        ("notes.md", "Kind is documented here\n"),
+    ]);
+    let kind = report(&repo, "Kind", None);
+    let first = line_of(&repo, "src/lib.rs", "Kind::A");
+    let second = line_of(&repo, "src/lib.rs", "fn single") + 1;
+
+    let text = format_reference_report(&kind, 20);
+    let folded = format_reference_report(&kind, 1);
+
+    assert!(
+        text.contains(&format!(
+            "Variant uses (2 functions): a match in them may need a new arm\n\
+             - `classify` [src/lib.rs:{first}] names 3 of 3 variants\n\
+             - `single` [src/lib.rs:{second}] names 1 of 3 variants\n\
+             Text only (1): "
+        )),
+        "{text}"
+    );
+    assert!(
+        folded.contains(&format!(
+            "- `classify` [src/lib.rs:{first}] names 3 of 3 variants\n\
+             … 1 more function in 1 file: src/lib.rs (1)\n"
+        )),
+        "{folded}"
+    );
+    let json = serde_json::to_value(&kind).unwrap();
+    assert_eq!(json["variant_uses"][0]["variants_used"], 3);
+    assert_eq!(json["variant_uses"][0]["variants_total"], 3);
+    assert_eq!(json["variant_uses"][0]["caller"], "classify");
+}
+
+#[test]
+fn variant_rows_with_the_same_count_sort_by_path() {
+    let repo = scanned_repo(&[
+        (
+            "src/lib.rs",
+            "pub mod b;\npub mod a;\n\npub enum Kind {\n    A,\n    B,\n}\n",
+        ),
+        (
+            "src/b.rs",
+            "use crate::Kind;\n\npub fn from_b() -> Kind {\n    Kind::A\n}\n",
+        ),
+        (
+            "src/a.rs",
+            "use crate::Kind;\n\npub fn from_a() -> Kind {\n    Kind::B\n}\n",
+        ),
+    ]);
+
+    let kind = report(&repo, "Kind", None);
+
+    let rows: Vec<(&str, &str)> = kind
+        .variant_uses
+        .iter()
+        .map(|row| (row.path.as_str(), row.caller.as_str()))
+        .collect();
+    assert_eq!(
+        rows,
+        [("src/a.rs", "from_a"), ("src/b.rs", "from_b")],
+        "{}",
+        dump(&kind)
+    );
+}
+
+#[test]
+fn qualified_member_accesses_of_python_typescript_csharp_and_java_enums_are_variant_uses() {
+    let python = scanned_repo(&[(
+        "color.py",
+        "from enum import Enum\n\n\nclass Color(Enum):\n    RED = 1\n    GREEN = 2\n    BLUE = 3\n\n\nRED_ALERT = 4\n\n\ndef pick(c):\n    if c == Color.RED:\n        return 1\n    elif c == Color.GREEN:\n        return 2\n    return Color.BLUE\n\n\ndef unrelated():\n    RED = 5\n    return RED\n",
+    )]);
+    let typescript = scanned_repo(&[(
+        "color.ts",
+        "export enum Shade {\n  Light,\n  Dark,\n}\n\nexport function flip(s: Shade): Shade {\n  return s === Shade.Light ? Shade.Dark : Shade.Light;\n}\n",
+    )]);
+    let csharp = scanned_repo(&[(
+        "Mode.cs",
+        "public enum Mode { Fast, Slow }\n\npublic class Runner {\n    public int Run(Mode m) {\n        return m == Mode.Fast ? 1 : 2;\n    }\n}\n",
+    )]);
+    let java = scanned_repo(&[(
+        "Level.java",
+        "public enum Level {\n    LOW,\n    HIGH;\n\n    static int score(Level l) {\n        switch (l) {\n            case LOW:\n                return 1;\n            default:\n                return Level.HIGH.ordinal();\n        }\n    }\n}\n",
+    )]);
+
+    let rows = |repo: &Repo, name: &str| -> Vec<String> {
+        report(repo, name, None)
+            .variant_uses
+            .iter()
+            .map(|row| {
+                format!(
+                    "{} {} of {}",
+                    row.caller, row.variants_used, row.variants_total
+                )
+            })
+            .collect()
+    };
+
+    assert_eq!(rows(&python, "Color"), ["pick 3 of 3"]);
+    assert_eq!(rows(&typescript, "Shade"), ["flip 2 of 2"]);
+    assert_eq!(rows(&csharp, "Mode"), ["Run 1 of 2"]);
+    assert_eq!(rows(&java, "Level"), ["score 1 of 2"]);
+}
+
+#[test]
+fn a_name_equal_to_a_variant_on_a_line_without_the_enum_is_not_a_variant_use() {
+    let repo = scanned_repo(&[(
+        "src/lib.rs",
+        "pub enum Kind {\n    A,\n    B,\n}\n\npub fn shadow() -> i32 {\n    let A = 1;\n    A\n}\n",
+    )]);
+
+    let kind = report(&repo, "Kind", None);
+
+    assert!(kind.variant_uses.is_empty(), "{:?}", kind.variant_uses);
+    let text = format_reference_report(&kind, 20);
+    assert!(!text.contains("Variant uses"), "{text}");
+    assert!(
+        serde_json::to_value(&kind)
+            .unwrap()
+            .get("variant_uses")
+            .is_none()
+    );
+}
+
+const RS_STATUS: &str = "pub enum Status {
+    Ok,
+    Err,
+    Some,
+    Warn,
+}
+
+pub fn parse(n: i32, s: Status) -> Option<Result<i32, ()>> {
+    let w = Status::Warn;
+    if matches!(s, Status::Warn) { Some(Ok(n)) } else { Some(Err(())) }
+}
+
+pub fn qualified(s: Status) -> Status {
+    match s {
+        Status::Ok => Status::Err,
+        _ => crate::Status::Some,
+    }
+}
+";
+
+#[test]
+fn rust_names_that_equal_variants_count_only_when_the_enum_qualifies_them() {
+    let repo = scanned_repo(&[("src/lib.rs", RS_STATUS)]);
+
+    let status = report(&repo, "Status", None);
+
+    let rows: Vec<String> = status
+        .variant_uses
+        .iter()
+        .map(|row| {
+            format!(
+                "{} {} of {}",
+                row.caller, row.variants_used, row.variants_total
+            )
+        })
+        .collect();
+    assert_eq!(
+        rows,
+        ["qualified 3 of 4", "parse 1 of 4"],
+        "{}",
+        dump(&status)
+    );
+}
+
+#[test]
+fn a_typescript_call_that_shares_a_variant_name_is_not_a_variant_use_but_the_member_access_is() {
+    let repo = scanned_repo(&[(
+        "color.ts",
+        "export enum Shade {\n  Light,\n  Dark,\n}\n\nexport function Dark(): void {}\n\nexport function flip(s: Shade): Shade {\n  return s === Shade.Light ? Dark() : s;\n}\n",
+    )]);
+
+    let shade = report(&repo, "Shade", Some("color.ts"));
+
+    let rows: Vec<String> = shade
+        .variant_uses
+        .iter()
+        .map(|row| {
+            format!(
+                "{} {} of {}",
+                row.caller, row.variants_used, row.variants_total
+            )
+        })
+        .collect();
+    assert_eq!(rows, ["flip 1 of 2"], "{}", dump(&shade));
+}
+
+fn variant_rows(repo: &Repo, name: &str) -> Vec<String> {
+    report(repo, name, None)
+        .variant_uses
+        .iter()
+        .map(|row| {
+            format!(
+                "{} {} of {}",
+                row.caller, row.variants_used, row.variants_total
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn an_unscoped_c_enum_counts_a_bare_enumerator_on_a_line_with_the_enum() {
+    let repo = scanned_repo(&[(
+        "color.c",
+        "enum Color { RED, GREEN, BLUE };\n\nint rank(enum Color c) { return c == RED ? 1 : 0; }\n\nint mix(void) {\n    enum Color a = RED, b = GREEN;\n    return a == b;\n}\n\nint plain(void) {\n    int x = GREEN;\n    return x;\n}\n",
+    )]);
+
+    assert_eq!(
+        variant_rows(&repo, "Color"),
+        ["mix 2 of 3", "rank 1 of 3"],
+        "{}",
+        dump(&report(&repo, "Color", None))
+    );
+}
+
+#[test]
+fn an_unscoped_c_enum_counts_a_bare_enumerator_in_a_function_that_names_the_enum() {
+    let c = scanned_repo(&[(
+        "color.c",
+        "enum Color { RED, GREEN, BLUE };\n\nint rank(enum Color c) {\n    switch (c) {\n    case RED: return 1;\n    case GREEN: return 2;\n    default: return 0;\n    }\n}\n\nint shadow(enum Color c) {\n    int GREEN = 3;\n    return c + GREEN;\n}\n\nint plain(int c) {\n    switch (c) {\n    case RED: return 1;\n    default: return 0;\n    }\n}\n",
+    )]);
+    let cpp = scanned_repo(&[(
+        "shade.cpp",
+        "enum Shade { Light, Dark, Dim };\n\nenum class Mode { Fast, Slow };\n\nint pick(Shade s, Mode m) {\n    switch (s) {\n    case Light: return 1;\n    case Dim: return 2;\n    default: break;\n    }\n    switch (m) {\n    case Mode::Fast: return 3;\n    default: return 0;\n    }\n}\n",
+    )]);
+
+    assert_eq!(
+        variant_rows(&c, "Color"),
+        ["rank 2 of 3"],
+        "{}",
+        dump(&report(&c, "Color", None))
+    );
+    assert_eq!(
+        variant_rows(&cpp, "Shade"),
+        ["pick 2 of 3"],
+        "{}",
+        dump(&report(&cpp, "Shade", None))
+    );
+    assert_eq!(
+        variant_rows(&cpp, "Mode"),
+        ["pick 1 of 2"],
+        "{}",
+        dump(&report(&cpp, "Mode", None))
+    );
+}
+
+#[test]
+fn a_parameter_or_local_named_like_an_enumerator_is_not_a_variant_use_on_a_site_line() {
+    let c = scanned_repo(&[(
+        "color.c",
+        "enum Color { RED, GREEN, BLUE };\n\nint named(enum Color c, int BLUE) { return BLUE + c; }\n\nint pointer(enum Color c, int *BLUE) { return *BLUE + c; }\n\nint split(enum Color c,\n          int BLUE) {\n    return BLUE + c;\n}\n\nint old(BLUE, c) enum Color c; int BLUE; { return BLUE + c; }\n\nint local(enum Color c) { int GREEN = 2; return c + GREEN; }\n\nint real(enum Color c) { return c == BLUE; }\n",
+    )]);
+    let cpp = scanned_repo(&[(
+        "color.cpp",
+        "enum Color { RED, GREEN, BLUE };\n\nint named(Color c, int BLUE = 3) { return BLUE + c; }\n\nint fallback(Color c, int x = BLUE) { return x + c; }\n",
+    )]);
+
+    assert_eq!(
+        variant_rows(&c, "Color"),
+        ["real 1 of 3"],
+        "{}",
+        dump(&report(&c, "Color", None))
+    );
+    assert_eq!(
+        variant_rows(&cpp, "Color"),
+        ["fallback 1 of 3"],
+        "{}",
+        dump(&report(&cpp, "Color", None))
+    );
+}
+
+#[test]
+fn an_unscoped_cpp_enum_counts_bare_and_qualified_enumerators() {
+    let repo = scanned_repo(&[(
+        "color.cpp",
+        "enum Color { RED, GREEN, BLUE };\n\nColor paint(Color c) {\n    Color d = RED;\n    return c == Color::GREEN ? d : c;\n}\n\nint plain() {\n    int x = BLUE;\n    return x;\n}\n",
+    )]);
+
+    assert_eq!(
+        variant_rows(&repo, "Color"),
+        ["paint 2 of 3"],
+        "{}",
+        dump(&report(&repo, "Color", None))
+    );
+}
+
+#[test]
+fn a_cpp_scoped_enum_counts_only_the_qualified_enumerator() {
+    let class = scanned_repo(&[(
+        "shade.cpp",
+        "enum class Shade { Light, Dark };\n\nint Light = 1;\n\nShade bare() {\n    Shade s = static_cast<Shade>(Light);\n    return s;\n}\n\nShade qualified() {\n    Shade s = Shade::Dark;\n    return s;\n}\n",
+    )]);
+    let record = scanned_repo(&[(
+        "mode.cpp",
+        "enum struct Mode { Fast, Slow };\n\nint Slow = 2;\n\nMode pick() {\n    Mode m = static_cast<Mode>(Slow);\n    return m;\n}\n",
+    )]);
+
+    assert_eq!(
+        variant_rows(&class, "Shade"),
+        ["qualified 1 of 2"],
+        "{}",
+        dump(&report(&class, "Shade", None))
+    );
+    assert!(variant_rows(&record, "Mode").is_empty());
+}
+
+const FLASK_VIEW: (&str, &str) = (
+    "app.py",
+    "from flask import Flask\n\napp = Flask(__name__)\n\n\n@app.route(\"/x\", methods=[\"POST\"])\ndef target():\n    return \"x\"\n\n\napp.add_url_rule(\"/y\", view_func=target)\n",
+);
+
+fn registered(report: &ReferenceReport) -> Vec<String> {
+    report
+        .registrations
+        .iter()
+        .map(|row| {
+            format!(
+                "{} {}:{}{}",
+                row.pattern_id,
+                row.path,
+                row.line,
+                if row.by_name { " (by name)" } else { "" }
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn a_flask_view_lists_its_decorator_route_and_its_add_url_rule_by_name() {
+    let repo = scanned_repo(&[FLASK_VIEW]);
+    let decorator = line_of(&repo, "app.py", "@app.route");
+    let rule = line_of(&repo, "app.py", "add_url_rule");
+
+    let target = report(&repo, "target", None);
+
+    assert_eq!(
+        registered(&target),
+        [
+            format!("flask.route.v1 app.py:{decorator}"),
+            format!("flask.route.v1 app.py:{rule} (by name)"),
+        ],
+        "{}",
+        dump(&target)
+    );
+    let text = format_reference_report(&target, 20);
+    assert!(
+        text.contains(&format!(
+            "Registrations (2):\n\
+             - route POST /x [app.py:{decorator}]\n\
+             - route GET /y [app.py:{rule}] (by name)\n"
+        )),
+        "{text}"
+    );
+}
+
+#[test]
+fn a_function_of_the_same_name_in_another_file_gets_no_row_from_a_file_that_defines_its_own() {
+    let repo = scanned_repo(&[
+        FLASK_VIEW,
+        ("other/views.py", "def target():\n    return \"other\"\n"),
+    ]);
+
+    let other = report(&repo, "target", Some("other/views.py"));
+
+    assert!(other.registrations.is_empty(), "{}", dump(&other));
+}
+
+const FLASK_IMPORTING_REGISTRAR: (&str, &str) = (
+    "other/reg.py",
+    "from flask import Flask\nfrom .views import target\n\napp2 = Flask(__name__)\napp2.add_url_rule(\"/other\", view_func=target)\n",
+);
+
+#[test]
+fn a_view_registered_through_an_import_keeps_its_by_name_row() {
+    let repo = scanned_repo(&[
+        FLASK_VIEW,
+        ("other/views.py", "def target():\n    return \"other\"\n"),
+        FLASK_IMPORTING_REGISTRAR,
+    ]);
+    let registrar = line_of(&repo, "other/reg.py", "add_url_rule");
+
+    let other = report(&repo, "target", Some("other/views.py"));
+
+    assert_eq!(
+        registered(&other),
+        [format!("flask.route.v1 other/reg.py:{registrar} (by name)")],
+        "{}",
+        dump(&other)
+    );
+}
+
+#[test]
+fn a_by_name_row_at_a_site_the_report_labels_excluded_is_dropped() {
+    let repo = scanned_repo(&[
+        FLASK_VIEW,
+        ("other/views.py", "def target():\n    return \"other\"\n"),
+        FLASK_IMPORTING_REGISTRAR,
+    ]);
+    let decorator = line_of(&repo, "app.py", "@app.route");
+    let rule = line_of(&repo, "app.py", "add_url_rule");
+    let registrar = line_of(&repo, "other/reg.py", "add_url_rule");
+
+    let target = report(&repo, "target", Some("app.py"));
+
+    assert_site(
+        &target,
+        "other/reg.py",
+        registrar,
+        SiteLabel::Excluded,
+        "resolves to `target` (other/views.py:1)",
+    );
+    assert_eq!(
+        registered(&target),
+        [
+            format!("flask.route.v1 app.py:{decorator}"),
+            format!("flask.route.v1 app.py:{rule} (by name)"),
+        ],
+        "{}",
+        dump(&target)
+    );
+}
+
+#[test]
+fn a_by_name_row_is_dropped_when_the_excluded_site_is_on_a_later_line_of_the_fact() {
+    let repo = scanned_repo(&[
+        FLASK_VIEW,
+        ("other/views.py", "def target():\n    return \"other\"\n"),
+        (
+            "other/reg.py",
+            "from flask import Flask\nfrom .views import target\n\napp2 = Flask(__name__)\napp2.add_url_rule(\n    \"/other\",\n    view_func=target,\n)\n",
+        ),
+    ]);
+    let decorator = line_of(&repo, "app.py", "@app.route");
+    let rule = line_of(&repo, "app.py", "add_url_rule");
+    let call = line_of(&repo, "other/reg.py", "add_url_rule");
+    let view = line_of(&repo, "other/reg.py", "view_func");
+
+    let target = report(&repo, "target", Some("app.py"));
+
+    assert!(call < view);
+    assert_site(
+        &target,
+        "other/reg.py",
+        view,
+        SiteLabel::Excluded,
+        "resolves to `target` (other/views.py:1)",
+    );
+    assert_eq!(
+        registered(&target),
+        [
+            format!("flask.route.v1 app.py:{decorator}"),
+            format!("flask.route.v1 app.py:{rule} (by name)"),
+        ],
+        "{}",
+        dump(&target)
+    );
+}
+
+#[test]
+fn a_local_function_that_a_test_registers_is_not_a_registration_of_the_routed_view() {
+    let repo = scanned_repo(&[
+        (
+            "views.py",
+            "from flask import Blueprint\n\nbp = Blueprint(\"bp\", __name__)\n\n\n@bp.route(\"/\")\ndef index():\n    return \"real\"\n",
+        ),
+        (
+            "tests/test_basic.py",
+            "from flask import Flask\n\n\ndef test_local():\n    app = Flask(__name__)\n\n    def index():\n        return \"local\"\n\n    app.add_url_rule(\"/\", view_func=index)\n",
+        ),
+    ]);
+    let decorator = line_of(&repo, "views.py", "@bp.route");
+    let rule = line_of(&repo, "tests/test_basic.py", "add_url_rule");
+
+    let routed = report(&repo, "index", Some("views.py"));
+    let local = report(&repo, "index", Some("tests/test_basic.py"));
+
+    assert_eq!(
+        registered(&routed),
+        [format!("flask.route.v1 views.py:{decorator}")],
+        "{}",
+        dump(&routed)
+    );
+    assert_eq!(
+        registered(&local),
+        [format!(
+            "flask.route.v1 tests/test_basic.py:{rule} (by name)"
+        )],
+        "{}",
+        dump(&local)
+    );
+}
+
+const FLASK_HANDLER: (&str, &str) = ("handlers.py", "def list_users():\n    return []\n");
+
+const FLASK_ROUTE_WITH_METHOD: (&str, &str) = (
+    "routes.py",
+    "from flask import Flask\nfrom handlers import list_users\n\napp = Flask(__name__)\n\n\nclass Service:\n    def list_users(self):\n        return [\"svc\"]\n\n\napp.add_url_rule(\"/users\", view_func=list_users)\n",
+);
+
+#[test]
+fn a_method_of_the_same_name_in_the_fact_file_does_not_drop_an_imported_registration() {
+    let repo = scanned_repo(&[FLASK_HANDLER, FLASK_ROUTE_WITH_METHOD]);
+    let rule = line_of(&repo, "routes.py", "add_url_rule");
+
+    let users = report(&repo, "list_users", Some("handlers.py"));
+
+    assert_site(&users, "routes.py", rule, SiteLabel::Proven, "import");
+    assert_eq!(
+        registered(&users),
+        [format!("flask.route.v1 routes.py:{rule} (by name)")],
+        "{}",
+        dump(&users)
+    );
+}
+
+#[test]
+fn a_method_of_the_same_name_does_not_drop_a_registration_the_report_cannot_tie() {
+    let repo = scanned_repo(&[
+        FLASK_HANDLER,
+        ("alt.py", "def list_users():\n    return [\"alt\"]\n"),
+        (
+            "routes.py",
+            "from flask import Flask\n\napp = Flask(__name__)\n\n\nclass Service:\n    def list_users(self):\n        return [\"svc\"]\n\n\napp.add_url_rule(\"/users\", view_func=list_users)\n",
+        ),
+    ]);
+    let rule = line_of(&repo, "routes.py", "add_url_rule");
+
+    let users = report(&repo, "list_users", Some("handlers.py"));
+
+    assert_eq!(
+        site_at(&users, "routes.py", rule).label,
+        SiteLabel::Unresolved,
+        "{}",
+        dump(&users)
+    );
+    assert_eq!(
+        registered(&users),
+        [format!("flask.route.v1 routes.py:{rule} (by name)")],
+        "{}",
+        dump(&users)
+    );
+}
+
+#[test]
+fn a_class_attribute_of_the_same_name_does_not_drop_an_unresolved_registration() {
+    let repo = scanned_repo(&[
+        FLASK_HANDLER,
+        ("alt.py", "def list_users():\n    return [\"alt\"]\n"),
+        (
+            "routes.py",
+            "from flask import Flask\n\napp = Flask(__name__)\n\n\nclass Service:\n    list_users = None\n\n\napp.add_url_rule(\"/users\", view_func=list_users)\n",
+        ),
+    ]);
+    let rule = line_of(&repo, "routes.py", "add_url_rule");
+
+    let users = report(&repo, "list_users", Some("handlers.py"));
+
+    assert_eq!(
+        registered(&users),
+        [format!("flask.route.v1 routes.py:{rule} (by name)")],
+        "{}",
+        dump(&users)
+    );
+}
+
+#[test]
+fn a_parameter_of_the_same_name_in_another_function_does_not_drop_an_unresolved_registration() {
+    let repo = scanned_repo(&[
+        FLASK_HANDLER,
+        ("alt.py", "def list_users():\n    return [\"alt\"]\n"),
+        (
+            "routes.py",
+            "from flask import Flask\n\napp = Flask(__name__)\n\napp.add_url_rule(\"/users\", view_func=list_users)\n\n\ndef helper(list_users=None):\n    return list_users\n",
+        ),
+    ]);
+    let rule = line_of(&repo, "routes.py", "add_url_rule");
+
+    let users = report(&repo, "list_users", Some("handlers.py"));
+
+    assert_eq!(
+        site_at(&users, "routes.py", rule).label,
+        SiteLabel::Unresolved,
+        "{}",
+        dump(&users)
+    );
+    assert_eq!(
+        registered(&users),
+        [format!("flask.route.v1 routes.py:{rule} (by name)")],
+        "{}",
+        dump(&users)
+    );
+}
+
+#[test]
+fn a_parameter_of_the_function_that_holds_the_fact_drops_an_unresolved_registration() {
+    let repo = scanned_repo(&[
+        FLASK_HANDLER,
+        ("alt.py", "def list_users():\n    return [\"alt\"]\n"),
+        (
+            "routes.py",
+            "from flask import Flask\n\napp = Flask(__name__)\n\n\ndef register(list_users=None):\n    app.add_url_rule(\"/users\", view_func=list_users)\n",
+        ),
+    ]);
+
+    let users = report(&repo, "list_users", Some("handlers.py"));
+
+    assert!(users.registrations.is_empty(), "{}", dump(&users));
+}
+
+const FLASK_SELF_HANDLER: (&str, &str) = (
+    "tests/routes.py",
+    "from flask import Flask\n\napp = Flask(__name__)\n\n\ndef test_rules():\n    def index():\n        return \"local\"\n\n    app.add_url_rule(\"/\", view_func=index)\n\n\ndef test_class():\n    class View:\n        def __init__(self, app):\n            app.add_url_rule(\"/v\", \"index\", self.index)\n\n        def index(self):\n            return \"member\"\n\n    View(app)\n",
+);
+
+fn repo_with_self_handler() -> Repo {
+    let alternatives: Vec<(String, String)> = (0..14)
+        .map(|n| {
+            (
+                format!("app/alt{n}.py"),
+                "def index():\n    return \"alt\"\n".to_string(),
+            )
+        })
+        .collect();
+    let mut files: Vec<(&str, &str)> = alternatives
+        .iter()
+        .map(|(path, text)| (path.as_str(), text.as_str()))
+        .collect();
+    files.push(("app/views.py", "def index():\n    return \"real\"\n"));
+    files.push(FLASK_SELF_HANDLER);
+    scanned_repo(&files)
+}
+
+#[test]
+fn a_self_qualified_handler_does_not_register_a_function_of_the_same_name() {
+    let repo = repo_with_self_handler();
+
+    let function = report(&repo, "index", Some("app/views.py"));
+
+    assert!(function.registrations.is_empty(), "{}", dump(&function));
+}
+
+#[test]
+fn a_self_qualified_handler_registers_the_method_of_the_same_name_by_name() {
+    let repo = repo_with_self_handler();
+    let rule = line_of(&repo, "tests/routes.py", "self.index");
+    let method = line_of(&repo, "tests/routes.py", "def index(self)");
+
+    let member = report_at(&repo, "index", "tests/routes.py", method);
+
+    assert_eq!(
+        registered(&member),
+        [format!("flask.route.v1 tests/routes.py:{rule} (by name)")],
+        "{}",
+        dump(&member)
+    );
+}
+
+#[test]
+fn a_module_level_variable_or_class_of_the_same_name_drops_an_unresolved_registration() {
+    let variable = scanned_repo(&[
+        FLASK_HANDLER,
+        ("alt.py", "def list_users():\n    return [\"alt\"]\n"),
+        (
+            "routes.py",
+            "from flask import Flask\n\napp = Flask(__name__)\nlist_users = lambda: []\n\napp.add_url_rule(\"/users\", view_func=list_users)\n",
+        ),
+    ]);
+    let class = scanned_repo(&[
+        FLASK_HANDLER,
+        ("alt.py", "def list_users():\n    return [\"alt\"]\n"),
+        (
+            "routes.py",
+            "from flask import Flask\n\napp = Flask(__name__)\n\n\nclass list_users:\n    pass\n\n\napp.add_url_rule(\"/users\", view_func=list_users)\n",
+        ),
+    ]);
+
+    assert!(
+        report(&variable, "list_users", Some("handlers.py"))
+            .registrations
+            .is_empty()
+    );
+    assert!(
+        report(&class, "list_users", Some("handlers.py"))
+            .registrations
+            .is_empty()
+    );
+}
+
+#[test]
+fn a_proven_site_on_the_lines_of_the_fact_keeps_the_row_despite_a_function_nested_elsewhere() {
+    let repo = scanned_repo(&[
+        FLASK_HANDLER,
+        (
+            "routes.py",
+            "from flask import Flask\nfrom handlers import list_users\n\napp = Flask(__name__)\n\n\ndef make_stub():\n    def list_users():\n        return []\n\n    return list_users\n\n\napp.add_url_rule(\"/users\", view_func=list_users)\n",
+        ),
+    ]);
+    let rule = line_of(&repo, "routes.py", "add_url_rule");
+
+    let users = report(&repo, "list_users", Some("handlers.py"));
+
+    assert_site(&users, "routes.py", rule, SiteLabel::Proven, "import");
+    assert_eq!(
+        registered(&users),
+        [format!("flask.route.v1 routes.py:{rule} (by name)")],
+        "{}",
+        dump(&users)
+    );
+}
+
+#[test]
+fn registrations_print_after_the_sites_and_before_the_text_only_lines() {
+    let repo = scanned_repo(&[FLASK_VIEW, ("notes.md", "target is documented here\n")]);
+    let decorator = line_of(&repo, "app.py", "@app.route");
+    let rule = line_of(&repo, "app.py", "add_url_rule");
+
+    let text = format_reference_report(&report(&repo, "target", None), 20);
+
+    assert!(
+        text.contains(&format!(
+            "- (no enclosing symbol) [app.py:{rule}] (kind: variable_ref; same file)\n\
+             Registrations (2):\n\
+             - route POST /x [app.py:{decorator}]\n\
+             - route GET /y [app.py:{rule}] (by name)\n\
+             Text only (1): "
+        )),
+        "{text}"
+    );
+}
+
+#[test]
+fn registration_rows_fold_after_the_limit_with_the_full_count() {
+    let repo = scanned_repo(&[FLASK_VIEW]);
+    let rule = line_of(&repo, "app.py", "add_url_rule");
+
+    let target = report(&repo, "target", None);
+    let text = format_reference_report(&target, 1);
+
+    assert_eq!(target.registrations.len(), 2);
+    assert!(
+        text.contains(&format!(
+            "Registrations (2):\n\
+             - route POST /x [app.py:{}]\n\
+             … 1 more registration in 1 file: app.py (1)\n",
+            line_of(&repo, "app.py", "@app.route")
+        )),
+        "{text}"
+    );
+    assert!(
+        !text.contains(&format!("app.py:{rule}] (by name)")),
+        "{text}"
+    );
+    let json = serde_json::to_value(&target).unwrap();
+    assert_eq!(json["registrations"][0]["pattern_id"], "flask.route.v1");
+    assert_eq!(json["registrations"][0]["verb"], "POST");
+    assert_eq!(json["registrations"][0]["template"], "/x");
+    assert_eq!(json["registrations"][0]["by_name"], false);
+    assert_eq!(json["registrations"][1]["by_name"], true);
+}
+
+#[test]
+fn a_function_no_framework_fact_names_prints_no_registration_section() {
+    let repo = scanned_repo(&[FLASK_VIEW, ("lib.py", "def helper():\n    return 1\n")]);
+
+    let helper = report(&repo, "helper", None);
+
+    assert!(helper.registrations.is_empty());
+    assert!(!format_reference_report(&helper, 20).contains("Registrations"));
+    assert!(
+        serde_json::to_value(&helper)
+            .unwrap()
+            .get("registrations")
+            .is_none()
+    );
+}
+
+#[test]
+fn a_minimal_api_handler_is_registered_by_name_and_a_fastapi_decorator_by_id() {
+    let csharp = scanned_repo(&[(
+        "Program.cs",
+        "var app = WebApplication.Create();\n\napp.MapGet(\"/hello\", Hello);\n\nstatic string Hello() => \"hi\";\n",
+    )]);
+    let fastapi = scanned_repo(&[(
+        "main.py",
+        "from fastapi import FastAPI\n\napp = FastAPI()\n\n\n@app.get(\"/items\")\ndef items():\n    return []\n",
+    )]);
+
+    let hello = report(&csharp, "Hello", None);
+    let items = report(&fastapi, "items", None);
+
+    assert_eq!(
+        registered(&hello),
+        [format!(
+            "aspnet.minimal_api.route.v1 Program.cs:{} (by name)",
+            line_of(&csharp, "Program.cs", "MapGet")
+        )],
+        "{}",
+        dump(&hello)
+    );
+    assert_eq!(
+        registered(&items),
+        [format!(
+            "fastapi.route.v1 main.py:{}",
+            line_of(&fastapi, "main.py", "def items")
+        )],
+        "{}",
+        dump(&items)
+    );
+    assert!(
+        format_reference_report(&items, 20).contains("- route GET /items [main.py:"),
+        "{}",
+        dump(&items)
+    );
+}
+
+fn insert_fact(repo: &Repo, pattern_id: &str, containing: Option<&str>, metadata: &str) {
+    let conn = rusqlite::Connection::open(&repo.db).unwrap();
+    let file_id: String = conn
+        .query_row(
+            "SELECT file_id FROM files WHERE path = 'app.py'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let serial: i64 = conn
+        .query_row("SELECT COUNT(*) FROM structural_facts", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    conn.execute(
+        "INSERT INTO structural_facts (structural_fact_id, file_id, path, language, pattern_id,
+            capture_name, node_kind, containing_symbol_id, start_line, start_column, end_line,
+            end_column, start_byte, end_byte, confidence, metadata_json)
+         VALUES (?1, ?2, 'app.py', 'python', ?3, 'route', 'call', ?4, ?5, 0, ?5, 1, 0, 1, 1.0, ?6)",
+        rusqlite::params![
+            format!("fact-{serial}"),
+            file_id,
+            pattern_id,
+            containing,
+            100 + serial,
+            metadata
+        ],
+    )
+    .unwrap();
+}
+
+#[test]
+fn every_handler_key_of_a_route_fact_registers_a_function_of_that_name_by_name() {
+    let repo = scanned_repo(&[(
+        "app.py",
+        "def target():\n    return 1\n\n\ndef other():\n    return 2\n",
+    )]);
+    let target_id: String = open_read_only(&repo.db)
+        .unwrap()
+        .query_row(
+            "SELECT symbol_id FROM symbols WHERE name = 'target'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    for key in [
+        "view_target",
+        "handler",
+        "handler_name",
+        "controller_action",
+        "view_name",
+        "function_name",
+    ] {
+        insert_fact(
+            &repo,
+            "demo.route.v1",
+            None,
+            &format!(r#"{{"{key}":"target","route_template":"/{key}"}}"#),
+        );
+    }
+    insert_fact(
+        &repo,
+        "demo.router_mount.v1",
+        None,
+        r#"{"handler_names":["other","target"]}"#,
+    );
+    insert_fact(&repo, "demo.route.v1", None, r#"{"handler":"other"}"#);
+    insert_fact(
+        &repo,
+        "demo.route.v1",
+        None,
+        r#"{"handler_names":["other"]}"#,
+    );
+    insert_fact(&repo, "demo.route.v1", None, r#"{"handler":"Target"}"#);
+    insert_fact(&repo, "demo.route.v1", None, "not json");
+    insert_fact(
+        &repo,
+        "sql.table_definition.v1",
+        None,
+        r#"{"function_name":"target"}"#,
+    );
+    insert_fact(
+        &repo,
+        "demo.route.v1",
+        Some(&target_id),
+        r#"{"api_style":"call_routing","route_template":"/registrar"}"#,
+    );
+    insert_fact(
+        &repo,
+        "demo.decorated.v1",
+        Some(&target_id),
+        r#"{"api_style":"decorator_routing"}"#,
+    );
+
+    let target = report(&repo, "target", None);
+
+    let lines: Vec<(&str, bool)> = target
+        .registrations
+        .iter()
+        .map(|row| (row.pattern_id.as_str(), row.by_name))
+        .collect();
+    assert_eq!(
+        lines,
+        [("demo.route.v1", true); 6]
+            .into_iter()
+            .chain([("demo.router_mount.v1", true)])
+            .collect::<Vec<_>>(),
+        "{:?}",
+        target.registrations
+    );
+    let text = format_reference_report(&target, 20);
+    assert!(text.contains("- route /view_target [app.py:"), "{text}");
+    assert!(
+        text.contains("- demo.router_mount.v1 [app.py:") && !text.contains("/registrar"),
+        "{text}"
+    );
+    assert!(
+        format_reference_report(&report(&repo, "other", None), 20).contains("Registrations (3):"),
+    );
+}
+
+#[test]
+fn a_class_of_the_handler_name_gets_no_row_from_a_file_that_defines_the_name() {
+    let repo = scanned_repo(&[FLASK_VIEW, ("models.py", "class target:\n    pass\n")]);
+
+    let class = report(&repo, "target", Some("models.py"));
+
+    assert!(class.registrations.is_empty(), "{:?}", class.registrations);
+}
+
+#[test]
+fn a_class_that_a_route_fact_names_in_a_file_without_its_definition_is_registered_by_name() {
+    let repo = scanned_repo(&[
+        ("app.py", "def other():\n    return 1\n"),
+        ("models.py", "class Target:\n    pass\n"),
+    ]);
+    insert_fact(&repo, "demo.route.v1", None, r#"{"handler":"Target"}"#);
+
+    let class = report(&repo, "Target", Some("models.py"));
+
+    let rows: Vec<(&str, bool)> = class
+        .registrations
+        .iter()
+        .map(|row| (row.pattern_id.as_str(), row.by_name))
+        .collect();
+    assert_eq!(rows, [("demo.route.v1", true)], "{}", dump(&class));
+}
+
+#[test]
+fn a_django_view_is_registered_by_the_last_segment_of_its_dotted_view_target() {
+    let repo = scanned_repo(&[
+        (
+            "shop/urls.py",
+            "from django.urls import path\nfrom . import views\n\nurlpatterns = [\n    path(\"cart/\", views.cart_view, name=\"cart\"),\n    path(\"pay/\", views.pay),\n]\n",
+        ),
+        (
+            "shop/views.py",
+            "def cart_view(request):\n    return None\n\n\ndef pay(request):\n    return None\n",
+        ),
+    ]);
+    let cart = line_of(&repo, "shop/urls.py", "views.cart_view");
+    let pay = line_of(&repo, "shop/urls.py", "views.pay");
+
+    let cart_view = report(&repo, "cart_view", None);
+    let pay_view = report(&repo, "pay", None);
+
+    assert_eq!(
+        registered(&cart_view),
+        [format!(
+            "django.url_pattern.v1 shop/urls.py:{cart} (by name)"
+        )],
+        "{}",
+        dump(&cart_view)
+    );
+    assert_eq!(
+        registered(&pay_view),
+        [format!(
+            "django.url_pattern.v1 shop/urls.py:{pay} (by name)"
+        )],
+        "{}",
+        dump(&pay_view)
+    );
+    assert!(format_reference_report(&pay_view, 20).contains(&format!(
+        "- django.url_pattern.v1 [shop/urls.py:{pay}] (by name)\n"
+    )));
+}
+
+#[test]
+fn a_dotted_handler_value_matches_only_by_the_whole_last_segment() {
+    let repo = scanned_repo(&[("app.py", "def target():\n    return 1\n")]);
+    for handler in [
+        "pkg.views.target",
+        "pkg.views.mytarget",
+        "pkg._target",
+        "mytarget",
+        "target.run",
+        "pkg.Target",
+    ] {
+        insert_fact(
+            &repo,
+            "demo.route.v1",
+            None,
+            &format!(r#"{{"handler":"{handler}","route_template":"{handler}"}}"#),
+        );
+    }
+    insert_fact(
+        &repo,
+        "demo.router_mount.v1",
+        None,
+        r#"{"handler_names":["pkg.mod.other","pkg.mod.target"],"route_template":"mount"}"#,
+    );
+
+    let target = report(&repo, "target", None);
+
+    let templates: Vec<&str> = target
+        .registrations
+        .iter()
+        .map(|row| row.template.as_deref().unwrap_or_default())
+        .collect();
+    assert_eq!(
+        templates,
+        ["pkg.views.target", "mount"],
+        "{:?}",
+        target.registrations
+    );
+}
+
+const SPRING_CONTROLLER: &str = "import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping(\"/api\")
+public class Ctl {
+    @GetMapping(\"/hello\")
+    public String hello() { return \"hi\"; }
+
+    public String helper() { return \"h\"; }
+}
+";
+
+const ASPNET_CONTROLLER: &str = "using Microsoft.AspNetCore.Mvc;
+
+[ApiController]
+[Route(\"api/items\")]
+public class ItemsController : ControllerBase
+{
+    [HttpGet(\"list\")]
+    public IActionResult List() { return Ok(); }
+
+    public IActionResult Helper() { return Ok(); }
+}
+";
+
+const ACTIX_SERVICE: &str = "use actix_web::{get, web, App};
+
+#[get(\"/hello\")]
+async fn hello() -> &'static str {
+    \"hi\"
+}
+
+fn main() {
+    let _ = App::new().route(\"/ping\", web::get().to(ping));
+}
+
+async fn ping() -> &'static str {
+    \"pong\"
+}
+";
+
+#[test]
+fn a_spring_annotation_registers_the_method_and_the_class_it_marks_by_id() {
+    let repo = scanned_repo(&[("Ctl.java", SPRING_CONTROLLER)]);
+
+    let hello = report(&repo, "hello", None);
+    let class = report(&repo, "Ctl", None);
+    let helper = report(&repo, "helper", None);
+
+    assert_eq!(
+        registered(&hello),
+        [format!(
+            "spring.request_mapping.v1 Ctl.java:{}",
+            line_of(&repo, "Ctl.java", "String hello")
+        )],
+        "{}",
+        dump(&hello)
+    );
+    assert_eq!(
+        registered(&class),
+        [format!(
+            "spring.request_mapping.v1 Ctl.java:{}",
+            line_of(&repo, "Ctl.java", "public class Ctl")
+        )],
+        "{}",
+        dump(&class)
+    );
+    assert!(helper.registrations.is_empty(), "{}", dump(&helper));
+}
+
+#[test]
+fn an_aspnet_attribute_registers_the_action_it_marks_by_id() {
+    let repo = scanned_repo(&[("Controllers/ItemsController.cs", ASPNET_CONTROLLER)]);
+
+    let list = report(&repo, "List", None);
+    let helper = report(&repo, "Helper", None);
+
+    assert_eq!(
+        registered(&list),
+        [format!(
+            "aspnet.attribute_route.v1 Controllers/ItemsController.cs:{}",
+            line_of(&repo, "Controllers/ItemsController.cs", "[HttpGet")
+        )],
+        "{}",
+        dump(&list)
+    );
+    assert!(helper.registrations.is_empty(), "{}", dump(&helper));
+}
+
+#[test]
+fn an_actix_attribute_registers_the_function_it_marks_but_a_call_route_does_not_register_its_caller()
+ {
+    let repo = scanned_repo(&[("src/main.rs", ACTIX_SERVICE)]);
+
+    let hello = report(&repo, "hello", None);
+    let main = report(&repo, "main", None);
+
+    assert_eq!(
+        registered(&hello),
+        [format!(
+            "actix.attribute_route.v1 src/main.rs:{}",
+            line_of(&repo, "src/main.rs", "async fn hello")
+        )],
+        "{}",
+        dump(&hello)
+    );
+    assert!(main.registrations.is_empty(), "{}", dump(&main));
+}
+
+#[test]
+fn registration_paths_use_forward_slashes_even_when_the_index_stores_backslashes() {
+    let repo = scanned_repo(&[("app.py", "def target():\n    return 1\n")]);
+    insert_fact(&repo, "demo.route.v1", None, r#"{"handler":"target"}"#);
+    rusqlite::Connection::open(&repo.db)
+        .unwrap()
+        .execute(
+            "UPDATE structural_facts SET path = 'web\\urls.py' WHERE pattern_id = 'demo.route.v1'",
+            [],
+        )
+        .unwrap();
+
+    let target = report(&repo, "target", None);
+
+    let paths: Vec<&str> = target
+        .registrations
+        .iter()
+        .map(|row| row.path.as_str())
+        .collect();
+    assert_eq!(paths, ["web/urls.py"], "{:?}", target.registrations);
+}
+
+#[test]
+fn override_paths_use_forward_slashes_even_when_the_index_stores_backslashes() {
+    let repo = scanned_repo(&[
+        (
+            "base.py",
+            "class Base:\n    def run(self):\n        return 1\n",
+        ),
+        (
+            "pkg/child.py",
+            "from base import Base\n\n\nclass Child(Base):\n    def run(self):\n        return 2\n",
+        ),
+    ]);
+    rusqlite::Connection::open(&repo.db)
+        .unwrap()
+        .execute(
+            "UPDATE symbols SET path = 'pkg\\child.py' WHERE path = 'pkg/child.py'",
+            [],
+        )
+        .unwrap();
+
+    let base = report(&repo, "run", Some("base.py"));
+
+    let paths: Vec<&str> = base.overrides.iter().map(|row| row.path.as_str()).collect();
+    assert_eq!(paths, ["pkg/child.py"], "{}", dump(&base));
+}
+
+const PY_TESTED: &[(&str, &str)] = &[
+    ("lib.py", "def target():\n    return 1\n"),
+    (
+        "app.py",
+        "from lib import target\n\n\ndef run():\n    return target()\n",
+    ),
+    (
+        "tests/test_a.py",
+        "import pytest\nfrom lib import target\n\n\ndef test_plain():\n    assert target() == 1\n\n\nclass TestKlass:\n    def setup_method(self):\n        target()\n\n    def test_method(self):\n        assert target() == 1\n\n    def helper_in_class(self):\n        return target()\n\n\n@pytest.fixture\ndef fx():\n    return target()\n\n\ndef test_with_helper():\n    def inner():\n        return target()\n\n    assert inner()\n",
+    ),
+];
+
+fn running(report: &ReferenceReport) -> Vec<String> {
+    report
+        .tests
+        .iter()
+        .map(|test| {
+            format!(
+                "{} {}:{} {}",
+                test.name,
+                test.path,
+                test.line,
+                test.command.as_deref().unwrap_or("-")
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn python_tests_that_call_the_target_list_with_their_pytest_commands() {
+    let repo = scanned_repo(PY_TESTED);
+    let plain = line_of(&repo, "tests/test_a.py", "def test_plain");
+    let method = line_of(&repo, "tests/test_a.py", "def test_method");
+    let helper = line_of(&repo, "tests/test_a.py", "def test_with_helper");
+
+    let target = report(&repo, "target", None);
+
+    assert_eq!(
+        running(&target),
+        [
+            format!("test_plain tests/test_a.py:{plain} pytest tests/test_a.py::test_plain"),
+            format!(
+                "test_method tests/test_a.py:{method} pytest tests/test_a.py::TestKlass::test_method"
+            ),
+            format!(
+                "test_with_helper tests/test_a.py:{helper} pytest tests/test_a.py::test_with_helper"
+            ),
+        ],
+        "{}",
+        dump(&target)
+    );
+    let text = format_reference_report(&target, 20);
+    assert!(
+        text.contains(&format!(
+            "Tests that call it (3):\n\
+             - `test_plain` [tests/test_a.py:{plain}] run: pytest tests/test_a.py::test_plain\n\
+             - `test_method` [tests/test_a.py:{method}] run: pytest tests/test_a.py::TestKlass::test_method\n\
+             - `test_with_helper` [tests/test_a.py:{helper}] run: pytest tests/test_a.py::test_with_helper\n"
+        )),
+        "{text}"
+    );
+}
+
+#[test]
+fn setup_fixture_helper_and_production_callers_are_not_tests() {
+    let repo = scanned_repo(PY_TESTED);
+
+    let target = report(&repo, "target", None);
+
+    let names: Vec<&str> = target.tests.iter().map(|test| test.name.as_str()).collect();
+    for caller in ["setup_method", "fx", "helper_in_class", "inner", "run"] {
+        assert!(!names.contains(&caller), "{caller} in {names:?}");
+        assert!(
+            target
+                .sites
+                .iter()
+                .any(|site| site.site.from_symbol_name == caller),
+            "{caller} is a site\n{}",
+            dump(&target)
+        );
+    }
+}
+
+#[test]
+fn a_helper_inside_a_test_maps_to_that_test_once() {
+    let repo = scanned_repo(&[
+        ("lib.py", "def target():\n    return 1\n"),
+        (
+            "tests/test_b.py",
+            "from lib import target\n\n\ndef test_both():\n    def inner():\n        return target()\n\n    return target() + inner()\n",
+        ),
+    ]);
+
+    let target = report(&repo, "target", None);
+
+    assert_eq!(
+        running(&target),
+        [format!(
+            "test_both tests/test_b.py:{} pytest tests/test_b.py::test_both",
+            line_of(&repo, "tests/test_b.py", "def test_both")
+        )],
+        "{}",
+        dump(&target)
+    );
+}
+
+#[test]
+fn a_helper_inside_a_setup_member_is_not_a_test() {
+    let repo = scanned_repo(&[
+        ("lib.py", "def target():\n    return 1\n"),
+        (
+            "tests/test_c.py",
+            "from lib import target\n\n\nclass TestC:\n    def setup_method(self):\n        def inner():\n            return target()\n\n        inner()\n",
+        ),
+    ]);
+
+    let target = report(&repo, "target", None);
+
+    assert!(target.tests.is_empty(), "{}", dump(&target));
+}
+
+#[test]
+fn a_python_test_in_a_nested_class_lists_every_enclosing_class_in_its_command() {
+    let repo = scanned_repo(&[
+        ("lib.py", "def target():\n    return 1\n"),
+        (
+            "tests/test_n.py",
+            "from lib import target\n\n\nclass TestOuter:\n    def test_top(self):\n        assert target() == 1\n\n    class TestInner:\n        def test_deep(self):\n            assert target() == 1\n",
+        ),
+    ]);
+
+    let target = report(&repo, "target", None);
+
+    assert_eq!(
+        running(&target),
+        [
+            format!(
+                "test_top tests/test_n.py:{} pytest tests/test_n.py::TestOuter::test_top",
+                line_of(&repo, "tests/test_n.py", "def test_top")
+            ),
+            format!(
+                "test_deep tests/test_n.py:{} pytest tests/test_n.py::TestOuter::TestInner::test_deep",
+                line_of(&repo, "tests/test_n.py", "def test_deep")
+            ),
+        ],
+        "{}",
+        dump(&target)
+    );
+}
+
+#[test]
+fn a_python_function_named_like_a_test_inside_a_test_folds_into_that_test() {
+    let repo = scanned_repo(&[
+        ("lib.py", "def target():\n    return 1\n"),
+        (
+            "tests/test_n.py",
+            "from lib import target\n\n\ndef test_outer_fn():\n    def test_helper():\n        return target()\n\n    assert test_helper() == 1\n\n\nclass TestKlass:\n    def test_method(self):\n        def test_inner():\n            return target()\n\n        assert test_inner() == 1\n\n\ndef plain():\n    def test_orphan():\n        return target()\n\n    return test_orphan()\n",
+        ),
+    ]);
+
+    let target = report(&repo, "target", None);
+
+    assert_eq!(
+        running(&target),
+        [
+            format!(
+                "test_outer_fn tests/test_n.py:{} pytest tests/test_n.py::test_outer_fn",
+                line_of(&repo, "tests/test_n.py", "def test_outer_fn")
+            ),
+            format!(
+                "test_method tests/test_n.py:{} pytest tests/test_n.py::TestKlass::test_method",
+                line_of(&repo, "tests/test_n.py", "def test_method")
+            ),
+        ],
+        "{}",
+        dump(&target)
+    );
+}
+
+#[test]
+fn a_python_class_inside_a_test_function_folds_into_that_test() {
+    let repo = scanned_repo(&[
+        ("lib.py", "def target():\n    return 1\n"),
+        (
+            "tests/test_f.py",
+            "from lib import target\n\n\ndef test_defines_class():\n    class TestInFunc:\n        class TestDeeper:\n            def test_z(self):\n                return target()\n\n        def test_y(self):\n            return target()\n\n    assert TestInFunc().test_y() == 1\n\n\ndef plain_helper():\n    class TestOrphan:\n        def test_x(self):\n            return target()\n\n    return TestOrphan().test_x()\n",
+        ),
+    ]);
+
+    let target = report(&repo, "target", None);
+
+    assert_eq!(
+        running(&target),
+        [format!(
+            "test_defines_class tests/test_f.py:{} pytest tests/test_f.py::test_defines_class",
+            line_of(&repo, "tests/test_f.py", "def test_defines_class")
+        )],
+        "{}",
+        dump(&target)
+    );
+}
+
+#[test]
+fn a_python_test_in_a_class_pytest_does_not_collect_lists_without_a_command() {
+    let repo = scanned_repo(&[
+        ("lib.py", "def target():\n    return 1\n"),
+        (
+            "tests/base_case.py",
+            "import unittest\n\n\nclass BaseCase(unittest.TestCase):\n    pass\n",
+        ),
+        (
+            "tests/test_g.py",
+            "import unittest\nfrom base_case import BaseCase\nfrom lib import target\n\n\nclass Helper:\n    def test_in_plain(self):\n        assert target() == 1\n\n\nclass FooTests(unittest.TestCase):\n    def test_a(self):\n        self.assertEqual(target(), 1)\n\n    class Nested(unittest.TestCase):\n        def test_nested_case(self):\n            self.assertEqual(target(), 1)\n\n\nclass BarTests(BaseCase):\n    def test_b(self):\n        self.assertEqual(target(), 1)\n\n\nclass TestOuter:\n    class Helper:\n        class TestInner:\n            def test_unreachable(self):\n                assert target() == 1\n\n    class Inner(unittest.TestCase):\n        def test_inner_case(self):\n            self.assertEqual(target(), 1)\n",
+        ),
+    ]);
+    let line = |needle: &str| line_of(&repo, "tests/test_g.py", needle);
+
+    let target = report(&repo, "target", None);
+
+    assert_eq!(
+        running(&target),
+        [
+            format!(
+                "test_in_plain tests/test_g.py:{} -",
+                line("def test_in_plain")
+            ),
+            format!(
+                "test_a tests/test_g.py:{} pytest tests/test_g.py::FooTests::test_a",
+                line("def test_a")
+            ),
+            format!(
+                "test_nested_case tests/test_g.py:{} -",
+                line("def test_nested_case")
+            ),
+            format!(
+                "test_b tests/test_g.py:{} pytest tests/test_g.py::BarTests::test_b",
+                line("def test_b")
+            ),
+            format!(
+                "test_unreachable tests/test_g.py:{} -",
+                line("def test_unreachable")
+            ),
+            format!(
+                "test_inner_case tests/test_g.py:{} pytest tests/test_g.py::TestOuter::Inner::test_inner_case",
+                line("def test_inner_case")
+            ),
+        ],
+        "{}",
+        dump(&target)
+    );
+}
+
+#[test]
+fn a_test_whose_only_site_the_report_excludes_is_not_listed() {
+    let repo = scanned_repo(&[
+        ("lib.py", "def target():\n    return 1\n"),
+        (
+            "src/test/java/FooTest.java",
+            "package x;\n\nimport org.junit.Test;\n\npublic class FooTest {\n    @Test\n    public void checks() {\n        Foo.target();\n    }\n}\n",
+        ),
+    ]);
+
+    let target = report(&repo, "target", Some("lib.py"));
+
+    assert_eq!(target.counts.excluded, 1, "{}", dump(&target));
+    assert!(target.tests.is_empty(), "{}", dump(&target));
+}
+
+#[test]
+fn rust_unit_and_integration_tests_list_with_cargo_commands() {
+    let repo = scanned_repo(&[
+        (
+            "Cargo.toml",
+            "[package]\nname = \"my-crate\"\nversion = \"0.1.0\"\n",
+        ),
+        (
+            "src/lib.rs",
+            "pub fn target() -> i32 {\n    1\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    fn unit_case() {\n        assert_eq!(target(), 1);\n    }\n}\n",
+        ),
+        (
+            "tests/it.rs",
+            "use my_crate::target;\n\n#[test]\nfn integration_case() {\n    assert_eq!(target(), 1);\n}\n",
+        ),
+    ]);
+
+    let target = report(&repo, "target", None);
+
+    assert_eq!(
+        running(&target),
+        [
+            format!(
+                "unit_case src/lib.rs:{} cargo test -p my-crate unit_case",
+                line_of(&repo, "src/lib.rs", "fn unit_case")
+            ),
+            format!(
+                "integration_case tests/it.rs:{} cargo test -p my-crate --test it integration_case",
+                line_of(&repo, "tests/it.rs", "fn integration_case")
+            ),
+        ],
+        "{}",
+        dump(&target)
+    );
+}
+
+#[test]
+fn a_rust_test_without_a_cargo_toml_runs_by_name() {
+    let repo = scanned_repo(&[(
+        "src/lib.rs",
+        "pub fn target() -> i32 {\n    1\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    fn unit_case() {\n        assert_eq!(target(), 1);\n    }\n}\n",
+    )]);
+
+    let target = report(&repo, "target", None);
+
+    assert_eq!(
+        running(&target),
+        [format!(
+            "unit_case src/lib.rs:{} cargo test unit_case",
+            line_of(&repo, "src/lib.rs", "fn unit_case")
+        )],
+        "{}",
+        dump(&target)
+    );
+}
+
+#[test]
+fn a_rust_test_marked_ignore_lists_the_ignored_flag_in_its_command() {
+    let repo = scanned_repo(&[
+        (
+            "Cargo.toml",
+            "[package]\nname = \"my-crate\"\nversion = \"0.1.0\"\n",
+        ),
+        (
+            "src/lib.rs",
+            "pub fn target() -> i32 {\n    1\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    #[ignore = \"slow\"]\n    fn slow_case() {\n        assert_eq!(target(), 1);\n    }\n\n    #[test]\n    fn quick_case() {\n        assert_eq!(target(), 1);\n    }\n}\n",
+        ),
+        (
+            "tests/it.rs",
+            "use my_crate::target;\n\n#[test]\n#[ignore]\nfn slow_integration() {\n    assert_eq!(target(), 1);\n}\n",
+        ),
+    ]);
+
+    let target = report(&repo, "target", None);
+
+    assert_eq!(
+        running(&target),
+        [
+            format!(
+                "slow_case src/lib.rs:{} cargo test -p my-crate slow_case -- --ignored",
+                line_of(&repo, "src/lib.rs", "fn slow_case")
+            ),
+            format!(
+                "quick_case src/lib.rs:{} cargo test -p my-crate quick_case",
+                line_of(&repo, "src/lib.rs", "fn quick_case")
+            ),
+            format!(
+                "slow_integration tests/it.rs:{} cargo test -p my-crate --test it slow_integration -- --ignored",
+                line_of(&repo, "tests/it.rs", "fn slow_integration")
+            ),
+        ],
+        "{}",
+        dump(&target)
+    );
+}
+
+#[test]
+fn java_tests_in_a_build_folder_below_the_root_list_the_cd_prefix() {
+    let main = "package x;\n\npublic class Foo {\n    public static int target() {\n        return 1;\n    }\n}\n";
+    let test = "package x;\n\nimport org.junit.Test;\n\npublic class FooTest {\n    @Test\n    public void checksTarget() {\n        Foo.target();\n    }\n}\n";
+    let cases = [
+        (
+            vec![("mvn/pom.xml", "<project></project>\n")],
+            "mvn",
+            "cd mvn && mvn test -Dtest=FooTest#checksTarget",
+        ),
+        (
+            vec![("gr/gradlew", ""), ("gr/build.gradle", "")],
+            "gr",
+            "cd gr && ./gradlew test --tests 'FooTest.checksTarget'",
+        ),
+        (
+            vec![("gradlew", ""), ("gr/build.gradle", "")],
+            "gr",
+            "cd gr && ../gradlew test --tests 'FooTest.checksTarget'",
+        ),
+    ];
+    for (markers, dir, command) in cases {
+        let main_path = format!("{dir}/src/main/java/x/Foo.java");
+        let test_path = format!("{dir}/src/test/java/x/FooTest.java");
+        let files: Vec<(&str, &str)> = markers
+            .into_iter()
+            .chain([(main_path.as_str(), main), (test_path.as_str(), test)])
+            .collect();
+        let repo = scanned_repo(&files);
+
+        let target = report(&repo, "target", None);
+
+        assert_eq!(
+            running(&target),
+            [format!(
+                "checksTarget {test_path}:{} {command}",
+                line_of(&repo, &test_path, "@Test")
+            )],
+            "{}",
+            dump(&target)
+        );
+    }
+}
+
+#[test]
+fn a_go_test_lists_with_its_folder_relative_to_go_mod() {
+    let repo = scanned_repo(&[
+        ("go.mod", "module example.com/m\n"),
+        (
+            "pkg/foo.go",
+            "package pkg\n\nfunc Target() int {\n\treturn 1\n}\n",
+        ),
+        (
+            "pkg/foo_test.go",
+            "package pkg\n\nimport \"testing\"\n\nfunc TestTarget(t *testing.T) {\n\tif Target() != 1 {\n\t\tt.Fatal(\"x\")\n\t}\n}\n",
+        ),
+    ]);
+
+    let target = report(&repo, "Target", None);
+
+    assert_eq!(
+        running(&target),
+        [format!(
+            "TestTarget pkg/foo_test.go:{} go test ./pkg -run '^TestTarget$'",
+            line_of(&repo, "pkg/foo_test.go", "func TestTarget")
+        )],
+        "{}",
+        dump(&target)
+    );
+}
+
+const GO_TESTED: &[(&str, &str)] = &[
+    ("go.mod", "module example.com/m\n"),
+    (
+        "pkg/foo.go",
+        "package pkg\n\nfunc Target() int {\n\treturn 1\n}\n",
+    ),
+    (
+        "pkg/foo_test.go",
+        "package pkg\n\nimport (\n\t\"fmt\"\n\t\"testing\"\n)\n\nfunc TestPlain(t *testing.T) {\n\tTarget()\n}\n\nfunc TestSub(t *testing.T) {\n\tt.Run(\"case a\", func(t *testing.T) {\n\t\tTarget()\n\t})\n\tt.Run(\"case b\", func(t *testing.T) {\n\t\tTarget()\n\t})\n}\n\nfunc BenchmarkTarget(b *testing.B) {\n\tTarget()\n}\n\nfunc ExampleTarget() {\n\tfmt.Println(Target())\n\t// Output: 1\n}\n\ntype Suite struct{}\n\nfunc (s *Suite) TestSuiteMethod() {\n\tTarget()\n}\n\nfunc helperNotATest(t *testing.T) {\n\tTarget()\n}\n",
+    ),
+];
+
+#[test]
+fn a_go_subtest_closure_folds_into_its_test_function_once() {
+    let repo = scanned_repo(GO_TESTED);
+
+    let target = report(&repo, "Target", None);
+
+    let sub: Vec<String> = running(&target)
+        .into_iter()
+        .filter(|row| row.contains("TestSub") || row.contains("case"))
+        .collect();
+    assert_eq!(
+        sub,
+        [format!(
+            "TestSub pkg/foo_test.go:{} go test ./pkg -run '^TestSub$'",
+            line_of(&repo, "pkg/foo_test.go", "func TestSub")
+        )],
+        "{}",
+        dump(&target)
+    );
+}
+
+#[test]
+fn go_benchmarks_run_with_the_bench_flag_and_functions_go_test_skips_list_without_a_command() {
+    let repo = scanned_repo(GO_TESTED);
+    let line = |needle: &str| line_of(&repo, "pkg/foo_test.go", needle);
+
+    let target = report(&repo, "Target", None);
+
+    assert_eq!(
+        running(&target),
+        [
+            format!(
+                "TestPlain pkg/foo_test.go:{} go test ./pkg -run '^TestPlain$'",
+                line("func TestPlain")
+            ),
+            format!(
+                "TestSub pkg/foo_test.go:{} go test ./pkg -run '^TestSub$'",
+                line("func TestSub")
+            ),
+            format!(
+                "BenchmarkTarget pkg/foo_test.go:{} go test ./pkg -bench '^BenchmarkTarget$' -run '^$'",
+                line("func BenchmarkTarget")
+            ),
+            format!(
+                "ExampleTarget pkg/foo_test.go:{} go test ./pkg -run '^ExampleTarget$'",
+                line("func ExampleTarget")
+            ),
+            format!(
+                "TestSuiteMethod pkg/foo_test.go:{} -",
+                line("TestSuiteMethod()")
+            ),
+            format!(
+                "helperNotATest pkg/foo_test.go:{} -",
+                line("func helperNotATest")
+            ),
+        ],
+        "{}",
+        dump(&target)
+    );
+}
+
+#[test]
+fn a_go_subtest_closure_inside_a_helper_that_is_not_a_test_is_not_listed() {
+    let repo = scanned_repo(&[
+        ("go.mod", "module example.com/m\n"),
+        (
+            "pkg/foo.go",
+            "package pkg\n\nfunc Target() int {\n\treturn 1\n}\n",
+        ),
+        (
+            "pkg/foo_test.go",
+            "package pkg\n\nimport \"testing\"\n\nfunc runCases(t *testing.T) {\n\tt.Run(\"case a\", func(t *testing.T) {\n\t\tTarget()\n\t})\n}\n",
+        ),
+    ]);
+
+    let target = report(&repo, "Target", None);
+
+    assert!(target.tests.is_empty(), "{}", dump(&target));
+}
+
+#[test]
+fn script_tests_list_with_the_runner_of_the_nearest_package_json() {
+    let repo = scanned_repo(&[
+        (
+            "web/package.json",
+            "{\"name\":\"web\",\"devDependencies\":{\"vitest\":\"^1.0.0\"}}\n",
+        ),
+        ("web/lib.js", "export function target() {\n  return 1;\n}\n"),
+        (
+            "web/a.test.js",
+            "import { target } from './lib.js';\n\ndescribe('suite', () => {\n  it('does \"quoted\" y', () => {\n    expect(target()).toBe(1);\n  });\n});\n\ntest('top level', () => {\n  expect(target()).toBe(1);\n});\n",
+        ),
+    ]);
+
+    let target = report(&repo, "target", None);
+
+    assert_eq!(
+        running(&target),
+        [
+            format!(
+                "does \"quoted\" y web/a.test.js:{} cd web && npx vitest run a.test.js -t \"does \\\"quoted\\\" y\"",
+                line_of(&repo, "web/a.test.js", "it('does")
+            ),
+            format!(
+                "top level web/a.test.js:{} cd web && npx vitest run a.test.js -t \"top level\"",
+                line_of(&repo, "web/a.test.js", "test('top level'")
+            ),
+        ],
+        "{}",
+        dump(&target)
+    );
+}
+
+#[test]
+fn a_script_test_without_a_known_runner_lists_without_a_command() {
+    let repo = scanned_repo(&[
+        ("lib.js", "export function target() {\n  return 1;\n}\n"),
+        (
+            "a.test.js",
+            "import { target } from './lib.js';\n\ntest('top level', () => {\n  expect(target()).toBe(1);\n});\n",
+        ),
+    ]);
+
+    let target = report(&repo, "target", None);
+
+    let line = line_of(&repo, "a.test.js", "test('top level'");
+    assert_eq!(
+        running(&target),
+        [format!("top level a.test.js:{line} -")],
+        "{}",
+        dump(&target)
+    );
+    let text = format_reference_report(&target, 20);
+    assert!(
+        text.contains(&format!("- `top level` [a.test.js:{line}]\n")),
+        "{text}"
+    );
+    let json = serde_json::to_value(&target).unwrap();
+    assert!(json["tests"][0].get("command").is_none(), "{json}");
+}
+
+#[test]
+fn java_and_csharp_tests_list_with_their_build_tool_commands() {
+    let java = scanned_repo(&[
+        ("pom.xml", "<project></project>\n"),
+        (
+            "src/main/java/x/Foo.java",
+            "package x;\n\npublic class Foo {\n    public static int target() {\n        return 1;\n    }\n}\n",
+        ),
+        (
+            "src/test/java/x/FooTest.java",
+            "package x;\n\nimport org.junit.Test;\n\npublic class FooTest {\n    @Test\n    public void checksTarget() {\n        Foo.target();\n    }\n\n    @org.junit.Before\n    public void setUp() {\n        Foo.target();\n    }\n}\n",
+        ),
+    ]);
+    let csharp = scanned_repo(&[
+        (
+            "Foo.cs",
+            "public class Foo\n{\n    public static int Target()\n    {\n        return 1;\n    }\n}\n",
+        ),
+        (
+            "tests/FooTests.cs",
+            "using Xunit;\n\npublic class FooTests\n{\n    [Fact]\n    public void ChecksTarget()\n    {\n        Foo.Target();\n    }\n}\n",
+        ),
+    ]);
+
+    let java_report = report(&java, "target", None);
+    let csharp_report = report(&csharp, "Target", None);
+
+    assert_eq!(
+        running(&java_report),
+        [format!(
+            "checksTarget src/test/java/x/FooTest.java:{} mvn test -Dtest=FooTest#checksTarget",
+            line_of(&java, "src/test/java/x/FooTest.java", "@Test")
+        )],
+        "{}",
+        dump(&java_report)
+    );
+    assert_eq!(
+        running(&csharp_report),
+        [format!(
+            "ChecksTarget tests/FooTests.cs:{} dotnet test --filter \"FullyQualifiedName~FooTests.ChecksTarget\"",
+            line_of(&csharp, "tests/FooTests.cs", "[Fact]")
+        )],
+        "{}",
+        dump(&csharp_report)
+    );
+}
+
+#[test]
+fn a_java_test_in_a_nested_class_lists_the_binary_class_name_in_its_command() {
+    let repo = scanned_repo(&[
+        ("pom.xml", "<project></project>\n"),
+        (
+            "src/main/java/x/Foo.java",
+            "package x;\n\npublic class Foo {\n    public static int target() {\n        return 1;\n    }\n}\n",
+        ),
+        (
+            "src/test/java/x/OuterTest.java",
+            "package x;\n\nimport org.junit.jupiter.api.Nested;\nimport org.junit.jupiter.api.Test;\n\npublic class OuterTest {\n    @Test\n    void top() {\n        Foo.target();\n    }\n\n    @Nested\n    class InnerTest {\n        @Test\n        void checks() {\n            Foo.target();\n        }\n    }\n}\n",
+        ),
+    ]);
+
+    let target = report(&repo, "target", None);
+
+    assert_eq!(
+        running(&target),
+        [
+            format!(
+                "top src/test/java/x/OuterTest.java:{} mvn test -Dtest=OuterTest#top",
+                line_of(&repo, "src/test/java/x/OuterTest.java", "@Test")
+            ),
+            format!(
+                "checks src/test/java/x/OuterTest.java:{} mvn test -Dtest='OuterTest$InnerTest'#checks",
+                line_of(&repo, "src/test/java/x/OuterTest.java", "        @Test")
+            ),
+        ],
+        "{}",
+        dump(&target)
+    );
+}
+
+#[test]
+fn a_test_in_another_language_lists_without_a_command() {
+    let repo = scanned_repo(&[
+        ("lib/foo.rb", "def target\n  1\nend\n"),
+        (
+            "test/foo_test.rb",
+            "require_relative '../lib/foo'\n\nclass FooTest\n  def test_target\n    target\n  end\nend\n",
+        ),
+    ]);
+
+    let target = report(&repo, "target", None);
+
+    assert_eq!(
+        running(&target),
+        [format!(
+            "test_target test/foo_test.rb:{} -",
+            line_of(&repo, "test/foo_test.rb", "def test_target")
+        )],
+        "{}",
+        dump(&target)
+    );
+}
+
+#[test]
+fn test_rows_fold_after_the_limit_with_the_full_count() {
+    let repo = scanned_repo(PY_TESTED);
+    let plain = line_of(&repo, "tests/test_a.py", "def test_plain");
+
+    let target = report(&repo, "target", None);
+    let text = format_reference_report(&target, 1);
+
+    assert_eq!(target.tests.len(), 3);
+    assert!(
+        text.contains(&format!(
+            "Tests that call it (3):\n\
+             - `test_plain` [tests/test_a.py:{plain}] run: pytest tests/test_a.py::test_plain\n\
+             … 2 more tests in 1 file: tests/test_a.py (2)\n"
+        )),
+        "{text}"
+    );
+    let json = serde_json::to_value(&target).unwrap();
+    assert_eq!(json["tests"].as_array().unwrap().len(), 3);
+    assert_eq!(json["tests"][0]["name"], "test_plain");
+    assert_eq!(
+        json["tests"][0]["command"],
+        "pytest tests/test_a.py::test_plain"
+    );
+}
+
+#[test]
+fn tests_print_after_the_registrations_and_before_the_text_only_lines() {
+    let repo = scanned_repo(&[
+        (
+            "app.py",
+            "from flask import Flask\n\napp = Flask(__name__)\n\n\n@app.route(\"/x\")\ndef target():\n    return \"x\"\n",
+        ),
+        (
+            "tests/test_app.py",
+            "from app import target\n\n\ndef test_target():\n    assert target()\n",
+        ),
+        ("notes.md", "target is documented here\n"),
+    ]);
+    let decorator = line_of(&repo, "app.py", "@app.route");
+    let test = line_of(&repo, "tests/test_app.py", "def test_target");
+
+    let text = format_reference_report(&report(&repo, "target", None), 20);
+
+    assert!(
+        text.contains(&format!(
+            "Registrations (1):\n\
+             - route GET /x [app.py:{decorator}]\n\
+             Tests that call it (1):\n\
+             - `test_target` [tests/test_app.py:{test}] run: pytest tests/test_app.py::test_target\n\
+             Text only (1): "
+        )),
+        "{text}"
+    );
+}
+
+#[test]
+fn a_test_name_with_control_characters_prints_them_as_escapes_in_text_and_unchanged_in_json() {
+    let repo = scanned_repo(&[
+        (
+            "package.json",
+            "{\"devDependencies\":{\"vitest\":\"^1\"}}\n",
+        ),
+        ("lib.js", "export function target() {\n  return 1;\n}\n"),
+        (
+            "a.test.js",
+            "import { target } from './lib.js';\n\ntest(`first line\nsecond\tcolumn`, () => {\n  expect(target()).toBe(1);\n});\n",
+        ),
+    ]);
+    let line = line_of(&repo, "a.test.js", "test(`first line");
+
+    let target = report(&repo, "target", None);
+    let text = format_reference_report(&target, 20);
+    let json = serde_json::to_value(&target).unwrap();
+
+    assert!(
+        text.contains(&format!(
+            "- `first line\\nsecond\\tcolumn` [a.test.js:{line}] run: npx vitest run a.test.js"
+        )),
+        "{text}"
+    );
+    assert_eq!(json["tests"][0]["name"], "first line\nsecond\tcolumn");
+}
+
+#[test]
+fn a_target_no_test_calls_prints_no_test_section() {
+    let repo = scanned_repo(PY_TESTED);
+
+    let run = report(&repo, "run", None);
+
+    assert!(run.tests.is_empty());
+    assert!(!format_reference_report(&run, 20).contains("Tests that call it"));
+    assert!(serde_json::to_value(&run).unwrap().get("tests").is_none());
+}
+
+#[test]
+fn a_vitest_or_jest_name_is_a_regular_expression_and_a_mocha_name_is_not() {
+    let source = "import { target } from './lib.js';\n\ntest('sums a.b (1+2) [3] $4', () => {\n  expect(target()).toBe(1);\n});\n";
+    let cases = [
+        (
+            "{\"devDependencies\":{\"vitest\":\"^1\"}}",
+            r#"npx vitest run a.test.js -t "sums a\\.b \\(1\\+2\\) \\[3\\] \\\$4""#,
+        ),
+        (
+            "{\"devDependencies\":{\"jest\":\"^29\"}}",
+            r#"npx jest --runTestsByPath a.test.js -t "sums a\\.b \\(1\\+2\\) \\[3\\] \\\$4""#,
+        ),
+        (
+            "{\"dependencies\":{\"mocha\":\"^10\"}}",
+            r#"npx mocha a.test.js --fgrep "sums a.b (1+2) [3] \$4""#,
+        ),
+    ];
+    for (package_json, command) in cases {
+        let repo = scanned_repo(&[
+            ("package.json", package_json),
+            ("lib.js", "export function target() {\n  return 1;\n}\n"),
+            ("a.test.js", source),
+        ]);
+
+        let target = report(&repo, "target", None);
+
+        assert_eq!(
+            running(&target),
+            [format!(
+                "sums a.b (1+2) [3] $4 a.test.js:{} {command}",
+                line_of(&repo, "a.test.js", "test('sums")
+            )],
+            "{}",
+            dump(&target)
+        );
+    }
+}
+
+#[test]
+fn a_template_literal_hole_in_a_test_name_and_a_space_in_the_path_reach_the_command() {
+    let source = "import { target } from './lib.js';\n\nfor (const kind of ['a']) {\n  test(`handles ${kind} kind`, () => {\n    expect(target()).toBe(1);\n  });\n}\n";
+    let cases = [
+        (
+            "{\"devDependencies\":{\"vitest\":\"^1\"}}",
+            r#"npx vitest run 'a b.test.js' -t "handles .* kind""#,
+        ),
+        (
+            "{\"dependencies\":{\"mocha\":\"^10\"}}",
+            r#"npx mocha 'a b.test.js' --fgrep "handles ""#,
+        ),
+    ];
+    for (package_json, command) in cases {
+        let repo = scanned_repo(&[
+            ("package.json", package_json),
+            ("lib.js", "export function target() {\n  return 1;\n}\n"),
+            ("a b.test.js", source),
+        ]);
+
+        let target = report(&repo, "target", None);
+
+        assert_eq!(
+            running(&target),
+            [format!(
+                "handles ${{kind}} kind a b.test.js:{} {command}",
+                line_of(&repo, "a b.test.js", "test(`handles")
+            )],
+            "{}",
+            dump(&target)
+        );
+    }
+}
+
+#[test]
+fn script_tests_list_the_command_of_each_runner_a_package_json_can_name() {
+    let cases = [
+        (
+            "{\"devDependencies\":{\"jest\":\"^29\"}}",
+            "npx jest --runTestsByPath a.test.js -t \"top level\"",
+        ),
+        (
+            "{\"dependencies\":{\"mocha\":\"^10\"}}",
+            "npx mocha a.test.js --fgrep \"top level\"",
+        ),
+        (
+            "{\"scripts\":{\"test\":\"node --test\"}}",
+            "node --test-name-pattern \"^top level\\$\" a.test.js",
+        ),
+    ];
+    for (package_json, command) in cases {
+        let repo = scanned_repo(&[
+            ("package.json", package_json),
+            ("lib.js", "export function target() {\n  return 1;\n}\n"),
+            (
+                "a.test.js",
+                "import { target } from './lib.js';\n\ntest('top level', () => {\n  expect(target()).toBe(1);\n});\n",
+            ),
+        ]);
+
+        let target = report(&repo, "target", None);
+
+        assert_eq!(
+            running(&target),
+            [format!(
+                "top level a.test.js:{} {command}",
+                line_of(&repo, "a.test.js", "test('top level'")
+            )],
+            "{package_json}\n{}",
+            dump(&target)
+        );
+    }
+}
+
+#[test]
+fn java_gradle_tests_list_the_wrapper_when_the_project_has_one() {
+    let main = (
+        "src/main/java/x/Foo.java",
+        "package x;\n\npublic class Foo {\n    public static int target() {\n        return 1;\n    }\n}\n",
+    );
+    let test = (
+        "src/test/java/x/FooTest.java",
+        "package x;\n\nimport org.junit.Test;\n\npublic class FooTest {\n    @Test\n    public void checksTarget() {\n        Foo.target();\n    }\n}\n",
+    );
+    let cases = [
+        (vec![("gradlew", ""), ("build.gradle", "")], "./gradlew"),
+        (vec![("gradlew", ""), ("build.gradle.kts", "")], "./gradlew"),
+        (vec![("build.gradle", "")], "gradle"),
+    ];
+    for (markers, tool) in cases {
+        let files: Vec<(&str, &str)> = markers.into_iter().chain([main, test]).collect();
+        let repo = scanned_repo(&files);
+
+        let target = report(&repo, "target", None);
+
+        assert_eq!(
+            running(&target),
+            [format!(
+                "checksTarget src/test/java/x/FooTest.java:{} {tool} test --tests 'FooTest.checksTarget'",
+                line_of(&repo, "src/test/java/x/FooTest.java", "@Test")
+            )],
+            "{}",
+            dump(&target)
         );
     }
 }

@@ -338,7 +338,7 @@ fn cli_refs_text_lists_up_to_the_limit_and_folds_the_rest_with_complete_counts()
          … 2 more proven sites in 1 file: app.py (2)\n\
          Text only (1): docs, comments, strings, or code the index did not record\n\
          \x20 notes.md: 1\n\
-         Not visible to this index: calls through getattr() or names built at runtime; calls through dynamic dispatch reach overrides that this list does not show.\n\
+         Not visible to this index: calls through getattr() or names built at runtime.\n\
          Imported 1 time in 1 file: app.py:1 (lookup_symbol with kind=\"import\" lists them)\n"
     );
 }

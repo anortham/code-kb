@@ -166,9 +166,66 @@ pub struct ReferenceTarget {
     pub definitions_with_name: usize,
 }
 
+/// A method of the same name in another type of the target owner's inheritance chain: an
+/// override of the target, or a method that the target overrides.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct OverrideRow {
+    pub symbol_id: String,
+    pub owner: String,
+    pub name: String,
+    pub path: String,
+    pub line: usize,
+}
+
+/// A place that builds a value of the target type: a call or `new`, or a Rust or Go struct literal.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ConstructionSite {
+    pub path: String,
+    pub line: usize,
+}
+
+/// A function that names some variants of the enum target, where a `match` may need a new arm.
+/// `caller` and `caller_id` are empty for code outside any symbol; `line` is the first use.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct VariantUse {
+    pub caller: String,
+    pub caller_id: String,
+    pub path: String,
+    pub line: usize,
+    pub variants_used: usize,
+    pub variants_total: usize,
+}
+
+/// A route or other framework fact that registers the target function as a handler. `template`
+/// is the route path (with any prefix joined) when the fact has one; `by_name` is true when only
+/// the name ties the fact to the target.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Registration {
+    pub pattern_id: String,
+    pub verb: Option<String>,
+    pub template: Option<String>,
+    pub path: String,
+    pub line: usize,
+    pub by_name: bool,
+}
+
+/// A test that reaches the target through a proven or likely site: a test function or method, or
+/// the test that holds a helper which has the site. `command` runs that test when the markers of
+/// the project name the runner.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CallingTest {
+    pub symbol_id: String,
+    pub name: String,
+    pub path: String,
+    pub line: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+}
+
 /// Every indexed site of one definition's name, labeled by evidence, with a whole-word text count
 /// that accounts for each line of the name. `sites` is complete and sorted by label (proven,
-/// likely, unresolved, excluded), then path, line, and column.
+/// likely, unresolved, excluded), then path, line, and column. The section arrays come after
+/// labeling, never change a label, and are left out of JSON when empty.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ReferenceReport {
     pub target: ReferenceTarget,
@@ -178,6 +235,24 @@ pub struct ReferenceReport {
     pub text_scan: TextScanSummary,
     pub cannot_see: Vec<String>,
     pub imports: Vec<(String, usize)>,
+    /// Methods of subtypes that calls through the target can reach.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub overrides: Vec<OverrideRow>,
+    /// Methods of ancestor types that the target overrides, nearest first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub overridden: Vec<OverrideRow>,
+    /// Places that build a value of a class, struct, or record target, one row per line.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub constructions: Vec<ConstructionSite>,
+    /// Functions that name variants of an enum target, most variants first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub variant_uses: Vec<VariantUse>,
+    /// Route facts and other framework facts that register the target function as a handler.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub registrations: Vec<Registration>,
+    /// Tests with a proven or likely site of the target, each with the command that runs it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tests: Vec<CallingTest>,
 }
 
 pub(crate) fn has_generated_lambda_name(name: &str) -> bool {

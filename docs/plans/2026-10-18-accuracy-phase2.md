@@ -171,10 +171,10 @@ All sections print after the site groups and before the text-only lines, only wh
 **File ownership:** as in the table.
 **Serialization required:** Yes. **Dependency reason:** creates the module.
 
-- [ ] Python, TypeScript, Java, C#, and Rust (trait impl) fixtures list the overrides and the base method.
-- [ ] A subclass in another file that is shadowed by a nearer same-named class is not counted.
-- [ ] A target with no owner prints neither section.
-- [ ] Worker scope green; diff handed to the lead.
+- [x] Python, TypeScript, Java, C#, and Rust (trait impl) fixtures list the overrides and the base method.
+- [x] A subclass in another file that is shadowed by a nearer same-named class is not counted.
+- [x] A target with no owner prints neither section.
+- [x] Worker scope green; diff handed to the lead.
 
 ### Task 2.2: Constructions and variant uses
 
@@ -186,10 +186,10 @@ All sections print after the site groups and before the text-only lines, only wh
 **File ownership:** as in the table.
 **Serialization required:** Yes. **Dependency reason:** after 2.1.
 
-- [ ] Rust fixtures: `Foo { a: 1 }`, `&Foo { .. }`, `Foo::<T> { .. }` count; `impl Foo {`, `fn f() -> Foo {`, `impl T for Foo {` do not.
-- [ ] Python `Foo()`, Java `new Foo()`, TypeScript `new Foo()`, Go `Foo{}` count.
-- [ ] A Rust enum with a `match` on 3 of 3 variants and a function naming 1 variant prints both rows in that order.
-- [ ] Worker scope green; diff handed to the lead.
+- [x] Rust fixtures: `Foo { a: 1 }`, `&Foo { .. }`, `Foo::<T> { .. }` count; `impl Foo {`, `fn f() -> Foo {`, `impl T for Foo {` do not.
+- [x] Python `Foo()`, Java `new Foo()`, TypeScript `new Foo()`, Go `Foo{}` count.
+- [x] A Rust enum with a `match` on 3 of 3 variants and a function naming 1 variant prints both rows in that order.
+- [x] Worker scope green; diff handed to the lead.
 
 ### Task 2.3: Registrations
 
@@ -199,19 +199,19 @@ All sections print after the site groups and before the text-only lines, only wh
 **File ownership:** as in the table.
 **Serialization required:** Yes. **Dependency reason:** after 2.2.
 
-- [ ] A Flask fixture with `@app.route("/x")` on the target and `app.add_url_rule("/y", view_func=target)` lists both rows, the second `(by name)`.
-- [ ] A function with the same name in another file gets the `(by name)` row only.
-- [ ] Worker scope green; diff handed to the lead.
+- [x] A Flask fixture with `@app.route("/x")` on the target and `app.add_url_rule("/y", view_func=target)` lists both rows, the second `(by name)`.
+- [x] A function with the same name in another file gets the `(by name)` row only.
+- [x] Worker scope green; diff handed to the lead.
 
 ### Task 2.4: Tests with commands
 
 **Files:** `crates/code-kb-core/src/test_commands.rs` (new), `crates/code-kb-core/src/lib.rs`, `sections.rs`, `models.rs`, `formatters.rs`, tests.
 **Interfaces:** `Tests that call it ({n}):` with rows ``- `{test}` [{path}:{line}] run: {command}`` (or without ` run: …` when no command is known). A test is the caller of a `proven` or `likely` site that is a test (`is_test`, or `names_a_test` in a test path), or the test that encloses a helper caller (`enclosing_test`); setup, teardown, and fixture members are not tests. At most `limit` rows, one fold line. Commands, exactly:
-- Python: `pytest {path}::{Class}::{name}` (`::{Class}` only for a member of a test class).
-- Rust: `cargo test -p {package} --test {stem} {name}` for a file directly under a package's `tests/`, else `cargo test -p {package} {name}`; `{package}` is `[package] name` of the nearest `Cargo.toml` above the file; without one, `cargo test {name}`.
-- Go: `go test ./{dir} -run '^{name}$'`, `{dir}` relative to the nearest `go.mod` folder, run from that folder (`.` for the folder itself).
-- JavaScript and TypeScript, by the nearest `package.json` (`devDependencies`, `dependencies`, `scripts.test`): vitest `npx vitest run {path} -t "{name}"`; jest `npx jest {path} -t "{name}"`; mocha `npx mocha {path} --grep "{name}"`; `node --test` in `scripts.test` → `node --test {path}`; otherwise no command. `{path}` is relative to that `package.json` folder.
-- Java: `mvn test -Dtest={Class}#{name}` when the nearest build file is `pom.xml`; `./gradlew test --tests '{Class}.{name}'` (or `gradle` without a `gradlew`) for `build.gradle` or `build.gradle.kts`.
+- Python: `pytest {path}::{Class}::{name}` (`::{Class}` for every class around the test); `cd '{dir}' && pytest {file}::{Class}::{name}` when the folder holds `[` or `::`; no command when pytest would not collect the test or the file name holds `[` or `::`.
+- Rust: `cargo test -p {package} --test {stem} {name}` for a file directly under a package's `tests/`, else `cargo test -p {package} {name}`; `{package}` is `[package] name` of the nearest `Cargo.toml` above the file; without one, `cargo test {name}`. A test with `#[ignore]` ends with ` -- --ignored`.
+- Go: `go test ./{dir} -run '^{name}$'`, `{dir}` relative to the nearest `go.mod` folder, run from that folder (`.` for the folder itself), for `Test`, `Fuzz`, and `Example` functions; `go test ./{dir} -bench '^{name}$' -run '^$'` for `Benchmark` functions; no command for a method, `TestMain`, a helper, or an `Example` without an output comment.
+- JavaScript and TypeScript, by the nearest `package.json` (`devDependencies`, `dependencies`, `scripts.test`): vitest `npx vitest run {path} -t "{name}"`; jest `npx jest --runTestsByPath {path} -t "{name}"`; mocha `npx mocha {path} --fgrep "{name}"`; `node --test` in `scripts.test` → `node --test-name-pattern "^{name}$" {path}`; otherwise no command. `{path}` is relative to that `package.json` folder.
+- Java: `mvn test -Dtest={Class}#{name}` when the nearest build file is `pom.xml`; `./gradlew test --tests '{Class}.{name}'` (or `gradle` without a `gradlew`) for `build.gradle` or `build.gradle.kts`. Both start with `cd {dir} && ` when the build file is below the root; the wrapper path is relative to that folder.
 - C#: `dotnet test --filter "FullyQualifiedName~{Class}.{name}"`.
 - Other languages: no command.
 Double quotes inside `{name}` are escaped with `\`.
@@ -219,17 +219,38 @@ Double quotes inside `{name}` are escaped with `\`.
 **File ownership:** as in the table.
 **Serialization required:** Yes. **Dependency reason:** after 2.3.
 
-- [ ] One fixture per language rule above, with its exact command.
-- [ ] A helper defined inside a test maps to that test; a fixture caller is not listed.
-- [ ] Worker scope green; diff handed to the lead.
+- [x] One fixture per language rule above, with its exact command.
+- [x] A helper defined inside a test maps to that test; a fixture caller is not listed.
+- [x] Worker scope green; diff handed to the lead.
 
 ### Task 2.5: Docs
 
 **Files:** `CLAUDE.md`, `AGENTS.md` (the "Callers report" paragraph), `README.md` (the find_references part), `skills/code-kb/SKILL.md`.
-- [ ] The sections, their rules, and the JSON arrays are described in the same style as the phase 1 text.
-- [ ] `cmp AGENTS.md CLAUDE.md` passes.
+- [x] The sections, their rules, and the JSON arrays are described in the same style as the phase 1 text.
+- [x] `cmp AGENTS.md CLAUDE.md` passes.
+
+**Deviations from the plan text:**
+- Variant uses strings pluralize: `Variant uses (1 function)` and `names 1 of 1 variant`.
+- Shell quoting of a test name escapes `\`, `$`, and a backtick besides `"`. A JavaScript or TypeScript name is first decoded from its source literal (`\'` becomes `'`, `\\` becomes `\`, `\n` and `\t` become control characters), because julie gives the literal text. For vitest and jest the decoded name is then escaped as a regular expression (`\ ^ $ . * + ? ( ) [ ] { } |`), because `-t` takes a regular expression, and each `test.each` placeholder (`%s %d %i %f %j %o %O %p %#`, `$name`) becomes `.*`; mocha `--fgrep` matches a plain substring, so it is not escaped, and keeps its placeholders.
+- Rust patterns nested in a group (`Some(Foo { a, .. }) = o`, `Outer { inner: Foo { a, .. } } = o`) are not constructions; the scan climbs out of the groups and reads what follows the outermost one.
+- A variant name that is not a member access counts only when `Enum::` or `Enum.` stands before it on the line of a site of the enum. The exception is a bare enumerator of an unscoped C or C++ enum (not `enum class` or `enum struct`), which counts as a variable read on that line. julie stores the enumerators of a C enum as `constant` rows, so a C enum takes its `constant` children as variants.
+- A Rust member counts as an override only in the `impl Trait for Type` block of the owner trait; inherent methods, the impl methods of other traits, and subtrait declarations do not.
+- A pending `extends` or `implements` row counts only when its type is in the same language family as the owner, and an import that reaches other definitions and not the owner drops it.
+- Registrations by name match the last dotted segment of a handler value (`views.cart_view` names `cart_view`), for every handler key and for each `handler_names` entry, and apply to a target of any kind. A by-name row is always kept when a `proven` or `likely` site of the target is on the lines of the fact. Otherwise it is dropped when every site of the report on those lines is `excluded`, or when the target is in another file and the file of the fact defines a function, class, or variable of that name at module level or nested in a function; a member of a class or another type and an import never drop a row.
+- Registrations by id accept `decorator_routing`, `attribute_routing`, `annotation_routing`, and `attribute` (actix) facts whose containing symbol is the target. The facts read include Spring `.request_mapping.` and Django `.url_pattern.`, which `ROUTE_FAMILIES` does not name.
+- Every path in a section is read with `\` replaced by `/`.
+- The full rules of the sections live in `docs/reach-sections.md`; `CLAUDE.md` and `AGENTS.md` keep a short summary, because every session in this repository loads them.
+- A Go function inside another function (a `t.Run` closure) is a helper and folds into the test around it, as a Python function inside a function does. A Python class defined inside a function folds into that function.
+- Go commands: `Benchmark` functions run with `-bench '^name$' -run '^$'`. A method, a non-`_test.go` file, `TestMain`, a name with a lowercase letter after the prefix, and an `Example` with no `// Output:` or `// Unordered output:` comment get no command, because `go test` runs none of them and exits 0.
+- Maven and Gradle commands run from the folder of the nearest `pom.xml`, `build.gradle`, or `build.gradle.kts`, with `cd dir && ` and a relative wrapper path.
+- A Python test in a folder with `[` or `::` runs as `cd dir && pytest file::name`, because pytest rejects such a path in a node id and `-k` does not help. A file name with either has no command.
+- A Python test pytest does not collect under its defaults (`python_classes = Test*`; a config is not read) has no command: every class around it must be named `Test…` or derive from `TestCase`, and no class around another may be a `TestCase`.
+- A Rust test with `#[ignore]` ends with ` -- --ignored`, because cargo runs 0 tests and exits 0 otherwise. `cfg_attr(…, ignore)` is not read.
+- A Rust override check treats a `use` row whose first segment is a dependency of the nearest `Cargo.toml` like a std path (`use serde::Serialize;` names no project trait), unless a project module, folder, file, package, or crate has that name.
+- `node --test-name-pattern` takes a regular expression, so the node command escapes the name like vitest and jest and anchors it with `^` and `$`. A test row in text output writes control characters of a test name as escapes; JSON and site rows are unchanged.
 
 **Slice 2 gate:** branch gate; gate report identical except Commit and Generated; latency and memory measured against slice 1 (no p50 regression over 15% on the bench symbols without a stated cause).
+- Result (2026-10-19): fmt, clippy, 1073 tests, plugin tests, and `cmp` pass; the reach gate report equals slice 1 except Commit, Generated, and Binary; `lost_proven` prints nothing for the 7 repos. Live servers, slice 1 against slice 2 (`refs_latency_js.py`, 5 rounds): p50 within +6% on all 10 bench symbols, RSS after calls within 3 MB. A unary plus on `i.name` in the judge SQL (fix round 3) cut the CLI peak RSS of gson `TypeAdapter.write` by 4 MB but cost zod `parse` 27% p50; the live server showed no memory gain, so slice 2 keeps the name index.
 
 ---
 
@@ -241,8 +262,8 @@ Double quotes inside `{name}` are escaped with `\`.
 **Files:** a new post-pass next to `crates/julie-extractors/src/base/receiver_metadata.rs` (same calling point in `registry.rs`), its tests, `docs/contracts/extraction-output-changes.md` (`## 3.8.0`, `classification: compatible`), the contract marker in `crates/julie-extractors/src/lib.rs` and `tests/api_surface.rs`, goldens that change.
 **Interfaces:** every `call` identifier in Python, JavaScript, TypeScript, TSX, Java, C#, Go, Rust, Kotlin, C, and C++ gets `metadata_json.arg_count` (integer: the named, non-comment children of the call's argument list) and `metadata_json.arg_spread: true` when one argument is a spread or splat (`*x`, `**x`, `...x`, Go `x...`). A macro call (`foo!(…)`) and a call with no argument list node get no key. No schema change.
 **Contract inputs:** julie-arity map sections 1-4.
-- [ ] Tests per language: 0, 1, and 3 arguments, a keyword argument (Python, Kotlin, C# named), a spread, a nested call (each call counts its own list), a constructor call (`new Foo(a)`).
-- [ ] `cargo xtask test default`, `contract`, and `compat-check` pass; clippy as in julie CI.
+- [x] Tests per language: 0, 1, and 3 arguments, a keyword argument (Python, Kotlin, C# named), a spread, a nested call (each call counts its own list), a constructor call (`new Foo(a)`).
+- [x] `cargo xtask test default`, `contract`, and `compat-check` pass; clippy as in julie CI.
 
 ### Task 3.2: julie 3.8.0 release
 

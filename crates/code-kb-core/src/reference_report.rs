@@ -21,6 +21,7 @@ use crate::text_scan::scan_word;
 
 mod js_bindings;
 mod js_modules;
+mod sections;
 
 const RESOLVER_ROW_CAP: usize = 5_000;
 const OTHER_DEFINITION_CAP: usize = 12;
@@ -95,14 +96,18 @@ fn report_within(
     let mut specs = vec![Spec {
         name: target.name.clone(),
         group: overload_group(conn, target)?,
-        calls_only: class.is_some(),
+        scope: if class.is_some() {
+            RowScope::Calls
+        } else {
+            RowScope::All
+        },
         builds_class: false,
     }];
     if let Some(class) = &class {
         specs.push(Spec {
             name: class.name.clone(),
             group: vec![class.clone()],
-            calls_only: true,
+            scope: RowScope::Calls,
             builds_class: true,
         });
     }
@@ -159,7 +164,9 @@ fn report_within(
         }
     }
 
+    let reach = sections::reach_sections(accounting, target, &sites)?;
     cannot_see.splice(0..0, cannot_see_for_language(&target.language));
+    cannot_see.extend(reach.notes);
     Ok(ReferenceReport {
         target: report_target(conn, target, definitions_with_name)?,
         counts,
@@ -168,6 +175,12 @@ fn report_within(
         text_scan: text.summary,
         cannot_see,
         imports: import_sites(conn, &target.name, Some(&target.path))?,
+        overrides: reach.overrides,
+        overridden: reach.overridden,
+        constructions: reach.constructions,
+        variant_uses: reach.variant_uses,
+        registrations: reach.registrations,
+        tests: reach.tests,
     })
 }
 
@@ -181,11 +194,12 @@ fn cannot_see_for_language(language: &str) -> Vec<String> {
         "java" | "csharp" | "kotlin" => {
             items.push("calls through reflection or dependency injection".to_string());
         }
+        "go" => items.push(
+            "calls through a Go interface that the index does not record reach methods this list does not show"
+                .to_string(),
+        ),
         _ => {}
     }
-    items.push(
-        "calls through dynamic dispatch reach overrides that this list does not show".to_string(),
-    );
     items
 }
 
@@ -349,10 +363,19 @@ const TOP_LEVEL_VARIABLE_SQL: &str = "SELECT 1 FROM symbols
 
 const FN_TYPES: [&str; 5] = ["fn(", "fn (", "Fn(", "FnMut(", "FnOnce("];
 
+/// Which indexed rows of a name a spec accounts for.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RowScope {
+    All,
+    Calls,
+    /// Only the pending `extends` and `implements` rows, which tie a type to its base by name.
+    Inheritance,
+}
+
 struct Spec {
     name: String,
     group: Vec<Symbol>,
-    calls_only: bool,
+    scope: RowScope,
     builds_class: bool,
 }
 
@@ -732,6 +755,9 @@ impl TextOutcome {
     }
 }
 
+/// A definition that an import reaches: its symbol id, path, and language.
+type ImportMatch = (String, String, String);
+
 struct Accounting<'a> {
     conn: &'a Connection,
     root: &'a Path,
@@ -739,11 +765,12 @@ struct Accounting<'a> {
     judge_deadline: Instant,
     deadline: Instant,
     judge_stmt: RefCell<Option<Statement<'a>>>,
+    definitions_stmt: RefCell<Option<Statement<'a>>>,
     import_match_stmt: Option<Statement<'a>>,
     statements: RefCell<HashMap<&'static str, Statement<'a>>>,
     external_sources: HashMap<String, bool>,
     /// Definitions an import reaches, by caller file, receiver, and name.
-    import_matches: HashMap<(String, String, String), Vec<(String, String)>>,
+    import_matches: HashMap<(String, String, String), Vec<ImportMatch>>,
     js: js_modules::JsCaches,
 }
 
@@ -755,6 +782,7 @@ impl<'a> Accounting<'a> {
             judge_deadline: Instant::now() + time_limit / 2,
             deadline: Instant::now() + time_limit,
             judge_stmt: RefCell::new(None),
+            definitions_stmt: RefCell::new(None),
             import_match_stmt: None,
             statements: RefCell::new(HashMap::new()),
             external_sources: HashMap::new(),
@@ -765,6 +793,13 @@ impl<'a> Accounting<'a> {
 
     fn out_of_time(&self) -> bool {
         Instant::now() >= self.deadline
+    }
+
+    /// Starts a new time limit and keeps every prepared statement and cache. The judge statement
+    /// is large, so a later phase of the report reuses it instead of preparing its own.
+    fn restart_clock(&mut self, time_limit: Duration) {
+        self.judge_deadline = Instant::now() + time_limit / 2;
+        self.deadline = Instant::now() + time_limit;
     }
 
     /// Runs `run` on the statement for `sql`, preparing it on first use: preparing the larger
@@ -809,7 +844,7 @@ impl<'a> Accounting<'a> {
         Ok(rows)
     }
 
-    fn definitions(&self, name: &str) -> Result<Vec<Definition>, QueryError> {
+    fn definitions_sql(&self) -> String {
         let decorated_start = if has_column(self.conn, "structural_facts", "end_byte")
             && has_column(self.conn, "symbols", "end_byte")
         {
@@ -819,7 +854,7 @@ impl<'a> Accounting<'a> {
         } else {
             "NULL"
         };
-        let mut stmt = self.conn.prepare(&format!(
+        format!(
             "SELECT s.symbol_id, s.name, s.kind, s.language, s.path, s.start_line,
                     s.body_start_line, s.parent_symbol_id, par.name, par.kind, {decorated_start},
                     COALESCE(s.signature, ''), s.visibility,
@@ -832,7 +867,17 @@ impl<'a> Accounting<'a> {
              WHERE s.name = ?1 AND s.kind NOT IN ('import', 'export')
                AND s.language NOT IN ({})",
             documentation_language_list()
-        ))?;
+        )
+    }
+
+    fn definitions(&self, name: &str) -> Result<Vec<Definition>, QueryError> {
+        let mut slot = self.definitions_stmt.borrow_mut();
+        if slot.is_none() {
+            *slot = Some(self.conn.prepare(&self.definitions_sql())?);
+        }
+        let stmt = slot
+            .as_mut()
+            .expect("definitions statement was just prepared");
         let rows = stmt.query_map(params![name], |row| {
             let signature: String = row.get(11)?;
             if is_test_label(&signature) {
@@ -895,6 +940,7 @@ impl<'a> Accounting<'a> {
         let mut definitions: Vec<Definition> = rows
             .filter_map(Result::transpose)
             .collect::<Result<_, _>>()?;
+        drop(slot);
         let writes =
             inherited_writes_among(self.conn, definitions.iter().map(|d| d.symbol_id.as_str()))?;
         definitions.retain(|d| !writes.contains(&d.symbol_id));
@@ -1043,7 +1089,7 @@ impl<'a> Accounting<'a> {
         let group_ids: HashSet<&str> = spec.group.iter().map(|s| s.symbol_id.as_str()).collect();
         let target = &spec.group[0];
 
-        let mut rows = self.load_rows(&spec.name, &definitions, spec.calls_only)?;
+        let mut rows = self.load_rows(&spec.name, &definitions, spec.scope)?;
         pair_identifiers(&mut rows);
         rows.retain(|row| !row.consumed);
         mark_hidden_receivers(self.root, &mut rows);
@@ -1077,6 +1123,7 @@ impl<'a> Accounting<'a> {
         let mut others: Vec<&Definition> = definitions
             .iter()
             .filter(|d| !d.local && !group_ids.contains(d.symbol_id.as_str()))
+            .filter(|d| !(spec.scope == RowScope::Inheritance && d.kind == "constructor"))
             .collect();
         others.sort_by_key(|d| {
             (
@@ -1200,7 +1247,7 @@ impl<'a> Accounting<'a> {
             }
             out.push(site_row(row, verdict, spec));
         }
-        if !spec.calls_only {
+        if spec.scope == RowScope::All {
             for member in &spec.group {
                 for grouped in
                     grouped_member_access_rows(self.conn, &member.symbol_id, RESOLVER_ROW_CAP)?
@@ -1218,13 +1265,46 @@ impl<'a> Accounting<'a> {
         Ok(())
     }
 
+    /// The label and basis the report gives each pending `extends` or `implements` row that names
+    /// `owner`, by the id of the type that holds the row; the best label wins when a type has
+    /// several rows.
+    fn inheritance_labels(
+        &mut self,
+        owner: &Symbol,
+    ) -> Result<HashMap<String, (SiteLabel, String)>, QueryError> {
+        let spec = Spec {
+            name: owner.name.clone(),
+            group: vec![owner.clone()],
+            scope: RowScope::Inheritance,
+            builds_class: false,
+        };
+        let mut rows = Vec::new();
+        self.account_spec(&spec, &mut rows, &mut Vec::new())?;
+        let mut labels: HashMap<String, (SiteLabel, String)> = HashMap::new();
+        for row in rows {
+            let better = labels
+                .get(&row.site.from_symbol_id)
+                .is_none_or(|(label, _)| row.label.rank() < label.rank());
+            if better {
+                labels.insert(row.site.from_symbol_id, (row.label, row.basis));
+            }
+        }
+        Ok(labels)
+    }
+
     fn load_rows(
         &self,
         name: &str,
         definitions: &[Definition],
-        calls_only: bool,
+        scope: RowScope,
     ) -> Result<Vec<NameRow>, QueryError> {
         let docs = documentation_language_list();
+        let inheritance = scope == RowScope::Inheritance;
+        let kinds = if inheritance {
+            "AND p.kind IN ('extends', 'implements')"
+        } else {
+            ""
+        };
         let mut rows = Vec::new();
 
         let mut stmt = self.conn.prepare(&format!(
@@ -1234,7 +1314,7 @@ impl<'a> Accounting<'a> {
              FROM pending_relationships p
              LEFT JOIN symbols s ON s.symbol_id = p.from_symbol_id
              LEFT JOIN files f ON f.file_id = p.file_id
-             WHERE p.target_terminal_name = ?1 AND p.kind != 'imports'
+             WHERE p.target_terminal_name = ?1 AND p.kind != 'imports' {kinds}
                AND COALESCE(f.language, s.language, '') NOT IN ({docs})"
         ))?;
         let mut query = stmt.query(params![name])?;
@@ -1272,8 +1352,9 @@ impl<'a> Accounting<'a> {
             });
         }
 
-        let mut stmt = self.conn.prepare(&format!(
-            "SELECT r.rowid, r.from_symbol_id, COALESCE(s.name, ''), r.kind, r.path,
+        if !inheritance {
+            let mut stmt = self.conn.prepare(&format!(
+                "SELECT r.rowid, r.from_symbol_id, COALESCE(s.name, ''), r.kind, r.path,
                     COALESCE(f.language, s.language, ''), r.start_line, r.start_column,
                     r.end_line, r.to_symbol_id
              FROM relationships r
@@ -1282,34 +1363,35 @@ impl<'a> Accounting<'a> {
              LEFT JOIN files f ON f.file_id = r.file_id
              WHERE t.name = ?1 AND r.kind != 'imports'
                AND COALESCE(f.language, s.language, '') NOT IN ({docs})"
-        ))?;
-        let mut query = stmt.query(params![name])?;
-        while let Some(row) = query.next()? {
-            let line = row.get::<_, Option<i64>>(6)?.unwrap_or(0) as usize;
-            rows.push(NameRow {
-                key: format!("R:{}", row.get::<_, i64>(0)?),
-                source: Source::Relationship,
-                caller_id: row.get(1)?,
-                caller_name: row.get(2)?,
-                path: row.get::<_, String>(4)?.replace('\\', "/"),
-                language: row.get(5)?,
-                kind: row.get(3)?,
-                line,
-                column: row.get::<_, Option<i64>>(7)?.map(|v| v as usize),
-                end_line: row.get::<_, Option<i64>>(8)?.map(|v| v as usize),
-                receiver: None,
-                namespace: Vec::new(),
-                to_symbol_id: row.get(9)?,
-                site_line: line,
-                site_column: row.get::<_, Option<i64>>(7)?.map(|v| v as usize),
-                consumed: false,
-                paired: false,
-                hidden_receiver: false,
-                chain: None,
-            });
+            ))?;
+            let mut query = stmt.query(params![name])?;
+            while let Some(row) = query.next()? {
+                let line = row.get::<_, Option<i64>>(6)?.unwrap_or(0) as usize;
+                rows.push(NameRow {
+                    key: format!("R:{}", row.get::<_, i64>(0)?),
+                    source: Source::Relationship,
+                    caller_id: row.get(1)?,
+                    caller_name: row.get(2)?,
+                    path: row.get::<_, String>(4)?.replace('\\', "/"),
+                    language: row.get(5)?,
+                    kind: row.get(3)?,
+                    line,
+                    column: row.get::<_, Option<i64>>(7)?.map(|v| v as usize),
+                    end_line: row.get::<_, Option<i64>>(8)?.map(|v| v as usize),
+                    receiver: None,
+                    namespace: Vec::new(),
+                    to_symbol_id: row.get(9)?,
+                    site_line: line,
+                    site_column: row.get::<_, Option<i64>>(7)?.map(|v| v as usize),
+                    consumed: false,
+                    paired: false,
+                    hidden_receiver: false,
+                    chain: None,
+                });
+            }
         }
 
-        if crate::queries::has_table(self.conn, "identifiers") {
+        if !inheritance && crate::queries::has_table(self.conn, "identifiers") {
             let mut stmt = self.conn.prepare(&format!(
                 "SELECT i.identifier_id, i.containing_symbol_id, COALESCE(s.name, ''), i.kind,
                         i.path, i.language, i.start_line, i.start_column,
@@ -1368,7 +1450,7 @@ impl<'a> Accounting<'a> {
         let import_spans = self.import_spans(name)?;
         let definition_spans = definition_spans(definitions);
         rows.retain(|row| {
-            if calls_only && !row.is_call() {
+            if scope == RowScope::Calls && !row.is_call() {
                 return false;
             }
             if in_spans(&import_spans, &row.path, row.line) {
@@ -1485,15 +1567,19 @@ impl<'a> Accounting<'a> {
         let mut claims: HashMap<String, Claim> = HashMap::new();
         let mut resolvers = Vec::with_capacity(spec.group.len());
         for member in &spec.group {
-            let resolver_ids: HashSet<String> = direct_identifier_rows(
-                self.conn,
-                &spec.name,
-                Some(&member.symbol_id),
-                RESOLVER_ROW_CAP,
-            )?
-            .into_iter()
-            .map(|row| format!("I:{}", row.identifier_id))
-            .collect();
+            let resolver_ids: HashSet<String> = if spec.scope == RowScope::Inheritance {
+                HashSet::new()
+            } else {
+                direct_identifier_rows(
+                    self.conn,
+                    &spec.name,
+                    Some(&member.symbol_id),
+                    RESOLVER_ROW_CAP,
+                )?
+                .into_iter()
+                .map(|row| format!("I:{}", row.identifier_id))
+                .collect()
+            };
             if resolver_ids.len() >= RESOLVER_ROW_CAP {
                 cannot_see.push(format!(
                     "the resolver listed {RESOLVER_ROW_CAP} identifier rows and may hold more; rows past that limit have no resolver evidence"
@@ -1867,16 +1953,15 @@ impl<'a> Accounting<'a> {
             .map(|(id, ..)| id))
     }
 
-    /// How many top-level definitions outside the target group the import behind the row also
-    /// reaches: a package import (`import * as z from "zod"`) can match every file of the package.
-    fn other_import_matches(
+    /// The definitions that the import binding of `receiver` (or of `name` itself when the
+    /// receiver is empty) in file `importer` reaches, as `(symbol_id, path, language)` rows.
+    fn import_matches_of(
         &mut self,
-        row: &NameRow,
+        importer: &str,
+        receiver: &str,
         name: &str,
-        group_ids: &HashSet<&str>,
-    ) -> Result<usize, QueryError> {
-        let receiver = row.receiver.clone().unwrap_or_default();
-        let key = (row.path.clone(), receiver.clone(), name.to_string());
+    ) -> Result<&[ImportMatch], QueryError> {
+        let key = (importer.to_string(), receiver.to_string(), name.to_string());
         if !self.import_matches.contains_key(&key) {
             if self.import_match_stmt.is_none() {
                 self.import_match_stmt = Some(self.conn.prepare(&import_match_sql())?);
@@ -1886,20 +1971,34 @@ impl<'a> Accounting<'a> {
                 .as_mut()
                 .expect("import match statement was just prepared");
             let matches = stmt
-                .query_map(params![row.path, receiver, name], |r| {
+                .query_map(params![importer, receiver, name], |r| {
                     Ok((
                         r.get::<_, String>(0)?,
                         r.get::<_, String>(1)?,
                         r.get::<_, String>(2)?,
+                        r.get::<_, String>(3)?,
                     ))
                 })?
-                .filter(|m| !matches!(m, Ok((_, _, signature)) if is_test_label(signature)))
-                .map(|m| m.map(|(id, path, _)| (id, path)))
+                .filter(|m| !matches!(m, Ok((_, _, signature, _)) if is_test_label(signature)))
+                .map(|m| m.map(|(id, path, _, language)| (id, path, language)))
                 .collect::<Result<Vec<_>, _>>()?;
             self.import_matches.insert(key.clone(), matches);
         }
+        Ok(&self.import_matches[&key])
+    }
+
+    /// How many top-level definitions outside the target group the import behind the row also
+    /// reaches: a package import (`import * as z from "zod"`) can match every file of the package.
+    fn other_import_matches(
+        &mut self,
+        row: &NameRow,
+        name: &str,
+        group_ids: &HashSet<&str>,
+    ) -> Result<usize, QueryError> {
+        let receiver = row.receiver.clone().unwrap_or_default();
+        let matches = self.import_matches_of(&row.path, &receiver, name)?.to_vec();
         let mut count = 0;
-        for (symbol_id, path) in &self.import_matches[&key] {
+        for (symbol_id, path, _) in &matches {
             if group_ids.contains(symbol_id.as_str()) {
                 continue;
             }
@@ -1911,6 +2010,31 @@ impl<'a> Accounting<'a> {
             count += 1;
         }
         Ok(count)
+    }
+
+    /// The top-level definitions named `name`, in the language of the importer, that the import
+    /// binding of `name` in file `importer` reaches. A Python absolute import reaches only the
+    /// files its first segment starts at.
+    fn imported_definitions(
+        &mut self,
+        importer: &str,
+        language: &str,
+        name: &str,
+    ) -> Result<Vec<String>, QueryError> {
+        let matches = self.import_matches_of(importer, "", name)?.to_vec();
+        let mut reached = Vec::new();
+        for (symbol_id, path, definition_language) in matches {
+            if !languages_compatible(&definition_language, language) {
+                continue;
+            }
+            if language == "python"
+                && !self.python_binding_reaches(importer, name, &path.replace('\\', "/"))?
+            {
+                continue;
+            }
+            reached.push(symbol_id);
+        }
+        Ok(reached)
     }
 
     fn bare_use_of_property_method(
@@ -1938,9 +2062,19 @@ impl<'a> Accounting<'a> {
         name: &str,
         path: &str,
     ) -> Result<bool, QueryError> {
-        let binding = row.qualifier().unwrap_or(name);
+        self.python_binding_reaches(&row.path, row.qualifier().unwrap_or(name), path)
+    }
+
+    /// Whether the absolute import of `binding` in file `importer` starts at the top package of
+    /// `path` or at a folder above it.
+    fn python_binding_reaches(
+        &self,
+        importer: &str,
+        binding: &str,
+        path: &str,
+    ) -> Result<bool, QueryError> {
         let sources = self.with_statement(IMPORT_SOURCES_SQL, |stmt| {
-            stmt.query_map(params![row.path, binding], |r| r.get::<_, String>(0))?
+            stmt.query_map(params![importer, binding], |r| r.get::<_, String>(0))?
                 .collect::<Result<Vec<_>, _>>()
         })?;
         if sources.is_empty() || sources.iter().any(|s| s.is_empty() || s.starts_with('.')) {
@@ -2554,7 +2688,7 @@ fn import_match_sql() -> String {
     let receiver = module_import_binding_sql("t", "p.target_receiver");
     let bare = module_import_binding_sql("t", "t.name");
     format!(
-        "SELECT t.symbol_id, t.path, COALESCE(t.signature, '')
+        "SELECT t.symbol_id, t.path, COALESCE(t.signature, ''), t.language
          FROM (SELECT ?1 AS path, ?2 AS target_receiver) p
          JOIN symbols t ON t.name = ?3
          WHERE t.parent_symbol_id IS NULL AND t.kind NOT IN ('import', 'export')

@@ -34,7 +34,7 @@ A project with no index gets one on the first call. If the answer is
 | A symbol by name or prefix, or code by concept (`"retry backoff"`); a query that names no symbol exactly also gets ranked matches | `lookup_symbol(query, path?)` | `code-kb lookup <query> [--path <p>]` |
 | One symbol's implementation | `get_symbol_body(symbol_name, file_path?)` | `code-kb body <symbol> [--file <f>]` |
 | Body, callee signatures, parameter types, and tests before an edit | `get_symbol_context(symbol_name, file_path?)` | `code-kb context <symbol> [--file <f>]` |
-| Callers, or callees with `direction="callees"` | `find_references(symbol_name, file_path?)` | `code-kb refs <symbol> [--direction callees]` |
+| Every site a change must reach: callers, overrides, constructions, enum variant uses, registrations, and the calling tests with run commands; or callees with `direction="callees"` | `find_references(symbol_name, file_path?)` | `code-kb refs <symbol> [--direction callees]` |
 | What a change affects and which tests to run | `blast_radius(symbol=...)`, `blast_radius(file=...)`, or `blast_radius()` for uncommitted changes | `code-kb blast-radius [target] [--file <f>]` |
 
 Edit with the host's own file tools. code-kb refreshes the index when files change.
@@ -48,6 +48,7 @@ Three CLI commands have no MCP tool. `code-kb facts [category]` lists routes, SQ
 - For a name that several symbols share, such as `new`, pass `file_path` or a qualified name (`Server::new`).
 - Lookup hides test code. Pass `is_test=true` (CLI `--include-tests`) to show it.
 - Callee lists leave out standard library and runtime calls. Pass `include_external=true` (CLI `--include-external`) to show them.
+- After the sites, `find_references` lists `Overrides`, `Overrides of`, `Constructions`, `Variant uses`, `Registrations`, and `Tests that call it` (each test with a `run:` command) when they have rows. Read them before you change a method, a class, or an enum. They never change a site's label.
 - Each caller site has a label. `proven` sites have index evidence. Read the code before you rely on a `likely` or `unresolved` site. The `Text only` lines and the `Not visible to this index` line show what the index did not record.
 
 ## Related skills
