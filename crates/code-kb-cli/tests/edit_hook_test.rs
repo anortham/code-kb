@@ -130,6 +130,7 @@ fn run_hook_with_env(
 ) -> Output {
     let mut child = Command::new(env!("CARGO_BIN_EXE_code-kb"))
         .args(["hook", event])
+        .env("CODE_KB_TELEMETRY_DIR", telemetry_dir(cwd))
         .envs(envs.iter().copied())
         .current_dir(cwd)
         .stdin(if stdin.is_some() {
@@ -150,6 +151,22 @@ fn run_hook_with_env(
             .unwrap();
     }
     child.wait_with_output().unwrap()
+}
+
+fn telemetry_dir(root: &Path) -> PathBuf {
+    root.join(".code-kb").join("telemetry")
+}
+
+fn hook_rows(root: &Path) -> Vec<(String, i64, i64, Option<i64>)> {
+    let conn = code_kb_core::Connection::open(telemetry_dir(root).join("telemetry.db")).unwrap();
+    conn.prepare("SELECT event, sites_listed, blocked, followed FROM hook_telemetry ORDER BY id")
+        .unwrap()
+        .query_map([], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+        })
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap()
 }
 
 fn without_parent_repository(root: &Path) -> [(&'static str, &OsStr); 1] {
@@ -395,6 +412,89 @@ fn stop_hooks_print_nothing_and_leave_an_index_from_another_extractor_alone() {
         assert_eq!(recorded_extractor_version(&repo.root), "0.0.1", "{event}");
         assert_silent(&output);
     }
+}
+
+#[test]
+fn the_stop_after_a_block_records_it_followed_when_a_listed_site_was_edited() {
+    let repo = rust_function_repo();
+    start_session(&repo, "f1");
+    add_depth_parameter(&repo);
+    assert_blocks_with(
+        &run_hook("Stop", Some(&payload("f1", &repo.root, false)), &repo.root),
+        STOP_REASON,
+    );
+    assert_eq!(
+        session_json(&repo.root, "f1")["blocked_sites"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    write(
+        &repo.root,
+        "src/second.rs",
+        "use crate::geometry;\n\npub fn second() -> i32 {\n    crate::geometry::area(4, 5, 1)\n}\n",
+    );
+
+    assert_silent(&run_hook(
+        "Stop",
+        Some(&payload("f1", &repo.root, true)),
+        &repo.root,
+    ));
+    assert_silent(&run_hook(
+        "Stop",
+        Some(&payload("f1", &repo.root, false)),
+        &repo.root,
+    ));
+    assert_eq!(
+        hook_rows(&repo.root),
+        vec![
+            ("Stop".to_string(), 1, 1, Some(1)),
+            ("Stop".to_string(), 0, 0, None)
+        ]
+    );
+    assert!(
+        session_json(&repo.root, "f1")
+            .get("blocked_sites")
+            .is_none()
+    );
+}
+
+#[test]
+fn the_stop_after_a_block_records_it_not_followed_when_no_listed_site_changed() {
+    let repo = rust_function_repo();
+    start_session(&repo, "f2");
+    add_depth_parameter(&repo);
+    let stdin = payload("f2", &repo.root, false);
+    assert_blocks_with(
+        &run_hook("SubagentStop", Some(&stdin), &repo.root),
+        STOP_REASON,
+    );
+
+    assert_silent(&run_hook("SubagentStop", Some(&stdin), &repo.root));
+    assert_eq!(
+        hook_rows(&repo.root),
+        vec![("SubagentStop".to_string(), 1, 1, Some(0))]
+    );
+}
+
+#[test]
+fn a_disabled_telemetry_flag_records_no_hook_check() {
+    let repo = rust_function_repo();
+    start_session(&repo, "f3");
+    add_depth_parameter(&repo);
+    let stdin = payload("f3", &repo.root, false);
+    let disabled = [("CODE_KB_NO_TELEMETRY", OsStr::new("1"))];
+
+    let output = run_hook_with_env("Stop", Some(&stdin), &repo.root, &disabled);
+    assert_blocks_with(&output, STOP_REASON);
+    assert_silent(&run_hook_with_env(
+        "Stop",
+        Some(&stdin),
+        &repo.root,
+        &disabled,
+    ));
+    assert!(!telemetry_dir(&repo.root).exists());
 }
 
 #[test]

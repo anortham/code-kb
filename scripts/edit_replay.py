@@ -1806,6 +1806,8 @@ HANDLERS = {
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
+    # The replay runs real Stop hooks, which would add rows to the owner's adoption telemetry.
+    os.environ["CODE_KB_NO_TELEMETRY"] = "1"
     try:
         return HANDLERS[(args.command, args.set)](args)
     except (RuntimeError, ValueError, KeyError) as error:

@@ -1,8 +1,9 @@
 //! Per-session state of the post-edit check, one file per session at
 //! `<root>/.code-kb/sessions/{session_id}.json`: the commit the session started at, the diff the
-//! last hook check ran on, and the diff a Stop hook blocked on. A `{session_id}.lock` file next to
-//! it serializes the hooks of one session.
+//! last hook check ran on, the diff a Stop hook blocked on, and the sites that block listed. A
+//! `{session_id}.lock` file next to it serializes the hooks of one session.
 
+use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
@@ -25,6 +26,18 @@ pub struct SessionState {
     pub blocked_diff: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checked_diff: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub blocked_sites: Vec<BlockedSite>,
+}
+
+/// A site that a Stop hook listed: the hash of its trimmed line text and how many lines of its
+/// file had that text. An edit above a site moves it, so the next Stop counts lines, not places.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BlockedSite {
+    pub path: String,
+    pub line: usize,
+    pub text: String,
+    pub count: usize,
 }
 
 impl SessionState {
@@ -34,6 +47,50 @@ impl SessionState {
             .into_iter()
             .any(|seen| seen.as_deref() == Some(hash))
     }
+}
+
+fn line_hashes(root: &Path, path: &str) -> Vec<String> {
+    fs::read_to_string(root.join(path))
+        .map(|text| {
+            text.lines()
+                .map(|line| blake3::hash(line.trim().as_bytes()).to_hex()[..16].to_string())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Marks each `(path, line)` site with the text of its line in the working tree. A site whose
+/// line cannot be read gets no mark.
+pub fn mark_sites<'a>(
+    root: &Path,
+    sites: impl IntoIterator<Item = (&'a str, usize)>,
+) -> Vec<BlockedSite> {
+    let mut files: HashMap<&str, Vec<String>> = HashMap::new();
+    sites
+        .into_iter()
+        .filter_map(|(path, line)| {
+            let hashes = files.entry(path).or_insert_with(|| line_hashes(root, path));
+            let text = hashes.get(line.checked_sub(1)?)?.clone();
+            let count = hashes.iter().filter(|hash| **hash == text).count();
+            Some(BlockedSite {
+                path: path.to_string(),
+                line,
+                text,
+                count,
+            })
+        })
+        .collect()
+}
+
+/// True when an edit changed a marked site: its file now has fewer lines with its text.
+pub fn any_site_edited(root: &Path, sites: &[BlockedSite]) -> bool {
+    let mut files: HashMap<&str, Vec<String>> = HashMap::new();
+    sites.iter().any(|site| {
+        let hashes = files
+            .entry(&site.path)
+            .or_insert_with(|| line_hashes(root, &site.path));
+        hashes.iter().filter(|hash| **hash == site.text).count() < site.count
+    })
 }
 
 /// True for a session id that is safe in a file name: letters, digits, `_` and `-` only.
@@ -235,6 +292,12 @@ mod tests {
             base: Some("abc".to_string()),
             blocked_diff: Some("h".to_string()),
             checked_diff: Some("k".to_string()),
+            blocked_sites: vec![BlockedSite {
+                path: "src/a.rs".to_string(),
+                line: 2,
+                text: "t".to_string(),
+                count: 1,
+            }],
         };
         write_session(root.path(), "s", &all).unwrap();
         assert_eq!(read_session(root.path(), "s"), Some(all));
@@ -395,6 +458,24 @@ mod tests {
         };
         assert!(state.has_seen("b") && state.has_seen("c"));
         assert!(!state.has_seen("d") && !SessionState::default().has_seen(""));
+    }
+
+    #[test]
+    fn a_site_counts_as_edited_when_its_file_has_fewer_lines_with_its_text() {
+        let root = root();
+        fs::create_dir_all(root.path().join("src")).unwrap();
+        let file = root.path().join("src/a.rs");
+        fs::write(&file, "fn a() {\n    f(1);\n    f(1);\n}\n").unwrap();
+        let marks = mark_sites(root.path(), [("src/a.rs", 2), ("src/a.rs", 9)]);
+        assert_eq!(marks.len(), 1);
+        assert_eq!(marks[0].count, 2);
+
+        fs::write(&file, "// moved\nfn a() {\n      f(1);\n    f(1);\n}\n").unwrap();
+        assert!(!any_site_edited(root.path(), &marks));
+        fs::write(&file, "fn a() {\n    f(1, 2);\n    f(1);\n}\n").unwrap();
+        assert!(any_site_edited(root.path(), &marks));
+        fs::remove_file(&file).unwrap();
+        assert!(any_site_edited(root.path(), &marks));
     }
 
     #[test]

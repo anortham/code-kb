@@ -45,6 +45,8 @@ pub struct McpServer {
     /// False while the active root has had no prepare, which happens when the startup
     /// pre-warm is refused.
     prepared: bool,
+    /// `clientInfo.name` of the `initialize` request, for telemetry.
+    client: Option<String>,
 }
 
 /// Resolves `input` like `Workspace::from_project_root`, except that a launch root with
@@ -178,6 +180,7 @@ impl McpServer {
             reconcile,
             parked: Vec::new(),
             prepared,
+            client: None,
         })
     }
 
@@ -551,6 +554,7 @@ impl McpServer {
             est_tokens_saved_known,
             reconcile_ms: res.reconcile_ms,
             query_ms: res.query_ms,
+            client: self.client.as_deref(),
         };
 
         if let Some(ref conn) = self.telemetry_conn {
@@ -1137,6 +1141,12 @@ impl McpServer {
         match request.method.as_str() {
             "initialize" => {
                 tracing::info!(params = ?request.params, "MCP initialize received");
+                self.client = request
+                    .params
+                    .as_ref()
+                    .and_then(|params| params.pointer("/clientInfo/name"))
+                    .and_then(Value::as_str)
+                    .map(|name| name.chars().take(100).collect());
                 let init_result = json!({
                     "protocolVersion": "2024-11-05",
                     "capabilities": {
@@ -1304,6 +1314,7 @@ mod tests {
             reconcile: None,
             parked: Vec::new(),
             prepared: true,
+            client: None,
         };
         assert!(
             !server

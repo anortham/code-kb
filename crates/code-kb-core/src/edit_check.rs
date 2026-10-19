@@ -39,8 +39,8 @@ use arms::Verdict;
 use fields::FieldChange;
 use git::{ChangedFile, Git, Hunks};
 pub use session::{
-    SessionLock, SessionState, is_session_id, latest_session_base, lock_session, prune_sessions,
-    read_session, record_session_base, write_session,
+    BlockedSite, SessionLock, SessionState, any_site_edited, is_session_id, latest_session_base,
+    lock_session, mark_sites, prune_sessions, read_session, record_session_base, write_session,
 };
 use signatures::{Difference, Shape};
 

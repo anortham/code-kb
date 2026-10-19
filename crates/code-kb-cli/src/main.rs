@@ -336,7 +336,7 @@ fn main() -> anyhow::Result<()> {
         let event = args.event.as_str();
 
         if hooks::is_stop_event(event) {
-            hooks::run_stop();
+            hooks::run_stop(event);
             return Ok(());
         }
 

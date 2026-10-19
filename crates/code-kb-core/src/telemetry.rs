@@ -23,6 +23,8 @@ pub struct ToolInvocation<'a> {
     pub est_tokens_saved_known: bool,
     pub reconcile_ms: Option<u64>,
     pub query_ms: Option<u64>,
+    /// `clientInfo.name` of the MCP `initialize` request.
+    pub client: Option<&'a str>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -247,11 +249,23 @@ fn init_telemetry_db(conn: &Connection) -> Result<(), QueryError> {
              est_tokens_saved_known INTEGER NOT NULL DEFAULT 0,
              code_kb_version TEXT NOT NULL,
              reconcile_ms INTEGER DEFAULT NULL,
-             query_ms INTEGER DEFAULT NULL
+             query_ms INTEGER DEFAULT NULL,
+             client TEXT DEFAULT NULL
+         );
+         CREATE TABLE IF NOT EXISTS hook_telemetry (
+             id INTEGER PRIMARY KEY,
+             timestamp TEXT NOT NULL,
+             workspace_root TEXT NOT NULL,
+             event TEXT NOT NULL,
+             diff_hash TEXT NOT NULL,
+             sites_listed INTEGER NOT NULL,
+             blocked INTEGER NOT NULL,
+             followed INTEGER DEFAULT NULL
          );
          CREATE INDEX IF NOT EXISTS idx_tool_telemetry_tool ON tool_telemetry(tool, timestamp DESC);
          CREATE INDEX IF NOT EXISTS idx_tool_telemetry_ts ON tool_telemetry(timestamp DESC);
-         DELETE FROM tool_telemetry WHERE timestamp < datetime('now', '-365 days');",
+         DELETE FROM tool_telemetry WHERE timestamp < datetime('now', '-365 days');
+         DELETE FROM hook_telemetry WHERE timestamp < datetime('now', '-365 days');",
     )?;
 
     // Handle column migrations if table previously existed without workspace columns
@@ -300,6 +314,12 @@ fn init_telemetry_db(conn: &Connection) -> Result<(), QueryError> {
     if !col_names.contains("query_ms") {
         conn.execute(
             "ALTER TABLE tool_telemetry ADD COLUMN query_ms INTEGER DEFAULT NULL",
+            [],
+        )?;
+    }
+    if !col_names.contains("client") {
+        conn.execute(
+            "ALTER TABLE tool_telemetry ADD COLUMN client TEXT DEFAULT NULL",
             [],
         )?;
     }
@@ -370,9 +390,7 @@ pub fn record_tool_call_conn(
     let id = blake3::hash(id_source.as_bytes()).to_hex().to_string();
     let version = env!("CARGO_PKG_VERSION");
 
-    let canonical =
-        dunce::canonicalize(workspace_root).unwrap_or_else(|_| workspace_root.to_path_buf());
-    let norm_ws = to_forward_slash(&normalize_path(&canonical));
+    let norm_ws = normalized_root(workspace_root);
     let ws_name = Path::new(&norm_ws)
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
@@ -383,8 +401,8 @@ pub fn record_tool_call_conn(
             id, timestamp, workspace_root, workspace_name, tool,
             duration_ms, outcome, error_message, result_count, result_count_known,
             bytes_returned, est_tokens, est_tokens_saved, est_tokens_saved_known,
-            code_kb_version, reconcile_ms, query_ms
-        ) VALUES (?1, datetime('now'), ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+            code_kb_version, reconcile_ms, query_ms, client
+        ) VALUES (?1, datetime('now'), ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
         params![
             id,
             norm_ws,
@@ -402,8 +420,15 @@ pub fn record_tool_call_conn(
             version,
             invocation.reconcile_ms.map(|v| v as i64),
             invocation.query_ms.map(|v| v as i64),
+            invocation.client,
         ],
     );
+}
+
+fn normalized_root(workspace_root: &Path) -> String {
+    let canonical =
+        dunce::canonicalize(workspace_root).unwrap_or_else(|_| workspace_root.to_path_buf());
+    to_forward_slash(&normalize_path(&canonical))
 }
 
 /// Record a tool call to the global telemetry database.
@@ -414,6 +439,48 @@ pub fn record_tool_call(workspace_root: &Path, invocation: &ToolInvocation) {
     }
     if let Ok(conn) = open_global_telemetry_db() {
         record_tool_call_conn(&conn, workspace_root, invocation);
+    }
+}
+
+/// Records one check of a `Stop` or `SubagentStop` hook: the diff it checked, the number of sites
+/// its block listed, and whether it blocked. Best-effort and non-panicking.
+pub fn record_hook_check(
+    workspace_root: &Path,
+    event: &str,
+    diff_hash: &str,
+    sites_listed: usize,
+    blocked: bool,
+) {
+    if is_telemetry_disabled() {
+        return;
+    }
+    if let Ok(conn) = open_global_telemetry_db() {
+        let _ = conn.execute(
+            "INSERT INTO hook_telemetry (timestamp, workspace_root, event, diff_hash, sites_listed, blocked)
+             VALUES (datetime('now'), ?1, ?2, ?3, ?4, ?5)",
+            params![
+                normalized_root(workspace_root),
+                event,
+                diff_hash,
+                sites_listed as i64,
+                blocked as i64
+            ],
+        );
+    }
+}
+
+/// Records whether the agent edited a site of the block on `diff_hash` before the next stop.
+/// Best-effort and non-panicking.
+pub fn record_hook_followed(workspace_root: &Path, diff_hash: &str, followed: bool) {
+    if is_telemetry_disabled() {
+        return;
+    }
+    if let Ok(conn) = open_global_telemetry_db() {
+        let _ = conn.execute(
+            "UPDATE hook_telemetry SET followed = ?3
+             WHERE workspace_root = ?1 AND diff_hash = ?2 AND blocked = 1 AND followed IS NULL",
+            params![normalized_root(workspace_root), diff_hash, followed as i64],
+        );
     }
 }
 
@@ -1309,6 +1376,7 @@ mod tests {
             est_tokens_saved_known: true,
             reconcile_ms: None,
             query_ms: None,
+            client: None,
         };
         record_tool_call_conn(&conn, ws_a, &inv_a);
         record_tool_call_conn(&conn, ws_a, &inv_a);
@@ -1325,6 +1393,7 @@ mod tests {
             est_tokens_saved_known: true,
             reconcile_ms: None,
             query_ms: None,
+            client: None,
         };
         record_tool_call_conn(&conn, ws_b, &inv_b);
 
@@ -1382,6 +1451,7 @@ mod tests {
             est_tokens_saved_known: true,
             reconcile_ms: None,
             query_ms: None,
+            client: None,
         };
         let inv2 = ToolInvocation {
             tool: "file_skeleton",
@@ -1395,6 +1465,7 @@ mod tests {
             est_tokens_saved_known: true,
             reconcile_ms: None,
             query_ms: None,
+            client: None,
         };
         let inv3 = ToolInvocation {
             tool: "get_symbol_body",
@@ -1408,6 +1479,7 @@ mod tests {
             est_tokens_saved_known: true,
             reconcile_ms: None,
             query_ms: None,
+            client: None,
         };
 
         record_tool_call_conn(&conn, ws, &inv1);
@@ -1460,6 +1532,7 @@ mod tests {
             est_tokens_saved_known: true,
             reconcile_ms: None,
             query_ms: None,
+            client: None,
         };
         let unknown = ToolInvocation {
             tool: "find_references",
@@ -1473,6 +1546,7 @@ mod tests {
             est_tokens_saved_known: false,
             reconcile_ms: None,
             query_ms: None,
+            client: None,
         };
         let outline = ToolInvocation {
             tool: "codebase_outline",
@@ -1486,6 +1560,7 @@ mod tests {
             est_tokens_saved_known: false,
             reconcile_ms: None,
             query_ms: None,
+            client: None,
         };
 
         record_tool_call_conn(&conn, ws, &known);
@@ -1539,6 +1614,7 @@ mod tests {
             est_tokens_saved_known: true,
             reconcile_ms: None,
             query_ms: None,
+            client: None,
         };
         record_tool_call_conn(&conn, ws, &inv_err);
 
@@ -1599,6 +1675,7 @@ mod tests {
                     est_tokens_saved_known: true,
                     reconcile_ms: None,
                     query_ms: None,
+                    client: None,
                 },
             );
         }
@@ -1640,6 +1717,7 @@ mod tests {
             est_tokens_saved_known: true,
             reconcile_ms: None,
             query_ms: None,
+            client: None,
         };
         record_tool_call_conn(&conn, root, &inv1);
 
@@ -1655,6 +1733,7 @@ mod tests {
             est_tokens_saved_known: true,
             reconcile_ms: None,
             query_ms: None,
+            client: None,
         };
         record_tool_call_conn(&conn, root, &inv2);
 
@@ -1670,6 +1749,7 @@ mod tests {
             est_tokens_saved_known: true,
             reconcile_ms: None,
             query_ms: None,
+            client: None,
         };
         record_tool_call_conn(&conn, root, &inv3);
 
@@ -1762,6 +1842,22 @@ mod tests {
             0
         );
 
+        assert_eq!(
+            conn.query_row(
+                "SELECT client FROM tool_telemetry WHERE id = 'old1'",
+                [],
+                |row| row.get::<_, Option<String>>(0),
+            )
+            .unwrap(),
+            None
+        );
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM hook_telemetry", [], |row| row
+                .get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
+
         // Verify we can insert a new record with workspace_root and query via index
         let inv = ToolInvocation {
             tool: "file_skeleton",
@@ -1775,8 +1871,18 @@ mod tests {
             est_tokens_saved_known: true,
             reconcile_ms: None,
             query_ms: None,
+            client: Some("claude-code"),
         };
         record_tool_call_conn(&conn, Path::new("/workspace/project"), &inv);
+        assert_eq!(
+            conn.query_row(
+                "SELECT client FROM tool_telemetry WHERE tool = 'file_skeleton'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .unwrap(),
+            "claude-code"
+        );
 
         let ws_filter = TelemetryFilter {
             time_window: TimeWindow::AllTime,
@@ -1924,6 +2030,7 @@ mod tests {
             est_tokens_saved_known: true,
             reconcile_ms: None,
             query_ms: None,
+            client: None,
         };
         // Create a fake malicious julie-extract binary in a .tools directory in workspace
         let ws_temp = crate::safe_tempdir();
@@ -2018,7 +2125,7 @@ mod tests {
             "INSERT INTO tool_telemetry VALUES (
                 't-1', datetime('now'), ?1, 'my_repo', 'lookup_symbol',
                 12, 'error', 'Failed to find symbol Foo', 0, 0, 100, 25, 0, 0, '0.9.0',
-                NULL, NULL
+                NULL, NULL, NULL
             )",
             params![raw_var_path],
         )
@@ -2047,7 +2154,7 @@ mod tests {
             "INSERT INTO tool_telemetry VALUES (
                 't-2', datetime('now'), ?1, 'other_repo', 'lookup_symbol',
                 12, 'error', 'Reverse matching error', 0, 0, 100, 25, 0, 0, '0.9.0',
-                NULL, NULL
+                NULL, NULL, NULL
             )",
             params!["/private/var/folders/zz/99999999/T/other_repo"],
         )
@@ -2140,6 +2247,7 @@ mod tests {
             est_tokens_saved_known: true,
             reconcile_ms: Some(100),
             query_ms: Some(20),
+            client: None,
         };
         // Record with custom version manually for test partitioning
         conn.execute(

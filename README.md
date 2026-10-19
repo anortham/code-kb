@@ -560,8 +560,11 @@ code-kb hook SubagentStop
 
 ## Telemetry and What "Saved" Means
 
-`code-kb` records every MCP tool call in `~/.code-kb/telemetry.db`. `code-kb stats` reports
-the calls, the latency, the error rate, the tokens served, and the tokens saved.
+`code-kb` records every MCP tool call in `~/.code-kb/telemetry.db`, with the name the client
+gives itself. `code-kb stats` reports the calls, the latency, the error rate, the tokens served,
+and the tokens saved. The Stop hooks record each check, each block, and whether the agent edited a
+blocked site (see [docs/edit-check.md](docs/edit-check.md)). No row holds source text.
+`CODE_KB_NO_TELEMETRY=1` turns all of it off.
 
 Saved is the size, in estimated tokens, of the files the answer points into, minus the tokens
 served. A skeleton, body, or context read is measured against its own file. A lookup,

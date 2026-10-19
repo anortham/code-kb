@@ -6,7 +6,8 @@ run. It measures two things:
 - How often the Stop hook blocks a diff that needs no more edits (a false block).
 - How many of the sites that an edit must reach the check lists.
 
-The harness calls only the `code-kb` CLI and git. It works in full-history clones under
+The harness calls only the `code-kb` CLI and git, with `CODE_KB_NO_TELEMETRY=1`, so its Stop hooks
+add no rows to `~/.code-kb/telemetry.db`. It works in full-history clones under
 `~/.cache/code-kb-accuracy/phase3/repos/<name>`, one per project in `evals/reach/corpus.json`.
 Each run checks out commits in its own detached worktrees under `<out>/trees/`, so two binaries
 never share an index. Remove a run folder with `rm -r <out>` and then `git -C <clone> worktree prune`.

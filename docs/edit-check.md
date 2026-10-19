@@ -181,10 +181,10 @@ A site that the diff did not reach goes under its label. `proven` and `likely` s
 {"base":"fb5628e8091fdfcceb4bf0fc8ce7a31d6c2c94aa"}
 ```
 
-The Stop hooks add two fields to the file:
+The Stop hooks add three fields to the file:
 
 ```
-{"base":"fb5628e8…","checked_diff":"3f1c…","blocked_diff":"3f1c…"}
+{"base":"fb5628e8…","checked_diff":"3f1c…","blocked_diff":"3f1c…","blocked_sites":[{"path":"src/lib.rs","line":8,"text":"9a0c…","count":1}]}
 ```
 
 - `session_id` holds only letters, digits, `_`, and `-` (at most 128 characters). The root is the payload's `cwd`, else the process folder, resolved like any `project_root`.
@@ -192,6 +192,7 @@ The Stop hooks add two fields to the file:
 - A file that has a base keeps it, so a resume, a `clear`, or a compaction does not move it. A file that has none (a Stop hook made it before `SessionStart` ran) gets the base from the next `SessionStart`, and it keeps its other fields. `SessionStart` takes the session lock for this, waits up to 2 s, and writes nothing when it cannot get the lock.
 - The same call removes session files older than 7 days.
 - `checked_diff` is the `diff_hash` of the last check that a Stop or SubagentStop hook ran in this session, blocked or not. `blocked_diff` is the `diff_hash` of the last diff a hook blocked on. A hook that finds no file creates one with these fields and no `base`; see above for how it gets one.
+- `blocked_sites` holds the sites that the last block listed (at most 15): the path, the line, a hash of the trimmed line text (never the text), and how many lines of the file had that text. The next Stop hook of the session reads it and removes it (see "Telemetry" below).
 - `{session_id}.lock` sits next to the file while a hook of the session runs (below). It is no session file, and `check_edit` does not read it.
 - `check_edit` and `code-kb check` have no session id. They use the base of the session file written last within the past day. Two sessions on one root can therefore see each other's base; pass `base` to pick one.
 
@@ -217,6 +218,15 @@ The hook reads `session_id`, `cwd`, and `stop_hook_active` from stdin and works 
 - It prints nothing, and exits 0, when `stop_hook_active` is true, when no site is outside the diff, when no symbol changed shape, outside a git repository, with no index, with a missing or bad `session_id`, when it cannot get the lock in 2 s, on stdin that is a terminal or stays silent for 2 s, and on any error or panic.
 - It also prints nothing when another `julie-extract` version or extraction level wrote the index. It uses the check of the index version guard (`index_written_by_other_extractor` in `sync.rs`) before it reads or writes the index, and it starts no scan or rebuild: the first write after an upgrade would rescan the whole index in place and could pass the 60 s timeout. The index file stays as it is. The next server start or `code-kb` command rebuilds it.
 - Claude Code and Codex both run these two events and read the same `decision` and `reason` output. The hook was not run inside a live harness in this branch.
+
+### Telemetry
+
+The Stop hooks record two adoption measures in the `hook_telemetry` table of `~/.code-kb/telemetry.db`, under the same switches as the tool telemetry (`CODE_KB_NO_TELEMETRY`, `CODE_KB_DISABLE_TELEMETRY`, `CODE_KB_TELEMETRY_DIR`). No row holds source text.
+
+- Each check that runs adds a row: the time, the root, the event (`Stop` or `SubagentStop`), the `diff_hash`, the number of blocking sites, and whether it blocked. A skipped diff adds no row.
+- The first Stop hook after a block, with `stop_hook_active` true or false, sets `followed` on that block's row: 1 when an edit changed a site that the block listed, else 0. A site counts as changed when its file now has fewer lines with its text, so an edit above the site that moves it does not count, and a deleted file does. Then it removes `blocked_sites`. A block that no later Stop hook follows keeps `followed` empty.
+- The MCP server records `clientInfo.name` of the `initialize` request in the `client` column of `tool_telemetry`.
+- On a zod copy, a repeat Stop took 0.081 s against 0.080 s in 2.7.0 (median of 20).
 
 ## Known limits
 

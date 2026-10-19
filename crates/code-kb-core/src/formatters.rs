@@ -1797,7 +1797,7 @@ fn explain_line(score: f64, e: &SearchExplain) -> String {
 
 const EDIT_SITES_LISTED: usize = 12;
 const EDIT_TESTS_LISTED: usize = 8;
-const STOP_SITES_LISTED: usize = 15;
+pub const STOP_SITES_LISTED: usize = 15;
 
 /// The post-edit answer: the base, each symbol whose shape changed with its sites split by
 /// whether the diff reached them, the tests to run, and the blind spots of the index.
@@ -1847,16 +1847,10 @@ pub fn format_edit_check(check: &EditCheck) -> String {
 /// the old shape of which symbols, then the first of them. `None` when no change that
 /// [`blocks_a_stop`] has such a site.
 pub fn format_stop_reason(check: &EditCheck) -> Option<String> {
-    let mut rows: Vec<(&EditSite, &ShapeChange)> = Vec::new();
-    for change in check.changes.iter().filter(|change| blocks_a_stop(change)) {
-        rows.extend(change.proven.iter().map(|site| (site, change)));
-    }
+    let rows = stop_rows(check);
     if rows.is_empty() {
         return None;
     }
-    rows.sort_by(|a, b| {
-        (&a.0.path, a.0.line, &a.1.display).cmp(&(&b.0.path, b.0.line, &b.1.display))
-    });
     let mut names: Vec<String> = Vec::new();
     for (_, change) in &rows {
         let name = format!("`{}`", change.display);
@@ -1877,6 +1871,22 @@ pub fn format_stop_reason(check: &EditCheck) -> Option<String> {
     }
     out.push_str("Edit them or say why they need no change.");
     Some(out)
+}
+
+fn stop_rows(check: &EditCheck) -> Vec<(&EditSite, &ShapeChange)> {
+    let mut rows: Vec<(&EditSite, &ShapeChange)> = Vec::new();
+    for change in check.changes.iter().filter(|change| blocks_a_stop(change)) {
+        rows.extend(change.proven.iter().map(|site| (site, change)));
+    }
+    rows.sort_by(|a, b| {
+        (&a.0.path, a.0.line, &a.1.display).cmp(&(&b.0.path, b.0.line, &b.1.display))
+    });
+    rows
+}
+
+/// The `proven` sites that block a stop, in the order its reason lists them.
+pub fn stop_sites(check: &EditCheck) -> Vec<&EditSite> {
+    stop_rows(check).into_iter().map(|(site, _)| site).collect()
 }
 
 /// A `signature changed` row is often a type change that every call still fits (a nullable

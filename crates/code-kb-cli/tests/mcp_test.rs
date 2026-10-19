@@ -3705,6 +3705,14 @@ fn test_mcp_telemetry_records_the_launch_root_for_a_refused_call_and_the_resolve
             ),
         ]
     );
+    let clients = conn
+        .prepare("SELECT client FROM tool_telemetry WHERE tool = 'lookup_symbol'")
+        .unwrap()
+        .query_map([], |row| row.get::<_, Option<String>>(0))
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    assert_eq!(clients, vec![Some("project-root-test".to_string()); 2]);
 }
 
 fn markerless_folder(source: &str) -> tempfile::TempDir {

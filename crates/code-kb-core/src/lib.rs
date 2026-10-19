@@ -17,16 +17,17 @@ pub use db::{
     Connection, DbError, ensure_fts_index, ensure_fts_index_path, open_read_only, open_read_write,
 };
 pub use edit_check::{
-    BaseRequest, BaseSource, EditCheck, EditCheckError, EditLimits, EditSite, PendingCheck,
-    SessionLock, SessionState, ShapeChange, head_commit, is_session_id, latest_session_base,
-    lock_session, prune_sessions, read_session, record_session_base, write_session,
+    BaseRequest, BaseSource, BlockedSite, EditCheck, EditCheckError, EditLimits, EditSite,
+    PendingCheck, SessionLock, SessionState, ShapeChange, any_site_edited, head_commit,
+    is_session_id, latest_session_base, lock_session, mark_sites, prune_sessions, read_session,
+    record_session_base, write_session,
 };
 pub use formatters::{
-    format_blast_radius, format_context_slice, format_context_slices, format_edit_check,
-    format_fact_categories, format_file_skeleton, format_find_symbol_results,
+    STOP_SITES_LISTED, format_blast_radius, format_context_slice, format_context_slices,
+    format_edit_check, format_fact_categories, format_file_skeleton, format_find_symbol_results,
     format_import_summary, format_no_facts, format_reference_report, format_references,
     format_search_results, format_stop_reason, format_structural_facts, format_symbol_bodies,
-    format_symbol_body, no_facts_heading,
+    format_symbol_body, no_facts_heading, stop_sites,
 };
 pub use models::{
     BlastRadiusResult, CallingTest, ConstructionSite, ContextSlice, FileFact, ImpactedSymbol,
@@ -66,7 +67,7 @@ pub use telemetry::{
     BugReportBundle, IndexFacts, TelemetryErrorRecord, TelemetryFilter, TelemetrySummary,
     TimeWindow, ToolInvocation, ToolStat, format_telemetry_summary, generate_bug_report,
     get_global_telemetry_dir, get_telemetry_summary, open_global_telemetry_db, open_telemetry_db,
-    record_tool_call, record_tool_call_conn,
+    record_hook_check, record_hook_followed, record_tool_call, record_tool_call_conn,
 };
 pub use text_scan::{WordHits, scan_word};
 pub use watcher::{WatcherError, WatcherHandle, start_watcher};

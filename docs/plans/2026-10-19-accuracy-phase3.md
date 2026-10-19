@@ -274,9 +274,9 @@ Runs only when the clean set fails its mark. v2.7.0 already made the first chang
 
 **What to build:** Telemetry for the two adoption measures of the research: how often an agent acts on a block, and which client calls the tools. At the next Stop after a block, the hook records `followed` = true when the new diff changed a line of a site it listed. Telemetry stays local, follows the existing disable flags, and records no source text.
 
-- [ ] An old telemetry database upgrades in place; a test covers it.
-- [ ] Hook tests cover `followed` true and false, and a disabled telemetry flag that records nothing.
-- [ ] Hook time stays within 0.01 s of 2.7.0 on a repeat Stop (0.07 to 0.08 s on zod). Worker commits.
+- [x] An old telemetry database upgrades in place; a test covers it.
+- [x] Hook tests cover `followed` true and false, and a disabled telemetry flag that records nothing.
+- [x] Hook time stays within 0.01 s of 2.7.0 on a repeat Stop (0.07 to 0.08 s on zod). Worker commits.
 
 ### Task 5.2: Adoption report
 
