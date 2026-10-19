@@ -25,7 +25,7 @@
 - `local_commit_authority: authorized — owner 2026-10-17: "You are approved to work in both repos"`. Applies after the owner approves this plan.
 - `push_authority: missing` — ask once at the end of each slice that ships.
 - `pr_authority: missing` (same ask).
-- code-kb release (2.7.1 or 2.8.0): missing. A changed block rule (task 2.1) needs a release before users get it.
+- code-kb release (2.7.1 or 2.8.0): missing. A further change to the block rule (task 2.1) needs a release before users get it.
 - julie-extractors release: missing for phase 3. The 2026-10-18 grant covered phase 2. Ask if slice 2 or 4 needs a julie change.
 - Paid model runs: none in this plan. The phase 4 agent A/B test needs its own budget approval.
 - Reviewer choice: none (Sonnet review agents inside the workflows, lead validation).
@@ -33,6 +33,7 @@
 **Lead decisions (provisional, recorded):**
 - The harness measures before any fix. No rule changes in slice 1.
 - The clean-commit mark is a release question: if more than 2% of clean commits get a false block, task 2.1 changes what blocks before any other fix, and the lead asks the owner about a patch release.
+- v2.7.0 (released 2026-10-19) already narrowed the block rule: the Stop hooks block only on a `proven` site, never on a `likely` site, a `signature changed` row, or a JavaScript parameter change. On 76 recent commits with a shape change in cobra, gson, flask, zod, express, Newtonsoft.Json, and code-kb, the old rule blocked 18 stops (none needed an edit) and the new one blocks 0. This branch starts before v2.7.0: rebase it onto `main` before task 1.1.
 - Holdback truth comes from what the commit's author changed, not from a compiler. A compiler run per case costs too much across 7 languages, and the author's edit is the site the agent must reach.
 - Session cases that cannot be rebuilt are counted by cause and left out. They are not guessed.
 - Blast radius test selection is out of scope. The research measured that static selection misses 29% to 52% of failing test files, and the tool already says "run the full test suite".
@@ -170,7 +171,7 @@ Each task in this slice measures. No task changes a rule.
 
 ### Task 2.1: Block rule
 
-Runs only when the clean set fails its mark.
+Runs only when the clean set fails its mark. v2.7.0 already made the first change (see Lead decisions), so the slice 1 baseline measures the v2.7.0 rule.
 
 **Files:** `crates/code-kb-core/src/edit_check.rs`, `crates/code-kb-cli/src/hooks.rs`, `docs/edit-check.md`, `crates/code-kb-core/tests/edit_check_test.rs`, `crates/code-kb-cli/tests/edit_hook_test.rs`.
 **Interfaces:** the Stop and SubagentStop decision; the `check_edit` text keeps every row.
