@@ -709,7 +709,7 @@ fn a_revision_that_looks_like_an_option_is_refused() {
 #[test]
 fn a_folder_outside_a_git_repository_is_an_error() {
     find_julie_extract_binary().expect("julie-extract binary must be present for tests");
-    let temp = safe_tempdir();
+    let temp = tempfile::tempdir().unwrap();
     write(temp.path(), "a.py", "def f():\n    return 1\n");
     let db = temp.path().join(".code-kb").join("artifact.db");
     let workspace = Workspace::new(temp.path().to_path_buf());
@@ -1408,7 +1408,7 @@ fn the_head_commit_is_none_outside_a_repository_and_before_the_first_commit() {
         head_commit(&repo.root),
         Some(git(&repo.root, &["rev-parse", "HEAD"]))
     );
-    let plain = safe_tempdir();
+    let plain = tempfile::tempdir().unwrap();
     assert_eq!(head_commit(plain.path()), None);
     git(plain.path(), &["init", "-q", "-b", "main"]);
     assert_eq!(head_commit(plain.path()), None);

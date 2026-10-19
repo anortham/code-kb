@@ -1,0 +1,4 @@
+[env]
+# cargo test runs a binary's tests as threads of one process. Past about 8 threads they slow each
+# other down until the report time limits cut even tiny fixtures. CI runners have 4 cores.
+RUST_TEST_THREADS = "4"

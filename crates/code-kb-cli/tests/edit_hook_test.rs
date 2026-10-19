@@ -152,6 +152,13 @@ fn run_hook_with_env(
     child.wait_with_output().unwrap()
 }
 
+fn without_parent_repository(root: &Path) -> [(&'static str, &OsStr); 1] {
+    [(
+        "GIT_CEILING_DIRECTORIES",
+        root.parent().unwrap().as_os_str(),
+    )]
+}
+
 fn start_session(repo: &Repo, session_id: &str) -> Output {
     run_hook(
         "SessionStart",
@@ -249,7 +256,12 @@ fn session_start_refuses_a_session_id_that_is_not_a_plain_name() {
 #[test]
 fn session_start_writes_no_file_outside_a_git_repository() {
     let repo = indexed_repo(&[("a.py", "def f():\n    return 1\n")], false);
-    let output = start_session(&repo, "plain");
+    let output = run_hook_with_env(
+        "SessionStart",
+        Some(&payload("plain", &repo.root, false)),
+        &repo.root,
+        &without_parent_repository(&repo.root),
+    );
     assert!(output.status.success());
     assert!(!output.stdout.is_empty());
     assert!(!repo.root.join(".code-kb").join("sessions").exists());
@@ -447,17 +459,19 @@ fn stop_is_silent_when_every_site_is_in_the_diff() {
 fn stop_is_silent_outside_a_git_repository() {
     let repo = indexed_repo(&[("a.py", "def f(x):\n    return x\n")], false);
     write(&repo.root, "a.py", "def f(x, y):\n    return x\n");
-    assert_silent(&run_hook(
+    assert_silent(&run_hook_with_env(
         "Stop",
         Some(&payload("plain", &repo.root, false)),
         &repo.root,
+        &without_parent_repository(&repo.root),
     ));
 
     let nowhere = safe_tempdir();
-    assert_silent(&run_hook(
+    assert_silent(&run_hook_with_env(
         "Stop",
         Some(&payload("plain", nowhere.path(), false)),
         nowhere.path(),
+        &without_parent_repository(nowhere.path()),
     ));
 }
 
