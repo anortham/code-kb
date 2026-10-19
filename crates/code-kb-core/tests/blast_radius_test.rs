@@ -387,6 +387,70 @@ fn test_blast_radius_cycle_excludes_seed_symbol() {
     assert_eq!(res.impacted_symbols[0].depth, 1);
 }
 
+fn call_chain(conn: &Connection, names: &[&str]) {
+    for (line, name) in names.iter().enumerate() {
+        conn.execute(
+            "INSERT INTO symbols (symbol_id, file_id, path, language, name, kind, start_line,
+                start_column, end_line, end_column, start_byte, end_byte, is_test, test_container)
+             VALUES (?1, 'f1', 'src/lib.rs', 'rust', ?1, 'function', ?2, 0, ?2, 0, 0, 1, 0, 0)",
+            rusqlite::params![name, line as i64 + 1],
+        )
+        .unwrap();
+    }
+    for pair in names.windows(2) {
+        conn.execute(
+            "INSERT INTO relationships VALUES (?1, ?2, 'calls', 'src/lib.rs', 1, 0)",
+            rusqlite::params![pair[1], pair[0]],
+        )
+        .unwrap();
+    }
+}
+
+#[test]
+fn a_walk_that_ends_at_the_depth_limit_has_no_callers_beyond_it() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+    call_chain(&conn, &["a", "b", "c"]);
+
+    let res = compute_blast_radius_scoped(&conn, &["a"], None, &[], 2, 20).unwrap();
+
+    assert_eq!(res.impacted_symbols.len(), 2);
+    assert_eq!(res.stopped_at_depth, None);
+    assert!(format_blast_radius(&res).contains("No test reaches it through the index."));
+}
+
+#[test]
+fn a_walk_with_a_caller_beyond_the_depth_limit_says_a_larger_depth_may_find_tests() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+    call_chain(&conn, &["a", "b", "c", "d"]);
+
+    let res = compute_blast_radius_scoped(&conn, &["a"], None, &[], 2, 20).unwrap();
+
+    let names: Vec<&str> = res
+        .impacted_symbols
+        .iter()
+        .map(|s| s.name.as_str())
+        .collect();
+    assert_eq!(names, ["b", "c"]);
+    assert_eq!(res.stopped_at_depth, Some(2));
+}
+
+#[test]
+fn a_walk_at_the_largest_depth_never_suggests_a_larger_one() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+    call_chain(&conn, &["a", "b", "c", "d", "e", "f", "g"]);
+
+    let res = compute_blast_radius_scoped(&conn, &["a"], None, &[], 5, 20).unwrap();
+
+    assert_eq!(res.impacted_symbols.len(), 5);
+    assert_eq!(res.stopped_at_depth, None);
+}
+
 #[test]
 fn test_blast_radius_max_depth_clamped() {
     let temp = safe_tempdir();

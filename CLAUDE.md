@@ -246,7 +246,8 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   counts those sites. A whole-word text scan with a 3 s budget sorts every line of the name into a site, a
   definition, an import, or text only. A definition runs from its first decorator line to the line
   before its body in Python, Ruby, Lua, F#, and VB.NET, where julie starts a body at its first
-  statement, and to the first line of its body elsewhere. An import row that julie names by its
+  statement, and to the first line of its body elsewhere. When no line before the body holds the
+  name (`@route` then `def index(): return 1`), the span keeps the first body line. An import row that julie names by its
   full path (Kotlin `import a.b.boxIfPrimitive`) counts for its last segment. Counts are always
   complete, `limit` caps only the listed rows, and CLI `--json` prints the whole report. Callees
   keep the plain list.
@@ -324,7 +325,10 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   (`fs/promises`), and a package whose last segment names no project folder or file are outside
   the project: the site is excluded, and no import claim proves a project definition. A test
   label (`describe('mix', …)`) never hides an import. A bare JavaScript or TypeScript type use (`output<T>`) is hidden by a type, interface,
-  or enum of that name in an enclosing function. julie records no symbol for a callback
+  or enum of that name in an enclosing function, and never by a value of that name (the `const`
+  half of an interface and a `const` with one name). A Rust read of a value never names a module
+  (`mod git;`): such a module is no shadow and no other definition of the site, and as the target
+  it excludes the site with ``git` is a module, which a read of a value never names`. julie records no symbol for a callback
   parameter, a `for … of` or `for … in` variable, or a `catch` parameter, so
   `reference_report/js_bindings.rs` reads them from the source: when one of them between the
   start of the caller and the site has the name, an `import`, `same file`, `enclosing scope`, or
@@ -372,7 +376,7 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   `conftest.py` that defines it. A fixture that takes that fixture is replaced by the tests that
   take it in turn. A setup member in another test framework, such as an xUnit test-class
   constructor or a Python `setUp` or `tearDown` method, is replaced by the tests of its class. A
-  fixture or setup member with no such tests stays, labelled `fixture` or `setup`. Every test row is a test that the call graph reaches: a caller, a fixture user, a test of a setup member's class, or a test that reaches the target through a constructor. When the walk finds no test for one symbol, the rows are the `Tests that call it` of its callers report, with the reason `calls it (find_references)`, or `calls it by name only (find_references)` when only `likely` sites with the basis `name only` reach the test; a target that is itself a test is then its own row, `the target is a test`. The index guesses no test from a shared word in a name, a stem in a file name, or an error handler, and it adds no `possible` row for a call that the runtime makes. When no test is found and the walk reached its depth, the answer says ``No test reaches it within depth N; a larger `depth` may find some. Otherwise run the full test suite.``; when the walk ended before its depth, it says `No test reaches it through the index. Run the full test suite.`; a list that `limit` or the 200-row discovery ceiling cut says neither. For a file target, the tests in one test file that reach the target only through a constructor fold into one row for that file, `constructor-only callers (N targets)`. When `limit` cuts a list,
+  fixture or setup member with no such tests stays, labelled `fixture` or `setup`. Every test row is a test that the call graph reaches: a caller, a fixture user, a test of a setup member's class, or a test that reaches the target through a constructor. When the walk finds no test for one symbol, the rows are the `Tests that call it` of its callers report, with the reason `calls it (find_references)`, or `calls it by name only (find_references)` when only `likely` sites with the basis `name only` reach the test; a target that is itself a test is then its own row, `the target is a test`. The index guesses no test from a shared word in a name, a stem in a file name, or an error handler, and it adds no `possible` row for a call that the runtime makes. When no test is found and a caller lies past the depth (the walk looks one level further, up to the largest depth, 5), the answer says ``No test reaches it within depth N; a larger `depth` may find some. Otherwise run the full test suite.``; otherwise it says `No test reaches it through the index. Run the full test suite.`; a list that `limit` or the 200-row discovery ceiling cut says neither. For a file target, the tests in one test file that reach the target only through a constructor fold into one row for that file, `constructor-only callers (N targets)`. When `limit` cuts a list,
   the answer says how many rows it shows of how many it found.
 - Edit check: `check_edit` (CLI `code-kb check [--base REV]`, `edit_check_op` in `ops.rs`) compares the
   working tree with a base revision (the given `base`, else the session base, else `HEAD`) and lists each

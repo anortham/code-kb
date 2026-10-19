@@ -379,7 +379,7 @@ pub struct BlastRadiusResult {
     /// Impacted symbols found before `limit` cut the list.
     #[serde(default)]
     pub impacted_symbols_found: usize,
-    /// The depth the walk stopped at while it still found callers, so a deeper walk may find more.
+    /// The depth limit of a walk that has callers beyond it, so a deeper walk may find more.
     #[serde(default)]
     pub stopped_at_depth: Option<usize>,
 }

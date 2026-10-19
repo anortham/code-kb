@@ -550,12 +550,14 @@ impl NameRow {
     /// Whether a definition of `kind` never hides the name from this row: a Java call names a
     /// method, so a field, variable, or parameter of that name is another thing.
     fn is_not_named_by(&self, kind: &str) -> bool {
-        self.language == "java"
-            && matches!(self.kind.as_str(), "calls" | "call")
-            && matches!(
-                kind,
-                "field" | "property" | "variable" | "constant" | "parameter"
-            )
+        let value_kind = matches!(
+            kind,
+            "field" | "property" | "variable" | "constant" | "parameter"
+        );
+        let java_call = self.language == "java" && matches!(self.kind.as_str(), "calls" | "call");
+        let type_use_of_value =
+            self.is_bare_type_use() && (value_kind || matches!(kind, "function" | "method"));
+        (java_call && value_kind) || type_use_of_value
     }
 
     fn is_bare_use(&self) -> bool {
@@ -589,7 +591,14 @@ impl NameRow {
             && languages_compatible(&self.language, &definition.language);
         let member_of_a_scoped_function =
             definition.free && language_family(&self.language) == "js" && self.has_qualifier();
-        !call_of_a_field && !member_of_a_scoped_function
+        !call_of_a_field && !member_of_a_scoped_function && !self.reads_a_module(&definition.kind)
+    }
+
+    /// A Rust read of a value (`git.diff()`) never names a module (`mod git;`), which holds none.
+    fn reads_a_module(&self, kind: &str) -> bool {
+        self.language == "rust"
+            && self.kind == "variable_ref"
+            && matches!(kind, "namespace" | "module")
     }
 }
 
@@ -1313,7 +1322,10 @@ impl<'a> Accounting<'a> {
                 let judged = self.judge(&spec.name, &other.symbol_id, &chunk_rows)?;
                 for &index in chunk {
                     let row = &rows[index];
-                    if row.hidden_receiver || row.language == "java" && !row.can_reach(other) {
+                    if row.hidden_receiver
+                        || row.language == "java" && !row.can_reach(other)
+                        || row.reads_a_module(&other.kind)
+                    {
                         kept.push(index);
                         continue;
                     }
@@ -1637,7 +1649,7 @@ impl<'a> Accounting<'a> {
         }
 
         let import_spans = self.import_spans(name)?;
-        let definition_spans = definition_spans(definitions);
+        let definition_spans = definition_spans(definitions, None);
         rows.retain(|row| {
             if scope == RowScope::Calls && !row.is_call() {
                 return false;
@@ -1906,6 +1918,20 @@ impl<'a> Accounting<'a> {
             return Ok(Some(Verdict::new(
                 SiteLabel::Excluded,
                 format!("`{}` is a test label, which code never names", spec.name),
+                false,
+            )));
+        }
+        if spec
+            .group
+            .iter()
+            .all(|member| row.reads_a_module(&member.kind))
+        {
+            return Ok(Some(Verdict::new(
+                SiteLabel::Excluded,
+                format!(
+                    "`{}` is a module, which a read of a value never names",
+                    spec.name
+                ),
                 false,
             )));
         }
@@ -2710,7 +2736,7 @@ impl<'a> Accounting<'a> {
             }
             spans
         };
-        let definition_spans = definition_spans(&self.definitions(name)?);
+        let definition_spans = definition_spans(&self.definitions(name)?, Some(&hits.hits));
         let import_spans = self.import_spans(name)?;
 
         let mut counts = ReferenceCounts::default();
@@ -2978,25 +3004,44 @@ fn attach_counts_by_line(rows: &mut [NameRow]) {
 /// definition. Elsewhere a body starts at its `{` or `=`, which can share the line of the name.
 const BODY_IS_FIRST_STATEMENT: &[&str] = &["python", "ruby", "lua", "fsharp", "vbnet"];
 
-fn definition_spans(definitions: &[Definition]) -> HashMap<String, Vec<(usize, usize)>> {
+/// The lines of each definition. With `name_lines`, the sorted lines that hold the name, a
+/// definition whose head lines hold no such line is a one-line definition (`@d` then
+/// `def f(): return 1`), so its span keeps the first body line, which holds the name.
+fn definition_spans(
+    definitions: &[Definition],
+    name_lines: Option<&[(String, usize)]>,
+) -> HashMap<String, Vec<(usize, usize)>> {
     let mut spans: HashMap<String, Vec<(usize, usize)>> = HashMap::new();
     for definition in definitions {
+        let start = definition
+            .decorated_start_line
+            .unwrap_or(definition.start_line);
+        let names_a_line_in = |first: usize, last: usize| {
+            name_lines.is_none_or(|lines| {
+                let from = lines.partition_point(|(path, line)| {
+                    (path.as_str(), *line) < (definition.path.as_str(), first)
+                });
+                lines
+                    .get(from)
+                    .is_some_and(|(path, line)| *path == definition.path && *line <= last)
+            })
+        };
         let end = definition
             .body_start_line
             .map_or(definition.start_line, |body| {
-                if BODY_IS_FIRST_STATEMENT.contains(&definition.language.as_str()) {
+                if BODY_IS_FIRST_STATEMENT.contains(&definition.language.as_str())
+                    && names_a_line_in(start, body.saturating_sub(1))
+                {
                     body.saturating_sub(1)
                 } else {
                     body
                 }
             })
             .max(definition.start_line);
-        spans.entry(definition.path.clone()).or_default().push((
-            definition
-                .decorated_start_line
-                .unwrap_or(definition.start_line),
-            end,
-        ));
+        spans
+            .entry(definition.path.clone())
+            .or_default()
+            .push((start, end));
     }
     spans
 }

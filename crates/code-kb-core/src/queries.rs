@@ -5770,6 +5770,8 @@ pub fn compute_blast_radius_scoped(
     )
 }
 
+const MAX_BLAST_DEPTH: usize = 5;
+
 /// Compute blast radius with exact current-index IDs kept as traversal seeds.
 pub fn compute_blast_radius_scoped_with_ids(
     conn: &Connection,
@@ -5781,7 +5783,7 @@ pub fn compute_blast_radius_scoped_with_ids(
     limit: usize,
 ) -> Result<BlastRadiusResult, QueryError> {
     validate_result_limit(limit)?;
-    let max_depth = max_depth.min(5);
+    let max_depth = max_depth.min(MAX_BLAST_DEPTH);
     let mut resolved_seed_symbols = seed_symbols
         .iter()
         .map(|name| {
@@ -5883,10 +5885,16 @@ pub fn compute_blast_radius_scoped_with_ids(
 
     let seed_condition = where_clauses.join(" OR ");
     let max_depth_idx = params_vec.len() + 1;
-    params_vec.push(rusqlite::types::Value::Integer(max_depth as i64));
+    // One level past `max_depth` tells a walk that a deeper call would extend from one that ran out.
+    let walk_depth = if max_depth < MAX_BLAST_DEPTH {
+        max_depth + 1
+    } else {
+        max_depth
+    };
+    params_vec.push(rusqlite::types::Value::Integer(walk_depth as i64));
 
     let mut traversal_ceiling_reached = false;
-    let mut deepest = 0;
+    let mut callers_beyond_depth = false;
 
     let has_relationships: bool = conn
         .query_row(
@@ -6018,7 +6026,7 @@ pub fn compute_blast_radius_scoped_with_ids(
               AND {not_documentation}
             GROUP BY s.symbol_id, s.name, s.kind, s.path, s.start_line, s.is_test, s.test_container
             HAVING MIN(iw.depth) > 0
-            ORDER BY MIN(iw.via) ASC, min_depth ASC, s.path ASC, s.name ASC
+            ORDER BY MIN(iw.depth) > {max_depth} ASC, MIN(iw.via) ASC, min_depth ASC, s.path ASC, s.name ASC
             LIMIT 201"
         );
 
@@ -6047,10 +6055,6 @@ pub fn compute_blast_radius_scoped_with_ids(
         })?;
 
         for (index, r) in rows.enumerate() {
-            if index == 200 {
-                traversal_ceiling_reached = true;
-                break;
-            }
             let (
                 name,
                 kind,
@@ -6066,7 +6070,14 @@ pub fn compute_blast_radius_scoped_with_ids(
                 language,
                 signature,
             ) = r?;
-            deepest = deepest.max(depth);
+            if depth > max_depth {
+                callers_beyond_depth = true;
+                break;
+            }
+            if index == 200 {
+                traversal_ceiling_reached = true;
+                break;
+            }
             let path = raw_path.replace('\\', "/");
             let is_test_target = is_test
                 || test_container
@@ -6241,7 +6252,7 @@ pub fn compute_blast_radius_scoped_with_ids(
         limit_at_maximum: limit >= MAX_RESULT_LIMIT,
         likely_tests_found,
         impacted_symbols_found,
-        stopped_at_depth: (deepest >= max_depth).then_some(max_depth),
+        stopped_at_depth: callers_beyond_depth.then_some(max_depth),
     })
 }
 

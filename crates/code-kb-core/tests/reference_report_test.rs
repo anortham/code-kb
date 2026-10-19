@@ -40,7 +40,8 @@ fn first_definition_report(repo: &Repo, name: &str, path: &str) -> ReferenceRepo
     let conn = open_read_only(&repo.db).unwrap();
     let id: String = conn
         .query_row(
-            "SELECT symbol_id FROM symbols WHERE name = ?1 AND path = ?2 ORDER BY start_line LIMIT 1",
+            "SELECT symbol_id FROM symbols WHERE name = ?1 AND path = ?2 AND kind NOT IN ('import', 'export')
+             ORDER BY start_line LIMIT 1",
             [name, path],
             |row| row.get(0),
         )
@@ -923,6 +924,26 @@ fn the_first_body_line_of_a_ruby_method_is_not_a_definition_line() {
     assert_eq!(report.counts.definition_lines, 1, "{}", dump(&report));
     assert_eq!(report.counts.text_only_lines, 1);
     assert_counts_add_up(&report);
+}
+
+#[test]
+fn a_one_line_definition_after_its_attribute_counts_its_name_line_as_a_definition_line() {
+    let repo = scanned_repo(&[
+        (
+            "src/Shapes.fs",
+            "module Shapes\n\n[<Struct>]\ntype Point = { X: int; Y: int }\n",
+        ),
+        (
+            "app/views.py",
+            "def route(f):\n    return f\n\n\n@route\ndef index(): return 1\n",
+        ),
+    ]);
+
+    for (name, path) in [("Point", "src/Shapes.fs"), ("index", "app/views.py")] {
+        let report = first_definition_report(&repo, name, path);
+        assert_eq!(report.counts.definition_lines, 1, "{}", dump(&report));
+        assert_eq!(report.counts.text_only_lines, 0, "{}", dump(&report));
+    }
 }
 
 #[test]
@@ -4411,6 +4432,61 @@ fn a_java_read_of_a_local_variable_is_still_hidden_by_it() {
         8,
         SiteLabel::Excluded,
         "resolves to `price` (q/Trade.java:7)",
+    );
+}
+
+#[test]
+fn a_typescript_type_use_is_not_shadowed_by_the_value_of_the_same_name() {
+    let path = "src/checks.ts";
+    let repo = scanned_repo(&[(
+        path,
+        "export interface Check {\n  kind: string;\n}\n\nexport const Check = (kind: string): Check => ({ kind });\n\nexport interface Other {\n  size: number;\n}\n\nexport type Checks =\n  | Other\n  | Check;\n",
+    )]);
+    let report = first_definition_report(&repo, "Check", path);
+
+    assert_not_excluded(&report, path, line_of(&repo, path, "  | Check;"));
+}
+
+const RUST_MODULE_AND_LOCAL: &[(&str, &str)] = &[
+    (
+        "Cargo.toml",
+        "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    ),
+    (
+        "src/lib.rs",
+        "mod git;\n\npub struct Pending {\n    git: u8,\n}\n\npub fn run(p: Pending) -> u8 {\n    let Pending { git } = p;\n    double(git)\n}\n\nfn double(n: u8) -> u8 {\n    n * 2\n}\n",
+    ),
+    ("src/git.rs", "pub fn diff() {}\n"),
+    (
+        "tests/check.rs",
+        "fn git() -> u8 {\n    1\n}\n\n#[test]\nfn uses_git() {\n    assert_eq!(git(), 1);\n}\n",
+    ),
+];
+
+#[test]
+fn a_rust_read_of_a_value_never_resolves_to_a_module_of_its_name() {
+    let repo = scanned_repo(RUST_MODULE_AND_LOCAL);
+    let report = first_definition_report(&repo, "git", "tests/check.rs");
+
+    let site = site_at(
+        &report,
+        "src/lib.rs",
+        line_of(&repo, "src/lib.rs", "double(git)"),
+    );
+    assert!(!site.basis.contains("src/lib.rs:1)"), "{}", dump(&report));
+}
+
+#[test]
+fn a_rust_module_is_not_the_target_of_a_read_of_a_value() {
+    let repo = scanned_repo(RUST_MODULE_AND_LOCAL);
+    let report = first_definition_report(&repo, "git", "src/lib.rs");
+
+    assert_site(
+        &report,
+        "src/lib.rs",
+        line_of(&repo, "src/lib.rs", "double(git)"),
+        SiteLabel::Excluded,
+        "`git` is a module, which a read of a value never names",
     );
 }
 
