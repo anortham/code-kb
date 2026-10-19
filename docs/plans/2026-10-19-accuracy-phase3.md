@@ -11,7 +11,7 @@
 4. Scan cost: the `full` index level costs about twice the scan memory of `facts` (hermes-agent 2.60 GB to 5.38 GB). Bring it down without a change to any callers answer.
 5. Adoption: telemetry records the client and the outcome of each hook block, and a report after 14 days of organic use.
 
-**Tech Stack:** Rust 2024 (rusqlite, serde_json), SQLite schema v7, julie-extract 3.8.0 (a newer version only if slice 4 needs it), git CLI, Python 3 standard library (harness and gate scripts).
+**Tech Stack:** Rust 2024 (rusqlite, serde_json), SQLite schema v7, julie-extract 3.8.1 (pinned at the start of phase 3; a newer version only if slice 4 needs it), git CLI, Python 3 standard library (harness and gate scripts).
 
 **Spec:** No approved design covers phase 3. `docs/plans/2026-10-17-accuracy-base-design.md` defines phases 1 and 2 only. The active goldfish brief names phase 3 as "a missed-site replay over session logs" and phase 4 as "an agent A/B test (needs a budget approval)". The pass marks come from the research in `~/.code-kb/reports/2026-10-17-direction-research/designs.txt` ("Missed-site replay, offline" and "Gate 2, the completeness replay"). Every ruling in this plan is provisional until the owner approves the plan.
 
@@ -34,6 +34,7 @@
 - The harness measures before any fix. No rule changes in slice 1.
 - The clean-commit mark is a release question: if more than 2% of clean commits get a false block, task 2.1 changes what blocks before any other fix, and the lead asks the owner about a patch release.
 - v2.7.0 (released 2026-10-19) already narrowed the block rule: the Stop hooks block only on a `proven` site, never on a `likely` site, a `signature changed` row, or a JavaScript parameter change. On 76 recent commits with a shape change in cobra, gson, flask, zod, express, Newtonsoft.Json, and code-kb, the old rule blocked 18 stops (none needed an edit) and the new one blocks 0. This branch starts before v2.7.0: rebase it onto `main` before task 1.1.
+- The owner asked on 2026-10-19 to pin julie-extract 3.8.1 (a patch: `symbols` and `facts` scans skip call-argument work; extraction output equal to 3.8.0). The repin is the first commit of this branch: full suite 1500 of 1500, reach gate tables equal to the 2.7.0 report, `lost_proven.py` empty in all 7 repos.
 - Holdback truth comes from what the commit's author changed, not from a compiler. A compiler run per case costs too much across 7 languages, and the author's edit is the site the agent must reach.
 - Session cases that cannot be rebuilt are counted by cause and left out. They are not guessed.
 - Blast radius test selection is out of scope. The research measured that static selection misses 29% to 52% of failing test files, and the tool already says "run the full test suite".
@@ -49,7 +50,7 @@
 - Reach gate marks hold after every task that changes Rust code: proven precision >= 0.98, excluded precision >= 0.98, and accounted share >= 0.98 in every language. `~/.cache/code-kb-accuracy/lost_proven.py` prints nothing for the gate projects against the previous task's build.
 - Tune only on dev cases: dev symbols in the reach gate, dev commits and dev sessions in the replay. Never read the site details of a holdout case. Never run `dump_sites.py`. The split is fixed at selection time: a commit is dev when `int(sha[:8], 16) % 2 == 0`, a session when the same rule holds for the SHA-256 of its log path.
 - Session logs are private. No session text, path, or diff enters the repository, a commit message, a PR, or a release note. The repository gets the harness and aggregate counts only.
-- Each test binary gets `.tools/julie-extract` 3.8.0 next to it, so no binary falls back to an older `julie-extract` and rewrites the indexes.
+- Each test binary gets `.tools/julie-extract` 3.8.1 next to it, so no binary falls back to an older `julie-extract` and rewrites the indexes.
 - Heavy output goes under `~/.cache/code-kb-accuracy/phase3/`, never `/tmp`. `TMPDIR=/home/murphy/.cache/julie-tmp`. Full-history clones for the replay go under `~/.cache/code-kb-accuracy/phase3/repos/`; the reach gate copies of flask, express, and zod are shallow and stay untouched.
 - Pass marks (provisional, from the research):
   - Clean set: at most 2% of commits with a shape change get a block (a `proven` or `likely` row outside the diff) that a hand check finds false. At least 50 such commits over at least 5 languages.
