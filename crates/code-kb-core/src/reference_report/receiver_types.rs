@@ -279,6 +279,17 @@ fn type_parameters_in(text: &str, owner: &str, before_name: bool) -> Vec<String>
                 None => break,
             },
             b'{' | b'=' => break,
+            b'<' if owner != "template" && follows_template(&text[..at]) => {
+                let Some(close) = matching_close(bytes, at) else {
+                    break;
+                };
+                names.extend(
+                    split_items(&text[at + 1..close])
+                        .iter()
+                        .filter_map(|item| template_parameter_name(item)),
+                );
+                at = close;
+            }
             b'<' | b'[' if opens_list(text, at, owner, before_name) => {
                 let Some(close) = matching_close(bytes, at) else {
                     break;
@@ -295,6 +306,24 @@ fn type_parameters_in(text: &str, owner: &str, before_name: bool) -> Vec<String>
         at += 1;
     }
     names
+}
+
+/// Whether `before` ends with the C++ keyword `template`, which opens a parameter list.
+fn follows_template(before: &str) -> bool {
+    before
+        .trim_end()
+        .strip_suffix("template")
+        .is_some_and(|rest| !rest.ends_with(is_word_char))
+}
+
+/// The name a C++ template parameter declares: the last word before a default
+/// (`typename OutStringType = std::string`, `typename... Args`, `int N`).
+fn template_parameter_name(item: &str) -> Option<String> {
+    let declared = item.split('=').next()?;
+    declared
+        .split(|c: char| !is_word_char(c))
+        .rfind(|word| !word.is_empty())
+        .map(str::to_string)
 }
 
 fn opens_list(text: &str, at: usize, owner: &str, before_name: bool) -> bool {
@@ -372,6 +401,22 @@ mod tests {
 
     fn names(text: &str, owner: &str, before_name: bool) -> Vec<String> {
         type_parameters_in(text, owner, before_name)
+    }
+
+    #[test]
+    fn a_cpp_template_header_declares_its_names() {
+        assert_eq!(
+            names(
+                "template<typename OutStringType = std::string, typename... Args>\ninline OutStringType concat(Args && ... args)",
+                "concat",
+                true
+            ),
+            ["OutStringType", "Args"]
+        );
+        assert_eq!(
+            names("template <class T, int N> struct Array", "Array", false),
+            ["T", "N"]
+        );
     }
 
     #[test]

@@ -5844,6 +5844,7 @@ pub fn compute_blast_radius_scoped_with_ids(
             limit_at_maximum: false,
             likely_tests_found: 0,
             impacted_symbols_found: 0,
+            stopped_at_depth: None,
         });
     };
 
@@ -5885,6 +5886,7 @@ pub fn compute_blast_radius_scoped_with_ids(
     params_vec.push(rusqlite::types::Value::Integer(max_depth as i64));
 
     let mut traversal_ceiling_reached = false;
+    let mut deepest = 0;
 
     let has_relationships: bool = conn
         .query_row(
@@ -6064,6 +6066,7 @@ pub fn compute_blast_radius_scoped_with_ids(
                 language,
                 signature,
             ) = r?;
+            deepest = deepest.max(depth);
             let path = raw_path.replace('\\', "/");
             let is_test_target = is_test
                 || test_container
@@ -6238,6 +6241,7 @@ pub fn compute_blast_radius_scoped_with_ids(
         limit_at_maximum: limit >= MAX_RESULT_LIMIT,
         likely_tests_found,
         impacted_symbols_found,
+        stopped_at_depth: (deepest >= max_depth).then_some(max_depth),
     })
 }
 

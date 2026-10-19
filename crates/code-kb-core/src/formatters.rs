@@ -1181,8 +1181,9 @@ fn test_section(rows: &[CallingTest], limit: usize) -> String {
             .as_ref()
             .map(|command| format!(" run: {command}"))
             .unwrap_or_default();
+        let name_only = if row.name_only { " (name only)" } else { "" };
         out.push_str(&format!(
-            "- `{}` [{}:{}]{run}\n",
+            "- `{}` [{}:{}]{name_only}{run}\n",
             on_one_line(&row.name),
             row.path,
             row.line
@@ -2013,6 +2014,10 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
         out.push('\n');
     } else if result.likely_tests_truncated || result.traversal_ceiling_reached {
         out.push_str("### Likely Tests to Run (0 returned)\n\n");
+    } else if let Some(depth) = result.stopped_at_depth {
+        out.push_str(&format!(
+            "### Likely Tests to Run (0 returned)\nNo test reaches it within depth {depth}; a larger `depth` may find some. Otherwise run the full test suite.\n\n",
+        ));
     } else {
         out.push_str(
             "### Likely Tests to Run (0 returned)\nNo test reaches it through the index. Run the full test suite.\n\n",
@@ -3127,6 +3132,7 @@ mod tests {
             limit_at_maximum: false,
             likely_tests_found: 0,
             impacted_symbols_found: 0,
+            stopped_at_depth: None,
         };
 
         let formatted = format_blast_radius(&res);
@@ -3188,6 +3194,7 @@ mod tests {
             limit_at_maximum: false,
             likely_tests_found: 0,
             impacted_symbols_found: 0,
+            stopped_at_depth: None,
         };
 
         let formatted = format_blast_radius(&res);
@@ -3337,6 +3344,7 @@ mod tests {
             limit_at_maximum: false,
             likely_tests_found: 0,
             impacted_symbols_found: 0,
+            stopped_at_depth: None,
         };
 
         let formatted = format_blast_radius(&res);
@@ -3356,6 +3364,7 @@ mod tests {
             limit_at_maximum: false,
             likely_tests_found: 0,
             impacted_symbols_found: 0,
+            stopped_at_depth: None,
         };
 
         let formatted = format_blast_radius(&res);
@@ -3372,6 +3381,16 @@ mod tests {
             format_blast_radius(&no_ceiling)
                 .contains("No test reaches it through the index. Run the full test suite.\n")
         );
+
+        let cut_by_depth = BlastRadiusResult {
+            stopped_at_depth: Some(2),
+            ..no_ceiling
+        };
+        let formatted = format_blast_radius(&cut_by_depth);
+        assert!(formatted.contains(
+            "No test reaches it within depth 2; a larger `depth` may find some. Otherwise run the full test suite.\n"
+        ));
+        assert!(!formatted.contains("through the index"));
     }
 
     fn skeleton_row(

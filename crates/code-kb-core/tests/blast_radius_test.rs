@@ -1,9 +1,10 @@
 use rusqlite::Connection;
 
 use code_kb_core::{
-    Workspace, blast_radius_op, compute_blast_radius, compute_blast_radius_scoped, find_references,
-    find_references_ext, find_related_tests, format_blast_radius, get_symbol_by_id,
-    open_read_write, safe_tempdir,
+    Workspace, blast_radius_op, compute_blast_radius, compute_blast_radius_scoped,
+    find_julie_extract_binary, find_references, find_references_ext, find_related_tests,
+    format_blast_radius, get_symbol_by_id, open_read_only, open_read_write, safe_tempdir,
+    scan_workspace,
 };
 
 fn setup_test_db(conn: &Connection) {
@@ -521,5 +522,86 @@ fn blast_radius_probes_the_traversal_ceiling_and_ignores_test_files_that_share_a
             .unwrap()
             .get("test_file_ceiling_reached")
             .is_none()
+    );
+}
+
+#[test]
+fn a_go_method_called_through_a_receiver_in_a_test_lists_that_test() {
+    find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+    let temp = safe_tempdir();
+    let root = temp.path().to_path_buf();
+    for (path, content) in [
+        ("go.mod", "module example.com/cmd\n\ngo 1.22\n"),
+        (
+            "command.go",
+            "package cmd\n\ntype Command struct{}\n\nfunc (c *Command) SetHelpCommand(cmd *Command) {}\n",
+        ),
+        (
+            "command_test.go",
+            "package cmd\n\nimport \"testing\"\n\nfunc TestSetHelpCommand(t *testing.T) {\n\tc := &Command{}\n\tc.SetHelpCommand(&Command{})\n}\n",
+        ),
+    ] {
+        std::fs::write(root.join(path), content).unwrap();
+    }
+    let db = root.join(".code-kb").join("artifact.db");
+    let workspace = Workspace::new(root.clone());
+    scan_workspace(&workspace, &db, true).expect("scan failed");
+    let conn = open_read_only(&db).unwrap();
+
+    let result = blast_radius_op(&workspace, &conn, Some("SetHelpCommand"), None, 2, 20).unwrap();
+
+    let tests: Vec<(&str, &str, &str)> = result
+        .likely_tests
+        .iter()
+        .map(|t| (t.name.as_str(), t.path.as_str(), t.reason.as_str()))
+        .collect();
+    assert_eq!(
+        tests,
+        [(
+            "TestSetHelpCommand",
+            "command_test.go",
+            "calls it by name only (find_references)"
+        )],
+        "{}",
+        format_blast_radius(&result)
+    );
+}
+
+#[test]
+fn a_test_target_that_no_test_calls_lists_itself() {
+    find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+    let temp = safe_tempdir();
+    let root = temp.path().to_path_buf();
+    std::fs::create_dir_all(root.join("test")).unwrap();
+    std::fs::write(
+        root.join("test/res.attachment.js"),
+        "var express = require('../');\n\ndescribe('res', function(){\n  it('should set Content-Disposition', function(){\n    express();\n  });\n});\n",
+    )
+    .unwrap();
+    let db = root.join(".code-kb").join("artifact.db");
+    let workspace = Workspace::new(root.clone());
+    scan_workspace(&workspace, &db, true).expect("scan failed");
+    let conn = open_read_only(&db).unwrap();
+
+    let result = blast_radius_op(
+        &workspace,
+        &conn,
+        Some("res"),
+        Some("test/res.attachment.js"),
+        2,
+        20,
+    )
+    .unwrap();
+
+    let tests: Vec<(&str, usize, &str)> = result
+        .likely_tests
+        .iter()
+        .map(|t| (t.path.as_str(), t.line, t.reason.as_str()))
+        .collect();
+    assert_eq!(
+        tests,
+        [("test/res.attachment.js", 3, "the target is a test")],
+        "{}",
+        format_blast_radius(&result)
     );
 }

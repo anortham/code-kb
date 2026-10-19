@@ -8,8 +8,9 @@ use crate::formatters::{
     OutlineNode, add_path_to_outline, add_unsupported_to_outline, format_file_skeleton,
     format_find_symbol_results, render_outline_tree,
 };
-use crate::models::{BlastRadiusResult, ContextSlice, Symbol, SymbolSearchResult};
+use crate::models::{BlastRadiusResult, ContextSlice, Symbol, SymbolSearchResult, TestTarget};
 use crate::queries::{self, QueryError};
+use crate::reference_report::{reference_report_for_edit, select_reference_target};
 use crate::slicer::{self, SliceError};
 use crate::sync::{self, SyncError};
 use crate::workspace::{Workspace, WorkspaceError, paths_equal};
@@ -644,7 +645,7 @@ pub fn blast_radius_selected_op(
     if let Some(selector @ SymbolSelector::Id(_)) = selector.as_ref() {
         let db_path = db_path.ok_or(OpError::SymbolIdRequiresDatabasePath)?;
         let selected = resolve_symbol_op(workspace, db_path, conn, selector, file)?;
-        return Ok(queries::compute_blast_radius_scoped_with_ids(
+        let res = queries::compute_blast_radius_scoped_with_ids(
             conn,
             &[],
             &[&selected.symbol_id],
@@ -652,7 +653,8 @@ pub fn blast_radius_selected_op(
             &[],
             if max_depth == 0 { 2 } else { max_depth.min(5) },
             limit,
-        )?);
+        )?;
+        return with_calling_tests(workspace, conn, Some(selected), res, limit);
     }
     let symbol = selector.as_ref().and_then(|selector| match selector {
         SymbolSelector::Name(name) => Some(name.as_str()),
@@ -717,6 +719,59 @@ pub fn blast_radius_selected_op(
         depth,
         limit,
     )?;
+    let target = match seed_symbols.as_slice() {
+        [name] => select_reference_target(conn, name, symbol_path_filter.as_deref()).ok(),
+        _ => None,
+    };
+    with_calling_tests(workspace, conn, target, res, limit)
+}
+
+/// The tests of the callers report of `target` when the walk found none, or `target` itself when
+/// it is a test: the walk follows resolved and pending rows by name, and the report also proves a
+/// call through a receiver's type.
+fn with_calling_tests(
+    workspace: &Workspace,
+    conn: &Connection,
+    target: Option<Symbol>,
+    mut res: BlastRadiusResult,
+    limit: usize,
+) -> Result<BlastRadiusResult, OpError> {
+    let Some(target) = target else {
+        return Ok(res);
+    };
+    if !res.likely_tests.is_empty() || res.likely_tests_truncated || res.traversal_ceiling_reached {
+        return Ok(res);
+    }
+    // The walk's answer stands alone; an index too old for the report keeps it.
+    let Ok(report) = reference_report_for_edit(conn, &workspace.root, &target) else {
+        return Ok(res);
+    };
+    res.likely_tests = report
+        .tests
+        .into_iter()
+        .map(|test| TestTarget {
+            reason: if test.name_only {
+                "calls it by name only (find_references)"
+            } else {
+                "calls it (find_references)"
+            }
+            .to_string(),
+            name: test.name,
+            path: test.path,
+            line: test.line,
+        })
+        .collect();
+    if res.likely_tests.is_empty() && (target.is_test || target.test_container) {
+        res.likely_tests.push(TestTarget {
+            name: target.name,
+            path: target.path.replace('\\', "/"),
+            line: target.start_line,
+            reason: "the target is a test".to_string(),
+        });
+    }
+    res.likely_tests_found = res.likely_tests.len();
+    res.likely_tests_truncated = res.likely_tests.len() > limit;
+    res.likely_tests.truncate(limit);
     Ok(res)
 }
 

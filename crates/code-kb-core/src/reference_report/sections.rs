@@ -212,7 +212,10 @@ fn dispatch_owner(conn: &Connection, target: &Symbol) -> Result<Option<TypeRef>,
     let Some(parent) = target.parent_symbol_id.as_deref() else {
         return Ok(None);
     };
-    if !callable || is_constructor(target) {
+    if !callable
+        || is_constructor(target)
+        || is_private_member(target.visibility.as_deref(), &target.language)
+    {
         return Ok(None);
     }
     Ok(get_symbol_by_id(conn, parent)?
@@ -222,6 +225,11 @@ fn dispatch_owner(conn: &Connection, target: &Symbol) -> Result<Option<TypeRef>,
             name: owner.name,
             path: owner.path,
         }))
+}
+
+/// A private method in a language where no subtype can override one.
+fn is_private_member(visibility: Option<&str>, language: &str) -> bool {
+    visibility == Some("private") && matches!(language, "java" | "csharp" | "kotlin" | "scala")
 }
 
 /// Types that extend or implement `?1` (named `?2`, in file `?3`): through resolved rows, and
@@ -961,7 +969,7 @@ fn methods_named(
     mut keep: impl FnMut(&TypeRef, &OverrideRow, &str) -> Result<bool, QueryError>,
 ) -> Result<Vec<OverrideRow>, QueryError> {
     let mut stmt = conn.prepare(&format!(
-        "SELECT symbol_id, path, start_line, language FROM symbols
+        "SELECT symbol_id, path, start_line, language, visibility FROM symbols
          WHERE parent_symbol_id = ?1 AND name = ?2 AND kind IN ({})
          ORDER BY start_line, symbol_id",
         sql_list(&CALLABLE_KINDS)
@@ -979,11 +987,13 @@ fn methods_named(
                         line: row.get::<_, i64>(2)? as usize,
                     },
                     row.get::<_, String>(3)?,
+                    row.get::<_, Option<String>>(4)?,
                 ))
             })?
             .collect::<Result<Vec<_>, _>>()?;
-        for (row, language) in found {
-            if keep(owner, &row, &language)? {
+        for (row, language, visibility) in found {
+            if !is_private_member(visibility.as_deref(), &language) && keep(owner, &row, &language)?
+            {
                 rows.push(row);
             }
         }
@@ -3040,7 +3050,7 @@ fn calling_tests(
          WHERE s.symbol_id = ?1"
     ))?;
     let mut callers = HashSet::new();
-    let mut tests: BTreeMap<String, TestSymbol> = BTreeMap::new();
+    let mut tests: BTreeMap<String, (TestSymbol, bool)> = BTreeMap::new();
     for labeled in sites
         .iter()
         .filter(|site| matches!(site.label, SiteLabel::Proven | SiteLabel::Likely))
@@ -3049,16 +3059,18 @@ fn calling_tests(
         if caller.is_empty() || caller == target.symbol_id || !callers.insert(caller) {
             continue;
         }
+        let name_only =
+            labeled.label == SiteLabel::Likely && labeled.basis.starts_with("name only");
         if let Some(test) = test_of(&mut load, caller)?
             && test.id != target.symbol_id
         {
-            tests.entry(test.id.clone()).or_insert(test);
+            tests.entry(test.id.clone()).or_insert((test, true)).1 &= name_only;
         }
     }
     let mut finder = CommandFinder::new(root);
     let mut bases = TestCaseBases::new(conn)?;
     let mut rows = Vec::with_capacity(tests.len());
-    for test in tests.into_values() {
+    for (test, name_only) in tests.into_values() {
         let chain = class_chain(&mut load, &test)?;
         let mut classes = Vec::with_capacity(chain.classes.len());
         for class in &chain.classes {
@@ -3081,6 +3093,7 @@ fn calling_tests(
             name: test.name,
             path: test.path,
             line: test.line,
+            name_only,
         });
     }
     rows.sort_by(|a, b| {

@@ -15,7 +15,8 @@ needs, and keeps nothing after the call.
 
 `Overrides (N): calls through `Owner.name` can reach these` applies to a method or function
 (never a constructor) whose parent is a class, struct, record, interface, trait, protocol,
-enum, or union. Its rows are the same-named method and function members of every type that
+enum, or union. A private Java, C#, Kotlin, or Scala method is never dispatched: it has neither
+override section, and it is never a row of one. Its rows are the same-named method and function members of every type that
 extends or implements the owner, through resolved `extends` and `implements` rows and through
 pending rows that name the owner. A type of any of these kinds can be a row, so an enum or a
 Rust union that implements a trait or an interface is listed. Only a class, struct, record,
@@ -236,7 +237,9 @@ scanning the facts.
 
 `Tests that call it (N):` rows are ``- `test` [path:line] run: command``, by path and line,
 without ` run: …` when no command is known. The text row writes each control character of a
-test name as an escape (`\n`, `\t`); JSON and the site rows keep the name as it is. A test is
+test name as an escape (`\n`, `\t`); JSON and the site rows keep the name as it is. A row
+shows ` (name only)` before ` run:` when only `likely` sites with the basis `name only` tie the
+test to the target, and JSON then sets `name_only: true`. A test is
 the caller of a `proven` or `likely`
 site when julie flags it as a test or its name reads like one in a test path
 (`names_a_test`), or else the test function that holds a helper caller, up to 4 levels up.

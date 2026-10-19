@@ -737,6 +737,226 @@ fn definition_import_and_comment_lines_are_counted_apart() {
 }
 
 #[test]
+fn a_python_function_defined_inside_a_test_is_out_of_reach_of_other_files() {
+    let repo = scanned_repo(&[
+        (
+            "tests/test_basic.py",
+            "def test_session():\n    def read():\n        return 1\n\n    assert read() == 1\n",
+        ),
+        (
+            "src/config.py",
+            "def load(path):\n    with open(path) as f:\n        return f.read()\n",
+        ),
+    ]);
+    let report = report(&repo, "read", Some("tests/test_basic.py"));
+
+    assert_not_excluded(&report, "tests/test_basic.py", 5);
+    assert_site(
+        &report,
+        "src/config.py",
+        3,
+        SiteLabel::Excluded,
+        "`read` is local to `test_session`",
+    );
+    assert!(
+        report
+            .tests
+            .iter()
+            .all(|test| test.path == "tests/test_basic.py"),
+        "{:?}",
+        report.tests
+    );
+}
+
+#[test]
+fn a_java_field_read_never_reaches_a_method_of_that_name() {
+    let repo = scanned_repo(&[
+        (
+            "src/main/java/p/Streams.java",
+            "package p;\n\nclass Streams {\n  static class CurrentWrite {\n    int length() { return 0; }\n  }\n}\n",
+        ),
+        (
+            "src/test/java/p/ArrayTest.java",
+            "package p;\n\nclass ArrayTest {\n  void testArray() {\n    int[] target = new int[2];\n    assert target.length == 2;\n    Streams.CurrentWrite w = new Streams.CurrentWrite();\n    w.length();\n    java.util.function.IntSupplier s = w::length;\n  }\n}\n",
+        ),
+    ]);
+    let report = report(&repo, "length", None);
+    let path = "src/test/java/p/ArrayTest.java";
+
+    assert_site(
+        &report,
+        path,
+        6,
+        SiteLabel::Excluded,
+        "a member access reads a field, not the method `length`",
+    );
+    assert_not_excluded(&report, path, 8);
+    assert_not_excluded(&report, path, 9);
+}
+
+#[test]
+fn a_cpp_receiver_typed_by_a_template_parameter_is_not_excluded() {
+    let repo = scanned_repo(&[
+        (
+            "include/alt_string.hpp",
+            "class alt_string {\n  public:\n    void reserve(int n) {}\n};\n",
+        ),
+        (
+            "include/concat.hpp",
+            "template<typename OutStringType = std::string, typename... Args>\ninline OutStringType concat(Args && ... args)\n{\n    OutStringType str;\n    str.reserve(3);\n    return str;\n}\n",
+        ),
+    ]);
+    let report = report(&repo, "reserve", Some("include/alt_string.hpp"));
+
+    assert_not_excluded(&report, "include/concat.hpp", 5);
+}
+
+#[test]
+fn a_call_keeps_its_own_line_when_julie_names_a_caller_that_ends_above_the_next_call() {
+    let repo = scanned_repo(&[
+        (
+            "src/string_compat.erl",
+            "-module(string_compat).\n-export([span/2]).\n\n-ifdef(OLD).\nspan(String, Chars) -> string:span(String, Chars).\n-else.\n\nspan(S, Cs) when is_list(Cs) -> span(S, Cs, 0).\n\nspan([C|S], Cs, I) ->\n    span(S, Cs, I+1);\nspan([], _Cs, I) -> I.\n-endif.\n",
+        ),
+        (
+            "src/telemetry.erl",
+            "-module(telemetry).\n-export([span/3]).\n\nspan(EventPrefix, StartMetadata, SpanFunction) ->\n    SpanFunction(EventPrefix, StartMetadata).\n",
+        ),
+    ]);
+    let report = report(&repo, "span", Some("src/telemetry.erl"));
+
+    let imported: Vec<usize> = report
+        .sites
+        .iter()
+        .filter(|site| site.basis.contains("imported from `string`"))
+        .map(|site| site.site.start_line.unwrap_or(0))
+        .collect();
+    assert_eq!(imported, [5], "{}", dump(&report));
+}
+
+#[test]
+fn an_excluded_typescript_site_cites_the_binding_nearest_above_it() {
+    let repo = scanned_repo(&[
+        (
+            "src/locales/ru.ts",
+            "export const error = () => \"ошибка\";\n",
+        ),
+        (
+            "src/tests/error.test.ts",
+            "function getThrownError(fn: () => void) {\n  try {\n    fn();\n  } catch (error) {\n    return error;\n  }\n}\n\nfunction format(a: boolean, b: boolean) {\n  if (a) {\n    const error = 1;\n    use(error);\n  }\n  if (b) {\n    const error = 2;\n    use(error);\n  }\n}\n\nconst schema = z.string({ error: () => \"bound\" });\n",
+        ),
+    ]);
+    let report = report(&repo, "error", Some("src/locales/ru.ts"));
+    let path = "src/tests/error.test.ts";
+
+    assert_site(
+        &report,
+        path,
+        5,
+        SiteLabel::Excluded,
+        "line 4 binds the name as a callback parameter, loop variable, or catch parameter",
+    );
+    let first = site_at(&report, path, 12);
+    assert!(first.basis.ends_with(":11)"), "{}", dump(&report));
+    let second = site_at(&report, path, 16);
+    assert!(second.basis.ends_with(":15)"), "{}", dump(&report));
+}
+
+#[test]
+fn a_test_that_only_a_bare_name_ties_to_the_target_is_marked_name_only() {
+    let repo = scanned_repo(&[
+        ("pkg/__init__.py", ""),
+        ("pkg/shapes.py", "def render(shape):\n    return shape\n"),
+        (
+            "tests/test_shapes.py",
+            "from pkg.shapes import render\n\n\ndef test_render():\n    assert render(1) == 1\n\n\ndef test_draw(canvas):\n    canvas.layer.render(2)\n",
+        ),
+    ]);
+    let report = report(&repo, "render", Some("pkg/shapes.py"));
+
+    let tests: Vec<(&str, bool)> = report
+        .tests
+        .iter()
+        .map(|test| (test.name.as_str(), test.name_only))
+        .collect();
+    assert_eq!(
+        tests,
+        [("test_render", false), ("test_draw", true)],
+        "{}",
+        dump(&report)
+    );
+    assert!(
+        format_reference_report(&report, 20)
+            .contains("- `test_draw` [tests/test_shapes.py:8] (name only) run: pytest")
+    );
+}
+
+#[test]
+fn no_site_reaches_a_mocha_describe_label() {
+    let repo = scanned_repo(&[(
+        "test/res.attachment.js",
+        "var express = require('../');\n\ndescribe('res', function(){\n  it('should set Content-Disposition', function(done){\n    var app = express();\n    app.use(function(req, res){\n      res.attachment();\n      res.end();\n    });\n    done();\n  });\n});\n",
+    )]);
+    let report = report(&repo, "res", Some("test/res.attachment.js"));
+
+    assert!(!report.sites.is_empty(), "{}", dump(&report));
+    assert!(
+        report
+            .sites
+            .iter()
+            .all(|site| site.label == SiteLabel::Excluded
+                && site.basis == "`res` is a test label, which code never names"),
+        "{}",
+        dump(&report)
+    );
+    assert!(report.tests.is_empty());
+}
+
+#[test]
+fn the_first_body_line_of_a_ruby_method_is_not_a_definition_line() {
+    let repo = scanned_repo(&[(
+        "lib/base.rb",
+        "class Base\n  def prototype\n    @prototype ||= new\n  end\nend\n",
+    )]);
+    let report = report(&repo, "prototype", None);
+
+    assert_eq!(report.counts.definition_lines, 1, "{}", dump(&report));
+    assert_eq!(report.counts.text_only_lines, 1);
+    assert_counts_add_up(&report);
+}
+
+#[test]
+fn an_annotated_kotlin_function_counts_its_name_line_as_a_definition_line() {
+    let repo = scanned_repo(&[(
+        "src/main/kotlin/com/example/Util.kt",
+        "package com.example\n\n@PublishedApi\ninternal fun <T> Class<T>.boxIfPrimitive(): Class<T> {\n  return this\n}\n",
+    )]);
+    let report = report(&repo, "boxIfPrimitive", None);
+
+    assert_eq!(report.counts.definition_lines, 1, "{}", dump(&report));
+    assert_eq!(report.counts.text_only_lines, 0);
+}
+
+#[test]
+fn a_kotlin_import_named_by_its_full_path_counts_as_an_import_line() {
+    let repo = scanned_repo(&[
+        (
+            "src/main/kotlin/com/example/internal/Util.kt",
+            "package com.example.internal\n\nfun boxIfPrimitive(x: Int): Int = x\n",
+        ),
+        (
+            "src/main/kotlin/com/example/Use.kt",
+            "package com.example\n\nimport com.example.internal.boxIfPrimitive\n\nfun use(): Int = boxIfPrimitive(1)\n",
+        ),
+    ]);
+    let report = report(&repo, "boxIfPrimitive", None);
+
+    assert_eq!(report.counts.import_lines, 1, "{}", dump(&report));
+    assert_eq!(report.counts.text_only_lines, 0);
+    assert_counts_add_up(&report);
+}
+
+#[test]
 fn a_constructor_target_skips_the_text_scan_and_counts_class_calls() {
     let repo = scanned_repo(CTOR_PY);
     let report = report(&repo, "Circle.__init__", None);
@@ -4486,6 +4706,23 @@ fn csharp_virtual_methods_list_their_overrides() {
 
     let circle = report(&repo, "Circle.Area", None);
     assert_eq!(listed(&circle.overridden), ["Shape.Area Shapes.cs:2"]);
+}
+
+#[test]
+fn a_private_csharp_method_has_no_overrides_and_overrides_nothing() {
+    let repo = scanned_repo(&[(
+        "Readers.cs",
+        "public class JsonReader {\n    private int Pop() { return 0; }\n    public virtual void Close() { }\n}\npublic class ValidatingReader : JsonReader {\n    private string Pop() { return \"\"; }\n    private void Close() { }\n}\n",
+    )]);
+
+    let base = report(&repo, "JsonReader.Pop", None);
+    assert!(base.overrides.is_empty(), "{:?}", base.overrides);
+
+    let sub = report(&repo, "ValidatingReader.Pop", None);
+    assert!(sub.overridden.is_empty(), "{:?}", sub.overridden);
+
+    let close = report(&repo, "JsonReader.Close", None);
+    assert!(close.overrides.is_empty(), "{:?}", close.overrides);
 }
 
 #[test]

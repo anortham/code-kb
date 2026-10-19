@@ -159,6 +159,7 @@ fn report_with(
     let mut specs = vec![Spec {
         name: target.name.clone(),
         arity: target_arity,
+        local_to: enclosing_function(conn, &group)?,
         group,
         scope: if class.is_some() {
             RowScope::Calls
@@ -173,6 +174,7 @@ fn report_with(
             group: vec![class.clone()],
             scope: RowScope::Calls,
             builds_class: true,
+            local_to: None,
             arity: if mode.arity_exclusion {
                 arity::group_arity(conn, root, &specs[0].group, true)?
             } else {
@@ -376,12 +378,12 @@ const SHADOW_IN_CHAIN_SQL: &str = "WITH RECURSIVE chain(symbol_id, depth) AS (
        AND (d.kind IN ('variable', 'parameter', 'function', 'constant', 'class')
             OR ?4 AND d.kind IN ('type', 'interface', 'enum'))
        AND (chain.depth = 0 OR scope.kind IN ('function', 'method', 'constructor'))
-     ORDER BY chain.depth, d.start_line";
+     ORDER BY chain.depth, d.start_line > ?5, abs(?5 - d.start_line)";
 
 const SHADOW_TOP_LEVEL_SQL: &str = "SELECT symbol_id, COALESCE(signature, ''), kind FROM symbols
      WHERE name = ?1 AND path = ?2 AND parent_symbol_id IS NULL
        AND kind NOT IN ('import', 'export', 'module', 'namespace')
-     ORDER BY start_line";
+     ORDER BY start_line > ?3, abs(?3 - start_line)";
 
 const IMPORT_SOURCES_SQL: &str = "SELECT COALESCE(json_extract(metadata_json, '$.source'), '')
      FROM symbols
@@ -468,6 +470,8 @@ struct Spec {
     builds_class: bool,
     /// The arguments a call to the group may pass; `None` when the index cannot tell.
     arity: Option<arity::Arity>,
+    /// The function that holds a group of local functions, which no site outside it can name.
+    local_to: Option<Symbol>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -492,6 +496,8 @@ struct NameRow {
     source: Source,
     caller_id: Option<String>,
     caller_name: String,
+    /// The last line of the caller; julie can name a caller that ends above the row.
+    caller_end_line: Option<usize>,
     path: String,
     language: String,
     kind: String,
@@ -591,6 +597,33 @@ impl NameRow {
 /// itself: `super`, `base`, and the Kotlin form that names the ancestor (`super<Greeter>`).
 fn is_super_receiver(receiver: &str) -> bool {
     matches!(receiver, "super" | "base") || receiver.starts_with("super<")
+}
+
+/// Languages where a function defined inside a function is named only inside it. JavaScript is
+/// not one here: such a function can be placed on an object the outer function returns.
+const LOCAL_FUNCTION_LANGUAGES: &[&str] = &[
+    "python", "rust", "kotlin", "csharp", "swift", "scala", "dart",
+];
+
+/// The function, method, or constructor that holds every member of `group` when each one is a
+/// function defined inside it in a language of [`LOCAL_FUNCTION_LANGUAGES`].
+fn enclosing_function(conn: &Connection, group: &[Symbol]) -> Result<Option<Symbol>, QueryError> {
+    let Some(parent) = group
+        .first()
+        .and_then(|first| first.parent_symbol_id.as_deref())
+    else {
+        return Ok(None);
+    };
+    let local = group.iter().all(|member| {
+        member.kind == "function"
+            && LOCAL_FUNCTION_LANGUAGES.contains(&member.language.as_str())
+            && member.parent_symbol_id.as_deref() == Some(parent)
+    });
+    if !local {
+        return Ok(None);
+    }
+    Ok(crate::queries::get_symbol_by_id(conn, parent)?
+        .filter(|outer| matches!(outer.kind.as_str(), "function" | "method" | "constructor")))
 }
 
 /// A JavaScript method assigned to a property (`req.accepts = function`): no scope binds its name,
@@ -1417,6 +1450,7 @@ impl<'a> Accounting<'a> {
             scope: RowScope::Inheritance,
             builds_class: false,
             arity: None,
+            local_to: None,
         };
         let mut rows = Vec::new();
         self.account_spec(&spec, &mut rows, &mut Vec::new())?;
@@ -1450,7 +1484,7 @@ impl<'a> Accounting<'a> {
         let mut stmt = self.conn.prepare(&format!(
             "SELECT p.rowid, p.from_symbol_id, COALESCE(s.name, ''), p.kind, p.path,
                     COALESCE(f.language, s.language, ''), p.start_line, p.start_column,
-                    p.end_line, p.target_receiver, p.target_namespace_json
+                    p.end_line, p.target_receiver, p.target_namespace_json, s.end_line
              FROM pending_relationships p
              LEFT JOIN symbols s ON s.symbol_id = p.from_symbol_id
              LEFT JOIN files f ON f.file_id = p.file_id
@@ -1474,6 +1508,7 @@ impl<'a> Accounting<'a> {
                 source: Source::Pending,
                 caller_id: row.get(1)?,
                 caller_name: row.get(2)?,
+                caller_end_line: row.get::<_, Option<i64>>(11)?.map(|v| v as usize),
                 path: row.get::<_, String>(4)?.replace('\\', "/"),
                 language: row.get(5)?,
                 kind: row.get(3)?,
@@ -1498,7 +1533,7 @@ impl<'a> Accounting<'a> {
             let mut stmt = self.conn.prepare(&format!(
                 "SELECT r.rowid, r.from_symbol_id, COALESCE(s.name, ''), r.kind, r.path,
                     COALESCE(f.language, s.language, ''), r.start_line, r.start_column,
-                    r.end_line, r.to_symbol_id, {LINKS_ENCLOSING_CLASS_SQL}
+                    r.end_line, r.to_symbol_id, {LINKS_ENCLOSING_CLASS_SQL}, s.end_line
              FROM relationships r
              JOIN symbols t ON t.symbol_id = r.to_symbol_id
              LEFT JOIN symbols s ON s.symbol_id = r.from_symbol_id
@@ -1514,6 +1549,7 @@ impl<'a> Accounting<'a> {
                     source: Source::Relationship,
                     caller_id: row.get(1)?,
                     caller_name: row.get(2)?,
+                    caller_end_line: row.get::<_, Option<i64>>(11)?.map(|v| v as usize),
                     path: row.get::<_, String>(4)?.replace('\\', "/"),
                     language: row.get(5)?,
                     kind: row.get(3)?,
@@ -1578,6 +1614,7 @@ impl<'a> Accounting<'a> {
                     source: Source::Identifier,
                     caller_id: row.get(1)?,
                     caller_name: row.get(2)?,
+                    caller_end_line: None,
                     path: row.get::<_, String>(4)?.replace('\\', "/"),
                     language: row.get(5)?,
                     kind,
@@ -1626,11 +1663,32 @@ impl<'a> Accounting<'a> {
                 .push((start, end));
         };
         let docs = documentation_language_list();
-        let mut stmt = self.conn.prepare(&format!(
-            "SELECT path, start_line, end_line FROM symbols
-             WHERE name = ?1 AND kind = 'import' AND language NOT IN ({docs})"
-        ))?;
-        for row in stmt.query_map(params![name], |row| {
+        // A full-path import row (`com.squareup.moshi.Json`) ends in `.name`; the trigram
+        // index finds those rows without a scan of every import row.
+        let dotted = format!("\".{}\"", name.replace('"', "\"\""));
+        let sql = if crate::queries::has_table(self.conn, "symbol_names_tri")
+            && name.chars().count() >= 2
+        {
+            format!(
+                "SELECT path, start_line, end_line FROM symbols
+                 WHERE kind = 'import' AND language NOT IN ({docs}) AND name = ?1
+                 UNION ALL
+                 SELECT s.path, s.start_line, s.end_line FROM symbol_names_tri
+                 CROSS JOIN symbols s ON s.rowid = symbol_names_tri.rowid
+                 WHERE symbol_names_tri MATCH ?2 AND s.kind = 'import'
+                   AND s.language NOT IN ({docs})
+                   AND substr(s.name, -length(?1) - 1) = '.' || ?1"
+            )
+        } else {
+            format!(
+                "SELECT path, start_line, end_line FROM symbols
+                 WHERE kind = 'import' AND language NOT IN ({docs})
+                   AND (name = ?1 OR substr(name, -length(?1) - 1) = '.' || ?1)
+                   AND ?2 = ?2"
+            )
+        };
+        let mut stmt = self.conn.prepare(&sql)?;
+        for row in stmt.query_map(params![name, dotted], |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, i64>(1)?,
@@ -1840,12 +1898,55 @@ impl<'a> Accounting<'a> {
                 false,
             )));
         }
-        if let Some(shadow) = self.nearest_shadow(row, &spec.name, group_ids)? {
+        if spec
+            .group
+            .iter()
+            .all(|member| member.signature.as_deref().is_some_and(is_test_label))
+        {
             return Ok(Some(Verdict::new(
                 SiteLabel::Excluded,
-                shadow.resolves_to(),
+                format!("`{}` is a test label, which code never names", spec.name),
                 false,
             )));
+        }
+        if let Some(outer) = &spec.local_to
+            && !(row.path == outer.path.replace('\\', "/")
+                && (outer.start_line..=outer.end_line).contains(&row.site_line))
+        {
+            return Ok(Some(Verdict::new(
+                SiteLabel::Excluded,
+                format!("`{}` is local to `{}`", spec.name, outer.name),
+                false,
+            )));
+        }
+        // julie writes a Java method reference (`parser::next`) as a call, so a member access
+        // without parentheses reads a field.
+        if row.language == "java"
+            && row.kind == "member_access"
+            && spec
+                .group
+                .iter()
+                .all(|member| member.language == "java" && member.kind == "method")
+        {
+            return Ok(Some(Verdict::new(
+                SiteLabel::Excluded,
+                format!(
+                    "a member access reads a field, not the method `{}`",
+                    spec.name
+                ),
+                false,
+            )));
+        }
+        if let Some(shadow) = self.nearest_shadow(row, &spec.name, group_ids)? {
+            let basis = match self.js_binding_line(row, &spec.name)? {
+                Some(line) if line > shadow.start_line || shadow.start_line > row.site_line => {
+                    format!(
+                        "line {line} binds the name as a callback parameter, loop variable, or catch parameter"
+                    )
+                }
+                _ => shadow.resolves_to(),
+            };
+            return Ok(Some(Verdict::new(SiteLabel::Excluded, basis, false)));
         }
         if row.is_bare_use() && spec.group.iter().all(is_property_method) {
             return Ok(Some(self.bare_use_of_property_method(row, &spec.name)?));
@@ -2149,7 +2250,8 @@ impl<'a> Accounting<'a> {
 
     /// The nearest definition of the name in a scope that holds the call, when it is not part of
     /// the target group: a parameter, local variable, or nested function of the caller or an
-    /// enclosing function, or a top-level definition of the caller's file.
+    /// enclosing function, or a top-level definition of the caller's file. In one scope the last
+    /// definition above the call wins, since julie does not record block scopes.
     fn nearest_shadow(
         &self,
         row: &NameRow,
@@ -2164,12 +2266,16 @@ impl<'a> Accounting<'a> {
         if let Some(caller) = row.caller_id.as_deref() {
             hit = self.first_real_definition(
                 SHADOW_IN_CHAIN_SQL,
-                params![caller, name, row.path, type_use],
+                params![caller, name, row.path, type_use, row.site_line as i64],
                 row,
             )?;
         }
         if hit.is_none() {
-            hit = self.first_real_definition(SHADOW_TOP_LEVEL_SQL, params![name, row.path], row)?;
+            hit = self.first_real_definition(
+                SHADOW_TOP_LEVEL_SQL,
+                params![name, row.path, row.site_line as i64],
+                row,
+            )?;
         }
         match hit {
             Some(id) if !group_ids.contains(id.as_str()) => self.definition_by_id(&id),
@@ -2791,8 +2897,8 @@ fn continues_chain(lines: &[&str], line: usize) -> bool {
 }
 
 /// Gives each pending or relationship call the first unused call identifier of the same caller
-/// and name on or after its line, so a statement that starts above its call reports the line of
-/// the call.
+/// and name on or after its line and inside the caller, so a statement that starts above its
+/// call reports the line of the call.
 fn pair_identifiers(rows: &mut [NameRow]) {
     let mut by_caller: HashMap<String, (Vec<usize>, Vec<usize>)> = HashMap::new();
     for (index, row) in rows.iter().enumerate() {
@@ -2812,10 +2918,11 @@ fn pair_identifiers(rows: &mut [NameRow]) {
         let mut used = vec![false; identifiers.len()];
         for &call in calls.iter() {
             let line = rows[call].line;
+            let last = rows[call].caller_end_line.unwrap_or(usize::MAX).max(line);
             let Some(slot) = identifiers
                 .iter()
                 .enumerate()
-                .position(|(slot, &i)| !used[slot] && rows[i].line >= line)
+                .position(|(slot, &i)| !used[slot] && (line..=last).contains(&rows[i].line))
             else {
                 continue;
             };
@@ -2867,12 +2974,22 @@ fn attach_counts_by_line(rows: &mut [NameRow]) {
     }
 }
 
+/// Languages where julie starts a body at its first statement, which is code and not part of the
+/// definition. Elsewhere a body starts at its `{` or `=`, which can share the line of the name.
+const BODY_IS_FIRST_STATEMENT: &[&str] = &["python", "ruby", "lua", "fsharp", "vbnet"];
+
 fn definition_spans(definitions: &[Definition]) -> HashMap<String, Vec<(usize, usize)>> {
     let mut spans: HashMap<String, Vec<(usize, usize)>> = HashMap::new();
     for definition in definitions {
         let end = definition
             .body_start_line
-            .unwrap_or(definition.start_line)
+            .map_or(definition.start_line, |body| {
+                if BODY_IS_FIRST_STATEMENT.contains(&definition.language.as_str()) {
+                    body.saturating_sub(1)
+                } else {
+                    body
+                }
+            })
             .max(definition.start_line);
         spans.entry(definition.path.clone()).or_default().push((
             definition

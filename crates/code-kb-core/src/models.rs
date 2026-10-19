@@ -223,6 +223,9 @@ pub struct CallingTest {
     pub line: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub command: Option<String>,
+    /// Only `likely` sites with the basis `name only` tie the test to the target.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub name_only: bool,
 }
 
 /// Every indexed site of one definition's name, labeled by evidence, with a whole-word text count
@@ -376,6 +379,9 @@ pub struct BlastRadiusResult {
     /// Impacted symbols found before `limit` cut the list.
     #[serde(default)]
     pub impacted_symbols_found: usize,
+    /// The depth the walk stopped at while it still found callers, so a deeper walk may find more.
+    #[serde(default)]
+    pub stopped_at_depth: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
