@@ -1404,3 +1404,35 @@ fn an_index_from_another_extractor_build_is_rebuilt_when_the_extractor_refuses_a
             .is_some()
     );
 }
+
+#[test]
+fn a_scan_leaves_out_the_folders_that_a_reconcile_deletes() {
+    find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+    let temp = safe_tempdir();
+    let root = temp.path().to_path_buf();
+    for (path, body) in [
+        ("src/app.py", "def run():\n    pass\n"),
+        (".agents/skills/handoff/SKILL.md", "# Handoff\n"),
+        (".razorback/notes.py", "def note():\n    pass\n"),
+        ("docs/.miller/cache.py", "def cached():\n    pass\n"),
+    ] {
+        fs::create_dir_all(root.join(path).parent().unwrap()).unwrap();
+        fs::write(root.join(path), body).unwrap();
+    }
+    let ws = Workspace::new(root.clone());
+    let db_path = root.join(".code-kb").join("artifact.db");
+
+    scan_workspace(&ws, &db_path, true).expect("scan failed");
+    let conn = open_read_write(&db_path).unwrap();
+    let report = reconcile_offline_edits(&ws, &db_path, &conn).unwrap();
+
+    let paths: Vec<String> = conn
+        .prepare("SELECT path FROM files ORDER BY path")
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(paths, vec!["src/app.py".to_string()]);
+    assert!(report.deleted.is_empty(), "{report:?}");
+}

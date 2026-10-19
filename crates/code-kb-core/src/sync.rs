@@ -275,9 +275,19 @@ pub fn scan_workspace(workspace: &Workspace, db_path: &Path, force: bool) -> Res
     let own_pid = std::process::id().to_string();
 
     ensure_index_dir(db_path)?;
+    let excludes = write_hard_excludes()?;
+    let excludes_str = excludes.path().to_string_lossy();
 
     let scan_args = |new_artifact: bool| {
-        let mut args = vec!["scan", "--root", &*root_str, "--db", &*db_str];
+        let mut args = vec![
+            "scan",
+            "--root",
+            &*root_str,
+            "--db",
+            &*db_str,
+            "--ignore-file",
+            &*excludes_str,
+        ];
         if new_artifact {
             args.extend(["--level", EXTRACTION_LEVEL]);
         }
@@ -594,6 +604,22 @@ pub fn create_index(workspace: &Workspace, db_path: &Path) -> Result<(), SyncErr
         return Ok(());
     }
     scan_workspace(workspace, db_path, false)
+}
+
+/// Writes the folders and file endings that code-kb never indexes to a temporary ignore file
+/// for julie. julie's own list lacks some of them, and a reconcile would delete what it scanned.
+fn write_hard_excludes() -> std::io::Result<tempfile::NamedTempFile> {
+    use std::io::Write;
+    let dirs = crate::workspace::HARD_EXCLUDED_DIRS
+        .iter()
+        .map(|dir| format!("{dir}/\n"));
+    let suffixes = crate::workspace::HARD_EXCLUDED_SUFFIXES
+        .iter()
+        .map(|suffix| format!("*{suffix}\n"));
+    let mut file = tempfile::NamedTempFile::new()?;
+    file.write_all(dirs.chain(suffixes).collect::<String>().as_bytes())?;
+    file.flush()?;
+    Ok(file)
 }
 
 /// Creates the index directory. A `.code-kb` directory also gets a `.gitignore` that

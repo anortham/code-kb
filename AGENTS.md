@@ -412,6 +412,9 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
 - Only the active root keeps a watcher; a root the server switched away from loses its watcher by
   the next call. When a call switches roots, the watcher and the offline
   reconcile restart for the new root.
+- A full scan passes `HARD_EXCLUDED_DIRS` and `HARD_EXCLUDED_SUFFIXES` (`workspace.rs`) to julie
+  as a temporary `--ignore-file`, so a reconcile never deletes what a scan wrote. julie's own list
+  lacks `.miller`, `.agents`, and `.razorback`.
 - A call waits up to 5 s for its root's index. If the index is not ready, the answer is
   `Indexing <root> started; call again in a few seconds.` The next call for that root checks again.
 - Until upstream header updates preserve C++ language detection, a batch of changed `.h` files triggers a

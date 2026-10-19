@@ -350,64 +350,63 @@ pub fn paths_equal(p1: &Path, p2: &Path) -> bool {
     }
 }
 
+/// Folder names that are never indexed or watched, at any depth.
+pub const HARD_EXCLUDED_DIRS: &[&str] = &[
+    ".git",
+    ".hg",
+    ".svn",
+    ".julie",
+    ".miller",
+    ".code-kb",
+    ".memories",
+    ".agents",
+    ".razorback",
+    ".worktrees",
+    "worktrees",
+    ".claude",
+    ".venv",
+    "venv",
+    ".env",
+    ".tox",
+    ".vs",
+    "node_modules",
+    "vendor",
+    "target",
+    "dist",
+    "build",
+    ".cache",
+    "obj",
+    "TestResults",
+    ".idea",
+    ".vscode",
+];
+
+/// File name endings that are never indexed or watched.
+pub const HARD_EXCLUDED_SUFFIXES: &[&str] = &[
+    ".min.js",
+    ".bundle.js",
+    ".generated.js",
+    ".generated.jsx",
+    ".generated.ts",
+    ".generated.tsx",
+    ".generated.d.ts",
+    ".tmp",
+    ".swp",
+    "~",
+    ".db-wal",
+    ".db-shm",
+    ".sqlite-wal",
+    ".sqlite-shm",
+];
+
 /// Check if a relative path contains directories or file patterns that must never be indexed or watched.
 pub fn is_hard_excluded(rel_path: &str) -> bool {
     let p = rel_path.replace('\\', "/");
-    let has_excluded_dir = p.split('/').any(|component| {
-        matches!(
-            component,
-            ".git"
-                | ".hg"
-                | ".svn"
-                | ".julie"
-                | ".miller"
-                | ".code-kb"
-                | ".memories"
-                | ".agents"
-                | ".razorback"
-                | ".worktrees"
-                | "worktrees"
-                | ".claude"
-                | ".venv"
-                | "venv"
-                | ".env"
-                | ".tox"
-                | ".vs"
-                | "node_modules"
-                | "vendor"
-                | "target"
-                | "dist"
-                | "build"
-                | ".cache"
-                | "obj"
-                | "TestResults"
-                | ".idea"
-                | ".vscode"
-        )
-    });
-
-    if has_excluded_dir {
-        return true;
-    }
-
-    const EXCLUDED_SUFFIXES: &[&str] = &[
-        ".min.js",
-        ".bundle.js",
-        ".generated.js",
-        ".generated.jsx",
-        ".generated.ts",
-        ".generated.tsx",
-        ".generated.d.ts",
-        ".tmp",
-        ".swp",
-        "~",
-        ".db-wal",
-        ".db-shm",
-        ".sqlite-wal",
-        ".sqlite-shm",
-    ];
-
-    EXCLUDED_SUFFIXES.iter().any(|suffix| p.ends_with(suffix))
+    p.split('/')
+        .any(|component| HARD_EXCLUDED_DIRS.contains(&component))
+        || HARD_EXCLUDED_SUFFIXES
+            .iter()
+            .any(|suffix| p.ends_with(suffix))
 }
 
 /// Represents a bound workspace session.
