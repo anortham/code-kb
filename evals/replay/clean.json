@@ -1,0 +1,1155 @@
+{
+  "selected_with": "code-kb 2.7.0",
+  "selected": "2026-10-19",
+  "per_repo": 15,
+  "max_walk": 400,
+  "cases": [
+    {
+      "repo": "flask",
+      "language": "python",
+      "commit": "89992954ec71b594b1b911f98977cdc8ad46a057",
+      "parent": "3596b1ab61cea85edb8970e83ff61daa073facf8",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "flask",
+      "language": "python",
+      "commit": "5ce121dd841e2dc2594d0ed3954278f4101d3521",
+      "parent": "8285adf5a4f572dbf7a0a3b8f3a96ca0b19c50a4",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "flask",
+      "language": "python",
+      "commit": "06ea505ce2b2042af26e96d35ebf159af7c0869d",
+      "parent": "2ac89889f4cc330eabd50f295dcef02828522c69",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "flask",
+      "language": "python",
+      "commit": "a31e6b73469cb2bf7eb8f70b5ff21f710fd2e23c",
+      "parent": "b21425d6df207fec0c47e9563faa10a2819984ca",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "flask",
+      "language": "python",
+      "commit": "91c6b3fecf36b1f04554e57cc4060ccb737a445d",
+      "parent": "4cae5d8e411b1e69949d8fae669afeacbd3e5908",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "flask",
+      "language": "python",
+      "commit": "c17f379390731543eea33a570a47bd4ef76a54fa",
+      "parent": "27be9338405382445a7cb01151e084559b98d602",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "flask",
+      "language": "python",
+      "commit": "e82db2ca3a22c9614c1987392c9cfaa8c6ce99ad",
+      "parent": "d3b78fd18a8d9e224cb9ef58a23cec9b1ffc9ce9",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "flask",
+      "language": "python",
+      "commit": "5e621a2801daf95be6d208da9dcc287bb251f63c",
+      "parent": "798e006f435887adceb6aab9b57cde8e20276793",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "flask",
+      "language": "python",
+      "commit": "c77a5203438fe772d41f6a47303ad3f57a4efe6d",
+      "parent": "9b74a90dd3c47f792734823e8793ac36f38bc4dd",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "flask",
+      "language": "python",
+      "commit": "6a64969009bf1898bd302e6a9633f71942523f7f",
+      "parent": "adf363679da2d9a5ddc564bb2da563c7ca083916",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "flask",
+      "language": "python",
+      "commit": "c2705ffd9ce1dc8476cb29eaf5ff5d4c719852d9",
+      "parent": "330123258e8c3dc391cbe55ab1ed94891ca83af3",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "flask",
+      "language": "python",
+      "commit": "edebd3704437f19b5b137eaffe97130fe817d144",
+      "parent": "daf1510a4bda652ac2cfca03ec5567b03ddf8bf1",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "flask",
+      "language": "python",
+      "commit": "53b8f08218796d95764c5252bccd8a50a173a6fb",
+      "parent": "5addaf833b2e8c7a616f89dd8ad5a44b07d7c000",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "flask",
+      "language": "python",
+      "commit": "41ec5760a2c55a099c3a1733fdd36fbb1258a02b",
+      "parent": "2732c4db66763462c2795d2287b61d4f77031342",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "flask",
+      "language": "python",
+      "commit": "d22bfcd4cfe3b93daddfce8521f77447ca8d6b84",
+      "parent": "4fec712f329ceecd38729af6404a2c32aed83648",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "express",
+      "language": "javascript",
+      "commit": "9c85a25c02e83ad16e1561d02c8ede652f0ef15b",
+      "parent": "1140301f6a0ed5a05bc1ef38d48294f75a49580c",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "express",
+      "language": "javascript",
+      "commit": "6cd404eb28ff861180f435b3015f8d0c8c0b44d4",
+      "parent": "3e81873b52e107898ed7ba45874959fb0546df3f",
+      "split": "holdout",
+      "verdicts": [
+        {
+          "display": "acceptsCharsets",
+          "change": "parameters 0 \u2192 1",
+          "verdict": "false",
+          "evidence": "The function became variadic (...charsets); one-argument and two-argument calls in the tests still fit."
+        }
+      ]
+    },
+    {
+      "repo": "express",
+      "language": "javascript",
+      "commit": "697547cde621d8b0a47b4fff6e98b29337f8c980",
+      "parent": "4007ad103ba29f6426b2ec9eccfb1ceb792682a8",
+      "split": "holdout",
+      "verdicts": [
+        {
+          "display": "createApp",
+          "change": "parameters 2 \u2192 1",
+          "verdict": "false",
+          "evidence": "The test helper lost its second parameter; every call in test/req.query.js passes at most one argument."
+        }
+      ]
+    },
+    {
+      "repo": "express",
+      "language": "javascript",
+      "commit": "2f64f68c37c64ae333e41ff38032d21860f22255",
+      "parent": "ed0ba3f1dc905d6b62eabf23bd383abcae4901ba",
+      "split": "dev",
+      "verdicts": [
+        {
+          "display": "createApp",
+          "change": "parameters 1 \u2192 2",
+          "verdict": "false",
+          "evidence": "createApp in test/req.query.js gains an optional second argument (isPrototypePropertyTest, JS, undefined when omitted); one-argument calls still work."
+        }
+      ]
+    },
+    {
+      "repo": "express",
+      "language": "javascript",
+      "commit": "dfd1851245aa2a563c8612777ef10143be4a5cec",
+      "parent": "9f4dbe3a1332cd883069ba9b73a9eed99234cfc7",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "express",
+      "language": "javascript",
+      "commit": "f9954dd317a1b534e62a5ae3aa7f52f3582b8881",
+      "parent": "5da5a11a498a3034623960861e542a3b39b00c94",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "express",
+      "language": "javascript",
+      "commit": "3dc96995df98cd76d8d31f3b6825401f25899be0",
+      "parent": "fa40ecfe7619acdfdeecf19d445ce5e9892d77ec",
+      "split": "holdout",
+      "verdicts": [
+        {
+          "display": "acceptsLanguages",
+          "change": "parameters 0 \u2192 1",
+          "verdict": "false",
+          "evidence": "The function became variadic (...languages); the one-argument calls still fit."
+        }
+      ]
+    },
+    {
+      "repo": "express",
+      "language": "javascript",
+      "commit": "41113599afb01040436dba993f06cacbdb8f8e13",
+      "parent": "6a40af82937803a7652b47641a7a3cd2f5c833c4",
+      "split": "holdout",
+      "verdicts": [
+        {
+          "display": "listen",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "The commit only changes quote and import style; listen keeps its variadic shape."
+        }
+      ]
+    },
+    {
+      "repo": "express",
+      "language": "javascript",
+      "commit": "4e92ac903194b705a121ec49103fd9fcd779a42b",
+      "parent": "9f8589e31ce8e54097defb48da89c8538e92bfd9",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "express",
+      "language": "javascript",
+      "commit": "9e3dbb43744620b8b490c61c9269a168e0c0e3ae",
+      "parent": "b31910c542c7079d8a763aff346400b6f4c0eaee",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "express",
+      "language": "javascript",
+      "commit": "bdd81f8670975ef30fd49e92513ef48d35029eaf",
+      "parent": "6c98f80b6ac95b90cff5da6857be4fe21d5e9c4e",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "express",
+      "language": "javascript",
+      "commit": "723b5451bbcbab69bc8ded50ccd6545a79b8fe64",
+      "parent": "ee40a881f5d8cb4ce71bc45262fde8e4b7640d05",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "express",
+      "language": "javascript",
+      "commit": "ee40a881f5d8cb4ce71bc45262fde8e4b7640d05",
+      "parent": "26801a0afdd73258ee3c3685e30d5d4040c1558d",
+      "split": "holdout",
+      "verdicts": [
+        {
+          "display": "listen",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "listen still forwards all arguments; callers that pass a port and optional callback are unchanged."
+        }
+      ]
+    },
+    {
+      "repo": "express",
+      "language": "javascript",
+      "commit": "b44191eb3de5fcc94b384d7d6028b8c9a0144231",
+      "parent": "8417c60fcfd7a9523e8783fd3f489d771df1ce44",
+      "split": "holdout",
+      "verdicts": [
+        {
+          "display": "methods.shouldSkipQuery",
+          "change": "removed",
+          "verdict": "false",
+          "evidence": "The helper moved to test/support/utils.js and is exported; test/app.router.js now imports it, so the site at line 42 uses the new definition."
+        }
+      ]
+    },
+    {
+      "repo": "express",
+      "language": "javascript",
+      "commit": "bf91946bd406b0c6f045fe81331de1725e9cee43",
+      "parent": "d97d79ed9a25099ec4f0537ad8bf2a9378350a6b",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "zod",
+      "language": "typescript",
+      "commit": "f101d8cada31bd99f2df5d5ce094c95b209b2950",
+      "parent": "2a417097652c522d5f08c4ed9858b9d020517943",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "zod",
+      "language": "typescript",
+      "commit": "87ffeb0f50d21881f64ed8926a5df8df6ff355e2",
+      "parent": "7785fc82a5247dc65cc27cac8f777f75dfa77f80",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "zod",
+      "language": "typescript",
+      "commit": "0135c85a4831a5a04326c4094888574cf1ae82f5",
+      "parent": "ca246d267001e2b64d43a5ff02699f1885e06227",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "zod",
+      "language": "typescript",
+      "commit": "d6ca12ae3e28b40392ec49323edc31a56a05ff3b",
+      "parent": "dc51404b2593b029166fd942319fda769f7ae631",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "zod",
+      "language": "typescript",
+      "commit": "898c4461e0de28c8798788211d8f4395917a1a5f",
+      "parent": "260e5d4bd3f2f1a395fce52d526383ba6181d318",
+      "split": "holdout",
+      "verdicts": [
+        {
+          "display": "parseValidURL",
+          "change": "removed",
+          "verdict": "true",
+          "evidence": "packages/bench/compile-helper-scope.ts imports and calls parseValidURL (lines 3 and 74), which the commit removed from schemas.ts; the bench file was not updated."
+        }
+      ]
+    },
+    {
+      "repo": "zod",
+      "language": "typescript",
+      "commit": "260e5d4bd3f2f1a395fce52d526383ba6181d318",
+      "parent": "11c9268b6025be7f2220ee83a1c3f28238a50b84",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "zod",
+      "language": "typescript",
+      "commit": "45fdeda54fc610261f0d18acaf869f75d568487e",
+      "parent": "e03d8587a16a4c635102b2415bc9dff6ee5f6ecf",
+      "split": "holdout",
+      "verdicts": [
+        {
+          "display": "inputOptin",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "The return type only gained the \"defaulted\" member; the equality tests in the object and tuple processors already handle it."
+        }
+      ]
+    },
+    {
+      "repo": "zod",
+      "language": "typescript",
+      "commit": "5b34c0cebffcfb083bf068e553cd9e13542d7cdd",
+      "parent": "d995981c2ccdd3af30e5a57784ee1555fa26b3a9",
+      "split": "dev",
+      "verdicts": [
+        {
+          "display": "error.getSizing",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "getSizing is a local helper in pt.ts whose return type lost the unused `verb` field; the sites at pt.ts:109,116 read only `sizing.unit`."
+        }
+      ]
+    },
+    {
+      "repo": "zod",
+      "language": "typescript",
+      "commit": "ba98071c77c242c01a2d8e6d284e4fcfb4bb9a5e",
+      "parent": "234c407d0eec716a31ad5ef47568b49f6832c43f",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "zod",
+      "language": "typescript",
+      "commit": "611bd762c303f0f1e188fb66e73528118702ca99",
+      "parent": "b53e53ccb3941bd3c8c651b4b1dcf1b5484726b0",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "zod",
+      "language": "typescript",
+      "commit": "bd6619c06d72f7829ee6ed14417ef1fd4d90ebcb",
+      "parent": "9d20fdc3c37207fa3fe77c9524a3421f4399cbf6",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "zod",
+      "language": "typescript",
+      "commit": "9d20fdc3c37207fa3fe77c9524a3421f4399cbf6",
+      "parent": "3063993a3317ac8af7a244691b837fce3e53aa96",
+      "split": "holdout",
+      "verdicts": [
+        {
+          "display": "preprocess",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "Type-only change that adds a second generic with a default; existing preprocess calls still compile."
+        }
+      ]
+    },
+    {
+      "repo": "zod",
+      "language": "typescript",
+      "commit": "3063993a3317ac8af7a244691b837fce3e53aa96",
+      "parent": "fd0741065d65ca6a83a8eb095d306444002dd2e3",
+      "split": "dev",
+      "verdicts": [
+        {
+          "display": "array",
+          "change": "removed",
+          "verdict": "false",
+          "evidence": "`array` was only a method shorthand moved from inline install code to a prototype factory; z.array / .array() still exist (classic/schemas.ts) and the test sites call them unchanged."
+        },
+        {
+          "display": "check",
+          "change": "removed",
+          "verdict": "false",
+          "evidence": "`check` was only a method shorthand moved from inline install code to a prototype factory; z.check / .check() still exist (classic/schemas.ts) and the test sites call them unchanged."
+        },
+        {
+          "display": "optional",
+          "change": "removed",
+          "verdict": "false",
+          "evidence": "`optional` was only a method shorthand moved from inline install code to a prototype factory; z.optional / .optional() still exist (classic/schemas.ts) and the test sites call them unchanged."
+        },
+        {
+          "display": "refine",
+          "change": "removed",
+          "verdict": "false",
+          "evidence": "`refine` was only a method shorthand moved from inline install code to a prototype factory; z.refine / .refine() still exist (classic/schemas.ts) and the test sites call them unchanged."
+        }
+      ]
+    },
+    {
+      "repo": "zod",
+      "language": "typescript",
+      "commit": "d24fb4c3fbde084cf5ad45332970c7856228defa",
+      "parent": "7708d4471eb2921e89c57ef5ad4785864eeff922",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "zod",
+      "language": "typescript",
+      "commit": "7708d4471eb2921e89c57ef5ad4785864eeff922",
+      "parent": "8ac9ae5198315a2306629f94f8323e45774a72f5",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "gson",
+      "language": "java",
+      "commit": "b3f4ca20087f9066de4c340522ff84e0558e1ad1",
+      "parent": "61f2c646066e959f65cb99a826a2a759be42dbdd",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "gson",
+      "language": "java",
+      "commit": "61f2c646066e959f65cb99a826a2a759be42dbdd",
+      "parent": "a3b9f1f7377d7ce308221b44eacd5571701174fb",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "gson",
+      "language": "java",
+      "commit": "9835b6f90192f79cdf5300c528fc6212455fb6c1",
+      "parent": "0f6506f632f5c7ceac4474245ad5c79c61c62ba7",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "gson",
+      "language": "java",
+      "commit": "9d5d6a8f457f3e60f2e84bf39b904c9a774d2365",
+      "parent": "8b8628c65699bc4421696183c62ae0c1b9b281dc",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "gson",
+      "language": "java",
+      "commit": "4b46b6ce6c175d0742a6f9f813219053fb5e36c3",
+      "parent": "138377c6b6c724dc1e0579f7c62337f85d9ee836",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "gson",
+      "language": "java",
+      "commit": "e25d4fab7fd54f267c765d975acccddfdddc9cda",
+      "parent": "b4e198040ae522b7442df7a7dc1095e3e822ba3d",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "gson",
+      "language": "java",
+      "commit": "866bc38923123f4ad8025c3c363511deb4380edf",
+      "parent": "cba6597f92f4bf71dcd6afbc01258d40d778ed38",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "gson",
+      "language": "java",
+      "commit": "9eb61b30acdfd1c8497eee7de9bec3a7448ff41e",
+      "parent": "681c01f1e2e5064ced8cdeb6b5c2c88bbd980d4e",
+      "split": "dev",
+      "verdicts": [
+        {
+          "display": "LinkedTreeMap.LinkedTreeMap",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "Only annotations and the body of the constructors changed; the no-arg `new LinkedTreeMap<>()` at ConstructorConstructor.java:363 still matches the unchanged public constructor."
+        },
+        {
+          "display": "NATURAL_ORDER.compare",
+          "change": "removed",
+          "verdict": "false",
+          "evidence": "The site at LinkedTreeMap.java:156 calls comparator.compare on the Comparator field (null means natural order), not the removed NATURAL_ORDER constant."
+        },
+        {
+          "display": "ReflectionAccessFilterHelper.canAccess",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "Only a @SuppressWarnings annotation was added; the signature is unchanged."
+        }
+      ]
+    },
+    {
+      "repo": "gson",
+      "language": "java",
+      "commit": "dbf0f0416596add88c9d38b3e80b4e44059863ca",
+      "parent": "552b4135c87f8d52bfd9ffcee6e7098e37f7a217",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "gson",
+      "language": "java",
+      "commit": "8526dbd2f0a7e61d5fbcc5caa163f2352fb0ddc0",
+      "parent": "286843d4a90a4690e5e1f438c944569b3fbfb1d2",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "gson",
+      "language": "java",
+      "commit": "286843d4a90a4690e5e1f438c944569b3fbfb1d2",
+      "parent": "ae9604c201b3ba44babc48e982e012b1d23b69c8",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "gson",
+      "language": "java",
+      "commit": "c47db7bc13875db690bcfb76e02b1e1bbb3a3353",
+      "parent": "dfc1ce001b46cb1c022012aa08152852b67dbdc9",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "gson",
+      "language": "java",
+      "commit": "e28fdb9303846b8c46fd5b8776f694149d0389d0",
+      "parent": "a271f487b5969601308ed438b2da9c8fc1a8e927",
+      "split": "holdout",
+      "verdicts": [
+        {
+          "display": "ConstructorConstructor.newCollectionConstructor",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "Only the generic return type changed from Collection<? extends Object> to Collection<?>, which is the same type; the cast site still compiles."
+        },
+        {
+          "display": "ConstructorConstructor.newMapConstructor",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "Only a generic wildcard in the return type changed; the cast at the call site still compiles."
+        }
+      ]
+    },
+    {
+      "repo": "gson",
+      "language": "java",
+      "commit": "72537db9a6095720aca3a67abe77ec5a16200081",
+      "parent": "569279fada1f623732ca4836404954d8cf8ca89c",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "gson",
+      "language": "java",
+      "commit": "8c23cd363daec806d2e9b69665520043914782ac",
+      "parent": "5eab3eda9fff9db77b82eae621c26f1d7263386f",
+      "split": "dev",
+      "verdicts": [
+        {
+          "display": "CustomClass3.CustomClass3",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "Only @SuppressWarnings annotations were added to the constructors; the signature is unchanged."
+        }
+      ]
+    },
+    {
+      "repo": "cobra",
+      "language": "go",
+      "commit": "6dec1ae26659a130bdb4c985768d1853b0e1bc06",
+      "parent": "c8289c10302063b9a2e26357e7e0f0bb599f29ce",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "cobra",
+      "language": "go",
+      "commit": "40b5bc1437a564fc795d388b23835e84f54cd1d1",
+      "parent": "a97f9fd47b290016526c8af2dac0531fea5cd773",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "cobra",
+      "language": "go",
+      "commit": "24ada7fe71e3a3a8741dd52e0a7fc3b97450535a",
+      "parent": "680936a2200be363c61feda8cd29287f0726a48c",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "cobra",
+      "language": "go",
+      "commit": "8cb30f9ca53a004a6fe88c5cfcc79ac7b24fc638",
+      "parent": "17b6dca2ffaf6113cbd1cf433ec988fa7d63c6f3",
+      "split": "dev",
+      "verdicts": [
+        {
+          "display": "AppendActiveHelp",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "The commit only introduces a type alias (Completion = string) and changes []string to []Completion; every site still fits because the alias is identical to string."
+        },
+        {
+          "display": "FixedCompletions",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "The commit only introduces a type alias (Completion = string) and changes []string to []Completion; every site still fits because the alias is identical to string."
+        },
+        {
+          "display": "completeRequireFlags",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "The commit only introduces a type alias (Completion = string) and changes []string to []Completion; every site still fits because the alias is identical to string."
+        },
+        {
+          "display": "getCompletions",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "The commit only introduces a type alias (Completion = string) and changes []string to []Completion; every site still fits because the alias is identical to string."
+        },
+        {
+          "display": "getFlagNameCompletions",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "The commit only introduces a type alias (Completion = string) and changes []string to []Completion; every site still fits because the alias is identical to string."
+        }
+      ]
+    },
+    {
+      "repo": "cobra",
+      "language": "go",
+      "commit": "611e16c322e3b0413a9ba4e489fcd98ef904e406",
+      "parent": "09d5664f34e3f7571560e48ccb74c8904b671e87",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "cobra",
+      "language": "go",
+      "commit": "6c3c1163c6df19860515103199e880122ba49e80",
+      "parent": "01ffff4eca5a08384ef2b85f39ec0dac192a5f7b",
+      "split": "holdout",
+      "verdicts": [
+        {
+          "display": "FixedCompletions",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "Return type became the named type CompletionFunc with the same function shape; the test's use as ValidArgsFunction still fits."
+        },
+        {
+          "display": "GetFlagCompletionFunc",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "Return type is now the named CompletionFunc with the same underlying shape; the test only calls the result."
+        },
+        {
+          "display": "RegisterFlagCompletionFunc",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "Parameter type became the named type CompletionFunc with the same underlying function type; every func literal or function value still fits."
+        }
+      ]
+    },
+    {
+      "repo": "cobra",
+      "language": "go",
+      "commit": "5bef9d8d87ad1a1c73e74361bad9e38b3469a58e",
+      "parent": "ff7c561cf741ac36ab319f528d93e738ae284835",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "cobra",
+      "language": "go",
+      "commit": "a0a6ae020bb3899ff0276067863e50523f897370",
+      "parent": "890302a35f578311404a462b3cdd404f34db3720",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "cobra",
+      "language": "go",
+      "commit": "0c72800b8dba637092b57a955ecee75949e79a73",
+      "parent": "c5dacb3ea4512e6766f86907dfa7014ceb9cb041",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "cobra",
+      "language": "go",
+      "commit": "60d056d1574d04c859638354bc9cacab70bab296",
+      "parent": "66b215ba186e6e28ccab74b9022149cc2236d863",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "cobra",
+      "language": "go",
+      "commit": "6b0bd3076cfafd1c108264ed1e4aa0c0fe3f8537",
+      "parent": "cc7e235fc26cfd0b5ae36c960f399eea4badaa3e",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "cobra",
+      "language": "go",
+      "commit": "860791844ed3a2e544a9b9bbbcb14144a948ad20",
+      "parent": "2169adb5749372c64cdd303864ae8a444da6350f",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "cobra",
+      "language": "go",
+      "commit": "2169adb5749372c64cdd303864ae8a444da6350f",
+      "parent": "212ea4078323771dc49b6f25a41d84efbaac3a4c",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "cobra",
+      "language": "go",
+      "commit": "fce8d8aeb08dc6afe413cc0af67a7fbb3cffec4c",
+      "parent": "a281c8b47b315fe428cf31ad5c38b526dc136f55",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "cobra",
+      "language": "go",
+      "commit": "70e53f62be77e03f376be845efacbd99c00024ca",
+      "parent": "2e8ba6f3087bda425da42af31f7373cd2c2c08c5",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "newtonsoft-json",
+      "language": "csharp",
+      "commit": "1c1d5e15a36142a86da460486a16c26bc3bf562e",
+      "parent": "5cdbd73612a215a22a7bdf9b5f06cb46f8b4ba0b",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "newtonsoft-json",
+      "language": "csharp",
+      "commit": "bd0773b8f3b948f47840886c2b3f28b9c8bd5333",
+      "parent": "c603502b95b019f99765d01412e4e74d502b61e0",
+      "split": "dev",
+      "verdicts": [
+        {
+          "display": "JContainer.GetItemProperties",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "The change only adds or removes C# nullable annotations (? or !) on the signature; every call still compiles against it."
+        },
+        {
+          "display": "JContainer.GetListName",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "The change only adds or removes C# nullable annotations (? or !) on the signature; every call still compiles against it."
+        }
+      ]
+    },
+    {
+      "repo": "newtonsoft-json",
+      "language": "csharp",
+      "commit": "9317d71ac5f08c354060bad2cd9bfe6ed5856294",
+      "parent": "4738a64817bb753667d9ed0ea99c1f955d414b33",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "newtonsoft-json",
+      "language": "csharp",
+      "commit": "b13717a1c13b0747853568f11fc9e2aa0abf4649",
+      "parent": "d0a328e8a46304d62d2174b8bba54721d02be3d3",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "newtonsoft-json",
+      "language": "csharp",
+      "commit": "bf2e2a78e8febf0006ec647f9bde3aa5bbe0ce72",
+      "parent": "e42c9e4824358b9b38414df0370919c822ed8523",
+      "split": "dev",
+      "verdicts": [
+        {
+          "display": "CollectionWrapper.Add",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "The change only adds or removes C# nullable annotations (? or !) on the signature; every call still compiles against it."
+        },
+        {
+          "display": "JContainer.Add",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "The change only adds or removes C# nullable annotations (? or !) on the signature; every call still compiles against it."
+        },
+        {
+          "display": "JEnumerable.Equals",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "The change only adds or removes C# nullable annotations (? or !) on the signature; every call still compiles against it."
+        },
+        {
+          "display": "JTokenEqualityComparer.Equals",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "The change only adds or removes C# nullable annotations (? or !) on the signature; every call still compiles against it."
+        },
+        {
+          "display": "JValue.Equals",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "The change only adds or removes C# nullable annotations (? or !) on the signature; every call still compiles against it."
+        },
+        {
+          "display": "JValue.ToString",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "The change only adds or removes C# nullable annotations (? or !) on the signature; every call still compiles against it."
+        }
+      ]
+    },
+    {
+      "repo": "newtonsoft-json",
+      "language": "csharp",
+      "commit": "7f78562d4496d6881e3f60504473127656b98554",
+      "parent": "13717cfc452ee9c1ea0b4fc368b8e9922d562028",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "newtonsoft-json",
+      "language": "csharp",
+      "commit": "13717cfc452ee9c1ea0b4fc368b8e9922d562028",
+      "parent": "197c6db94a19eaca018debac6e2d07e2ba22ba75",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "newtonsoft-json",
+      "language": "csharp",
+      "commit": "c9e12bc4755c786a9073dddf1be14cd27823a498",
+      "parent": "e44ab3348fabcbe9ed6b5053b706a9e10b945ba1",
+      "split": "dev",
+      "verdicts": [
+        {
+          "display": "JToken.ToObject",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "The change only adds or removes C# nullable annotations (? or !) on the signature; every call still compiles against it."
+        }
+      ]
+    },
+    {
+      "repo": "newtonsoft-json",
+      "language": "csharp",
+      "commit": "e44ab3348fabcbe9ed6b5053b706a9e10b945ba1",
+      "parent": "2b0f7a2492bbedbf5e381d0468f503a99e834dbc",
+      "split": "dev",
+      "verdicts": [
+        {
+          "display": "JContainer.Merge",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "The change only adds or removes C# nullable annotations (? or !) on the signature; every call still compiles against it."
+        }
+      ]
+    },
+    {
+      "repo": "newtonsoft-json",
+      "language": "csharp",
+      "commit": "1745d7c14ec7e4244a5ca1c7ddf5d955cf7d1f43",
+      "parent": "583eb120152f8b6332df2fe3d4b9f4c947c944d0",
+      "split": "holdout",
+      "verdicts": [
+        {
+          "display": "JContainer.InsertItem",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "InsertItem now returns bool, but the listed callers discard the return value, so they compile and behave as before; every override was updated."
+        },
+        {
+          "display": "JProperty.InsertItem",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "The JProperty site calls InsertItem as a statement and ignores the new bool return; it needs no edit."
+        }
+      ]
+    },
+    {
+      "repo": "newtonsoft-json",
+      "language": "csharp",
+      "commit": "42139ea6cd8d500790bf27c9afc69fd66eab60ad",
+      "parent": "95a6eb3ac50eaa599018a97265725e135197159c",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "newtonsoft-json",
+      "language": "csharp",
+      "commit": "95a6eb3ac50eaa599018a97265725e135197159c",
+      "parent": "1403f5d329a778102895401ed9fa4a2f99a7b5ac",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "newtonsoft-json",
+      "language": "csharp",
+      "commit": "0cf47a4687f50c1e0fb46c0f8048531d0faaf978",
+      "parent": "6795ca55f474913b80e31c5088df4642f56e6068",
+      "split": "dev",
+      "verdicts": [
+        {
+          "display": "JsonConvert.SerializeObject",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "The change only adds or removes C# nullable annotations (? or !) on the signature; every call still compiles against it."
+        }
+      ]
+    },
+    {
+      "repo": "newtonsoft-json",
+      "language": "csharp",
+      "commit": "c918ca862fe0f47c72bb3b410c7bc8a74dc5254f",
+      "parent": "c298f3d6a261db76cd2a1e45d8d41bbbd386a749",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "newtonsoft-json",
+      "language": "csharp",
+      "commit": "a222c8b69cc8ae55d938339362c2550c939a1e4d",
+      "parent": "666d9760719e5ec5b2a50046f7dbd6a1267c01c6",
+      "split": "dev",
+      "verdicts": [
+        {
+          "display": "Extensions.Convert",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "The change only adds or removes C# nullable annotations (? or !) on the signature; every call still compiles against it."
+        },
+        {
+          "display": "JValue.Equals",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "The change only adds or removes C# nullable annotations (? or !) on the signature; every call still compiles against it."
+        },
+        {
+          "display": "JsonConvert.DeserializeObject",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "The change only adds or removes C# nullable annotations (? or !) on the signature; every call still compiles against it."
+        },
+        {
+          "display": "JsonSerializer.Deserialize",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "The change only adds or removes C# nullable annotations (? or !) on the signature; every call still compiles against it."
+        }
+      ]
+    },
+    {
+      "repo": "code-kb",
+      "language": "rust",
+      "commit": "211dbac63cd2c0f2a6e4114428028312d4339cfe",
+      "parent": "e838787a552caad090fad2d0c3c0a2fb554980ee",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "code-kb",
+      "language": "rust",
+      "commit": "e838787a552caad090fad2d0c3c0a2fb554980ee",
+      "parent": "7017d7b85bca48b316c6c852b7e0647a6a10f275",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "code-kb",
+      "language": "rust",
+      "commit": "1d2d18655465a30b176aafeeb516b8ce257c427e",
+      "parent": "5491ca9336df7134357ee7b7fd4891dc413aac8c",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "code-kb",
+      "language": "rust",
+      "commit": "908477519ed8bc4a3a68f46a360d20c4920502b8",
+      "parent": "907fc5d79068824f0b3d1dc57963ffd3d6231505",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "code-kb",
+      "language": "rust",
+      "commit": "c54a46d09964c2dcd97ae8aadbbd07d554bc0e8c",
+      "parent": "99cb8b359d26cf45bd9a4eadfbd03e891cd53dd5",
+      "split": "dev",
+      "verdicts": [
+        {
+          "display": "implicit_entry_tests",
+          "change": "signature changed",
+          "verdict": "false",
+          "evidence": "The one caller at queries.rs:5949 is updated in the same diff to use test.test.path/test.test.line for the new RankedImplicitTest return type."
+        }
+      ]
+    },
+    {
+      "repo": "code-kb",
+      "language": "rust",
+      "commit": "aeb6392db20dd6cacf61fe3687a8c573fca66d5c",
+      "parent": "1e98ffd088f7fa4ab77a246ffc83af2263bda5fb",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "code-kb",
+      "language": "rust",
+      "commit": "1e98ffd088f7fa4ab77a246ffc83af2263bda5fb",
+      "parent": "fac7dde07fcc71e0a2495fe3f40d1bd442d15910",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "code-kb",
+      "language": "rust",
+      "commit": "54f2c08852ec81fe063cb833bc8d3a87805af2ef",
+      "parent": "90585d29c9101eee7d668b83e5f621afbc968174",
+      "split": "dev",
+      "verdicts": []
+    },
+    {
+      "repo": "code-kb",
+      "language": "rust",
+      "commit": "ce55b4f3870c8dd1b56b9de6d281142efcd13fc2",
+      "parent": "b609b86559035d6db8c958509b17cbdcd90f3750",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "code-kb",
+      "language": "rust",
+      "commit": "b609b86559035d6db8c958509b17cbdcd90f3750",
+      "parent": "8d5e6487de6458193ad3c47dbddd65cbb0a3694f",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "code-kb",
+      "language": "rust",
+      "commit": "8d5e6487de6458193ad3c47dbddd65cbb0a3694f",
+      "parent": "f22c60af9fa224c5f40dc977f83e8d975ec43b1e",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "code-kb",
+      "language": "rust",
+      "commit": "f22c60af9fa224c5f40dc977f83e8d975ec43b1e",
+      "parent": "ac7a951d3ff6c1da9265b696eba335b0d5a855de",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "code-kb",
+      "language": "rust",
+      "commit": "ac7a951d3ff6c1da9265b696eba335b0d5a855de",
+      "parent": "8950621740394655108673c35c1d1561bee87203",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "code-kb",
+      "language": "rust",
+      "commit": "8950621740394655108673c35c1d1561bee87203",
+      "parent": "36d859522adc9b7921261b436b49b801adb2d2c3",
+      "split": "holdout",
+      "verdicts": []
+    },
+    {
+      "repo": "code-kb",
+      "language": "rust",
+      "commit": "36d859522adc9b7921261b436b49b801adb2d2c3",
+      "parent": "b042eddb1b54d4c94a4397937fa29f9a886213e0",
+      "split": "dev",
+      "verdicts": []
+    }
+  ]
+}

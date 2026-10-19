@@ -63,13 +63,13 @@
 
 **Project source of truth:** `CLAUDE.md`, `.github/workflows/ci.yml`, `docs/RELEASING.md` (code-kb); `CLAUDE.md`, `docs/release.md`, `.github/workflows/ci.yml` (julie-extractors).
 
-**Worker red/green scope:** `python3 -m unittest scripts/test_edit_replay.py`, `python3 -m unittest scripts/test_reach_gate.py`, `cargo test -p code-kb-core --test <file>`, `cargo test -p code-kb-core --lib <module>`, `cargo test -p code-kb-cli --test <file>`; julie `cargo test -p julie-extractors <filter>`.
+**Worker red/green scope:** `python3 -m unittest discover -s scripts -p test_edit_replay.py`, `python3 -m unittest discover -s scripts -p test_reach_gate.py`, `cargo test -p code-kb-core --test <file>`, `cargo test -p code-kb-core --lib <module>`, `cargo test -p code-kb-cli --test <file>`; julie `cargo test -p julie-extractors <filter>`.
 
 **Worker ceiling:** the test binaries of the crate a task changes, plus `cargo clippy -p <crate> --all-targets -- -D warnings` and `cargo fmt --all -- --check`. Workers run `edit_replay.py run` and `score` on dev cases only. Workers never run the reach gate, the holdout score, or release scripts.
 
 **Lead affected-change scope:** after each task that changes Rust code: `CI=1 cargo nextest run --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`, `python3 scripts/reach_gate.py run --cache-dir /home/murphy/.cache/code-kb-reach-new` PASS, `lost_proven.py` empty, and `edit_replay.py score` on dev not lower than before the task.
 
-**Branch gate (end of each slice):** `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `CI=1 cargo nextest run --workspace`, `node --test tests/plugin/*.test.cjs`, `python3 -m unittest scripts/test_edit_replay.py scripts/test_reach_gate.py`, `cmp AGENTS.md CLAUDE.md`, the reach gate PASS, `lost_proven.py` empty. julie (only if changed): `cargo fmt --check`, `cargo clippy --workspace --all-targets --all-features --no-deps -- -D warnings`, `scripts/check-agent-doc-sync.sh`, `node scripts/language-data-quality-report.mjs --strict`, `cargo xtask test default`, `cargo xtask test contract`, `cargo xtask compat-check`.
+**Branch gate (end of each slice):** `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `CI=1 cargo nextest run --workspace`, `node --test tests/plugin/*.test.cjs`, `python3 -m unittest discover -s scripts -p 'test_*.py'`, `cmp AGENTS.md CLAUDE.md`, the reach gate PASS, `lost_proven.py` empty. julie (only if changed): `cargo fmt --check`, `cargo clippy --workspace --all-targets --all-features --no-deps -- -D warnings`, `scripts/check-agent-doc-sync.sh`, `node scripts/language-data-quality-report.mjs --strict`, `cargo xtask test default`, `cargo xtask test contract`, `cargo xtask compat-check`.
 
 **Security scope:** julie: `cargo deny check --all-features` (CI). code-kb: none declared. Slice 1 adds one manual check: `git grep` for the session report folder name and for `/.claude/projects/` and `/.codex/sessions/` returns nothing in the repository.
 
@@ -111,11 +111,11 @@ Each task in this slice measures. No task changes a rule.
 
 **Approach:** Clone full history into `~/.cache/code-kb-accuracy/phase3/repos/<name>` from `url` (the local clones of flask, express, and zod are shallow). Build one index per clone, then let each detached worktree copy and reconcile it (Invariant 1, automatic index creation). Stop a repository at N commits with a shape change, or after 400 commits.
 
-- [ ] `select clean` writes at least 50 commits with a shape change over at least 5 languages, each with `repo`, `commit`, `parent`, `language`, and `split`.
-- [ ] `run clean` records the check JSON, the wall time, and the exit code of each commit; a check that errors counts as an error, never as clean.
-- [ ] `score clean` prints, per language and in total: commits, commits with a block, commits with a false block, and the false-block share; and p50 and p95 of the check time.
-- [ ] Unit tests cover the split rule, the block rule (only `proven` or `likely` outside the diff), and scoring on a fixture run with no network.
-- [ ] `python3 -m unittest scripts/test_edit_replay.py` passes. Worker commits (`serial-worker-commit`).
+- [x] `select clean` writes at least 50 commits with a shape change over at least 5 languages, each with `repo`, `commit`, `parent`, `language`, and `split`.
+- [x] `run clean` records the check JSON, the wall time, and the exit code of each commit; a check that errors counts as an error, never as clean.
+- [x] `score clean` prints, per language and in total: commits, commits with a block, commits with a false block, and the false-block share; and p50 and p95 of the check time.
+- [x] Unit tests cover the split rule, the block rule (only `proven` or `likely` outside the diff), and scoring on a fixture run with no network.
+- [x] `python3 -m unittest discover -s scripts -p test_edit_replay.py` passes (the plan's `python3 -m unittest scripts/...` form cannot import the sibling modules). Worker commits (`serial-worker-commit`).
 
 ### Task 1.2: Holdback set
 
@@ -228,7 +228,7 @@ Runs only when the clean set fails its mark. v2.7.0 already made the first chang
 **What to build:** One TypeScript project and one Java project, each with a pinned full commit, 30 sampled symbols, SCIP truth, and the dev and holdout split of the README. The executor picks the projects and records why. A project qualifies when its SCIP indexer runs on it, it has at least 30 symbols with at least 3 truth sites outside their own file, and it is an application or a tool, not a library of the same kind as zod or gson. Local candidates: `/home/murphy/source/goldfish` (TypeScript).
 
 - [ ] The gate runs 9 projects and still passes with the 2.7.0 binary, or the report lists each mark that fails on the new projects. A new project that fails is a finding for 3.2 and 2.2, not a reason to drop the project.
-- [ ] `python3 -m unittest scripts/test_reach_gate.py` passes. Worker commits.
+- [ ] `python3 -m unittest discover -s scripts -p test_reach_gate.py` passes. Worker commits.
 
 ### Task 3.2: TypeScript unresolved noise
 
