@@ -4491,6 +4491,29 @@ fn a_rust_module_is_not_the_target_of_a_read_of_a_value() {
 }
 
 #[test]
+fn a_java_call_that_a_static_import_ties_to_another_class_is_excluded() {
+    let repo = scanned_repo(&[
+        (
+            "p/TypeAdapters.java",
+            "package p;\n\npublic final class TypeAdapters {\n    static int toIntExact(long v) {\n        return (int) v;\n    }\n}\n",
+        ),
+        (
+            "p/Time.java",
+            "package p;\n\nimport static java.lang.Math.toIntExact;\n\npublic final class Time {\n    int of(long v) {\n        return toIntExact(v);\n    }\n}\n",
+        ),
+    ]);
+    let report = report(&repo, "toIntExact", Some("p/TypeAdapters.java"));
+
+    assert_site(
+        &report,
+        "p/Time.java",
+        7,
+        SiteLabel::Excluded,
+        "`toIntExact` is imported from `java.lang.Math`",
+    );
+}
+
+#[test]
 fn a_java_call_is_not_shadowed_by_a_field_of_its_name() {
     let repo = scanned_repo(&[
         (

@@ -1843,23 +1843,22 @@ pub fn format_edit_check(check: &EditCheck) -> String {
     out
 }
 
-/// The reason a Stop hook gives for a check: how many sites outside the diff still use the old
-/// shape of which symbols, then the first of them, proven ones first. `None` when no changed
-/// symbol has such a site.
+/// The reason a Stop hook gives for a check: how many `proven` sites outside the diff still use
+/// the old shape of which symbols, then the first of them. `None` when no change that
+/// [`blocks_a_stop`] has such a site.
 pub fn format_stop_reason(check: &EditCheck) -> Option<String> {
-    let mut rows: Vec<(u8, &EditSite, &ShapeChange)> = Vec::new();
-    for change in &check.changes {
-        rows.extend(change.proven.iter().map(|site| (0, site, change)));
-        rows.extend(change.likely.iter().map(|site| (1, site, change)));
+    let mut rows: Vec<(&EditSite, &ShapeChange)> = Vec::new();
+    for change in check.changes.iter().filter(|change| blocks_a_stop(change)) {
+        rows.extend(change.proven.iter().map(|site| (site, change)));
     }
     if rows.is_empty() {
         return None;
     }
     rows.sort_by(|a, b| {
-        (a.0, &a.1.path, a.1.line, &a.2.display).cmp(&(b.0, &b.1.path, b.1.line, &b.2.display))
+        (&a.0.path, a.0.line, &a.1.display).cmp(&(&b.0.path, b.0.line, &b.1.display))
     });
     let mut names: Vec<String> = Vec::new();
-    for (_, _, change) in &rows {
+    for (_, change) in &rows {
         let name = format!("`{}`", change.display);
         if !names.contains(&name) {
             names.push(name);
@@ -1870,7 +1869,7 @@ pub fn format_stop_reason(check: &EditCheck) -> Option<String> {
         rows.len(),
         names.join(", ")
     );
-    for (_, site, change) in rows.iter().take(STOP_SITES_LISTED) {
+    for (site, change) in rows.iter().take(STOP_SITES_LISTED) {
         out.push_str(&format!(
             "{}:{}  {}: {}\n",
             site.path, site.line, change.display, change.change
@@ -1878,6 +1877,17 @@ pub fn format_stop_reason(check: &EditCheck) -> Option<String> {
     }
     out.push_str("Edit them or say why they need no change.");
     Some(out)
+}
+
+/// A `signature changed` row is often a type change that every call still fits (a nullable
+/// `?`, a type alias, a return type), and JavaScript ignores the argument count. On clean
+/// commits of real projects both blocked stops that needed no edit, so neither blocks a stop.
+fn blocks_a_stop(change: &ShapeChange) -> bool {
+    let javascript = [".js", ".jsx", ".mjs", ".cjs"]
+        .iter()
+        .any(|extension| change.path.ends_with(extension));
+    !change.change.starts_with("signature changed")
+        && !(javascript && change.change.starts_with("parameters"))
 }
 
 fn push_edit_cuts(out: &mut String, check: &EditCheck) {

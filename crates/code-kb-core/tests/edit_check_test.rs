@@ -1399,9 +1399,31 @@ fn the_head_commit_is_none_before_the_first_commit() {
     assert_eq!(head_commit(plain.path()), None);
 }
 
+fn qualified_call_repo() -> Repo {
+    committed_repo(&[
+        ("Cargo.toml", CARGO_TOML),
+        (
+            "src/lib.rs",
+            "pub mod geometry;\npub mod first;\npub mod second;\n",
+        ),
+        (
+            "src/geometry.rs",
+            "pub fn area(w: i32, h: i32) -> i32 {\n    w * h\n}\n",
+        ),
+        (
+            "src/first.rs",
+            "use crate::geometry;\n\npub fn first() -> i32 {\n    crate::geometry::area(2, 3)\n}\n",
+        ),
+        (
+            "src/second.rs",
+            "use crate::geometry;\n\npub fn second() -> i32 {\n    crate::geometry::area(4, 5)\n}\n",
+        ),
+    ])
+}
+
 #[test]
 fn the_stop_reason_counts_the_sites_outside_the_diff_and_names_each_change() {
-    let repo = rust_function_repo();
+    let repo = qualified_call_repo();
     add_depth_parameter(&repo);
     let reason = format_stop_reason(&run_check(&repo, None)).unwrap();
     assert_eq!(
@@ -1435,6 +1457,104 @@ fn the_stop_reason_is_none_when_the_diff_reached_every_site() {
 }
 
 #[test]
+fn a_likely_site_never_blocks_a_stop() {
+    let repo = rust_function_repo();
+    add_depth_parameter(&repo);
+    let check = run_check(&repo, None);
+
+    assert!(!check.changes[0].likely.is_empty(), "{check:?}");
+    assert_eq!(format_stop_reason(&check), None);
+}
+
+#[test]
+fn a_signature_change_never_blocks_a_stop() {
+    let repo = qualified_call_repo();
+    write(
+        &repo.root,
+        "src/geometry.rs",
+        "pub fn area(w: i32, h: i32) -> i64 {\n    (w * h) as i64\n}\n",
+    );
+    let check = run_check(&repo, None);
+
+    assert!(
+        check.changes[0].change.starts_with("signature changed"),
+        "{check:?}"
+    );
+    assert!(!check.changes[0].proven.is_empty(), "{check:?}");
+    assert_eq!(format_stop_reason(&check), None);
+}
+
+#[test]
+fn a_javascript_parameter_count_change_never_blocks_a_stop() {
+    let repo = committed_repo(&[
+        (
+            "lib/geometry.js",
+            "function area(w, h) {\n  return w * h;\n}\n\nmodule.exports = { area };\n",
+        ),
+        (
+            "lib/user.js",
+            "const { area } = require('./geometry');\n\nfunction user() {\n  return area(1, 2);\n}\n\nmodule.exports = { user };\n",
+        ),
+    ]);
+    write(
+        &repo.root,
+        "lib/geometry.js",
+        "function area(w, h, depth) {\n  return w * h * depth;\n}\n\nmodule.exports = { area };\n",
+    );
+    let check = run_check(&repo, None);
+
+    assert!(
+        check.changes[0].change.starts_with("parameters"),
+        "{check:?}"
+    );
+    assert!(!check.changes[0].proven.is_empty(), "{check:?}");
+    assert_eq!(format_stop_reason(&check), None);
+}
+
+#[test]
+fn a_call_that_an_inherited_overload_takes_is_no_site_of_a_changed_override() {
+    let base = "namespace N\n{\n    public abstract class QueryExpression\n    {\n        public abstract bool IsMatch(int root, int t);\n    }\n\n    public class CompositeExpression : QueryExpression\n    {\n        public override bool IsMatch(int root, int t)\n        {\n            return root == t;\n        }\n    }\n}\n";
+    let repo = committed_repo(&[
+        ("Src/Query.cs", base),
+        (
+            "Src/Use.cs",
+            "namespace N\n{\n    public static class Use\n    {\n        public static bool Run(CompositeExpression c)\n        {\n            return c.IsMatch(1, 2);\n        }\n    }\n}\n",
+        ),
+    ]);
+    write(
+        &repo.root,
+        "Src/Query.cs",
+        "namespace N\n{\n    public abstract class QueryExpression\n    {\n        public bool IsMatch(int root, int t)\n        {\n            return IsMatch(root, t, 0);\n        }\n\n        public abstract bool IsMatch(int root, int t, int settings);\n    }\n\n    public class CompositeExpression : QueryExpression\n    {\n        public override bool IsMatch(int root, int t, int settings)\n        {\n            return root == t;\n        }\n    }\n}\n",
+    );
+    let check = run_check(&repo, None);
+
+    let listed: Vec<_> = check
+        .changes
+        .iter()
+        .flat_map(|change| change.proven.iter().chain(&change.likely))
+        .filter(|site| site.path == "Src/Use.cs")
+        .collect();
+    assert!(listed.is_empty(), "{}", format_edit_check(&check));
+}
+
+#[test]
+fn a_call_that_a_new_static_import_takes_is_no_site_of_the_removed_method() {
+    let repo = committed_repo(&[(
+        "src/p/Calc.java",
+        "package p;\n\npublic class Calc {\n    public int sum(long a, long b) {\n        return toIntExact(a) + toIntExact(b);\n    }\n\n    private static int toIntExact(long x) {\n        return (int) x;\n    }\n}\n",
+    )]);
+    write(
+        &repo.root,
+        "src/p/Calc.java",
+        "package p;\n\nimport static java.lang.Math.toIntExact;\n\npublic class Calc {\n    public int sum(long a, long b) {\n        return toIntExact(a) + toIntExact(b);\n    }\n}\n",
+    );
+    let text = text_of(&repo);
+
+    assert_has(&text, "method `Calc.toIntExact` (src/p/Calc.java): removed");
+    assert!(!text.contains("Not in your diff"), "{text}");
+}
+
+#[test]
 fn the_stop_reason_lists_at_most_fifteen_sites_in_path_order() {
     let mut files: Vec<(String, String)> = vec![
         ("Cargo.toml".to_string(), CARGO_TOML.to_string()),
@@ -1449,7 +1569,7 @@ fn the_stop_reason_lists_at_most_fifteen_sites_in_path_order() {
         files.push((
             format!("src/user{index}.rs"),
             format!(
-                "use crate::geometry::area;\n\npub fn user{index}() -> i32 {{\n    area(1, 2)\n}}\n"
+                "use crate::geometry;\n\npub fn user{index}() -> i32 {{\n    crate::geometry::area(1, 2)\n}}\n"
             ),
         ));
     }

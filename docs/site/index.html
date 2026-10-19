@@ -513,7 +513,7 @@ args = ["serve"]</code></pre>
         </div>
 
         <div class="tab-panel" id="tab-hooks" hidden>
-          <p class="panel-sub"><code>code-kb hook</code> prints the routing instructions the agent reads at session start. No Node.js or shell needed. Supports <code>SessionStart</code>, <code>SubagentStart</code>, and <code>PreInvocation</code> (Antigravity). <code>Stop</code> and <code>SubagentStop</code> read the hook JSON on stdin and run the edit check: they block the stop when a <code>proven</code> or <code>likely</code> site still uses the old shape, skip the diff they checked or blocked on last, and print nothing otherwise. The <code>SessionStart</code> hook records the session base in <code>.code-kb/sessions/</code>.</p>
+          <p class="panel-sub"><code>code-kb hook</code> prints the routing instructions the agent reads at session start. No Node.js or shell needed. Supports <code>SessionStart</code>, <code>SubagentStart</code>, and <code>PreInvocation</code> (Antigravity). <code>Stop</code> and <code>SubagentStop</code> read the hook JSON on stdin and run the edit check: they block the stop when a <code>proven</code> site still uses the old shape (never for a <code>likely</code> site, a signature change, or a JavaScript parameter change), skip the diff they checked or blocked on last, and print nothing otherwise. The <code>SessionStart</code> hook records the session base in <code>.code-kb/sessions/</code>.</p>
           <div class="code-wrapper">
             <pre><code>code-kb hook SessionStart
 code-kb hook SubagentStart

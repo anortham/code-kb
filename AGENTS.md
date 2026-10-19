@@ -289,7 +289,10 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   or Dart function is local to it, so a site outside that function is excluded:
   ``read` is local to `test_session_cookie_setting``. A Java member access, written without
   parentheses, never reaches a method, because julie writes a method reference (`parser::next`)
-  as a call: ``a member access reads a field, not the method `length` ``. A bare site that a
+  as a call: ``a member access reads a field, not the method `length` ``. A bare Java
+  call is excluded with the basis ``name` is imported from `java.lang.Math`` when its file has
+  `import static C.name`, no definition of the name is in the caller's file, and C and the
+  caller's class chain own none. A bare site that a
   nearer definition shadows cites the definition nearest above it in its scope, because julie
   does not record block scopes, or in JavaScript and TypeScript the callback, loop, or catch
   parameter that binds the name when it is nearer: `line N binds the name as a callback
@@ -390,8 +393,9 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   `<root>/.code-kb/sessions/<session_id>.json` with `{"base": "<HEAD sha>"}` when the root is a git
   repository with a commit, with or without an index; a file that has a base keeps it, and files
   older than 7 days are removed. `code-kb hook Stop` and `code-kb hook SubagentStop` run the check
-  against that base and print `{"decision":"block","reason":…}` when a `proven` or `likely` site is
-  outside the diff, never when `stop_hook_active` is true, and nothing on any
+  against that base and print `{"decision":"block","reason":…}` when a `proven` site is outside the
+  diff, never for a `likely` site, a `signature changed` row, or a JavaScript parameter change,
+  never when `stop_hook_active` is true, and nothing on any
   error or when another `julie-extract` wrote the index (the server or the CLI rebuilds it; a hook
   never does). The session file keeps the last checked and the last blocked diff hash
   (`checked_diff`, `blocked_diff`): a Stop on either runs no scan and prints nothing, and a

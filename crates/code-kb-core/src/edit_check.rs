@@ -30,7 +30,8 @@ use crate::models::{
 use crate::queries::{QueryError, escape_like, load_file_symbols};
 use crate::reference_report::arity::{self, Arity};
 use crate::reference_report::{
-    destructurings, enum_variant_names, overload_group, reference_report_for_edit, uses_of_variants,
+    destructurings, enum_variant_names, inherited_group_arity, reference_report_for_edit,
+    uses_of_variants,
 };
 use crate::sync::{self, SyncError, ensure_fresh_file};
 use crate::workspace::{Workspace, is_hard_excluded};
@@ -1379,8 +1380,7 @@ impl<'a> SiteLister<'a> {
         let report = reference_report_for_edit(self.conn, self.root, &candidate.subject)?;
         let placed = match &candidate.what {
             What::Parameters => {
-                let group = overload_group(self.conn, &candidate.subject)?;
-                let range = arity::group_arity(self.conn, self.root, &group, false)?;
+                let range = inherited_group_arity(self.conn, self.root, &candidate.subject)?;
                 let mut placed = self.calls(&report, range.as_ref());
                 self.overrides(&report, &mut placed)?;
                 placed

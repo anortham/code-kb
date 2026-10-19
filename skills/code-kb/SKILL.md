@@ -53,7 +53,7 @@ Three CLI commands have no MCP tool. `code-kb facts [category]` lists routes, SQ
 - After the sites, `find_references` lists `Overrides`, `Overrides of`, `Constructions`, `Variant uses`, `Registrations`, and `Tests that call it` (each test with a `run:` command) when they have rows. Read them before you change a method, a class, or an enum. They never change a site's label.
 - Each caller site has a label. `proven` sites have index evidence. A call shows its argument count (`; 2 args`); a `likely` or `unresolved` call whose count no definition of the target accepts is `excluded` with the range (`3 args; `render` takes 1-2`). Read the code before you rely on a `likely` or `unresolved` site. The `Text only` lines and the `Not visible to this index` line show what the index did not record.
 
-- `check_edit` compares the working tree with `base`, else the commit the session started at, else `HEAD`. Under `Not in your diff`, `proven` and `likely` sites still use the old shape: edit them, or say why they need no change. `Unresolved outside the diff` is a count; read those sites with `find_references`. The `Stop` and `SubagentStop` hooks run the same check and block the stop once for each diff.
+- `check_edit` compares the working tree with `base`, else the commit the session started at, else `HEAD`. Under `Not in your diff`, `proven` and `likely` sites still use the old shape: edit them, or say why they need no change. `Unresolved outside the diff` is a count; read those sites with `find_references`. The `Stop` and `SubagentStop` hooks run the same check and block the stop once for each diff that leaves a `proven` site outside it, except for a `signature changed` row or a JavaScript parameter change.
 
 ## Related skills
 

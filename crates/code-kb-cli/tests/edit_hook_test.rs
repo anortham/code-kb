@@ -82,11 +82,11 @@ fn rust_function_files() -> Vec<(&'static str, &'static str)> {
         ),
         (
             "src/first.rs",
-            "use crate::geometry::area;\n\npub fn first() -> i32 {\n    area(2, 3)\n}\n",
+            "use crate::geometry;\n\npub fn first() -> i32 {\n    crate::geometry::area(2, 3)\n}\n",
         ),
         (
             "src/second.rs",
-            "use crate::geometry::area;\n\npub fn second() -> i32 {\n    area(4, 5)\n}\n",
+            "use crate::geometry;\n\npub fn second() -> i32 {\n    crate::geometry::area(4, 5)\n}\n",
         ),
     ]
 }
@@ -104,7 +104,7 @@ fn add_depth_parameter(repo: &Repo) {
     write(
         &repo.root,
         "src/first.rs",
-        "use crate::geometry::area;\n\npub fn first() -> i32 {\n    area(2, 3, 1)\n}\n",
+        "use crate::geometry;\n\npub fn first() -> i32 {\n    crate::geometry::area(2, 3, 1)\n}\n",
     );
 }
 
@@ -408,7 +408,7 @@ fn stop_blocks_again_when_the_diff_changes() {
     write(
         &repo.root,
         "src/first.rs",
-        "use crate::geometry::area;\n\npub fn first() -> i32 {\n    area(2, 3, 2)\n}\n",
+        "use crate::geometry;\n\npub fn first() -> i32 {\n    crate::geometry::area(2, 3, 2)\n}\n",
     );
     assert_blocks_with(&run_hook("Stop", Some(&stdin), &repo.root), STOP_REASON);
 }
@@ -446,7 +446,7 @@ fn stop_is_silent_when_every_site_is_in_the_diff() {
     write(
         &repo.root,
         "src/second.rs",
-        "use crate::geometry::area;\n\npub fn second() -> i32 {\n    area(4, 5, 1)\n}\n",
+        "use crate::geometry;\n\npub fn second() -> i32 {\n    crate::geometry::area(4, 5, 1)\n}\n",
     );
     assert_silent(&run_hook(
         "Stop",
@@ -835,7 +835,7 @@ fn stop_lists_at_most_fifteen_sites() {
         files.push((
             format!("src/user{index}.rs"),
             format!(
-                "use crate::geometry::area;\n\npub fn user{index}() -> i32 {{\n    area(1, 2)\n}}\n"
+                "use crate::geometry;\n\npub fn user{index}() -> i32 {{\n    crate::geometry::area(1, 2)\n}}\n"
             ),
         ));
     }

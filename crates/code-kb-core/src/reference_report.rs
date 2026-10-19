@@ -314,6 +314,25 @@ fn constructor_class(conn: &Connection, target: &Symbol) -> Result<Option<Symbol
     crate::queries::get_symbol_by_id(conn, &class_id)
 }
 
+/// The range of the overloads of `target` joined with the same-named methods of its base types,
+/// in Java, C#, and Kotlin, where a call sees the overloads it inherits (C++ and TypeScript hide
+/// them, and a Python override replaces the method). The own range when the walk was cut.
+pub(crate) fn inherited_group_arity(
+    conn: &Connection,
+    root: &Path,
+    target: &Symbol,
+) -> Result<Option<arity::Arity>, QueryError> {
+    let group = overload_group(conn, target)?;
+    let Some(own) = arity::group_arity(conn, root, &group, false)? else {
+        return Ok(None);
+    };
+    if !matches!(target.language.as_str(), "java" | "csharp" | "kotlin") {
+        return Ok(Some(own));
+    }
+    let mut accounting = Accounting::new(conn, root, ACCOUNTING_TIME_LIMIT);
+    Ok(arity::widened_by_ancestors(&mut accounting, target, own.clone())?.or(Some(own)))
+}
+
 /// The selected symbol and its overloads: the symbols with its name, owner, kind, and file.
 pub(crate) fn overload_group(
     conn: &Connection,
@@ -384,6 +403,9 @@ const SHADOW_TOP_LEVEL_SQL: &str = "SELECT symbol_id, COALESCE(signature, ''), k
      WHERE name = ?1 AND path = ?2 AND parent_symbol_id IS NULL
        AND kind NOT IN ('import', 'export', 'module', 'namespace')
      ORDER BY start_line > ?3, abs(?3 - start_line)";
+
+const JAVA_STATIC_IMPORT_SQL: &str = "SELECT signature FROM symbols
+     WHERE kind = 'import' AND path = ?1 AND name = ?2 AND signature LIKE 'import static %'";
 
 const IMPORT_SOURCES_SQL: &str = "SELECT COALESCE(json_extract(metadata_json, '$.source'), '')
      FROM symbols
@@ -1974,6 +1996,9 @@ impl<'a> Accounting<'a> {
             };
             return Ok(Some(Verdict::new(SiteLabel::Excluded, basis, false)));
         }
+        if let Some(verdict) = self.java_static_import(row, spec)? {
+            return Ok(Some(verdict));
+        }
         if row.is_bare_use() && spec.group.iter().all(is_property_method) {
             return Ok(Some(self.bare_use_of_property_method(row, &spec.name)?));
         }
@@ -2019,6 +2044,60 @@ impl<'a> Accounting<'a> {
             )));
         }
         self.external_import(row, &spec.name)
+    }
+
+    /// A bare Java call whose file imports the name statically from a class that owns no
+    /// target (`import static java.lang.Math.toIntExact;`). Java takes such a call from the import
+    /// unless the caller's file or class chain defines the name. A removed target defines nothing.
+    fn java_static_import(
+        &self,
+        row: &NameRow,
+        spec: &Spec,
+    ) -> Result<Option<Verdict>, QueryError> {
+        if row.language != "java" || !row.is_call() || row.has_qualifier() {
+            return Ok(None);
+        }
+        let signatures = self.with_statement(JAVA_STATIC_IMPORT_SQL, |stmt| {
+            stmt.query_map(params![row.path, spec.name], |r| r.get::<_, String>(0))?
+                .collect::<Result<Vec<_>, _>>()
+        })?;
+        let Some(class_path) = signatures.iter().find_map(|signature| {
+            let imported = signature
+                .strip_prefix("import static ")?
+                .trim_end_matches(';');
+            Some(imported.trim().rsplit_once('.')?.0.to_string())
+        }) else {
+            return Ok(None);
+        };
+        let class_name = class_path.rsplit('.').next().unwrap_or(&class_path);
+        let mut chain = HashSet::new();
+        if let Some(caller) = row.caller_id.as_deref()
+            && let Some(class) = self.definition_by_id(caller)?.and_then(|d| d.owner_name)
+        {
+            chain = self.ancestor_names(&class)?;
+            chain.insert(class);
+        }
+        let present = spec.group.iter().filter(|member| {
+            self.absent
+                .as_ref()
+                .is_none_or(|absent| absent.symbol_id != member.symbol_id)
+        });
+        for member in present {
+            if member.path.replace('\\', "/") == row.path {
+                return Ok(None);
+            }
+            let owner = self
+                .definition_by_id(&member.symbol_id)?
+                .and_then(|d| d.owner_name);
+            if owner.is_some_and(|owner| owner == class_name || chain.contains(&owner)) {
+                return Ok(None);
+            }
+        }
+        Ok(Some(Verdict::new(
+            SiteLabel::Excluded,
+            format!("`{}` is imported from `{class_path}`", spec.name),
+            false,
+        )))
     }
 
     fn external_import(

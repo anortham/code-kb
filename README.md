@@ -475,8 +475,10 @@ Not checked: calls inside macro arguments, functions passed as values.
   `<project>/.code-kb/sessions/<session_id>.json`, also when the project has no index yet. That
   folder is inside `.code-kb/`, which git ignores.
 - `code-kb hook Stop` and `code-kb hook SubagentStop` run the check when the agent stops. The
-  Claude Code and Codex plugins wire them. If a `proven` or `likely` site is outside the diff,
-  the hook blocks the stop and lists up to 15 sites. It stays silent when nothing changed shape,
+  Claude Code and Codex plugins wire them. If a `proven` site is outside the diff, the hook
+  blocks the stop and lists up to 15 sites. A `likely` site, a `signature changed` row, and a
+  JavaScript parameter change never block; `check_edit` still lists them. It stays silent when
+  nothing changed shape,
   for the diff it checked last or blocked on last, when `stop_hook_active` is true,
   outside a git repository, when another `julie-extract` wrote the index, and on any error.
 - A check reads at most 200 files and 10 symbols and starts no new step after 20 s. The answer states each cut.
