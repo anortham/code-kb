@@ -19,8 +19,10 @@ use crate::queries::{
 };
 use crate::text_scan::scan_word;
 
+mod arity;
 mod js_bindings;
 mod js_modules;
+mod receiver_types;
 mod sections;
 
 const RESOLVER_ROW_CAP: usize = 5_000;
@@ -93,9 +95,17 @@ fn report_within(
     time_limit: Duration,
 ) -> Result<ReferenceReport, QueryError> {
     let class = constructor_class(conn, target)?;
+    let group = overload_group(conn, target)?;
+    let mut accounting = Accounting::new(conn, root, time_limit);
+    let target_arity = match arity::group_arity(conn, root, &group, false)? {
+        Some(own) => arity::widened_by_ancestors(&mut accounting, target, own)?,
+        None => None,
+    };
+    accounting.restart_clock(time_limit);
     let mut specs = vec![Spec {
         name: target.name.clone(),
-        group: overload_group(conn, target)?,
+        arity: target_arity,
+        group,
         scope: if class.is_some() {
             RowScope::Calls
         } else {
@@ -109,10 +119,10 @@ fn report_within(
             group: vec![class.clone()],
             scope: RowScope::Calls,
             builds_class: true,
+            arity: arity::group_arity(conn, root, &specs[0].group, true)?,
         });
     }
 
-    let mut accounting = Accounting::new(conn, root, time_limit);
     let mut site_rows = Vec::new();
     let mut cannot_see = Vec::new();
     for spec in &specs {
@@ -164,7 +174,7 @@ fn report_within(
         }
     }
 
-    let reach = sections::reach_sections(accounting, target, &sites)?;
+    let reach = sections::reach_sections(&mut accounting, target, &sites)?;
     cannot_see.splice(0..0, cannot_see_for_language(&target.language));
     cannot_see.extend(reach.notes);
     Ok(ReferenceReport {
@@ -272,6 +282,19 @@ const DEFINITION_BY_ID_SQL: &str =
      FROM symbols s LEFT JOIN symbols par ON par.symbol_id = s.parent_symbol_id
      WHERE s.symbol_id = ?1";
 
+/// Whether the relationship row `r` links its call to a member of a class that encloses the
+/// caller, the caller included; `t` is the linked symbol.
+const LINKS_ENCLOSING_CLASS_SQL: &str = "EXISTS (
+         WITH RECURSIVE enclosing(symbol_id, depth) AS (
+             SELECT r.from_symbol_id, 0
+             UNION ALL
+             SELECT s.parent_symbol_id, enclosing.depth + 1
+             FROM symbols s JOIN enclosing ON s.symbol_id = enclosing.symbol_id
+             WHERE s.parent_symbol_id IS NOT NULL AND enclosing.depth < 32
+         )
+         SELECT 1 FROM enclosing WHERE symbol_id = t.parent_symbol_id
+     )";
+
 const SHADOW_IN_CHAIN_SQL: &str = "WITH RECURSIVE chain(symbol_id, depth) AS (
          SELECT ?1, 0
          UNION ALL
@@ -377,6 +400,8 @@ struct Spec {
     group: Vec<Symbol>,
     scope: RowScope,
     builds_class: bool,
+    /// The arguments a call to the group may pass; `None` when the index cannot tell.
+    arity: Option<arity::Arity>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -420,6 +445,11 @@ struct NameRow {
     /// The names written before the used name (`["z", "core"]` for `z.core.f()`), `None` when
     /// the row does not say.
     chain: Option<Vec<String>>,
+    /// The arguments the call passes, `None` when julie recorded no count or the call spreads an
+    /// argument, so the count is unknown.
+    arg_count: Option<u32>,
+    /// julie linked the call to a member of a class that encloses the caller, the caller included.
+    links_enclosing_class: bool,
 }
 
 impl NameRow {
@@ -435,6 +465,10 @@ impl NameRow {
             .map(String::as_str)
             .or(self.receiver.as_deref())
             .filter(|q| is_plain_identifier(q))
+    }
+
+    fn is_super_call(&self) -> bool {
+        self.receiver.as_deref().is_some_and(is_super_receiver)
     }
 
     fn is_call(&self) -> bool {
@@ -487,6 +521,12 @@ impl NameRow {
     }
 }
 
+/// Whether `receiver` makes a call reach an ancestor of the caller's class, never the class
+/// itself: `super`, `base`, and the Kotlin form that names the ancestor (`super<Greeter>`).
+fn is_super_receiver(receiver: &str) -> bool {
+    matches!(receiver, "super" | "base") || receiver.starts_with("super<")
+}
+
 /// A JavaScript method assigned to a property (`req.accepts = function`): no scope binds its name,
 /// so a bare use of that name reads an import or a global.
 fn is_property_method(symbol: &Symbol) -> bool {
@@ -497,7 +537,9 @@ fn is_property_method(symbol: &Symbol) -> bool {
 
 /// The type a C# extension method extends: `IEnumerable` for `Foo(this IEnumerable<T> source)`.
 fn extended_type(signature: &str) -> Option<String> {
-    let (_, rest) = signature.split_once("(this ")?;
+    let rest = signature
+        .match_indices('(')
+        .find_map(|(open, _)| arity::after_csharp_this(&signature[open + 1..]))?;
     let written = rest.split_whitespace().next()?;
     let unqualified = written.split('<').next()?.rsplit('.').next()?;
     Some(unqualified.trim_end_matches('?').to_string()).filter(|t| is_plain_identifier(t))
@@ -722,6 +764,7 @@ struct SiteRow {
     basis: String,
     claimed: bool,
     end_line: Option<usize>,
+    arg_count: Option<u32>,
 }
 
 struct Claim {
@@ -772,6 +815,7 @@ struct Accounting<'a> {
     /// Definitions an import reaches, by caller file, receiver, and name.
     import_matches: HashMap<(String, String, String), Vec<ImportMatch>>,
     js: js_modules::JsCaches,
+    receivers: receiver_types::ReceiverCaches,
 }
 
 impl<'a> Accounting<'a> {
@@ -788,6 +832,7 @@ impl<'a> Accounting<'a> {
             external_sources: HashMap::new(),
             import_matches: HashMap::new(),
             js: js_modules::JsCaches::default(),
+            receivers: receiver_types::ReceiverCaches::default(),
         }
     }
 
@@ -1235,6 +1280,13 @@ impl<'a> Accounting<'a> {
             let Some(mut verdict) = verdicts.remove(&row.key) else {
                 continue;
             };
+            if matches!(verdict.label, SiteLabel::Likely | SiteLabel::Unresolved)
+                && let Some(arity) = &spec.arity
+                && let Some(count) = row.arg_count
+                && let Some(basis) = arity.exclusion_basis(&spec.name, &row.language, count)
+            {
+                verdict = Verdict::new(SiteLabel::Excluded, basis, false);
+            }
             if verdict.label == SiteLabel::Proven
                 && NAME_RESOLVED_BASES.contains(&verdict.basis.as_str())
                 && let Some(line) = self.js_binding_line(row, &spec.name)?
@@ -1254,6 +1306,7 @@ impl<'a> Accounting<'a> {
                 {
                     out.push(SiteRow {
                         end_line: None,
+                        arg_count: None,
                         label: SiteLabel::Proven,
                         basis: "qualified path".to_string(),
                         claimed: true,
@@ -1277,6 +1330,7 @@ impl<'a> Accounting<'a> {
             group: vec![owner.clone()],
             scope: RowScope::Inheritance,
             builds_class: false,
+            arity: None,
         };
         let mut rows = Vec::new();
         self.account_spec(&spec, &mut rows, &mut Vec::new())?;
@@ -1349,6 +1403,8 @@ impl<'a> Accounting<'a> {
                 paired: false,
                 hidden_receiver: false,
                 chain: Some(chain),
+                arg_count: None,
+                links_enclosing_class: false,
             });
         }
 
@@ -1356,7 +1412,7 @@ impl<'a> Accounting<'a> {
             let mut stmt = self.conn.prepare(&format!(
                 "SELECT r.rowid, r.from_symbol_id, COALESCE(s.name, ''), r.kind, r.path,
                     COALESCE(f.language, s.language, ''), r.start_line, r.start_column,
-                    r.end_line, r.to_symbol_id
+                    r.end_line, r.to_symbol_id, {LINKS_ENCLOSING_CLASS_SQL}
              FROM relationships r
              JOIN symbols t ON t.symbol_id = r.to_symbol_id
              LEFT JOIN symbols s ON s.symbol_id = r.from_symbol_id
@@ -1387,6 +1443,8 @@ impl<'a> Accounting<'a> {
                     paired: false,
                     hidden_receiver: false,
                     chain: None,
+                    arg_count: None,
+                    links_enclosing_class: row.get(10)?,
                 });
             }
         }
@@ -1398,7 +1456,11 @@ impl<'a> Accounting<'a> {
                         CASE WHEN json_valid(i.metadata_json)
                              THEN json_extract(i.metadata_json, '$.receiver') END,
                         CASE WHEN json_valid(i.metadata_json)
-                             THEN json_extract(i.metadata_json, '$.receiver_qualifier') END
+                             THEN json_extract(i.metadata_json, '$.receiver_qualifier') END,
+                        CASE WHEN json_valid(i.metadata_json)
+                             THEN json_extract(i.metadata_json, '$.arg_count') END,
+                        CASE WHEN json_valid(i.metadata_json)
+                             THEN json_extract(i.metadata_json, '$.arg_spread') END IS NOT NULL
                  FROM identifiers i
                  LEFT JOIN symbols s ON s.symbol_id = i.containing_symbol_id
                  WHERE i.name = ?1 AND COALESCE(s.kind, '') != 'import'
@@ -1410,6 +1472,8 @@ impl<'a> Accounting<'a> {
                 let kind: String = row.get(3)?;
                 let receiver: Option<String> = row.get(8)?;
                 let qualifier: Option<String> = row.get(9)?;
+                let arg_count: Option<u32> = row.get(10)?;
+                let arg_spread: bool = row.get(11)?;
                 let written = receiver.as_deref().filter(|r| !r.is_empty());
                 let chain = match kind.as_str() {
                     "type_usage" => None,
@@ -1443,6 +1507,8 @@ impl<'a> Accounting<'a> {
                     paired: false,
                     hidden_receiver: false,
                     chain,
+                    arg_count: arg_count.filter(|_| !arg_spread),
+                    links_enclosing_class: false,
                 });
             }
         }
@@ -1456,7 +1522,9 @@ impl<'a> Accounting<'a> {
             if in_spans(&import_spans, &row.path, row.line) {
                 return false;
             }
-            !(row.source == Source::Identifier && in_spans(&definition_spans, &row.path, row.line))
+            !(row.source == Source::Identifier
+                && !row.is_super_call()
+                && in_spans(&definition_spans, &row.path, row.line))
         });
         Ok(rows)
     }
@@ -1791,6 +1859,9 @@ impl<'a> Accounting<'a> {
         group_definitions: &[&Definition],
         rivals: &[&Definition],
     ) -> Result<Verdict, QueryError> {
+        if let Some(verdict) = self.outside_ancestors(row, group)? {
+            return Ok(verdict);
+        }
         if let Some(receiver) = row.qualifier().filter(|_| row.namespace.len() <= 1)
             && let Some(type_name) = self.receiver_type(row, receiver)?
             && !self.owner_related(&type_name, group)?
@@ -1827,6 +1898,44 @@ impl<'a> Accounting<'a> {
                 false,
             ))
         }
+    }
+
+    /// A `super` or `base` call whose julie link into the caller's own class was dropped reaches
+    /// an ancestor of that class. A target none of whose owners is such an ancestor is out of
+    /// reach.
+    fn outside_ancestors(
+        &self,
+        row: &NameRow,
+        group: &[Symbol],
+    ) -> Result<Option<Verdict>, QueryError> {
+        let (Some(caller), Some(receiver)) = (row.caller_id.as_deref(), row.receiver.as_deref())
+        else {
+            return Ok(None);
+        };
+        if !row.links_enclosing_class {
+            return Ok(None);
+        }
+        let Some(class) = self
+            .definition_by_id(caller)?
+            .and_then(|caller| caller.owner_name)
+        else {
+            return Ok(None);
+        };
+        let ancestors = self.ancestor_names(&class)?;
+        for member in group {
+            match self
+                .definition_by_id(&member.symbol_id)?
+                .and_then(|member| member.owner_name)
+            {
+                Some(owner) if !ancestors.contains(&owner) => {}
+                _ => return Ok(None),
+            }
+        }
+        Ok(Some(Verdict::new(
+            SiteLabel::Excluded,
+            format!("receiver `{receiver}` reaches only the ancestors of `{class}`"),
+            false,
+        )))
     }
 
     /// The receiver of a JavaScript call that names the object the target is assigned on
@@ -2238,10 +2347,15 @@ impl<'a> Accounting<'a> {
             })?
             .collect::<Result<Vec<_>, _>>()
         })?;
-        Ok(match types.as_slice() {
-            [only] => Some(only.clone()),
-            _ => None,
-        })
+        let [only] = types.as_slice() else {
+            return Ok(None);
+        };
+        if self.holds_any_value(row, only)?
+            || self.is_type_parameter(caller, &row.language, only)?
+        {
+            return Ok(None);
+        }
+        Ok(Some(only.clone()))
     }
 
     /// True when `type_name` is an owner of the target group or shares an inheritance chain
@@ -2440,6 +2554,7 @@ fn site_row(row: &NameRow, verdict: Verdict, spec: &Spec) -> SiteRow {
         basis: verdict.basis,
         claimed: verdict.claimed,
         end_line,
+        arg_count: row.arg_count,
     }
 }
 
@@ -2472,6 +2587,7 @@ fn merge_site_rows(rows: Vec<SiteRow>) -> Vec<LabeledSite> {
             label: row.label,
             basis: row.basis,
             end_line: row.end_line,
+            arg_count: row.arg_count,
         })
         .collect()
 }
@@ -2567,10 +2683,47 @@ fn pair_identifiers(rows: &mut [NameRow]) {
             used[slot] = true;
             let identifier = identifiers[slot];
             let (site_line, site_column) = (rows[identifier].line, rows[identifier].column);
+            let alone_on_line = identifiers
+                .iter()
+                .filter(|&&other| rows[other].line == site_line)
+                .count()
+                == 1;
+            if alone_on_line && rows[call].links_enclosing_class && rows[identifier].is_super_call()
+            {
+                rows[call].consumed = true;
+                rows[identifier].links_enclosing_class = true;
+                continue;
+            }
+            rows[call].arg_count = rows[identifier].arg_count.filter(|_| alone_on_line);
             rows[identifier].consumed = true;
             rows[call].paired = true;
             rows[call].site_line = site_line;
             rows[call].site_column = site_column;
+        }
+    }
+    attach_counts_by_line(rows);
+}
+
+/// Gives each pending or relationship call that has no count (a `new Foo(a)` construction) the
+/// count of the one call identifier on its line.
+fn attach_counts_by_line(rows: &mut [NameRow]) {
+    let mut identifiers: HashMap<(String, usize), Vec<Option<u32>>> = HashMap::new();
+    for row in rows.iter() {
+        if row.source == Source::Identifier && row.kind == "call" {
+            identifiers
+                .entry((row.path.clone(), row.line))
+                .or_default()
+                .push(row.arg_count);
+        }
+    }
+    for row in rows.iter_mut() {
+        if row.source != Source::Identifier
+            && row.is_call()
+            && row.arg_count.is_none()
+            && let Some(counts) = identifiers.get(&(row.path.clone(), row.line))
+            && let [count] = counts.as_slice()
+        {
+            row.arg_count = *count;
         }
     }
 }

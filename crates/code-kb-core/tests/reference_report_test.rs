@@ -100,6 +100,17 @@ fn assert_site(report: &ReferenceReport, path: &str, line: usize, label: SiteLab
     );
 }
 
+fn assert_not_excluded(report: &ReferenceReport, path: &str, line: usize) {
+    let site = site_at(report, path, line);
+    assert_ne!(
+        site.label,
+        SiteLabel::Excluded,
+        "{path}:{line} is excluded: {}\n{}",
+        site.basis,
+        dump(report)
+    );
+}
+
 const PY: &[(&str, &str)] = &[
     ("pkg/__init__.py", ""),
     (
@@ -1403,7 +1414,7 @@ fn a_go_field_of_a_func_type_stays_a_rival_of_a_call() {
     let repo = scanned_repo(&[
         (
             "a/fns.go",
-            "package a\n\nfunc Run() {}\n\nfunc Handle() {}\n\nfunc Size() int {\n\treturn 1\n}\n",
+            "package a\n\nfunc Run(n int) {}\n\nfunc Handle(n int) {}\n\nfunc Size() int {\n\treturn 1\n}\n",
         ),
         (
             "b/cmd.go",
@@ -4326,7 +4337,7 @@ fn the_override_sections_print_after_the_sites_and_before_the_text_only_lines() 
     let base = format_reference_report(&report(&repo, "Base.render", None), 20);
     assert!(
         base.contains(
-            "- `go` [pkg/use.py:5] (kind: calls; receiver type)\n\
+            "- `go` [pkg/use.py:5] (kind: calls; receiver type; 0 args)\n\
              Overrides (2): calls through `Base.render` can reach these\n\
              - `Mid.render` (pkg/base.py:7)\n\
              - `Leaf.render` (pkg/leaf.py:5)\n\
@@ -9319,4 +9330,722 @@ fn java_gradle_tests_list_the_wrapper_when_the_project_has_one() {
             dump(&target)
         );
     }
+}
+
+const JAVA_SUPER: &[(&str, &str)] = &[
+    (
+        "Base.java",
+        "public class Base {\n    public void f(int a) {}\n    public void g(int a) {}\n}\n",
+    ),
+    (
+        "Sub.java",
+        "public class Sub extends Base {\n    public void f(int a, int b) {}\n    @Override\n    public void g(int a) {\n        super.g(a);\n    }\n    public void run() {\n        super.f(1);\n        f(1, 2);\n    }\n}\n",
+    ),
+];
+
+const JAVA_SUPER_ONE_FILE: &[(&str, &str)] = &[(
+    "All.java",
+    "class Base {\n    public void g(int a) {}\n}\n\nclass Sub extends Base {\n    @Override\n    public void g(int a) {\n        super.g(a);\n    }\n}\n",
+)];
+
+const KOTLIN_SUPER: &[(&str, &str)] = &[
+    (
+        "Base.kt",
+        "open class Base {\n    open fun f(a: Int) {}\n    open fun g(a: Int) {}\n}\n",
+    ),
+    (
+        "Sub.kt",
+        "class Sub : Base() {\n    fun f(a: Int, b: Int) {}\n    override fun g(a: Int) {\n        super.g(a)\n    }\n    fun run() {\n        super.f(1)\n        f(1, 2)\n    }\n}\n",
+    ),
+];
+
+#[test]
+fn a_java_super_call_reaches_the_base_method_and_not_the_override_that_makes_it() {
+    let repo = scanned_repo(JAVA_SUPER);
+    let from_run = line_of(&repo, "Sub.java", "super.f(1)");
+    let from_override = line_of(&repo, "Sub.java", "super.g(a)");
+
+    let base_f = report(&repo, "Base.f", None);
+    assert_site(
+        &base_f,
+        "Sub.java",
+        from_run,
+        SiteLabel::Proven,
+        "class chain",
+    );
+    let base_g = report(&repo, "Base.g", None);
+    assert_site(
+        &base_g,
+        "Sub.java",
+        from_override,
+        SiteLabel::Proven,
+        "class chain",
+    );
+
+    let sub_g = report(&repo, "Sub.g", None);
+    assert_site(
+        &sub_g,
+        "Sub.java",
+        from_override,
+        SiteLabel::Excluded,
+        "resolves to `Base.g` (Base.java:3)",
+    );
+}
+
+#[test]
+fn a_java_super_call_in_the_file_of_its_base_class_reaches_the_base_method() {
+    let repo = scanned_repo(JAVA_SUPER_ONE_FILE);
+    let line = line_of(&repo, "All.java", "super.g(a)");
+
+    let base = report(&repo, "Base.g", None);
+    assert_site(&base, "All.java", line, SiteLabel::Proven, "class chain");
+    let sub = report(&repo, "Sub.g", None);
+    assert_site(
+        &sub,
+        "All.java",
+        line,
+        SiteLabel::Excluded,
+        "resolves to `Base.g` (All.java:2)",
+    );
+}
+
+#[test]
+fn a_kotlin_super_call_reaches_the_base_method_and_not_the_override_that_makes_it() {
+    let repo = scanned_repo(KOTLIN_SUPER);
+    let from_run = line_of(&repo, "Sub.kt", "super.f(1)");
+    let from_override = line_of(&repo, "Sub.kt", "super.g(a)");
+
+    let base_f = report(&repo, "Base.f", None);
+    assert_site(
+        &base_f,
+        "Sub.kt",
+        from_run,
+        SiteLabel::Proven,
+        "class chain",
+    );
+    let base_g = report(&repo, "Base.g", None);
+    assert_site(
+        &base_g,
+        "Sub.kt",
+        from_override,
+        SiteLabel::Proven,
+        "class chain",
+    );
+
+    let sub_g = report(&repo, "Sub.g", None);
+    assert_site(
+        &sub_g,
+        "Sub.kt",
+        from_override,
+        SiteLabel::Excluded,
+        "resolves to `Base.g` (Base.kt:3)",
+    );
+}
+
+#[test]
+fn a_super_call_reaches_neither_its_own_class_nor_a_class_that_is_no_ancestor() {
+    let repo = scanned_repo(&[
+        (
+            "Other.java",
+            "public class Other {\n    public String name() { return \"o\"; }\n}\n",
+        ),
+        (
+            "Sub.java",
+            "public class Sub extends Thread {\n    public String name() {\n        return super.name();\n    }\n}\n",
+        ),
+    ]);
+    let line = line_of(&repo, "Sub.java", "super.name()");
+    let basis = "receiver `super` reaches only the ancestors of `Sub`";
+
+    let other = report(&repo, "Other.name", None);
+    assert_site(&other, "Sub.java", line, SiteLabel::Excluded, basis);
+    let own = report(&repo, "Sub.name", None);
+    assert_site(&own, "Sub.java", line, SiteLabel::Excluded, basis);
+}
+
+#[test]
+fn a_typescript_receiver_typed_any_unknown_or_object_never_excludes_a_site() {
+    let repo = scanned_repo(&[
+        (
+            "src/k.ts",
+            "export class K {\n  m(a: number): number { return a; }\n}\n\nexport class Dog {\n  m(a: number): number { return a + 1; }\n}\n",
+        ),
+        (
+            "src/use.ts",
+            "import { K, Dog } from \"./k\";\n\nexport function viaAny(k: any): number {\n  return k.m(1);\n}\n\nexport function viaUnknown(k: unknown): number {\n  if (k instanceof K) {\n    return k.m(2);\n  }\n  return 0;\n}\n\nexport function viaObject(k: object): number {\n  if (k instanceof K) {\n    return k.m(3);\n  }\n  return 0;\n}\n\nexport function viaDog(d: Dog): number {\n  return d.m(4);\n}\n",
+        ),
+    ]);
+    let report = report(&repo, "K.m", None);
+
+    for needle in ["k.m(1)", "k.m(2)", "k.m(3)"] {
+        let line = line_of(&repo, "src/use.ts", needle);
+        assert_site(
+            &report,
+            "src/use.ts",
+            line,
+            SiteLabel::Unresolved,
+            "2 definitions",
+        );
+    }
+    let line = line_of(&repo, "src/use.ts", "d.m(4)");
+    assert_site(
+        &report,
+        "src/use.ts",
+        line,
+        SiteLabel::Excluded,
+        "resolves to `Dog.m` (src/k.ts:6)",
+    );
+}
+
+#[test]
+fn a_python_receiver_typed_any_or_object_never_excludes_a_site() {
+    let repo = scanned_repo(&[(
+        "animals.py",
+        "from typing import Any\n\n\nclass Cat:\n    def purr(self, a):\n        return a\n\n\nclass Dog:\n    def purr(self, a):\n        return a + 1\n\n\ndef via_any(x: Any):\n    return x.purr(1)\n\n\ndef via_object(x: object):\n    return x.purr(2)\n\n\ndef via_dog(d: Dog):\n    return d.purr(3)\n",
+    )]);
+    let report = report(&repo, "Cat.purr", None);
+
+    for needle in ["x.purr(1)", "x.purr(2)"] {
+        let line = line_of(&repo, "animals.py", needle);
+        assert_site(
+            &report,
+            "animals.py",
+            line,
+            SiteLabel::Unresolved,
+            "2 definitions",
+        );
+    }
+    let line = line_of(&repo, "animals.py", "d.purr(3)");
+    assert_site(
+        &report,
+        "animals.py",
+        line,
+        SiteLabel::Excluded,
+        "resolves to `Dog.purr` (animals.py:10)",
+    );
+}
+
+#[test]
+fn a_csharp_receiver_typed_dynamic_never_excludes_a_site() {
+    let repo = scanned_repo(&[(
+        "Program.cs",
+        "public class Cat { public int Purr(int a) { return a; } }\npublic class Dog { public int Purr(int a) { return a + 1; } }\n\npublic static class Use\n{\n    public static int ViaDynamic(dynamic x) { return x.Purr(1); }\n    public static int ViaDog(Dog d) { return d.Purr(3); }\n}\n",
+    )]);
+    let report = report(&repo, "Cat.Purr", None);
+
+    let line = line_of(&repo, "Program.cs", "x.Purr(1)");
+    assert_site(
+        &report,
+        "Program.cs",
+        line,
+        SiteLabel::Unresolved,
+        "2 definitions",
+    );
+    let line = line_of(&repo, "Program.cs", "d.Purr(3)");
+    assert_site(
+        &report,
+        "Program.cs",
+        line,
+        SiteLabel::Excluded,
+        "resolves to `Dog.Purr` (Program.cs:2)",
+    );
+}
+
+#[test]
+fn a_python_receiver_typed_any_through_a_module_or_an_alias_never_excludes_a_site() {
+    let repo = scanned_repo(&[(
+        "q.py",
+        r#"import typing
+import typing as t
+import typing_extensions as te
+from typing import Any as AnyT
+from typing import List as L
+
+
+class Cat:
+    def purr(self, a):
+        return a
+
+
+class Dog:
+    def purr(self, a):
+        return a + 1
+
+
+def via_module(x: typing.Any):
+    return x.purr(1)
+
+
+def via_module_alias(x: t.Any):
+    return x.purr(2)
+
+
+def via_extensions(x: te.Any):
+    return x.purr(3)
+
+
+def via_name_alias(x: AnyT):
+    return x.purr(4)
+
+
+def via_string(x: "typing.Any"):
+    return x.purr(5)
+
+
+def via_default(x: typing.Any = None):
+    return x.purr(6)
+
+
+def via_list(x: L):
+    return x.purr(7)
+"#,
+    )]);
+    let report = report(&repo, "Cat.purr", None);
+
+    for needle in [
+        "x.purr(1)",
+        "x.purr(2)",
+        "x.purr(3)",
+        "x.purr(4)",
+        "x.purr(5)",
+        "x.purr(6)",
+    ] {
+        let line = line_of(&repo, "q.py", needle);
+        assert_site(
+            &report,
+            "q.py",
+            line,
+            SiteLabel::Unresolved,
+            "2 definitions",
+        );
+    }
+    let line = line_of(&repo, "q.py", "x.purr(7)");
+    assert_site(
+        &report,
+        "q.py",
+        line,
+        SiteLabel::Excluded,
+        "receiver `x` has type `L`",
+    );
+}
+
+#[test]
+fn a_python_receiver_typed_by_a_type_variable_never_excludes_a_site() {
+    let repo = scanned_repo(&[(
+        "q.py",
+        r#"from typing import TypeVar
+
+
+class Cat:
+    def purr(self, a):
+        return a
+
+
+class Dog:
+    def purr(self, a):
+        return a + 1
+
+
+T = TypeVar("T", bound=Cat)
+
+
+def via_variable(x: T):
+    return x.purr(1)
+
+
+def via_dog(d: Dog):
+    return d.purr(2)
+"#,
+    )]);
+    let report = report(&repo, "Cat.purr", None);
+
+    assert_not_excluded(&report, "q.py", line_of(&repo, "q.py", "x.purr(1)"));
+    assert_site(
+        &report,
+        "q.py",
+        line_of(&repo, "q.py", "d.purr(2)"),
+        SiteLabel::Excluded,
+        "resolves to `Dog.purr` (q.py:10)",
+    );
+}
+
+#[test]
+fn a_java_receiver_typed_by_a_type_parameter_never_excludes_a_site() {
+    let repo = scanned_repo(&[(
+        "G.java",
+        r#"interface Greeter { void greet(int a); }
+class Cat implements Greeter { public void greet(int a) {} }
+class Other { public void greet(int a) {} }
+class Box<T extends Greeter> {
+    T held;
+    void viaClass(T x) { x.greet(1); }
+    <U extends Greeter> void viaBoth(U y, T z) { y.greet(2); z.greet(3); }
+    void viaField() { held.greet(4); }
+}
+class Use {
+    static <K, V extends Greeter> void viaSecond(K k, V v) { v.greet(5); }
+    static void viaOther(Other o) { o.greet(6); }
+}
+"#,
+    )]);
+    for target in ["Cat.greet", "Greeter.greet"] {
+        let report = report(&repo, target, None);
+        for needle in [
+            "x.greet(1)",
+            "y.greet(2)",
+            "z.greet(3)",
+            "held.greet(4)",
+            "v.greet(5)",
+        ] {
+            assert_not_excluded(&report, "G.java", line_of(&repo, "G.java", needle));
+        }
+    }
+    let report = report(&repo, "Cat.greet", None);
+    assert_site(
+        &report,
+        "G.java",
+        line_of(&repo, "G.java", "o.greet(6)"),
+        SiteLabel::Excluded,
+        "resolves to `Other.greet` (G.java:3)",
+    );
+}
+
+#[test]
+fn a_kotlin_receiver_typed_by_a_type_parameter_never_excludes_a_site() {
+    let repo = scanned_repo(&[(
+        "g.kt",
+        r#"package app
+
+interface Greeter {
+    fun greet(a: Int): Int
+}
+
+class Cat : Greeter {
+    override fun greet(a: Int): Int = a
+}
+
+class Other {
+    fun greet(a: Int): Int = a + 1
+}
+
+fun <T : Greeter> viaT(x: T): Int {
+    return x.greet(1)
+}
+
+class Box<T : Greeter> {
+    fun viaClass(x: T): Int {
+        return x.greet(2)
+    }
+}
+
+fun viaOther(o: Other): Int {
+    return o.greet(3)
+}
+"#,
+    )]);
+    let report = report(&repo, "Cat.greet", None);
+    for needle in ["x.greet(1)", "x.greet(2)"] {
+        assert_not_excluded(&report, "g.kt", line_of(&repo, "g.kt", needle));
+    }
+    assert_site(
+        &report,
+        "g.kt",
+        line_of(&repo, "g.kt", "o.greet(3)"),
+        SiteLabel::Excluded,
+        "resolves to `Other.greet` (g.kt:12)",
+    );
+}
+
+#[test]
+fn a_rust_receiver_typed_by_a_type_parameter_never_excludes_a_site() {
+    let repo = scanned_repo(&[(
+        "g.rs",
+        r#"pub trait Greeter {
+    fn greet(&self, a: i32) -> i32;
+}
+
+pub struct Cat;
+
+impl Greeter for Cat {
+    fn greet(&self, a: i32) -> i32 {
+        a
+    }
+}
+
+pub struct Other;
+
+impl Other {
+    pub fn greet(&self, a: i32) -> i32 {
+        a + 1
+    }
+}
+
+pub fn via_t<T: Greeter>(x: T) -> i32 {
+    x.greet(1)
+}
+
+pub fn via_other(o: Other) -> i32 {
+    o.greet(2)
+}
+"#,
+    )]);
+    let report = report(&repo, "Cat.greet", None);
+    assert_not_excluded(&report, "g.rs", line_of(&repo, "g.rs", "x.greet(1)"));
+    assert_site(
+        &report,
+        "g.rs",
+        line_of(&repo, "g.rs", "o.greet(2)"),
+        SiteLabel::Excluded,
+        "resolves to `Other.greet` (g.rs:16)",
+    );
+}
+
+#[test]
+fn a_csharp_receiver_typed_by_a_type_parameter_never_excludes_a_site() {
+    let repo = scanned_repo(&[(
+        "G.cs",
+        r#"public interface IGreeter { int Greet(int a); }
+public class Cat : IGreeter { public int Greet(int a) { return a; } }
+public class Other { public int Greet(int a) { return a + 1; } }
+public class Box<T> where T : IGreeter
+{
+    public T Held;
+    public int ViaClass(T x) { return x.Greet(1); }
+    public int ViaBoth<U>(U y, T z) where U : IGreeter { return y.Greet(2) + z.Greet(3); }
+    public int ViaField() { return Held.Greet(4); }
+}
+public static class Use
+{
+    public static int ViaSecond<K, V>(K k, V v) where V : IGreeter { return v.Greet(5); }
+    public static int ViaOther(Other o) { return o.Greet(6); }
+}
+"#,
+    )]);
+    for target in ["Cat.Greet", "IGreeter.Greet"] {
+        let report = report(&repo, target, None);
+        for needle in [
+            "x.Greet(1)",
+            "y.Greet(2)",
+            "z.Greet(3)",
+            "Held.Greet(4)",
+            "v.Greet(5)",
+        ] {
+            assert_not_excluded(&report, "G.cs", line_of(&repo, "G.cs", needle));
+        }
+    }
+    let report = report(&repo, "Cat.Greet", None);
+    assert_site(
+        &report,
+        "G.cs",
+        line_of(&repo, "G.cs", "o.Greet(6)"),
+        SiteLabel::Excluded,
+        "resolves to `Other.Greet` (G.cs:3)",
+    );
+}
+
+#[test]
+fn a_typescript_receiver_typed_by_a_type_parameter_never_excludes_a_site() {
+    let repo = scanned_repo(&[(
+        "g.ts",
+        r#"export class K { m(a: number): number { return a; } }
+export class Other { m(a: number): number { return a + 1; } }
+export class Box<T extends { m(a: number): number }> {
+  viaClass(x: T): number { return x.m(1); }
+  viaMethod<U extends K>(y: U): number { return y.m(2); }
+}
+export interface Holder<W extends K> { run(w: W): number; }
+export class Impl<W extends K> implements Holder<W> {
+  run(w: W): number { return w.m(3); }
+}
+export const arrow = <V extends K>(v: V): number => v.m(4);
+export function viaFn<F extends K>(f: F, g: F[]): number { return f.m(5); }
+export function viaOther(o: Other): number { return o.m(6); }
+"#,
+    )]);
+    let report = report(&repo, "K.m", None);
+    for needle in ["x.m(1)", "y.m(2)", "w.m(3)", "v.m(4)", "f.m(5)"] {
+        assert_not_excluded(&report, "g.ts", line_of(&repo, "g.ts", needle));
+    }
+    assert_site(
+        &report,
+        "g.ts",
+        line_of(&repo, "g.ts", "o.m(6)"),
+        SiteLabel::Excluded,
+        "resolves to `Other.m` (g.ts:2)",
+    );
+}
+
+#[test]
+fn a_typescript_receiver_typed_by_a_project_alias_of_any_unknown_or_object_never_excludes_a_site() {
+    let repo = scanned_repo(&[(
+        "g.ts",
+        r#"export class K { m(a: number): number { return a; } }
+export class Other { m(a: number): number { return a + 1; } }
+type Anything = any;
+type Same = object;
+type Wrap = Same;
+type Named = Other;
+export function viaAlias(k: Anything): number { return k.m(1); }
+export function viaChain(k: Wrap): number { return k.m(2); }
+export function viaLater(k: Later): number { return k.m(3); }
+export function viaNamed(k: Named): number { return k.m(4); }
+type Later = unknown;
+"#,
+    )]);
+    let report = report(&repo, "K.m", None);
+    for needle in ["k.m(1)", "k.m(2)", "k.m(3)"] {
+        assert_not_excluded(&report, "g.ts", line_of(&repo, "g.ts", needle));
+    }
+    assert_site(
+        &report,
+        "g.ts",
+        line_of(&repo, "g.ts", "k.m(4)"),
+        SiteLabel::Excluded,
+        "receiver `k` has type `Named`",
+    );
+}
+
+#[test]
+fn a_typescript_super_call_reaches_the_base_method_and_not_the_override_that_makes_it() {
+    let repo = scanned_repo(&[
+        (
+            "base.ts",
+            "export class Base {\n  f(a: number): void {}\n  h(a: number): void {}\n}\n",
+        ),
+        (
+            "sub.ts",
+            "import { Base } from \"./base\";\n\nexport class Sub extends Base {\n  h(a: number): void {\n    super.h(a);\n  }\n  run(): void {\n    super.f(1);\n  }\n}\n",
+        ),
+    ]);
+    let from_override = line_of(&repo, "sub.ts", "super.h(a)");
+    let from_run = line_of(&repo, "sub.ts", "super.f(1)");
+
+    let base_f = report(&repo, "Base.f", None);
+    assert_site(
+        &base_f,
+        "sub.ts",
+        from_run,
+        SiteLabel::Proven,
+        "class chain",
+    );
+    let base_h = report(&repo, "Base.h", None);
+    assert_site(
+        &base_h,
+        "sub.ts",
+        from_override,
+        SiteLabel::Proven,
+        "class chain",
+    );
+    let sub_h = report(&repo, "Sub.h", None);
+    assert_site(
+        &sub_h,
+        "sub.ts",
+        from_override,
+        SiteLabel::Excluded,
+        "resolves to `Base.h` (base.ts:3)",
+    );
+}
+
+#[test]
+fn a_python_super_call_reaches_the_base_method_and_not_the_override_that_makes_it() {
+    let repo = scanned_repo(&[
+        (
+            "base.py",
+            "class Base:\n    def f(self, a):\n        return a\n\n    def h(self, a):\n        return a\n",
+        ),
+        (
+            "sub.py",
+            "from base import Base\n\n\nclass Sub(Base):\n    def h(self, a):\n        return super().h(a)\n\n    def run(self):\n        return super().f(1)\n",
+        ),
+    ]);
+    let from_override = line_of(&repo, "sub.py", "super().h(a)");
+    let from_run = line_of(&repo, "sub.py", "super().f(1)");
+
+    let base_f = report(&repo, "Base.f", None);
+    assert_site(
+        &base_f,
+        "sub.py",
+        from_run,
+        SiteLabel::Proven,
+        "class chain",
+    );
+    let base_h = report(&repo, "Base.h", None);
+    assert_site(
+        &base_h,
+        "sub.py",
+        from_override,
+        SiteLabel::Proven,
+        "class chain",
+    );
+    let sub_h = report(&repo, "Sub.h", None);
+    assert_site(
+        &sub_h,
+        "sub.py",
+        from_override,
+        SiteLabel::Excluded,
+        "resolves to `Base.h` (base.py:5)",
+    );
+}
+
+#[test]
+fn a_csharp_base_call_reaches_the_base_method_and_not_the_override_that_makes_it() {
+    let repo = scanned_repo(&[(
+        "All.cs",
+        "public class Base\n{\n    public virtual void F(int a) {}\n}\n\npublic class Sub : Base\n{\n    public override void F(int a)\n    {\n        base.F(a);\n    }\n}\n",
+    )]);
+    let line = line_of(&repo, "All.cs", "base.F(a)");
+
+    let base = report(&repo, "Base.F", None);
+    assert_site(&base, "All.cs", line, SiteLabel::Proven, "same file");
+    let sub = report(&repo, "Sub.F", None);
+    assert_site(
+        &sub,
+        "All.cs",
+        line,
+        SiteLabel::Excluded,
+        "resolves to `Base.F` (All.cs:3)",
+    );
+}
+
+#[test]
+fn a_kotlin_super_call_that_names_an_interface_does_not_resolve_to_its_own_class() {
+    let repo = scanned_repo(&[(
+        "all.kt",
+        "interface Greeter {\n    fun greet(a: Int): String = \"G\"\n}\n\nclass Impl : Greeter {\n    override fun greet(a: Int): String = super<Greeter>.greet(a) + \"!\"\n}\n",
+    )]);
+    let line = line_of(&repo, "all.kt", "super<Greeter>.greet(a)");
+
+    let interface = report(&repo, "Greeter.greet", None);
+    assert_ne!(
+        site_at(&interface, "all.kt", line).label,
+        SiteLabel::Excluded,
+        "{}",
+        dump(&interface)
+    );
+    let own = report(&repo, "Impl.greet", None);
+    assert_site(
+        &own,
+        "all.kt",
+        line,
+        SiteLabel::Excluded,
+        "receiver `super<Greeter>` reaches only the ancestors of `Impl`",
+    );
+}
+
+#[test]
+fn a_kotlin_expression_bodied_override_that_calls_super_reaches_the_base_method() {
+    let repo = scanned_repo(&[
+        (
+            "Base.kt",
+            "open class Base {\n    open fun g(a: Int): Int = a\n}\n",
+        ),
+        (
+            "Sub.kt",
+            "class Sub : Base() {\n    override fun g(a: Int): Int = super.g(a) + 1\n}\n",
+        ),
+    ]);
+    let line = line_of(&repo, "Sub.kt", "super.g(a)");
+
+    let base = report(&repo, "Base.g", None);
+    assert_site(&base, "Sub.kt", line, SiteLabel::Proven, "class chain");
 }

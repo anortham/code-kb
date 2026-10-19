@@ -125,7 +125,7 @@ pub(super) struct ReachSections {
 /// The sections of the callers report for `target`. The type walk reuses the prepared statements
 /// of `accounting`, which labeled the sites.
 pub(super) fn reach_sections<'a>(
-    accounting: Accounting<'a>,
+    accounting: &mut Accounting<'a>,
     target: &Symbol,
     sites: &[LabeledSite],
 ) -> Result<ReachSections, QueryError> {
@@ -134,31 +134,32 @@ pub(super) fn reach_sections<'a>(
     if let Some(owner) = dispatch_owner(conn, target)? {
         let mut edges = TypeEdges::new(accounting);
         let mut impls = RustImpls::new(root);
-        let (subtypes, truncated) = walk(&mut edges, &owner, Step::Subtypes)?;
-        sections.overrides = methods_named(conn, &subtypes, &target.name, |_, row, language| {
-            if language != "rust" {
-                return Ok(true);
-            }
-            match impls.context(&row.path, row.line) {
-                ImplContext::Trait(written) => {
-                    written.names(&mut edges.rust, &owner, &row.path, row.line)
+        let subtypes = walk(&mut edges, &owner, Step::Subtypes)?;
+        sections.overrides =
+            methods_named(conn, &subtypes.types, &target.name, |_, row, language| {
+                if language != "rust" {
+                    return Ok(true);
                 }
-                _ => Ok(false),
-            }
-        })?;
+                match impls.context(&row.path, row.line) {
+                    ImplContext::Trait(written) => {
+                        written.names(&mut edges.rust, &owner, &row.path, row.line)
+                    }
+                    _ => Ok(false),
+                }
+            })?;
         sections.overrides.sort_by(|a, b| {
             a.path
                 .cmp(&b.path)
                 .then_with(|| a.line.cmp(&b.line))
                 .then_with(|| a.symbol_id.cmp(&b.symbol_id))
         });
-        if truncated {
+        if subtypes.type_limit_cut {
             sections.notes.push(format!(
                 "overrides are listed for the first {MAX_TYPES} subtypes of `{}` only",
                 owner.name
             ));
         }
-        let (ancestors, _) = walk(&mut edges, &owner, Step::Supertypes)?;
+        let ancestors = walk(&mut edges, &owner, Step::Supertypes)?.types;
         let own_impl =
             (target.language == "rust").then(|| impls.context(&target.path, target.start_line));
         sections.overridden =
@@ -249,14 +250,35 @@ fn subtype_sql() -> String {
     )
 }
 
+/// SQL for the name that the import row `import` binds: the name an aliased TypeScript, Python, or
+/// Kotlin import takes from its module (`Base` of `import { Base as B }`), or the last segment of
+/// the target of a C# alias (`Base1` of `using B = N.Base1`). `NULL` for a namespace or default
+/// import and for any other row.
+fn imported_name_sql(import: &str) -> String {
+    let target = format!(
+        "trim(replace(substr({import}.signature, instr({import}.signature, '=') + 1), ';', ''))"
+    );
+    let last_segment =
+        format!("replace({target}, rtrim({target}, replace({target}, '.', '')), '')");
+    format!(
+        "CASE WHEN json_valid({import}.metadata_json)
+                   AND json_extract({import}.metadata_json, '$.importedName') NOT IN ('*', 'default')
+              THEN json_extract({import}.metadata_json, '$.importedName')
+              WHEN {import}.signature LIKE 'using % = %' THEN {last_segment}
+         END"
+    )
+}
+
 /// Types that `?1` extends or implements, through resolved rows and through pending rows that
-/// name them. After the path, the columns are those of `subtype_sql`.
+/// name them, also by the name that an import alias gives them. After the path, the columns are
+/// those of `subtype_sql`.
 fn supertype_sql() -> String {
     let base_kind = base_kind_sql("b");
     let rival_kind = base_kind_sql("rival");
     let candidate_kind = base_kind_sql("c");
     let rival = path_proximity("rival.path", "pe.path");
     let candidate = path_proximity("c.path", "pe.path");
+    let imported = imported_name_sql("alias");
     format!(
         "SELECT b.symbol_id, b.name, b.path, 0 AS pending, 0 AS nearer, '[]' AS written,
                 b.path AS written_in, '' AS receiver, 0 AS written_line
@@ -272,6 +294,20 @@ fn supertype_sql() -> String {
                 pe.target_namespace_json, pe.path, COALESCE(pe.target_receiver, ''), pe.start_line
          FROM pending_relationships pe
          JOIN symbols c ON c.name = pe.target_terminal_name AND {candidate_kind}
+         WHERE pe.from_symbol_id = ?1 AND pe.kind IN ('extends', 'implements')
+         UNION
+         SELECT c.symbol_id, c.name, c.path, 1,
+                EXISTS (SELECT 1 FROM symbols rival
+                        WHERE rival.name = c.name AND {rival_kind}
+                          AND {rival} > {candidate}),
+                pe.target_namespace_json, pe.path, COALESCE(pe.target_receiver, ''), pe.start_line
+         FROM pending_relationships pe
+         JOIN symbols alias ON alias.kind = 'import' AND alias.path = pe.path
+                           AND (alias.name = pe.target_terminal_name
+                                OR (json_valid(alias.metadata_json)
+                                    AND json_extract(alias.metadata_json, '$.alias')
+                                        = pe.target_terminal_name))
+         JOIN symbols c ON c.name = {imported} AND {candidate_kind}
          WHERE pe.from_symbol_id = ?1 AND pe.kind IN ('extends', 'implements')
          ORDER BY 3, 1, 4"
     )
@@ -302,18 +338,18 @@ impl Step {
 
 /// Decides which pending `extends` and `implements` rows tie a type to the base they name. The
 /// callers report's own evidence (imports, language, scope) judges each row once per base.
-struct TypeEdges<'a> {
+struct TypeEdges<'a, 'b> {
     conn: &'a Connection,
     root: &'a Path,
-    accounting: Accounting<'a>,
+    accounting: &'b mut Accounting<'a>,
     labels: HashMap<String, HashMap<String, (SiteLabel, String)>>,
     jvm_owners: HashMap<String, Option<String>>,
     star_imports: HashMap<String, Vec<String>>,
     rust: RustPaths<'a>,
 }
 
-impl<'a> TypeEdges<'a> {
-    fn new(mut accounting: Accounting<'a>) -> Self {
+impl<'a, 'b> TypeEdges<'a, 'b> {
+    fn new(accounting: &'b mut Accounting<'a>) -> Self {
         accounting.restart_clock(EDGE_TIME_LIMIT);
         TypeEdges {
             conn: accounting.conn,
@@ -418,10 +454,10 @@ impl<'a> TypeEdges<'a> {
         let Some(owner) = self.jvm_owner(base)? else {
             return Ok(None);
         };
-        let package = jvm_package(&self.accounting, &subtype.path)?;
+        let package = jvm_package(self.accounting, &subtype.path)?;
         if let Some(qualifier) = written.qualifier() {
             let head = qualifier.split('.').next().unwrap_or_default();
-            let candidates = match jvm_imported(&self.accounting, &subtype.path, head)? {
+            let candidates = match jvm_imported(self.accounting, &subtype.path, head)? {
                 Some(imported) => vec![format!("{imported}{}", &qualifier[head.len()..])],
                 None => std::iter::once(qualifier.clone())
                     .chain(
@@ -435,7 +471,7 @@ impl<'a> TypeEdges<'a> {
             };
             return Ok(Some(candidates.contains(&owner)));
         }
-        if let Some(imported) = jvm_imported(&self.accounting, &subtype.path, &base.name)? {
+        if let Some(imported) = jvm_imported(self.accounting, &subtype.path, &base.name)? {
             return Ok(Some(imported == format!("{owner}.{}", base.name)));
         }
         let stars = self.star_imports(&subtype.path);
@@ -458,7 +494,7 @@ impl<'a> TypeEdges<'a> {
         if let Some(owner) = self.jvm_owners.get(&base.id) {
             return Ok(owner.clone());
         }
-        let owner = jvm_container(&self.accounting, base)?;
+        let owner = jvm_container(self.accounting, base)?;
         self.jvm_owners.insert(base.id.clone(), owner.clone());
         Ok(owner)
     }
@@ -494,14 +530,14 @@ impl<'a> TypeEdges<'a> {
             return Ok(None);
         };
         let head = qualifier.split('.').next().unwrap_or_default();
-        let bound = import_rows(&self.accounting, &subtype.path, head)?;
+        let bound = import_rows(self.accounting, &subtype.path, head)?;
         if bound
             .iter()
             .any(|(signature, _)| !is_plain_import(signature))
         {
             return Ok(None);
         }
-        let container = python_container(&self.accounting, base)?;
+        let container = python_container(self.accounting, base)?;
         Ok(Some(
             format!(".{container}").ends_with(&format!(".{qualifier}")),
         ))
@@ -516,7 +552,7 @@ impl<'a> TypeEdges<'a> {
         base: &TypeRef,
         subtype: &TypeRef,
     ) -> Result<Option<bool>, QueryError> {
-        let named = import_rows(&self.accounting, &subtype.path, &base.name)?;
+        let named = import_rows(self.accounting, &subtype.path, &base.name)?;
         if !named.is_empty() {
             for (_, source) in &named {
                 if !self.accounting.source_is_external(source)? {
@@ -525,7 +561,7 @@ impl<'a> TypeEdges<'a> {
             }
             return Ok(Some(false));
         }
-        let stars = import_rows(&self.accounting, &subtype.path, "*")?;
+        let stars = import_rows(self.accounting, &subtype.path, "*")?;
         if stars.is_empty()
             || stars
                 .iter()
@@ -533,7 +569,7 @@ impl<'a> TypeEdges<'a> {
         {
             return Ok(None);
         }
-        let container = format!(".{}.", python_container(&self.accounting, base)?);
+        let container = format!(".{}.", python_container(self.accounting, base)?);
         Ok(Some(stars.iter().any(|(_, source)| {
             container.contains(&format!(".{source}."))
         })))
@@ -743,12 +779,13 @@ fn quoted_end(bytes: &[u8], open: usize) -> usize {
     at.min(bytes.len())
 }
 
-/// The dotted name an `import a.b.C;` line writes.
+/// The dotted name an `import a.b.C;` line writes; an aliased import (`import a.b.C as D`) binds
+/// another name and writes none.
 fn qualified_import(signature: &str) -> Option<&str> {
     let text = signature.trim().strip_prefix("import")?.trim_start();
     let text = text.strip_prefix("static ").unwrap_or(text);
     let text = text.trim().trim_end_matches(';').trim();
-    text.contains('.').then_some(text)
+    (text.contains('.') && !text.contains(" as ")).then_some(text)
 }
 
 /// The path a pending `extends` or `implements` row writes before the type name (the modules and
@@ -793,13 +830,16 @@ struct Reached {
     written: WrittenPath,
 }
 
+/// The types a walk reached, and whether a limit cut it before it reached the rest.
+struct Walked {
+    types: Vec<TypeRef>,
+    type_limit_cut: bool,
+    depth_limit_cut: bool,
+}
+
 /// The types reached from `start` by `step`, nearest first, to depth `MAX_DEPTH` and at most
-/// `MAX_TYPES` types; the flag says the type limit cut the walk.
-fn walk(
-    edges: &mut TypeEdges,
-    start: &TypeRef,
-    step: Step,
-) -> Result<(Vec<TypeRef>, bool), QueryError> {
+/// `MAX_TYPES` types.
+fn walk(edges: &mut TypeEdges, start: &TypeRef, step: Step) -> Result<Walked, QueryError> {
     let sql = step.sql();
     let mut statement = edges.conn.prepare(&sql)?;
     let mut found: Vec<TypeRef> = Vec::new();
@@ -809,7 +849,8 @@ fn walk(
         name: start.name.clone(),
         path: start.path.clone(),
     }];
-    for _ in 0..MAX_DEPTH {
+    let mut depth_limit_cut = false;
+    for level in 1..=MAX_DEPTH {
         let mut next = Vec::new();
         for node in &frontier {
             let args = [&node.id, &node.name, &node.path];
@@ -853,7 +894,11 @@ fn walk(
                     }
                 }
                 if found.len() == MAX_TYPES {
-                    return Ok((found, true));
+                    return Ok(Walked {
+                        types: found,
+                        type_limit_cut: true,
+                        depth_limit_cut,
+                    });
                 }
                 seen.push(candidate.id.clone());
                 next.push(TypeRef {
@@ -867,9 +912,40 @@ fn walk(
         if next.is_empty() {
             break;
         }
+        depth_limit_cut = level == MAX_DEPTH;
         frontier = next;
     }
-    Ok((found, false))
+    Ok(Walked {
+        types: found,
+        type_limit_cut: false,
+        depth_limit_cut,
+    })
+}
+
+/// The callable members named like `target` in every type that the owner of `target` extends or
+/// implements. `None` when a limit cut the walk or the time ran out, so a base may be missing.
+pub(super) fn inherited_methods(
+    accounting: &mut Accounting,
+    target: &Symbol,
+) -> Result<Option<Vec<Symbol>>, QueryError> {
+    let conn = accounting.conn;
+    let Some(owner) = dispatch_owner(conn, target)? else {
+        return Ok(Some(Vec::new()));
+    };
+    let mut edges = TypeEdges::new(accounting);
+    let walked = walk(&mut edges, &owner, Step::Supertypes)?;
+    if walked.type_limit_cut || walked.depth_limit_cut || edges.out_of_time() {
+        return Ok(None);
+    }
+    let rows = methods_named(conn, &walked.types, &target.name, |_, _, _| Ok(true))?;
+    let mut methods = Vec::with_capacity(rows.len());
+    for row in rows {
+        match get_symbol_by_id(conn, &row.symbol_id)? {
+            Some(method) => methods.push(method),
+            None => return Ok(None),
+        }
+    }
+    Ok(Some(methods))
 }
 
 /// The callable members of `types` named `name` that `keep` accepts, given the type, the member,

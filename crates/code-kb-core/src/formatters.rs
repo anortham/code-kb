@@ -973,11 +973,12 @@ fn site_groups(sites: &[LabeledSite], limit: usize) -> String {
             let site = &labeled.site;
             let line = site.start_line.map(|l| format!(":{l}")).unwrap_or_default();
             out.push_str(&format!(
-                "- {} [{}{line}] (kind: {}; {})\n",
+                "- {} [{}{line}] (kind: {}; {}{})\n",
                 caller_text(site),
                 site.path,
                 site.kind,
-                labeled.basis
+                labeled.basis,
+                arg_count_text(labeled)
             ));
         }
         listed += shown;
@@ -986,6 +987,22 @@ fn site_groups(sites: &[LabeledSite], limit: usize) -> String {
         }
     }
     out
+}
+
+/// `; 2 args` after the basis, left out when the basis already starts with the count.
+fn arg_count_text(labeled: &LabeledSite) -> String {
+    match labeled.arg_count {
+        Some(count) => {
+            let noun = if count == 1 { "arg" } else { "args" };
+            let text = format!("{count} {noun}");
+            if labeled.basis.starts_with(&text) {
+                String::new()
+            } else {
+                format!("; {text}")
+            }
+        }
+        None => String::new(),
+    }
 }
 
 fn fold_line(label: SiteLabel, hidden: &[&LabeledSite]) -> String {
@@ -3553,6 +3570,7 @@ mod tests {
             label,
             basis: basis.into(),
             end_line: None,
+            arg_count: None,
         }
     }
 

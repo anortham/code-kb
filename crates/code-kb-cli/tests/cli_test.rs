@@ -334,7 +334,7 @@ fn cli_refs_text_lists_up_to_the_limit_and_folds_the_rest_with_complete_counts()
          Text: `helper` is on 6 lines: 3 sites, 1 definition, 1 import, 1 text only.\n\
          \n\
          Proven (3):\n\
-         - `a` [app.py:5] (kind: calls; import)\n\
+         - `a` [app.py:5] (kind: calls; import; 0 args)\n\
          … 2 more proven sites in 1 file: app.py (2)\n\
          Text only (1): docs, comments, strings, or code the index did not record\n\
          \x20 notes.md: 1\n\

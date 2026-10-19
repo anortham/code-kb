@@ -118,6 +118,9 @@ pub struct LabeledSite {
     pub basis: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub end_line: Option<usize>,
+    /// The number of arguments the call passes, when julie recorded it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arg_count: Option<u32>,
 }
 
 /// Lines that hold the target's name as a whole word but have no site, definition, or import.

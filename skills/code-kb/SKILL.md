@@ -49,7 +49,7 @@ Three CLI commands have no MCP tool. `code-kb facts [category]` lists routes, SQ
 - Lookup hides test code. Pass `is_test=true` (CLI `--include-tests`) to show it.
 - Callee lists leave out standard library and runtime calls. Pass `include_external=true` (CLI `--include-external`) to show them.
 - After the sites, `find_references` lists `Overrides`, `Overrides of`, `Constructions`, `Variant uses`, `Registrations`, and `Tests that call it` (each test with a `run:` command) when they have rows. Read them before you change a method, a class, or an enum. They never change a site's label.
-- Each caller site has a label. `proven` sites have index evidence. Read the code before you rely on a `likely` or `unresolved` site. The `Text only` lines and the `Not visible to this index` line show what the index did not record.
+- Each caller site has a label. `proven` sites have index evidence. A call shows its argument count (`; 2 args`); a `likely` or `unresolved` call whose count no definition of the target accepts is `excluded` with the range (`3 args; `render` takes 1-2`). Read the code before you rely on a `likely` or `unresolved` site. The `Text only` lines and the `Not visible to this index` line show what the index did not record.
 
 ## Related skills
 

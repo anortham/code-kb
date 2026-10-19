@@ -255,9 +255,29 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   because julie does not record callback parameters. A bare name never reaches a JavaScript
   method assigned to a property (`req.accepts = function`). A call that julie links to its own
   caller is not proof, because julie links a call inside a method to that method by name alone. A
-  subclass write to an inherited attribute (`self.debug = …`) is a site, not a definition, and
-  does not hide the base class's definition in a class chain. A C# extension method counts the
-  type of its `this` parameter as an owner, so a receiver of that type does not exclude a call.
+  call through `super`, `base`, or Kotlin `super<X>` reaches an ancestor of the caller's class,
+  never that class. Java and Kotlin link `super.f()` in an override to the override; when the
+  call's identifier has such a receiver, the report drops a link into the caller's class or an
+  enclosing class and judges the call by its receiver, so the nearest ancestor that defines the
+  name proves it (`class chain`). A target whose owners are no ancestor of the caller's class is
+  excluded: ``receiver `super` reaches only the ancestors of `Sub` ``. A subclass write to an
+  inherited attribute (`self.debug = …`) is a site, not a definition, and does not hide the base
+  class's definition in a class chain. A C# extension method counts the type of its `this`
+  parameter as an owner, so a receiver of that type does not exclude a call. A receiver declared
+  with a type that can hold a value of any type never excludes a site (the basis ``receiver `k`
+  has type `any` `` is not given): TypeScript `any`, `unknown`, and `object` (a check narrows the
+  variable before the call), Python `Any` and `object`, and C# `dynamic`. A Python `Any` counts
+  when written through its module (`typing.Any`, `typing_extensions.Any`, `t.Any` after `import
+  typing as t`) or imported under another name (`from typing import Any as AnyT`); a project
+  TypeScript alias of `any`, `unknown`, or `object` (`type Anything = any`, followed through four
+  aliases) counts as that type. A C# `object`, a Java `Object`, and a Kotlin `Any` keep excluding.
+  A receiver declared with a type parameter never excludes a site either, since the parameter
+  stands for any type that fits its bound: a type parameter of the caller, of a function that
+  encloses it, or of a class or interface that encloses it (Java `<T extends Greeter>`, C#
+  `ViaT<T>(T x) where T : IGreeter`, TypeScript `<T extends …>` on a function, method, class, or
+  interface, Kotlin and Rust `<T>`), and a Python `TypeVar`. The lists are read from the
+  signatures, from julie's `typeParameters` of a TypeScript function, and, for a TypeScript class
+  or interface, from the first 600 bytes of its source.
   julie names a test call after its label (`test("strictObject", …)`); such a label is not a
   definition. A receiver that names an object (`z.coerce.boolean()`) ties the call to a member of
   that object only when the qualifier's import (`z`) reaches the object's file. julie records no
@@ -306,6 +326,15 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   indexed rows and opens source only for the files it needs. Every rule of each section, its
   known limits, and the run-command forms are in `docs/reach-sections.md`; change that file
   with the code.
+  Argument counts: julie 3.8.0 writes `arg_count` on call identifiers (and `arg_spread` for a
+  spread or splat). A site shows `; N args` after its basis, and `--json` adds `arg_count`.
+  `reference_report/arity.rs` excludes a `likely` or `unresolved` Python, Java, C#, Go, Rust,
+  Kotlin, or TypeScript call in the target's language (never JavaScript, never a spread) when its
+  count fits no definition of the target: ``3 args; `render` takes 1-2``. A `proven` site never
+  changes. The range comes from the parameter rows checked against the signature, counts a
+  method's receiver where a call can pass it, and joins the ranges of the same-named methods of
+  every base type, so a call through a base reaches an override. Every rule and every shape with
+  no range are in `docs/argument-counts.md`; change that file with the code.
 - Related tests (`get_symbol_context`): callers from relationships, pending calls, and references
   that are tests, test classes, or functions and methods in test files that are members of a test
   class or have a name that reads like a test (`names_a_test`), so a module-level app factory such
@@ -353,7 +382,7 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   content-aware workspace scan that only re-extracts changed files.
 
 ### 7. Pinned Extractor & Bundled Distribution
-- `code-kb` pins the exact extractor version in `scripts/julie-pins.json` (currently `3.7.2`).
+- `code-kb` pins the exact extractor version in `scripts/julie-pins.json` (currently `3.8.0`).
 - Build guard: `crates/code-kb-cli/build.rs` verifies that `julie-extract` is restored and matches the pinned version. A missing or mismatched extractor fails the build immediately (bypassable for offline packaging via `CODE_KB_ALLOW_MISSING_JULIE_EXTRACT=1`).
 - Single-download distribution: Release archives ship `code-kb` and matching `julie-extract` pre-packaged side-by-side. Users download one archive and receive both binaries ready to execute.
 - Runtime discovery: `code-kb` checks `JULIE_EXTRACT_BIN`, next to its own executable (`current_exe().parent()`), `.tools/julie-extract` in that directory or any directory above it, and `PATH`. The current directory is never searched, so another repository's vendored extractor is never run. The first candidate whose version matches the pin wins; otherwise the first candidate found is used with a warning.
