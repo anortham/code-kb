@@ -149,9 +149,9 @@ Each task in this slice measures. No task changes a rule.
 
 **Approach:** The session's first git output or its `cwd` and start time give the start commit. A case is not rebuilt when its repository or commit is gone, or an edit does not apply. The script does not guess.
 
-- [ ] `score sessions` prints, per group: cases, cases rebuilt, cases not rebuilt by cause, cases caught, and cases missed with the cause list of 1.2.
-- [ ] No session content is written inside the repository; the security check in the Verification Strategy passes.
-- [ ] Unit tests cover the edit replay of one Claude and one Codex fixture log (made-up content). Worker commits.
+- [x] `score sessions` prints, per group: cases, cases rebuilt, cases not rebuilt by cause, cases caught, and cases missed with the cause list of 1.2.
+- [x] No session content is written inside the repository; the security check in the Verification Strategy passes.
+- [x] Unit tests cover the edit replay of one Claude and one Codex fixture log (made-up content). Worker commits.
 
 ### Task 1.4: Baseline report
 

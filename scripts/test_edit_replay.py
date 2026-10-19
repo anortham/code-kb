@@ -589,6 +589,11 @@ class SessionReplayTest(unittest.TestCase):
         overlay = edit_replay.replay_edits(self.repo, self.commit, session["edits"], [root], root)
         self.assertEqual(overlay, {"geo.py": "def area(w, h, d):\n    return w * h\n"})
 
+    def test_a_failing_line_that_makes_the_tool_call_takes_the_output_of_that_call(self):
+        session = edit_replay.parse_claude_log(claude_log(str(self.repo), self.fail), 4)
+        self.assertIn("TypeError", session["fail_text"])
+        self.assertEqual((len(session["edits"]), session["commands"]), (1, []))
+
     def test_a_codex_log_replays_its_patches_on_the_recorded_commit(self):
         root = str(self.repo)
         session = edit_replay.parse_codex_log(codex_log(root, self.commit, self.fail), 3)
@@ -616,6 +621,37 @@ class SessionReplayTest(unittest.TestCase):
         self.assertEqual(edit_replay.session_blocker({"commands": ["git stash"]}), "git state changed")
         self.assertEqual(edit_replay.session_blocker({"commands": ["sed -i 's/a/b/' src/x.rs"]}), "shell edit")
         self.assertIsNone(edit_replay.session_blocker({"commands": ["git commit -m x", "cargo test"]}))
+
+    def test_only_a_write_to_a_code_file_of_the_tree_or_a_change_of_its_git_state_blocks(self):
+        quiet = ["cat > /tmp/x.rs <<'EOF'", "cargo test 2>&1 > out.txt", "git -C /gone/checkout reset --hard",
+                 "git merge-base HEAD main", "git stash list", "python3 - <<'EOF'\nopen(p, 'w').write(s) # notes.md\nEOF",
+                 "sed -n 1,9p src/x.rs > $TMPDIR/y.rs", "cargo fmt"]
+        for command in quiet:
+            self.assertIsNone(edit_replay.session_blocker({"commands": [command], "cwd": "/r"}, "/r"), command)
+        blocking = {"cat > src/x.rs <<'EOF'": "shell edit", "echo x >> /r/src/y.py": "shell edit",
+                    "python3 - <<'EOF'\nPath('src/a.ts').write_text(s)\nEOF": "shell edit",
+                    "git -C /r checkout main": "git state changed", "git merge topic": "git state changed"}
+        for command, cause in blocking.items():
+            self.assertEqual(edit_replay.session_blocker({"commands": [command], "cwd": "/r"}, "/r"), cause, command)
+
+    def test_a_session_is_rooted_in_the_checkout_that_holds_most_of_its_edits(self):
+        root = str(self.repo)
+        session = {"cwd": "/elsewhere", "edits": [{"path": f"{root}/.worktrees/topic/src/a.rs"},
+                                                  {"path": f"{root}/.worktrees/topic/b.rs"}, {"path": f"{root}/geo.py"}]}
+        self.assertEqual(edit_replay.edit_repository(session), (f"{root}/.worktrees/topic", root))
+        self.assertEqual(edit_replay.edit_repository({"cwd": root, "edits": [{"path": "geo.py"}]}), (root, root))
+        self.assertEqual(edit_replay.edit_repository({"cwd": "/", "edits": [{"path": "/no/such/x.rs"}]}), (None, None))
+
+    def test_a_heredoc_write_becomes_an_edit_unless_the_shell_would_rewrite_its_body(self):
+        command = "cd /r && cat > src/a.rs <<'EOF'\nfn a(x: u8) {}\nEOF\ncat >> src/b.rs << X\nfn b() {}\nX\ncargo check"
+        rest, edits = edit_replay.heredoc_writes(command)
+        self.assertEqual(rest, "cd /r && :\n:\ncargo check")
+        self.assertEqual(edits, [{"op": "write", "path": "src/a.rs", "content": "fn a(x: u8) {}\n"},
+                                 {"op": "append", "path": "src/b.rs", "content": "fn b() {}\n"}])
+        self.assertEqual(edit_replay.apply_edit("fn c() {}\n", edits[1]), "fn c() {}\nfn b() {}\n")
+        expanded = "cat > src/a.ts <<EOF\nconst s = `${x}`;\nEOF"
+        self.assertEqual(edit_replay.heredoc_writes(expanded), (expanded, []))
+        self.assertEqual(edit_replay.session_blocker({"commands": [expanded], "cwd": "/r"}, "/r"), "shell edit")
 
     def test_hunks_apply_by_content_when_the_stated_line_is_off(self):
         text = "a\nb\nc\nd\n"

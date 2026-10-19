@@ -22,6 +22,7 @@ import hashlib
 import itertools
 import json
 import math
+import os
 import posixpath
 import re
 import subprocess
@@ -1126,11 +1127,14 @@ CANDIDATE_MARK = 0.70
 LINE_SLACK = 2
 CANDIDATE_COMMITS = 30
 WORKTREE_LAYOUT = re.compile(r"^(?P<main>.+?)/(?:\.claude/worktrees|\.worktrees|worktrees)/(?P<name>[^/]+)")
-GIT_STATE = re.compile(r"\bgit\s+(?:-C\s+\S+\s+)?(?:checkout|switch|reset|stash|rebase|merge|pull|restore|cherry-pick|"
-                       r"revert|am)\b")
-SHELL_EDIT = re.compile(r"\bsed\s+(?:-\S+\s+)*-i|\bsed\s+-i|\bperl\s+-\w*i|\bcat\s*>|\btee\s|write_text\(|"
-                        r"open\([^)]*['\"][wa]['\"]|\bcargo\s+fmt\b|\bprettier\b.*--write|\bblack\b|\bruff\s+format|"
-                        r"\bdotnet\s+format|\bgofmt\s+-w|>\s*[\w./-]+\.(?:rs|py|ts|tsx|js|mjs|cjs|cs|go|java|kt|rb|swift)\b")
+GIT_STATE = re.compile(r"\bgit\s+(?:-C\s+(?P<dir>\S+)\s+)?(?:checkout(?!\s+-b\b)|switch(?!\s+-c\b)|reset|"
+                       r"stash(?!\s+(?:list|show)\b)|rebase|merge(?!-)|pull|restore(?!\s+--staged\b)|cherry-pick|revert|am)\b")
+HEREDOC_HEAD = re.compile(r"\bcat\s*(?:(?P<op>>>?)\s*(?P<target>[^\s;|&()<>]+)\s*<<(?P<tabs>-?)\s*(?P<q>['\"]?)(?P<mark>\w+)(?P=q)"
+                          r"|<<(?P<tabs2>-?)\s*(?P<q2>['\"]?)(?P<mark2>\w+)(?P=q2)\s*(?P<op2>>>?)\s*(?P<target2>[^\s;|&()<>]+))")
+IN_PLACE = re.compile(r"\bsed\s+(?:-\S+\s+)*-i|\bperl\s+-\w*i|write_text\(|open\([^)]*['\"][wa]['\"]")
+REDIRECT = re.compile(r"(?:\btee\s+(?:-a\s+)?|(?<![0-9&<>=-])>>?\s*)(?P<target>[^\s;|&()<>]+)")
+CODE_FILE = re.compile(r"[\w./~-]*\.(?:rs|py|pyi|ts|tsx|js|jsx|mjs|cjs|cs|razor|go|java|kt|kts|rb|swift|c|cc|cpp|h|hpp|"
+                       r"scala|dart|vb|fs)\b")
 LOCATION_PATTERNS = [re.compile(p, re.M) for p in (
     r"-->\s+(?P<path>[^\s:]+):(?P<line>\d+):\d+",
     r"(?P<path>[^\s(]+\.(?:tsx?|cs|razor))\((?P<line>\d+),\d+\): error",
@@ -1214,10 +1218,12 @@ def claude_edit(name, payload):
 
 
 def parse_claude_log(lines, fail_line):
-    """Start facts, edits that succeeded before `fail_line`, shell commands, and the text at `fail_line`."""
+    """Start facts, edits that succeeded before `fail_line`, shell commands, and the failing output: the
+    result at `fail_line`, or the result of the tool call that `fail_line` makes."""
     session = {"cwd": None, "branch": None, "started": None, "commit": None, "edits": [], "commands": [],
                "fail_text": ""}
     pending = {}
+    failing = set()
     for number, line in enumerate(lines, 1):
         try:
             entry = json.loads(line)
@@ -1231,6 +1237,8 @@ def parse_claude_log(lines, fail_line):
         if entry.get("type") == "assistant" and isinstance(content, list):
             for part in content:
                 if isinstance(part, dict) and part.get("type") == "tool_use":
+                    if number == fail_line:
+                        failing.add(part.get("id"))
                     edit = claude_edit(part.get("name"), part.get("input") or {})
                     if edit:
                         pending[part.get("id")] = edit
@@ -1240,13 +1248,16 @@ def parse_claude_log(lines, fail_line):
             for part in content:
                 if not (isinstance(part, dict) and part.get("type") == "tool_result"):
                     continue
-                if number == fail_line:
+                if number == fail_line or part.get("tool_use_id") in failing:
                     session["fail_text"] += tool_result_text(part.get("content"))
                 action = pending.pop(part.get("tool_use_id"), None)
                 if action is None or number >= fail_line:
                     continue
                 if action["op"] == "command":
-                    session["commands"].append(action["command"])
+                    command, writes = heredoc_writes(action["command"])
+                    session["commands"].append(command)
+                    if not part.get("is_error"):
+                        session["edits"].extend(writes)
                 elif not part.get("is_error"):
                     session["edits"].append(action)
     return session
@@ -1287,7 +1298,10 @@ def parse_codex_log(lines, fail_line):
             if number == fail_line:
                 session["fail_text"] += item.get("aggregated_output") or ""
             elif number < fail_line:
-                session["commands"].append((item.get("command") or [""])[-1])
+                command, writes = heredoc_writes((item.get("command") or [""])[-1])
+                session["commands"].append(command)
+                if item.get("exit_code") in (0, None):
+                    session["edits"].extend(writes)
         elif item.get("type") == "FileChange" and number < fail_line and item.get("status") == "completed":
             session["edits"].extend(codex_edits(item.get("changes")))
     return session
@@ -1331,6 +1345,8 @@ def apply_edit(text, edit):
     """The file text after one edit, or None when the edit does not fit the text."""
     if edit["op"] == "write":
         return edit["content"]
+    if edit["op"] == "append":
+        return (text or "") + edit["content"]
     if edit["op"] == "delete":
         return "" if text is not None else None
     if text is None:
@@ -1393,17 +1409,45 @@ def replay_edits(clone, commit, edits, roots, cwd):
     return overlay
 
 
+def edit_repository(session):
+    """(root, main repository) of the checkout that holds most of the session's edits, or (None, None).
+    A session can start in one checkout and edit a worktree inside it, or another repository; its
+    recorded commit then names the wrong tree."""
+    counts = collections.Counter()
+    folders = {}
+    for edit in session["edits"]:
+        full = os.path.normpath(os.path.join(session["cwd"] or "", edit["path"]))
+        match = WORKTREE_LAYOUT.match(full)
+        if match and (Path(match["main"]) / ".git").is_dir():
+            counts[(match.group(0), match["main"])] += 1
+            continue
+        folder = Path(full).parent
+        while folder != folder.parent and not folder.is_dir():
+            folder = folder.parent
+        if folder not in folders:
+            folders[folder] = session_roots(str(folder)) if folder != folder.parent else (None, None)
+        if folders[folder][1]:
+            counts[folders[folder]] += 1
+    return counts.most_common(1)[0][0] if counts else (None, None)
+
+
 def start_candidates(clone, session):
+    """Start commits to try: the recorded commit, then the newest commits before the session start on
+    the branches named like its worktree, on its branch, and on any branch."""
     seen = []
     if session.get("commit"):
         seen.append(session["commit"])
     before = [f"--before={session['started']}"] if session.get("started") else []
-    for refs in ([session["branch"]] if session.get("branch") else []) + ["--all"]:
+    named = []
+    if session.get("worktree"):
+        refs = git(clone, "for-each-ref", "--format=%(refname:short)", "refs/remotes/origin").split()
+        named = [ref.removeprefix("origin/") for ref in refs if ref.rsplit("/", 1)[-1] == session["worktree"]]
+    for refs in named + ([session["branch"]] if session.get("branch") else []) + ["--all"]:
         done = subprocess.run(["git", "-C", str(clone), "rev-list", "-n", str(CANDIDATE_COMMITS), *before,
                                *(["--all"] if refs == "--all" else [f"origin/{refs}", "--"])],
                               capture_output=True, text=True, check=False)
         seen.extend(sha for sha in done.stdout.split() if sha not in seen)
-    return seen[:CANDIDATE_COMMITS + 1]
+    return seen[:CANDIDATE_COMMITS * (len(named) + 1) + 1]
 
 
 def failing_locations(text):
@@ -1425,12 +1469,65 @@ def map_reported_path(path, roots, cwd, tracked):
     return matches[0] if len(matches) == 1 else None
 
 
-def session_blocker(session):
-    """Why the session cannot be rebuilt from its own edits, or None."""
+def in_tree(path, root, cwd):
+    """True when a shell path names a place in the session tree: a relative path, or an absolute one
+    under the root. A path through a variable is taken as outside (a temporary file)."""
+    path = path.strip("'\"")
+    if path.startswith("$"):
+        return False
+    full = os.path.normpath(os.path.join(cwd or "", os.path.expanduser(path)))
+    return not path.startswith(("/", "~")) or bool(root) and (full + "/").startswith(root.rstrip("/") + "/")
+
+
+def same_tree(folder, root, cwd):
+    """True when `git -C folder` acts on the session tree, not on another checkout or a removed worktree."""
+    full = os.path.normpath(os.path.join(cwd or "", os.path.expanduser(folder.strip("'\""))))
+    if root and full == os.path.normpath(root):
+        return True
+    if not os.path.isdir(full):
+        return False
+    done = subprocess.run(["git", "-C", full, "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=False)
+    return done.returncode == 0 and os.path.normpath(done.stdout.strip()) == os.path.normpath(root or cwd or "")
+
+
+def heredoc_writes(command):
+    """(the command without its replayable `cat > file <<MARK` writes, the write and append edits they
+    make). A heredoc whose marker is not quoted and whose body holds `$`, a backtick, or a backslash
+    stays in the command, since the shell rewrites such a body."""
+    edits, kept, position = [], [], 0
+    for head in HEREDOC_HEAD.finditer(command):
+        if head.start() < position:
+            continue
+        mark = head["mark"] or head["mark2"]
+        start = command.find("\n", head.end())
+        end = re.compile(r"^[ \t]*" + re.escape(mark) + r"[ \t]*$", re.M).search(command, start + 1) if start >= 0 else None
+        if end is None:
+            continue
+        body = command[start + 1:end.start()]
+        if not (head["q"] or head["q2"]) and re.search(r"[$`\\]", body):
+            continue
+        if head["tabs"] or head["tabs2"]:
+            body = re.sub(r"^\t+", "", body, flags=re.M)
+        edits.append({"op": "append" if ">>" in (head["op"] or head["op2"]) else "write",
+                      "path": os.path.expanduser((head["target"] or head["target2"]).strip("'\"")), "content": body})
+        kept.append(command[position:head.start()] + ":")
+        position = end.end()
+    return "".join(kept) + command[position:], edits
+
+
+def session_blocker(session, root=None):
+    """Why the session cannot be rebuilt from its own edits, or None: a git command that changed the
+    session tree, or a shell command that wrote a code file of the tree. A formatter keeps every name
+    and shape, so it does not block."""
+    cwd = session.get("cwd")
     for command in session["commands"]:
-        if GIT_STATE.search(command):
+        state = GIT_STATE.search(command)
+        if state and (not state["dir"] or same_tree(state["dir"], root, cwd)):
             return "git state changed"
-        if SHELL_EDIT.search(command):
+        written = [match["target"] for match in REDIRECT.finditer(command)]
+        if IN_PLACE.search(command):
+            written += CODE_FILE.findall(command)
+        if any(CODE_FILE.fullmatch(path.strip("'\"")) and in_tree(path, root, cwd) for path in written):
             return "shell edit"
     return None
 
@@ -1451,9 +1548,13 @@ def run_session_case(binary, out, case):
     parse = parse_codex_log if case["harness"] == "codex" else parse_claude_log
     session = parse(lines, case["fail_line"])
     root, main = session_roots(session["cwd"])
+    edit_root, edit_main = edit_repository(session)
+    if edit_main and edit_root != root:
+        root, main = edit_root, edit_main
+        session = session | {"worktree": Path(root).name if root != main else None}
     if main is None:
         return record | {"status": "not rebuilt", "cause": "repository gone"}
-    blocker = session_blocker(session)
+    blocker = session_blocker(session, root)
     if blocker:
         return record | {"status": "not rebuilt", "cause": blocker}
     roots = [root, main]
@@ -1502,6 +1603,9 @@ def run_session_case(binary, out, case):
     if not record["changes"]:
         record["cause"] = "cut by a limit" if record["cuts"] else "shape not seen"
         return record
+    if file_level:
+        record["cause"] = "fixed file not listed"
+        return record
     record["cause"] = "site not indexed"
     for change in record["changes"]:
         name = re.split(r"\.|::", change["display"])[-1]
@@ -1517,6 +1621,8 @@ def run_session_case(binary, out, case):
             if cause != "site not indexed":
                 record["cause"] = cause
                 return record
+    if record["cuts"]:
+        record["cause"] = "cut by a limit"
     return record
 
 

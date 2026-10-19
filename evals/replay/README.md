@@ -139,14 +139,25 @@ scripts/edit_replay.py score sessions --run DIR [--split dev|holdout]
 - `run` rebuilds the tree just before the failing check: the session's start commit plus every
   edit that succeeded before the failing line (Claude `Edit`, `MultiEdit`, `Write`; Codex file
   changes). The start commit is Codex's recorded `commit_hash`, else the newest commit before
-  the session start on its branch or on any branch where every edit applies. The repository is a
-  `git clone --shared` of the session's main repository, so the owner's checkouts never change.
+  the session start on its branch or on any branch where every edit applies. The session's tree is
+  the checkout that holds most of its edits, which can be a worktree inside the folder where the
+  session started, or another repository; then the newest commits of the branches named like that
+  worktree come first. The repository is a `git clone --shared` of the session's main repository,
+  so the owner's checkouts never change.
+- A `cat > file <<'MARK'` or `cat >> file` heredoc in a shell command is an edit too, in its place
+  among the others, unless its marker is not quoted and its body holds `$`, a backtick, or a
+  backslash, which the shell rewrites.
 - A case is not rebuilt, with its cause, when the log or the repository is gone, a command before
-  the failing line changed the git state (`checkout`, `reset`, `stash`, `rebase`, `merge`, `pull`,
-  `restore`, and the like) or edited files from the shell (`sed -i`, `cat >`, a formatter), no
-  start commit takes every edit, or the failing output names no site outside the edited files.
+  the failing line changed the git state of the session tree (`checkout`, `reset`, `stash`,
+  `rebase`, `merge`, `pull`, `restore`, and the like; `git -C` on another checkout does not count)
+  or wrote a code file of the tree from the shell (`sed -i`, a redirect, a script that writes a
+  file it names), no start commit takes every edit, or the failing output names no site outside
+  the edited files. A formatter keeps every name and shape, so it does not stop a rebuild.
+- The failing output is the result at the failing line, or, when that line makes a Claude tool
+  call, the result of that call.
 - The truth is each file and line the failing output reports in a file the session did not edit.
   When it reports none, the truth is the file the next edit fixed. A case is caught when a
   `proven` or `likely` row lists a truth file within 2 lines of a truth line (any line for a file).
+  A miss takes the cause list of the holdback set; a file-level miss is `fixed file not listed`.
 - The marks: at least 8 of 9 of the rebuilt verified cases caught, and at least 70% of the
   rebuilt cases of the other groups.
