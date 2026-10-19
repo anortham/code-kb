@@ -57,6 +57,7 @@ run_session() {
   case "${harness}" in
     claude) (cd "${wt}" && claude -p --permission-mode bypassPermissions <"${prompt}" >"${OUT}/claude.md" 2>"${OUT}/claude.log") & ;;
     codex) (cd "${wt}" && codex exec -c 'mcp_servers.code-kb.default_tools_approval_mode="approve"' \
+      -c "mcp_servers.code-kb.command=\"${REPO_ROOT}/target/release/code-kb\"" \
       --skip-git-repo-check -s workspace-write -o "${OUT}/codex.md" - <"${prompt}" >"${OUT}/codex.log" 2>&1) & ;;
   esac
 }
