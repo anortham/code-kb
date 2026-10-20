@@ -101,6 +101,7 @@ pub fn reference_report_for_edit(
     conn: &Connection,
     root: &Path,
     target: &Symbol,
+    absent_condition: Option<&str>,
 ) -> Result<ReferenceReport, QueryError> {
     report_with(
         conn,
@@ -112,6 +113,7 @@ pub fn reference_report_for_edit(
             arity_exclusion: false,
             absent_target: crate::queries::get_symbol_by_id(conn, &target.symbol_id)?.is_none(),
         },
+        absent_condition,
     )
 }
 
@@ -135,7 +137,7 @@ fn report_within(
         arity_exclusion: true,
         absent_target: false,
     };
-    report_with(conn, root, target, time_limit, mode)
+    report_with(conn, root, target, time_limit, mode, None)
 }
 
 fn report_with(
@@ -144,11 +146,16 @@ fn report_with(
     target: &Symbol,
     time_limit: Duration,
     mode: ReportMode,
+    absent_condition: Option<&str>,
 ) -> Result<ReferenceReport, QueryError> {
     let class = constructor_class(conn, target)?;
     let group = overload_group(conn, target)?;
     let mut accounting = Accounting::new(conn, root, time_limit);
     accounting.absent = mode.absent_target.then(|| target.clone());
+    accounting.target_condition = match absent_condition {
+        Some(condition) => Some(condition.to_string()),
+        None => preprocessor_condition(conn, &target.symbol_id)?,
+    };
     let target_arity = match arity::group_arity(conn, root, &group, false)? {
         Some(own) if mode.arity_exclusion => {
             arity::widened_by_ancestors(&mut accounting, target, own)?
@@ -529,6 +536,15 @@ const CSHARP_USINGS_SQL: &str = "SELECT COALESCE(signature, '') FROM symbols
      WHERE kind = 'import' AND language = 'csharp'
        AND (path = ?1 OR signature LIKE 'global using %')";
 
+const PREPROCESSOR_CONDITION_SQL: &str = "SELECT json_extract(metadata_json, '$.preprocessorIf')
+     FROM symbols WHERE symbol_id = ?1 AND json_valid(metadata_json)";
+
+const CSHARP_CONDITIONAL_USINGS_SQL: &str = "SELECT COALESCE(signature, ''),
+            json_extract(metadata_json, '$.preprocessorIf')
+     FROM symbols
+     WHERE kind = 'import' AND language = 'csharp' AND path = ?1 AND json_valid(metadata_json)
+       AND json_extract(metadata_json, '$.preprocessorIf') IS NOT NULL";
+
 const MSBUILD_FILES_SQL: &str = "SELECT path FROM files
      WHERE path LIKE '%.csproj' OR path LIKE '%.props' OR path LIKE '%.targets'";
 
@@ -778,6 +794,20 @@ fn assigned_object(symbol: &Symbol) -> Option<String> {
     let signature = symbol.signature.as_deref()?;
     let (object, _) = signature.split_once(&format!(".{} =", symbol.name))?;
     Some(object.trim().to_string()).filter(|object| is_plain_identifier(object))
+}
+
+/// The `#if` condition of the branch that julie kept a symbol from (`preprocessorIf`), nested
+/// conditions joined with ` && `.
+pub(crate) fn preprocessor_condition(
+    conn: &Connection,
+    symbol_id: &str,
+) -> Result<Option<String>, QueryError> {
+    Ok(conn
+        .query_row(PREPROCESSOR_CONDITION_SQL, params![symbol_id], |r| {
+            r.get::<_, Option<String>>(0)
+        })
+        .optional()?
+        .flatten())
 }
 
 /// The namespace a C# `using` directive opens (`A.B` for `using A.B;` or `global using A.B;`),
@@ -1103,6 +1133,8 @@ struct Accounting<'a> {
     /// the symbol instead of joining its row.
     absent: Option<Symbol>,
     absent_judge_stmt: RefCell<Option<Statement<'a>>>,
+    /// The C# `#if` condition of the branch that julie kept the target from.
+    target_condition: Option<String>,
     definitions_stmt: RefCell<Option<Statement<'a>>>,
     import_match_stmt: Option<Statement<'a>>,
     statements: RefCell<HashMap<&'static str, Statement<'a>>>,
@@ -1124,6 +1156,7 @@ impl<'a> Accounting<'a> {
             judge_stmt: RefCell::new(None),
             absent: None,
             absent_judge_stmt: RefCell::new(None),
+            target_condition: None,
             definitions_stmt: RefCell::new(None),
             import_match_stmt: None,
             statements: RefCell::new(HashMap::new()),
@@ -2216,6 +2249,9 @@ impl<'a> Accounting<'a> {
         if let Some(verdict) = self.csharp_type_outside_namespaces(row, spec)? {
             return Ok(Some(verdict));
         }
+        if let Some(verdict) = self.csharp_conditional_fallback(row, &spec.name)? {
+            return Ok(Some(verdict));
+        }
         if row.is_bare_use() && spec.group.iter().all(is_property_method) {
             return Ok(Some(self.bare_use_of_property_method(row, &spec.name)?));
         }
@@ -2933,6 +2969,50 @@ impl<'a> Accounting<'a> {
                 format!("namespace `{namespace}` is not open here"),
                 false,
             )
+        }))
+    }
+
+    /// A bare C# use of a target that julie kept from an `#if !X` branch, in a file that opens a
+    /// namespace under `#if X`: a build with `X` takes the name from that namespace, and a build
+    /// without it takes the target.
+    fn csharp_conditional_fallback(
+        &self,
+        row: &NameRow,
+        name: &str,
+    ) -> Result<Option<Verdict>, QueryError> {
+        if row.language != "csharp" || row.has_qualifier() {
+            return Ok(None);
+        }
+        let Some(condition) = self.target_condition.as_deref() else {
+            return Ok(None);
+        };
+        let negated: Vec<&str> = condition
+            .split(" && ")
+            .filter_map(|term| term.trim().strip_prefix('!'))
+            .map(str::trim)
+            .collect();
+        if negated.is_empty() {
+            return Ok(None);
+        }
+        let usings = self.with_statement(CSHARP_CONDITIONAL_USINGS_SQL, |stmt| {
+            stmt.query_map(params![row.path], |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+            })?
+            .collect::<Result<Vec<_>, _>>()
+        })?;
+        Ok(usings.iter().find_map(|(signature, using_condition)| {
+            let symbol = using_condition
+                .split(" && ")
+                .map(str::trim)
+                .find(|term| negated.contains(term))?;
+            let namespace = csharp_using_namespace(signature)?;
+            Some(Verdict::new(
+                SiteLabel::Unresolved,
+                format!(
+                    "`{name}` is defined only without `{symbol}`, and this file opens `{namespace}` with it"
+                ),
+                false,
+            ))
         }))
     }
 

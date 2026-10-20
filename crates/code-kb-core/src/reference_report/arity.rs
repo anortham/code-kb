@@ -584,7 +584,7 @@ fn skip_csharp_modifiers(mut text: &str) -> &str {
 }
 
 /// The text after the attribute group that `text` starts with (`[A, B(1)] rest`).
-fn after_attribute_group(text: &str) -> Option<&str> {
+pub(crate) fn after_attribute_group(text: &str) -> Option<&str> {
     let mut scanner = Scanner::new("csharp");
     for (index, c) in text.char_indices() {
         scanner.step(c, text[index + c.len_utf8()..].chars().next());

@@ -2336,13 +2336,13 @@ fn test_cli_scan_passes_its_own_pid_to_the_extractor_watchdog() {
 
 #[cfg(unix)]
 #[test]
-fn test_cli_scan_requests_the_full_extraction_level() {
+fn test_cli_scan_requests_the_references_extraction_level() {
     let (_repo, args, _) = scan_with_fake_extractor();
     let idx = args
         .iter()
         .position(|a| a == "--level")
         .expect("scan must pass --level");
-    assert_eq!(args[idx + 1], "full");
+    assert_eq!(args[idx + 1], "references");
 }
 
 #[test]

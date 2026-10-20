@@ -1185,7 +1185,7 @@ fn identifier_count(db_path: &std::path::Path, kind: &str) -> i64 {
 }
 
 #[test]
-fn test_fresh_scan_records_full_level_with_call_and_variable_identifiers() {
+fn test_fresh_scan_records_references_level_with_call_and_variable_identifiers() {
     find_julie_extract_binary().expect("julie-extract binary must be present for tests");
     let temp_dir = safe_tempdir();
     let root = temp_dir.path().to_path_buf();
@@ -1196,13 +1196,13 @@ fn test_fresh_scan_records_full_level_with_call_and_variable_identifiers() {
 
     scan_workspace(&ws, &db_path, true).expect("Scan failed");
 
-    assert_eq!(index_level(&db_path), "full");
+    assert_eq!(index_level(&db_path), "references");
     assert!(identifier_count(&db_path, "call") > 0);
     assert!(identifier_count(&db_path, "variable_ref") > 0);
 }
 
 #[test]
-fn test_facts_index_is_rebuilt_once_to_full() {
+fn test_facts_index_is_rebuilt_once_to_references() {
     let extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
     let temp_dir = safe_tempdir();
@@ -1226,10 +1226,10 @@ fn test_facts_index_is_rebuilt_once_to_full() {
 
     assert!(ensure_index_matches_extractor(&ws, &db_path, &installed).unwrap());
 
-    assert_eq!(index_level(&db_path), "full");
+    assert_eq!(index_level(&db_path), "references");
     assert!(identifier_count(&db_path, "call") > 0);
     assert!(!ensure_index_matches_extractor(&ws, &db_path, &installed).unwrap());
-    assert_eq!(index_level(&db_path), "full");
+    assert_eq!(index_level(&db_path), "references");
 }
 
 #[test]

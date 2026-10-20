@@ -28,11 +28,12 @@ pub enum SyncError {
     TargetNotIndexed(String),
 }
 
-pub const PINNED_JULIE_VERSION: &str = "3.8.1";
+pub const PINNED_JULIE_VERSION: &str = "3.9.0";
 
-/// Extraction level code-kb asks for on a new artifact: everything the extractor computes,
-/// including call and variable-reference identifiers, annotations, and source regions.
-pub const EXTRACTION_LEVEL: &str = "full";
+/// Extraction level code-kb asks for on a new artifact: the call and variable-reference
+/// identifiers with their call metadata, without the annotations and complexity metrics of `full`,
+/// which code-kb never reads.
+pub const EXTRACTION_LEVEL: &str = "references";
 
 static CACHED_JULIE_BIN: std::sync::OnceLock<Option<(PathBuf, String)>> =
     std::sync::OnceLock::new();
@@ -79,7 +80,7 @@ fn installed_extractor() -> Option<(PathBuf, String)> {
         .clone()
 }
 
-fn extractor_version(bin: &Path) -> Option<String> {
+pub(crate) fn extractor_version(bin: &Path) -> Option<String> {
     let output = Command::new(bin).arg("--version").output().ok()?;
     let text = String::from_utf8_lossy(&output.stdout);
     text.split_whitespace().last().map(str::to_string)

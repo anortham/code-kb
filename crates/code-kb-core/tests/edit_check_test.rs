@@ -2524,6 +2524,28 @@ fn a_csharp_parameter_rename_lists_the_call_that_names_the_old_parameter() {
 }
 
 #[test]
+fn a_csharp_call_whose_argument_types_select_another_overload_is_not_listed() {
+    let repo = committed_repo(&[
+        (
+            "JValue.cs",
+            "public class JValue {\n    public bool Same(object other) { return false; }\n    public bool Same(JValue other) { return true; }\n}\n",
+        ),
+        (
+            "Use.cs",
+            "public class Use {\n    public bool Typed(JValue a, JValue b) { return a.Same(b); }\n    public bool Loose(JValue a, object b) { return a.Same(b); }\n}\n",
+        ),
+    ]);
+    write(
+        &repo.root,
+        "JValue.cs",
+        "public class JValue {\n    public bool Same(object? other) { return false; }\n    public bool Same(JValue other) { return true; }\n}\n",
+    );
+    let text = text_of(&repo);
+    assert_has(&text, "Use.cs:3  `Loose`");
+    assert_lacks(&text, "`Typed`");
+}
+
+#[test]
 fn a_swift_parameter_rename_lists_the_call_that_names_the_old_parameter() {
     let repo = committed_repo(&[
         (
@@ -3927,6 +3949,28 @@ fn a_deleted_javascript_twin_of_a_typescript_file_lists_the_calls_of_its_javascr
     assert_has(&text, "function `helper` (src/util.js): removed");
     assert_has(&text, "src/use.js:4  `fromScript`");
     assert_lacks(&text, "fromSource");
+}
+
+#[test]
+fn a_removed_csharp_fallback_counts_a_use_beside_a_using_under_the_condition_as_unresolved() {
+    let repo = committed_repo(&[
+        (
+            "src/Utilities/ConcurrentDictionary.cs",
+            "#if !HAVE_CONCURRENT\nnamespace App.Serialization\n{\n    internal sealed class ConcurrentDictionary<TKey, TValue>\n    {\n    }\n}\n#endif\n",
+        ),
+        (
+            "src/Utilities/Store.cs",
+            "using System;\n#if HAVE_CONCURRENT\nusing System.Collections.Concurrent;\n#endif\nusing App.Serialization;\n\nnamespace App.Utilities\n{\n    internal class Store\n    {\n        private ConcurrentDictionary<string, int> _store;\n    }\n}\n",
+        ),
+        (
+            "src/Utilities/Plain.cs",
+            "using System;\nusing App.Serialization;\n\nnamespace App.Utilities\n{\n    internal class Plain\n    {\n        private ConcurrentDictionary<string, int> _plain;\n    }\n}\n",
+        ),
+    ]);
+    fs::remove_file(repo.root.join("src/Utilities/ConcurrentDictionary.cs")).unwrap();
+    let text = text_of(&repo);
+    assert_has(&text, "src/Utilities/Plain.cs:8");
+    assert_lacks(&text, "src/Utilities/Store.cs");
 }
 
 #[test]

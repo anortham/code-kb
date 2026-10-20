@@ -6,6 +6,7 @@
 //! and the sites come from the main index, after the changed files are refreshed in it.
 
 mod arms;
+mod binding;
 mod fields;
 mod git;
 mod session;
@@ -32,12 +33,13 @@ use crate::queries::{
 };
 use crate::reference_report::arity::{self, Arity};
 use crate::reference_report::{
-    destructurings, enum_variant_names, inherited_group_arity, reference_report_for_edit,
-    uses_of_variants,
+    destructurings, enum_variant_names, inherited_group_arity, preprocessor_condition,
+    reference_report_for_edit, uses_of_variants,
 };
 use crate::sync::{self, SyncError, ensure_fresh_file};
 use crate::workspace::{Workspace, is_hard_excluded};
 use arms::Verdict;
+use binding::TypedOverloads;
 use fields::FieldChange;
 use git::{ChangedFile, Git, Hunks};
 pub use session::{
@@ -971,6 +973,8 @@ enum What {
         overloads: Option<Overloads>,
         /// The name tests take as a parameter when the symbol is a pytest fixture.
         fixture: Option<String>,
+        /// The C# `#if` condition of the branch that julie kept the symbol from.
+        condition: Option<String>,
     },
     Fields(FieldChange),
     Variants {
@@ -1170,6 +1174,7 @@ impl Detector<'_> {
             what: What::Removed {
                 overloads: self.remaining_overloads(row, after)?,
                 fixture: pytest_fixture_name(&row.symbol),
+                condition: preprocessor_condition(&self.base.conn, &row.symbol.symbol_id)?,
             },
         })
     }
@@ -1514,16 +1519,23 @@ impl<'a> SiteLister<'a> {
     }
 
     fn list(&mut self, candidate: &Candidate) -> Result<Listed, EditCheckError> {
-        let report = reference_report_for_edit(self.conn, self.root, &candidate.subject)?;
+        let condition = match &candidate.what {
+            What::Removed { condition, .. } => condition.as_deref(),
+            _ => None,
+        };
+        let report =
+            reference_report_for_edit(self.conn, self.root, &candidate.subject, condition)?;
         let placed = match &candidate.what {
             What::Parameters => {
                 let range = inherited_group_arity(self.conn, self.root, &candidate.subject)?;
-                let mut placed = self.calls(&report, range.as_ref());
+                let typed = TypedOverloads::of(self.conn, &candidate.subject)?;
+                let mut placed = self.calls(&report, range.as_ref(), typed.as_ref());
                 self.overrides(&report, &mut placed)?;
                 placed
             }
             What::Signature => {
-                let mut placed = self.calls(&report, None);
+                let typed = TypedOverloads::of(self.conn, &candidate.subject)?;
+                let mut placed = self.calls(&report, None, typed.as_ref());
                 self.overrides(&report, &mut placed)?;
                 placed
             }
@@ -1535,6 +1547,7 @@ impl<'a> SiteLister<'a> {
             What::Removed {
                 overloads: None,
                 fixture,
+                ..
             } => {
                 let mut placed = self.every_site(&report);
                 self.imports(&report, &mut placed);
@@ -1556,7 +1569,12 @@ impl<'a> SiteLister<'a> {
         Ok(Listed { placed, tests })
     }
 
-    fn calls(&mut self, report: &ReferenceReport, range: Option<&Arity>) -> Placed {
+    fn calls(
+        &mut self,
+        report: &ReferenceReport,
+        range: Option<&Arity>,
+        typed: Option<&TypedOverloads>,
+    ) -> Placed {
         let mut placed = Placed::default();
         for labeled in report
             .sites
@@ -1566,6 +1584,13 @@ impl<'a> SiteLister<'a> {
             let (first, last) = site_span(labeled);
             let path = labeled.site.path.as_str();
             let touched = self.touches(path, first, last);
+            if !touched
+                && typed.is_some_and(|typed| {
+                    typed.binds_another(self.conn, &labeled.site.to_symbol_name, path, first)
+                })
+            {
+                continue;
+            }
             let language = self.language_of(path);
             let arguments = range.map(|_| self.arguments(labeled)).unwrap_or_default();
             let count = range

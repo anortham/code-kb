@@ -743,7 +743,7 @@ fn with_calling_tests(
         return Ok(res);
     }
     // The walk's answer stands alone; an index too old for the report keeps it.
-    let Ok(report) = reference_report_for_edit(conn, &workspace.root, &target) else {
+    let Ok(report) = reference_report_for_edit(conn, &workspace.root, &target, None) else {
         return Ok(res);
     };
     res.likely_tests = report

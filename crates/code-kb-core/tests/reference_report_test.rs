@@ -10991,6 +10991,41 @@ fn a_bare_csharp_use_of_a_type_whose_namespace_is_not_open_is_excluded() {
     }
 }
 
+const CSHARP_FALLBACK: (&str, &str) = (
+    "src/Utilities/ConcurrentDictionary.cs",
+    "#if !HAVE_CONCURRENT\nnamespace App.Serialization\n{\n    internal sealed class ConcurrentDictionary<TKey, TValue>\n    {\n    }\n}\n#endif\n",
+);
+const CSHARP_FALLBACK_STORE: (&str, &str) = (
+    "src/Utilities/Store.cs",
+    "using System;\n#if HAVE_CONCURRENT\nusing System.Collections.Concurrent;\n#endif\nusing App.Serialization;\n\nnamespace App.Utilities\n{\n    internal class Store\n    {\n        private ConcurrentDictionary<string, int> _store;\n    }\n}\n",
+);
+const CSHARP_FALLBACK_PLAIN: (&str, &str) = (
+    "src/Utilities/Plain.cs",
+    "using System;\nusing App.Serialization;\n\nnamespace App.Utilities\n{\n    internal class Plain\n    {\n        private ConcurrentDictionary<string, int> _plain;\n    }\n}\n",
+);
+
+#[test]
+fn a_csharp_use_of_an_if_not_fallback_beside_a_using_under_the_condition_is_unresolved() {
+    let repo = scanned_repo(&[
+        CSHARP_FALLBACK,
+        CSHARP_FALLBACK_STORE,
+        CSHARP_FALLBACK_PLAIN,
+    ]);
+    let report = report(&repo, "ConcurrentDictionary", None);
+
+    assert_site(
+        &report,
+        "src/Utilities/Store.cs",
+        11,
+        SiteLabel::Unresolved,
+        "`ConcurrentDictionary` is defined only without `HAVE_CONCURRENT`, and this file opens `System.Collections.Concurrent` with it",
+    );
+    assert_eq!(
+        site_at(&report, "src/Utilities/Plain.cs", 8).label,
+        SiteLabel::Likely
+    );
+}
+
 #[test]
 fn an_msbuild_using_item_opens_every_csharp_namespace() {
     let repo = scanned_repo(&[

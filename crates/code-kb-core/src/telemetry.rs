@@ -897,20 +897,9 @@ pub fn generate_bug_report(
         .and_then(|p| p.parent().map(|d| d.join(exe_name)))
         .filter(|p| p.is_file());
 
-    let julie_extract_version = if let Some(bin) = sibling_binary {
-        if let Ok(output) = std::process::Command::new(&bin).arg("--version").output() {
-            let ver = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if !ver.is_empty() {
-                ver
-            } else {
-                crate::sync::PINNED_JULIE_VERSION.to_string()
-            }
-        } else {
-            crate::sync::PINNED_JULIE_VERSION.to_string()
-        }
-    } else {
-        crate::sync::PINNED_JULIE_VERSION.to_string()
-    };
+    let julie_extract_version = sibling_binary
+        .and_then(|bin| crate::sync::extractor_version(&bin))
+        .unwrap_or_else(|| crate::sync::PINNED_JULIE_VERSION.to_string());
 
     let active_workspace_name = workspace_root.map(|ws| {
         let norm = to_forward_slash(&normalize_path(ws));
