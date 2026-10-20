@@ -76,7 +76,7 @@ Run the automated pre-flight script, or execute each check manually:
    ln -sf "$PWD/.tools/julie-extract" target/candidate/julie-extract   # the pinned extractor
    scripts/release-corpus-check.py --old ~/.code-kb/search-eval/bin/v$PREV --new target/candidate
    ```
-   The script fails on a failed scan, a symbol loss over 0.5%, a scan more than 1.75 times slower (1.5 after v2.7.0),
+   The script fails on a failed scan, a symbol loss over 0.5%, a scan more than 1.5 times slower,
    an old index the candidate does not bring up to date, or a tool call that worked before and now
    errors or returns nothing. A PASS is not enough. Read `target/release-corpus/report.md`:
    - Check each gained and lost call-edge sample against its source line. A gained edge that is not

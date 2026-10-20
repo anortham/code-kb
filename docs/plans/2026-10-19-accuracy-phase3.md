@@ -257,9 +257,20 @@ Runs only when the clean set fails its mark. v2.7.0 already made the first chang
 
 **What to build:** Find what the `full` level writes that no code-kb query reads, and stop writing it, or cut the scan's peak memory. The callers report reads the call and read identifiers; the other `full` rows are the candidates.
 
-- [ ] On aspnetcore and hermes-agent, index size and peak scan memory are at most 1.5 times the `facts` level of 2.6.0. The report gives both numbers before and after.
-- [ ] The reach gate report is equal to the 2.7.0 report, and `lost_proven.py` is empty.
-- [ ] `SCAN_SLOWDOWN_LIMIT` is 1.5 again, its shortcut comment is gone, and `docs/RELEASING.md` says 1.5. Worker commits.
+- [ ] On aspnetcore and hermes-agent, index size and peak scan memory are at most 1.5 times the `facts` level of 2.6.0. The report gives both numbers before and after. **Memory passes, size does not** (table below).
+- [x] The reach gate report is equal to the 2.7.0 report, and `lost_proven.py` is empty.
+- [x] `SCAN_SLOWDOWN_LIMIT` is 1.5 again, its shortcut comment is gone, and `docs/RELEASING.md` says 1.5. Worker commits.
+
+Result (2026-10-19, `git archive` exports of HEAD, julie 3.8.1, index MB / peak GB / scan s):
+
+| Project | 2.6.0 `facts` (mark x1.5) | 3.8.1 `facts` | `full` (2.7.0) | `full`, 1 GiB cache (committed) | `references`, 1 GiB cache (julie branch) |
+|---|---|---|---|---|---|
+| hermes-agent | 1.8 GB / 2.60 (2.7 GB / 3.90) | 1670 / 2.62 / 49.7 | 3952 / 5.41 / 83.6 | 3952 / 2.02 / 84.8 | 3181 / 2.00 / 79.7 |
+| aspnetcore | 2.0 GB / 2.81 (3.0 GB / 4.22) | 1923 / 2.79 / 35.7 | 3521 / 4.81 / 56.4 | 3521 / 1.91 / 56.8 | 3077 / 1.96 / 54.4 |
+
+- Peak memory is julie's SQLite page cache, an eighth of RAM up to 8 GiB. code-kb now sets `JULIE_BULK_CACHE_KIB` to 1 GiB.
+- code-kb never reads `source_regions`, `type_argument_usages`, `type_arguments`, `complexity_metrics`, or `symbol_annotations`. A julie `references` level (`facts` plus call and read identifiers with their call metadata) drops them: branch `feat/references-level` in julie-extractors. With it the gate tables stay equal and no site label or basis changes on the 210 gate symbols. It needs a julie release before code-kb can ask for it.
+- The size mark needs more: each call and read identifier also writes its own `reference_sites` row with the same span (hermes-agent 535 MB, plus 134 MB of index on `identifiers.reference_site_id`). Dropping those is a julie schema change (about 1.40x on hermes-agent). That is an owner decision.
 
 ## Slice 5: Adoption
 

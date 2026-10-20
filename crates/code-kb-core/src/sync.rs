@@ -122,14 +122,23 @@ fn julie_extract_candidates() -> Vec<PathBuf> {
         .collect()
 }
 
-/// Run julie-extract command with arguments.
+/// Page cache of a julie-extract write, in SQLite's negative-KiB form. julie's own default is an
+/// eighth of physical memory up to 8 GiB, so a scan's memory grows with the index; on hermes-agent
+/// 1 GiB lowers the peak from 5.4 GB to 2.1 GB for 1.4% more scan time.
+const JULIE_CACHE_KIB: &str = "-1048576";
+
+/// Run julie-extract command with arguments. `JULIE_BULK_CACHE_KIB` in the environment overrides
+/// [`JULIE_CACHE_KIB`].
 pub fn execute_julie_extract(args: &[&str]) -> Result<String, SyncError> {
     let bin = find_julie_extract_binary().ok_or(SyncError::BinaryNotFound)?;
+    let cache_kib =
+        std::env::var("JULIE_BULK_CACHE_KIB").unwrap_or_else(|_| JULIE_CACHE_KIB.to_string());
 
     let mut attempts = 0;
     loop {
         let output = Command::new(&bin)
             .args(args)
+            .env("JULIE_BULK_CACHE_KIB", &cache_kib)
             .output()
             .map_err(SyncError::Io)?;
 

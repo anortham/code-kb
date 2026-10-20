@@ -34,8 +34,7 @@ COUNTED_TABLES = [
 ]
 PROBE_KINDS = ("function", "method", "class", "struct", "interface", "trait", "enum")
 SYMBOL_LOSS_LIMIT = 0.005
-# shortcut: 1.75 admits the `full` index level that v2.7.0 adds (miller 1.6x); return to 1.5 after v2.7.0.
-SCAN_SLOWDOWN_LIMIT = 1.75
+SCAN_SLOWDOWN_LIMIT = 1.5
 SCAN_SLOWDOWN_FLOOR_SECONDS = 3.0
 
 
