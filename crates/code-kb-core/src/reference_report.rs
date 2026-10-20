@@ -486,6 +486,26 @@ const OWNER_IN_PACKAGE_SQL: &str = "SELECT COUNT(*) FROM symbols
 const TYPE_HEAD_KINDS_SQL: &str =
     "SELECT DISTINCT kind FROM symbols WHERE name = ?1 AND kind != 'parameter'";
 
+const RECEIVER_DECLARATIONS_SQL: &str = "WITH RECURSIVE chain(symbol_id, depth) AS (
+         SELECT ?1, 0
+         UNION ALL
+         SELECT s.parent_symbol_id, chain.depth + 1
+         FROM symbols s JOIN chain ON s.symbol_id = chain.symbol_id
+         WHERE s.parent_symbol_id IS NOT NULL AND chain.depth < 32
+     )
+     SELECT chain.depth, r.kind, r.start_line FROM chain
+     JOIN symbols r ON r.parent_symbol_id = chain.symbol_id
+     WHERE r.name = ?2 AND r.path = ?3 AND r.kind IN ('variable', 'constant', 'parameter')
+     UNION ALL
+     SELECT 99, r.kind, r.start_line FROM symbols r
+     WHERE r.parent_symbol_id IS NULL AND r.name = ?2 AND r.path = ?3
+       AND r.kind IN ('variable', 'constant')
+     ORDER BY 1, 3 DESC";
+
+const JS_IMPORTER_PATHS_SQL: &str = "SELECT DISTINCT replace(path, '\\', '/') FROM symbols
+     WHERE kind = 'import' AND name = ?1
+       AND language IN ('javascript', 'typescript', 'tsx', 'jsx', 'vue')";
+
 const MEMBER_ACCESS_PATHS_SQL: &str =
     "SELECT DISTINCT path FROM identifiers WHERE name = ?1 AND kind = 'member_access'";
 
@@ -587,6 +607,9 @@ struct NameRow {
     /// The call is written on an expression (`getAsSingleElement().getAsInt()`), so it has a
     /// receiver that julie did not record.
     hidden_receiver: bool,
+    /// That receiver is the result of a call or an index, or a string literal, and loads no
+    /// module (`require(…)`, `import(…)`).
+    result_receiver: bool,
     /// The names written before the used name (`["z", "core"]` for `z.core.f()`), `None` when
     /// the row does not say.
     chain: Option<Vec<String>>,
@@ -664,8 +687,12 @@ impl NameRow {
             && languages_compatible(&self.language, &definition.language);
         let member_of_a_scoped_function =
             definition.free && language_family(&self.language) == "js" && self.has_qualifier();
+        let call_on_a_result = self.result_receiver
+            && definition.module_value
+            && language_family(&self.language) == "js";
         !call_of_a_field
             && !member_of_a_scoped_function
+            && !call_on_a_result
             && !self.reads_a_module(&definition.kind)
             && !(self.is_bare_use() && definition.is_property_method())
             && self.is_in_scope_of(definition)
@@ -955,6 +982,10 @@ struct Definition {
     /// A JavaScript function, variable, or constant that only its own scope names: not exported,
     /// not a member of an object, and never written as `object.name` in its file.
     free: bool,
+    /// A top-level JavaScript function, variable, or constant that no object holds: never written
+    /// as `object.name` in its file and never placed in an object literal there or in a file that
+    /// imports the name. Only a module object can hold it, and no call result is one.
+    module_value: bool,
 }
 
 impl Definition {
@@ -1221,6 +1252,10 @@ impl<'a> Accounting<'a> {
             };
             let exported = row.get::<_, Option<String>>(12)?.as_deref() == Some("public")
                 || row.get::<_, Option<i64>>(14)? == Some(1);
+            let module_value = language_family(&language) == "js"
+                && matches!(kind.as_str(), "function" | "variable" | "constant")
+                && class_name.is_none()
+                && parent_id.is_none();
             let free = language_family(&language) == "js"
                 && matches!(kind.as_str(), "function" | "variable" | "constant")
                 && class_name.is_none()
@@ -1262,6 +1297,7 @@ impl<'a> Accounting<'a> {
                 class_name,
                 callable,
                 free,
+                module_value,
             }))
         })?;
         let mut definitions: Vec<Definition> = rows
@@ -1271,18 +1307,30 @@ impl<'a> Accounting<'a> {
         let writes =
             inherited_writes_among(self.conn, definitions.iter().map(|d| d.symbol_id.as_str()))?;
         definitions.retain(|d| !writes.contains(&d.symbol_id));
-        let free_paths: HashSet<&str> = definitions
+        let mut probed: HashSet<&str> = definitions
             .iter()
-            .filter(|d| d.free)
+            .filter(|d| d.free || d.module_value)
             .map(|d| d.path.as_str())
             .collect();
-        let member_paths = if free_paths.is_empty() {
+        let importers = if definitions.iter().any(|d| d.module_value) {
+            self.with_statement(JS_IMPORTER_PATHS_SQL, |stmt| {
+                stmt.query_map(params![name], |r| r.get::<_, String>(0))?
+                    .collect::<Result<Vec<_>, _>>()
+            })?
+        } else {
+            Vec::new()
+        };
+        probed.extend(importers.iter().map(String::as_str));
+        let member_paths = if probed.is_empty() {
             HashSet::new()
         } else {
-            self.paths_using_as_member(name, &free_paths)?
+            self.paths_using_as_member(name, &probed)?
         };
+        let held_by_importer = importers.iter().any(|path| member_paths.contains(path));
         for definition in &mut definitions {
             definition.free &= !member_paths.contains(&definition.path);
+            definition.module_value &=
+                !held_by_importer && !member_paths.contains(&definition.path);
             if !definition.callable {
                 definition.callable = match definition.language.as_str() {
                     "go" => self.holds_func(definition)?,
@@ -1420,6 +1468,7 @@ impl<'a> Accounting<'a> {
         pair_identifiers(&mut rows);
         rows.retain(|row| !row.consumed);
         mark_hidden_receivers(self.root, &mut rows);
+        self.mark_result_variables(&mut rows)?;
         js_modules::complete_js_chains(self.root, &mut rows);
 
         let mut order: Vec<usize> = (0..rows.len()).collect();
@@ -1431,6 +1480,11 @@ impl<'a> Accounting<'a> {
                 .then_with(|| a.line.cmp(&b.line))
         });
         let (claims, judged) = self.claims(spec, &rows, &order, cannot_see)?;
+        let mut group = definitions
+            .iter()
+            .filter(|d| group_ids.contains(d.symbol_id.as_str()))
+            .peekable();
+        let module_target = group.peek().is_some() && group.all(|d| d.module_value);
         let mut unchecked: Vec<usize> = order[judged..].to_vec();
         let mut verdicts: HashMap<String, Verdict> = HashMap::new();
         let mut undecided: Vec<usize> = Vec::new();
@@ -1439,9 +1493,26 @@ impl<'a> Accounting<'a> {
                 unchecked.extend_from_slice(&order[position..judged]);
                 break;
             }
-            match self.decide_cheap(&rows[index], spec, target, &group_ids, &claims)? {
+            let row = &rows[index];
+            match self.decide_cheap(row, spec, target, &group_ids, &claims)? {
                 Some(verdict) => {
-                    verdicts.insert(rows[index].key.clone(), verdict);
+                    verdicts.insert(row.key.clone(), verdict);
+                }
+                None if module_target
+                    && row.result_receiver
+                    && language_family(&row.language) == "js" =>
+                {
+                    verdicts.insert(
+                        row.key.clone(),
+                        Verdict::new(
+                            SiteLabel::Excluded,
+                            format!(
+                                "a call on a call result never reaches the top-level `{}`",
+                                spec.name
+                            ),
+                            false,
+                        ),
+                    );
                 }
                 None => undecided.push(index),
             }
@@ -1694,6 +1765,7 @@ impl<'a> Accounting<'a> {
                 consumed: false,
                 paired: false,
                 hidden_receiver: false,
+                result_receiver: false,
                 chain: Some(chain),
                 arg_count: None,
                 links_enclosing_class: false,
@@ -1735,6 +1807,7 @@ impl<'a> Accounting<'a> {
                     consumed: false,
                     paired: false,
                     hidden_receiver: false,
+                    result_receiver: false,
                     chain: None,
                     arg_count: None,
                     links_enclosing_class: row.get(10)?,
@@ -1800,6 +1873,7 @@ impl<'a> Accounting<'a> {
                     consumed: false,
                     paired: false,
                     hidden_receiver: false,
+                    result_receiver: false,
                     chain,
                     arg_count: arg_count.filter(|_| !arg_spread),
                     links_enclosing_class: false,
@@ -2552,6 +2626,7 @@ impl<'a> Accounting<'a> {
                     top_level: row.get::<_, Option<String>>(7)?.is_none(),
                     callable: true,
                     free: false,
+                    module_value: false,
                 })
             })
             .optional()
@@ -2584,6 +2659,7 @@ impl<'a> Accounting<'a> {
             top_level: symbol.parent_symbol_id.is_none(),
             callable: true,
             free: false,
+            module_value: false,
         })
     }
 
@@ -2744,6 +2820,54 @@ impl<'a> Accounting<'a> {
             None => "a bare name cannot reach a property method".to_string(),
         };
         Ok(Verdict::new(SiteLabel::Excluded, basis, false))
+    }
+
+    /// Marks the JavaScript calls whose receiver is a `const` of the caller's scope or file that
+    /// holds a call result or a new object (`const schema = z.object({…})`), the nearest
+    /// declaration above the call.
+    fn mark_result_variables(&self, rows: &mut [NameRow]) -> Result<(), QueryError> {
+        let mut texts: HashMap<String, Option<String>> = HashMap::new();
+        for row in rows.iter_mut() {
+            if row.result_receiver
+                || row.hidden_receiver
+                || language_family(&row.language) != "js"
+                || !row.is_call()
+                || !row.namespace.is_empty()
+            {
+                continue;
+            }
+            let (Some(receiver), Some(caller)) = (
+                row.receiver
+                    .clone()
+                    .filter(|r| is_plain_identifier(r) && !SELF_RECEIVERS.contains(&r.as_str())),
+                row.caller_id.as_deref(),
+            ) else {
+                continue;
+            };
+            let declarations = self.with_statement(RECEIVER_DECLARATIONS_SQL, |stmt| {
+                stmt.query_map(params![caller, receiver, row.path], |r| {
+                    Ok((r.get::<_, String>(1)?, r.get::<_, i64>(2)? as usize))
+                })?
+                .collect::<Result<Vec<_>, _>>()
+            })?;
+            let Some((kind, line)) = declarations
+                .into_iter()
+                .find(|(_, line)| *line <= row.site_line)
+            else {
+                continue;
+            };
+            if kind == "parameter" {
+                continue;
+            }
+            let text = texts
+                .entry(row.path.clone())
+                .or_insert_with(|| std::fs::read_to_string(self.root.join(&row.path)).ok());
+            row.result_receiver = text
+                .as_deref()
+                .and_then(|text| text.lines().nth(line.saturating_sub(1)))
+                .is_some_and(|declaration| const_holds_result(declaration, &receiver));
+        }
+        Ok(())
     }
 
     /// The other definitions that can reach `row`; a module receiver reaches no member of a class.
@@ -3452,9 +3576,16 @@ fn mark_hidden_receivers(root: &Path, rows: &mut [NameRow]) {
                 continue;
             };
             let before = before.trim_end();
-            row.hidden_receiver = matches!(before.trim_start(), "." | "?.")
-                || awaits_member(before)
+            let starts_line = matches!(before.trim_start(), "." | "?.")
                 || before.is_empty() && continues_chain(&lines, row.site_line);
+            row.hidden_receiver = starts_line || awaits_member(before);
+            row.result_receiver = if starts_line {
+                code_line_above(&lines, row.site_line).is_some_and(|above| {
+                    ends_with_result(above.trim_end_matches('.')) && !loads_module(above)
+                })
+            } else {
+                awaits_member(before) && !loads_module(before)
+            };
         }
     }
 }
@@ -3462,28 +3593,64 @@ fn mark_hidden_receivers(root: &Path, rows: &mut [NameRow]) {
 /// Whether `text` ends with a call result, an index result, or a string literal and a `.`
 /// (`make().`, `items[0]?.`, `make()!.`, `'abc'.`) that waits for a member name.
 fn awaits_member(text: &str) -> bool {
-    text.strip_suffix('.').is_some_and(|result| {
-        result
-            .trim_end_matches(['?', '!'])
-            .ends_with([')', ']', '\'', '"', '`'])
-    })
+    text.strip_suffix('.').is_some_and(ends_with_result)
 }
 
-/// Whether the last non-blank line above `line` (1-based) is a line of code, not a comment, that
-/// ends with a call or index result and a `.` that waits for the name on `line`.
+/// Whether `text` ends with a call result, an index result, or a string literal.
+fn ends_with_result(text: &str) -> bool {
+    text.trim_end_matches(['?', '!'])
+        .ends_with([')', ']', '\'', '"', '`'])
+}
+
+/// Whether `text` loads a module, whose result can be a module object.
+fn loads_module(text: &str) -> bool {
+    text.contains("require(") || text.contains("import(")
+}
+
+/// Whether `line` declares `name` as a `const` that holds a call result or a new object
+/// (`const schema = z.object({`) and loads no module.
+fn const_holds_result(line: &str, name: &str) -> bool {
+    let Some(at) = line.find(&format!("const {name}")) else {
+        return false;
+    };
+    let rest = line[at + "const ".len() + name.len()..].trim_start();
+    let initializer = match rest.strip_prefix(':') {
+        Some(typed) => typed.split_once('=').map(|(_, value)| value),
+        None => rest.strip_prefix('='),
+    };
+    let Some(initializer) = initializer.map(str::trim_start) else {
+        return false;
+    };
+    if initializer.starts_with(['=', '>']) || loads_module(initializer) {
+        return false;
+    }
+    let initializer = initializer.strip_prefix("await ").unwrap_or(initializer);
+    let initializer = initializer.strip_prefix("new ").unwrap_or(initializer);
+    let head = initializer
+        .find(|c: char| !(c.is_alphanumeric() || matches!(c, '_' | '$' | '.' | '?')))
+        .unwrap_or(initializer.len());
+    head > 0 && initializer[head..].trim_start().starts_with(['(', '<'])
+}
+
+/// Whether the last line of code above `line` (1-based) ends with a call or index result and a
+/// `.` that waits for the name on `line`.
 fn continues_chain(lines: &[&str], line: usize) -> bool {
-    let above = lines
+    code_line_above(lines, line).is_some_and(awaits_member)
+}
+
+/// The last non-blank line above `line` (1-based), trimmed, unless it is a comment.
+fn code_line_above<'l>(lines: &[&'l str], line: usize) -> Option<&'l str> {
+    lines
         .iter()
         .take(line.saturating_sub(1))
         .rev()
         .map(|text| text.trim())
-        .find(|text| !text.is_empty());
-    above.is_some_and(|text| {
-        awaits_member(text)
-            && !["//", "/*", "*", "#"]
+        .find(|text| !text.is_empty())
+        .filter(|text| {
+            !["//", "/*", "*", "#"]
                 .iter()
                 .any(|start| text.starts_with(start))
-    })
+        })
 }
 
 /// Gives each pending or relationship call the first unused call identifier of the same caller

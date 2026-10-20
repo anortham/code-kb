@@ -183,8 +183,8 @@ Runs only when the clean set fails its mark. v2.7.0 already made the first chang
 
 **What to build:** The smallest change to what blocks a stop that brings the dev false-block share to 2% or less, for example `likely` rows with one basis no longer block. `check_edit` still lists the rows; only the hook decision changes.
 
-- [ ] Dev false-block share <= 2%; the holdback and session catch rates on dev drop by at most the rows the change stops blocking, and the report states the drop.
-- [ ] A test for each rule that no longer blocks. `docs/edit-check.md` "What blocks a stop" matches the code. Worker commits.
+- [x] Dev false-block share <= 2%; the holdback and session catch rates on dev drop by at most the rows the change stops blocking, and the report states the drop. **Not run (lead decision, 2026-10-19):** the dev clean set passed at the baseline, 1 of 56 commits (1.8%). That one false block was a wrong `proven` row, not a block rule; task 2.2 fixed the row (an object-literal method no longer takes a call of the module function with its name), and dev is 0 of 56. The block rule is unchanged, so no catch rate drops.
+- [x] A test for each rule that no longer blocks. `docs/edit-check.md` "What blocks a stop" matches the code. Worker commits. No rule changed; the section is unchanged.
 
 ### Task 2.2: Close the misses
 
@@ -197,9 +197,29 @@ Runs only when the clean set fails its mark. v2.7.0 already made the first chang
 
 **What to build:** Fix the causes in order of their dev miss count until every pass mark holds on dev, or until each remaining cause needs a julie change that the owner has not approved. A cause that is a gap, not a wrong answer, can stay as a known limit; the report says which.
 
-- [ ] Each fix has a regression test named for the behavior, a reach gate PASS, an empty `lost_proven.py`, and a dev score not lower in any set.
-- [ ] `docs/edit-check.md` "Known limits" drops each closed gap and names each one left.
-- [ ] Every pass mark holds on dev, or the report names the julie change each remaining cause needs. Worker commits.
+- [x] Each fix has a regression test named for the behavior, a reach gate PASS, an empty `lost_proven.py`, and a dev score not lower in any set.
+- [x] `docs/edit-check.md` "Known limits" drops each closed gap and names each one left.
+- [x] Every pass mark holds on dev, or the report names the julie change each remaining cause needs. Worker commits.
+
+Result (2026-10-19, dev halves, build of commit 419e2a2; the Java truth was corrected in cfab566, 99 to 89 sites):
+
+| Language | Catch share, 2.7.0 | Catch share, now | Judged outside rows true, now |
+|---|---|---|---|
+| C# | 26.2% | 54.8% | 12 of 20 |
+| Go | 97.1% | 97.1% | none listed |
+| Java | 73.7% (old truth) | 82.0% | 1 of 1 |
+| JavaScript | 78.3% | 95.7% | 6 of 22 |
+| Python | 18.0% | 84.0% | 20 of 20 |
+| Rust | 83.3% | 83.3% | none listed |
+| TypeScript | 10.1% | 94.2% | 14 of 14 |
+
+- Clean set: 0 of 56 false blocks (1 of 56 at 2.7.0). Sessions: 1 of 3 verified and 2 of 37 candidates caught, as at 2.7.0.
+- Dev misses left by cause: fits the new shape 23, shape not seen 16, import not listed 5, site not indexed 4, site excluded 3, cut by a limit 2, other 2, not a call 1.
+- Marks that still fail, and what each needs:
+  - C# catch share: 6 misses are calls that fit the new shape (a design choice of the check, not a defect), 4 are member calls of a removed class (a known limit), 3 are `Equals` calls the index does not hold, and 2 are calls through a virtual base method. All are gaps; they stay in "Known limits".
+  - C# outside rows: 3 `Equals` calls bind another overload by argument type, and 3 uses name a library type that `#if` swaps in. A julie change would record argument types and `#if` regions.
+  - JavaScript outside rows: 16 reads of a property that is assigned a value, not a function (`res.locals`). A julie change would record such an assignment as a definition, so the read gets another definition.
+  - Sessions: most cases do not rebuild (shell edits, git state); the rebuilt misses are shape not seen and fixed file not listed. The verified group has 3 rebuilt cases, too few for the mark.
 
 ### Task 2.3: Holdout score and docs
 
@@ -243,8 +263,10 @@ Result (2026-10-19): goldfish (TypeScript, 30 symbols, 689 truth lines) and json
 
 **What to build:** Rules from the dev symbols of zod and the new TypeScript project that move `unresolved` sites with no truth line to `excluded` with a basis, and true sites to `proven`.
 
-- [ ] On dev, TypeScript `unresolved` sites with no truth line fall by at least half, with excluded precision >= 0.98 and no lost proven site.
-- [ ] Each rule has a test and a line in `CLAUDE.md`/`AGENTS.md` "Proof rules". Worker commits.
+- [x] On dev, TypeScript `unresolved` sites with no truth line fall by at least half, with excluded precision >= 0.98 and no lost proven site.
+- [x] Each rule has a test and a line in `CLAUDE.md`/`AGENTS.md` "Proof rules". Worker commits.
+
+Result (2026-10-19): one rule. A JavaScript or TypeScript call whose receiver is a call result, an index result, a string literal, or a `const` that holds a call never reaches a top-level function, variable, or constant that no object holds, since only a module object holds one. On dev, `unresolved` TypeScript sites with no truth line fall from 429 to 209 (the 27 with a truth line stay), and 220 sites move to `excluded`, none on a truth line (dev excluded with a truth line: 1 of 961). Holdout `unresolved` falls from 821 to 814. The gate metric tables are equal, `lost_proven.py` is empty, and the replay scores do not change.
 
 ## Slice 4: Scan cost
 

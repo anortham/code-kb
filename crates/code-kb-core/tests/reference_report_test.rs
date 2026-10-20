@@ -2906,8 +2906,8 @@ fn a_call_after_a_line_that_ends_with_a_dot_is_not_a_bare_call() {
             &report,
             "use.ts",
             line,
-            SiteLabel::Unresolved,
-            "2 definitions",
+            SiteLabel::Excluded,
+            "a call on a call result never reaches the top-level `foo`",
         );
     }
 }
@@ -3090,8 +3090,8 @@ fn a_call_after_a_line_that_ends_with_an_optional_or_non_null_member_dot_is_not_
             &report,
             "use.ts",
             line,
-            SiteLabel::Unresolved,
-            "2 definitions",
+            SiteLabel::Excluded,
+            "a call on a call result never reaches the top-level `foo`",
         );
     }
 }
@@ -3968,7 +3968,13 @@ fn a_call_on_a_string_literal_is_not_a_bare_call() {
     let report = report(&repo, "trim", Some("a.js"));
 
     for line in [3, 5, 7] {
-        assert_site(&report, "b.js", line, SiteLabel::Likely, "name only");
+        assert_site(
+            &report,
+            "b.js",
+            line,
+            SiteLabel::Excluded,
+            "a call on a call result never reaches the top-level `trim`",
+        );
     }
     assert_site(&report, "b.js", 8, SiteLabel::Proven, "import");
 }
@@ -10965,4 +10971,79 @@ fn an_msbuild_using_item_opens_every_csharp_namespace() {
     let report = report(&repo, "Cache", Some("src/Utilities/Cache.cs"));
 
     assert_not_excluded(&report, "src/Tests/GameObject.cs", 7);
+}
+
+const TS_RESULT_RECEIVERS: &[(&str, &str)] = &[
+    (
+        "src/mini.ts",
+        "export function refine(fn: () => boolean) {\n  return fn;\n}\n",
+    ),
+    (
+        "src/classic.ts",
+        "export class ZodType {\n  refine(fn: () => boolean) {\n    return this;\n  }\n}\n\nexport function string() {\n  return new ZodType();\n}\n",
+    ),
+    (
+        "src/use.ts",
+        "import * as z from \"./mini\";\nimport { string } from \"./classic\";\n\nexport const a = string().refine(() => true);\nexport const b = string()\n  .refine(() => true);\nexport const c = z.refine(() => true);\nexport const d = require(\"./mini\").refine(() => true);\n",
+    ),
+];
+
+#[test]
+fn a_call_on_a_call_result_never_reaches_a_top_level_function() {
+    let repo = scanned_repo(TS_RESULT_RECEIVERS);
+    let function = report(&repo, "refine", Some("src/mini.ts"));
+
+    for line in [4, 6] {
+        assert_site(
+            &function,
+            "src/use.ts",
+            line,
+            SiteLabel::Excluded,
+            "a call on a call result never reaches the top-level `refine`",
+        );
+    }
+    assert_not_excluded(&function, "src/use.ts", 7);
+    assert_not_excluded(&function, "src/use.ts", 8);
+
+    let method = report(&repo, "ZodType.refine", None);
+    assert_eq!(
+        site_at(&method, "src/use.ts", 4).label,
+        SiteLabel::Likely,
+        "{}",
+        dump(&method)
+    );
+}
+
+#[test]
+fn a_call_result_reaches_a_top_level_function_that_an_object_literal_holds() {
+    let mut files = TS_RESULT_RECEIVERS.to_vec();
+    files.push((
+        "src/api.ts",
+        "import { refine } from \"./mini\";\n\nexport function api() {\n  return { refine };\n}\n\nexport const e = api().refine(() => true);\n",
+    ));
+    let repo = scanned_repo(&files);
+    let report = report(&repo, "refine", Some("src/mini.ts"));
+
+    assert_not_excluded(&report, "src/api.ts", 7);
+    assert_not_excluded(&report, "src/use.ts", 4);
+}
+
+#[test]
+fn a_const_that_holds_a_call_result_never_reaches_a_top_level_function() {
+    let mut files = TS_RESULT_RECEIVERS.to_vec();
+    files.push((
+        "src/vars.ts",
+        "import * as z from \"./mini\";\nimport { string } from \"./classic\";\n\nexport function f() {\n  const schema = string();\n  return schema.refine(() => true);\n}\n\nexport function g() {\n  const alias = z;\n  return alias.refine(() => true);\n}\n",
+    ));
+    let repo = scanned_repo(&files);
+    let report = report(&repo, "refine", Some("src/mini.ts"));
+
+    assert_site(
+        &report,
+        "src/vars.ts",
+        6,
+        SiteLabel::Excluded,
+        "a call on a call result never reaches the top-level `refine`",
+    );
+    assert_not_excluded(&report, "src/vars.ts", 11);
 }

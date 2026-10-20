@@ -334,7 +334,14 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   whose name follows a `.` after a call result, an index result, or a closing quote, a call on a
   line that starts with `.` (`    .readonly()`), and a call that starts the line below such a `.`
   are never bare calls: scope, class chain, and julie's same-file link neither prove nor exclude
-  them. A JavaScript call whose receiver names the top-level object that the target is assigned
+  them. When such a receiver is a call result, an index result, or a string literal (on the line,
+  or at the end of the line above a line that starts with `.`), or a `const` of the caller's scope
+  or file whose nearest declaration above the call holds a call or a `new` object (`const schema =
+  z.object({…})`), and it loads no module (`require(…)`, `import(…)`), the call never reaches a top-level JavaScript or TypeScript function, variable, or
+  constant that no object holds: one never written as `object.name` in its file and never placed
+  in an object literal there or in a file that imports the name. Such a target excludes the site
+  (``a call on a call result never reaches the top-level `refine` ``), and such a definition is no
+  other definition of it. A JavaScript call whose receiver names the top-level object that the target is assigned
   on in its file (`res.redirect()` for `res.redirect = function`) is `likely` with the basis
   ``receiver `res` names the object `redirect` is assigned on`` when no other definition is
   assigned on an object of that name.
