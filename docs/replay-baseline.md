@@ -191,3 +191,30 @@ once; the cap is 30 symbols.
 - Check time: holdback p95 7.05 s to 7.83 s; clean holdout p95 9.47 s to 7.94 s. The slowest
   clean case (Newtonsoft.Json `bf2e2a78`, 80 changed symbols) took 19.32 s with the cap of 10 and
   18.95 s with 30, so its time is the scan, not the symbols.
+
+## julie 3.9.0 build
+
+The release build (commit 74c1c6f, julie-extract 3.9.0 at the `references` level) against the
+holdout-fix build (adec8ee, which ran with julie-extract 3.8.0 at the `full` level), on 2026-10-20.
+
+| Set | Half | Holdout fix | julie 3.9.0 |
+|---|---|---|---|
+| Clean commits | dev | 0 of 56 | 0 of 56 |
+| Clean commits | holdout | 1 of 49 (2.04%) | 1 of 49 (2.04%) |
+| Holdback: truth sites listed | dev | 342 of 396 (86.4%) | 342 of 396 (86.4%) |
+| Holdback: truth sites listed | holdout | 841 of 1073 (78.4%) | 840 of 1073 (78.3%) |
+| Holdback: judged outside rows true | dev | 53 of 77 | 53 of 59 |
+| Holdback: judged outside rows true | holdout | 90 of 96 | 90 of 96 |
+| Sessions: rebuilt cases caught | dev + holdout | 8 of 88 | 8 of 88 |
+
+- The build adds no outside row and drops 60: 57 JavaScript dev rows, where julie now writes a
+  property for a value assigned on a named object (`res.locals = …`), and 3 C# rows, where the `#if`
+  rule makes a use of `ConcurrentDictionary` `unresolved`. The dropped judged rows were all false
+  (16 JavaScript, 2 C#); no true row was lost.
+- The one lost holdout site is express `f41d09a3cf05`: the commit replaces the method
+  `Router.prototype.middleware` with `self.middleware = self.handle.bind(self)` in the constructor.
+  julie 3.9.0 writes that property, so the test's `router.middleware` still names a definition and
+  is `unresolved` for the removed method. The name is still defined, so the label is right; the
+  author changed the line because the test was rewritten.
+- Holdback check time: p50 1.12 s to 0.99 s, p95 7.80 s to 6.11 s. Clean set: dev p50 2.06 s and
+  p95 9.32 s, holdout p50 2.18 s and p95 7.35 s.
