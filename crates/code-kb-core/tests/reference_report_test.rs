@@ -10781,3 +10781,43 @@ fn a_function_nested_in_another_python_function_is_no_rival_outside_it() {
         dump(&report)
     );
 }
+
+#[test]
+fn a_csharp_type_in_a_namespace_the_use_does_not_open_is_no_rival() {
+    let repo = scanned_repo(&[
+        (
+            "src/Tests/PerformanceTests.cs",
+            "namespace App.Tests\n{\n    public class PerformanceTests\n    {\n    }\n}\n",
+        ),
+        (
+            "src/Tests/Documentation/PerformanceTests.cs",
+            "namespace App.Tests.Documentation\n{\n    public class PerformanceTests\n    {\n    }\n}\n",
+        ),
+        (
+            "src/Console/Program.cs",
+            "using System;\nusing App.Tests;\n\nnamespace App.Console\n{\n    public class Program\n    {\n        public static void Run()\n        {\n            var t = new PerformanceTests();\n        }\n    }\n}\n",
+        ),
+        (
+            "src/Console/Docs.cs",
+            "using App.Tests;\nusing App.Tests.Documentation;\n\nnamespace App.Console\n{\n    public class Docs\n    {\n        public static void Run()\n        {\n            var t = new PerformanceTests();\n        }\n    }\n}\n",
+        ),
+    ]);
+    let report = report(
+        &repo,
+        "PerformanceTests",
+        Some("src/Tests/PerformanceTests.cs"),
+    );
+
+    assert_ne!(
+        site_at(&report, "src/Console/Program.cs", 10).label,
+        SiteLabel::Unresolved,
+        "{}",
+        dump(&report)
+    );
+    assert_eq!(
+        site_at(&report, "src/Console/Docs.cs", 10).label,
+        SiteLabel::Unresolved,
+        "{}",
+        dump(&report)
+    );
+}

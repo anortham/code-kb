@@ -264,6 +264,8 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   is unresolved). A module receiver never proves a class member, and a Python receiver chain that
   names a module of the project (`flask.json` after `import flask`, or `json` after `from flask
   import json`) reaches none, so a method of that name is no other definition of the site. A
+  C# type or constructor is no other definition of a bare C# use unless its namespace is the
+  global one, holds the use, or is opened by a `using` of the use's file or by a `global using`. A
   Python absolute import proves
   only a file whose top package (the outermost folder with `__init__.py`), or a plain folder
   above it, is the first segment of the import (`import json` does not reach `src/flask/json/`).

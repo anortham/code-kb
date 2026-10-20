@@ -484,7 +484,7 @@ const VARIABLE_REF_SITES_SQL: &str = "SELECT path, start_line, start_column FROM
 const TYPE_DECLARATIONS_SQL: &str = "SELECT COALESCE(signature, '') FROM symbols
      WHERE name = ?1 AND kind = 'type' AND language = ?2";
 
-const ENCLOSING_CLASSES_SQL: &str = "WITH RECURSIVE chain(symbol_id, depth) AS (
+const SYMBOL_CHAIN_SQL: &str = "WITH RECURSIVE chain(symbol_id, depth) AS (
          SELECT ?1, 0
          UNION ALL
          SELECT s.parent_symbol_id, chain.depth + 1
@@ -493,6 +493,12 @@ const ENCLOSING_CLASSES_SQL: &str = "WITH RECURSIVE chain(symbol_id, depth) AS (
      )
      SELECT s.kind, s.name FROM chain JOIN symbols s ON s.symbol_id = chain.symbol_id
      ORDER BY chain.depth";
+
+const CSHARP_USINGS_SQL: &str = "SELECT COALESCE(signature, '') FROM symbols
+     WHERE kind = 'import' AND language = 'csharp'
+       AND (path = ?1 OR signature LIKE 'global using %')";
+
+const CSHARP_TYPE_KINDS: &[&str] = &["class", "struct", "interface", "enum", "record", "delegate"];
 
 const JAVA_STATIC_IMPORTS_SQL: &str = "SELECT signature FROM symbols
      WHERE kind = 'import' AND path = ?1 AND (name = ?2 OR signature LIKE '%.*')
@@ -715,6 +721,19 @@ fn assigned_object(symbol: &Symbol) -> Option<String> {
     let signature = symbol.signature.as_deref()?;
     let (object, _) = signature.split_once(&format!(".{} =", symbol.name))?;
     Some(object.trim().to_string()).filter(|object| is_plain_identifier(object))
+}
+
+/// The namespace a C# `using` directive opens (`A.B` for `using A.B;` or `global using A.B;`),
+/// none for a `using static` or an alias.
+fn csharp_using_namespace(signature: &str) -> Option<&str> {
+    let signature = signature.trim();
+    let directive = signature.strip_prefix("global ").unwrap_or(signature);
+    let namespace = directive
+        .strip_prefix("using ")?
+        .trim()
+        .trim_end_matches(';')
+        .trim();
+    (!namespace.starts_with("static ") && !namespace.contains('=')).then_some(namespace)
 }
 
 /// The type a C# extension method extends: `IEnumerable` for `Foo(this IEnumerable<T> source)`.
@@ -2157,7 +2176,7 @@ impl<'a> Accounting<'a> {
                 None => return Ok(None),
             }
         }
-        let chain = self.with_statement(ENCLOSING_CLASSES_SQL, |stmt| {
+        let chain = self.with_statement(SYMBOL_CHAIN_SQL, |stmt| {
             stmt.query_map(params![caller], |r| {
                 Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
             })?
@@ -2694,13 +2713,60 @@ impl<'a> Accounting<'a> {
         others: &[&'d Definition],
     ) -> Result<Vec<&'d Definition>, QueryError> {
         let module_receiver = self.receiver_is_python_module(row)?;
-        Ok(others
+        let bare_csharp = row.language == "csharp" && !row.has_qualifier();
+        let mut rivals = Vec::new();
+        for &other in others {
+            if !row.can_reach(other) || module_receiver && other.owner_name.is_some() {
+                continue;
+            }
+            let csharp_type = other.language == "csharp"
+                && (other.kind == "constructor"
+                    || other.owner_name.is_none()
+                        && CSHARP_TYPE_KINDS.contains(&other.kind.as_str()));
+            if bare_csharp && csharp_type && !self.csharp_type_in_scope(row, other)? {
+                continue;
+            }
+            rivals.push(other);
+        }
+        Ok(rivals)
+    }
+
+    /// Whether a bare C# use can name the type of `other`: its namespace is the global one, one
+    /// that holds the use, or one that a `using` of the use's file or a `global using` opens.
+    fn csharp_type_in_scope(&self, row: &NameRow, other: &Definition) -> Result<bool, QueryError> {
+        let namespace = self.csharp_namespace(&other.symbol_id)?;
+        let Some(caller) = row.caller_id.as_deref().filter(|_| !namespace.is_empty()) else {
+            return Ok(true);
+        };
+        let enclosing = self.csharp_namespace(caller)?;
+        if enclosing == namespace || enclosing.starts_with(&format!("{namespace}.")) {
+            return Ok(true);
+        }
+        let usings = self.with_statement(CSHARP_USINGS_SQL, |stmt| {
+            stmt.query_map(params![row.path], |r| r.get::<_, String>(0))?
+                .collect::<Result<Vec<_>, _>>()
+        })?;
+        Ok(usings
             .iter()
-            .copied()
-            .filter(|other| {
-                row.can_reach(other) && !(module_receiver && other.owner_name.is_some())
-            })
-            .collect())
+            .any(|using| csharp_using_namespace(using) == Some(namespace.as_str())))
+    }
+
+    /// The dotted namespace that holds `symbol_id`, read from its `namespace` ancestors; empty
+    /// for the global namespace.
+    fn csharp_namespace(&self, symbol_id: &str) -> Result<String, QueryError> {
+        let chain = self.with_statement(SYMBOL_CHAIN_SQL, |stmt| {
+            stmt.query_map(params![symbol_id], |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+            })?
+            .collect::<Result<Vec<_>, _>>()
+        })?;
+        let mut parts: Vec<String> = chain
+            .into_iter()
+            .filter(|(kind, _)| kind == "namespace")
+            .map(|(_, name)| name)
+            .collect();
+        parts.reverse();
+        Ok(parts.join("."))
     }
 
     /// Whether the receiver chain of a Python row names a module of the project: `flask.json`
