@@ -240,12 +240,12 @@ fn lookup_symbol_reports_actionable_candidates_for_qualified_path_scoped_symbols
         (
             "Scaffold.static_folder",
             "static_folder",
-            [("attribute", 3), ("property", 7), ("property", 11)],
+            [("property", 7), ("property", 11)],
         ),
         (
             "Scaffold.static_url_path",
             "static_url_path",
-            [("attribute", 4), ("property", 15), ("property", 19)],
+            [("property", 15), ("property", 19)],
         ),
     ] {
         let result = session.call(
@@ -259,7 +259,7 @@ fn lookup_symbol_reports_actionable_candidates_for_qualified_path_scoped_symbols
         );
         assert_eq!(result["isError"], true, "{result}");
         let text = result_text(&result);
-        assert!(text.contains("3 matching candidates"), "{text}");
+        assert!(text.contains("2 matching candidates"), "{text}");
         assert!(
             text.contains("Choose a candidate by its kind and source line")
                 && text.contains("`symbol_id`")
@@ -271,7 +271,7 @@ fn lookup_symbol_reports_actionable_candidates_for_qualified_path_scoped_symbols
             "do not recommend refinements already supplied: {text}"
         );
         let candidates: Vec<_> = text.lines().filter(|line| line.starts_with("- ")).collect();
-        assert_eq!(candidates.len(), 3, "{text}");
+        assert_eq!(candidates.len(), 2, "{text}");
 
         for (kind, line) in expected_candidates {
             let prefix = format!("- {kind} `{name}` in src/flask/sansio/scaffold.py:{line} (id=");
@@ -314,7 +314,7 @@ fn lookup_symbol_reports_actionable_candidates_for_qualified_path_scoped_symbols
     );
     assert_eq!(unscoped["isError"], true, "{unscoped}");
     assert!(
-        result_text(&unscoped).contains("3 matching candidates"),
+        result_text(&unscoped).contains("2 matching candidates"),
         "an actually ambiguous unscoped request must remain ambiguous: {unscoped}"
     );
 }

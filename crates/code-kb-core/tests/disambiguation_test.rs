@@ -1,7 +1,8 @@
 use code_kb_core::{
-    SymbolSelector, Workspace, ensure_fts_index, find_callee_signatures, find_julie_extract_binary,
-    find_literals_scoped, find_references_scoped, find_structural_facts_scoped,
-    format_fact_categories, format_structural_facts, format_symbol_bodies, get_context_slice_op,
+    SymbolSelector, Workspace, ensure_fts_index, file_skeleton_op, find_callee_signatures,
+    find_julie_extract_binary, find_literals_scoped, find_references_scoped,
+    find_structural_facts_scoped, format_context_slices, format_fact_categories,
+    format_structural_facts, format_symbol_bodies, get_context_slice_op,
     get_context_slices_selected_op, get_symbol_bodies_selected_op, get_symbol_by_id,
     get_symbol_by_name, list_structural_fact_categories_scoped, open_read_only, open_read_write,
     safe_tempdir, scan_workspace, search_symbols_scoped, suggest_file_paths, suggest_symbol_names,
@@ -1598,4 +1599,52 @@ fn neither_a_setup_hook_nor_the_target_itself_is_a_related_test() {
 
     assert!(!names.contains(&"before"), "{names:?}");
     assert!(!names.contains(&"setHeaders"), "{names:?}");
+}
+
+const SCAFFOLD: &str = "class Scaffold:\n    def __init__(self, folder):\n        self.static_folder = folder\n\n    @property\n    def static_folder(self):\n        return self._folder\n\n    @static_folder.setter\n    def static_folder(self, value):\n        self._folder = value\n";
+
+#[test]
+fn a_write_to_a_property_of_its_own_class_is_no_overload_and_no_definition() {
+    let (_repo, ws, db) = scanned(&[("src/scaffold.py", SCAFFOLD)]);
+    let conn = open_read_only(&db).unwrap();
+    let folder = SymbolSelector::Name("Scaffold.static_folder".to_string());
+
+    let bodies = get_symbol_bodies_selected_op(&ws, &db, &conn, &folder, None).unwrap();
+    let text = format_symbol_bodies(&bodies);
+    assert_eq!(bodies.len(), 2, "{text}");
+    assert!(!text.contains("self.static_folder = folder"), "{text}");
+
+    let rows = search_symbols_scoped(&conn, "static_folder", None, None, false, 20).unwrap();
+    let lines: Vec<_> = rows.iter().map(|s| s.start_line).collect();
+    assert!(!lines.contains(&3), "{lines:?}");
+
+    let skeleton = file_skeleton_op(&ws, &db, &conn, "src/scaffold.py").unwrap();
+    assert!(!skeleton.contains("self.static_folder"), "{skeleton}");
+}
+
+#[test]
+fn a_decorated_body_and_context_start_their_range_at_the_first_decorator() {
+    let (_repo, ws, db) = scanned(&[("src/scaffold.py", SCAFFOLD)]);
+    let conn = open_read_only(&db).unwrap();
+    let folder = SymbolSelector::Name("Scaffold.static_folder".to_string());
+
+    let bodies = format_symbol_bodies(
+        &get_symbol_bodies_selected_op(&ws, &db, &conn, &folder, None).unwrap(),
+    );
+    assert!(
+        bodies.contains("// src/scaffold.py:5-7 (static_folder)\n    @property\n"),
+        "{bodies}"
+    );
+    assert!(
+        bodies.contains("// src/scaffold.py:9-11 (static_folder)\n    @static_folder.setter\n"),
+        "{bodies}"
+    );
+
+    let contexts = format_context_slices(
+        &get_context_slices_selected_op(&ws, &db, &conn, &folder, None, false).unwrap(),
+    );
+    assert!(
+        contexts.contains("### Target: `static_folder` (src/scaffold.py:5-7)"),
+        "{contexts}"
+    );
 }

@@ -562,7 +562,8 @@ pub fn search_symbols(
 /// SQLite cannot plan it as a multi-index OR, which scans every non-test row through the
 /// test-path predicate (about 8 ms on this repository's index against 1 ms).
 /// True when `alias` is an attribute row such as `self.debug = …` whose name a base class already
-/// defines with a value or a property. A base class named by a pending `extends` row counts only
+/// defines with a value or a property, or whose own class defines it that way in another row than
+/// a `self.` write (`@property def static_folder`). A base class named by a pending `extends` row counts only
 /// when no class of that name is as close to the subclass's file, so an unclear base keeps the row. The row is a write to an inherited attribute, not a
 /// definition, so lookup, search, and skeletons leave it out. `CASE` keeps SQLite from walking
 /// the base classes of every row a search touches: it evaluates an `AND` with `EXISTS` eagerly.
@@ -593,7 +594,9 @@ pub(crate) fn inherited_attribute_write(alias: &str) -> String {
                         AND {rival_rank} >= {base_rank})
             )
             SELECT 1 FROM base JOIN symbols inherited ON inherited.parent_symbol_id = base.symbol_id
-            WHERE base.depth > 0 AND inherited.name = {alias}.name
+            WHERE inherited.name = {alias}.name
+              AND (base.depth > 0 OR NOT (COALESCE(inherited.signature, '') LIKE 'self.%'
+                   OR inherited.signature LIKE 'this.%' OR inherited.signature LIKE 'cls.%'))
               AND (inherited.kind NOT IN ('variable', 'field') OR inherited.signature LIKE '%=%'))
           ELSE 0 END)"
     )
@@ -2692,6 +2695,15 @@ fn name_candidates(
         matches.into_iter().filter(|s| s.kind != "import").collect()
     } else {
         matches
+    };
+    let writes = inherited_writes_among(conn, candidates.iter().map(|s| s.symbol_id.as_str()))?;
+    let candidates: Vec<Symbol> = if candidates.iter().any(|s| !writes.contains(&s.symbol_id)) {
+        candidates
+            .into_iter()
+            .filter(|s| !writes.contains(&s.symbol_id))
+            .collect()
+    } else {
+        candidates
     };
 
     if candidates.len() == 1 {

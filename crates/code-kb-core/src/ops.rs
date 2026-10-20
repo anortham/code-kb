@@ -255,11 +255,14 @@ pub fn get_symbol_body_selected_op(
     selector: &SymbolSelector,
     file_path: Option<&str>,
 ) -> Result<(Symbol, String), OpError> {
-    let symbol = resolve_symbol_op(workspace, db_path, conn, selector, file_path)?;
+    let mut symbol = resolve_symbol_op(workspace, db_path, conn, selector, file_path)?;
+    if let Some((start_byte, start_line)) = decorated_start(conn, &symbol) {
+        symbol.start_byte = start_byte;
+        symbol.start_line = start_line;
+    }
 
     let abs_file = workspace.canonical_root.join(&symbol.path);
-    let start = decorated_start(conn, &symbol).unwrap_or(symbol.start_byte);
-    let source = slicer::slice_symbol_source(&abs_file, &symbol, start)?;
+    let source = slicer::slice_symbol_source(&abs_file, &symbol, symbol.start_byte)?;
 
     Ok((symbol, source))
 }
@@ -363,23 +366,27 @@ fn overload_selectors(
         .collect())
 }
 
-/// Where the decorators above a Python symbol begin: julie starts the symbol at its `def` or
-/// `class` line and records the decorated block as a `decorated_definition` fact.
-fn decorated_start(conn: &Connection, symbol: &Symbol) -> Option<usize> {
+/// The byte and line where the decorators above a Python symbol begin: julie starts the symbol at
+/// its `def` or `class` line and records the decorated block as a `decorated_definition` fact.
+fn decorated_start(conn: &Connection, symbol: &Symbol) -> Option<(usize, usize)> {
     conn.query_row(
-        "SELECT MAX(start_byte) FROM structural_facts
+        "SELECT start_byte, start_line FROM structural_facts
          WHERE path = ?1 AND pattern_id LIKE '%.decorated_definition.%'
-           AND end_byte = ?2 AND start_byte < ?3",
+           AND end_byte = ?2 AND start_byte < ?3
+         ORDER BY start_byte DESC LIMIT 1",
         rusqlite::params![
             symbol.path,
             symbol.end_byte as i64,
             symbol.start_byte as i64
         ],
-        |row| row.get::<_, Option<i64>>(0),
+        |row| {
+            Ok((
+                row.get::<_, i64>(0)? as usize,
+                row.get::<_, i64>(1)? as usize,
+            ))
+        },
     )
     .ok()
-    .flatten()
-    .map(|start| start as usize)
 }
 
 /// Retrieve a complete context slice for a symbol, guaranteeing fresh offsets.
