@@ -229,10 +229,82 @@
       ],
       "adjudicated": [
         {
+          "path": "scripts/sync-agent-skills.ts",
+          "line": 76,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 73; scip-typescript records the binding as a local symbol"
+        },
+        {
           "path": "tests/agent-assets.test.ts",
           "line": 198,
           "verdict": "false",
           "note": "Dynamic import binding, which counts as an import line."
+        },
+        {
+          "path": "tests/agent-assets.test.ts",
+          "line": 201,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 198; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 198,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 196, re-exported by `../src/server`; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 219,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 217, re-exported by `../src/server`; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 247,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 245, re-exported by `../src/server`; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 261,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 259, re-exported by `../src/server`; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 275,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 273, re-exported by `../src/server`; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 296,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 273, re-exported by `../src/server`; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 305,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 303, re-exported by `../src/server`; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 319,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 317, re-exported by `../src/server`; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 340,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 338, re-exported by `../src/server`; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 350,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 348, re-exported by `../src/server`; scip-typescript records the binding as a local symbol"
         },
         {
           "path": "tests/server.test.ts",
@@ -242,9 +314,33 @@
         },
         {
           "path": "tests/server.test.ts",
+          "line": 391,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 388; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
           "line": 446,
           "verdict": "false",
           "note": "Dynamic import binding, which counts as an import line."
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 449,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 446; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 506,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 504, re-exported by `../src/server`; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 1355,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 1354, re-exported by `../src/server`; scip-typescript records the binding as a local symbol"
         }
       ]
     },
@@ -575,6 +671,12 @@
           "line": 1643,
           "verdict": "false",
           "note": "a dynamic import binding, which counts as an import line"
+        },
+        {
+          "path": "tests/handlers.test.ts",
+          "line": 1644,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 1643; scip-typescript records the binding as a local symbol"
         }
       ]
     },
@@ -1003,6 +1105,12 @@
           "line": 1627,
           "verdict": "false",
           "note": "a dynamic import binding, which counts as an import line"
+        },
+        {
+          "path": "tests/checkpoints.test.ts",
+          "line": 1628,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 1627; scip-typescript records the binding as a local symbol"
         }
       ]
     },
@@ -1813,7 +1921,38 @@
           "line": 1751
         }
       ],
-      "adjudicated": []
+      "adjudicated": [
+        {
+          "path": "tests/server.test.ts",
+          "line": 129,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 127, re-exported by `../src/server`; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 155,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 145, re-exported by `../src/server`; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 167,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 165, re-exported by `../src/server`; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 182,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 180, re-exported by `../src/server`; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 1386,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 1384, re-exported by `../src/server`; scip-typescript records the binding as a local symbol"
+        }
+      ]
     },
     {
       "id": "_resetForTests@src/logger.ts:166",
@@ -1845,9 +1984,21 @@
         },
         {
           "path": "tests/logger.test.ts",
+          "line": 16,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 15; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/logger.test.ts",
           "line": 96,
           "verdict": "false",
           "note": "Dynamic import binding, which counts as an import line."
+        },
+        {
+          "path": "tests/logger.test.ts",
+          "line": 97,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 96; scip-typescript records the binding as a local symbol"
         }
       ]
     },
@@ -2446,9 +2597,33 @@
         },
         {
           "path": "tests/recall.test.ts",
+          "line": 421,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 420; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/recall.test.ts",
+          "line": 422,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 420; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/recall.test.ts",
           "line": 1936,
           "verdict": "false",
           "note": "a dynamic import binding, which counts as an import line"
+        },
+        {
+          "path": "tests/recall.test.ts",
+          "line": 1937,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 1936; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/recall.test.ts",
+          "line": 1938,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 1936; scip-typescript records the binding as a local symbol"
         },
         {
           "path": "tests/recall.test.ts",
@@ -2458,15 +2633,45 @@
         },
         {
           "path": "tests/recall.test.ts",
+          "line": 1962,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 1961; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/recall.test.ts",
           "line": 2036,
           "verdict": "false",
           "note": "a dynamic import binding, which counts as an import line"
         },
         {
           "path": "tests/recall.test.ts",
+          "line": 2037,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 2036; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/recall.test.ts",
+          "line": 2038,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 2036; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/recall.test.ts",
           "line": 2096,
           "verdict": "false",
           "note": "a dynamic import binding, which counts as an import line"
+        },
+        {
+          "path": "tests/recall.test.ts",
+          "line": 2097,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 2096; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/recall.test.ts",
+          "line": 2098,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 2096; scip-typescript records the binding as a local symbol"
         }
       ]
     },
@@ -2653,7 +2858,32 @@
           "line": 1698
         }
       ],
-      "adjudicated": []
+      "adjudicated": [
+        {
+          "path": "tests/server.test.ts",
+          "line": 68,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 66, re-exported by `../src/server`; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 87,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 85, re-exported by `../src/server`; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 105,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 102, re-exported by `../src/server`; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 1373,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 1370, re-exported by `../src/server`; scip-typescript records the binding as a local symbol"
+        }
+      ]
     },
     {
       "id": "__getSearchIndexCacheStatsForTests@src/ranking.ts:237",
@@ -2678,6 +2908,24 @@
           "line": 360,
           "verdict": "false",
           "note": "Dynamic import binding, which counts as an import line."
+        },
+        {
+          "path": "tests/ranking.test.ts",
+          "line": 363,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 360; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/ranking.test.ts",
+          "line": 367,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 360; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/ranking.test.ts",
+          "line": 383,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 360; scip-typescript records the binding as a local symbol"
         }
       ]
     },
@@ -3054,6 +3302,66 @@
           "line": 24,
           "verdict": "true",
           "note": "Real call to getInstructions inside a template literal, imported from src/instructions."
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 366,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 364, re-exported by `../src/server`; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 377,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 375, re-exported by `../src/server`; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 390,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 387, re-exported by `../src/server`; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 403,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 401, re-exported by `../src/server`; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 412,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 410, re-exported by `../src/server`; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 422,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 420, re-exported by `../src/server`; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 441,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 439, re-exported by `../src/server`; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 448,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 445, re-exported by `../src/server`; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 462,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 460, re-exported by `../src/server`; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 507,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 504, re-exported by `../src/server`; scip-typescript records the binding as a local symbol"
         }
       ]
     },
@@ -3299,9 +3607,27 @@
         },
         {
           "path": "tests/server.test.ts",
+          "line": 485,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 483; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 486,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 483; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
           "line": 720,
           "verdict": "false",
           "note": "a dynamic import binding, which counts as an import line"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 722,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 720; scip-typescript records the binding as a local symbol"
         },
         {
           "path": "tests/server.test.ts",
@@ -3311,9 +3637,21 @@
         },
         {
           "path": "tests/server.test.ts",
+          "line": 850,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 849; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
           "line": 1042,
           "verdict": "false",
           "note": "a dynamic import binding, which counts as an import line"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 1044,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 1042; scip-typescript records the binding as a local symbol"
         },
         {
           "path": "tests/server.test.ts",
@@ -3323,9 +3661,21 @@
         },
         {
           "path": "tests/server.test.ts",
+          "line": 1109,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 1108; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
           "line": 1143,
           "verdict": "false",
           "note": "a dynamic import binding, which counts as an import line"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 1144,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 1143; scip-typescript records the binding as a local symbol"
         },
         {
           "path": "tests/server.test.ts",
@@ -3335,9 +3685,21 @@
         },
         {
           "path": "tests/server.test.ts",
+          "line": 1191,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 1190; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
           "line": 1224,
           "verdict": "false",
           "note": "a dynamic import binding, which counts as an import line"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 1225,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 1224; scip-typescript records the binding as a local symbol"
         },
         {
           "path": "tests/server.test.ts",
@@ -3347,9 +3709,21 @@
         },
         {
           "path": "tests/server.test.ts",
+          "line": 1259,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 1258; scip-typescript records the binding as a local symbol"
+        },
+        {
+          "path": "tests/server.test.ts",
           "line": 1289,
           "verdict": "false",
           "note": "a dynamic import binding, which counts as an import line"
+        },
+        {
+          "path": "tests/server.test.ts",
+          "line": 1290,
+          "verdict": "true",
+          "note": "call through the destructured dynamic import at line 1289; scip-typescript records the binding as a local symbol"
         }
       ]
     },

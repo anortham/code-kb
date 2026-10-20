@@ -376,7 +376,7 @@ pub(crate) fn overload_group(
 
 const DEFINITION_BY_ID_SQL: &str =
     "SELECT s.symbol_id, s.name, s.kind, s.language, s.path, s.start_line,
-            s.body_start_line, s.parent_symbol_id, par.name, par.kind
+            s.body_start_line, s.parent_symbol_id, par.name, par.kind, COALESCE(s.signature, '')
      FROM symbols s LEFT JOIN symbols par ON par.symbol_id = s.parent_symbol_id
      WHERE s.symbol_id = ?1";
 
@@ -1038,6 +1038,14 @@ impl Definition {
         )
     }
 
+    /// The module source and imported name when this is a JavaScript variable that a
+    /// destructured dynamic import binds: a binding, not a definition.
+    fn dynamic_import(&self, name: &str) -> Option<(String, String)> {
+        (self.kind == "variable" && language_family(&self.language) == "js")
+            .then(|| js_modules::dynamic_import_binding(&self.signature, name))
+            .flatten()
+    }
+
     /// See [`is_property_method`].
     fn is_property_method(&self) -> bool {
         self.kind == "method" && self.top_level && language_family(&self.language) == "js"
@@ -1351,7 +1359,7 @@ impl<'a> Accounting<'a> {
         drop(slot);
         let writes =
             inherited_writes_among(self.conn, definitions.iter().map(|d| d.symbol_id.as_str()))?;
-        definitions.retain(|d| !writes.contains(&d.symbol_id));
+        definitions.retain(|d| !writes.contains(&d.symbol_id) && d.dynamic_import(name).is_none());
         let mut probed: HashSet<&str> = definitions
             .iter()
             .filter(|d| d.free || d.module_value)
@@ -2017,6 +2025,24 @@ impl<'a> Accounting<'a> {
             let (path, start, end) = row?;
             add(path, start, end);
         }
+        let mut stmt = self.conn.prepare(
+            "SELECT path, start_line, end_line, COALESCE(signature, '') FROM symbols
+             WHERE name = ?1 AND kind = 'variable'
+               AND language IN ('javascript', 'typescript', 'tsx', 'jsx', 'vue')",
+        )?;
+        for row in stmt.query_map(params![name], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, Option<i64>>(2)?,
+                row.get::<_, String>(3)?,
+            ))
+        })? {
+            let (path, start, end, signature) = row?;
+            if js_modules::dynamic_import_binding(&signature, name).is_some() {
+                add(path, start, end);
+            }
+        }
         Ok(spans)
     }
 
@@ -2242,15 +2268,28 @@ impl<'a> Accounting<'a> {
             )));
         }
         if let Some(shadow) = self.nearest_shadow(row, &spec.name, group_ids)? {
-            let basis = match self.js_binding_line(row, &spec.name)? {
-                Some(line) if line > shadow.start_line || shadow.start_line > row.site_line => {
-                    format!(
-                        "line {line} binds the name as a callback parameter, loop variable, or catch parameter"
-                    )
-                }
-                _ => shadow.resolves_to(),
+            let dynamic = shadow.dynamic_import(&spec.name);
+            if let Some((source, imported)) = &dynamic
+                && let Some(verdict) =
+                    self.js_dynamic_import_verdict(row, spec, source, imported)?
+            {
+                return Ok(Some(verdict));
+            }
+            let follows_project_module = match &dynamic {
+                Some((source, _)) => !self.js_source_is_external(&row.path, source)?,
+                None => false,
             };
-            return Ok(Some(Verdict::new(SiteLabel::Excluded, basis, false)));
+            if !follows_project_module {
+                let basis = match self.js_binding_line(row, &spec.name)? {
+                    Some(line) if line > shadow.start_line || shadow.start_line > row.site_line => {
+                        format!(
+                            "line {line} binds the name as a callback parameter, loop variable, or catch parameter"
+                        )
+                    }
+                    _ => shadow.resolves_to(),
+                };
+                return Ok(Some(Verdict::new(SiteLabel::Excluded, basis, false)));
+            }
         }
         if let Some(line) = self.js_enclosing_binding_line(row, &spec.name)? {
             return Ok(Some(Verdict::new(
@@ -2678,7 +2717,7 @@ impl<'a> Accounting<'a> {
                     scope: None,
                     kind: row.get(2)?,
                     language: row.get(3)?,
-                    signature: String::new(),
+                    signature: row.get(10)?,
                     class_name: None,
                     top_level: row.get::<_, Option<String>>(7)?.is_none(),
                     callable: true,

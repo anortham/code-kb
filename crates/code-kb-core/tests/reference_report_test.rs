@@ -836,6 +836,41 @@ fn a_call_keeps_its_own_line_when_julie_names_a_caller_that_ends_above_the_next_
 }
 
 #[test]
+fn a_destructured_dynamic_import_binds_the_export_of_its_module() {
+    let repo = scanned_repo(&[
+        (
+            "src/server.ts",
+            "export async function hydrate(tool: string) {\n  return tool;\n}\n",
+        ),
+        (
+            "src/other.ts",
+            "export async function hydrate(tool: string) {\n  return tool + \"!\";\n}\n",
+        ),
+        (
+            "tests/server.test.ts",
+            "import { describe, it } from \"bun:test\";\n\ndescribe(\"hydrate\", () => {\n  it(\"fills a missing workspace\", async () => {\n    const { hydrate } = await import(\"../src/server\");\n    await hydrate(\"recall\");\n  });\n\n  it(\"uses the other module\", async () => {\n    const { hydrate } = await import(\"../src/other\");\n    await hydrate(\"brief\");\n  });\n});\n",
+        ),
+    ]);
+    let report = report(&repo, "hydrate", Some("src/server.ts"));
+
+    assert_site(
+        &report,
+        "tests/server.test.ts",
+        6,
+        SiteLabel::Proven,
+        "import",
+    );
+    assert_site(
+        &report,
+        "tests/server.test.ts",
+        11,
+        SiteLabel::Excluded,
+        "resolves to `hydrate` (src/other.ts:1)",
+    );
+    assert_eq!(report.counts.import_lines, 2, "{}", dump(&report));
+}
+
+#[test]
 fn a_typescript_read_inside_the_block_of_its_binding_is_excluded_with_no_other_definition_near() {
     let repo = scanned_repo(&[
         (

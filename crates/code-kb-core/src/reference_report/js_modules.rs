@@ -516,6 +516,29 @@ impl Accounting<'_> {
         self.js_definitions_verdict(row, spec, reached)
     }
 
+    /// The verdict a destructured dynamic import of `source` gives a site that it binds, or
+    /// `None` when the module is not a project file that the index can follow.
+    pub(super) fn js_dynamic_import_verdict(
+        &self,
+        row: &NameRow,
+        spec: &Spec,
+        source: &str,
+        imported: &str,
+    ) -> Result<Option<Verdict>, QueryError> {
+        let files = self.js_module(&row.path, source, Kind::Import)?;
+        if files.is_empty() {
+            return Ok(None);
+        }
+        let mut reached = Vec::new();
+        for target in self.walk_module(&files, imported, 1, &mut HashSet::new())? {
+            match target {
+                Target::Definition(definition) => reached.push(definition),
+                _ => return Ok(None),
+            }
+        }
+        self.js_definitions_verdict(row, spec, reached)
+    }
+
     fn js_definitions_verdict(
         &self,
         row: &NameRow,
@@ -1272,6 +1295,32 @@ impl Accounting<'_> {
     }
 }
 
+/// The module source and the imported name of a destructured dynamic import that binds `name`
+/// (`const { a, b: c } = await import('./m')`), which julie stores as a local variable.
+pub(super) fn dynamic_import_binding(signature: &str, name: &str) -> Option<(String, String)> {
+    let (head, call) = signature.split_at(signature.find("import(")?);
+    let rest = call["import(".len()..].trim_start();
+    let quote = rest
+        .chars()
+        .next()
+        .filter(|c| matches!(c, '\'' | '"' | '`'))?;
+    let source = rest[1..].split(quote).next()?;
+    let (open, close) = (head.find('{')?, head.rfind('}')?);
+    let between: Vec<&str> = head.get(close + 1..)?.split_whitespace().collect();
+    if close < open || !matches!(between.as_slice(), ["="] | ["=", "await"]) {
+        return None;
+    }
+    head[open + 1..close].split(',').find_map(|entry| {
+        let entry = entry.split('=').next().unwrap_or_default().trim();
+        let (imported, local) = entry
+            .split_once(':')
+            .map_or((entry, entry), |(imported, local)| {
+                (imported.trim(), local.trim())
+            });
+        (local == name).then(|| (source.to_string(), imported.to_string()))
+    })
+}
+
 /// Reads the names written before each JavaScript use whose qualifier julie did not record, so
 /// a type usage (`z.core.output<T>`) gets its chain, and drops the chain of a use that follows a
 /// `.` after something other than a name.
@@ -1303,5 +1352,31 @@ pub(super) fn complete_js_chains(root: &Path, rows: &mut [NameRow]) {
             let typed = row.kind == "type_usage";
             row.chain = written.filter(|chain| typed || chain.is_empty());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::dynamic_import_binding;
+
+    #[test]
+    fn a_destructured_dynamic_import_names_its_source_and_imported_name() {
+        let binding = |signature: &str, name: &str| dynamic_import_binding(signature, name);
+        let pair = |source: &str, imported: &str| Some((source.to_string(), imported.to_string()));
+
+        assert_eq!(
+            binding(
+                "const { hydrate } = await import('../src/server')",
+                "hydrate"
+            ),
+            pair("../src/server", "hydrate")
+        );
+        assert_eq!(
+            binding("const { a, hydrate: run = noop } = import(\"./m\")", "run"),
+            pair("./m", "hydrate")
+        );
+        assert_eq!(binding("const { a } = await import('./m')", "b"), None);
+        assert_eq!(binding("const { a } = wrap(import('./m'))", "a"), None);
+        assert_eq!(binding("const a = await import('./m')", "a"), None);
     }
 }

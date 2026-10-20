@@ -360,7 +360,10 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   `main`, never `module`; an ES import follows the `import` condition, `module`, and `main`. A
   package with no entry for the importer falls back to its `index` file. `types` comes after the
   scripts and never counts as a second script; a package that still names two scripts proves
-  nothing. `exports.name = …` and `module.exports.name = …` count as exports. The nearest
+  nothing. `exports.name = …` and `module.exports.name = …` count as exports. A destructured
+  dynamic import (`const { f } = await import('./m')`), which julie stores as a local variable,
+  is a binding, not a definition: the resolver follows its module like an ES import, and its
+  line counts as an import. The nearest
   `tsconfig.json` or `jsconfig.json` (`paths`, `baseUrl`, and relative `extends`, one or a list;
   `${configDir}` is the folder of that config) decides before the workspace packages. A `paths`
   key whose targets do not exist on disk falls through, as in TypeScript; a target on disk that
