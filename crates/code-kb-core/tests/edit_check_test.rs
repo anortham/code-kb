@@ -3952,7 +3952,7 @@ fn a_deleted_javascript_twin_of_a_typescript_file_lists_the_calls_of_its_javascr
 }
 
 #[test]
-fn a_removed_csharp_fallback_counts_a_use_beside_a_using_under_the_condition_as_unresolved() {
+fn a_removed_csharp_fallback_lists_a_use_beside_a_using_under_the_condition() {
     let repo = committed_repo(&[
         (
             "src/Utilities/ConcurrentDictionary.cs",
@@ -3963,14 +3963,14 @@ fn a_removed_csharp_fallback_counts_a_use_beside_a_using_under_the_condition_as_
             "using System;\n#if HAVE_CONCURRENT\nusing System.Collections.Concurrent;\n#endif\nusing App.Serialization;\n\nnamespace App.Utilities\n{\n    internal class Store\n    {\n        private ConcurrentDictionary<string, int> _store;\n    }\n}\n",
         ),
         (
-            "src/Utilities/Plain.cs",
-            "using System;\nusing App.Serialization;\n\nnamespace App.Utilities\n{\n    internal class Plain\n    {\n        private ConcurrentDictionary<string, int> _plain;\n    }\n}\n",
+            "src/Utilities/Always.cs",
+            "using System;\nusing System.Collections.Concurrent;\nusing App.Serialization;\n\nnamespace App.Utilities\n{\n    internal class Always\n    {\n        private ConcurrentDictionary<string, int> _always;\n    }\n}\n",
         ),
     ]);
     fs::remove_file(repo.root.join("src/Utilities/ConcurrentDictionary.cs")).unwrap();
     let text = text_of(&repo);
-    assert_has(&text, "src/Utilities/Plain.cs:8");
-    assert_lacks(&text, "src/Utilities/Store.cs");
+    assert_has(&text, "src/Utilities/Store.cs:11");
+    assert_lacks(&text, "src/Utilities/Always.cs");
 }
 
 #[test]

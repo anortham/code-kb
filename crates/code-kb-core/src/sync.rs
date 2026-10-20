@@ -213,6 +213,12 @@ fn is_fingerprint_mismatch(stderr: &str) -> bool {
     stderr.contains("fingerprint_mismatch")
 }
 
+/// julie-extract cannot read the artifact, or cannot write it before a schema migration that it
+/// does not run, so only a new artifact works.
+fn needs_new_artifact(stderr: &str) -> bool {
+    stderr.contains("schema_incompatible") || stderr.contains("schema_migration_required")
+}
+
 fn scan_header_file(
     workspace: &Workspace,
     db_path: &Path,
@@ -313,9 +319,9 @@ pub fn scan_workspace(workspace: &Workspace, db_path: &Path, force: bool) -> Res
     match execute_julie_extract(&scan_args(!db_path.exists())) {
         Ok(_) => {}
         Err(SyncError::ExtractionFailed(_, stderr))
-            if stderr.contains("schema_incompatible") && db_path.exists() =>
+            if needs_new_artifact(&stderr) && db_path.exists() =>
         {
-            warn!("Extractor cannot read the existing artifact; rebuilding from scratch");
+            warn!("Extractor cannot use the existing artifact; rebuilding from scratch");
             remove_artifact_files(db_path)?;
             execute_julie_extract(&scan_args(true))?;
         }

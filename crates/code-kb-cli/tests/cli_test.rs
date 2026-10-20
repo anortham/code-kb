@@ -2325,6 +2325,42 @@ fn scan_with_fake_extractor() -> (tempfile::TempDir, Vec<String>, u32) {
 
 #[cfg(unix)]
 #[test]
+fn test_cli_scan_rebuilds_an_index_the_extractor_must_migrate() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp_dir = code_kb_core::safe_tempdir();
+    let root = temp_dir.path();
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("src/lib.rs"), "pub fn f() {}\n").unwrap();
+    let db = root.join(".code-kb").join("artifact.db");
+    std::fs::create_dir_all(db.parent().unwrap()).unwrap();
+    std::fs::write(&db, "schema 7").unwrap();
+    let args_log = root.join("extractor-args.txt");
+    let fake = root.join("fake-julie-extract");
+    std::fs::write(
+        &fake,
+        format!(
+            "#!/bin/sh\ncase \"$1\" in --version) echo 'julie-extract {}'; exit 0;; esac\nfor arg in \"$@\"; do [ \"$arg\" = --level ] && {{ printf '%s\\n' \"$@\" > \"$EXTRACTOR_ARGS_LOG\"; exit 0; }}; done\necho 'schema_migration_required: artifact schema migration is required' >&2\nexit 3\n",
+            code_kb_core::PINNED_JULIE_VERSION
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .env("JULIE_EXTRACT_BIN", &fake)
+        .env("EXTRACTOR_ARGS_LOG", &args_log)
+        .current_dir(root)
+        .arg("scan")
+        .output()
+        .expect("Failed to run scan");
+
+    let args = std::fs::read_to_string(&args_log).expect("scan must rebuild the index");
+    assert!(args.lines().any(|arg| arg == "--level"), "{args}");
+    assert!(!db.exists(), "the old index must be removed");
+}
+
+#[cfg(unix)]
+#[test]
 fn test_cli_scan_passes_its_own_pid_to_the_extractor_watchdog() {
     let (_repo, args, code_kb_pid) = scan_with_fake_extractor();
     let idx = args

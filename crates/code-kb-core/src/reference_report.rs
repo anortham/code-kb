@@ -539,10 +539,16 @@ const CSHARP_USINGS_SQL: &str = "SELECT COALESCE(signature, '') FROM symbols
 const PREPROCESSOR_CONDITION_SQL: &str = "SELECT json_extract(metadata_json, '$.preprocessorIf')
      FROM symbols WHERE symbol_id = ?1 AND json_valid(metadata_json)";
 
+const CSHARP_FILE_USINGS_SQL: &str = "SELECT COALESCE(signature, ''),
+            CASE WHEN json_valid(metadata_json)
+                 THEN json_extract(metadata_json, '$.preprocessorIf') END
+     FROM symbols
+     WHERE kind = 'import' AND language = 'csharp' AND path = ?1";
+
 const CSHARP_CONDITIONAL_USINGS_SQL: &str = "SELECT COALESCE(signature, ''),
             json_extract(metadata_json, '$.preprocessorIf')
      FROM symbols
-     WHERE kind = 'import' AND language = 'csharp' AND path = ?1 AND json_valid(metadata_json)
+     WHERE kind = 'import' AND language = 'csharp' AND json_valid(metadata_json)
        AND json_extract(metadata_json, '$.preprocessorIf') IS NOT NULL";
 
 const MSBUILD_FILES_SQL: &str = "SELECT path FROM files
@@ -808,6 +814,12 @@ pub(crate) fn preprocessor_condition(
         })
         .optional()?
         .flatten())
+}
+
+/// The terms of a `preprocessorIf` condition: the conditions of nested branches, joined with
+/// ` && `.
+fn condition_terms(condition: &str) -> impl Iterator<Item = &str> {
+    condition.split(" && ").map(str::trim)
 }
 
 /// The namespace a C# `using` directive opens (`A.B` for `using A.B;` or `global using A.B;`),
@@ -2972,9 +2984,10 @@ impl<'a> Accounting<'a> {
         }))
     }
 
-    /// A bare C# use of a target that julie kept from an `#if !X` branch, in a file that opens a
-    /// namespace under `#if X`: a build with `X` takes the name from that namespace, and a build
-    /// without it takes the target.
+    /// A bare C# use of a target that julie kept from an `#if !X` branch, in a file that always
+    /// opens a namespace that other files open under `#if X`: the file builds against that
+    /// namespace, which defines the name where `X` holds. A file that opens it under `#if X`
+    /// itself pairs its use with the target, which a build without `X` needs, so it stays.
     fn csharp_conditional_fallback(
         &self,
         row: &NameRow,
@@ -2986,34 +2999,51 @@ impl<'a> Accounting<'a> {
         let Some(condition) = self.target_condition.as_deref() else {
             return Ok(None);
         };
-        let negated: Vec<&str> = condition
-            .split(" && ")
-            .filter_map(|term| term.trim().strip_prefix('!'))
+        let negated: Vec<&str> = condition_terms(condition)
+            .filter_map(|term| term.strip_prefix('!'))
             .map(str::trim)
             .collect();
         if negated.is_empty() {
             return Ok(None);
         }
-        let usings = self.with_statement(CSHARP_CONDITIONAL_USINGS_SQL, |stmt| {
+        let usings = self.with_statement(CSHARP_FILE_USINGS_SQL, |stmt| {
             stmt.query_map(params![row.path], |r| {
-                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+                Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?))
             })?
             .collect::<Result<Vec<_>, _>>()
         })?;
-        Ok(usings.iter().find_map(|(signature, using_condition)| {
-            let symbol = using_condition
-                .split(" && ")
-                .map(str::trim)
-                .find(|term| negated.contains(term))?;
-            let namespace = csharp_using_namespace(signature)?;
-            Some(Verdict::new(
-                SiteLabel::Unresolved,
-                format!(
-                    "`{name}` is defined only without `{symbol}`, and this file opens `{namespace}` with it"
-                ),
-                false,
-            ))
-        }))
+        let under_negated = |condition: &str| {
+            condition_terms(condition)
+                .find_map(|term| negated.iter().copied().find(|symbol| *symbol == term))
+        };
+        if usings
+            .iter()
+            .any(|(_, condition)| condition.as_deref().and_then(under_negated).is_some())
+        {
+            return Ok(None);
+        }
+        let paired = self.with_statement(CSHARP_CONDITIONAL_USINGS_SQL, |stmt| {
+            stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?
+                .collect::<Result<Vec<_>, _>>()
+        })?;
+        Ok(usings
+            .iter()
+            .filter(|(_, condition)| condition.is_none())
+            .filter_map(|(signature, _)| csharp_using_namespace(signature))
+            .find_map(|namespace| {
+                let symbol = paired.iter().find_map(|(signature, condition)| {
+                    (csharp_using_namespace(signature) == Some(namespace))
+                        .then(|| under_negated(condition))
+                        .flatten()
+                })?;
+                Some(Verdict::new(
+                    SiteLabel::Unresolved,
+                    format!(
+                        "`{name}` is defined only without `{symbol}`, and this file always opens `{namespace}`, which other files open with it"
+                    ),
+                    false,
+                ))
+            }))
     }
 
     /// Whether a bare C# use can name the type of `other`: its namespace is the global one, one

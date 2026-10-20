@@ -10999,29 +10999,30 @@ const CSHARP_FALLBACK_STORE: (&str, &str) = (
     "src/Utilities/Store.cs",
     "using System;\n#if HAVE_CONCURRENT\nusing System.Collections.Concurrent;\n#endif\nusing App.Serialization;\n\nnamespace App.Utilities\n{\n    internal class Store\n    {\n        private ConcurrentDictionary<string, int> _store;\n    }\n}\n",
 );
-const CSHARP_FALLBACK_PLAIN: (&str, &str) = (
-    "src/Utilities/Plain.cs",
-    "using System;\nusing App.Serialization;\n\nnamespace App.Utilities\n{\n    internal class Plain\n    {\n        private ConcurrentDictionary<string, int> _plain;\n    }\n}\n",
+const CSHARP_FALLBACK_ALWAYS: (&str, &str) = (
+    "src/Utilities/Always.cs",
+    "using System;\nusing System.Collections.Concurrent;\nusing App.Serialization;\n\nnamespace App.Utilities\n{\n    internal class Always\n    {\n        private ConcurrentDictionary<string, int> _always;\n    }\n}\n",
 );
 
 #[test]
-fn a_csharp_use_of_an_if_not_fallback_beside_a_using_under_the_condition_is_unresolved() {
+fn a_csharp_use_of_an_if_not_fallback_in_a_file_that_always_opens_the_paired_namespace_is_unresolved()
+ {
     let repo = scanned_repo(&[
         CSHARP_FALLBACK,
         CSHARP_FALLBACK_STORE,
-        CSHARP_FALLBACK_PLAIN,
+        CSHARP_FALLBACK_ALWAYS,
     ]);
     let report = report(&repo, "ConcurrentDictionary", None);
 
     assert_site(
         &report,
-        "src/Utilities/Store.cs",
-        11,
+        "src/Utilities/Always.cs",
+        9,
         SiteLabel::Unresolved,
-        "`ConcurrentDictionary` is defined only without `HAVE_CONCURRENT`, and this file opens `System.Collections.Concurrent` with it",
+        "`ConcurrentDictionary` is defined only without `HAVE_CONCURRENT`, and this file always opens `System.Collections.Concurrent`, which other files open with it",
     );
     assert_eq!(
-        site_at(&report, "src/Utilities/Plain.cs", 8).label,
+        site_at(&report, "src/Utilities/Store.cs", 11).label,
         SiteLabel::Likely
     );
 }
