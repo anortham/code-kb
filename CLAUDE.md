@@ -204,7 +204,15 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   or module scope, where the nearest scope that defines or imports the name wins. In Java, C#, Kotlin, Swift, C++, Scala, Dart, Ruby,
   and VB.NET a bare call also matches a method of the caller's class chain, where the nearest
   class that defines the name wins, a method of another part of the caller's class in the same
-  file (a C# partial class), and a type nested in an enclosing class. A member-access identifier never matches a function
+  file (a C# partial class), and a type nested in an enclosing class. A bare Java call reaches
+  nothing else but a static import (`import static C.name;` or `import static C.*;`), so a call
+  of a method whose class is none of the caller's classes, the classes enclosing it, their
+  ancestors, or a class it imports statically is excluded with the basis
+  ``a bare call reaches only the classes of `Caller` and its static imports``; an ancestor that
+  is not indexed does not change this, since a library class cannot extend a project class. An
+  annotation element (`alternate = {…}`) is not a call, and julie records no supertype for an
+  anonymous class (it hangs the methods on the field or method that builds it), so the rule
+  excludes neither. A member-access identifier never matches a function
   nested in another function, a private JavaScript or TypeScript module-level name in another
   file, or any target when its receiver is a capitalized name that no indexed type, module,
   import, field, or property has (`Assert.Contains`); a QML signal handler is exempt. Callee rows

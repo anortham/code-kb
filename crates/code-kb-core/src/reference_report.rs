@@ -476,6 +476,20 @@ const VARIABLE_REF_SITES_SQL: &str = "SELECT path, start_line, start_column FROM
 const TYPE_DECLARATIONS_SQL: &str = "SELECT COALESCE(signature, '') FROM symbols
      WHERE name = ?1 AND kind = 'type' AND language = ?2";
 
+const ENCLOSING_CLASSES_SQL: &str = "WITH RECURSIVE chain(symbol_id, depth) AS (
+         SELECT ?1, 0
+         UNION ALL
+         SELECT s.parent_symbol_id, chain.depth + 1
+         FROM symbols s JOIN chain ON s.symbol_id = chain.symbol_id
+         WHERE s.parent_symbol_id IS NOT NULL AND chain.depth < 32
+     )
+     SELECT s.kind, s.name FROM chain JOIN symbols s ON s.symbol_id = chain.symbol_id
+     ORDER BY chain.depth";
+
+const JAVA_STATIC_IMPORTS_SQL: &str = "SELECT signature FROM symbols
+     WHERE kind = 'import' AND path = ?1 AND (name = ?2 OR signature LIKE '%.*')
+       AND signature LIKE 'import static %'";
+
 const CALLABLE_IN_FILE_SQL: &str = "SELECT 1 FROM symbols
      WHERE path = ?1 AND name = ?2 AND kind IN ('method', 'function', 'constructor') LIMIT 1";
 
@@ -2037,6 +2051,9 @@ impl<'a> Accounting<'a> {
         if let Some(verdict) = self.java_static_import(row, spec)? {
             return Ok(Some(verdict));
         }
+        if let Some(verdict) = self.java_bare_call_outside_classes(row, spec)? {
+            return Ok(Some(verdict));
+        }
         if row.is_bare_use() && spec.group.iter().all(is_property_method) {
             return Ok(Some(self.bare_use_of_property_method(row, &spec.name)?));
         }
@@ -2087,6 +2104,81 @@ impl<'a> Accounting<'a> {
     /// A bare Java call whose file imports the name statically from a class that owns no
     /// target (`import static java.lang.Math.toIntExact;`). Java takes such a call from the import
     /// unless the caller's file or class chain defines the name. A removed target defines nothing.
+    /// A bare Java call names a method of the caller's class, of a class that encloses it, of
+    /// their ancestors, or of a class that the file imports it from statically (`import static
+    /// C.name;` or `import static C.*;`). An external base class cannot extend a project class,
+    /// so an ancestor that is not indexed does not change this.
+    fn java_bare_call_outside_classes(
+        &self,
+        row: &NameRow,
+        spec: &Spec,
+    ) -> Result<Option<Verdict>, QueryError> {
+        if row.language != "java" || !row.is_call() || !row.is_bare_use() {
+            return Ok(None);
+        }
+        let Some(caller) = row.caller_id.as_deref() else {
+            return Ok(None);
+        };
+        let mut owners = Vec::new();
+        for member in &spec.group {
+            let owner = (member.language == "java" && member.kind == "method")
+                .then(|| self.definition_by_id(&member.symbol_id))
+                .transpose()?
+                .flatten()
+                .and_then(|d| d.owner_name);
+            match owner {
+                Some(owner) => owners.push(owner),
+                None => return Ok(None),
+            }
+        }
+        let chain = self.with_statement(ENCLOSING_CLASSES_SQL, |stmt| {
+            stmt.query_map(params![caller], |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+            })?
+            .collect::<Result<Vec<_>, _>>()
+        })?;
+        let is_class = |kind: &str| matches!(kind, "class" | "interface" | "enum" | "record");
+        // julie hangs the methods of an anonymous class on the field or method that builds it,
+        // so its supertype, whose methods a bare call also reaches, is unknown.
+        if chain.windows(2).any(|pair| {
+            matches!(pair[0].0.as_str(), "method" | "constructor") && !is_class(&pair[1].0)
+        }) {
+            return Ok(None);
+        }
+        let enclosing: Vec<String> = chain
+            .into_iter()
+            .filter(|(kind, _)| is_class(kind))
+            .map(|(_, name)| name)
+            .collect();
+        let Some(innermost) = enclosing.first().cloned() else {
+            return Ok(None);
+        };
+        let mut reachable = HashSet::new();
+        for class in enclosing {
+            reachable.extend(self.ancestor_names(&class)?);
+            reachable.insert(class);
+        }
+        let imported_from = self.with_statement(JAVA_STATIC_IMPORTS_SQL, |stmt| {
+            stmt.query_map(params![row.path, spec.name], |r| r.get::<_, String>(0))?
+                .collect::<Result<Vec<_>, _>>()
+        })?;
+        reachable.extend(imported_from.iter().filter_map(|signature| {
+            let imported = signature
+                .strip_prefix("import static ")?
+                .trim_end_matches(';');
+            let class_path = imported.trim().rsplit_once('.')?.0;
+            Some(class_path.rsplit('.').next()?.to_string())
+        }));
+        if owners.iter().any(|owner| reachable.contains(owner)) {
+            return Ok(None);
+        }
+        Ok(Some(Verdict::new(
+            SiteLabel::Excluded,
+            format!("a bare call reaches only the classes of `{innermost}` and its static imports"),
+            false,
+        )))
+    }
+
     fn java_static_import(
         &self,
         row: &NameRow,

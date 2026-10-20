@@ -1351,9 +1351,24 @@ fn a_namespace_import_reaches_the_module_function_and_not_an_object_literal_meth
 
     let namespace_call = line_of(&repo, "src/use.ts", "z.array(1)");
     let bare_call = line_of(&repo, "src/schemas.ts", "array(this)");
-    assert_eq!(site_at(&method, "src/use.ts", namespace_call).label, SiteLabel::Excluded);
-    assert_site(&function, "src/use.ts", namespace_call, SiteLabel::Proven, "import");
-    assert_site(&function, "src/schemas.ts", bare_call, SiteLabel::Proven, "same file");
+    assert_eq!(
+        site_at(&method, "src/use.ts", namespace_call).label,
+        SiteLabel::Excluded
+    );
+    assert_site(
+        &function,
+        "src/use.ts",
+        namespace_call,
+        SiteLabel::Proven,
+        "import",
+    );
+    assert_site(
+        &function,
+        "src/schemas.ts",
+        bare_call,
+        SiteLabel::Proven,
+        "same file",
+    );
 }
 
 #[test]
@@ -1374,7 +1389,91 @@ fn a_bare_java_call_through_a_static_import_of_the_class_file_is_proven() {
     ]);
     let report = report(&repo, "check", Some("src/main/java/p/util/Checks.java"));
 
-    assert_site(&report, "src/main/java/p/Use.java", 7, SiteLabel::Proven, "import");
+    assert_site(
+        &report,
+        "src/main/java/p/Use.java",
+        7,
+        SiteLabel::Proven,
+        "import",
+    );
+}
+
+#[test]
+fn a_bare_java_call_reaches_only_its_classes_and_its_static_imports() {
+    let repo = scanned_repo(&[
+        (
+            "src/main/java/p/common/MoreAsserts.java",
+            "package p.common;\n\npublic final class MoreAsserts {\n    public static void assertEquals(Object a, Object b) {\n    }\n}\n",
+        ),
+        (
+            "src/main/java/p/Inherited.java",
+            "package p;\n\nimport junit.framework.TestCase;\n\npublic class Inherited extends TestCase {\n    public void run() {\n        assertEquals(1, 1);\n    }\n}\n",
+        ),
+        (
+            "src/main/java/p/Named.java",
+            "package p;\n\nimport static p.common.MoreAsserts.assertEquals;\n\npublic class Named {\n    public void run() {\n        assertEquals(1, 1);\n    }\n}\n",
+        ),
+        (
+            "src/main/java/p/Wildcard.java",
+            "package p;\n\nimport static p.common.MoreAsserts.*;\n\npublic class Wildcard {\n    public void run() {\n        assertEquals(1, 1);\n    }\n}\n",
+        ),
+    ]);
+    let report = report(
+        &repo,
+        "assertEquals",
+        Some("src/main/java/p/common/MoreAsserts.java"),
+    );
+
+    assert_site(
+        &report,
+        "src/main/java/p/Inherited.java",
+        7,
+        SiteLabel::Excluded,
+        "a bare call reaches only the classes of `Inherited` and its static imports",
+    );
+    assert_site(
+        &report,
+        "src/main/java/p/Named.java",
+        7,
+        SiteLabel::Proven,
+        "import",
+    );
+    assert_not_excluded(&report, "src/main/java/p/Wildcard.java", 7);
+}
+
+#[test]
+fn a_bare_java_call_in_an_anonymous_class_reaches_its_supertype() {
+    let repo = scanned_repo(&[
+        (
+            "src/main/java/p/Adapter.java",
+            "package p;\n\npublic abstract class Adapter {\n    public final void nullSafe() {\n    }\n\n    public abstract void write();\n}\n",
+        ),
+        (
+            "src/main/java/p/Adapters.java",
+            "package p;\n\npublic final class Adapters {\n    static final Adapter FIELD = new Adapter() {\n        @Override\n        public void write() {\n            nullSafe();\n        }\n    };\n\n    void build() {\n        Adapter local = new Adapter() {\n            @Override\n            public void write() {\n                nullSafe();\n            }\n        };\n    }\n}\n",
+        ),
+    ]);
+    let report = report(&repo, "nullSafe", Some("src/main/java/p/Adapter.java"));
+
+    assert_not_excluded(&report, "src/main/java/p/Adapters.java", 7);
+    assert_not_excluded(&report, "src/main/java/p/Adapters.java", 15);
+}
+
+#[test]
+fn a_java_annotation_element_is_not_a_bare_call() {
+    let repo = scanned_repo(&[
+        (
+            "src/main/java/p/Name.java",
+            "package p;\n\npublic @interface Name {\n    String value();\n\n    String[] alternate() default {};\n}\n",
+        ),
+        (
+            "src/main/java/p/Use.java",
+            "package p;\n\npublic class Use {\n    @Name(value = \"a\",\n        alternate = {\"b\"})\n    String field;\n}\n",
+        ),
+    ]);
+    let report = report(&repo, "alternate", Some("src/main/java/p/Name.java"));
+
+    assert_not_excluded(&report, "src/main/java/p/Use.java", 5);
 }
 
 #[test]
