@@ -347,7 +347,8 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   assigned on an object of that name.
   JavaScript and TypeScript imports go through the resolver in `reference_report/js_modules.rs`. It
   follows `export … from`, `export * from`, and namespace re-exports to a relative file (any
-  script extension or an `index` file) or to a workspace package by its `package.json`
+  script extension or an `index` file; a JavaScript importer tries the JavaScript extensions
+  first, so it takes the compiled `.js` twin of a `.ts` file) or to a workspace package by its `package.json`
   `exports`, `module`, `main`, and `types`, scripts before declaration files, and it takes the
   next candidate when a walk reaches nothing. `require()` follows the `require` condition and
   `main`, never `module`; an ES import follows the `import` condition, `module`, and `main`. A
@@ -426,7 +427,7 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   `proven` and `likely` sites it did not reach, a count of the `unresolved` ones, and the tests to run.
   The base symbols come from a `julie-extract scan` of the base content of the changed files into
   `<root>/.code-kb/check/<pid>/`, removed after the call; the main index changes only by the refresh
-  of the changed files. A check covers at most 200 files and 10 symbols and starts no step after 20 s, and the
+  of the changed files. A check covers at most 200 files and 30 symbols and starts no step after 20 s, and the
   answer states each cut. `code-kb hook SessionStart` reads the hook JSON on stdin and writes
   `<root>/.code-kb/sessions/<session_id>.json` with `{"base": "<HEAD sha>"}` when the root is a git
   repository with a commit, with or without an index; a file that has a base keeps it, and files

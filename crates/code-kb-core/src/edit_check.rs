@@ -99,7 +99,7 @@ impl Default for EditLimits {
     fn default() -> Self {
         Self {
             files: 200,
-            symbols: 10,
+            symbols: 30,
             time: Duration::from_secs(20),
         }
     }
@@ -1080,7 +1080,7 @@ impl Detector<'_> {
             .iter()
             .map(|&index| before[index].symbol.symbol_id.as_str())
             .collect();
-        for &index in &pairing.removed {
+        for (position, &index) in pairing.removed.iter().enumerate() {
             let row = &before[index];
             let inside_removed = row
                 .symbol
@@ -1094,8 +1094,16 @@ impl Detector<'_> {
                         && other.symbol.name == row.symbol.name
                         && other.parents == row.parents
                 });
+            let repeated = BINDING_KINDS.contains(&row.symbol.kind.as_str())
+                && pairing.removed[..position].iter().any(|&other| {
+                    let other = &before[other];
+                    other.symbol.kind == row.symbol.kind
+                        && other.symbol.name == row.symbol.name
+                        && other.parents == row.parents
+                });
             if inside_removed
                 || value_beside
+                || repeated
                 || after.iter().any(|other| row.changed_kind_to(other))
             {
                 continue;

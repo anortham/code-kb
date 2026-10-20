@@ -481,7 +481,7 @@ Not checked: calls inside macro arguments, functions passed as values.
   nothing changed shape,
   for the diff it checked last or blocked on last, when `stop_hook_active` is true,
   outside a git repository, when another `julie-extract` wrote the index, and on any error.
-- A check reads at most 200 files and 10 symbols and starts no new step after 20 s. The answer states each cut.
+- A check reads at most 200 files and 30 symbols and starts no new step after 20 s. The answer states each cut.
 - The rules and the known limits are in [docs/edit-check.md](docs/edit-check.md).
 
 ---

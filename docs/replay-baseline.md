@@ -155,3 +155,39 @@ Holdback catch share by language:
 - Check time on the clean set: dev p50 3.10 s and p95 11.54 s, holdout p50 3.08 s and p95 9.47 s.
   Two runs of the 2.7.0 binary on dev gave p50 2.59 s and 2.95 s, so the spread between runs is as
   large as the change.
+
+## Holdout drop fix
+
+The owner chose on 2026-10-20 to spend the holdout half to find the JavaScript and Python drop.
+From here on both halves are tuning data; a later phase needs new holdout cases.
+
+Two commits caused all of it:
+
+- zod `6e74f877` deletes compiled `.js` files that sit beside their `.ts` sources. `src/types.js`
+  imports `./PseudoPromise`, and the resolver tried `.ts` before `.js`, so the uses were excluded.
+  2.7.0 listed 17 of them only through the method `PseudoPromise.all`; phase 3 made the removed
+  variable `PseudoPromise` a shape change, and members of a removed parent fold into it.
+- flask `662c2457` deletes `_compat.py`. The removed-binding rule raised its candidates from 3 to
+  21, three of them second copies of one name (`text_type` in both branches of `if PY2:`), and the
+  cap of 10 symbols cut `implements_to_string` and `with_metaclass`.
+
+The fix: a JavaScript importer tries the JavaScript extensions first, and the old file of a
+removed symbol takes its own place in that order; a binding defined twice in one scope reports
+once; the cap is 30 symbols.
+
+| Language | dev phase 3 | dev fix | holdout phase 3 | holdout fix |
+|---|---|---|---|---|
+| C# | 54.8% | 54.8% | 82.9% | 84.2% |
+| Go | 97.1% | 97.1% | 82.5% | 82.5% |
+| Java | 82.0% | 82.0% | 58.9% | 58.9% |
+| JavaScript | 95.7% | 95.7% | 33.3% | 78.1% |
+| Python | 84.0% | 84.0% | 72.5% | 78.3% |
+| Rust | 83.3% | 83.3% | 93.9% | 93.9% |
+| TypeScript | 94.2% | 95.7% | 80.4% | 80.7% |
+| All | 85.9% | 86.4% | 73.3% | 78.4% |
+
+- Clean set: dev 0 of 56 and holdout 1 of 49 false blocks, as before; no block changed.
+- Judged outside rows: dev 53 of 77 and holdout 90 of 96 true, as before.
+- Check time: holdback p95 7.05 s to 7.83 s; clean holdout p95 9.47 s to 7.94 s. The slowest
+  clean case (Newtonsoft.Json `bf2e2a78`, 80 changed symbols) took 19.32 s with the cap of 10 and
+  18.95 s with 30, so its time is the scan, not the symbols.

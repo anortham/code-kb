@@ -20,6 +20,10 @@ use crate::models::SiteLabel;
 const MAX_DEPTH: usize = 8;
 const MAX_TARGETS: usize = 8;
 const SCRIPT_EXTENSIONS: [&str; 8] = ["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"];
+/// Node and bundlers load the JavaScript twin of a module that a JavaScript file imports
+/// (compiled output committed beside its TypeScript source).
+const JAVASCRIPT_FIRST: [&str; 8] = ["js", "jsx", "mjs", "cjs", "ts", "tsx", "mts", "cts"];
+const JAVASCRIPT_IMPORTERS: [&str; 4] = [".js", ".jsx", ".mjs", ".cjs"];
 const DECLARATION_EXTENSIONS: [&str; 3] = ["d.ts", "d.mts", "d.cts"];
 /// The scripts that a declaration file describes when they share its stem and folder.
 const DECLARATION_TWINS: [(&str, &[&str]); 3] = [
@@ -246,7 +250,7 @@ pub(super) type BindingSites = Rc<Vec<(usize, usize)>>;
 /// The per-report memory of module lookups.
 #[derive(Default)]
 pub(super) struct JsCaches {
-    files: RefCell<HashMap<String, Option<String>>>,
+    files: RefCell<HashMap<(String, bool), Option<String>>>,
     on_disk: RefCell<HashMap<String, bool>>,
     modules: RefCell<HashMap<(String, String, Kind), Vec<String>>>,
     imports: RefCell<HashMap<(String, String), ImportRows>>,
@@ -313,16 +317,16 @@ fn normalize(path: &str) -> Option<String> {
 }
 
 /// The files a module path can name, best first: the path, its TypeScript twin, the path with
-/// each script extension, and the `index` file of a folder, then the same with declaration
+/// each of `scripts`, and the `index` file of a folder, then the same with declaration
 /// extensions, which hold no code.
-fn file_candidates(base: &str) -> Vec<String> {
+fn file_candidates(base: &str, scripts: &[&str]) -> Vec<String> {
     let mut candidates = vec![base.to_string()];
     for (compiled, sources) in COMPILED_EXTENSIONS {
         if let Some(stem) = base.strip_suffix(compiled) {
             candidates.extend(sources.iter().map(|ext| format!("{stem}.{ext}")));
         }
     }
-    for extensions in [&SCRIPT_EXTENSIONS[..], &DECLARATION_EXTENSIONS[..]] {
+    for extensions in [scripts, &DECLARATION_EXTENSIONS[..]] {
         candidates.extend(extensions.iter().map(|ext| format!("{base}.{ext}")));
         candidates.extend(
             extensions
@@ -854,8 +858,14 @@ impl Accounting<'_> {
         let key = (importer.to_string(), specifier.to_string(), kind);
         cached(&self.js.modules, key, || {
             if specifier.starts_with('.') {
+                let javascript_first = JAVASCRIPT_IMPORTERS
+                    .iter()
+                    .any(|ext| importer.ends_with(ext));
                 return match normalize(&child(parent(importer), specifier)) {
-                    Some(base) => Ok(self.js_file(&base)?.into_iter().collect()),
+                    Some(base) => Ok(self
+                        .js_file_for(&base, javascript_first)?
+                        .into_iter()
+                        .collect()),
                     None => Ok(Vec::new()),
                 };
             }
@@ -1142,24 +1152,42 @@ impl Accounting<'_> {
 
     /// The first indexed file `base` can name.
     fn js_file(&self, base: &str) -> Result<Option<String>, QueryError> {
-        cached(&self.js.files, base.to_string(), || {
-            for candidate in file_candidates(base) {
+        self.js_file_for(base, false)
+    }
+
+    /// The first file `base` can name, with the JavaScript extensions first for a JavaScript
+    /// importer. The old file of a removed symbol counts in its place, since the import named it
+    /// before the edit.
+    fn js_file_for(
+        &self,
+        base: &str,
+        javascript_first: bool,
+    ) -> Result<Option<String>, QueryError> {
+        let scripts: &[&str] = if javascript_first {
+            &JAVASCRIPT_FIRST
+        } else {
+            &SCRIPT_EXTENSIONS
+        };
+        let absent = self.absent.as_ref().map(|s| s.path.replace('\\', "/"));
+        cached(&self.js.files, (base.to_string(), javascript_first), || {
+            for candidate in file_candidates(base, scripts) {
                 let windows = candidate.replace('/', "\\");
-                if self.with_statement(FILE_EXISTS_SQL, |stmt| {
-                    stmt.exists(params![candidate, windows])
-                })? {
+                if absent.as_deref() == Some(candidate.as_str())
+                    || self.with_statement(FILE_EXISTS_SQL, |stmt| {
+                        stmt.exists(params![candidate, windows])
+                    })?
+                {
                     return Ok(Some(candidate));
                 }
             }
-            let absent = self.absent.as_ref().map(|s| s.path.replace('\\', "/"));
-            Ok(absent.filter(|path| file_candidates(base).contains(path)))
+            Ok(None)
         })
     }
 
     /// Whether any file `base` can name exists on disk, indexed or not.
     fn js_file_on_disk(&self, base: &str) -> Result<bool, QueryError> {
         cached(&self.js.on_disk, base.to_string(), || {
-            Ok(file_candidates(base)
+            Ok(file_candidates(base, &SCRIPT_EXTENSIONS)
                 .iter()
                 .any(|candidate| self.root.join(candidate).is_file()))
         })

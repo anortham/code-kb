@@ -2837,6 +2837,39 @@ fn a_declaration_file_does_not_take_an_import_from_the_script_next_to_it() {
 }
 
 #[test]
+fn a_javascript_importer_takes_the_javascript_twin_of_a_typescript_module() {
+    let repo = scanned_repo(&[
+        ("util.ts", "export function foo(): number { return 1; }\n"),
+        ("util.js", "export function foo() { return 1; }\n"),
+        (
+            "main.js",
+            "import { foo } from \"./util\";\nexport function run() { return foo(); }\n",
+        ),
+        (
+            "main.ts",
+            "import { foo } from \"./util\";\nexport function go() { return foo(); }\n",
+        ),
+    ]);
+
+    let script = report(&repo, "foo", Some("util.js"));
+    assert_site(&script, "main.js", 2, SiteLabel::Proven, "import");
+    assert_eq!(
+        site_at(&script, "main.ts", 2).label,
+        SiteLabel::Excluded,
+        "{}",
+        dump(&script)
+    );
+    let source = report(&repo, "foo", Some("util.ts"));
+    assert_site(&source, "main.ts", 2, SiteLabel::Proven, "import");
+    assert_eq!(
+        site_at(&source, "main.js", 2).label,
+        SiteLabel::Excluded,
+        "{}",
+        dump(&source)
+    );
+}
+
+#[test]
 fn a_package_export_prefers_the_script_over_its_declaration_file() {
     let repo = scanned_repo(&[
         ("package.json", "{\"name\":\"root\",\"private\":true}\n"),

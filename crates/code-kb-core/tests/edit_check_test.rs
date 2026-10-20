@@ -987,12 +987,12 @@ fn the_tests_that_call_a_changed_function_are_named_with_their_commands() {
 }
 
 #[test]
-fn only_the_ten_symbols_with_the_most_uses_are_checked_and_the_cut_is_stated() {
+fn only_the_thirty_symbols_with_the_most_uses_are_checked_and_the_cut_is_stated() {
     let mut files: Vec<(String, String)> = Vec::new();
     let mut definitions = String::new();
     let mut edited = String::new();
     let mut uses = String::from("from lib import *\n\n\ndef go():\n");
-    for index in 0..12 {
+    for index in 0..32 {
         definitions.push_str(&format!("def f{index}(a):\n    return a\n\n\n"));
         edited.push_str(&format!("def f{index}(a, b):\n    return a\n\n\n"));
         for _ in 0..=index {
@@ -1008,20 +1008,20 @@ fn only_the_ten_symbols_with_the_most_uses_are_checked_and_the_cut_is_stated() {
     let repo = committed_repo(&borrowed);
     write(&repo.root, "lib.py", &edited);
     let check = run_check(&repo, None);
-    assert_eq!(check.changes.len(), 10);
+    assert_eq!(check.changes.len(), 30);
     let names: Vec<&str> = check.changes.iter().map(|c| c.display.as_str()).collect();
-    assert!(names.contains(&"f11") && names.contains(&"f2"), "{names:?}");
+    assert!(names.contains(&"f31") && names.contains(&"f2"), "{names:?}");
     assert!(
         !names.contains(&"f0") && !names.contains(&"f1"),
         "{names:?}"
     );
     assert_eq!(
         check.cuts,
-        vec!["Checked 10 of 12 changed symbols, those with the most uses of their name first."]
+        vec!["Checked 30 of 32 changed symbols, those with the most uses of their name first."]
     );
     assert_has(
         &format_edit_check(&check),
-        "Cut: Checked 10 of 12 changed symbols",
+        "Cut: Checked 30 of 32 changed symbols",
     );
 }
 
@@ -3899,6 +3899,57 @@ fn a_re_export_of_a_deleted_typescript_file_proves_the_call_of_its_removed_funct
         &text,
         "Not in your diff, proven (1):\n      src/use.ts:4  `usesHelper`",
     );
+}
+
+#[test]
+fn a_deleted_javascript_twin_of_a_typescript_file_lists_the_calls_of_its_javascript_importers() {
+    let repo = committed_repo(&[
+        ("package.json", "{\"name\": \"demo\"}\n"),
+        (
+            "src/util.ts",
+            "export function helper(): number {\n  return 1;\n}\n",
+        ),
+        (
+            "src/util.js",
+            "export function helper() {\n  return 1;\n}\n",
+        ),
+        (
+            "src/use.js",
+            "import { helper } from \"./util\";\n\nexport function fromScript() {\n  return helper();\n}\n",
+        ),
+        (
+            "src/use.ts",
+            "import { helper } from \"./util\";\n\nexport function fromSource() {\n  return helper();\n}\n",
+        ),
+    ]);
+    fs::remove_file(repo.root.join("src/util.js")).unwrap();
+    let text = text_of(&repo);
+    assert_has(&text, "function `helper` (src/util.js): removed");
+    assert_has(&text, "src/use.js:4  `fromScript`");
+    assert_lacks(&text, "fromSource");
+}
+
+#[test]
+fn a_removed_python_binding_set_in_both_branches_of_an_if_is_reported_once() {
+    let repo = committed_repo(&[
+        (
+            "compat.py",
+            "import sys\n\nPY2 = sys.version_info[0] == 2\n\nif PY2:\n    text_type = unicode\nelse:\n    text_type = str\n",
+        ),
+        (
+            "use.py",
+            "from compat import text_type\n\n\ndef run(x):\n    return text_type(x)\n",
+        ),
+    ]);
+    fs::remove_file(repo.root.join("compat.py")).unwrap();
+    let text = text_of(&repo);
+    assert_eq!(
+        text.matches("variable `text_type` (compat.py): removed")
+            .count(),
+        1,
+        "{text}"
+    );
+    assert_has(&text, "use.py:5  `run`");
 }
 
 const JAVA_CHECKS: &str = "package p.util;\n\npublic class Checks {\n    public static void check(boolean b) {\n    }\n\n    public static void keep() {\n    }\n}\n";
