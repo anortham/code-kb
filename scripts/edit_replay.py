@@ -50,7 +50,8 @@ OUTSIDE_JUDGED_CAP = 50
 MISS_CAUSES = ("shape not seen", "site not indexed", "import not listed", "site labeled unresolved", "site excluded",
                "not a call", "fits the new shape", "cut by a limit", "other")
 CALL_KINDS = {"calls", "call", "instantiates"}
-CHECKED_KINDS = {"function", "method", "constructor", "class", "struct", "interface", "trait", "enum", "record"}
+CHECKED_KINDS = {"function", "method", "constructor", "class", "struct", "interface", "trait", "enum", "record",
+                 "constant", "variable", "type"}
 
 LANGUAGE_OF_EXTENSION = {
     ".py": "python",
@@ -975,7 +976,8 @@ def run_holdback_case(binary, tree, case):
         status, detail, answer = reach_gate.fetch_answer(
             binary, tree, {"name": case["symbol"], "file": case["file"], "line": case["line"]})
         for path, line in missed:
-            cause, basis = (miss_cause(answer, changes, path, line, len(kinds or [])) if status == "ok"
+            overloads = sum(kind in ("function", "method", "constructor") for kind in kinds or [])
+            cause, basis = (miss_cause(answer, changes, path, line, overloads) if status == "ok"
                             else ("other", detail))
             if cause == "site not indexed" and starts[(path, line)]:
                 cause = "import not listed"

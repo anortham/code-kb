@@ -4844,7 +4844,23 @@ fn import_sites_from(
     } else {
         "symbols"
     };
-    let dotted = "replace(module_path.value, '/', '.')";
+    // `./util.ts` (Deno, and TypeScript's `allowImportingTsExtensions`) names the module `util`.
+    let extensions: String = ["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"]
+        .iter()
+        .map(|ext| {
+            format!(
+                " WHEN module_path.value LIKE '%.{ext}'
+                  THEN substr(module_path.value, 1, length(module_path.value) - {})",
+                ext.len() + 1
+            )
+        })
+        .collect();
+    let source = format!(
+        "(CASE WHEN i.language IN ('javascript', 'typescript', 'tsx', 'jsx', 'vue') THEN
+             CASE{extensions} ELSE module_path.value END
+           ELSE module_path.value END)"
+    );
+    let dotted = format!("replace({source}, '/', '.')");
     let segment = format!("replace({dotted}, rtrim({dotted}, replace({dotted}, '.', '')), '')");
     let target_path = "('/' || replace(target.path, '\\', '/'))";
     // `from . import Flask`: a source of dots only names the importing file's package.

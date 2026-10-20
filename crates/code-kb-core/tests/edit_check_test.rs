@@ -3769,3 +3769,61 @@ fn a_removed_object_literal_method_does_not_list_a_namespace_call_of_the_module_
     assert_has(&text, "(src/schemas.ts): removed");
     assert_lacks(&text, "usesArray");
 }
+
+const TS_CODES: &str = "export const Codes = { invalid: \"invalid\" } as const;\n\nexport type Code = keyof typeof Codes;\n\nconst local = 1;\n\nexport function keep() {\n  return local;\n}\n";
+const TS_CODES_WITHOUT_BINDINGS: &str = "export function keep() {\n  return 1;\n}\n";
+const TS_CODES_USE: &str = "import { Codes } from \"./codes\";\nimport type { Code } from \"./codes\";\n\nexport function usesCodes(code: Code) {\n  return Codes.invalid === code;\n}\n";
+
+fn ts_codes_repo() -> Repo {
+    committed_repo(&[
+        ("package.json", "{\"name\": \"demo\"}\n"),
+        ("src/codes.ts", TS_CODES),
+        ("src/use.ts", TS_CODES_USE),
+    ])
+}
+
+#[test]
+fn a_removed_exported_constant_and_type_alias_list_the_uses_in_another_file() {
+    let repo = ts_codes_repo();
+    write(&repo.root, "src/codes.ts", TS_CODES_WITHOUT_BINDINGS);
+    let text = text_of(&repo);
+    assert_has(&text, "`Codes` (src/codes.ts): removed");
+    assert_has(&text, "`Code` (src/codes.ts): removed");
+    assert_has(&text, "src/use.ts:4  `usesCodes`");
+    assert_has(&text, "src/use.ts:5  `usesCodes`");
+    assert_lacks(&text, "`local`");
+}
+
+#[test]
+fn a_type_alias_that_becomes_an_interface_of_the_same_name_is_no_change() {
+    let repo = committed_repo(&[
+        ("package.json", "{\"name\": \"demo\"}\n"),
+        ("src/shape.ts", "export type Shape = { a: number };\n"),
+        ("src/use.ts", "import type { Shape } from \"./shape\";\n\nexport function area(s: Shape) {\n  return s.a;\n}\n"),
+    ]);
+    write(&repo.root, "src/shape.ts", "export interface Shape {\n  a: number;\n}\n");
+    let text = text_of(&repo);
+    assert_lacks(&text, "Shape");
+}
+
+#[test]
+fn a_removed_constant_and_type_alias_of_one_name_report_once_with_an_import_that_names_the_ts_file() {
+    let repo = committed_repo(&[
+        ("package.json", "{\"name\": \"demo\"}\n"),
+        (
+            "src/issues.ts",
+            "export const IssueCode = { custom: \"custom\" } as const;\n\nexport type IssueCode = keyof typeof IssueCode;\n\nexport function keep() {\n  return 1;\n}\n",
+        ),
+        (
+            "src/use.ts",
+            "import { IssueCode } from \"./issues.ts\";\n\nexport function usesCode(code: IssueCode) {\n  return IssueCode.custom === code;\n}\n",
+        ),
+    ]);
+    write(&repo.root, "src/issues.ts", TS_CODES_WITHOUT_BINDINGS);
+    let text = text_of(&repo);
+    assert_has(&text, "1 shape change:");
+    assert_has(&text, "`IssueCode` (src/issues.ts): removed");
+    assert_has(&text, "src/use.ts:1  (no enclosing symbol)  imports `IssueCode`");
+    assert_has(&text, "src/use.ts:4  `usesCode`");
+}
+

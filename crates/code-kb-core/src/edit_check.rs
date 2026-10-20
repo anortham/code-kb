@@ -27,7 +27,7 @@ use crate::models::{
     ConstructionSite, LabeledSite, ReferenceReport, SiteLabel, Symbol, VariantUse,
     is_generated_lambda_name,
 };
-use crate::queries::{QueryError, escape_like, load_file_symbols};
+use crate::queries::{DOCUMENTATION_LANGUAGES, QueryError, escape_like, load_file_symbols};
 use crate::reference_report::arity::{self, Arity};
 use crate::reference_report::{
     destructurings, enum_variant_names, inherited_group_arity, reference_report_for_edit,
@@ -144,6 +144,13 @@ pub struct EditCheck {
 const CALLABLE_KINDS: [&str; 3] = ["function", "method", "constructor"];
 const TYPE_KINDS: [&str; 6] = ["class", "struct", "interface", "trait", "enum", "record"];
 const FIELD_OWNER_KINDS: [&str; 3] = ["class", "struct", "record"];
+const BINDING_KINDS: [&str; 3] = ["constant", "variable", "type"];
+/// A removed symbol whose name stays in the same scope as another kind of one group changed
+/// kind, not name: `type X` became `interface X`, or `const f` became `function f`.
+const KIND_GROUPS: [&[&str]; 2] = [
+    &["class", "struct", "interface", "trait", "enum", "record", "type"],
+    &["constant", "variable", "function"],
+];
 const FIELD_KINDS: [&str; 2] = ["field", "property"];
 const ATTRIBUTE_WRITE_PREFIXES: [&str; 3] = ["self.", "this.", "cls."];
 const SIGNATURE_MODIFIERS: [&str; 30] = [
@@ -686,11 +693,17 @@ impl Row {
         }
     }
 
-    /// A julie lambda is named after its line, so a line shift would read as a rename.
+    /// A julie lambda is named after its line, so a line shift would read as a rename. A
+    /// constant, variable, or type alias counts only at the top level and when another file can
+    /// import it.
     fn is_shape(&self) -> bool {
         let symbol = &self.symbol;
         let kind = symbol.kind.as_str();
-        (CALLABLE_KINDS.contains(&kind) || TYPE_KINDS.contains(&kind))
+        let exported_binding = BINDING_KINDS.contains(&kind)
+            && self.parents.is_empty()
+            && symbol.visibility.as_deref() == Some("public")
+            && !DOCUMENTATION_LANGUAGES.contains(&symbol.language.as_str());
+        (CALLABLE_KINDS.contains(&kind) || TYPE_KINDS.contains(&kind) || exported_binding)
             && !is_generated_lambda_name(
                 &symbol.name,
                 &symbol.language,
@@ -704,6 +717,17 @@ impl Row {
             Some(owner) => format!("{owner}.{}", self.symbol.name),
             None => self.symbol.name.clone(),
         }
+    }
+
+    fn changed_kind_to(&self, other: &Row) -> bool {
+        other.symbol.name == self.symbol.name
+            && other.symbol.kind != self.symbol.kind
+            && other.parents == self.parents
+            && other.is_shape()
+            && KIND_GROUPS.iter().any(|group| {
+                group.contains(&self.symbol.kind.as_str())
+                    && group.contains(&other.symbol.kind.as_str())
+            })
     }
 }
 
@@ -994,7 +1018,17 @@ impl Detector<'_> {
                 .parent_symbol_id
                 .as_deref()
                 .is_some_and(|parent| gone.contains(parent));
-            if inside_removed {
+            let value_beside = row.symbol.kind == "type"
+                && pairing.removed.iter().any(|&other| {
+                    let other = &before[other];
+                    matches!(other.symbol.kind.as_str(), "constant" | "variable")
+                        && other.symbol.name == row.symbol.name
+                        && other.parents == row.parents
+                });
+            if inside_removed
+                || value_beside
+                || after.iter().any(|other| row.changed_kind_to(other))
+            {
                 continue;
             }
             let renamed_to = renamed
