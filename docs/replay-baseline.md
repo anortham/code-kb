@@ -228,3 +228,7 @@ commit 683a26d5) against the holdout-fix build (adec8ee, which ran with julie-ex
   0394c72 fixes both. The replay counts and the clean-set result are equal before and after it;
   the clean set check time is p50 2.02 s and p95 9.07 s on dev, p50 1.93 s and p95 6.44 s on
   holdout.
+- An agent test on goldfish then found that a call bound by a destructured dynamic import
+  (`const { f } = await import('../src/m')`) was excluded. 3955ba2 follows that import to its
+  module. The holdback, clean-set, and sessions counts are equal before and after it; the clean
+  set check time is p50 2.09 s and p95 8.99 s on dev, p50 1.98 s and p95 6.75 s on holdout.
