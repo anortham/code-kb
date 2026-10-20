@@ -3856,3 +3856,20 @@ fn a_removed_constant_and_type_alias_of_one_name_report_once_with_an_import_that
     assert_has(&text, "src/use.ts:4  `usesCode`");
 }
 
+#[test]
+fn a_re_export_of_a_deleted_typescript_file_proves_the_call_of_its_removed_function() {
+    let repo = committed_repo(&[
+        ("package.json", "{\"name\": \"demo\"}\n"),
+        ("src/lib/util.ts", "export function helper() {\n  return 1;\n}\n"),
+        ("mirror/util.ts", "export function helper() {\n  return 2;\n}\n"),
+        ("src/index.ts", "export * from \"./lib/util.ts\";\n"),
+        (
+            "src/use.ts",
+            "import { helper } from \"./index.ts\";\n\nexport function usesHelper() {\n  return helper();\n}\n",
+        ),
+    ]);
+    fs::remove_file(repo.root.join("src/lib/util.ts")).unwrap();
+    let text = text_of(&repo);
+    assert_has(&text, "function `helper` (src/lib/util.ts): removed");
+    assert_has(&text, "Not in your diff, proven (1):\n      src/use.ts:4  `usesHelper`");
+}

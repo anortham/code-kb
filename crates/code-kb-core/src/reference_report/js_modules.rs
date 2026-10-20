@@ -757,7 +757,30 @@ impl Accounting<'_> {
                     .map(Target::Definition),
             );
         }
+        if found.is_empty()
+            && let Some(absent) = self.absent_export(file, name)
+        {
+            found.push(Target::Definition(absent));
+        }
         Ok(found)
+    }
+
+    /// The removed top-level symbol a post-edit report is for, when `file` held it as `name`: an
+    /// import of the old file still names it, also when the edit deleted the file.
+    fn absent_export(&self, file: &str, name: &str) -> Option<Reached> {
+        let absent = self.absent.as_ref()?;
+        let path = absent.path.replace('\\', "/");
+        (path == file
+            && absent.name == name
+            && absent.parent_symbol_id.is_none()
+            && !matches!(absent.kind.as_str(), "method" | "property"))
+        .then(|| Reached {
+            symbol_id: absent.symbol_id.clone(),
+            path,
+            name: absent.name.clone(),
+            kind: absent.kind.clone(),
+            line: absent.start_line,
+        })
     }
 
     /// What a local name in `file` is: its top-level definitions and the imports that bind it.
@@ -1128,7 +1151,8 @@ impl Accounting<'_> {
                     return Ok(Some(candidate));
                 }
             }
-            Ok(None)
+            let absent = self.absent.as_ref().map(|s| s.path.replace('\\', "/"));
+            Ok(absent.filter(|path| file_candidates(base).contains(path)))
         })
     }
 
