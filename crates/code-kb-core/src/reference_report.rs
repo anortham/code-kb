@@ -655,6 +655,17 @@ impl NameRow {
             && !self.reads_a_module(&definition.kind)
             && !(self.is_bare_use() && definition.is_property_method())
             && self.is_in_scope_of(definition)
+            && !(self.is_type_position() && definition.is_value())
+    }
+
+    /// A place where a statically typed language names a type: a base type, a built type, a
+    /// written type, or the type of a C# member (julie's `uses`).
+    fn is_type_position(&self) -> bool {
+        STATIC_TYPE_LANGUAGES.contains(&self.language.as_str())
+            && (matches!(
+                self.kind.as_str(),
+                "extends" | "implements" | "instantiates" | "type_usage"
+            ) || self.kind == "uses" && self.language == "csharp")
     }
 
     fn is_in_scope_of(&self, definition: &Definition) -> bool {
@@ -679,6 +690,11 @@ fn is_super_receiver(receiver: &str) -> bool {
 
 /// Languages where a function defined inside a function is named only inside it. JavaScript is
 /// not one here: such a function can be placed on an object the outer function returns.
+/// Languages where a type and a value are apart, so a place that names a type never names a value.
+const STATIC_TYPE_LANGUAGES: &[&str] = &[
+    "csharp", "java", "kotlin", "scala", "swift", "dart", "rust", "go", "cpp", "c", "vbnet",
+];
+
 const LOCAL_FUNCTION_LANGUAGES: &[&str] = &[
     "python", "rust", "kotlin", "csharp", "swift", "scala", "dart",
 ];
@@ -928,6 +944,13 @@ struct Definition {
 }
 
 impl Definition {
+    fn is_value(&self) -> bool {
+        matches!(
+            self.kind.as_str(),
+            "field" | "constant" | "variable" | "property" | "parameter" | "enum_member"
+        )
+    }
+
     /// See [`is_property_method`].
     fn is_property_method(&self) -> bool {
         self.kind == "method" && self.top_level && language_family(&self.language) == "js"
@@ -1439,6 +1462,7 @@ impl<'a> Accounting<'a> {
                     let row = &rows[index];
                     if row.hidden_receiver
                         || !row.is_in_scope_of(other)
+                        || row.is_type_position() && other.is_value()
                         || row.language == "java" && !row.can_reach(other)
                         || row.reads_a_module(&other.kind)
                         || row.is_bare_use() && other.is_property_method()

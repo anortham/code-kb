@@ -10821,3 +10821,38 @@ fn a_csharp_type_in_a_namespace_the_use_does_not_open_is_no_rival() {
         dump(&report)
     );
 }
+
+#[test]
+fn a_csharp_constant_never_takes_a_type_position_of_its_name() {
+    let repo = scanned_repo(&[
+        (
+            "src/Utilities/Cache.cs",
+            "namespace App.Utilities\n{\n    internal sealed class Cache\n    {\n    }\n}\n",
+        ),
+        (
+            "src/Bench/Holder.cs",
+            "namespace App.Bench\n{\n    public class Holder\n    {\n        private static readonly object Cache = new object();\n\n        public object Get()\n        {\n            return Cache;\n        }\n    }\n}\n",
+        ),
+        (
+            "src/Store.cs",
+            "using App.Utilities;\n\nnamespace App\n{\n    internal class Store\n    {\n        private readonly Cache _cache = new Cache();\n    }\n}\n",
+        ),
+    ]);
+    let report = report(&repo, "Cache", Some("src/Utilities/Cache.cs"));
+
+    assert!(
+        report
+            .sites
+            .iter()
+            .filter(|site| site.site.path == "src/Store.cs")
+            .all(|site| matches!(site.label, SiteLabel::Proven | SiteLabel::Likely)),
+        "{}",
+        dump(&report)
+    );
+    assert_eq!(
+        site_at(&report, "src/Bench/Holder.cs", 9).label,
+        SiteLabel::Excluded,
+        "{}",
+        dump(&report)
+    );
+}

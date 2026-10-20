@@ -265,7 +265,11 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   names a module of the project (`flask.json` after `import flask`, or `json` after `from flask
   import json`) reaches none, so a method of that name is no other definition of the site. A
   C# type or constructor is no other definition of a bare C# use unless its namespace is the
-  global one, holds the use, or is opened by a `using` of the use's file or by a `global using`. A
+  global one, holds the use, or is opened by a `using` of the use's file or by a `global using`.
+  In C#, Java, Kotlin, Scala, Swift, Dart, Rust, Go, C++, C, and VB.NET a place that names a
+  type (a base type, `new X()`, a written type, or the type of a C# member) never names a field,
+  constant, variable, property, parameter, or enum member, so none of them is its other
+  definition or excludes it. A
   Python absolute import proves
   only a file whose top package (the outermost folder with `__init__.py`), or a plain folder
   above it, is the first segment of the import (`import json` does not reach `src/flask/json/`).
