@@ -1357,6 +1357,27 @@ fn a_namespace_import_reaches_the_module_function_and_not_an_object_literal_meth
 }
 
 #[test]
+fn a_bare_java_call_through_a_static_import_of_the_class_file_is_proven() {
+    let repo = scanned_repo(&[
+        (
+            "src/main/java/p/util/Checks.java",
+            "package p.util;\n\npublic class Checks {\n    public static void check(boolean b) {\n    }\n}\n",
+        ),
+        (
+            "src/main/java/q/util/Checks.java",
+            "package q.util;\n\npublic class Checks {\n    public static void check(boolean b) {\n    }\n}\n",
+        ),
+        (
+            "src/main/java/p/Use.java",
+            "package p;\n\nimport static p.util.Checks.check;\n\npublic class Use {\n    void viaImport() {\n        check(false);\n    }\n}\n",
+        ),
+    ]);
+    let report = report(&repo, "check", Some("src/main/java/p/util/Checks.java"));
+
+    assert_site(&report, "src/main/java/p/Use.java", 7, SiteLabel::Proven, "import");
+}
+
+#[test]
 fn a_decorator_line_of_a_property_setter_is_a_definition_line() {
     let repo = scanned_repo(&[(
         "pkg/box.py",

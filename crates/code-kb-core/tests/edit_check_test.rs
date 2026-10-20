@@ -3873,3 +3873,35 @@ fn a_re_export_of_a_deleted_typescript_file_proves_the_call_of_its_removed_funct
     assert_has(&text, "function `helper` (src/lib/util.ts): removed");
     assert_has(&text, "Not in your diff, proven (1):\n      src/use.ts:4  `usesHelper`");
 }
+
+const JAVA_CHECKS: &str = "package p.util;\n\npublic class Checks {\n    public static void check(boolean b) {\n    }\n\n    public static void keep() {\n    }\n}\n";
+const JAVA_CHECKS_WITHOUT_CHECK: &str = "package p.util;\n\npublic class Checks {\n    public static void keep() {\n    }\n}\n";
+const JAVA_CHECKS_USE: &str = "package p;\n\nimport p.util.Checks;\nimport static p.util.Checks.check;\n\npublic class Use {\n    void viaClass() {\n        Checks.keep();\n    }\n\n    void viaImport() {\n        check(false);\n    }\n}\n";
+
+fn java_checks_repo() -> Repo {
+    committed_repo(&[
+        ("src/main/java/p/util/Checks.java", JAVA_CHECKS),
+        ("src/main/java/p/Use.java", JAVA_CHECKS_USE),
+    ])
+}
+
+#[test]
+fn a_removed_java_class_lists_its_import_and_the_static_import_of_its_member() {
+    let repo = java_checks_repo();
+    fs::remove_file(repo.root.join("src/main/java/p/util/Checks.java")).unwrap();
+    let text = text_of(&repo);
+    assert_has(&text, "class `Checks` (src/main/java/p/util/Checks.java): removed");
+    assert_has(&text, "src/main/java/p/Use.java:3  (no enclosing symbol)  imports `Checks`");
+    assert_has(&text, "src/main/java/p/Use.java:4  (no enclosing symbol)  imports `Checks`");
+}
+
+#[test]
+fn a_removed_java_static_method_lists_its_static_import() {
+    let repo = java_checks_repo();
+    write(&repo.root, "src/main/java/p/util/Checks.java", JAVA_CHECKS_WITHOUT_CHECK);
+    let text = text_of(&repo);
+    assert_has(&text, "method `Checks.check` (src/main/java/p/util/Checks.java): removed");
+    assert_has(&text, "src/main/java/p/Use.java:4  (no enclosing symbol)  imports `check`");
+    assert_has(&text, "Not in your diff, proven (1):\n      src/main/java/p/Use.java:12  `viaImport`");
+    assert_lacks(&text, "Use.java:3");
+}

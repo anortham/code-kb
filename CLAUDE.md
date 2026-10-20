@@ -294,7 +294,9 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   as a call: ``a member access reads a field, not the method `length` ``. A bare Java
   call is excluded with the basis ``name` is imported from `java.lang.Math`` when its file has
   `import static C.name`, no definition of the name is in the caller's file, and C and the
-  caller's class chain own none. A bare site that a
+  caller's class chain own none. When C names the target's class file (`p.util.Checks` for
+  `p/util/Checks.java`) and the caller's file defines no method of that name, the import proves
+  the call, also for a removed target in `check_edit`. A bare site that a
   nearer definition shadows cites the definition nearest above it in its scope, because julie
   does not record block scopes, or in JavaScript and TypeScript the callback, loop, or catch
   parameter that binds the name when it is nearer: `line N binds the name as a callback

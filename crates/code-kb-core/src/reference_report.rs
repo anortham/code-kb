@@ -246,8 +246,12 @@ fn report_with(
         text_scan: text.summary,
         cannot_see,
         imports: match mode.absent_target {
-            true if target.parent_symbol_id.is_some() => Vec::new(),
-            true => import_sites_of_absent(conn, &target.name, &target.path)?,
+            true => import_sites_of_absent(
+                conn,
+                &target.name,
+                &target.path,
+                target.parent_symbol_id.is_some(),
+            )?,
             false => import_sites(conn, &target.name, Some(&target.path))?,
         },
         overrides: reach.overrides,
@@ -471,6 +475,9 @@ const VARIABLE_REF_SITES_SQL: &str = "SELECT path, start_line, start_column FROM
 
 const TYPE_DECLARATIONS_SQL: &str = "SELECT COALESCE(signature, '') FROM symbols
      WHERE name = ?1 AND kind = 'type' AND language = ?2";
+
+const CALLABLE_IN_FILE_SQL: &str = "SELECT 1 FROM symbols
+     WHERE path = ?1 AND name = ?2 AND kind IN ('method', 'function', 'constructor') LIMIT 1";
 
 const TOP_LEVEL_VARIABLE_SQL: &str = "SELECT 1 FROM symbols
      WHERE path = ?1 AND name = ?2 AND parent_symbol_id IS NULL
@@ -2080,6 +2087,19 @@ impl<'a> Accounting<'a> {
         }) else {
             return Ok(None);
         };
+        let class_file = format!("/{}.java", class_path.replace('.', "/"));
+        let names_target_class = spec.group.iter().any(|member| {
+            format!("/{}", member.path.replace('\\', "/")).ends_with(&class_file)
+        });
+        if names_target_class
+            && self
+                .rows_at_path(CALLABLE_IN_FILE_SQL, &row.path, &[&spec.name], |r| {
+                    r.get::<_, i64>(0)
+                })?
+                .is_empty()
+        {
+            return Ok(Some(Verdict::new(SiteLabel::Proven, IMPORT_BASIS, true)));
+        }
         let class_name = class_path.rsplit('.').next().unwrap_or(&class_path);
         let mut chain = HashSet::new();
         if let Some(caller) = row.caller_id.as_deref()

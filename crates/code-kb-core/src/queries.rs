@@ -4797,9 +4797,14 @@ pub fn import_sites_of_absent(
     conn: &Connection,
     name: &str,
     path: &str,
+    member: bool,
 ) -> Result<Vec<(String, usize)>, QueryError> {
-    let mut sites = import_sites_from(conn, name, Some(path), true)?;
-    sites.extend(rust_use_lines(conn, name, path)?);
+    let mut sites = Vec::new();
+    if !member {
+        sites.extend(import_sites_from(conn, name, Some(path), true)?);
+        sites.extend(rust_use_lines(conn, name, path)?);
+    }
+    sites.extend(java_import_lines(conn, name, path, member)?);
     sites.sort();
     sites.dedup();
     Ok(sites)
@@ -4808,6 +4813,58 @@ pub fn import_sites_of_absent(
 /// The Rust `use` lines of `name` whose last module segment is the stem of the file `path` or the
 /// folder of its `mod.rs`. A Rust import row carries no source, so the pending `imports` rows give
 /// the module.
+/// The Java import lines that name `name` of the class file `path`. For the class itself:
+/// `import p.G;`, and `import static p.G.m;` or `import p.G.Inner;` of its members. For a member:
+/// `import static p.G.name;` or `import p.G.name;`. julie writes no source for a Java import, so
+/// the path is read from the signature.
+fn java_import_lines(
+    conn: &Connection,
+    name: &str,
+    path: &str,
+    member: bool,
+) -> Result<Vec<(String, usize)>, QueryError> {
+    let normalized = format!("/{}", path.replace('\\', "/"));
+    let Some(class_file) = normalized.strip_suffix(".java") else {
+        return Ok(Vec::new());
+    };
+    let class = class_file.rsplit('/').next().unwrap_or_default();
+    let names_file = |dotted: &str| class_file.ends_with(&format!("/{}", dotted.replace('.', "/")));
+    let mut stmt = conn.prepare(
+        "SELECT replace(path, '\\', '/'), start_line, COALESCE(signature, '') FROM symbols
+         WHERE kind = 'import' AND language = 'java'
+           AND (name = ?1 OR ?2 AND signature LIKE '%.' || ?3 || '.%')",
+    )?;
+    let rows = stmt.query_map(params![name, !member, class], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, i64>(1)? as usize,
+            row.get::<_, String>(2)?,
+        ))
+    })?;
+    let mut lines = Vec::new();
+    for row in rows {
+        let (import_path, line, signature) = row?;
+        let imported = signature
+            .trim()
+            .trim_start_matches("import ")
+            .trim_start()
+            .trim_start_matches("static ")
+            .trim()
+            .trim_end_matches(';')
+            .trim();
+        let (owner, last) = imported.rsplit_once('.').unwrap_or(("", imported));
+        let named = if member {
+            last == name && names_file(owner)
+        } else {
+            names_file(imported) || names_file(owner)
+        };
+        if named {
+            lines.push((import_path, line));
+        }
+    }
+    Ok(lines)
+}
+
 fn rust_use_lines(
     conn: &Connection,
     name: &str,
