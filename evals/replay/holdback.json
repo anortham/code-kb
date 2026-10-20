@@ -6894,36 +6894,7 @@
       "kind": "callable",
       "line": 107,
       "change": "parameters changed",
-      "truth": [
-        {
-          "path": "gson/src/test/java/com/google/gson/GsonTypeAdapterTest.java",
-          "line": 113
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/GsonTypeAdapterTest.java",
-          "line": 147
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/ParameterizedTypeFixtures.java",
-          "line": 142
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/functional/DefaultTypeAdaptersTest.java",
-          "line": 510
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/functional/Java17RecordTest.java",
-          "line": 355
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/functional/NullObjectAndFieldTest.java",
-          "line": 244
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/functional/TypeHierarchyAdapterTest.java",
-          "line": 171
-        }
-      ],
+      "truth": [],
       "verdicts": []
     },
     {
@@ -6939,68 +6910,7 @@
       "kind": "callable",
       "line": 150,
       "change": "parameters changed",
-      "truth": [
-        {
-          "path": "gson/src/test/java/com/google/gson/GsonBuilderTest.java",
-          "line": 87
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/GsonTest.java",
-          "line": 444
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/GsonTest.java",
-          "line": 494
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/GsonTest.java",
-          "line": 519
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/GsonTypeAdapterTest.java",
-          "line": 109
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/ParameterizedTypeFixtures.java",
-          "line": 133
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/functional/CircularReferenceTest.java",
-          "line": 87
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/functional/CollectionTest.java",
-          "line": 354
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/functional/CustomSerializerTest.java",
-          "line": 99
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/functional/MapTest.java",
-          "line": 328
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/functional/MapTest.java",
-          "line": 532
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/functional/NullObjectAndFieldTest.java",
-          "line": 209
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/functional/NullObjectAndFieldTest.java",
-          "line": 229
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/functional/ReflectionAccessFilterTest.java",
-          "line": 354
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/functional/TypeHierarchyAdapterTest.java",
-          "line": 157
-        }
-      ],
+      "truth": [],
       "verdicts": []
     },
     {
@@ -7462,14 +7372,6 @@
       "change": "removed or renamed",
       "truth": [
         {
-          "path": "gson/src/test/java/com/google/gson/JsonPrimitiveTest.java",
-          "line": 116
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/JsonPrimitiveTest.java",
-          "line": 117
-        },
-        {
           "path": "gson/src/test/java/com/google/gson/functional/ArrayTest.java",
           "line": 56
         },
@@ -7488,38 +7390,6 @@
         {
           "path": "gson/src/test/java/com/google/gson/functional/CollectionTest.java",
           "line": 89
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/functional/JsonParserTest.java",
-          "line": 126
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/functional/JsonParserTest.java",
-          "line": 127
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/functional/JsonParserTest.java",
-          "line": 128
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/functional/MapTest.java",
-          "line": 367
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/functional/PrimitiveTest.java",
-          "line": 167
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/functional/PrimitiveTest.java",
-          "line": 168
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/functional/PrimitiveTest.java",
-          "line": 173
-        },
-        {
-          "path": "gson/src/test/java/com/google/gson/functional/PrimitiveTest.java",
-          "line": 176
         }
       ],
       "verdicts": [

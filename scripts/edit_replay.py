@@ -18,6 +18,7 @@ import argparse
 import ast
 import collections
 import datetime
+import functools
 import hashlib
 import itertools
 import json
@@ -758,6 +759,47 @@ def script_use_filter(text, name, defining_path, use_path):
     return use_reaches
 
 
+JAVA_TYPE = re.compile(r"\b(?:class|interface|enum|record)\s+(\w+)")
+JAVA_GENERICS = re.compile(r"<[^<>;{}()\n]*>")
+JAVA_SUPERTYPES = re.compile(r"\b(?:extends|implements)\s+([\w.]+(?:\s*,\s*[\w.]+)*)")
+JAVA_ANONYMOUS = re.compile(r"\bnew\s+([\w.]+)\s*\([^;{}]*?\)\s*\{")
+JAVA_STATIC_IMPORT = re.compile(r"^\s*import\s+static\s+(?:\w+\s*\.\s*)*(?P<owner>\w+)\s*\.\s*(?P<member>\w+|\*)\s*;",
+                                re.M)
+
+
+def java_supertypes(text):
+    """The simple names a Java file extends, implements, or builds an anonymous class of."""
+    plain = JAVA_GENERICS.sub("", text)
+    while plain != text:
+        text, plain = plain, JAVA_GENERICS.sub("", plain)
+    names = [part for clause in JAVA_SUPERTYPES.findall(text) for part in clause.split(",")]
+    return {name.strip().split(".")[-1] for name in names + JAVA_ANONYMOUS.findall(text)}
+
+
+def java_use_filter(text, name, defining_text, read_parent, java_files):
+    """For a Java method, which a bare call reaches only through a static import or the class chain of
+    its caller: a `reaches(line, start)` predicate that takes a use after a receiver or `::`, and a
+    bare use when the file imports the name statically from a class of the defining file, or a
+    supertype it names reaches such a class through the project's files (`java_files()` maps a simple
+    name to its paths)."""
+    defining = set(JAVA_TYPE.findall(defining_text or ""))
+    owners = {m["owner"] for m in JAVA_STATIC_IMPORT.finditer(text or "") if m["member"] in (name, "*")}
+
+    def chain_reaches(types, seen):
+        for found in types - seen:
+            seen.add(found)
+            if found in defining or any(chain_reaches(java_supertypes(read_parent(path) or ""), seen)
+                                        for path in java_files().get(found, ())):
+                return True
+        return False
+    named = bool(owners & defining) or chain_reaches(java_supertypes(text or ""), set())
+
+    def use_reaches(line, start):
+        before = line[:start]
+        return named or bool(RECEIVER.search(before)) or before.rstrip().endswith("::")
+    return use_reaches
+
+
 def binds_name_elsewhere(language, text, name, defining_path, use_path=""):
     """True when the file defines `name` itself, or (Python, JavaScript, TypeScript) imports it only
     from sources that do not name the defining module."""
@@ -777,11 +819,13 @@ def binds_name_elsewhere(language, text, name, defining_path, use_path=""):
     return bool(named) and not any(source_reaches(source, use_path, defining_path, module) for source in named)
 
 
-def holdback_cases(repo, commit, parent, diff_text, read_parent):
+def holdback_cases(repo, commit, parent, diff_text, read_parent, java_files=dict):
     """The holdback cases of one commit: a definition change in one file and the lines in other
     files of its language family whose use of the name the commit changed. A file that defines the
     name itself in the parent (`read_parent(path)`), or imports it from another module, gives no
-    truth: its uses name another definition. A dunder name is skipped, since its callers name the class."""
+    truth: its uses name another definition, and so does a bare Java call that no static import or
+    class chain reaches (`java_files` as in `java_use_filter`). A dunder name is skipped, since its
+    callers name the class."""
     files = parse_diff(diff_text)
     cases = []
     for defining in files:
@@ -795,6 +839,9 @@ def holdback_cases(repo, commit, parent, diff_text, read_parent):
                 continue
             head = dict(defining["removed"]).get(change["line"], "")
             statement = family_of(language) == "script" and not re.search(r"=\s*(?:async\s+)?function\b", head)
+            defining_text = read_parent(path) if language == "java" else None
+            java_method = (language == "java" and change["kind"] == "callable"
+                           and name not in JAVA_TYPE.findall(defining_text or ""))
             truth = []
             for other in files:
                 other_path = other["old"]
@@ -804,7 +851,9 @@ def holdback_cases(repo, commit, parent, diff_text, read_parent):
                 if other_language is None or family_of(other_language) != family_of(language):
                     continue
                 parent_text = read_parent(other_path)
-                reaches = script_use_filter(parent_text, name, path, other_path) if statement else None
+                reaches = (script_use_filter(parent_text, name, path, other_path) if statement
+                           else java_use_filter(parent_text, name, defining_text, read_parent, java_files)
+                           if java_method else None)
                 comments = block_comment_lines(other_language, parent_text)
                 lines = [line for line in truth_lines(other, name, reaches) if line not in comments]
                 if change["change"] == "parameters changed":
@@ -823,7 +872,49 @@ def holdback_cases(repo, commit, parent, diff_text, read_parent):
     return cases
 
 
+def commit_cases(clone, repo, commit, parent):
+    """`holdback_cases` of one commit of the clone."""
+    diff = git(clone, "diff", "-U0", "--no-color", "--no-ext-diff", "-M", parent, commit, "--",
+               *[f"*{extension}" for extension in LANGUAGE_OF_EXTENSION])
+
+    def read_parent(path):
+        done = subprocess.run(["git", "-C", str(clone), "show", f"{parent}:{path}"], capture_output=True,
+                              text=True, errors="replace", check=False)
+        return done.stdout if done.returncode == 0 else None
+
+    @functools.cache
+    def java_files():
+        files = collections.defaultdict(list)
+        for path in git(clone, "ls-tree", "-r", "--name-only", parent, "--", "*.java").splitlines():
+            files[Path(path).stem].append(path)
+        return files
+    return holdback_cases(repo, commit, parent, diff, read_parent, java_files)
+
+
+def refresh_truth(args):
+    """Recomputes the truth of the cases in `args.keep` with the current rule, keeping each case's id,
+    split, and verdicts; prints only the counts that changed per language and split."""
+    data = load_json(args.keep)
+    clones = {entry["name"]: clone_dir(args.repos_dir, entry) for entry in load_json(args.repos)}
+    fresh = {}
+    for repo, commit, parent in sorted({(c["repo"], c["commit"], c["parent"]) for c in data["cases"]}):
+        fresh.update((case["id"], case["truth"]) for case in commit_cases(clones[repo], repo, commit, parent))
+    counts = collections.defaultdict(lambda: [0, 0])
+    for case in data["cases"]:
+        truth = fresh.get(case["id"], [])
+        counts[(case["language"], case["split"])][0] += len(case["truth"])
+        counts[(case["language"], case["split"])][1] += len(truth)
+        case["truth"] = truth
+    write_json(args.out, data)
+    for (language, split), (before, after) in sorted(counts.items()):
+        if before != after:
+            print(f"{language} {split}: {before} truth lines, now {after}")
+    return 0
+
+
 def cmd_select_holdback(args):
+    if args.keep:
+        return refresh_truth(args)
     corpus = load_json(args.repos)
     cases = []
     for entry in corpus:
@@ -832,15 +923,8 @@ def cmd_select_holdback(args):
         kept = walked = 0
         for commit, parent in walk_commits(clone, entry["commit"], args.max_walk):
             walked += 1
-            diff = git(clone, "diff", "-U0", "--no-color", "--no-ext-diff", "-M", parent, commit, "--",
-                       *[f"*{extension}" for extension in LANGUAGE_OF_EXTENSION])
             in_commit = 0
-            def read_parent(path, parent=parent):
-                done = subprocess.run(["git", "-C", str(clone), "show", f"{parent}:{path}"], capture_output=True,
-                                      text=True, errors="replace", check=False)
-                return done.stdout if done.returncode == 0 else None
-
-            for case in holdback_cases(entry["name"], commit, parent, diff, read_parent):
+            for case in commit_cases(clone, entry["name"], commit, parent):
                 if per_name[case["symbol"]] >= args.per_symbol or in_commit >= args.per_commit:
                     continue
                 per_name[case["symbol"]] += 1
@@ -1759,6 +1843,8 @@ def build_parser():
     select_holdback.add_argument("--per-commit", type=int, default=3)
     select_holdback.add_argument("--max-walk", type=int, default=3000)
     select_holdback.add_argument("--out", default=holdback_cases_path)
+    select_holdback.add_argument("--keep", help="a case file whose cases keep their ids, splits, and verdicts; "
+                                                "only their truth is recomputed")
     run_holdback = run_sets.add_parser("holdback")
     run_holdback.add_argument("--cases", default=holdback_cases_path)
     run_holdback.add_argument("--repos", default=str(CORPUS_PATH), help="the reach corpus file")

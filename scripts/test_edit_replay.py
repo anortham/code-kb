@@ -420,6 +420,39 @@ class HoldbackTruthFilterTest(unittest.TestCase):
         cases = edit_replay.holdback_cases("demo", DEV_SHA, "p", diff, parents.get)
         self.assertEqual(cases[0]["truth"], [{"path": "own.py", "line": 3}])
 
+    def java_diff(self, uses):
+        removed = "".join(f"-{use}\n" for use in uses)
+        added = "".join(f"+{use.replace('(a)', '(a, b)')}\n" for use in uses)
+        head = "  public static void check(int a) {"
+        return (f"diff --git a/src/p/Asserts.java b/src/p/Asserts.java\n--- a/src/p/Asserts.java\n"
+                f"+++ b/src/p/Asserts.java\n@@ -3 +3 @@\n-{head}\n+{head.replace('int a', 'int a, int b')}\n"
+                + "".join(f"diff --git a/src/p/{use_file}.java b/src/p/{use_file}.java\n--- a/src/p/{use_file}.java\n"
+                          f"+++ b/src/p/{use_file}.java\n@@ -5 +5 @@\n{removed}{added}"
+                          for use_file in ("Library", "Static", "Sub", "Deep")))
+
+    def test_a_bare_java_call_counts_only_through_a_static_import_or_a_class_chain_to_the_defining_class(self):
+        parents = {"src/p/Asserts.java": "package p;\n\npublic class Asserts {\n",
+                   "src/p/Library.java": "import p.Asserts;\nimport junit.framework.TestCase;\n"
+                                         "class Library extends TestCase {\n  Object t = new Token<List<String>>() {};\n",
+                   "src/p/Static.java": "import static p.Asserts.*;\nclass Static extends TestCase {\n",
+                   "src/p/Sub.java": "class Sub extends Asserts implements Comparable<Map<K, V>> {\n",
+                   "src/p/Deep.java": "class Deep extends Base {\n",
+                   "src/p/Base.java": "abstract class Base<T extends Number> extends Asserts {\n",
+                   "src/p/Token.java": "public class Token<T> {\n"}
+        files = {"Asserts": ["src/p/Asserts.java"], "Library": ["src/p/Library.java"], "Base": ["src/p/Base.java"],
+                 "Token": ["src/p/Token.java"]}
+        diff = self.java_diff(("    check(a);", "    Asserts.check(a);"))
+        cases = edit_replay.holdback_cases("demo", DEV_SHA, "p", diff, parents.get, lambda: files)
+        truth = [(row["path"].split("/")[-1], row["line"]) for row in cases[0]["truth"]]
+        self.assertEqual(truth, [("Library.java", 6), ("Static.java", 5), ("Static.java", 6), ("Sub.java", 5),
+                                 ("Sub.java", 6), ("Deep.java", 5), ("Deep.java", 6)])
+
+    def test_a_java_method_reference_has_a_receiver(self):
+        reaches = edit_replay.java_use_filter("class Library extends TestCase {\n", "check", "class Asserts {\n",
+                                              {}.get, dict)
+        line = "Runnable r = Asserts::check;"
+        self.assertEqual((reaches(line, line.index("check")), reaches("check(a);", 0)), (True, False))
+
     def test_a_dunder_name_makes_no_case(self):
         diff = self.diff().replace("area", "__init__")
         self.assertEqual(edit_replay.holdback_cases("demo", DEV_SHA, "p", diff, lambda path: ""), [])
@@ -488,7 +521,7 @@ class HoldbackScoreTest(unittest.TestCase):
     def test_a_cut_explains_a_missing_change_only_for_a_kind_the_check_compares(self):
         self.assertEqual(edit_replay.unchecked_cause(["method"], []), "shape not seen")
         self.assertEqual(edit_replay.unchecked_cause(["method"], ["Checked 10 of 18"]), "cut by a limit")
-        self.assertEqual(edit_replay.unchecked_cause(["constant", "type"], ["Checked 10 of 18"]), "shape not seen")
+        self.assertEqual(edit_replay.unchecked_cause(["field", "property"], ["Checked 10 of 18"]), "shape not seen")
 
     def test_score_counts_caught_sites_misses_by_cause_and_outside_verdicts(self):
         cases = [

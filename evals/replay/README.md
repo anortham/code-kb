@@ -62,6 +62,7 @@ diffs only and never calls `code-kb`, so the set does not depend on what the che
 
 ```
 scripts/edit_replay.py select holdback [--per-repo 40] [--per-symbol 3] [--per-commit 3] [--max-walk 3000]
+scripts/edit_replay.py select holdback --keep evals/replay/holdback.json [--out FILE]
 scripts/edit_replay.py run holdback --code-kb PATH --out DIR [--split dev|holdout|all]
 scripts/edit_replay.py score holdback --run DIR [--split dev|holdout] [--todo FILE]
 scripts/edit_replay.py verdicts holdback --from FILE
@@ -95,8 +96,16 @@ scripts/edit_replay.py verdicts holdback --from FILE
   its source. A JavaScript or TypeScript function or type statement (not `x.name = function name(`)
   reaches another file only through an import: a bare use counts when such an import names it, and
   `recv.name` when `recv` is bound by such an import of the whole module or by any package import.
+  A bare call of a Java method (not a constructor) counts only when the file imports the name
+  statically (`import static p.C.name;` or `p.C.*`) from a class of the defining file, or a type the
+  file extends, implements, or builds an anonymous class of reaches a class of the defining file
+  through the `extends` and `implements` clauses of the project's files; a library base such as
+  JUnit's `TestCase` reaches none. A use after a receiver or `::` always counts.
   A dunder name (`__init__`) makes no case, since its callers name the class. Truth lines carry their
   line numbers in the parent.
+- `--keep FILE` recomputes the truth of the cases in FILE with the current rule and keeps each
+  case's id, split, and verdicts, so a truth rule fix does not change the set. It prints the
+  truth-line counts that changed per language and split, never a site.
 - A case is the commit, the defining file, and the name. A file renamed by the commit is skipped.
   A name gets at most `--per-symbol` cases per project, and a commit at most `--per-commit`, so one
   large refactor cannot fill the set.
