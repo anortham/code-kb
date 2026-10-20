@@ -27,7 +27,9 @@ use crate::models::{
     ConstructionSite, LabeledSite, ReferenceReport, SiteLabel, Symbol, VariantUse,
     is_generated_lambda_name,
 };
-use crate::queries::{DOCUMENTATION_LANGUAGES, QueryError, escape_like, load_file_symbols};
+use crate::queries::{
+    DOCUMENTATION_LANGUAGES, QueryError, declared_fixture_name, escape_like, load_file_symbols,
+};
 use crate::reference_report::arity::{self, Arity};
 use crate::reference_report::{
     destructurings, enum_variant_names, inherited_group_arity, reference_report_for_edit,
@@ -785,6 +787,64 @@ fn rows_of(conn: &Connection, path: &str) -> Result<Vec<Row>, QueryError> {
     Ok(rows)
 }
 
+/// The name tests take as a parameter for a Python function under a `fixture` decorator.
+fn pytest_fixture_name(symbol: &Symbol) -> Option<String> {
+    let signature = symbol.signature.as_deref()?;
+    let decorated = signature
+        .lines()
+        .any(|line| line.trim_start().starts_with('@') && line.contains("fixture"));
+    (symbol.language == "python" && decorated)
+        .then(|| declared_fixture_name(signature).unwrap_or_else(|| symbol.name.clone()))
+}
+
+const FIXTURE_DEFINITIONS_SQL: &str = "SELECT replace(path, '\\', '/') FROM symbols
+     WHERE name = ?1 AND language = 'python' AND kind IN ('function', 'method')
+       AND signature LIKE '%fixture%'";
+
+const FIXTURE_PARAMETERS_SQL: &str =
+    "SELECT parameter.path, parameter.start_line, t.name,
+            COALESCE(t.body_start_line, t.start_line), t.end_line
+     FROM symbols parameter
+     JOIN symbols t ON t.symbol_id = parameter.parent_symbol_id
+     WHERE parameter.name = ?1
+       AND (parameter.kind = 'parameter'
+            OR (parameter.kind = 'variable' AND parameter.start_byte < t.body_start_byte))
+       AND t.is_test = 1 AND t.language = 'python'
+       AND replace(t.path, '\\', '/') LIKE ?2 ESCAPE '\\'
+     ORDER BY parameter.path, parameter.start_line";
+
+const PARAMETER_READS_SQL: &str = "SELECT DISTINCT start_line FROM identifiers
+     WHERE name = ?1 AND path = ?2 AND start_line BETWEEN ?3 AND ?4
+     ORDER BY start_line";
+
+type FixtureUser = (String, usize, String, usize, usize);
+
+/// The paths of the pytest fixtures named `name`, and the parameters named `name` of the tests
+/// and fixtures under `scope` as `(path, line, function, first body line, last line)`.
+fn fixture_rows(
+    conn: &Connection,
+    name: &str,
+    scope: &str,
+) -> rusqlite::Result<(Vec<String>, Vec<FixtureUser>)> {
+    let overrides = conn
+        .prepare(FIXTURE_DEFINITIONS_SQL)?
+        .query_map(params![name], |row| row.get(0))?
+        .collect::<Result<_, _>>()?;
+    let users = conn
+        .prepare(FIXTURE_PARAMETERS_SQL)?
+        .query_map(params![name, scope], |row| {
+            Ok((
+                row.get(0)?,
+                row.get::<_, i64>(1)? as usize,
+                row.get(2)?,
+                row.get::<_, i64>(3)? as usize,
+                row.get::<_, i64>(4)? as usize,
+            ))
+        })?
+        .collect::<Result<_, _>>()?;
+    Ok((overrides, users))
+}
+
 fn signature_tail(symbol: &Symbol) -> String {
     signatures::tail_of(&signatures::signature_of(symbol), &symbol.name)
 }
@@ -902,6 +962,8 @@ enum What {
     },
     Removed {
         overloads: Option<Overloads>,
+        /// The name tests take as a parameter when the symbol is a pytest fixture.
+        fixture: Option<String>,
     },
     Fields(FieldChange),
     Variants {
@@ -1067,6 +1129,7 @@ impl Detector<'_> {
             subject,
             what: What::Removed {
                 overloads: self.remaining_overloads(row, after)?,
+                fixture: pytest_fixture_name(&row.symbol),
             },
         })
     }
@@ -1427,10 +1490,17 @@ impl<'a> SiteLister<'a> {
             What::Renamed { renames } => self.named_calls(&report, renames),
             What::Removed {
                 overloads: Some(overloads),
+                ..
             } => self.removed_overloads(&report, overloads),
-            What::Removed { overloads: None } => {
+            What::Removed {
+                overloads: None,
+                fixture,
+            } => {
                 let mut placed = self.every_site(&report);
                 self.imports(&report, &mut placed);
+                if let Some(name) = fixture {
+                    self.fixture_users(name, &candidate.subject.path, &mut placed)?;
+                }
                 placed
             }
             What::Fields(change) => self.constructions(&report, &candidate.subject, change)?,
@@ -1661,6 +1731,76 @@ impl<'a> SiteLister<'a> {
             }
         }
         placed
+    }
+
+    /// The tests and fixtures in the scope of a pytest fixture that take it as a parameter, and
+    /// the reads of that parameter in their bodies. A user that a fixture of the same name in its
+    /// own file or in a nearer `conftest.py` serves is left out.
+    fn fixture_users(
+        &self,
+        name: &str,
+        fixture_path: &str,
+        placed: &mut Placed,
+    ) -> Result<(), EditCheckError> {
+        let fixture_path = fixture_path.replace('\\', "/");
+        let fixture_dir = fixture_path
+            .strip_suffix("conftest.py")
+            .map(|dir| dir.trim_end_matches('/'));
+        let scope = match fixture_dir {
+            Some("") => "%".to_string(),
+            Some(dir) => format!("{}/%", escape_like(dir)),
+            None => escape_like(&fixture_path),
+        };
+        let (overrides, users) = fixture_rows(self.conn, name, &scope).map_err(QueryError::from)?;
+        let depth = fixture_dir.map_or(usize::MAX, str::len);
+        let served_elsewhere = |path: &str| {
+            overrides.iter().any(|other| {
+                other == path
+                    || other.strip_suffix("conftest.py").is_some_and(|dir| {
+                        let dir = dir.trim_end_matches('/');
+                        dir.len() > depth && path.starts_with(&format!("{dir}/"))
+                    })
+            })
+        };
+        let mut listed: HashSet<(String, usize)> = [&placed.in_diff, &placed.proven, &placed.likely]
+            .into_iter()
+            .flatten()
+            .map(|site| (site.path.clone(), site.line))
+            .collect();
+        let mut reads = self
+            .conn
+            .prepare(PARAMETER_READS_SQL)
+            .map_err(QueryError::from)?;
+        for (path, line, caller, first, last) in users {
+            let shown = path.replace('\\', "/");
+            if served_elsewhere(&shown) {
+                continue;
+            }
+            let read_lines: Vec<i64> = reads
+                .query_map(params![name, path, first as i64, last as i64], |row| row.get(0))
+                .and_then(Iterator::collect)
+                .map_err(QueryError::from)?;
+            let note = format!("takes the fixture `{name}`");
+            let sites = std::iter::once((line, Some(note)))
+                .chain(read_lines.into_iter().map(|read| (read as usize, None)));
+            for (line, note) in sites {
+                if !listed.insert((shown.clone(), line)) {
+                    continue;
+                }
+                let reached = self.touches(&shown, line, line);
+                placed.add(
+                    SiteLabel::Proven,
+                    reached,
+                    EditSite {
+                        path: shown.clone(),
+                        line,
+                        caller: caller.clone(),
+                        note,
+                    },
+                );
+            }
+        }
+        Ok(())
     }
 
     fn every_site(&mut self, report: &ReferenceReport) -> Placed {

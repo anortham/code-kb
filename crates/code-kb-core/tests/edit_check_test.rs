@@ -3806,6 +3806,35 @@ fn a_type_alias_that_becomes_an_interface_of_the_same_name_is_no_change() {
     assert_lacks(&text, "Shape");
 }
 
+const PY_CONFTEST: &str = "import pytest\n\n\n@pytest.fixture\ndef limit_loader():\n    return 1\n\n\n@pytest.fixture\ndef keep():\n    return 2\n";
+const PY_CONFTEST_WITHOUT_FIXTURE: &str = "import pytest\n\n\n@pytest.fixture\ndef keep():\n    return 2\n";
+const PY_NEARER_CONFTEST: &str = "import pytest\n\n\n@pytest.fixture\ndef limit_loader():\n    return 3\n";
+
+#[test]
+fn a_removed_pytest_fixture_lists_the_tests_that_take_it_and_their_reads_of_it() {
+    let repo = committed_repo(&[
+        ("tests/conftest.py", PY_CONFTEST),
+        (
+            "tests/test_a.py",
+            "def test_uses(limit_loader):\n    assert limit_loader == 1\n",
+        ),
+        ("tests/sub/conftest.py", PY_NEARER_CONFTEST),
+        (
+            "tests/sub/test_b.py",
+            "def test_other(limit_loader):\n    assert limit_loader == 3\n",
+        ),
+    ]);
+    write(&repo.root, "tests/conftest.py", PY_CONFTEST_WITHOUT_FIXTURE);
+    let text = text_of(&repo);
+    assert_has(&text, "function `limit_loader` (tests/conftest.py): removed");
+    assert_has(
+        &text,
+        "tests/test_a.py:1  `test_uses`  takes the fixture `limit_loader`",
+    );
+    assert_has(&text, "tests/test_a.py:2  `test_uses`");
+    assert_lacks(&text, "test_other");
+}
+
 #[test]
 fn a_removed_constant_and_type_alias_of_one_name_report_once_with_an_import_that_names_the_ts_file() {
     let repo = committed_repo(&[

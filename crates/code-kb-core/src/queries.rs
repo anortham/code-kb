@@ -6316,7 +6316,7 @@ fn fixture_name(conn: &Connection, function: &str, path: &str) -> String {
 }
 
 /// The `name=` argument of a `fixture(...)` decorator in `signature`.
-fn declared_fixture_name(signature: &str) -> Option<String> {
+pub(crate) fn declared_fixture_name(signature: &str) -> Option<String> {
     let args = &signature[signature.find("fixture(")? + "fixture(".len()..];
     let args = &args[..args.find(')').unwrap_or(args.len())];
     let value = args[args.find("name=")? + "name=".len()..].trim_start();
