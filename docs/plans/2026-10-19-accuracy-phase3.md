@@ -227,8 +227,10 @@ Runs only when the clean set fails its mark. v2.7.0 already made the first chang
 
 **What to build:** One TypeScript project and one Java project, each with a pinned full commit, 30 sampled symbols, SCIP truth, and the dev and holdout split of the README. The executor picks the projects and records why. A project qualifies when its SCIP indexer runs on it, it has at least 30 symbols with at least 3 truth sites outside their own file, and it is an application or a tool, not a library of the same kind as zod or gson. Local candidates: `/home/murphy/source/goldfish` (TypeScript).
 
-- [ ] The gate runs 9 projects and still passes with the 2.7.0 binary, or the report lists each mark that fails on the new projects. A new project that fails is a finding for 3.2 and 2.2, not a reason to drop the project.
-- [ ] `python3 -m unittest discover -s scripts -p test_reach_gate.py` passes. Worker commits.
+- [x] The gate runs 9 projects and still passes with the 2.7.0 binary, or the report lists each mark that fails on the new projects. A new project that fails is a finding for 3.2 and 2.2, not a reason to drop the project.
+- [x] `python3 -m unittest discover -s scripts -p test_reach_gate.py` passes. Worker commits.
+
+Result (2026-10-19): goldfish (TypeScript, 30 symbols, 689 truth lines) and jsonschema2pojo (Java, 30 symbols, 297 truth lines, scoped to the indexed modules). The 9-project gate passes with the 2.7.0 code and with the branch build, with equal tables. Findings for 3.2 and 2.2: jsonschema2pojo dev recall is 0.582, because 59 dev truth lines are `unresolved` (Java `unresolved` noise, not only TypeScript). The goldfish holdout lines were adjudicated by a reviewer; the lead saw counts only (2 true, 7 false).
 
 ### Task 3.2: TypeScript unresolved noise
 

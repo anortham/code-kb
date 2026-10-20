@@ -1,0 +1,1655 @@
+{
+  "repo": "jsonschema2pojo",
+  "commit": "1c6b7664e453c62265c5e60a630f52f1fd47452a",
+  "language": "java",
+  "scope": [
+    "jsonschema2pojo-cli/",
+    "jsonschema2pojo-core/",
+    "jsonschema2pojo-jdk-annotation/",
+    "jsonschema2pojo-maven-plugin/"
+  ],
+  "symbols": [
+    {
+      "id": "enumCreatorMethod@jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/Annotator.java:149",
+      "split": "dev",
+      "name": "enumCreatorMethod",
+      "file": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/Annotator.java",
+      "line": 149,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/CompositeAnnotator.java",
+          "line": 105
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/EnumRule.java",
+          "line": 407
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "apply@jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/TypeRule.java:78",
+      "split": "holdout",
+      "name": "apply",
+      "file": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/TypeRule.java",
+      "line": 78,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden",
+        "many-refs"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/EnumRuleTest.java",
+          "line": 77
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/SchemaRuleTest.java",
+          "line": 71
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 64
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 85
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 98
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 113
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 129
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 144
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 161
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 176
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 193
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 210
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 226
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 242
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 258
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 274
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 290
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 306
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 322
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 338
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 354
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 370
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 384
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 399
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 415
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 431
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 447
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 463
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 479
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 493
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 506
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 521
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 534
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 547
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 565
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 583
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 596
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 609
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "isUsePrimitives@jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/GenerationConfig.java:72",
+      "split": "dev",
+      "name": "isUsePrimitives",
+      "file": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/GenerationConfig.java",
+      "line": 72,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden",
+        "many-refs"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/FormatRule.java",
+          "line": 100
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/TypeRule.java",
+          "line": 147
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/FormatRulePrimitivesTest.java",
+          "line": 68
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 111
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 127
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 208
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 224
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 240
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 256
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 272
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 288
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 304
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 320
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 336
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 352
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 368
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 412
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 429
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 445
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 461
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 477
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/TypeRuleTest.java",
+          "line": 519
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "clearCache@jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/SchemaStore.java:152",
+      "split": "holdout",
+      "name": "clearCache",
+      "file": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/SchemaStore.java",
+      "line": 152,
+      "kind": "method",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/Jsonschema2Pojo.java",
+          "line": 134
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "isApplicableType@jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/MinimumMaximumRule.java:66",
+      "split": "holdout",
+      "name": "isApplicableType",
+      "file": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/MinimumMaximumRule.java",
+      "line": 66,
+      "kind": "method",
+      "tags": [
+        "common-name"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/MinimumMaximumRule.java",
+          "line": 41
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "isFormatDates@jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/GenerationConfig.java:537",
+      "split": "dev",
+      "name": "isFormatDates",
+      "file": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/GenerationConfig.java",
+      "line": 537,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/JacksonAnnotator.java",
+          "line": 169
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/JacksonAnnotator.java",
+          "line": 188
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/Jsonb1Annotator.java",
+          "line": 89
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/Jsonb1Annotator.java",
+          "line": 108
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/Jsonb2Annotator.java",
+          "line": 89
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/Jsonb2Annotator.java",
+          "line": 108
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "singular@jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java:186",
+      "split": "holdout",
+      "name": "singular",
+      "file": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+      "line": 186,
+      "kind": "method",
+      "tags": [
+        "many-refs"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 73
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 74
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 75
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 76
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 77
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 78
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 79
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 80
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 81
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 82
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 83
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 84
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 85
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 86
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 87
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 88
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 89
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 90
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 91
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 92
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 93
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 94
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 95
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 96
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 97
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 98
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 99
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 100
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 101
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 102
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 103
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 104
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+          "line": 193
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "addConstructorFromParcel@jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/ParcelableHelper.java:70",
+      "split": "dev",
+      "name": "addConstructorFromParcel",
+      "file": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/ParcelableHelper.java",
+      "line": 70,
+      "kind": "method",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/ObjectRule.java",
+          "line": 170
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "getSource@jsonschema2pojo-cli/src/main/java/org/jsonschema2pojo/cli/Arguments.java:295",
+      "split": "dev",
+      "name": "getSource",
+      "file": "jsonschema2pojo-cli/src/main/java/org/jsonschema2pojo/cli/Arguments.java",
+      "line": 295,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "jsonschema2pojo-cli/src/test/java/org/jsonschema2pojo/cli/ArgumentsTest.java",
+          "line": 62
+        },
+        {
+          "path": "jsonschema2pojo-cli/src/test/java/org/jsonschema2pojo/cli/ArgumentsTest.java",
+          "line": 85
+        },
+        {
+          "path": "jsonschema2pojo-cli/src/test/java/org/jsonschema2pojo/cli/ArgumentsTest.java",
+          "line": 115
+        },
+        {
+          "path": "jsonschema2pojo-cli/src/test/java/org/jsonschema2pojo/cli/ArgumentsTest.java",
+          "line": 163
+        },
+        {
+          "path": "jsonschema2pojo-cli/src/test/java/org/jsonschema2pojo/cli/ArgumentsTest.java",
+          "line": 176
+        },
+        {
+          "path": "jsonschema2pojo-cli/src/test/java/org/jsonschema2pojo/cli/ArgumentsTest.java",
+          "line": 189
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "error@jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/RuleLogger.java:23",
+      "split": "holdout",
+      "name": "error",
+      "file": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/RuleLogger.java",
+      "line": 23,
+      "kind": "method",
+      "tags": [
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/EnumRule.java",
+          "line": 315
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "resolve@jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/FragmentResolver.java:29",
+      "split": "dev",
+      "name": "resolve",
+      "file": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/FragmentResolver.java",
+      "line": 29,
+      "kind": "method",
+      "tags": [
+        "many-refs"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/FragmentResolver.java",
+          "line": 31
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/FragmentResolver.java",
+          "line": 45
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/FragmentResolver.java",
+          "line": 53
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/SchemaStore.java",
+          "line": 72
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/SchemaStore.java",
+          "line": 138
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/FragmentResolverTest.java",
+          "line": 42
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/FragmentResolverTest.java",
+          "line": 75
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/FragmentResolverTest.java",
+          "line": 76
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/FragmentResolverTest.java",
+          "line": 77
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/FragmentResolverTest.java",
+          "line": 79
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/FragmentResolverTest.java",
+          "line": 80
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/FragmentResolverTest.java",
+          "line": 81
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/FragmentResolverTest.java",
+          "line": 83
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/FragmentResolverTest.java",
+          "line": 84
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/FragmentResolverTest.java",
+          "line": 85
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/FragmentResolverTest.java",
+          "line": 101
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/FragmentResolverTest.java",
+          "line": 102
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/FragmentResolverTest.java",
+          "line": 103
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/FragmentResolverTest.java",
+          "line": 115
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/FragmentResolverTest.java",
+          "line": 116
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/FragmentResolverTest.java",
+          "line": 117
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/FragmentResolverTest.java",
+          "line": 125
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/FragmentResolverTest.java",
+          "line": 135
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "generateFieldsConstructor@jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/ConstructorRule.java:367",
+      "split": "holdout",
+      "name": "generateFieldsConstructor",
+      "file": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/ConstructorRule.java",
+      "line": 367,
+      "kind": "method",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/ConstructorRule.java",
+          "line": 153
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "isIncludeCopyConstructor@jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/GenerationConfig.java:420",
+      "split": "holdout",
+      "name": "isIncludeCopyConstructor",
+      "file": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/GenerationConfig.java",
+      "line": 420,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/ConstructorRule.java",
+          "line": 106
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "isIncludeGeneratedAnnotation@jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/GenerationConfig.java:630",
+      "split": "dev",
+      "name": "isIncludeGeneratedAnnotation",
+      "file": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/GenerationConfig.java",
+      "line": 630,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/EnumRule.java",
+          "line": 152
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/ObjectRule.java",
+          "line": 135
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "getGenerationConfig@jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/AbstractAnnotator.java:104",
+      "split": "holdout",
+      "name": "getGenerationConfig",
+      "file": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/AbstractAnnotator.java",
+      "line": 104,
+      "kind": "method",
+      "tags": [
+        "many-refs"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/AbstractTypeInfoAwareAnnotator.java",
+          "line": 30
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/AbstractTypeInfoAwareAnnotator.java",
+          "line": 49
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/JacksonAnnotator.java",
+          "line": 167
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/JacksonAnnotator.java",
+          "line": 168
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/JacksonAnnotator.java",
+          "line": 169
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/JacksonAnnotator.java",
+          "line": 186
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/JacksonAnnotator.java",
+          "line": 187
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/JacksonAnnotator.java",
+          "line": 188
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/JacksonAnnotator.java",
+          "line": 206
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/JacksonAnnotator.java",
+          "line": 207
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/JacksonAnnotator.java",
+          "line": 208
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/Jsonb1Annotator.java",
+          "line": 87
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/Jsonb1Annotator.java",
+          "line": 88
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/Jsonb1Annotator.java",
+          "line": 89
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/Jsonb1Annotator.java",
+          "line": 106
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/Jsonb1Annotator.java",
+          "line": 107
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/Jsonb1Annotator.java",
+          "line": 108
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/Jsonb1Annotator.java",
+          "line": 125
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/Jsonb1Annotator.java",
+          "line": 126
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/Jsonb1Annotator.java",
+          "line": 127
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/Jsonb2Annotator.java",
+          "line": 87
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/Jsonb2Annotator.java",
+          "line": 88
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/Jsonb2Annotator.java",
+          "line": 89
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/Jsonb2Annotator.java",
+          "line": 106
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/Jsonb2Annotator.java",
+          "line": 107
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/Jsonb2Annotator.java",
+          "line": 108
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/Jsonb2Annotator.java",
+          "line": 125
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/Jsonb2Annotator.java",
+          "line": 126
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/Jsonb2Annotator.java",
+          "line": 127
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "getConcreteBuilderClass@jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/ReflectionHelper.java:96",
+      "split": "dev",
+      "name": "getConcreteBuilderClass",
+      "file": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/ReflectionHelper.java",
+      "line": 96,
+      "kind": "method",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/ConstructorRule.java",
+          "line": 158
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/ConstructorRule.java",
+          "line": 184
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "getAnnotator@jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/Jsonschema2Pojo.java:166",
+      "split": "dev",
+      "name": "getAnnotator",
+      "file": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/Jsonschema2Pojo.java",
+      "line": 166,
+      "kind": "method",
+      "tags": [
+        "common-name"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/Jsonschema2Pojo.java",
+          "line": 59
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "isIncludeSetters@jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/GenerationConfig.java:445",
+      "split": "holdout",
+      "name": "isIncludeSetters",
+      "file": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/GenerationConfig.java",
+      "line": 445,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/DynamicPropertiesRule.java",
+          "line": 101
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/PropertyRule.java",
+          "line": 89
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "apply@jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/Rule.java:54",
+      "split": "dev",
+      "name": "apply",
+      "file": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/Rule.java",
+      "line": 54,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden",
+        "many-refs"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/SchemaMapper.java",
+          "line": 90
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/SchemaMapper.java",
+          "line": 118
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/SchemaMapper.java",
+          "line": 135
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/AdditionalPropertiesRule.java",
+          "line": 114
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/AdditionalPropertiesRule.java",
+          "line": 118
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/ArrayRule.java",
+          "line": 93
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/EnumRule.java",
+          "line": 109
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/EnumRule.java",
+          "line": 125
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/EnumRule.java",
+          "line": 129
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/EnumRule.java",
+          "line": 133
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/EnumRule.java",
+          "line": 147
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/EnumRule.java",
+          "line": 192
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/EnumRule.java",
+          "line": 197
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/ObjectRule.java",
+          "line": 102
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/ObjectRule.java",
+          "line": 105
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/ObjectRule.java",
+          "line": 109
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/ObjectRule.java",
+          "line": 113
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/ObjectRule.java",
+          "line": 118
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/ObjectRule.java",
+          "line": 121
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/ObjectRule.java",
+          "line": 127
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/ObjectRule.java",
+          "line": 129
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/ObjectRule.java",
+          "line": 132
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/ObjectRule.java",
+          "line": 152
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/PropertiesRule.java",
+          "line": 70
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/PropertyRule.java",
+          "line": 85
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/PropertyRule.java",
+          "line": 119
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/PropertyRule.java",
+          "line": 122
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/PropertyRule.java",
+          "line": 124
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/PropertyRule.java",
+          "line": 126
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/PropertyRule.java",
+          "line": 128
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/PropertyRule.java",
+          "line": 130
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/PropertyRule.java",
+          "line": 170
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/PropertyRule.java",
+          "line": 174
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/PropertyRule.java",
+          "line": 178
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/PropertyRule.java",
+          "line": 182
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/PropertyRule.java",
+          "line": 186
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/PropertyRule.java",
+          "line": 188
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/SchemaRule.java",
+          "line": 85
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/SchemaRule.java",
+          "line": 87
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/TypeRule.java",
+          "line": 86
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/TypeRule.java",
+          "line": 109
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/TypeRule.java",
+          "line": 116
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/TypeRule.java",
+          "line": 118
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/TypeRule.java",
+          "line": 121
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/ReflectionHelper.java",
+          "line": 56
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "fromValue@jsonschema2pojo-cli/src/main/java/org/jsonschema2pojo/cli/CommandLineLogger.java:123",
+      "split": "holdout",
+      "name": "fromValue",
+      "file": "jsonschema2pojo-cli/src/main/java/org/jsonschema2pojo/cli/CommandLineLogger.java",
+      "line": 123,
+      "kind": "method",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "jsonschema2pojo-cli/src/main/java/org/jsonschema2pojo/cli/CommandLineLogger.java",
+          "line": 40
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "enumConstant@jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/Annotator.java:175",
+      "split": "holdout",
+      "name": "enumConstant",
+      "file": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/Annotator.java",
+      "line": 175,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/CompositeAnnotator.java",
+          "line": 119
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/EnumRule.java",
+          "line": 186
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "isErrorEnabled@jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/RuleLogger.java:31",
+      "split": "dev",
+      "name": "isErrorEnabled",
+      "file": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/RuleLogger.java",
+      "line": 31,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/AbstractRuleLogger.java",
+          "line": 29
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/AbstractRuleLogger.java",
+          "line": 36
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "getInstance@jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java:119",
+      "split": "holdout",
+      "name": "getInstance",
+      "file": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/Inflector.java",
+      "line": 119,
+      "kind": "method",
+      "tags": [
+        "many-refs"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/ArrayRule.java",
+          "line": 115
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 29
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 30
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 31
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 32
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 33
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 34
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 35
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 36
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 37
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 38
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 39
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 40
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 41
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 42
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 43
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 44
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 45
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 47
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 48
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 49
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 50
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 51
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 52
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 53
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 54
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 56
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 57
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 58
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 59
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 61
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 62
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 63
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 64
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 65
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 67
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 68
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 69
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 74
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/util/InflectorTest.java",
+          "line": 75
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "addPublicWithMethod@jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/DynamicPropertiesRule.java:240",
+      "split": "dev",
+      "name": "addPublicWithMethod",
+      "file": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/DynamicPropertiesRule.java",
+      "line": 240,
+      "kind": "method",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/DynamicPropertiesRule.java",
+          "line": 237
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "isWarnEnabled@jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/RuleLogger.java:37",
+      "split": "dev",
+      "name": "isWarnEnabled",
+      "file": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/RuleLogger.java",
+      "line": 37,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/AbstractRuleLogger.java",
+          "line": 57
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/AbstractRuleLogger.java",
+          "line": 64
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "isIncludeDynamicSetters@jsonschema2pojo-cli/src/main/java/org/jsonschema2pojo/cli/Arguments.java:530",
+      "split": "holdout",
+      "name": "isIncludeDynamicSetters",
+      "file": "jsonschema2pojo-cli/src/main/java/org/jsonschema2pojo/cli/Arguments.java",
+      "line": 530,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "jsonschema2pojo-cli/src/test/java/org/jsonschema2pojo/cli/ArgumentsTest.java",
+          "line": 73
+        },
+        {
+          "path": "jsonschema2pojo-cli/src/test/java/org/jsonschema2pojo/cli/ArgumentsTest.java",
+          "line": 94
+        },
+        {
+          "path": "jsonschema2pojo-cli/src/test/java/org/jsonschema2pojo/cli/ArgumentsTest.java",
+          "line": 126
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "create@jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/SchemaStore.java:57",
+      "split": "dev",
+      "name": "create",
+      "file": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/SchemaStore.java",
+      "line": 57,
+      "kind": "method",
+      "tags": [
+        "many-refs"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/SchemaStore.java",
+          "line": 144
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/AdditionalPropertiesRule.java",
+          "line": 113
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/ArrayRule.java",
+          "line": 89
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/PropertyRule.java",
+          "line": 84
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/PropertyRule.java",
+          "line": 211
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/SchemaRule.java",
+          "line": 71
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/ReflectionHelper.java",
+          "line": 73
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/ReflectionHelper.java",
+          "line": 189
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/SchemaStoreTest.java",
+          "line": 42
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/SchemaStoreTest.java",
+          "line": 57
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/SchemaStoreTest.java",
+          "line": 58
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/SchemaStoreTest.java",
+          "line": 81
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/SchemaStoreTest.java",
+          "line": 82
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/SchemaStoreTest.java",
+          "line": 95
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/SchemaStoreTest.java",
+          "line": 96
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/SchemaStoreTest.java",
+          "line": 108
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/SchemaStoreTest.java",
+          "line": 109
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/SchemaStoreTest.java",
+          "line": 110
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/SchemaStoreTest.java",
+          "line": 122
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/SchemaStoreTest.java",
+          "line": 123
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/SchemaStoreTest.java",
+          "line": 141
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/SchemaStoreTest.java",
+          "line": 143
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/SchemaStoreTest.java",
+          "line": 157
+        },
+        {
+          "path": "jsonschema2pojo-core/src/test/java/org/jsonschema2pojo/rules/SchemaRuleTest.java",
+          "line": 113
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "getSuperSchema@jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/ReflectionHelper.java:64",
+      "split": "holdout",
+      "name": "getSuperSchema",
+      "file": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/ReflectionHelper.java",
+      "line": 64,
+      "kind": "method",
+      "tags": [],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/rules/ConstructorRule.java",
+          "line": 251
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/util/ReflectionHelper.java",
+          "line": 54
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "isInfoEnabled@jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/RuleLogger.java:33",
+      "split": "holdout",
+      "name": "isInfoEnabled",
+      "file": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/RuleLogger.java",
+      "line": 33,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/AbstractRuleLogger.java",
+          "line": 43
+        }
+      ],
+      "adjudicated": []
+    },
+    {
+      "id": "doWarn@jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/AbstractRuleLogger.java:77",
+      "split": "dev",
+      "name": "doWarn",
+      "file": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/AbstractRuleLogger.java",
+      "line": 77,
+      "kind": "method",
+      "tags": [
+        "common-name",
+        "overridden"
+      ],
+      "truth_source": "scip",
+      "truth": [
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/AbstractRuleLogger.java",
+          "line": 58
+        },
+        {
+          "path": "jsonschema2pojo-core/src/main/java/org/jsonschema2pojo/AbstractRuleLogger.java",
+          "line": 65
+        }
+      ],
+      "adjudicated": []
+    }
+  ]
+}

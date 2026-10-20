@@ -8,7 +8,7 @@ only code-kb and the case files. SCIP indexes are used once, to build the cases.
 
 | Path | Purpose |
 |---|---|
-| `corpus.json` | The 7 pinned projects: name, language, URL, full commit, optional local clone. |
+| `corpus.json` | The 9 pinned projects: name, language, URL, full commit, optional local clone. |
 | `cases/<repo>.json` | 30 frozen symbols per project with truth and adjudications. |
 | `../../scripts/reach_gate.py` | `materialize`, `run`, `disagreements`. |
 | `../../scripts/reach_truth.py` | `sample` and `truth`, from a SCIP index. |
@@ -26,6 +26,15 @@ only code-kb and the case files. SCIP indexes are used once, to build the cases.
 | cobra | go | `adbc8813901bba65827259daa8e22ff94ec1f30e` |
 | newtonsoft-json | csharp | `09bb545d72969ad7fb4ea07db0d5c34f4fc07877` |
 | code-kb | rust | `765d94079677cd21fc180f9b3e1e266b02c83a31` |
+| goldfish | typescript | `e1e95c44a57e819a95535f231476e5fd3f02515e` |
+| jsonschema2pojo | java | `1c6b7664e453c62265c5e60a630f52f1fd47452a` |
+
+TypeScript and Java have two projects each, so fixes in those languages have dev data outside zod
+and gson. goldfish (an MCP memory server) and jsonschema2pojo (a code generator with a CLI and a
+Maven plugin) are applications or tools, not libraries like zod and gson. Each has at least 30
+callable symbols with 3 or more truth lines outside their own file (goldfish 64, jsonschema2pojo
+124), and its SCIP indexer runs on it. google-java-format was rejected: it needs JDK 21, on which
+scip-java fails. The marks are per language, over both projects of the language.
 
 `reach_gate.py materialize` clones each project into `~/.cache/code-kb-reach/<name>-<first 12 of commit>`
 (from `local` when that folder exists, else from `url`) and checks out the commit. A second run
@@ -134,5 +143,7 @@ A name with more than 250 reference lines is not sampled.
 | cobra | scip-go 0.2.7 | `scip-go index --repository-remote github.com/spf13/cobra --module-version adbc881 --output X.scip`. Install from `github.com/scip-code/scip-go/cmd/scip-go`. |
 | newtonsoft-json | scip-dotnet 0.2.14 | In `Src/Newtonsoft.Json`: `LibraryFrameworks=net8.0 scip-dotnet index Newtonsoft.Json.csproj --output X.scip`, then pass `--path-prefix Src/Newtonsoft.Json/` to `reach_truth.py`. Scope symbols and truth to the library; the test project does not resolve. The SDK pin in `Src/global.json` may need a lower version. |
 | code-kb | rust-analyzer 1.97 | `rust-analyzer scip . --output X.scip`. Host-inactive `cfg` blocks are not indexed. |
+| goldfish | scip-typescript 0.4.0 | In a separate copy: `bun install --frozen-lockfile --ignore-scripts`, then `scip-typescript index --no-progress-bar --output X.scip` with the project's own `tsconfig.json`. SCIP counts a dynamic import binding (`const { f } = await import('../src/x')`) and an object-literal member that implements an interface member as references; the case file adjudicates them false. |
+| jsonschema2pojo | scip-java 0.12.3 | JDK 17, Maven 3.9: `cs launch com.sourcegraph:scip-java_2.13:0.12.3 -- index --output X.scip -- --batch-mode test-compile -pl '!jsonschema2pojo-gradle-plugin,!jsonschema2pojo-integration-tests'`. The Gradle plugin uses a Groovy compiler that scip-java cannot wrap, and the integration tests need the plugin to run, so neither is indexed; the case file's `scope` limits scoring to the indexed modules. |
 
 Put heavy output (copies, indexes, virtual environments) under `~/.cache/code-kb-reach/` or `~/.cache/code-kb-accuracy/`, not `/tmp`.

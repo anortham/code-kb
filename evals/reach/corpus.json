@@ -47,5 +47,18 @@
     "url": "https://github.com/anortham/code-kb",
     "commit": "765d94079677cd21fc180f9b3e1e266b02c83a31",
     "local": "/home/murphy/source/code-kb"
+  },
+  {
+    "name": "goldfish",
+    "language": "typescript",
+    "url": "https://github.com/anortham/goldfish",
+    "commit": "e1e95c44a57e819a95535f231476e5fd3f02515e",
+    "local": "/home/murphy/source/goldfish"
+  },
+  {
+    "name": "jsonschema2pojo",
+    "language": "java",
+    "url": "https://github.com/joelittlejohn/jsonschema2pojo",
+    "commit": "1c6b7664e453c62265c5e60a630f52f1fd47452a"
   }
 ]
