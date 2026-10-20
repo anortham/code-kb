@@ -261,7 +261,10 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   keep the plain list.
   Proof rules: a package import proves a site only when it reaches no other top-level definition
   of the name (`import * as z from "zod"` reaches every `boolean` in the package, so `z.boolean()`
-  is unresolved). A module receiver never proves a class member. A Python absolute import proves
+  is unresolved). A module receiver never proves a class member, and a Python receiver chain that
+  names a module of the project (`flask.json` after `import flask`, or `json` after `from flask
+  import json`) reaches none, so a method of that name is no other definition of the site. A
+  Python absolute import proves
   only a file whose top package (the outermost folder with `__init__.py`), or a plain folder
   above it, is the first segment of the import (`import json` does not reach `src/flask/json/`).
   A JavaScript or TypeScript read of the name that only scope ties to the target is likely,
@@ -297,7 +300,8 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   definition, and when the target is a label every site is excluded: ``res` is a test label,
   which code never names``. A function defined inside a Python, Rust, Kotlin, C#, Swift, Scala,
   or Dart function is local to it, so a site outside that function is excluded:
-  ``read` is local to `test_session_cookie_setting``. A Java member access, written without
+  ``read` is local to `test_session_cookie_setting``; such a function is no other definition
+  of a site outside that function either. A Java member access, written without
   parentheses, never reaches a method, because julie writes a method reference (`parser::next`)
   as a call: ``a member access reads a field, not the method `length` ``. A bare Java
   call is excluded with the basis ``name` is imported from `java.lang.Math`` when its file has

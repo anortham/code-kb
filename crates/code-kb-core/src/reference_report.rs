@@ -419,6 +419,14 @@ const IMPORT_SOURCES_SQL: &str = "SELECT COALESCE(json_extract(metadata_json, '$
        AND (name = ?2 OR json_extract(metadata_json, '$.alias') = ?2
             OR json_extract(metadata_json, '$.local_name') = ?2)";
 
+const PYTHON_IMPORT_ROWS_SQL: &str = "SELECT COALESCE(signature, ''),
+            COALESCE(json_extract(metadata_json, '$.source'), ''),
+            COALESCE(json_extract(metadata_json, '$.importedName'), '')
+     FROM symbols
+     WHERE kind = 'import' AND path = ?1 AND json_valid(metadata_json)
+       AND (name = ?2 OR json_extract(metadata_json, '$.alias') = ?2
+            OR json_extract(metadata_json, '$.local_name') = ?2)";
+
 const PENDING_IMPORT_MODULES_SQL: &str = "SELECT target_namespace_json FROM pending_relationships
      WHERE kind = 'imports' AND path = ?1 AND target_terminal_name = ?2";
 
@@ -640,6 +648,13 @@ impl NameRow {
             && !member_of_a_scoped_function
             && !self.reads_a_module(&definition.kind)
             && !(self.is_bare_use() && definition.is_property_method())
+            && self.is_in_scope_of(definition)
+    }
+
+    fn is_in_scope_of(&self, definition: &Definition) -> bool {
+        definition.scope.is_none_or(|(start, end)| {
+            self.path == definition.path && (start..=end).contains(&self.site_line)
+        })
     }
 
     /// A Rust read of a value (`git.diff()`) never names a module (`mod git;`), which holds none.
@@ -876,6 +891,9 @@ struct Definition {
     body_start_line: Option<usize>,
     owner_name: Option<String>,
     local: bool,
+    /// The lines of the function that holds this function, which alone names it in a language of
+    /// [`LOCAL_FUNCTION_LANGUAGES`].
+    scope: Option<(usize, usize)>,
     kind: String,
     language: String,
     signature: String,
@@ -1099,7 +1117,7 @@ impl<'a> Accounting<'a> {
                         json_extract(s.metadata_json, '$.className') END,
                     CASE WHEN json_valid(s.metadata_json) THEN
                         json_extract(s.metadata_json, '$.isCommonJSExport') END,
-                    COALESCE(par.signature, '')
+                    COALESCE(par.signature, ''), par.start_line, par.end_line
              FROM symbols s LEFT JOIN symbols par ON par.symbol_id = s.parent_symbol_id
              WHERE s.name = ?1 AND s.kind NOT IN ('import', 'export')
                AND s.language NOT IN ({})",
@@ -1130,6 +1148,19 @@ impl<'a> Accounting<'a> {
                 .as_deref()
                 .is_some_and(|k| matches!(k, "function" | "method" | "constructor"));
             let local = kind == "parameter" || kind == "variable" && in_function;
+            let scope = match (
+                row.get::<_, Option<i64>>(16)?,
+                row.get::<_, Option<i64>>(17)?,
+            ) {
+                (Some(start), Some(end))
+                    if in_function
+                        && kind == "function"
+                        && LOCAL_FUNCTION_LANGUAGES.contains(&language.as_str()) =>
+                {
+                    Some((start as usize, end as usize))
+                }
+                _ => None,
+            };
             let exported = row.get::<_, Option<String>>(12)?.as_deref() == Some("public")
                 || row.get::<_, Option<i64>>(14)? == Some(1);
             let free = language_family(&language) == "js"
@@ -1165,6 +1196,7 @@ impl<'a> Accounting<'a> {
                         .is_some_and(|k| CLASS_LIKE_KINDS.contains(&k))
                 }),
                 local,
+                scope,
                 top_level: parent_id.is_none(),
                 kind,
                 language,
@@ -1387,6 +1419,7 @@ impl<'a> Accounting<'a> {
                 for &index in chunk {
                     let row = &rows[index];
                     if row.hidden_receiver
+                        || !row.is_in_scope_of(other)
                         || row.language == "java" && !row.can_reach(other)
                         || row.reads_a_module(&other.kind)
                         || row.is_bare_use() && other.is_property_method()
@@ -1443,16 +1476,9 @@ impl<'a> Accounting<'a> {
             .filter(|d| group_ids.contains(d.symbol_id.as_str()))
             .chain(absent_definition.iter())
             .collect();
-        let rivals_of = |row: &NameRow| -> Vec<&Definition> {
-            others
-                .iter()
-                .copied()
-                .filter(|other| row.can_reach(other))
-                .collect()
-        };
         for index in undecided {
             let row = &rows[index];
-            let rivals = rivals_of(row);
+            let rivals = self.rivals(row, &others)?;
             let verdict = match claims.get(&row.key) {
                 Some(claim) => claimed_verdict(row, claim, rivals.len(), spec.builds_class),
                 None if self.out_of_time() => {
@@ -1464,7 +1490,7 @@ impl<'a> Accounting<'a> {
             verdicts.insert(row.key.clone(), verdict);
         }
         for index in unchecked {
-            let rivals = rivals_of(&rows[index]).len();
+            let rivals = self.rivals(&rows[index], &others)?.len();
             let verdict = if rivals == 0 {
                 Verdict::new(
                     SiteLabel::Likely,
@@ -2456,6 +2482,7 @@ impl<'a> Accounting<'a> {
                             .is_some_and(|k| CLASS_LIKE_KINDS.contains(&k))
                     }),
                     local: false,
+                    scope: None,
                     kind: row.get(2)?,
                     language: row.get(3)?,
                     signature: String::new(),
@@ -2487,6 +2514,7 @@ impl<'a> Accounting<'a> {
                 .filter(|owner| CLASS_LIKE_KINDS.contains(&owner.kind.as_str()))
                 .map(|owner| owner.name),
             local: false,
+            scope: None,
             kind: symbol.kind.clone(),
             language: symbol.language.clone(),
             signature: String::new(),
@@ -2659,6 +2687,68 @@ impl<'a> Accounting<'a> {
     /// Whether the absolute import that binds the row's qualifier, or the name itself, starts at
     /// the top package of `path` or at a folder above it: `import json` does not reach
     /// `src/flask/json/provider.py`, whose top package is `flask`.
+    /// The other definitions that can reach `row`; a module receiver reaches no member of a class.
+    fn rivals<'d>(
+        &self,
+        row: &NameRow,
+        others: &[&'d Definition],
+    ) -> Result<Vec<&'d Definition>, QueryError> {
+        let module_receiver = self.receiver_is_python_module(row)?;
+        Ok(others
+            .iter()
+            .copied()
+            .filter(|other| {
+                row.can_reach(other) && !(module_receiver && other.owner_name.is_some())
+            })
+            .collect())
+    }
+
+    /// Whether the receiver chain of a Python row names a module of the project: `flask.json`
+    /// after `import flask`, or `json` after `from flask import json`.
+    fn receiver_is_python_module(&self, row: &NameRow) -> Result<bool, QueryError> {
+        if row.language != "python" || row.hidden_receiver {
+            return Ok(false);
+        }
+        let chain: Vec<&str> = row
+            .namespace
+            .iter()
+            .chain(row.receiver.iter())
+            .flat_map(|part| part.split('.'))
+            .filter(|part| !part.is_empty())
+            .collect();
+        let Some((head, rest)) = chain.split_first() else {
+            return Ok(false);
+        };
+        let imports = self.with_statement(PYTHON_IMPORT_ROWS_SQL, |stmt| {
+            stmt.query_map(params![row.path, head], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()
+        })?;
+        let [(signature, source, imported)] = imports.as_slice() else {
+            return Ok(false);
+        };
+        if source.is_empty() || source.starts_with('.') {
+            return Ok(false);
+        }
+        let mut module: Vec<&str> = source.split('.').collect();
+        if signature.trim_start().starts_with("from ") {
+            module.push(imported);
+        }
+        module.extend(rest);
+        let module = module.join("/");
+        let package = format!(
+            "%/{}",
+            crate::queries::escape_like(&format!("{module}/__init__.py"))
+        );
+        let file = format!("%/{}", crate::queries::escape_like(&format!("{module}.py")));
+        self.with_statement(SOURCE_FILES_SQL, |stmt| stmt.exists(params![package, file]))
+    }
+
     fn python_import_reaches(
         &self,
         row: &NameRow,

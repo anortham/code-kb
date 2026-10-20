@@ -1520,6 +1520,28 @@ fn a_module_receiver_never_proves_a_class_member() {
 }
 
 #[test]
+fn a_python_module_receiver_reaches_no_class_member_with_the_name() {
+    let mut files = PY_STDLIB_JSON.to_vec();
+    files.push((
+        "tests/test_json.py",
+        "import pkg\nfrom pkg import json\n\n\ndef test_dumps():\n    pkg.json.dumps(1)\n    json.dumps(2)\n",
+    ));
+    let repo = scanned_repo(&files);
+    let report = report(&repo, "dumps", Some("pkg/json/__init__.py"));
+
+    for line in [6, 7] {
+        assert!(
+            matches!(
+                site_at(&report, "tests/test_json.py", line).label,
+                SiteLabel::Proven | SiteLabel::Likely
+            ),
+            "{}",
+            dump(&report)
+        );
+    }
+}
+
+#[test]
 fn a_python_absolute_import_proves_only_a_file_of_its_top_package() {
     let repo = scanned_repo(PY_STDLIB_JSON);
     let report = report(&repo, "dumps", Some("pkg/json/__init__.py"));
@@ -10726,4 +10748,36 @@ fn a_kotlin_expression_bodied_override_that_calls_super_reaches_the_base_method(
 
     let base = report(&repo, "Base.g", None);
     assert_site(&base, "Sub.kt", line, SiteLabel::Proven, "class chain");
+}
+
+#[test]
+fn a_function_nested_in_another_python_function_is_no_rival_outside_it() {
+    let repo = scanned_repo(&[
+        (
+            "pkg/app.py",
+            "class App:\n    def hook(self, f):\n        return f\n",
+        ),
+        (
+            "tests/test_bp.py",
+            "def test_bp():\n    def hook():\n        pass\n\n    hook()\n",
+        ),
+        (
+            "tests/test_app.py",
+            "def test_app(app):\n    @app.hook\n    def foo():\n        pass\n",
+        ),
+    ]);
+    let report = report(&repo, "hook", Some("pkg/app.py"));
+
+    assert_eq!(
+        site_at(&report, "tests/test_app.py", 2).label,
+        SiteLabel::Likely,
+        "{}",
+        dump(&report)
+    );
+    assert_eq!(
+        site_at(&report, "tests/test_bp.py", 5).label,
+        SiteLabel::Excluded,
+        "{}",
+        dump(&report)
+    );
 }
