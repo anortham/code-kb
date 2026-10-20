@@ -3754,10 +3754,12 @@ fn a_cpp_static_is_a_call_shape_word_only_for_a_member_of_a_class_or_struct() {
 const TS_SCHEMAS_WITH_MEMBER: &str = "declare function install(inst: object, methods: object): void;\ndeclare function make(name: string, init: (inst: object) => void): object;\n\nexport const ZodType = make(\"ZodType\", (inst) => {\n  install(inst, {\n    array() {\n      return array(this);\n    },\n    keep() {\n      return 1;\n    },\n  });\n});\n\nexport function array(element: unknown) {\n  return [element];\n}\n";
 const TS_SCHEMAS_WITHOUT_MEMBER: &str = "declare function install(inst: object, methods: object): void;\ndeclare function make(name: string, init: (inst: object) => void): object;\n\nexport const ZodType = make(\"ZodType\", (inst) => {\n  install(inst, {\n    keep() {\n      return 1;\n    },\n  });\n});\n\nexport function array(element: unknown) {\n  return [element];\n}\n";
 const TS_SCHEMAS_INDEX: &str = "export * from \"./schemas\";\n";
-const TS_SCHEMAS_USE: &str = "import * as z from \"./index\";\n\nexport function usesArray() {\n  return z.array(1);\n}\n";
+const TS_SCHEMAS_USE: &str =
+    "import * as z from \"./index\";\n\nexport function usesArray() {\n  return z.array(1);\n}\n";
 
 #[test]
-fn a_removed_object_literal_method_does_not_list_a_namespace_call_of_the_module_function_with_its_name() {
+fn a_removed_object_literal_method_does_not_list_a_namespace_call_of_the_module_function_with_its_name()
+ {
     let repo = committed_repo(&[
         ("package.json", "{\"name\": \"demo\"}\n"),
         ("src/schemas.ts", TS_SCHEMAS_WITH_MEMBER),
@@ -3799,16 +3801,25 @@ fn a_type_alias_that_becomes_an_interface_of_the_same_name_is_no_change() {
     let repo = committed_repo(&[
         ("package.json", "{\"name\": \"demo\"}\n"),
         ("src/shape.ts", "export type Shape = { a: number };\n"),
-        ("src/use.ts", "import type { Shape } from \"./shape\";\n\nexport function area(s: Shape) {\n  return s.a;\n}\n"),
+        (
+            "src/use.ts",
+            "import type { Shape } from \"./shape\";\n\nexport function area(s: Shape) {\n  return s.a;\n}\n",
+        ),
     ]);
-    write(&repo.root, "src/shape.ts", "export interface Shape {\n  a: number;\n}\n");
+    write(
+        &repo.root,
+        "src/shape.ts",
+        "export interface Shape {\n  a: number;\n}\n",
+    );
     let text = text_of(&repo);
     assert_lacks(&text, "Shape");
 }
 
 const PY_CONFTEST: &str = "import pytest\n\n\n@pytest.fixture\ndef limit_loader():\n    return 1\n\n\n@pytest.fixture\ndef keep():\n    return 2\n";
-const PY_CONFTEST_WITHOUT_FIXTURE: &str = "import pytest\n\n\n@pytest.fixture\ndef keep():\n    return 2\n";
-const PY_NEARER_CONFTEST: &str = "import pytest\n\n\n@pytest.fixture\ndef limit_loader():\n    return 3\n";
+const PY_CONFTEST_WITHOUT_FIXTURE: &str =
+    "import pytest\n\n\n@pytest.fixture\ndef keep():\n    return 2\n";
+const PY_NEARER_CONFTEST: &str =
+    "import pytest\n\n\n@pytest.fixture\ndef limit_loader():\n    return 3\n";
 
 #[test]
 fn a_removed_pytest_fixture_lists_the_tests_that_take_it_and_their_reads_of_it() {
@@ -3826,7 +3837,10 @@ fn a_removed_pytest_fixture_lists_the_tests_that_take_it_and_their_reads_of_it()
     ]);
     write(&repo.root, "tests/conftest.py", PY_CONFTEST_WITHOUT_FIXTURE);
     let text = text_of(&repo);
-    assert_has(&text, "function `limit_loader` (tests/conftest.py): removed");
+    assert_has(
+        &text,
+        "function `limit_loader` (tests/conftest.py): removed",
+    );
     assert_has(
         &text,
         "tests/test_a.py:1  `test_uses`  takes the fixture `limit_loader`",
@@ -3836,7 +3850,8 @@ fn a_removed_pytest_fixture_lists_the_tests_that_take_it_and_their_reads_of_it()
 }
 
 #[test]
-fn a_removed_constant_and_type_alias_of_one_name_report_once_with_an_import_that_names_the_ts_file() {
+fn a_removed_constant_and_type_alias_of_one_name_report_once_with_an_import_that_names_the_ts_file()
+{
     let repo = committed_repo(&[
         ("package.json", "{\"name\": \"demo\"}\n"),
         (
@@ -3852,7 +3867,10 @@ fn a_removed_constant_and_type_alias_of_one_name_report_once_with_an_import_that
     let text = text_of(&repo);
     assert_has(&text, "1 shape change:");
     assert_has(&text, "`IssueCode` (src/issues.ts): removed");
-    assert_has(&text, "src/use.ts:1  (no enclosing symbol)  imports `IssueCode`");
+    assert_has(
+        &text,
+        "src/use.ts:1  (no enclosing symbol)  imports `IssueCode`",
+    );
     assert_has(&text, "src/use.ts:4  `usesCode`");
 }
 
@@ -3860,8 +3878,14 @@ fn a_removed_constant_and_type_alias_of_one_name_report_once_with_an_import_that
 fn a_re_export_of_a_deleted_typescript_file_proves_the_call_of_its_removed_function() {
     let repo = committed_repo(&[
         ("package.json", "{\"name\": \"demo\"}\n"),
-        ("src/lib/util.ts", "export function helper() {\n  return 1;\n}\n"),
-        ("mirror/util.ts", "export function helper() {\n  return 2;\n}\n"),
+        (
+            "src/lib/util.ts",
+            "export function helper() {\n  return 1;\n}\n",
+        ),
+        (
+            "mirror/util.ts",
+            "export function helper() {\n  return 2;\n}\n",
+        ),
         ("src/index.ts", "export * from \"./lib/util.ts\";\n"),
         (
             "src/use.ts",
@@ -3871,11 +3895,15 @@ fn a_re_export_of_a_deleted_typescript_file_proves_the_call_of_its_removed_funct
     fs::remove_file(repo.root.join("src/lib/util.ts")).unwrap();
     let text = text_of(&repo);
     assert_has(&text, "function `helper` (src/lib/util.ts): removed");
-    assert_has(&text, "Not in your diff, proven (1):\n      src/use.ts:4  `usesHelper`");
+    assert_has(
+        &text,
+        "Not in your diff, proven (1):\n      src/use.ts:4  `usesHelper`",
+    );
 }
 
 const JAVA_CHECKS: &str = "package p.util;\n\npublic class Checks {\n    public static void check(boolean b) {\n    }\n\n    public static void keep() {\n    }\n}\n";
-const JAVA_CHECKS_WITHOUT_CHECK: &str = "package p.util;\n\npublic class Checks {\n    public static void keep() {\n    }\n}\n";
+const JAVA_CHECKS_WITHOUT_CHECK: &str =
+    "package p.util;\n\npublic class Checks {\n    public static void keep() {\n    }\n}\n";
 const JAVA_CHECKS_USE: &str = "package p;\n\nimport p.util.Checks;\nimport static p.util.Checks.check;\n\npublic class Use {\n    void viaClass() {\n        Checks.keep();\n    }\n\n    void viaImport() {\n        check(false);\n    }\n}\n";
 
 fn java_checks_repo() -> Repo {
@@ -3890,18 +3918,63 @@ fn a_removed_java_class_lists_its_import_and_the_static_import_of_its_member() {
     let repo = java_checks_repo();
     fs::remove_file(repo.root.join("src/main/java/p/util/Checks.java")).unwrap();
     let text = text_of(&repo);
-    assert_has(&text, "class `Checks` (src/main/java/p/util/Checks.java): removed");
-    assert_has(&text, "src/main/java/p/Use.java:3  (no enclosing symbol)  imports `Checks`");
-    assert_has(&text, "src/main/java/p/Use.java:4  (no enclosing symbol)  imports `Checks`");
+    assert_has(
+        &text,
+        "class `Checks` (src/main/java/p/util/Checks.java): removed",
+    );
+    assert_has(
+        &text,
+        "src/main/java/p/Use.java:3  (no enclosing symbol)  imports `Checks`",
+    );
+    assert_has(
+        &text,
+        "src/main/java/p/Use.java:4  (no enclosing symbol)  imports `Checks`",
+    );
 }
 
 #[test]
 fn a_removed_java_static_method_lists_its_static_import() {
     let repo = java_checks_repo();
-    write(&repo.root, "src/main/java/p/util/Checks.java", JAVA_CHECKS_WITHOUT_CHECK);
+    write(
+        &repo.root,
+        "src/main/java/p/util/Checks.java",
+        JAVA_CHECKS_WITHOUT_CHECK,
+    );
     let text = text_of(&repo);
-    assert_has(&text, "method `Checks.check` (src/main/java/p/util/Checks.java): removed");
-    assert_has(&text, "src/main/java/p/Use.java:4  (no enclosing symbol)  imports `check`");
-    assert_has(&text, "Not in your diff, proven (1):\n      src/main/java/p/Use.java:12  `viaImport`");
+    assert_has(
+        &text,
+        "method `Checks.check` (src/main/java/p/util/Checks.java): removed",
+    );
+    assert_has(
+        &text,
+        "src/main/java/p/Use.java:4  (no enclosing symbol)  imports `check`",
+    );
+    assert_has(
+        &text,
+        "Not in your diff, proven (1):\n      src/main/java/p/Use.java:12  `viaImport`",
+    );
     assert_lacks(&text, "Use.java:3");
+}
+
+const JS_REQUEST: &str = "var req = Object.create(null);\n\nmodule.exports = req;\n\nreq.param = function param(name) {\n  return name;\n};\n\nreq.keep = function keep() {\n  return 1;\n};\n";
+const JS_REQUEST_WITHOUT_PARAM: &str = "var req = Object.create(null);\n\nmodule.exports = req;\n\nreq.keep = function keep() {\n  return 1;\n};\n";
+
+#[test]
+fn a_removed_javascript_method_keeps_the_object_it_was_assigned_on() {
+    let repo = committed_repo(&[
+        ("package.json", "{\"name\": \"demo\"}\n"),
+        ("lib/request.js", JS_REQUEST),
+        (
+            "lib/application.js",
+            "var app = exports = module.exports = {};\n\napp.param = function param(name) {\n  return name;\n};\n",
+        ),
+        (
+            "test/use.js",
+            "function handler(req, res) {\n  return req.param('name');\n}\n\nmodule.exports = handler;\n",
+        ),
+    ]);
+    write(&repo.root, "lib/request.js", JS_REQUEST_WITHOUT_PARAM);
+    let text = text_of(&repo);
+    assert_has(&text, "`param` (lib/request.js): removed");
+    assert_has(&text, "test/use.js:2  `handler`");
 }

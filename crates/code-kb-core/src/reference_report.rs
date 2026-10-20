@@ -677,6 +677,17 @@ fn is_property_method(symbol: &Symbol) -> bool {
         && language_family(&symbol.language) == "js"
 }
 
+/// The object a JavaScript method is assigned on (`req` for `req.param = function`), which julie
+/// keeps as `className` in metadata that a removed symbol no longer has.
+fn assigned_object(symbol: &Symbol) -> Option<String> {
+    if language_family(&symbol.language) != "js" {
+        return None;
+    }
+    let signature = symbol.signature.as_deref()?;
+    let (object, _) = signature.split_once(&format!(".{} =", symbol.name))?;
+    Some(object.trim().to_string()).filter(|object| is_plain_identifier(object))
+}
+
 /// The type a C# extension method extends: `IEnumerable` for `Foo(this IEnumerable<T> source)`.
 fn extended_type(signature: &str) -> Option<String> {
     let rest = signature
@@ -1405,9 +1416,18 @@ impl<'a> Accounting<'a> {
             });
         }
 
+        let absent_definition = match self
+            .absent
+            .as_ref()
+            .filter(|absent| group_ids.contains(absent.symbol_id.as_str()))
+        {
+            Some(absent) => Some(self.absent_definition(absent)?),
+            None => None,
+        };
         let group_definitions: Vec<&Definition> = definitions
             .iter()
             .filter(|d| group_ids.contains(d.symbol_id.as_str()))
+            .chain(absent_definition.iter())
             .collect();
         let rivals_of = |row: &NameRow| -> Vec<&Definition> {
             others
@@ -2088,9 +2108,10 @@ impl<'a> Accounting<'a> {
             return Ok(None);
         };
         let class_file = format!("/{}.java", class_path.replace('.', "/"));
-        let names_target_class = spec.group.iter().any(|member| {
-            format!("/{}", member.path.replace('\\', "/")).ends_with(&class_file)
-        });
+        let names_target_class = spec
+            .group
+            .iter()
+            .any(|member| format!("/{}", member.path.replace('\\', "/")).ends_with(&class_file));
         if names_target_class
             && self
                 .rows_at_path(CALLABLE_IN_FILE_SQL, &row.path, &[&spec.name], |r| {
@@ -2377,7 +2398,7 @@ impl<'a> Accounting<'a> {
             kind: symbol.kind.clone(),
             language: symbol.language.clone(),
             signature: String::new(),
-            class_name: None,
+            class_name: assigned_object(symbol),
             top_level: symbol.parent_symbol_id.is_none(),
             callable: true,
             free: false,

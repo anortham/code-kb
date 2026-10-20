@@ -150,7 +150,15 @@ const BINDING_KINDS: [&str; 3] = ["constant", "variable", "type"];
 /// A removed symbol whose name stays in the same scope as another kind of one group changed
 /// kind, not name: `type X` became `interface X`, or `const f` became `function f`.
 const KIND_GROUPS: [&[&str]; 2] = [
-    &["class", "struct", "interface", "trait", "enum", "record", "type"],
+    &[
+        "class",
+        "struct",
+        "interface",
+        "trait",
+        "enum",
+        "record",
+        "type",
+    ],
     &["constant", "variable", "function"],
 ];
 const FIELD_KINDS: [&str; 2] = ["field", "property"];
@@ -801,8 +809,7 @@ const FIXTURE_DEFINITIONS_SQL: &str = "SELECT replace(path, '\\', '/') FROM symb
      WHERE name = ?1 AND language = 'python' AND kind IN ('function', 'method')
        AND signature LIKE '%fixture%'";
 
-const FIXTURE_PARAMETERS_SQL: &str =
-    "SELECT parameter.path, parameter.start_line, t.name,
+const FIXTURE_PARAMETERS_SQL: &str = "SELECT parameter.path, parameter.start_line, t.name,
             COALESCE(t.body_start_line, t.start_line), t.end_line
      FROM symbols parameter
      JOIN symbols t ON t.symbol_id = parameter.parent_symbol_id
@@ -1762,11 +1769,12 @@ impl<'a> SiteLister<'a> {
                     })
             })
         };
-        let mut listed: HashSet<(String, usize)> = [&placed.in_diff, &placed.proven, &placed.likely]
-            .into_iter()
-            .flatten()
-            .map(|site| (site.path.clone(), site.line))
-            .collect();
+        let mut listed: HashSet<(String, usize)> =
+            [&placed.in_diff, &placed.proven, &placed.likely]
+                .into_iter()
+                .flatten()
+                .map(|site| (site.path.clone(), site.line))
+                .collect();
         let mut reads = self
             .conn
             .prepare(PARAMETER_READS_SQL)
@@ -1777,7 +1785,9 @@ impl<'a> SiteLister<'a> {
                 continue;
             }
             let read_lines: Vec<i64> = reads
-                .query_map(params![name, path, first as i64, last as i64], |row| row.get(0))
+                .query_map(params![name, path, first as i64, last as i64], |row| {
+                    row.get(0)
+                })
                 .and_then(Iterator::collect)
                 .map_err(QueryError::from)?;
             let note = format!("takes the fixture `{name}`");
