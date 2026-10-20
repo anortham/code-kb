@@ -3978,3 +3978,57 @@ fn a_removed_javascript_method_keeps_the_object_it_was_assigned_on() {
     assert_has(&text, "`param` (lib/request.js): removed");
     assert_has(&text, "test/use.js:2  `handler`");
 }
+
+#[test]
+fn a_removed_typescript_type_skips_an_import_of_a_mirror_copy() {
+    let parse_util = "export type ParseParams = { path: string[] };\n\nexport type Keep = string;\n";
+    let types = "import { ParseParams } from \"./helpers/parseUtil\";\n\nexport function parse(p: ParseParams) {\n  return p;\n}\n";
+    let repo = committed_repo(&[
+        ("package.json", "{\"name\": \"demo\"}\n"),
+        ("src/helpers/parseUtil.ts", parse_util),
+        ("src/types.ts", types),
+        ("deno/lib/helpers/parseUtil.ts", parse_util),
+        ("deno/lib/types.ts", types),
+    ]);
+    write(
+        &repo.root,
+        "deno/lib/helpers/parseUtil.ts",
+        "export type Keep = string;\n",
+    );
+    let text = text_of(&repo);
+    assert_has(
+        &text,
+        "deno/lib/types.ts:1  (no enclosing symbol)  imports `ParseParams`",
+    );
+    assert_lacks(&text, "src/types.ts:1");
+}
+
+#[test]
+fn a_removed_csharp_type_skips_a_use_whose_file_does_not_open_its_namespace() {
+    let repo = committed_repo(&[
+        (
+            "src/Utilities/Cache.cs",
+            "namespace App.Utilities\n{\n    internal class Cache\n    {\n    }\n}\n",
+        ),
+        (
+            "src/Utilities/Other.cs",
+            "namespace App.Utilities\n{\n    internal class Other\n    {\n    }\n}\n",
+        ),
+        (
+            "src/Tests/GameObject.cs",
+            "using System.Collections.Concurrent;\n\nnamespace App.Tests\n{\n    public class GameObject\n    {\n        public Cache Components;\n    }\n}\n",
+        ),
+        (
+            "src/Tests/Opened.cs",
+            "using App.Utilities;\n\nnamespace App.Tests\n{\n    public class Opened\n    {\n        public Cache Components;\n    }\n}\n",
+        ),
+    ]);
+    fs::remove_file(repo.root.join("src/Utilities/Cache.cs")).unwrap();
+    let text = text_of(&repo);
+    assert_has(
+        &text,
+        "class `App.Utilities.Cache` (src/Utilities/Cache.cs): removed",
+    );
+    assert_has(&text, "src/Tests/Opened.cs:7");
+    assert_lacks(&text, "GameObject.cs");
+}

@@ -419,6 +419,9 @@ const IMPORT_SOURCES_SQL: &str = "SELECT COALESCE(json_extract(metadata_json, '$
        AND (name = ?2 OR json_extract(metadata_json, '$.alias') = ?2
             OR json_extract(metadata_json, '$.local_name') = ?2)";
 
+const IMPORT_SIGNATURES_SQL: &str = "SELECT COALESCE(signature, '') FROM symbols
+     WHERE kind = 'import' AND path = ?1 AND name = ?2";
+
 const PYTHON_IMPORT_ROWS_SQL: &str = "SELECT COALESCE(signature, ''),
             COALESCE(json_extract(metadata_json, '$.source'), ''),
             COALESCE(json_extract(metadata_json, '$.importedName'), '')
@@ -431,6 +434,14 @@ const PENDING_IMPORT_MODULES_SQL: &str = "SELECT target_namespace_json FROM pend
      WHERE kind = 'imports' AND path = ?1 AND target_terminal_name = ?2";
 
 const FILE_EXISTS_SQL: &str = "SELECT 1 FROM files WHERE path = ?1 OR path = ?2 LIMIT 1";
+
+const PYTHON_FILES_NAMED_SQL: &str = "SELECT replace(path, '\\', '/') FROM files
+     WHERE language = 'python'
+       AND ('/' || replace(path, '\\', '/') LIKE ?1 OR '/' || replace(path, '\\', '/') LIKE ?2)
+     LIMIT 200";
+
+/// At this many candidate files an import counts as reaching the project, unchecked.
+const PYTHON_FILES_NAMED_CAP: usize = 200;
 
 const SOURCE_FILES_SQL: &str = "SELECT 1 FROM files
      WHERE '/' || replace(replace(path, '\\', '/'), '-', '_') LIKE ?1 ESCAPE '\\'
@@ -497,6 +508,9 @@ const SYMBOL_CHAIN_SQL: &str = "WITH RECURSIVE chain(symbol_id, depth) AS (
 const CSHARP_USINGS_SQL: &str = "SELECT COALESCE(signature, '') FROM symbols
      WHERE kind = 'import' AND language = 'csharp'
        AND (path = ?1 OR signature LIKE 'global using %')";
+
+const MSBUILD_FILES_SQL: &str = "SELECT path FROM files
+     WHERE path LIKE '%.csproj' OR path LIKE '%.props' OR path LIKE '%.targets'";
 
 const CSHARP_TYPE_KINDS: &[&str] = &["class", "struct", "interface", "enum", "record", "delegate"];
 
@@ -1062,6 +1076,7 @@ struct Accounting<'a> {
     import_match_stmt: Option<Statement<'a>>,
     statements: RefCell<HashMap<&'static str, Statement<'a>>>,
     external_sources: HashMap<String, bool>,
+    msbuild_usings: std::cell::OnceCell<bool>,
     /// Definitions an import reaches, by caller file, receiver, and name.
     import_matches: HashMap<(String, String, String), Vec<ImportMatch>>,
     js: js_modules::JsCaches,
@@ -1082,6 +1097,7 @@ impl<'a> Accounting<'a> {
             import_match_stmt: None,
             statements: RefCell::new(HashMap::new()),
             external_sources: HashMap::new(),
+            msbuild_usings: std::cell::OnceCell::new(),
             import_matches: HashMap::new(),
             js: js_modules::JsCaches::default(),
             receivers: receiver_types::ReceiverCaches::default(),
@@ -2123,6 +2139,9 @@ impl<'a> Accounting<'a> {
         if let Some(verdict) = self.java_bare_call_outside_classes(row, spec)? {
             return Ok(Some(verdict));
         }
+        if let Some(verdict) = self.csharp_type_outside_namespaces(row, spec)? {
+            return Ok(Some(verdict));
+        }
         if row.is_bare_use() && spec.group.iter().all(is_property_method) {
             return Ok(Some(self.bare_use_of_property_method(row, &spec.name)?));
         }
@@ -2727,9 +2746,6 @@ impl<'a> Accounting<'a> {
         Ok(Verdict::new(SiteLabel::Excluded, basis, false))
     }
 
-    /// Whether the absolute import that binds the row's qualifier, or the name itself, starts at
-    /// the top package of `path` or at a folder above it: `import json` does not reach
-    /// `src/flask/json/provider.py`, whose top package is `flask`.
     /// The other definitions that can reach `row`; a module receiver reaches no member of a class.
     fn rivals<'d>(
         &self,
@@ -2755,13 +2771,59 @@ impl<'a> Accounting<'a> {
         Ok(rivals)
     }
 
+    /// A bare C# use of a top-level type whose namespace the use's file neither holds nor opens,
+    /// and that no `using Name = …;` alias names.
+    fn csharp_type_outside_namespaces(
+        &self,
+        row: &NameRow,
+        spec: &Spec,
+    ) -> Result<Option<Verdict>, QueryError> {
+        if row.language != "csharp" || row.has_qualifier() {
+            return Ok(None);
+        }
+        let mut namespace = None;
+        for member in &spec.group {
+            let Some(definition) = self.definition_by_id(&member.symbol_id)? else {
+                return Ok(None);
+            };
+            if definition.language != "csharp"
+                || definition.owner_name.is_some()
+                || !CSHARP_TYPE_KINDS.contains(&definition.kind.as_str())
+                || self.csharp_type_in_scope(row, &definition)?
+            {
+                return Ok(None);
+            }
+            namespace = Some(self.csharp_namespace(&definition.symbol_id)?);
+        }
+        let usings = self.with_statement(CSHARP_USINGS_SQL, |stmt| {
+            stmt.query_map(params![row.path], |r| r.get::<_, String>(0))?
+                .collect::<Result<Vec<_>, _>>()
+        })?;
+        let alias = format!("using {} =", spec.name);
+        if usings.iter().any(|using| using.contains(&alias)) {
+            return Ok(None);
+        }
+        Ok(namespace.map(|namespace| {
+            Verdict::new(
+                SiteLabel::Excluded,
+                format!("namespace `{namespace}` is not open here"),
+                false,
+            )
+        }))
+    }
+
     /// Whether a bare C# use can name the type of `other`: its namespace is the global one, one
-    /// that holds the use, or one that a `using` of the use's file or a `global using` opens.
+    /// that holds the use, or one that a `using` of the use's file or a `global using` opens. A
+    /// project file with an MSBuild `<Using …/>` item opens namespaces the index does not see, so
+    /// every namespace counts as open there.
     fn csharp_type_in_scope(&self, row: &NameRow, other: &Definition) -> Result<bool, QueryError> {
         let namespace = self.csharp_namespace(&other.symbol_id)?;
         let Some(caller) = row.caller_id.as_deref().filter(|_| !namespace.is_empty()) else {
             return Ok(true);
         };
+        if self.msbuild_usings()? {
+            return Ok(true);
+        }
         let enclosing = self.csharp_namespace(caller)?;
         if enclosing == namespace || enclosing.starts_with(&format!("{namespace}.")) {
             return Ok(true);
@@ -2775,11 +2837,34 @@ impl<'a> Accounting<'a> {
             .any(|using| csharp_using_namespace(using) == Some(namespace.as_str())))
     }
 
+    /// Whether a `.csproj`, `.props`, or `.targets` file of the project holds a `<Using …/>` item.
+    fn msbuild_usings(&self) -> Result<bool, QueryError> {
+        if let Some(known) = self.msbuild_usings.get() {
+            return Ok(*known);
+        }
+        let paths = self.with_statement(MSBUILD_FILES_SQL, |stmt| {
+            stmt.query_map([], |r| r.get::<_, String>(0))?
+                .collect::<Result<Vec<_>, _>>()
+        })?;
+        let found = paths.iter().any(|path| {
+            std::fs::read_to_string(self.root.join(path))
+                .is_ok_and(|text| text.contains("<Using ") || text.contains("<Using\n"))
+        });
+        Ok(*self.msbuild_usings.get_or_init(|| found))
+    }
+
     /// The dotted namespace that holds `symbol_id`, read from its `namespace` ancestors; empty
-    /// for the global namespace.
+    /// for the global namespace. A removed target starts from its owner in the index.
     fn csharp_namespace(&self, symbol_id: &str) -> Result<String, QueryError> {
+        let start = match self.absent.as_ref().filter(|s| s.symbol_id == symbol_id) {
+            Some(absent) => match absent.parent_symbol_id.as_deref() {
+                Some(parent) => parent,
+                None => return Ok(String::new()),
+            },
+            None => symbol_id,
+        };
         let chain = self.with_statement(SYMBOL_CHAIN_SQL, |stmt| {
-            stmt.query_map(params![symbol_id], |r| {
+            stmt.query_map(params![start], |r| {
                 Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
             })?
             .collect::<Result<Vec<_>, _>>()
@@ -2839,6 +2924,9 @@ impl<'a> Accounting<'a> {
         self.with_statement(SOURCE_FILES_SQL, |stmt| stmt.exists(params![package, file]))
     }
 
+    /// Whether the absolute import that binds the row's qualifier, or the name itself, starts at
+    /// the top package of `path` or at a folder above it: `import json` does not reach
+    /// `src/flask/json/provider.py`, whose top package is `flask`.
     fn python_import_reaches(
         &self,
         row: &NameRow,
@@ -2863,6 +2951,19 @@ impl<'a> Accounting<'a> {
         if sources.is_empty() || sources.iter().any(|s| s.is_empty() || s.starts_with('.')) {
             return Ok(true);
         }
+        let reachable = self.python_import_heads(path)?;
+        Ok(sources.iter().any(|source| {
+            source
+                .split('.')
+                .next()
+                .is_some_and(|first| reachable.contains(&first))
+        }))
+    }
+
+    /// The first segments of an absolute import that reach the Python file `path`: its top package
+    /// (the outermost folder with `__init__.py`) and the plain folders above it, or, outside a
+    /// package, its folders and its stem.
+    fn python_import_heads<'p>(&self, path: &'p str) -> Result<Vec<&'p str>, QueryError> {
         let (folders, file) = match path.rsplit_once('/') {
             Some((dir, file)) => (dir.split('/').collect::<Vec<_>>(), file),
             None => (Vec::new(), path),
@@ -2879,7 +2980,7 @@ impl<'a> Accounting<'a> {
             top -= 1;
         }
         let stem = file.strip_suffix(".py").unwrap_or(file);
-        let reachable: Vec<&str> = if top == folders.len() {
+        Ok(if top == folders.len() {
             folders
                 .iter()
                 .copied()
@@ -2887,13 +2988,37 @@ impl<'a> Accounting<'a> {
                 .collect()
         } else {
             folders[..=top].to_vec()
+        })
+    }
+
+    /// Whether the absolute Python import `source` reaches no file of the project: `import json`
+    /// beside `src/flask/json/`, whose top package is `flask`, names the standard library.
+    fn python_source_is_external(&mut self, source: &str) -> Result<bool, QueryError> {
+        let key = format!("python:{source}");
+        if let Some(known) = self.external_sources.get(&key) {
+            return Ok(*known);
+        }
+        let first = source.split('.').next().unwrap_or_default();
+        let external = if source.starts_with('.') || !is_plain_identifier(first) {
+            false
+        } else {
+            let paths = self.with_statement(PYTHON_FILES_NAMED_SQL, |stmt| {
+                stmt.query_map(params![format!("%/{first}/%"), format!("%/{first}.py")], |r| {
+                    r.get::<_, String>(0)
+                })?
+                .collect::<Result<Vec<_>, _>>()
+            })?;
+            let mut reached = paths.len() >= PYTHON_FILES_NAMED_CAP;
+            for path in &paths {
+                if reached {
+                    break;
+                }
+                reached = self.python_import_heads(path)?.contains(&first);
+            }
+            !reached
         };
-        Ok(sources.iter().any(|source| {
-            source
-                .split('.')
-                .next()
-                .is_some_and(|first| reachable.contains(&first))
-        }))
+        self.external_sources.insert(key, external);
+        Ok(external)
     }
 
     /// The import that binds the qualifier of the call to a module outside the index; for a
@@ -2940,15 +3065,17 @@ impl<'a> Accounting<'a> {
             }
         }
         if sources.is_empty() {
-            return if has_import {
-                Ok(None)
-            } else {
-                self.unindexed_path_head(row)
+            return match has_import {
+                true if row.language == "java" => self.java_import_outside(row, qualifier),
+                true => Ok(None),
+                false => self.unindexed_path_head(row),
             };
         }
         for source in &sources {
             let external = if javascript {
                 self.js_source_is_external(&row.path, source)?
+            } else if row.language == "python" {
+                self.python_source_is_external(source)?
             } else {
                 self.source_is_external(source)?
             };
@@ -2957,6 +3084,40 @@ impl<'a> Accounting<'a> {
             }
         }
         Ok(Some((qualifier.to_string(), sources[0].clone())))
+    }
+
+    /// A Java import of the receiver from a package that no project folder holds (`Assert` after
+    /// `import org.junit.Assert;`). julie writes no source for a Java import, so the package is
+    /// read from the signature: the segments before the first capitalized one.
+    fn java_import_outside(
+        &self,
+        row: &NameRow,
+        qualifier: &str,
+    ) -> Result<Option<(String, String)>, QueryError> {
+        let signatures = self.with_statement(IMPORT_SIGNATURES_SQL, |stmt| {
+            stmt.query_map(params![row.path, qualifier], |r| r.get::<_, String>(0))?
+                .collect::<Result<Vec<_>, _>>()
+        })?;
+        let [signature] = signatures.as_slice() else {
+            return Ok(None);
+        };
+        let imported = signature
+            .trim()
+            .trim_start_matches("import ")
+            .trim()
+            .trim_end_matches(';')
+            .trim();
+        let package: Vec<&str> = imported
+            .split('.')
+            .take_while(|segment| segment.starts_with(|c: char| c.is_ascii_lowercase()))
+            .collect();
+        if imported.starts_with("static ") || package.is_empty() {
+            return Ok(None);
+        }
+        let folder = format!("%/{}/%", crate::queries::escape_like(&package.join("/")));
+        let indexed =
+            self.with_statement(SOURCE_FILES_SQL, |stmt| stmt.exists(params![folder, folder]))?;
+        Ok((!indexed).then(|| (qualifier.to_string(), imported.to_string())))
     }
 
     /// A lowercase head of a path call (`dunce::simplified()`) that no symbol, folder, or file of

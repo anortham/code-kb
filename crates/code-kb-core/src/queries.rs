@@ -4782,6 +4782,8 @@ fn describe_callee_targets(
 
 /// The import statements of the top-level definition `name` (under `path_filter` when given): an
 /// import row with that name whose source module names a folder or file on the definition's path.
+/// A relative JavaScript or TypeScript source (`./helpers/parseUtil`) must name the definition's
+/// file, so a mirror copy elsewhere (`deno/lib/helpers/parseUtil.ts`) does not count.
 /// `find_references` lists calls and type uses, so these go in a summary line after them.
 pub fn import_sites(
     conn: &Connection,
@@ -4925,6 +4927,9 @@ fn import_sites_from(
         format!("rtrim(replace({path}, '\\', '/'), replace(replace({path}, '\\', '/'), '/', ''))")
     };
     let (import_dir, target_dir) = (dir("i.path"), dir("target.path"));
+    let relative = is_relative_import_path("module_path.value");
+    let relative_match =
+        relative_import_matches("module_path.value", "target").replace("p.path", "i.path");
     let mut stmt = conn.prepare(&format!(
         "SELECT DISTINCT replace(i.path, '\\', '/'), i.start_line
          FROM {targets} target
@@ -4944,6 +4949,7 @@ fn import_sites_from(
                OR module_path.value != '' AND replace(module_path.value, '.', '') = ''
                AND substr({import_dir}, 1, length({target_dir})) = {target_dir}
            )
+           AND NOT (i.language IN ({JS_FAMILY_LANGUAGES}) AND {relative} AND NOT {relative_match})
          ORDER BY 1, 2",
         docs = documentation_language_list()
     ))?;

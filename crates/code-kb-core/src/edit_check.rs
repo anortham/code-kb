@@ -1108,6 +1108,28 @@ impl Detector<'_> {
         Ok(candidates)
     }
 
+    /// A C# namespace of the index with the name of the namespace that held a removed top-level
+    /// type, when its own file no longer declares it: the report reads the type's namespace from
+    /// its owner.
+    fn namespace_elsewhere(&self, row: &Row) -> Result<Option<String>, EditCheckError> {
+        let [namespace] = row.parents.as_slice() else {
+            return Ok(None);
+        };
+        if row.symbol.language != "csharp" {
+            return Ok(None);
+        }
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT symbol_id FROM symbols
+                 WHERE kind = 'namespace' AND language = 'csharp' AND name = ?1 LIMIT 1",
+                [namespace],
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(QueryError::from)?)
+    }
+
     fn removed(
         &self,
         row: &Row,
@@ -1121,7 +1143,10 @@ impl Detector<'_> {
         });
         let mut subject = row.symbol.clone();
         subject.symbol_id = format!("removed:{}", subject.symbol_id);
-        subject.parent_symbol_id = owner.map(|owner| owner.symbol.symbol_id.clone());
+        subject.parent_symbol_id = match owner {
+            Some(owner) => Some(owner.symbol.symbol_id.clone()),
+            None => self.namespace_elsewhere(row)?,
+        };
         Ok(Candidate {
             kind: row.symbol.kind.clone(),
             display: row.display(),

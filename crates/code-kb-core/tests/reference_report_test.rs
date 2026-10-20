@@ -10856,3 +10856,113 @@ fn a_csharp_constant_never_takes_a_type_position_of_its_name() {
         dump(&report)
     );
 }
+
+#[test]
+fn a_python_receiver_imported_from_outside_the_project_is_excluded() {
+    let repo = scanned_repo(&[
+        ("src/flask/__init__.py", ""),
+        (
+            "src/flask/json/__init__.py",
+            "import json as _json\n\n\ndef dumps(obj):\n    return _json.dumps(obj)\n",
+        ),
+        (
+            "tests/test_json.py",
+            "from flask import json\n\n\ndef test_dumps():\n    json.dumps(1)\n",
+        ),
+    ]);
+    let report = report(&repo, "dumps", Some("src/flask/json/__init__.py"));
+
+    assert_site(
+        &report,
+        "src/flask/json/__init__.py",
+        5,
+        SiteLabel::Excluded,
+        "receiver `_json` is imported from `json`",
+    );
+    assert_not_excluded(&report, "tests/test_json.py", 5);
+}
+
+#[test]
+fn a_java_receiver_imported_from_a_package_outside_the_project_is_excluded() {
+    let repo = scanned_repo(&[
+        (
+            "src/test/java/p/common/MoreAsserts.java",
+            "package p.common;\n\nimport org.junit.Assert;\n\npublic final class MoreAsserts {\n    public static void assertEquals(Object a, Object b) {\n    }\n\n    public static void check(Object a, Object b) {\n        Assert.assertEquals(a, b);\n    }\n}\n",
+        ),
+        (
+            "src/test/java/p/Use.java",
+            "package p;\n\nimport p.common.MoreAsserts;\n\npublic class Use {\n    void run() {\n        MoreAsserts.assertEquals(1, 2);\n    }\n}\n",
+        ),
+    ]);
+    let report = report(
+        &repo,
+        "assertEquals",
+        Some("src/test/java/p/common/MoreAsserts.java"),
+    );
+
+    assert_site(
+        &report,
+        "src/test/java/p/common/MoreAsserts.java",
+        10,
+        SiteLabel::Excluded,
+        "receiver `Assert` is imported from `org.junit.Assert`",
+    );
+    assert_not_excluded(&report, "src/test/java/p/Use.java", 7);
+}
+
+const CSHARP_CACHE: (&str, &str) = (
+    "src/Utilities/Cache.cs",
+    "namespace App.Utilities\n{\n    internal class Cache\n    {\n    }\n}\n",
+);
+const CSHARP_CACHE_UNOPENED: (&str, &str) = (
+    "src/Tests/GameObject.cs",
+    "using System.Collections.Concurrent;\n\nnamespace App.Tests\n{\n    public class GameObject\n    {\n        public Cache Components;\n    }\n}\n",
+);
+
+#[test]
+fn a_bare_csharp_use_of_a_type_whose_namespace_is_not_open_is_excluded() {
+    let repo = scanned_repo(&[
+        CSHARP_CACHE,
+        CSHARP_CACHE_UNOPENED,
+        (
+            "src/Tests/Opened.cs",
+            "using App.Utilities;\n\nnamespace App.Tests\n{\n    public class Opened\n    {\n        public Cache Components;\n    }\n}\n",
+        ),
+        (
+            "src/Utilities/Inside.cs",
+            "namespace App.Utilities.Deep\n{\n    public class Inside\n    {\n        public Cache Components;\n    }\n}\n",
+        ),
+        (
+            "src/Tests/Aliased.cs",
+            "using Cache = App.Utilities.Cache;\n\nnamespace App.Tests\n{\n    public class Aliased\n    {\n        public Cache Components;\n    }\n}\n",
+        ),
+    ]);
+    let report = report(&repo, "Cache", Some("src/Utilities/Cache.cs"));
+
+    assert_site(
+        &report,
+        "src/Tests/GameObject.cs",
+        7,
+        SiteLabel::Excluded,
+        "namespace `App.Utilities` is not open here",
+    );
+    assert_not_excluded(&report, "src/Utilities/Inside.cs", 5);
+    for path in ["src/Tests/Opened.cs", "src/Tests/Aliased.cs"] {
+        assert_not_excluded(&report, path, 7);
+    }
+}
+
+#[test]
+fn an_msbuild_using_item_opens_every_csharp_namespace() {
+    let repo = scanned_repo(&[
+        CSHARP_CACHE,
+        CSHARP_CACHE_UNOPENED,
+        (
+            "src/App.csproj",
+            "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <ItemGroup>\n    <Using Include=\"App.Utilities\" />\n  </ItemGroup>\n</Project>\n",
+        ),
+    ]);
+    let report = report(&repo, "Cache", Some("src/Utilities/Cache.cs"));
+
+    assert_not_excluded(&report, "src/Tests/GameObject.cs", 7);
+}

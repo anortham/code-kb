@@ -217,7 +217,8 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   file, or any target when its receiver is a capitalized name that no indexed type, module,
   import, field, or property has (`Assert.Contains`); a QML signal handler is exempt. Callee rows
   come in source order. `find_references` for callers ends with one line that counts the files
-  that import the target.
+  that import the target; a relative JavaScript or TypeScript import counts only when it resolves
+  to the target's file, so an import of a mirror copy (`deno/lib/`) does not.
   Ordinary member-access identifiers targeting callable class members use the same receiver
   evidence as pending calls. A proven different receiver is omitted, including an imported base
   instance used to query a subclass override. Supported rows retain `member_access`; unresolved
@@ -265,14 +266,22 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   names a module of the project (`flask.json` after `import flask`, or `json` after `from flask
   import json`) reaches none, so a method of that name is no other definition of the site. A
   C# type or constructor is no other definition of a bare C# use unless its namespace is the
-  global one, holds the use, or is opened by a `using` of the use's file or by a `global using`.
-  In C#, Java, Kotlin, Scala, Swift, Dart, Rust, Go, C++, C, and VB.NET a place that names a
+  global one, holds the use, or is opened by a `using` of the use's file or by a `global using`,
+  and a bare C# use of a top-level type is excluded on the same terms when no `using Name = …;`
+  alias names it: ``namespace `App.Utilities` is not open here``. A `.csproj`, `.props`, or
+  `.targets` file with an MSBuild `<Using …/>` item opens every namespace, since the index does
+  not see it. In C#, Java, Kotlin, Scala, Swift, Dart, Rust, Go, C++, C, and VB.NET a place that names a
   type (a base type, `new X()`, a written type, or the type of a C# member) never names a field,
   constant, variable, property, parameter, or enum member, so none of them is its other
   definition or excludes it. A
   Python absolute import proves
   only a file whose top package (the outermost folder with `__init__.py`), or a plain folder
-  above it, is the first segment of the import (`import json` does not reach `src/flask/json/`).
+  above it, is the first segment of the import (`import json` does not reach `src/flask/json/`),
+  so a receiver bound by an absolute import that reaches no project file (`_json.dumps()` after
+  `import json as _json`) is excluded: ``receiver `_json` is imported from `json` ``. A Java
+  receiver imported from a package that no project folder holds (`Assert.assertEquals()` after
+  `import org.junit.Assert;`) is excluded the same way; julie writes no source for a Java import,
+  so the package is the segments of the line before the first capitalized one.
   A JavaScript or TypeScript read of the name that only scope ties to the target is likely,
   because julie does not record callback parameters. A bare name never reaches a JavaScript
   method assigned to a property (`req.accepts = function`) or an object-literal method, which

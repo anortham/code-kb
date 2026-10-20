@@ -640,11 +640,39 @@
       ],
       "verdicts": [
         {
+          "path": "src/flask/json/__init__.py",
+          "line": 126,
+          "label": "likely",
+          "verdict": "false",
+          "evidence": "Line is inside the docstring of dumps, plain text."
+        },
+        {
           "path": "src/flask/json/tag.py",
           "line": 308,
           "label": "proven",
           "verdict": "true",
           "evidence": "Bare dumps is imported by 'from ..json import dumps' from the changed flask.json module."
+        },
+        {
+          "path": "tests/test_json.py",
+          "line": 53,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "flask.json.dumps resolves to the dumps function in src/flask/json/__init__.py."
+        },
+        {
+          "path": "tests/test_json.py",
+          "line": 192,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "flask.json.dumps resolves to the dumps function in src/flask/json/__init__.py."
+        },
+        {
+          "path": "tests/test_json.py",
+          "line": 204,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "flask.json.dumps resolves to the dumps function in src/flask/json/__init__.py."
         },
         {
           "path": "tests/test_json.py",
@@ -676,11 +704,39 @@
       ],
       "verdicts": [
         {
+          "path": "src/flask/json/__init__.py",
+          "line": 213,
+          "label": "likely",
+          "verdict": "false",
+          "evidence": "Line is inside the docstring of a function, plain text."
+        },
+        {
           "path": "src/flask/json/tag.py",
           "line": 312,
           "label": "proven",
           "verdict": "true",
           "evidence": "Bare loads is imported by 'from ..json import loads' from the changed flask.json module."
+        },
+        {
+          "path": "tests/test_json.py",
+          "line": 75,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "flask.json.loads resolves to loads in src/flask/json/__init__.py."
+        },
+        {
+          "path": "tests/test_json.py",
+          "line": 102,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "flask.json.loads resolves to loads in src/flask/json/__init__.py."
+        },
+        {
+          "path": "tests/test_json.py",
+          "line": 130,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "flask.json.loads resolves to loads in src/flask/json/__init__.py."
         }
       ]
     },
@@ -798,6 +854,34 @@
           "label": "proven",
           "verdict": "true",
           "evidence": "url_for is imported from flask, which re-exports helpers.url_for."
+        },
+        {
+          "path": "tests/test_appctx.py",
+          "line": 15,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "flask.url_for resolves through flask/__init__ re-export to helpers.url_for."
+        },
+        {
+          "path": "tests/test_appctx.py",
+          "line": 22,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "flask.url_for resolves through flask/__init__ re-export to helpers.url_for."
+        },
+        {
+          "path": "tests/test_appctx.py",
+          "line": 27,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "flask.url_for resolves through flask/__init__ re-export to helpers.url_for."
+        },
+        {
+          "path": "tests/test_basic.py",
+          "line": 1343,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "flask.url_for resolves through flask/__init__ re-export to helpers.url_for."
         }
       ]
     },
@@ -1717,6 +1801,48 @@
           "label": "likely",
           "verdict": "false",
           "evidence": "res.locals is a property of the response object, not a reference to the utils.locals function."
+        },
+        {
+          "path": "examples/mvc/index.js",
+          "line": 48,
+          "label": "likely",
+          "verdict": "false",
+          "evidence": "res.locals is a property access on res, not the exports.locals function in lib/utils.js."
+        },
+        {
+          "path": "examples/mvc/index.js",
+          "line": 51,
+          "label": "likely",
+          "verdict": "false",
+          "evidence": "res.locals is a property access, not utils.locals."
+        },
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 83,
+          "label": "likely",
+          "verdict": "false",
+          "evidence": "res.locals is a property access, not utils.locals."
+        },
+        {
+          "path": "examples/view-locals/index.js",
+          "line": 91,
+          "label": "likely",
+          "verdict": "false",
+          "evidence": "res.locals is a property access, not utils.locals."
+        },
+        {
+          "path": "lib/application.js",
+          "line": 11,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "Line imports locals from ./utils, which is exports.locals in lib/utils.js."
+        },
+        {
+          "path": "lib/application.js",
+          "line": 78,
+          "label": "likely",
+          "verdict": "false",
+          "evidence": "this.locals.settings is a property access, not utils.locals."
         }
       ]
     },
@@ -1795,6 +1921,48 @@
           "label": "likely",
           "verdict": "false",
           "evidence": "Site is a parameter, a property or a proto assignment named request, not the test support function."
+        },
+        {
+          "path": "lib/express.js",
+          "line": 72,
+          "label": "likely",
+          "verdict": "false",
+          "evidence": "exports.request = req is a property assignment in lib/express.js, unrelated to the test helper."
+        },
+        {
+          "path": "lib/middleware.js",
+          "line": 26,
+          "label": "likely",
+          "verdict": "false",
+          "evidence": "req.__proto__ = app.request is a property access, not the test helper."
+        },
+        {
+          "path": "test/Router.js",
+          "line": 4,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "request = require('./support/http') binds the module export, which is the request function."
+        },
+        {
+          "path": "test/Router.js",
+          "line": 48,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "request(app) calls the function bound by require('./support/http') in the same file."
+        },
+        {
+          "path": "test/acceptance/auth.js",
+          "line": 2,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "request = require('../support/http') binds the module export, which is the request function."
+        },
+        {
+          "path": "test/acceptance/auth.js",
+          "line": 21,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "request(app) calls the function bound by require('../support/http') in the same file."
         }
       ]
     },
@@ -3229,7 +3397,22 @@
           "line": 3553
         }
       ],
-      "verdicts": []
+      "verdicts": [
+        {
+          "path": "src/__tests__/error.test.ts",
+          "line": 6,
+          "label": "likely",
+          "verdict": "false",
+          "evidence": "Imports ZodIssueCode from src/ZodError.ts, not the deno/lib mirror that was deleted."
+        },
+        {
+          "path": "src/__tests__/refine.test.ts",
+          "line": 6,
+          "label": "likely",
+          "verdict": "false",
+          "evidence": "Imports ZodIssueCode from src/ZodError.ts, not the deno/lib mirror that was deleted."
+        }
+      ]
     },
     {
       "id": "0a5f64443732:deno/lib/ZodError.ts:StringValidation",
@@ -3393,6 +3576,13 @@
       "verdicts": [
         {
           "path": "deno/lib/types.ts",
+          "line": 2,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "Import of ASYNC from ./helpers/parseUtil.ts resolves to deno/lib/helpers/parseUtil.ts."
+        },
+        {
+          "path": "deno/lib/types.ts",
           "line": 123,
           "label": "proven",
           "verdict": "true",
@@ -3425,6 +3615,13 @@
           "label": "proven",
           "verdict": "true",
           "evidence": "Site calls ASYNC imported from the parseUtil of the same tree (src or deno), the changed definition."
+        },
+        {
+          "path": "deno/lib/types.ts",
+          "line": 2283,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "ASYNC(...) call in deno/lib/types.ts uses the import from deno/lib/helpers/parseUtil.ts."
         }
       ]
     },
@@ -3448,6 +3645,20 @@
         }
       ],
       "verdicts": [
+        {
+          "path": "deno/lib/types.ts",
+          "line": 2,
+          "label": "likely",
+          "verdict": "false",
+          "evidence": "Site is in deno/lib/types.ts, which imports the deno copy, not src/helpers/parseUtil.ts."
+        },
+        {
+          "path": "src/types.ts",
+          "line": 2,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "src/types.ts imports ASYNC from ./helpers/parseUtil, which is src/helpers/parseUtil.ts."
+        },
         {
           "path": "src/types.ts",
           "line": 123,
@@ -3501,7 +3712,15 @@
           "line": 107
         }
       ],
-      "verdicts": []
+      "verdicts": [
+        {
+          "path": "src/types.ts",
+          "line": 2,
+          "label": "likely",
+          "verdict": "false",
+          "evidence": "src/types.ts imports from src/helpers/parseUtil, not the deno/lib copy."
+        }
+      ]
     },
     {
       "id": "1d2c364ce8f5:deno/lib/helpers/parseUtil.ts:ZodParserReturnType",
@@ -3530,7 +3749,15 @@
           "line": 108
         }
       ],
-      "verdicts": []
+      "verdicts": [
+        {
+          "path": "src/types.ts",
+          "line": 2,
+          "label": "likely",
+          "verdict": "false",
+          "evidence": "src/types.ts imports from src/helpers/parseUtil, not the deno/lib copy."
+        }
+      ]
     },
     {
       "id": "1d2c364ce8f5:deno/lib/helpers/util.ts:INVALID",
@@ -3563,7 +3790,15 @@
           "line": 92
         }
       ],
-      "verdicts": []
+      "verdicts": [
+        {
+          "path": "deno/lib/types.ts",
+          "line": 13,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "Import of INVALID from ./helpers/util.ts resolves to deno/lib/helpers/util.ts."
+        }
+      ]
     },
     {
       "id": "faebb0549518:deno/lib/helpers/parseUtil.ts:ParseParamsWithOptionals",
@@ -3588,7 +3823,15 @@
           "line": 107
         }
       ],
-      "verdicts": []
+      "verdicts": [
+        {
+          "path": "src/types.ts",
+          "line": 2,
+          "label": "likely",
+          "verdict": "false",
+          "evidence": "src/types.ts imports from src/helpers/parseUtil, not the deno/lib copy."
+        }
+      ]
     },
     {
       "id": "faebb0549518:deno/lib/helpers/parseUtil.ts:ZodParserReturnType",
@@ -3617,7 +3860,15 @@
           "line": 108
         }
       ],
-      "verdicts": []
+      "verdicts": [
+        {
+          "path": "src/types.ts",
+          "line": 2,
+          "label": "likely",
+          "verdict": "false",
+          "evidence": "src/types.ts imports from src/helpers/parseUtil, not the deno/lib copy."
+        }
+      ]
     },
     {
       "id": "faebb0549518:deno/lib/helpers/util.ts:INVALID",
@@ -3650,7 +3901,15 @@
           "line": 92
         }
       ],
-      "verdicts": []
+      "verdicts": [
+        {
+          "path": "deno/lib/types.ts",
+          "line": 13,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "Import of INVALID from ./helpers/util.ts resolves to deno/lib/helpers/util.ts."
+        }
+      ]
     },
     {
       "id": "01fd23a508c1:deno/lib/types.ts:ZodDefaulter",
@@ -7455,6 +7714,13 @@
           "label": "likely",
           "verdict": "false",
           "evidence": "GraphAdapterBuilderTest extends TestCase and does not import MoreAsserts, so assertEquals is the inherited TestCase method."
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/common/MoreAsserts.java",
+          "line": 48,
+          "label": "likely",
+          "verdict": "false",
+          "evidence": "Assert.assertEquals is junit Assert, not the MoreAsserts overload that was removed."
         }
       ]
     },
@@ -8746,6 +9012,13 @@
           "label": "proven",
           "verdict": "false",
           "evidence": "Static object.Equals(object, object) on IEnumerable fields, not the changed instance Equals(object)."
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JEnumerable.cs",
+          "line": 118,
+          "label": "proven",
+          "verdict": "false",
+          "evidence": "Call Equals(enumerable) with a JEnumerable<T> argument binds to the Equals(JEnumerable<T>) overload, not the changed Equals(object)."
         }
       ]
     },
@@ -8818,6 +9091,20 @@
           "label": "proven",
           "verdict": "false",
           "evidence": "Equals(v) has a JValue argument, so it binds to Equals(JValue), not the changed Equals(object)."
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JsonPath/QueryExpression.cs",
+          "line": 247,
+          "label": "proven",
+          "verdict": "false",
+          "evidence": "value.Equals(queryValue) with a JValue argument binds to Equals(JValue), not Equals(object)."
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Linq/JsonPath/QueryExpression.cs",
+          "line": 325,
+          "label": "proven",
+          "verdict": "false",
+          "evidence": "value.Equals(queryValue) with a JValue argument binds to Equals(JValue), not Equals(object)."
         }
       ]
     },
@@ -9541,6 +9828,20 @@
           "label": "proven",
           "verdict": "true",
           "evidence": "new ConvertibleInt(1) builds the struct defined in JsonTextWriterTest.cs, same namespace."
+        },
+        {
+          "path": "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs",
+          "line": 5937,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "new ConvertibleInt(1) in namespace Newtonsoft.Json.Tests resolves to the struct in JsonTextWriterTest.cs."
+        },
+        {
+          "path": "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs",
+          "line": 5938,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "new ConvertibleInt(2) in namespace Newtonsoft.Json.Tests resolves to the struct in JsonTextWriterTest.cs."
         }
       ]
     },
@@ -9609,7 +9910,43 @@
           "line": 99
         }
       ],
-      "verdicts": []
+      "verdicts": [
+        {
+          "path": "Src/Newtonsoft.Json.Tests/Benchmarks/LowLevelBenchmarks.cs",
+          "line": 48,
+          "label": "likely",
+          "verdict": "false",
+          "evidence": "Field named ConcurrentDictionary of type System.Collections.Concurrent.ConcurrentDictionary (BCL), using TryAdd that the internal class lacks."
+        },
+        {
+          "path": "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerCollectionsTests.cs",
+          "line": 407,
+          "label": "likely",
+          "verdict": "false",
+          "evidence": "Base class is the BCL ConcurrentDictionary, the internal fallback class is compiled out by HAVE_CONCURRENT_DICTIONARY."
+        },
+        {
+          "path": "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerCollectionsTests.cs",
+          "line": 1053,
+          "label": "likely",
+          "verdict": "false",
+          "evidence": "new ConcurrentDictionary<string,Component>(components) builds the BCL class, the internal class has no such constructor and is compiled out."
+        },
+        {
+          "path": "Src/Newtonsoft.Json.Tests/TestObjects/GameObject.cs",
+          "line": 40,
+          "label": "likely",
+          "verdict": "false",
+          "evidence": "Field type is the BCL ConcurrentDictionary, not the internal fallback class."
+        },
+        {
+          "path": "Src/Newtonsoft.Json.Tests/TestObjects/GameObject.cs",
+          "line": 41,
+          "label": "likely",
+          "verdict": "false",
+          "evidence": "Field type is the BCL ConcurrentDictionary, not the internal fallback class."
+        }
+      ]
     },
     {
       "id": "609a02aa4aee:Src/Newtonsoft.Json/Utilities/ConcurrentDictionary.cs:GetOrAdd",
@@ -9727,6 +10064,27 @@
           "label": "proven",
           "verdict": "true",
           "evidence": "JsonTypeReflector.SetFullyTrusted(false) calls the changed internal static method."
+        },
+        {
+          "path": "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs",
+          "line": 5128,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "JsonTypeReflector.SetFullyTrusted is the single definition, called qualified."
+        },
+        {
+          "path": "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs",
+          "line": 8605,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "JsonTypeReflector.SetFullyTrusted is the single definition, called qualified."
+        },
+        {
+          "path": "Src/Newtonsoft.Json.Tests/Serialization/JsonSerializerTest.cs",
+          "line": 8615,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "JsonTypeReflector.SetFullyTrusted is the single definition, called qualified."
         }
       ]
     },
