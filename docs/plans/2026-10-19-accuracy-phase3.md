@@ -230,8 +230,10 @@ Result (2026-10-19, dev halves, build of commit 419e2a2; the Java truth was corr
 **Serialization required:** Yes.
 **Dependency reason:** Last task; it scores the holdout halves once.
 
-- [ ] The holdout halves of all three sets are scored once with the final build, and the report adds them next to the baseline.
-- [ ] The release notes draft and `CLAUDE.md`/`AGENTS.md` describe every changed rule; `cmp AGENTS.md CLAUDE.md` passes.
+- [x] The holdout halves of all three sets are scored once with the final build, and the report adds them next to the baseline.
+- [x] The release notes draft and `CLAUDE.md`/`AGENTS.md` describe every changed rule; `cmp AGENTS.md CLAUDE.md` passes.
+
+Result (2026-10-20, build of commit 7950b58; `docs/replay-baseline.md` "Phase 3 build"): holdback truth sites listed rise from 43.9% to 85.9% on dev and from 54.6% to 73.3% on holdout. Holdout catch share falls in JavaScript (49.5% to 33.3%) and Python (78.3% to 72.5%); no dev case lost a listed site, so the cause is not known without reading holdout cases, which is the owner's call. The clean holdout half stays at 1 of 49 false blocks (2.04%, FAIL by 0.04 points), and the session scores do not change.
 - [ ] Branch gate green. The lead asks the owner about push, PR, and the release. Worker commits.
 
 ## Slice 3: Corpus breadth

@@ -4,6 +4,13 @@ The phase 3 replay harness (`scripts/edit_replay.py`, `evals/replay/README.md`) 
 release binary (with julie-extract 3.8.0) on 2026-10-19. This file holds aggregate counts only.
 Session logs stay outside the repository.
 
+The phase 3 branch build (commit 7950b58, julie-extract 3.8.1) was scored on 2026-10-20, and the
+section "Phase 3 build" at the end puts its numbers next to the baseline. The Java holdback truth
+was corrected on 2026-10-19 (a bare `assertEquals` that a test inherits from JUnit's `TestCase` is
+not a use of a project method): 99 to 89 dev sites and 151 to 129 holdout sites. The baseline tables
+below keep the numbers of the first scoring; the phase 3 section rescores the baseline with the
+corrected truth.
+
 ## Marks
 
 | Set | Half | Mark | Result | Numbers |
@@ -103,3 +110,48 @@ many of their failures are not shape changes at all. Only 4 of the 24 verified c
   rule used them, and no holdout row was read.
 - The clean-set result is a question for the owner before slice 2: the holdout half is 0.04 points
   over the mark, from one false block.
+
+## Phase 3 build
+
+The same harness and cases, with the phase 3 build (commit 7950b58). The baseline columns are the
+2.7.0 runs rescored with the corrected Java truth and with every outside-row verdict merged so far.
+Fixes were tuned on dev only; the holdout halves were scored once, with this build.
+
+| Set | Half | Mark | 2.7.0 | Phase 3 build |
+|---|---|---|---|---|
+| Clean commits | dev | Stop hook false blocks <= 2% | PASS, 1 of 56 | PASS, 0 of 56 |
+| Clean commits | holdout | same | FAIL, 1 of 49 (2.04%) | FAIL, 1 of 49 (2.04%) |
+| Holdback | dev | catch share >= 80% in each language with 10+ truth sites | 3 of 7 pass | 6 of 7 pass (not C#) |
+| Holdback | dev | judged outside rows true >= 90% | 43 of 76 (57%) | 53 of 77 (69%) |
+| Holdback | holdout | catch share >= 80% in each language with 10+ truth sites | 2 of 7 pass | 4 of 7 pass (C#, Go, Rust, TypeScript) |
+| Holdback | holdout | judged outside rows true >= 90% | 81 of 90 (90%) | 90 of 96 (94%) |
+| Sessions | dev | verified / candidates | 1 of 3, 2 of 37 | 1 of 3, 2 of 37 |
+| Sessions | holdout | verified / candidates | 0 of 1, 5 of 47 | 0 of 1, 5 of 47 |
+
+Holdback catch share by language:
+
+| Language | dev truth | dev 2.7.0 | dev phase 3 | holdout truth | holdout 2.7.0 | holdout phase 3 |
+|---|---|---|---|---|---|---|
+| C# | 42 | 26.2% | 54.8% | 76 | 82.9% | 82.9% |
+| Go | 35 | 97.1% | 97.1% | 40 | 75.0% | 82.5% |
+| Java | 89 | 82.0% | 82.0% | 129 | 51.9% | 58.9% |
+| JavaScript | 23 | 78.3% | 95.7% | 105 | 49.5% | 33.3% |
+| Python | 50 | 18.0% | 84.0% | 69 | 78.3% | 72.5% |
+| Rust | 18 | 83.3% | 83.3% | 33 | 93.9% | 93.9% |
+| TypeScript | 139 | 10.1% | 94.2% | 621 | 46.5% | 80.4% |
+| All | 396 | 43.9% | 85.9% | 1073 | 54.6% | 73.3% |
+
+- JavaScript and Python fall on the holdout half: 17 and 4 truth sites that 2.7.0 listed are not
+  listed. The holdout misses labeled `site excluded` grow from 43 to 60. No dev case lost a listed
+  site, so the dev half does not show the cause. Finding it means reading holdout cases, which the
+  plan leaves to the owner.
+- Holdout misses by cause, 2.7.0 to phase 3: shape not seen 266 to 67, site not indexed 113 to 113,
+  import not listed 51 to 9, site excluded 43 to 60, site labeled unresolved 10 to 10, cut by a
+  limit 5 to 11, fits the new shape 8 to 2, other 13 to 14.
+- Judged outside rows that are false on dev: C# `Equals` calls that bind another overload by
+  argument type, C# uses of a library type that `#if` swaps in for a project type, and JavaScript
+  reads of a property that is assigned a value (`res.locals`). On the holdout half, 6 of 96 judged
+  rows are false (2 C#, 4 JavaScript).
+- Check time on the clean set: dev p50 3.10 s and p95 11.54 s, holdout p50 3.08 s and p95 9.47 s.
+  Two runs of the 2.7.0 binary on dev gave p50 2.59 s and 2.95 s, so the spread between runs is as
+  large as the change.

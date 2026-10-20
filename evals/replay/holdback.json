@@ -259,6 +259,69 @@
           "label": "likely",
           "verdict": "true",
           "evidence": "Site resolves to the defining symbol at the parent through the import, receiver, or same-package reference."
+        },
+        {
+          "path": "examples/javascript/js_example/__init__.py",
+          "line": 3,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "Names the Flask class; at the parent its only definition is in the given file (a mid-move commit leaves the relative import to .app dangling), so this is the most likely reading."
+        },
+        {
+          "path": "examples/tutorial/flaskr/__init__.py",
+          "line": 3,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "Names the Flask class; at the parent its only definition is in the given file (a mid-move commit leaves the relative import to .app dangling), so this is the most likely reading."
+        },
+        {
+          "path": "examples/tutorial/flaskr/__init__.py",
+          "line": 8,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "Names the Flask class; at the parent its only definition is in the given file (a mid-move commit leaves the relative import to .app dangling), so this is the most likely reading."
+        },
+        {
+          "path": "src/flask/__init__.py",
+          "line": 2,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "Names the Flask class; at the parent its only definition is in the given file (a mid-move commit leaves the relative import to .app dangling), so this is the most likely reading."
+        },
+        {
+          "path": "src/flask/cli.py",
+          "line": 25,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "Names the Flask class; at the parent its only definition is in the given file (a mid-move commit leaves the relative import to .app dangling), so this is the most likely reading."
+        },
+        {
+          "path": "src/flask/ctx.py",
+          "line": 18,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "Names the Flask class; at the parent its only definition is in the given file (a mid-move commit leaves the relative import to .app dangling), so this is the most likely reading."
+        },
+        {
+          "path": "src/flask/globals.py",
+          "line": 9,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "Names the Flask class; at the parent its only definition is in the given file (a mid-move commit leaves the relative import to .app dangling), so this is the most likely reading."
+        },
+        {
+          "path": "src/flask/sessions.py",
+          "line": 16,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "Names the Flask class; at the parent its only definition is in the given file (a mid-move commit leaves the relative import to .app dangling), so this is the most likely reading."
+        },
+        {
+          "path": "src/flask/templating.py",
+          "line": 19,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "Names the Flask class; at the parent its only definition is in the given file (a mid-move commit leaves the relative import to .app dangling), so this is the most likely reading."
         }
       ]
     },
@@ -302,6 +365,27 @@
           "label": "proven",
           "verdict": "true",
           "evidence": "Site resolves to the defining symbol at the parent through the import, receiver, or same-package reference."
+        },
+        {
+          "path": "tests/test_helpers.py",
+          "line": 61,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "Call on a Flask app instance, which inherits send_static_file from Scaffold in the given file."
+        },
+        {
+          "path": "tests/test_helpers.py",
+          "line": 71,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "Call on a Flask app instance, which inherits send_static_file from Scaffold in the given file."
+        },
+        {
+          "path": "tests/test_helpers.py",
+          "line": 83,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "Call on a Flask app instance, which inherits send_static_file from Scaffold in the given file."
         }
       ]
     },
@@ -2109,6 +2193,69 @@
           "label": "likely",
           "verdict": "true",
           "evidence": "Site resolves to the defining symbol at the parent through the import, receiver, or same-package reference."
+        },
+        {
+          "path": "test/view.test.js",
+          "line": 28,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "new View comes from require('../lib/view'), which re-exports the View constructor from lib/view/view.js."
+        },
+        {
+          "path": "test/view.test.js",
+          "line": 31,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "new View comes from require('../lib/view'), which re-exports the View constructor from lib/view/view.js."
+        },
+        {
+          "path": "test/view.test.js",
+          "line": 34,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "new View comes from require('../lib/view'), which re-exports the View constructor from lib/view/view.js."
+        },
+        {
+          "path": "test/view.test.js",
+          "line": 37,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "new View comes from require('../lib/view'), which re-exports the View constructor from lib/view/view.js."
+        },
+        {
+          "path": "test/view.test.js",
+          "line": 40,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "new View comes from require('../lib/view'), which re-exports the View constructor from lib/view/view.js."
+        },
+        {
+          "path": "test/view.test.js",
+          "line": 43,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "new View comes from require('../lib/view'), which re-exports the View constructor from lib/view/view.js."
+        },
+        {
+          "path": "test/view.test.js",
+          "line": 46,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "new View comes from require('../lib/view'), which re-exports the View constructor from lib/view/view.js."
+        },
+        {
+          "path": "test/view.test.js",
+          "line": 51,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "new View comes from require('../lib/view'), which re-exports the View constructor from lib/view/view.js."
+        },
+        {
+          "path": "test/view.test.js",
+          "line": 54,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "new View comes from require('../lib/view'), which re-exports the View constructor from lib/view/view.js."
         }
       ]
     },
@@ -2904,7 +3051,22 @@
           "line": 5033
         }
       ],
-      "verdicts": []
+      "verdicts": [
+        {
+          "path": "deno/lib/__tests__/transformer.test.ts",
+          "line": 83,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "z.ZodIssueCode comes through index.ts and external.ts re-exports of ZodError.ts, where the const is defined."
+        },
+        {
+          "path": "deno/lib/__tests__/transformer.test.ts",
+          "line": 208,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "z.ZodIssueCode comes through index.ts and external.ts re-exports of ZodError.ts, where the const is defined."
+        }
+      ]
     },
     {
       "id": "85928549a7c2:deno/lib/ZodError.ts:StringValidation",
@@ -3930,7 +4092,22 @@
           "line": 90
         }
       ],
-      "verdicts": []
+      "verdicts": [
+        {
+          "path": "deno/lib/__tests__/default.test.ts",
+          "line": 18,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "z.ZodDefaulter comes through the index and external re-exports of types, where the class is defined."
+        },
+        {
+          "path": "deno/lib/__tests__/default.test.ts",
+          "line": 35,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "z.ZodDefaulter comes through the index and external re-exports of types, where the class is defined."
+        }
+      ]
     },
     {
       "id": "01fd23a508c1:src/types.ts:ZodDefaulter",
@@ -3951,7 +4128,22 @@
           "line": 89
         }
       ],
-      "verdicts": []
+      "verdicts": [
+        {
+          "path": "src/__tests__/default.test.ts",
+          "line": 17,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "z.ZodDefaulter comes through the index and external re-exports of types, where the class is defined."
+        },
+        {
+          "path": "src/__tests__/default.test.ts",
+          "line": 34,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "z.ZodDefaulter comes through the index and external re-exports of types, where the class is defined."
+        }
+      ]
     },
     {
       "id": "6e74f877997c:src/PseudoPromise.js:PseudoPromise",
@@ -4214,6 +4406,27 @@
           "label": "likely",
           "verdict": "false",
           "evidence": "TypeScript resolves ../ZodError to ZodError.ts, not the compiled .js output."
+        },
+        {
+          "path": "src/__tests__/tuple.test.ts",
+          "line": 6,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "Extensionless import of ZodError from the ZodError module; the .js file is the compiled twin of the .ts module with the same class, so the class is the same definition (ambiguity noted)."
+        },
+        {
+          "path": "src/helpers/parseUtil.ts",
+          "line": 1,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "Extensionless import of ZodError from the ZodError module; the .js file is the compiled twin of the .ts module with the same class, so the class is the same definition (ambiguity noted)."
+        },
+        {
+          "path": "src/types.ts",
+          "line": 15,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "Extensionless import of ZodError from the ZodError module; the .js file is the compiled twin of the .ts module with the same class, so the class is the same definition (ambiguity noted)."
         }
       ]
     },
@@ -5784,7 +5997,22 @@
           "line": 25
         }
       ],
-      "verdicts": []
+      "verdicts": [
+        {
+          "path": "src/types.ts",
+          "line": 6,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "Imported from helpers/primitive and used as the type there defined."
+        },
+        {
+          "path": "src/types.ts",
+          "line": 2395,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "Imported from helpers/primitive and used as the type there defined."
+        }
+      ]
     },
     {
       "id": "64d696b9e3db:src/ZodTypes.ts:ZodTypes",
@@ -6160,6 +6388,20 @@
           "label": "likely",
           "verdict": "true",
           "evidence": "Site resolves to the defining symbol at the parent through the import, receiver, or same-package reference."
+        },
+        {
+          "path": "src/types/base.ts",
+          "line": 63,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "ZodTypes is imported from ../ZodTypes, the enum defined in the given file."
+        },
+        {
+          "path": "src/types/base.ts",
+          "line": 144,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "ZodTypes is imported from ../ZodTypes, the enum defined in the given file."
         }
       ]
     },
@@ -6260,7 +6502,15 @@
           "line": 7
         }
       ],
-      "verdicts": []
+      "verdicts": [
+        {
+          "path": "src/parser.ts",
+          "line": 7,
+          "label": "likely",
+          "verdict": "true",
+          "evidence": "ZodDef is imported from ./ZodDef, the type defined in the given file."
+        }
+      ]
     },
     {
       "id": "435297d93c50:src/codegen.ts:ZodCodeGenerator",
@@ -6292,6 +6542,13 @@
           "label": "likely",
           "verdict": "true",
           "evidence": "Site resolves to the defining symbol at the parent through the import, receiver, or same-package reference."
+        },
+        {
+          "path": "src/external.ts",
+          "line": 79,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "ZodCodeGenerator is imported from ./codegen, the class defined in the given file."
         }
       ]
     },
@@ -6813,6 +7070,13 @@
           "label": "proven",
           "verdict": "true",
           "evidence": "Site resolves to the defining symbol at the parent through the import, receiver, or same-package reference."
+        },
+        {
+          "path": "gson/src/test/java/com/google/gson/internal/GsonTypesTest.java",
+          "line": 76,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "Qualified call on $Gson$Types in the same package resolves to the public static method."
         }
       ]
     },
@@ -9259,6 +9523,55 @@
           "label": "proven",
           "verdict": "true",
           "evidence": "Site resolves to the defining symbol at the parent through the import, receiver, or same-package reference."
+        },
+        {
+          "path": "Src/Newtonsoft.Json.Tests/Documentation/Samples/Linq/DeepEquals.cs",
+          "line": 72,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "Qualified call JToken.DeepEquals(a, b) resolves to the public static method in JToken.cs."
+        },
+        {
+          "path": "Src/Newtonsoft.Json.Tests/Documentation/Samples/Linq/DeepEquals.cs",
+          "line": 75,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "Qualified call JToken.DeepEquals(a, b) resolves to the public static method in JToken.cs."
+        },
+        {
+          "path": "Src/Newtonsoft.Json.Tests/Documentation/Samples/Linq/DeepEquals.cs",
+          "line": 79,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "Qualified call JToken.DeepEquals(a, b) resolves to the public static method in JToken.cs."
+        },
+        {
+          "path": "Src/Newtonsoft.Json.Tests/Documentation/Samples/Linq/DeepEquals.cs",
+          "line": 80,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "Qualified call JToken.DeepEquals(a, b) resolves to the public static method in JToken.cs."
+        },
+        {
+          "path": "Src/Newtonsoft.Json.Tests/Linq/JConstructorAsyncTests.cs",
+          "line": 53,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "Qualified call JToken.DeepEquals(a, b) resolves to the public static method in JToken.cs."
+        },
+        {
+          "path": "Src/Newtonsoft.Json.Tests/Linq/JConstructorTests.cs",
+          "line": 57,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "Qualified call JToken.DeepEquals(a, b) resolves to the public static method in JToken.cs."
+        },
+        {
+          "path": "Src/Newtonsoft.Json.Tests/Linq/JObjectTests.cs",
+          "line": 165,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "Qualified call JToken.DeepEquals(a, b) resolves to the public static method in JToken.cs."
         }
       ]
     },
@@ -9335,6 +9648,48 @@
           "label": "proven",
           "verdict": "true",
           "evidence": "Site resolves to the defining symbol at the parent through the import, receiver, or same-package reference."
+        },
+        {
+          "path": "Src/Newtonsoft.Json/JsonWriterException.cs",
+          "line": 109,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "Qualified call JsonPosition.FormatMessage resolves to the internal static method in JsonPosition.cs."
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonSerializerInternalBase.cs",
+          "line": 139,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "Qualified call JsonPosition.FormatMessage resolves to the internal static method in JsonPosition.cs."
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonSerializerInternalReader.cs",
+          "line": 625,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "Qualified call JsonPosition.FormatMessage resolves to the internal static method in JsonPosition.cs."
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonSerializerInternalReader.cs",
+          "line": 799,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "Qualified call JsonPosition.FormatMessage resolves to the internal static method in JsonPosition.cs."
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonSerializerInternalReader.cs",
+          "line": 1051,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "Qualified call JsonPosition.FormatMessage resolves to the internal static method in JsonPosition.cs."
+        },
+        {
+          "path": "Src/Newtonsoft.Json/Serialization/JsonSerializerInternalReader.cs",
+          "line": 1117,
+          "label": "proven",
+          "verdict": "true",
+          "evidence": "Qualified call JsonPosition.FormatMessage resolves to the internal static method in JsonPosition.cs."
         }
       ]
     },

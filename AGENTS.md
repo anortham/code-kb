@@ -439,13 +439,18 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   (`checked_diff`, `blocked_diff`): a Stop on either runs no scan and prints nothing, and a
   `<session_id>.lock` file makes parallel hooks of one session wait up to 2 s, so they block once.
   `hooks/claude-codex-hooks.json` wires them. The text, every rule, and the known limits are in
-  `docs/edit-check.md`; change that file with the code.
+  `docs/edit-check.md`; change that file with the code. `scripts/edit_replay.py` replays the check
+  and the Stop hook offline on real commits and session events (`evals/replay/README.md`); the
+  scores are in `docs/replay-baseline.md`, and the session cases stay outside the repository.
 - Continuous testing and editing stay in native agent terminal commands. `code-kb` predicts the
   targeted test targets to run before or after a change; filesystem changes automatically refresh indexed files.
 - Self-cleaning workspaces: Every repository and git worktree maintains its own isolated database at
   `<root>/.code-kb/artifact.db`, and `code-kb` writes a `.gitignore` with `*` inside that directory, so no project `.gitignore` edit is needed. Deleting a repository directory or running `git worktree remove`
   automatically cleans up the AST index database with no orphaned external state. Durable tool
   telemetry and token efficiency history are preserved centrally at `~/.code-kb/telemetry.db`.
+  `tool_telemetry` records the MCP client (`clientInfo.name` of `initialize`), and `hook_telemetry`
+  records each Stop check: the event, the diff hash, the sites listed, whether it blocked, and
+  `followed` (the next Stop after a block changed a line of a listed site).
 - Cross-platform agent hooks: `code-kb hook [SessionStart|SubagentStart|PreInvocation]` outputs agent routing instructions
   directly from the native binary without external runtime dependencies (Node.js, bash, python), formatting JSON
   natively for Claude Code/Cursor (`SessionStart`), Copilot, and Antigravity (`PreInvocation` injectSteps).
