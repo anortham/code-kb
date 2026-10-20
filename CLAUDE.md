@@ -380,7 +380,11 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   parameter, a `for … of` or `for … in` variable, or a `catch` parameter, so
   `reference_report/js_bindings.rs` reads them from the source: when one of them between the
   start of the caller and the site has the name, an `import`, `same file`, `enclosing scope`, or
-  `qualified path` proof becomes `likely` and names that line.
+  `qualified path` proof becomes `likely` and names that line. When that binding's body is a
+  block that holds a bare site (`catch (e) { … }`, `(e) => { … }`, `function (e) { … }`,
+  `for (const e of list) { … }`), the site reads the binding and is excluded with the basis
+  `line N binds the name as a callback parameter, loop variable, or catch parameter`; an
+  expression body (`(e) => e()`) and a loop body without braces keep the rule above.
   Reach sections: `reach_sections` in `reference_report/sections.rs` adds up to six sections
   after the sites are labeled: `Overrides`, `Overrides of`, `Constructions`, `Variant uses`,
   `Registrations`, and `Tests that call it`, where each test has a run command from

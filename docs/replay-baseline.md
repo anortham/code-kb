@@ -194,8 +194,8 @@ once; the cap is 30 symbols.
 
 ## julie 3.9.0 build
 
-The release build (commit 74c1c6f, julie-extract 3.9.0 at the `references` level) against the
-holdout-fix build (adec8ee, which ran with julie-extract 3.8.0 at the `full` level), on 2026-10-20.
+The release build (commit 74c1c6f, with julie-extract 3.9.0 at the `references` level, julie
+commit 683a26d5) against the holdout-fix build (adec8ee, which ran with julie-extract 3.8.0 at the `full` level), on 2026-10-20.
 
 | Set | Half | Holdout fix | julie 3.9.0 |
 |---|---|---|---|
@@ -216,5 +216,8 @@ holdout-fix build (adec8ee, which ran with julie-extract 3.8.0 at the `full` lev
   julie 3.9.0 writes that property, so the test's `router.middleware` still names a definition and
   is `unresolved` for the removed method. The name is still defined, so the label is right; the
   author changed the line because the test was rewritten.
-- Holdback check time: p50 1.12 s to 0.99 s, p95 7.80 s to 6.11 s. Clean set: dev p50 2.06 s and
-  p95 9.32 s, holdout p50 2.18 s and p95 7.35 s.
+- Holdback check time: p50 1.12 s to 1.02 s, p95 7.80 s to 5.63 s. Clean set: dev p50 2.16 s and
+  p95 10.54 s, holdout p50 2.03 s and p95 6.98 s.
+- The corpus check then found that a new property row owned the calls in its value and that a
+  chained assignment (`req.get = req.header = function header()`) made a property the parent of
+  the method. julie 683a26d5 fixes both; the replay counts above are equal before and after it.

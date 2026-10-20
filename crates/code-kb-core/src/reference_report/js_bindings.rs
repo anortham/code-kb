@@ -7,6 +7,14 @@ use std::rc::Rc;
 use super::js_modules::BindingSites;
 use super::{Accounting, NameRow, QueryError, is_word_char, language_family};
 
+/// Where a file binds a name, and where the block body that holds the binding ends, as
+/// `(line, column)`.
+#[derive(Clone, Copy)]
+pub(super) struct Binding {
+    at: (usize, usize),
+    body_end: Option<(usize, usize)>,
+}
+
 /// The longest parameter list or loop head read, in bytes.
 const MAX_LIST: usize = 400;
 /// The longest return type read before the `=>` of a typed arrow function, in bytes.
@@ -45,7 +53,33 @@ impl Accounting<'_> {
             None if !row.has_qualifier() => name,
             None => return Ok(None),
         };
-        let bindings = self.js_binding_sites(&row.path, head);
+        self.nearest_binding(row, head, |_| true)
+    }
+
+    /// The line above a bare row, inside its caller, that binds the row's name as a callback
+    /// parameter, loop variable, or catch parameter whose `{ … }` body holds the row, so the row
+    /// reads that binding.
+    pub(super) fn js_enclosing_binding_line(
+        &self,
+        row: &NameRow,
+        name: &str,
+    ) -> Result<Option<usize>, QueryError> {
+        if language_family(&row.language) != "js" || row.hidden_receiver || !row.is_bare_use() {
+            return Ok(None);
+        }
+        let site = (row.site_line, row.site_column.unwrap_or(usize::MAX));
+        self.nearest_binding(row, name, |binding| {
+            binding.body_end.is_some_and(|end| site < end)
+        })
+    }
+
+    fn nearest_binding(
+        &self,
+        row: &NameRow,
+        name: &str,
+        holds: impl Fn(&Binding) -> bool,
+    ) -> Result<Option<usize>, QueryError> {
+        let bindings = self.js_binding_sites(&row.path, name);
         if bindings.is_empty() {
             return Ok(None);
         }
@@ -59,8 +93,8 @@ impl Accounting<'_> {
         Ok(bindings
             .iter()
             .rev()
-            .find(|&&binding| (caller_start, 0) <= binding && binding < site)
-            .map(|&(line, _)| line))
+            .find(|binding| (caller_start, 0) <= binding.at && binding.at < site && holds(binding))
+            .map(|binding| binding.at.0))
     }
 
     /// The `(line, column)` of every place `path` binds `name`, in source order.
@@ -79,35 +113,80 @@ impl Accounting<'_> {
     }
 }
 
-fn binding_sites(text: &str, name: &str) -> Vec<(usize, usize)> {
+fn binding_sites(text: &str, name: &str) -> Vec<Binding> {
     let line_starts: Vec<usize> = std::iter::once(0)
         .chain(text.match_indices('\n').map(|(at, _)| at + 1))
         .collect();
+    let position = |at: usize| {
+        let line = line_starts.partition_point(|&start| start <= at);
+        (line, at - line_starts[line - 1])
+    };
     text.match_indices(name)
-        .filter(|&(at, _)| binds(text, at, name))
-        .map(|(at, _)| {
-            let line = line_starts.partition_point(|&start| start <= at);
-            (line, at - line_starts[line - 1])
+        .filter_map(|(at, _)| {
+            let after = binding_end(text, at, name)?;
+            Some(Binding {
+                at: position(at),
+                body_end: block_body_end(text, after).map(position),
+            })
         })
         .collect()
 }
 
-/// Whether the word `name` at `at` is a binding: `name =>`, or a name of a parameter list, a
-/// catch clause, or a `for` head that encloses it.
-fn binds(text: &str, at: usize, name: &str) -> bool {
+/// The index after a binding of the word `name` at `at`: after `name` in `name =>`, or after the
+/// `)` of a parameter list, a catch clause, or a `for` head that declares it.
+fn binding_end(text: &str, at: usize, name: &str) -> Option<usize> {
     let end = at + name.len();
     let before = text[..at].trim_end();
     let written_as_word =
         !text[..at].ends_with(is_word_char) && !text[end..].starts_with(is_word_char);
     let member = before.ends_with('.') && !before.ends_with("...");
     if !written_as_word || member {
-        return false;
+        return None;
     }
-    text[end..].trim_start().starts_with("=>")
-        || enclosing_open(text, at)
-            .and_then(|open| Some((open, matching_close(text, open)?)))
-            .and_then(|(open, close)| declared_region(text, open, close))
-            .is_some_and(|region| declares(region, name))
+    if text[end..].trim_start().starts_with("=>") {
+        return Some(end);
+    }
+    let open = enclosing_open(text, at)?;
+    let close = matching_close(text, open)?;
+    declared_region(text, open, close)
+        .filter(|region| declares(region, name))
+        .map(|_| close + 1)
+}
+
+/// The index of the `}` that closes the body after a binding, when that body is a block
+/// (`catch (e) { … }`, `(e) => { … }`, `for (const e of list) { … }`).
+fn block_body_end(text: &str, after: usize) -> Option<usize> {
+    let rest = text[after..].trim_start();
+    let rest = rest.strip_prefix("=>").map_or(rest, str::trim_start);
+    if !rest.starts_with('{') {
+        return None;
+    }
+    brace_close(text, text.len() - rest.len())
+}
+
+/// The `}` that closes the `{` at `open`, past comments and quoted text.
+/// shortcut: a brace inside a regular expression literal shifts the count; skip regex literals
+/// when a project shows one.
+fn brace_close(text: &str, open: usize) -> Option<usize> {
+    let bytes = text.as_bytes();
+    let end = bytes.len();
+    let mut depth = 0;
+    let mut at = open;
+    while at < end {
+        if let Some(after) = comment_end(bytes, at, end) {
+            at = after;
+            continue;
+        }
+        match bytes[at] {
+            b'\'' | b'"' | b'`' => at = quote_end(bytes, at, end)?,
+            b'{' => depth += 1,
+            b'}' if depth == 1 => return Some(at),
+            b'}' => depth -= 1,
+            _ => {}
+        }
+        at += 1;
+    }
+    None
 }
 
 /// The `(` of the innermost parentheses around `at`, within reach.

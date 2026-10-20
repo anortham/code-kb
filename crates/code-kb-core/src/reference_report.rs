@@ -2252,6 +2252,15 @@ impl<'a> Accounting<'a> {
             };
             return Ok(Some(Verdict::new(SiteLabel::Excluded, basis, false)));
         }
+        if let Some(line) = self.js_enclosing_binding_line(row, &spec.name)? {
+            return Ok(Some(Verdict::new(
+                SiteLabel::Excluded,
+                format!(
+                    "line {line} binds the name as a callback parameter, loop variable, or catch parameter"
+                ),
+                false,
+            )));
+        }
         if let Some(verdict) = self.java_static_import(row, spec)? {
             return Ok(Some(verdict));
         }

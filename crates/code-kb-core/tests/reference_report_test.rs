@@ -836,6 +836,53 @@ fn a_call_keeps_its_own_line_when_julie_names_a_caller_that_ends_above_the_next_
 }
 
 #[test]
+fn a_typescript_read_inside_the_block_of_its_binding_is_excluded_with_no_other_definition_near() {
+    let repo = scanned_repo(&[
+        (
+            "src/locales/ru.ts",
+            "export const error = () => \"ошибка\";\n",
+        ),
+        (
+            "src/tests/error.test.ts",
+            "import { error } from \"../locales/ru\";\n\nfunction getThrownError(fn: () => void) {\n  try {\n    fn();\n  } catch (error) {\n    return error;\n  }\n  return error();\n}\n\nfunction logAll(items: unknown[]) {\n  items.forEach((error) => {\n    console.log(error);\n  });\n}\n",
+        ),
+        (
+            "src/tests/plain.test.ts",
+            "function getRejectedError(fn: () => void) {\n  try {\n    fn();\n  } catch (error) {\n    return error;\n  }\n}\n",
+        ),
+    ]);
+    let report = report(&repo, "error", Some("src/locales/ru.ts"));
+    let binds = |line: usize| {
+        format!(
+            "line {line} binds the name as a callback parameter, loop variable, or catch parameter"
+        )
+    };
+
+    assert_site(
+        &report,
+        "src/tests/error.test.ts",
+        7,
+        SiteLabel::Excluded,
+        &binds(6),
+    );
+    assert_site(
+        &report,
+        "src/tests/error.test.ts",
+        14,
+        SiteLabel::Excluded,
+        &binds(13),
+    );
+    assert_not_excluded(&report, "src/tests/error.test.ts", 9);
+    assert_site(
+        &report,
+        "src/tests/plain.test.ts",
+        5,
+        SiteLabel::Excluded,
+        &binds(4),
+    );
+}
+
+#[test]
 fn an_excluded_typescript_site_cites_the_binding_nearest_above_it() {
     let repo = scanned_repo(&[
         (
@@ -1298,18 +1345,29 @@ fn a_constructor_target_counts_a_same_file_new_expression() {
 }
 
 #[test]
-fn a_javascript_read_of_the_name_is_likely_because_callback_parameters_are_not_indexed() {
+fn a_javascript_read_inside_a_callback_body_is_excluded_and_one_outside_is_likely() {
     let repo = scanned_repo(&[(
         "app/index.js",
         "function count(req, res, next) {\n  next();\n}\n\napp.get('/', function (err, count) {\n  res.send({ total: count });\n});\n\napp.use(count);\n",
     )]);
     let report = report(&repo, "count", None);
 
-    let basis = "same file; the index does not record callback parameters";
     let shadowed = line_of(&repo, "app/index.js", "total: count");
-    assert_site(&report, "app/index.js", shadowed, SiteLabel::Likely, basis);
+    assert_site(
+        &report,
+        "app/index.js",
+        shadowed,
+        SiteLabel::Excluded,
+        "line 5 binds the name as a callback parameter, loop variable, or catch parameter",
+    );
     let passed = line_of(&repo, "app/index.js", "app.use(count)");
-    assert_site(&report, "app/index.js", passed, SiteLabel::Likely, basis);
+    assert_site(
+        &report,
+        "app/index.js",
+        passed,
+        SiteLabel::Likely,
+        "same file; the index does not record callback parameters",
+    );
 }
 
 #[test]
@@ -3554,7 +3612,7 @@ fn binding_note(line: usize) -> String {
 }
 
 #[test]
-fn a_callback_parameter_loop_variable_or_catch_parameter_downgrades_the_proof_to_likely() {
+fn a_binding_with_a_block_body_excludes_the_read_and_one_without_downgrades_the_proof() {
     let repo = scanned_repo(&[
         ("package.json", "{\"name\":\"r\"}\n"),
         ("m.ts", "export function foo() { return 1 }\n"),
@@ -3565,13 +3623,22 @@ fn a_callback_parameter_loop_variable_or_catch_parameter_downgrades_the_proof_to
     ]);
     let report = report(&repo, "foo", Some("m.ts"));
 
-    for line in 2..=11 {
+    for line in [2, 3, 4, 6, 11] {
         assert_site(
             &report,
             "use.ts",
             line,
             SiteLabel::Likely,
             &binding_note(line),
+        );
+    }
+    for line in [5, 7, 8, 9, 10] {
+        assert_site(
+            &report,
+            "use.ts",
+            line,
+            SiteLabel::Excluded,
+            &binding_note(line).replacen("import; ", "", 1),
         );
     }
 }
@@ -3940,7 +4007,13 @@ fn a_promise_catch_method_is_not_a_catch_clause() {
 
     assert_site(&report, "use.js", 4, SiteLabel::Proven, "import");
     assert_site(&report, "use.js", 8, SiteLabel::Proven, "import");
-    assert_site(&report, "use.js", 11, SiteLabel::Likely, &binding_note(11));
+    assert_site(
+        &report,
+        "use.js",
+        11,
+        SiteLabel::Excluded,
+        &binding_note(11).replacen("import; ", "", 1),
+    );
 }
 
 #[test]

@@ -245,7 +245,7 @@ struct Aliases {
 
 type ImportRows = Rc<[ImportRow]>;
 /// The `(line, column)` of each place a file binds a name.
-pub(super) type BindingSites = Rc<Vec<(usize, usize)>>;
+pub(super) type BindingSites = Rc<Vec<super::js_bindings::Binding>>;
 
 /// The per-report memory of module lookups.
 #[derive(Default)]
