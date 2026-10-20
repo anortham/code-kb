@@ -3750,3 +3750,22 @@ fn a_cpp_static_is_a_call_shape_word_only_for_a_member_of_a_class_or_struct() {
         assert_has(&text, "): signature changed: static removed");
     }
 }
+
+const TS_SCHEMAS_WITH_MEMBER: &str = "declare function install(inst: object, methods: object): void;\ndeclare function make(name: string, init: (inst: object) => void): object;\n\nexport const ZodType = make(\"ZodType\", (inst) => {\n  install(inst, {\n    array() {\n      return array(this);\n    },\n    keep() {\n      return 1;\n    },\n  });\n});\n\nexport function array(element: unknown) {\n  return [element];\n}\n";
+const TS_SCHEMAS_WITHOUT_MEMBER: &str = "declare function install(inst: object, methods: object): void;\ndeclare function make(name: string, init: (inst: object) => void): object;\n\nexport const ZodType = make(\"ZodType\", (inst) => {\n  install(inst, {\n    keep() {\n      return 1;\n    },\n  });\n});\n\nexport function array(element: unknown) {\n  return [element];\n}\n";
+const TS_SCHEMAS_INDEX: &str = "export * from \"./schemas\";\n";
+const TS_SCHEMAS_USE: &str = "import * as z from \"./index\";\n\nexport function usesArray() {\n  return z.array(1);\n}\n";
+
+#[test]
+fn a_removed_object_literal_method_does_not_list_a_namespace_call_of_the_module_function_with_its_name() {
+    let repo = committed_repo(&[
+        ("package.json", "{\"name\": \"demo\"}\n"),
+        ("src/schemas.ts", TS_SCHEMAS_WITH_MEMBER),
+        ("src/index.ts", TS_SCHEMAS_INDEX),
+        ("src/use.ts", TS_SCHEMAS_USE),
+    ]);
+    write(&repo.root, "src/schemas.ts", TS_SCHEMAS_WITHOUT_MEMBER);
+    let text = text_of(&repo);
+    assert_has(&text, "(src/schemas.ts): removed");
+    assert_lacks(&text, "usesArray");
+}

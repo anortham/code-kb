@@ -61,11 +61,13 @@ const EXPORT_ROWS_SQL: &str = "SELECT json_extract(metadata_json, '$.exportedNam
      FROM symbols
      WHERE kind = 'export' AND path = ?1 AND json_valid(metadata_json)";
 
+/// julie records an object-literal member and a method assigned to a property with no owner;
+/// neither binds a name at module scope.
 const TOP_LEVEL_DEFINITIONS_SQL: &str =
     "SELECT symbol_id, kind, start_line, COALESCE(signature, '')
      FROM symbols
      WHERE path = ?1 AND +name = ?2 AND parent_symbol_id IS NULL
-       AND kind NOT IN ('import', 'export')";
+       AND kind NOT IN ('import', 'export', 'method', 'property')";
 
 /// julie writes no export row for `exports.name = …` or `module.exports.name = …`; the
 /// signature of the definition it records names the export.
@@ -521,6 +523,7 @@ impl Accounting<'_> {
             spec.group.iter().any(|member| {
                 let path = member.path.replace('\\', "/");
                 member.parent_symbol_id.is_none()
+                    && !matches!(member.kind.as_str(), "method" | "property")
                     && member.name == found.name
                     && (path == found.path || are_twins(&path, &found.path))
             })

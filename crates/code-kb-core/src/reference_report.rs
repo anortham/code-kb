@@ -399,9 +399,11 @@ const SHADOW_IN_CHAIN_SQL: &str = "WITH RECURSIVE chain(symbol_id, depth) AS (
        AND (chain.depth = 0 OR scope.kind IN ('function', 'method', 'constructor'))
      ORDER BY chain.depth, d.start_line > ?5, abs(?5 - d.start_line)";
 
+/// An ownerless JavaScript method is an object-literal member or a property, which binds no name.
 const SHADOW_TOP_LEVEL_SQL: &str = "SELECT symbol_id, COALESCE(signature, ''), kind FROM symbols
      WHERE name = ?1 AND path = ?2 AND parent_symbol_id IS NULL
        AND kind NOT IN ('import', 'export', 'module', 'namespace')
+       AND NOT (kind = 'method' AND language IN ('javascript', 'typescript', 'tsx', 'jsx', 'vue'))
      ORDER BY start_line > ?3, abs(?3 - start_line)";
 
 const JAVA_STATIC_IMPORT_SQL: &str = "SELECT signature FROM symbols
@@ -613,7 +615,10 @@ impl NameRow {
             && languages_compatible(&self.language, &definition.language);
         let member_of_a_scoped_function =
             definition.free && language_family(&self.language) == "js" && self.has_qualifier();
-        !call_of_a_field && !member_of_a_scoped_function && !self.reads_a_module(&definition.kind)
+        !call_of_a_field
+            && !member_of_a_scoped_function
+            && !self.reads_a_module(&definition.kind)
+            && !(self.is_bare_use() && definition.is_property_method())
     }
 
     /// A Rust read of a value (`git.diff()`) never names a module (`mod git;`), which holds none.
@@ -854,6 +859,11 @@ struct Definition {
 }
 
 impl Definition {
+    /// See [`is_property_method`].
+    fn is_property_method(&self) -> bool {
+        self.kind == "method" && self.top_level && language_family(&self.language) == "js"
+    }
+
     fn display(&self) -> String {
         match &self.owner_name {
             Some(owner) => format!("{owner}.{}", self.name),
@@ -1347,6 +1357,7 @@ impl<'a> Accounting<'a> {
                     if row.hidden_receiver
                         || row.language == "java" && !row.can_reach(other)
                         || row.reads_a_module(&other.kind)
+                        || row.is_bare_use() && other.is_property_method()
                     {
                         kept.push(index);
                         continue;

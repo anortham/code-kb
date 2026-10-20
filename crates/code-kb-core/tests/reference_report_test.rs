@@ -844,7 +844,7 @@ fn an_excluded_typescript_site_cites_the_binding_nearest_above_it() {
         ),
         (
             "src/tests/error.test.ts",
-            "function getThrownError(fn: () => void) {\n  try {\n    fn();\n  } catch (error) {\n    return error;\n  }\n}\n\nfunction format(a: boolean, b: boolean) {\n  if (a) {\n    const error = 1;\n    use(error);\n  }\n  if (b) {\n    const error = 2;\n    use(error);\n  }\n}\n\nconst schema = z.string({ error: () => \"bound\" });\n",
+            "function getThrownError(fn: () => void) {\n  try {\n    fn();\n  } catch (error) {\n    return error;\n  }\n}\n\nfunction format(a: boolean, b: boolean) {\n  if (a) {\n    const error = 1;\n    use(error);\n  }\n  if (b) {\n    const error = 2;\n    use(error);\n  }\n}\n\nconst error = () => \"bound\";\n",
         ),
     ]);
     let report = report(&repo, "error", Some("src/locales/ru.ts"));
@@ -1328,6 +1328,32 @@ fn a_bare_call_never_reaches_a_javascript_property_method() {
         SiteLabel::Excluded,
         "resolves to the import of `accepts` from `accepts`",
     );
+}
+
+const TS_OBJECT_LITERAL_METHOD: &[(&str, &str)] = &[
+    ("package.json", "{\"name\": \"demo\"}\n"),
+    (
+        "src/schemas.ts",
+        "declare function install(inst: object, methods: object): void;\ndeclare function make(name: string, init: (inst: object) => void): object;\n\nexport const ZodType = make(\"ZodType\", (inst) => {\n  install(inst, {\n    array() {\n      return array(this);\n    },\n  });\n});\n\nexport function array(element: unknown) {\n  return [element];\n}\n",
+    ),
+    ("src/index.ts", "export * from \"./schemas\";\n"),
+    (
+        "src/use.ts",
+        "import * as z from \"./index\";\n\nexport function usesArray() {\n  return z.array(1);\n}\n",
+    ),
+];
+
+#[test]
+fn a_namespace_import_reaches_the_module_function_and_not_an_object_literal_method_with_its_name() {
+    let repo = scanned_repo(TS_OBJECT_LITERAL_METHOD);
+    let method = report_at(&repo, "array", "src/schemas.ts", 6);
+    let function = report_at(&repo, "array", "src/schemas.ts", 12);
+
+    let namespace_call = line_of(&repo, "src/use.ts", "z.array(1)");
+    let bare_call = line_of(&repo, "src/schemas.ts", "array(this)");
+    assert_eq!(site_at(&method, "src/use.ts", namespace_call).label, SiteLabel::Excluded);
+    assert_site(&function, "src/use.ts", namespace_call, SiteLabel::Proven, "import");
+    assert_site(&function, "src/schemas.ts", bare_call, SiteLabel::Proven, "same file");
 }
 
 #[test]
@@ -4580,7 +4606,8 @@ fn report_at(repo: &Repo, name: &str, path: &str, line: usize) -> ReferenceRepor
     let conn = open_read_only(&repo.db).unwrap();
     let id: String = conn
         .query_row(
-            "SELECT symbol_id FROM symbols WHERE name = ?1 AND path = ?2 AND start_line = ?3",
+            "SELECT symbol_id FROM symbols WHERE name = ?1 AND path = ?2 AND start_line = ?3
+             AND kind NOT IN ('import', 'export')",
             rusqlite::params![name, path, line as i64],
             |row| row.get(0),
         )

@@ -258,7 +258,9 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   above it, is the first segment of the import (`import json` does not reach `src/flask/json/`).
   A JavaScript or TypeScript read of the name that only scope ties to the target is likely,
   because julie does not record callback parameters. A bare name never reaches a JavaScript
-  method assigned to a property (`req.accepts = function`). A call that julie links to its own
+  method assigned to a property (`req.accepts = function`) or an object-literal method, which
+  julie records with no owner, and an import never reaches either one, so `z.array()` does not
+  reach `{ array() {…} }` beside `export function array`. A call that julie links to its own
   caller is not proof, because julie links a call inside a method to that method by name alone. A
   call through `super`, `base`, or Kotlin `super<X>` reaches an ancestor of the caller's class,
   never that class. Java and Kotlin link `super.f()` in an override to the override; when the
