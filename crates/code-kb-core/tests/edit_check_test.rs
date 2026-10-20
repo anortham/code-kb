@@ -3981,7 +3981,8 @@ fn a_removed_javascript_method_keeps_the_object_it_was_assigned_on() {
 
 #[test]
 fn a_removed_typescript_type_skips_an_import_of_a_mirror_copy() {
-    let parse_util = "export type ParseParams = { path: string[] };\n\nexport type Keep = string;\n";
+    let parse_util =
+        "export type ParseParams = { path: string[] };\n\nexport type Keep = string;\n";
     let types = "import { ParseParams } from \"./helpers/parseUtil\";\n\nexport function parse(p: ParseParams) {\n  return p;\n}\n";
     let repo = committed_repo(&[
         ("package.json", "{\"name\": \"demo\"}\n"),

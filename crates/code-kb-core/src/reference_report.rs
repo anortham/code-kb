@@ -3127,9 +3127,10 @@ impl<'a> Accounting<'a> {
             false
         } else {
             let paths = self.with_statement(PYTHON_FILES_NAMED_SQL, |stmt| {
-                stmt.query_map(params![format!("%/{first}/%"), format!("%/{first}.py")], |r| {
-                    r.get::<_, String>(0)
-                })?
+                stmt.query_map(
+                    params![format!("%/{first}/%"), format!("%/{first}.py")],
+                    |r| r.get::<_, String>(0),
+                )?
                 .collect::<Result<Vec<_>, _>>()
             })?;
             let mut reached = paths.len() >= PYTHON_FILES_NAMED_CAP;
@@ -3239,8 +3240,9 @@ impl<'a> Accounting<'a> {
             return Ok(None);
         }
         let folder = format!("%/{}/%", crate::queries::escape_like(&package.join("/")));
-        let indexed =
-            self.with_statement(SOURCE_FILES_SQL, |stmt| stmt.exists(params![folder, folder]))?;
+        let indexed = self.with_statement(SOURCE_FILES_SQL, |stmt| {
+            stmt.exists(params![folder, folder])
+        })?;
         Ok((!indexed).then(|| (qualifier.to_string(), imported.to_string())))
     }
 
