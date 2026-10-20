@@ -223,3 +223,8 @@ commit 683a26d5) against the holdout-fix build (adec8ee, which ran with julie-ex
   the method. julie 683a26d5 fixes both. It also found two zod reads of a catch parameter that lost
   their exclusion; 091f937 excludes a read inside the block body of its binding. The replay counts
   above are equal before and after both fixes, except one `unresolved` row fewer on dev.
+- The dogfood round then found that a body read of a property listed a `self.x = …` write of
+  its own class as an overload, and that a Python body header started below the decorators.
+  0394c72 fixes both. The replay counts and the clean-set result are equal before and after it;
+  the clean set check time is p50 2.02 s and p95 9.07 s on dev, p50 1.93 s and p95 6.44 s on
+  holdout.
