@@ -118,7 +118,7 @@ fn record_followed(root: &Path, id: &str) -> Option<()> {
         },
     )
     .ok()?;
-    record_hook_followed(root, &blocked_diff?, followed);
+    record_hook_followed(root, id, &blocked_diff?, followed);
     Some(())
 }
 
@@ -167,7 +167,7 @@ fn stop_decision(payload: &Value, event: &str) -> Option<String> {
         ..state
     };
     write_session(root, id, &reported).ok()?;
+    record_hook_check(root, id, event, &hash, sites.len(), reason.is_some());
     drop(lock);
-    record_hook_check(root, event, &hash, sites.len(), reason.is_some());
     reason.map(|reason| json!({ "decision": "block", "reason": reason }).to_string())
 }

@@ -140,6 +140,39 @@ class FakeBinaryTest(unittest.TestCase):
         self.assertFalse(got["ran"])
         self.assertFalse(got["block"])
 
+    def test_a_replay_resume_rejects_a_rebuilt_binary_with_the_same_version(self):
+        cases = self.dir / "cases.json"
+        cases.write_text('{"cases": []}')
+        repos = self.dir / "repos.json"
+        repos.write_text('[]')
+        for kind in ("clean", "holdback", "sessions"):
+            with self.subTest(kind=kind):
+                binary = self.fake("echo code-kb 2.8.0\n")
+                out = self.dir / kind
+                args = ["run", kind, "--cases", str(cases), "--code-kb", str(binary), "--out", str(out)]
+                if kind != "sessions":
+                    args += ["--repos", str(repos)]
+                self.assertEqual(edit_replay.main(args), 0)
+                metadata = (out / "run.json").read_text()
+                self.assertEqual(edit_replay.main(args), 0)
+                self.assertEqual((out / "run.json").read_text(), metadata)
+                self.fake("echo code-kb 2.8.0\nexit 0\n")
+                with contextlib.redirect_stderr(io.StringIO()) as errors:
+                    self.assertEqual(edit_replay.main(args), 2)
+                self.assertIn("output directory", errors.getvalue())
+                self.assertEqual((out / "run.json").read_text(), metadata)
+
+    def test_a_replay_resume_rejects_metadata_without_a_binary_fingerprint(self):
+        cases = self.dir / "cases.json"
+        cases.write_text('{"cases": []}')
+        binary = self.fake("echo code-kb 2.8.0\n")
+        out = self.dir / "old-run"
+        out.mkdir()
+        (out / "run.json").write_text(json.dumps({"binary": str(binary), "version": "code-kb 2.8.0"}))
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(edit_replay.main([
+                "run", "sessions", "--cases", str(cases), "--code-kb", str(binary), "--out", str(out)]), 2)
+
 
 class WalkTest(unittest.TestCase):
     def test_the_walk_skips_merge_commits_and_root_commits(self):

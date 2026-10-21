@@ -162,6 +162,21 @@ def binary_version(binary):
     return done.stdout.strip() or "unknown"
 
 
+def prepare_run(out, binary):
+    digest = hashlib.sha256()
+    with binary.open("rb") as source:
+        for block in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(block)
+    fingerprint = digest.hexdigest()
+    meta = out / "run.json"
+    if meta.exists():
+        if load_json(meta).get("binary_sha256") != fingerprint:
+            raise RuntimeError("the output directory belongs to another or an unverified binary; use a new output directory")
+        return
+    write_json(meta, {"binary": str(binary), "binary_sha256": fingerprint, "version": binary_version(binary),
+                      "started": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")})
+
+
 def trim_site(site):
     return {key: site[key] for key in ("path", "line", "caller") if key in site}
 
@@ -319,10 +334,7 @@ def cmd_run_clean(args):
     binary = Path(args.code_kb).resolve()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    meta = out / "run.json"
-    if not meta.exists():
-        write_json(meta, {"binary": str(binary), "version": binary_version(binary),
-                          "started": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")})
+    prepare_run(out, binary)
     errors = 0
     for case in wanted_cases(data["cases"], args.split, args.only):
         sink_path = out / "clean" / f"{case['repo']}.jsonl"
@@ -1075,9 +1087,7 @@ def cmd_run_holdback(args):
     binary = Path(args.code_kb).resolve()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    if not (out / "run.json").exists():
-        write_json(out / "run.json", {"binary": str(binary), "version": binary_version(binary),
-                                      "started": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")})
+    prepare_run(out, binary)
     errors = 0
     for case in wanted_cases(data["cases"], args.split, args.only):
         sink_path = out / "holdback" / f"{case['repo']}.jsonl"
@@ -1717,9 +1727,7 @@ def cmd_run_sessions(args):
     binary = Path(args.code_kb).resolve()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    if not (out / "run.json").exists():
-        write_json(out / "run.json", {"binary": str(binary), "version": binary_version(binary),
-                                      "started": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")})
+    prepare_run(out, binary)
     sink_path = out / "sessions.jsonl"
     done = set()
     if sink_path.exists():

@@ -461,6 +461,82 @@ fn the_stop_after_a_block_records_it_followed_when_a_listed_site_was_edited() {
 }
 
 #[test]
+fn one_sessions_follow_through_does_not_resolve_another_sessions_matching_block() {
+    let repo = rust_function_repo();
+    start_session(&repo, "first");
+    start_session(&repo, "second");
+    add_depth_parameter(&repo);
+
+    for session_id in ["first", "second"] {
+        assert_blocks_with(
+            &run_hook(
+                "Stop",
+                Some(&payload(session_id, &repo.root, false)),
+                &repo.root,
+            ),
+            STOP_REASON,
+        );
+    }
+
+    write(
+        &repo.root,
+        "src/second.rs",
+        "use crate::geometry;\n\npub fn second() -> i32 {\n    crate::geometry::area(4, 5, 1)\n}\n",
+    );
+    assert_silent(&run_hook(
+        "Stop",
+        Some(&payload("first", &repo.root, true)),
+        &repo.root,
+    ));
+
+    assert_eq!(
+        hook_rows(&repo.root),
+        vec![
+            ("Stop".to_string(), 1, 1, Some(1)),
+            ("Stop".to_string(), 1, 1, None),
+        ]
+    );
+}
+
+#[test]
+fn a_legacy_hook_telemetry_table_is_upgraded_before_checks_are_recorded() {
+    let repo = rust_function_repo();
+    let telemetry = telemetry_dir(&repo.root);
+    std::fs::create_dir_all(&telemetry).unwrap();
+    code_kb_core::Connection::open(telemetry.join("telemetry.db"))
+        .unwrap()
+        .execute_batch(
+            "CREATE TABLE hook_telemetry (
+                id INTEGER PRIMARY KEY,
+                timestamp TEXT NOT NULL,
+                workspace_root TEXT NOT NULL,
+                event TEXT NOT NULL,
+                diff_hash TEXT NOT NULL,
+                sites_listed INTEGER NOT NULL,
+                blocked INTEGER NOT NULL,
+                followed INTEGER DEFAULT NULL
+            );",
+        )
+        .unwrap();
+
+    start_session(&repo, "legacy");
+    add_depth_parameter(&repo);
+    assert_blocks_with(
+        &run_hook(
+            "Stop",
+            Some(&payload("legacy", &repo.root, false)),
+            &repo.root,
+        ),
+        STOP_REASON,
+    );
+
+    assert_eq!(
+        hook_rows(&repo.root),
+        vec![("Stop".to_string(), 1, 1, None)]
+    );
+}
+
+#[test]
 fn the_stop_after_a_block_records_it_not_followed_when_no_listed_site_changed() {
     let repo = rust_function_repo();
     start_session(&repo, "f2");
