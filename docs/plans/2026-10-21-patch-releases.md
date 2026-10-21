@@ -19,7 +19,7 @@ The owner requested: "ok let's go through the release process for both". This au
 ## Sequence and acceptance
 
 - [x] Prepare Julie3.9.1, schema8/report3/epoch10, corrected C# output marker; run local release/contract gates and build optimized binary.
-- [ ] Put that exact binary in code-kb .tools, update local pin to3.9.1, commit and run exactly one paired Claude/Codex dogfood round. Verify every wrong answer; fix before tagging, document nonblocking gaps. No repeat discovery round.
+- [x] Put that exact binary in code-kb .tools, update local pin to3.9.1, commit and run exactly one paired Claude/Codex dogfood round. Verify every wrong answer; fix before tagging, document nonblocking gaps. No repeat discovery round.
 - [ ] Integrate Julie through green CI; tag/publish3.9.1 only after the downstream round has no open defect.
 - [ ] Verify all six public archives and embedded checksums. Restore public Linux binary and put exact archive checksums into code-kb's pin.
 - [ ] Integrate code-kb source and published pin through PRs and green main CI. Preserve the dogfood commit as an ancestor with merge commits.
