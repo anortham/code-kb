@@ -964,7 +964,9 @@ struct Candidate {
 }
 
 enum What {
-    Parameters,
+    Parameters {
+        required_keyword_parameters: Vec<String>,
+    },
     Signature,
     Renamed {
         renames: Vec<(String, String)>,
@@ -1307,7 +1309,13 @@ impl Detector<'_> {
             self.parameter_shape(self.conn, self.root, is)?,
         );
         if before.differs(&after) {
-            return Ok(Some((before.change_text(&after), What::Parameters)));
+            return Ok(Some((
+                before.change_text(&after),
+                What::Parameters {
+                    required_keyword_parameters:
+                        signatures::added_required_python_keyword_parameters(was, is),
+                },
+            )));
         }
         let shapes = (
             Shape::of(&self.base.conn, was, &self.base.tree)?,
@@ -1526,16 +1534,23 @@ impl<'a> SiteLister<'a> {
         let report =
             reference_report_for_edit(self.conn, self.root, &candidate.subject, condition)?;
         let placed = match &candidate.what {
-            What::Parameters => {
+            What::Parameters {
+                required_keyword_parameters,
+            } => {
                 let range = inherited_group_arity(self.conn, self.root, &candidate.subject)?;
                 let typed = TypedOverloads::of(self.conn, &candidate.subject)?;
-                let mut placed = self.calls(&report, range.as_ref(), typed.as_ref());
+                let mut placed = self.calls(
+                    &report,
+                    range.as_ref(),
+                    typed.as_ref(),
+                    required_keyword_parameters,
+                );
                 self.overrides(&report, &mut placed)?;
                 placed
             }
             What::Signature => {
                 let typed = TypedOverloads::of(self.conn, &candidate.subject)?;
-                let mut placed = self.calls(&report, None, typed.as_ref());
+                let mut placed = self.calls(&report, None, typed.as_ref(), &[]);
                 self.overrides(&report, &mut placed)?;
                 placed
             }
@@ -1574,6 +1589,7 @@ impl<'a> SiteLister<'a> {
         report: &ReferenceReport,
         range: Option<&Arity>,
         typed: Option<&TypedOverloads>,
+        required_keyword_parameters: &[String],
     ) -> Placed {
         let mut placed = Placed::default();
         for labeled in report
@@ -1590,38 +1606,88 @@ impl<'a> SiteLister<'a> {
                 continue;
             }
             let language = self.language_of(path);
-            let arguments = range.map(|_| self.arguments(labeled)).unwrap_or_default();
+            let arguments = if range.is_some() || !required_keyword_parameters.is_empty() {
+                self.arguments(labeled)
+            } else {
+                CallArguments::default()
+            };
             let count = range
                 .and_then(|range| arguments.rejected_by(range, &language))
                 .or_else(|| arguments.counts.first().copied());
             let verdict = range
                 .zip(count)
                 .and_then(|(range, count)| Some((range, count, range.accepts(&language, count)?)));
+            let missing_keywords = if required_keyword_parameters.is_empty() {
+                Vec::new()
+            } else {
+                let Some(check) = self.required_keyword_arguments(
+                    labeled,
+                    first,
+                    last,
+                    required_keyword_parameters,
+                ) else {
+                    placed.unresolved += 1;
+                    continue;
+                };
+                if !check.missing.is_empty() && check.has_unknown_spread {
+                    placed.unresolved += 1;
+                    continue;
+                }
+                check.missing
+            };
             if !touched
+                && missing_keywords.is_empty()
                 && verdict.is_some_and(|(_, _, fits)| fits)
                 && binding.is_none_or(|binding| binding == OverloadBinding::Changed)
             {
                 continue;
             }
-            if !touched && verdict.is_none() && arguments.spread {
+            if !touched && missing_keywords.is_empty() && verdict.is_none() && arguments.spread {
                 placed.unresolved += 1;
                 continue;
             }
             let rejected = verdict.filter(|(_, _, fits)| !fits);
-            let note = rejected.map(|(range, count, _)| {
-                format!(
-                    "passes {count} {}; takes {}",
-                    args_noun(count),
-                    range.range_text()
-                )
-            });
+            let note = rejected
+                .map(|(range, count, _)| {
+                    format!(
+                        "passes {count} {}; takes {}",
+                        args_noun(count),
+                        range.range_text()
+                    )
+                })
+                .or_else(|| {
+                    (!missing_keywords.is_empty()).then(|| {
+                        format!(
+                            "missing required keyword{}: {}",
+                            if missing_keywords.len() == 1 { "" } else { "s" },
+                            missing_keywords.join(", ")
+                        )
+                    })
+                });
             placed.add(
                 labeled.label,
-                touched && rejected.is_none(),
+                touched && rejected.is_none() && missing_keywords.is_empty(),
                 edit_site(labeled, first, note),
             );
         }
         placed
+    }
+
+    fn required_keyword_arguments(
+        &mut self,
+        labeled: &LabeledSite,
+        first: usize,
+        last: usize,
+        required: &[String],
+    ) -> Option<signatures::RequiredKeywordArguments> {
+        let source = self.source(&labeled.site.path)?;
+        let lines = source.get(first.checked_sub(1)?..last)?;
+        let lines: Vec<&str> = lines.iter().map(String::as_str).collect();
+        signatures::required_python_keyword_arguments(
+            &lines,
+            &labeled.site.to_symbol_name,
+            required,
+        )
     }
 
     /// The argument counts of the call at the site: the count the report gives, else the counts of

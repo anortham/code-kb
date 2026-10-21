@@ -9359,7 +9359,7 @@ fn python_tests_that_call_the_target_list_with_their_pytest_commands() {
     let text = format_reference_report(&target, 20);
     assert!(
         text.contains(&format!(
-            "Tests that call it (3):\n\
+            "Tests that call or use it (3):\n\
              - `test_plain` [tests/test_a.py:{plain}] run: pytest tests/test_a.py::test_plain\n\
              - `test_method` [tests/test_a.py:{method}] run: pytest tests/test_a.py::TestKlass::test_method\n\
              - `test_with_helper` [tests/test_a.py:{helper}] run: pytest tests/test_a.py::test_with_helper\n"
@@ -10007,7 +10007,7 @@ fn test_rows_fold_after_the_limit_with_the_full_count() {
     assert_eq!(target.tests.len(), 3);
     assert!(
         text.contains(&format!(
-            "Tests that call it (3):\n\
+            "Tests that call or use it (3):\n\
              - `test_plain` [tests/test_a.py:{plain}] run: pytest tests/test_a.py::test_plain\n\
              … 2 more tests in 1 file: tests/test_a.py (2)\n"
         )),
@@ -10044,7 +10044,7 @@ fn tests_print_after_the_registrations_and_before_the_text_only_lines() {
         text.contains(&format!(
             "Registrations (1):\n\
              - route GET /x [app.py:{decorator}]\n\
-             Tests that call it (1):\n\
+             Tests that call or use it (1):\n\
              - `test_target` [tests/test_app.py:{test}] run: pytest tests/test_app.py::test_target\n\
              Text only (1): "
         )),
@@ -10087,7 +10087,7 @@ fn a_target_no_test_calls_prints_no_test_section() {
     let run = report(&repo, "run", None);
 
     assert!(run.tests.is_empty());
-    assert!(!format_reference_report(&run, 20).contains("Tests that call it"));
+    assert!(!format_reference_report(&run, 20).contains("Tests that call or use it"));
     assert!(serde_json::to_value(&run).unwrap().get("tests").is_none());
 }
 
@@ -10571,6 +10571,79 @@ def via_dog(d: Dog):
         SiteLabel::Excluded,
         "resolves to `Dog.purr` (q.py:10)",
     );
+}
+
+#[test]
+fn an_annotation_only_python_base_member_does_not_exclude_a_runtime_child_member() {
+    let repo = scanned_repo(&[(
+        "app.py",
+        "from typing import Literal\n\n\nclass Base:\n    response_class: Literal[\"=\"]\n\n\nclass Flask(Base):\n    response_class = type\n\n\ndef make_response(app: Base):\n    return app.response_class()\n",
+    )]);
+    let report = report(&repo, "Flask.response_class", None);
+
+    assert_site(
+        &report,
+        "app.py",
+        line_of(&repo, "app.py", "app.response_class()"),
+        SiteLabel::Unresolved,
+        "2 definitions",
+    );
+}
+
+#[test]
+fn an_assigned_python_child_member_still_excludes_its_base_member() {
+    let repo = scanned_repo(&[(
+        "app.py",
+        "class Base:\n    response_class = object\n\n\nclass Child(Base):\n    response_class = type\n\n\ndef make_response(app: Child):\n    return app.response_class()\n",
+    )]);
+    let report = report(&repo, "Base.response_class", None);
+    let site_line = line_of(&repo, "app.py", "app.response_class()");
+    let child_line = line_of(&repo, "app.py", "response_class = type");
+    let basis = format!("resolves to `Child.response_class` (app.py:{child_line})");
+
+    assert_site(&report, "app.py", site_line, SiteLabel::Excluded, &basis);
+}
+
+#[test]
+fn a_python_property_descriptor_still_excludes_a_base_member() {
+    let repo = scanned_repo(&[(
+        "app.py",
+        "class Base:\n    response_class = object\n\n\nclass Child(Base):\n    @property\n    def response_class(self):\n        return type\n\n\ndef make_response(app: Child):\n    return app.response_class\n",
+    )]);
+    let report = report(&repo, "Base.response_class", None);
+    let site_line = line_of(&repo, "app.py", "app.response_class");
+    let child_line = line_of(&repo, "app.py", "def response_class(self)");
+    let basis = format!("resolves to `Child.response_class` (app.py:{child_line})");
+
+    assert_site(&report, "app.py", site_line, SiteLabel::Excluded, &basis);
+}
+
+#[test]
+fn a_dataclass_field_remains_a_competing_python_member() {
+    let repo = scanned_repo(&[(
+        "app.py",
+        "from dataclasses import dataclass\n\n\n@dataclass\nclass Base:\n    response_class: object\n\n\nclass Child(Base):\n    response_class = type\n\n\ndef make_response(app: Base):\n    return app.response_class()\n",
+    )]);
+    let report = report(&repo, "Child.response_class", None);
+    let site_line = line_of(&repo, "app.py", "app.response_class()");
+    let base_line = line_of(&repo, "app.py", "response_class: object");
+    let basis = format!("resolves to `Base.response_class` (app.py:{base_line})");
+
+    assert_site(&report, "app.py", site_line, SiteLabel::Excluded, &basis);
+}
+
+#[test]
+fn a_typed_dict_field_remains_a_competing_python_member() {
+    let repo = scanned_repo(&[(
+        "app.py",
+        "from typing import TypedDict\n\n\nclass Base(TypedDict):\n    response_class: object\n\n\nclass Child(Base):\n    response_class = type\n\n\ndef make_response(app: Base):\n    return app.response_class()\n",
+    )]);
+    let report = report(&repo, "Child.response_class", None);
+    let site_line = line_of(&repo, "app.py", "app.response_class()");
+    let base_line = line_of(&repo, "app.py", "response_class: object");
+    let basis = format!("resolves to `Base.response_class` (app.py:{base_line})");
+
+    assert_site(&report, "app.py", site_line, SiteLabel::Excluded, &basis);
 }
 
 #[test]

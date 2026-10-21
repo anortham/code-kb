@@ -511,6 +511,125 @@ pub(super) fn names_parameter(
     names_in_call(&code[open..], callee, parameter, separator)
 }
 
+pub(super) fn added_required_python_keyword_parameters(was: &Symbol, is: &Symbol) -> Vec<String> {
+    if was.language != "python" || is.language != "python" {
+        return Vec::new();
+    }
+    let (Some(before), Some(after)) = (
+        required_python_keyword_parameters(was),
+        required_python_keyword_parameters(is),
+    ) else {
+        return Vec::new();
+    };
+    after
+        .into_iter()
+        .filter(|name| !before.contains(name))
+        .collect()
+}
+
+fn required_python_keyword_parameters(symbol: &Symbol) -> Option<Vec<String>> {
+    let signature = symbol.signature.as_deref()?;
+    let (_, segments) = arity::parameter_segments(signature, &symbol.name, "python")?;
+    let mut keyword_only = false;
+    let mut required = Vec::new();
+    for segment in segments {
+        let segment = segment.trim();
+        match segment {
+            "*" => {
+                keyword_only = true;
+                continue;
+            }
+            "/" => continue,
+            _ => {}
+        }
+        if segment.starts_with("**") {
+            continue;
+        }
+        if segment.starts_with('*') {
+            keyword_only = true;
+            continue;
+        }
+        if !keyword_only || arity::default_start(segment).is_some() {
+            continue;
+        }
+        let name = segment
+            .split(|character: char| {
+                character == ':' || character == '=' || character.is_whitespace()
+            })
+            .next()?
+            .trim();
+        if name.is_empty()
+            || !name
+                .chars()
+                .next()
+                .is_some_and(|character| character == '_' || character.is_alphabetic())
+            || !name.chars().all(is_identifier_char)
+        {
+            return None;
+        }
+        required.push(name.to_string());
+    }
+    Some(required)
+}
+
+pub(super) struct RequiredKeywordArguments {
+    pub(super) missing: Vec<String>,
+    pub(super) has_unknown_spread: bool,
+}
+
+pub(super) fn required_python_keyword_arguments(
+    lines: &[&str],
+    callee: &str,
+    required: &[String],
+) -> Option<RequiredKeywordArguments> {
+    let code = code_only(&lines.join("\n"), "python");
+    let mut calls = code.match_indices(callee).filter(|(at, _)| {
+        let end = at + callee.len();
+        code[..*at]
+            .chars()
+            .next_back()
+            .is_none_or(|character| !is_identifier_char(character))
+            && code[end..].trim_start().starts_with('(')
+    });
+    let (at, _) = calls.next()?;
+    if calls.next().is_some() {
+        return None;
+    }
+    let arguments_start = code[at + callee.len()..]
+        .find('(')
+        .map(|offset| at + callee.len() + offset)?;
+    let call = &code[arguments_start..];
+    let rest = after_balanced(call, '(', ')')?;
+    let closing = call.len().checked_sub(rest.len() + 1)?;
+    let arguments = split_body(&call[1..closing]).0;
+    let missing = required
+        .iter()
+        .filter(|parameter| {
+            !arguments
+                .iter()
+                .any(|argument| is_keyword_argument(argument, parameter))
+        })
+        .cloned()
+        .collect();
+    Some(RequiredKeywordArguments {
+        missing,
+        has_unknown_spread: arguments
+            .iter()
+            .any(|argument| argument.trim_start().starts_with("**")),
+    })
+}
+
+fn is_keyword_argument(argument: &str, parameter: &str) -> bool {
+    let argument = argument.trim();
+    let Some(rest) = argument.strip_prefix(parameter) else {
+        return false;
+    };
+    let rest = rest.trim_start();
+    !argument[parameter.len()..].starts_with(is_identifier_char)
+        && rest.starts_with('=')
+        && !rest[1..].starts_with('=')
+}
+
 /// Whether the arguments of the call that opens `call` pass `parameter` by name, or hold a call of
 /// `callee` that does.
 fn names_in_call(call: &str, callee: &str, parameter: &str, separator: char) -> bool {

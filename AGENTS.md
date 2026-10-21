@@ -303,7 +303,10 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   name proves it (`class chain`). A target whose owners are no ancestor of the caller's class is
   excluded: ``receiver `super` reaches only the ancestors of `Sub` ``. A subclass write to an
   inherited attribute (`self.debug = …`) is a site, not a definition, and does not hide the base
-  class's definition in a class chain. A C# extension method counts the type of its `this`
+  class's definition in a class chain. An ordinary Python class-body annotation without a value
+  is not a runtime binding, so it cannot exclude another provider; without receiver proof, the
+  site stays likely or unresolved. Dataclass and TypedDict annotated fields retain their existing
+  member semantics. A C# extension method counts the type of its `this`
   parameter as an owner, so a receiver of that type does not exclude a call. A receiver declared
   with a type that can hold a value of any type never excludes a site (the basis ``receiver `k`
   has type `any` `` is not given): TypeScript `any`, `unknown`, and `object` (a check narrows the
@@ -392,7 +395,7 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   expression body (`(e) => e()`) and a loop body without braces keep the rule above.
   Reach sections: `reach_sections` in `reference_report/sections.rs` adds up to six sections
   after the sites are labeled: `Overrides`, `Overrides of`, `Constructions`, `Variant uses`,
-  `Registrations`, and `Tests that call it`, where each test has a run command from
+  `Registrations`, and `Tests that call or use it`, where each test has a run command from
   `test_commands.rs` or no command when no runner can run it alone. They print after the site
   groups and before the text-only lines, each only when it has rows. They never change a site's
   label or basis or a count, so the reach gate scores the same labels. `limit` caps the listed
@@ -433,7 +436,7 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   `conftest.py` that defines it. A fixture that takes that fixture is replaced by the tests that
   take it in turn. A setup member in another test framework, such as an xUnit test-class
   constructor or a Python `setUp` or `tearDown` method, is replaced by the tests of its class. A
-  fixture or setup member with no such tests stays, labelled `fixture` or `setup`. Every test row is a test that the call graph reaches: a caller, a fixture user, a test of a setup member's class, or a test that reaches the target through a constructor. When the walk finds no test for one symbol, the rows are the `Tests that call it` of its callers report, with the reason `calls it (find_references)`, or `calls it by name only (find_references)` when only `likely` sites with the basis `name only` reach the test; a target that is itself a test is then its own row, `the target is a test`. The index guesses no test from a shared word in a name, a stem in a file name, or an error handler, and it adds no `possible` row for a call that the runtime makes. When no test is found and a caller lies past the depth (the walk looks one level further, up to the largest depth, 5), the answer says ``No test reaches it within depth N; a larger `depth` may find some. Otherwise run the full test suite.``; otherwise it says `No test reaches it through the index. Run the full test suite.`; a list that `limit` or the 200-row discovery ceiling cut says neither. For a file target, the tests in one test file that reach the target only through a constructor fold into one row for that file, `constructor-only callers (N targets)`. When `limit` cuts a list,
+  fixture or setup member with no such tests stays, labelled `fixture` or `setup`. Every test row is a test that the call graph reaches: a caller, a fixture user, a test of a setup member's class, or a test that reaches the target through a constructor. When the walk finds no test for one symbol, the rows are the `Tests that call or use it` of its callers report, with the reason `calls it (find_references)`, or `calls it by name only (find_references)` when only `likely` sites with the basis `name only` reach the test; a target that is itself a test is then its own row, `the target is a test`. The index guesses no test from a shared word in a name, a stem in a file name, or an error handler, and it adds no `possible` row for a call that the runtime makes. When no test is found and a caller lies past the depth (the walk looks one level further, up to the largest depth, 5), the answer says ``No test reaches it within depth N; a larger `depth` may find some. Otherwise run the full test suite.``; otherwise it says `No test reaches it through the index. Run the full test suite.`; a list that `limit` or the 200-row discovery ceiling cut says neither. For a file target, the tests in one test file that reach the target only through a constructor fold into one row for that file, `constructor-only callers (N targets)`. When `limit` cuts a list,
   the answer says how many rows it shows of how many it found.
 - Edit check: `check_edit` (CLI `code-kb check [--base REV]`, `edit_check_op` in `ops.rs`) compares the
   working tree with a base revision (the given `base`, else the session base, else `HEAD`) and lists each
@@ -445,6 +448,9 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   that overload and is no site of a parameter or signature change. Custom type namespaces stay
   distinct; only explicit framework aliases such as `System.String` normalize to keywords. With
   typed overload evidence, an accepted argument count alone never drops an unbound call.
+  A Python parameter change that adds required keyword-only names checks the call's explicit
+  keywords before accepting its count; missing names keep the site outside the diff, while
+  ambiguous source or `**kwargs` that could supply them stays unresolved.
   The base symbols come from a `julie-extract scan` of the base content of the changed files into
   `<root>/.code-kb/check/<pid>/`, removed after the call; the main index changes only by the refresh
   of the changed files. A check covers at most 200 files and 30 symbols and starts no step after 20 s, and the

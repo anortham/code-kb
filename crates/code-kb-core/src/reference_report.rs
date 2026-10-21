@@ -376,7 +376,8 @@ pub(crate) fn overload_group(
 
 const DEFINITION_BY_ID_SQL: &str =
     "SELECT s.symbol_id, s.name, s.kind, s.language, s.path, s.start_line,
-            s.body_start_line, s.parent_symbol_id, par.name, par.kind, COALESCE(s.signature, '')
+            s.body_start_line, s.parent_symbol_id, par.name, par.kind, COALESCE(s.signature, ''),
+            COALESCE(par.signature, '')
      FROM symbols s LEFT JOIN symbols par ON par.symbol_id = s.parent_symbol_id
      WHERE s.symbol_id = ?1";
 
@@ -1012,6 +1013,7 @@ struct Definition {
     kind: String,
     language: String,
     signature: String,
+    owner_signature: String,
     /// The object a JavaScript function is assigned on (`res.redirect = function`).
     class_name: Option<String>,
     top_level: bool,
@@ -1033,6 +1035,30 @@ impl Definition {
             self.kind.as_str(),
             "field" | "constant" | "variable" | "property" | "parameter" | "enum_member"
         )
+    }
+
+    fn is_python_class_annotation_without_value(&self) -> bool {
+        if self.language != "python"
+            || self.owner_name.is_none()
+            || !matches!(self.kind.as_str(), "field" | "variable" | "constant")
+            || arity::default_start(&self.signature).is_some()
+        {
+            return false;
+        }
+        let owner_signature = self.owner_signature.as_str();
+        let dataclass = owner_signature.split_whitespace().any(|part| {
+            let Some(decorator) = part.strip_prefix('@') else {
+                return false;
+            };
+            let name = decorator
+                .split_once('(')
+                .map_or(decorator, |(name, _)| name);
+            name.rsplit('.').next() == Some("dataclass")
+        });
+        let typed_dict = owner_signature
+            .split(|c: char| !c.is_alphanumeric() && c != '_')
+            .any(|word| word == "TypedDict");
+        !dataclass && !typed_dict
     }
 
     /// The module source and imported name when this is a JavaScript variable that a
@@ -1282,6 +1308,7 @@ impl<'a> Accounting<'a> {
             let parent_id: Option<String> = row.get(7)?;
             let parent_kind: Option<String> = row.get(9)?;
             let parent_name: Option<String> = row.get(8)?;
+            let owner_signature: String = row.get(15)?;
             let class_name: Option<String> = row.get(13)?;
             let in_function = parent_kind
                 .as_deref()
@@ -1314,7 +1341,7 @@ impl<'a> Accounting<'a> {
                 && (parent_id.is_none() || in_function);
             let record_component = language == "java"
                 && kind == "property"
-                && is_record(&row.get::<_, String>(15)?)
+                && is_record(&owner_signature)
                 && !signature.split_whitespace().any(|word| word == "static");
             let function_typed = language == "rust"
                 && matches!(kind.as_str(), "variable" | "constant")
@@ -1344,6 +1371,7 @@ impl<'a> Accounting<'a> {
                 kind,
                 language,
                 signature,
+                owner_signature,
                 class_name,
                 callable,
                 free,
@@ -1603,6 +1631,8 @@ impl<'a> Accounting<'a> {
                         || row.language == "java" && !row.can_reach(other)
                         || row.reads_a_module(&other.kind)
                         || row.is_bare_use() && other.is_property_method()
+                        || row.language == "python"
+                            && other.is_python_class_annotation_without_value()
                     {
                         kept.push(index);
                         continue;
@@ -2724,6 +2754,7 @@ impl<'a> Accounting<'a> {
                     kind: row.get(2)?,
                     language: row.get(3)?,
                     signature: row.get(10)?,
+                    owner_signature: row.get(11)?,
                     class_name: None,
                     top_level: row.get::<_, Option<String>>(7)?.is_none(),
                     callable: true,
@@ -2742,6 +2773,13 @@ impl<'a> Accounting<'a> {
             Some(parent) => crate::queries::get_symbol_by_id(self.conn, parent)?,
             None => None,
         };
+        let owner_signature = owner
+            .as_ref()
+            .and_then(|owner| owner.signature.clone())
+            .unwrap_or_default();
+        let owner_name = owner
+            .filter(|owner| CLASS_LIKE_KINDS.contains(&owner.kind.as_str()))
+            .map(|owner| owner.name);
         Ok(Definition {
             symbol_id: symbol.symbol_id.clone(),
             name: symbol.name.clone(),
@@ -2749,14 +2787,13 @@ impl<'a> Accounting<'a> {
             start_line: symbol.start_line,
             decorated_start_line: None,
             body_start_line: symbol.body_start_line,
-            owner_name: owner
-                .filter(|owner| CLASS_LIKE_KINDS.contains(&owner.kind.as_str()))
-                .map(|owner| owner.name),
+            owner_name,
             local: false,
             scope: None,
             kind: symbol.kind.clone(),
             language: symbol.language.clone(),
             signature: String::new(),
+            owner_signature,
             class_name: assigned_object(symbol),
             top_level: symbol.parent_symbol_id.is_none(),
             callable: true,

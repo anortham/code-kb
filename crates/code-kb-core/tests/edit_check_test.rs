@@ -156,6 +156,117 @@ fn a_call_that_already_passes_the_new_count_is_not_listed() {
 }
 
 #[test]
+fn a_python_call_omitting_a_new_required_keyword_only_parameter_is_listed() {
+    let repo = committed_repo(&[
+        ("a.py", "def render(default=True):\n    return default\n"),
+        (
+            "b.py",
+            "from a import render\n\n\ndef old():\n    return render(False)\n",
+        ),
+    ]);
+    write(
+        &repo.root,
+        "a.py",
+        "def render(default=True, *, strict):\n    return default\n",
+    );
+    let text = text_of(&repo);
+    assert_has(&text, "function `render` (a.py): parameters 0-1 → 1-2");
+    assert_has(&text, "b.py:5");
+    assert_has(&text, "strict");
+}
+
+#[test]
+fn a_touched_python_call_that_still_omits_a_new_required_keyword_is_not_in_the_diff() {
+    let repo = committed_repo(&[
+        ("a.py", "def render(default=True):\n    return default\n"),
+        (
+            "b.py",
+            "from a import render\n\n\ndef old():\n    return render(False)\n",
+        ),
+    ]);
+    write(
+        &repo.root,
+        "a.py",
+        "def render(default=True, *, strict):\n    return default\n",
+    );
+    write(
+        &repo.root,
+        "b.py",
+        "from a import render\n\n\ndef old():\n    return render(default=False)\n",
+    );
+    let text = text_of(&repo);
+    assert_lacks(&text, "In your diff");
+    assert_has(&text, "Not in your diff");
+    assert_has(&text, "missing required keyword: strict");
+}
+
+#[test]
+fn a_python_call_that_names_a_new_required_keyword_only_parameter_is_not_listed() {
+    let repo = committed_repo(&[
+        ("a.py", "def render(default=True):\n    return default\n"),
+        (
+            "b.py",
+            "from a import render\n\n\ndef old():\n    return render(False, strict=True)\n",
+        ),
+    ]);
+    write(
+        &repo.root,
+        "a.py",
+        "def render(default=True, *, strict):\n    return default\n",
+    );
+    let check = run_check(&repo, None);
+    let change = &check.changes[0];
+    assert!(change.in_diff.is_empty());
+    assert!(change.proven.is_empty());
+    assert!(change.likely.is_empty());
+    assert_eq!(change.unresolved, 0);
+}
+
+#[test]
+fn a_python_optional_keyword_only_parameter_does_not_list_positional_calls() {
+    let repo = committed_repo(&[
+        ("a.py", "def render(default=True):\n    return default\n"),
+        (
+            "b.py",
+            "from a import render\n\n\ndef old():\n    return render(False)\n",
+        ),
+    ]);
+    write(
+        &repo.root,
+        "a.py",
+        "def render(default=True, *, strict=True):\n    return default\n",
+    );
+    let check = run_check(&repo, None);
+    let change = &check.changes[0];
+    assert!(change.in_diff.is_empty());
+    assert!(change.proven.is_empty());
+    assert!(change.likely.is_empty());
+    assert_eq!(change.unresolved, 0);
+}
+
+#[test]
+fn a_python_unknown_keyword_spread_does_not_make_a_definite_missing_keyword_verdict() {
+    let repo = committed_repo(&[
+        ("a.py", "def render(default=True):\n    return default\n"),
+        (
+            "b.py",
+            "from a import render\n\n\ndef old(kwargs):\n    return render(False, **kwargs)\n",
+        ),
+    ]);
+    write(
+        &repo.root,
+        "a.py",
+        "def render(default=True, *, strict):\n    return default\n",
+    );
+    let check = run_check(&repo, None);
+    let change = &check.changes[0];
+    assert!(change.in_diff.is_empty());
+    assert!(change.proven.is_empty());
+    assert!(change.likely.is_empty());
+    assert_eq!(change.unresolved, 1);
+}
+
+#[test]
 fn a_rust_struct_that_gains_a_field_lists_the_construction_the_diff_did_not_reach() {
     let repo = committed_repo(&[
         ("Cargo.toml", CARGO_TOML),

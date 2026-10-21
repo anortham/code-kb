@@ -737,7 +737,7 @@ pub fn format_context_slice(slice: &ContextSlice) -> String {
         out.push_str("These tests call, use, or name this symbol; blast_radius also lists tests that can reach it through callers.\n\n");
     } else {
         out.push_str(
-            "### Related Tests:\nNo test calls, uses, or names this symbol; blast_radius lists tests that can reach it through callers.\n",
+            "### Related Tests:\nNo related test was found in the index; blast_radius may find tests through callers.\n",
         );
     }
 
@@ -1173,7 +1173,7 @@ fn test_section(rows: &[CallingTest], limit: usize) -> String {
     if rows.is_empty() {
         return String::new();
     }
-    let mut out = format!("Tests that call it ({}):\n", rows.len());
+    let mut out = format!("Tests that call or use it ({}):\n", rows.len());
     let shown = limit.min(rows.len());
     for row in &rows[..shown] {
         let run = row
@@ -3315,7 +3315,7 @@ mod tests {
         let text = format_context_slice(&sample_context_slice());
 
         assert!(
-            text.ends_with("### Related Tests:\nNo test calls, uses, or names this symbol; blast_radius lists tests that can reach it through callers.\n"),
+            text.ends_with("### Related Tests:\nNo related test was found in the index; blast_radius may find tests through callers.\n"),
             "{text}"
         );
     }
