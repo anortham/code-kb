@@ -28,7 +28,7 @@ pub enum SyncError {
     TargetNotIndexed(String),
 }
 
-pub const PINNED_JULIE_VERSION: &str = "3.9.0";
+pub const PINNED_JULIE_VERSION: &str = "3.9.1";
 
 /// Extraction level code-kb asks for on a new artifact: the call and variable-reference
 /// identifiers with their call metadata, without the annotations and complexity metrics of `full`,
