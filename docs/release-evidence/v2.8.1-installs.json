@@ -1,0 +1,179 @@
+{
+  "version": "2.8.1",
+  "source_commit": "c0668601df8e70ce7d33a2e55054fa63dc75171a",
+  "working_directory": "/tmp",
+  "install_roots": {
+    "cargo_install": "/tmp/code-kb-2.8.1-publish-smoke-lhlmw2dk/cargo-install-root",
+    "cargo_binstall": "/tmp/code-kb-2.8.1-publish-smoke-lhlmw2dk/cargo-binstall-root"
+  },
+  "global_extractor": {
+    "path_on_path": "/home/murphy/source/code-kb/.tools/julie-extract",
+    "expected_path": "/home/murphy/.local/bin/julie-extract",
+    "sha256": "777fe822a0eddbdfd9f357c018c7a1a881907bedc698f913736a30ffc0ce0d12",
+    "expected_sha256": "777fe822a0eddbdfd9f357c018c7a1a881907bedc698f913736a30ffc0ce0d12",
+    "version_command": {
+      "argv": [
+        "/home/murphy/.local/bin/julie-extract",
+        "--version"
+      ],
+      "cwd": "/tmp",
+      "exit_code": 0,
+      "elapsed_seconds": 0.002,
+      "log": "/tmp/code-kb-2.8.1-publish-smoke-lhlmw2dk/logs/global-julie-version.log",
+      "output": "julie-extract 3.9.1\n"
+    },
+    "valid": true
+  },
+  "public_crate_vcs": [
+    {
+      "crate": "code-kb-core",
+      "version": "2.8.1",
+      "download_url": "https://crates.io/api/v1/crates/code-kb-core/2.8.1/download",
+      "archive_bytes": 539975,
+      "cargo_vcs_info": {
+        "git": {
+          "sha1": "c0668601df8e70ce7d33a2e55054fa63dc75171a"
+        },
+        "path_in_vcs": "crates/code-kb-core"
+      },
+      "expected_sha": "c0668601df8e70ce7d33a2e55054fa63dc75171a",
+      "valid": true
+    },
+    {
+      "crate": "code-kb-cli",
+      "version": "2.8.1",
+      "download_url": "https://crates.io/api/v1/crates/code-kb-cli/2.8.1/download",
+      "archive_bytes": 110414,
+      "cargo_vcs_info": {
+        "git": {
+          "sha1": "c0668601df8e70ce7d33a2e55054fa63dc75171a"
+        },
+        "path_in_vcs": "crates/code-kb-cli"
+      },
+      "expected_sha": "c0668601df8e70ce7d33a2e55054fa63dc75171a",
+      "valid": true
+    }
+  ],
+  "valid": true,
+  "install_checks": [
+    {
+      "name": "cargo_install",
+      "source": "crates.io registry (cargo install from /tmp, with no --path or --git source)",
+      "strategy": "cargo install code-kb-cli --version 2.8.1 --locked",
+      "binary_sha256": "c0367e72bf61b095d86d479e9b3f2b4c4047cbd76bd1ec1ac7563cedaa5dd638",
+      "binary_sha256_valid": true,
+      "version_valid": true,
+      "query_valid": true,
+      "query_environment": {
+        "JULIE_EXTRACT_BIN": "unset",
+        "CODE_KB_BIN": "unset",
+        "CODE_KB_NO_TELEMETRY": "1",
+        "PATH_resolves_julie_to": "/home/murphy/source/code-kb/.tools/julie-extract"
+      },
+      "install": {
+        "argv": [
+          "cargo",
+          "install",
+          "code-kb-cli",
+          "--version",
+          "2.8.1",
+          "--locked",
+          "--root",
+          "/tmp/code-kb-2.8.1-publish-smoke-lhlmw2dk/cargo-install-root"
+        ],
+        "cwd": "/tmp",
+        "exit_code": 0,
+        "elapsed_seconds": 49.438,
+        "log": "/tmp/code-kb-2.8.1-publish-smoke-lhlmw2dk/logs/cargo_install-install.log"
+      },
+      "version": {
+        "argv": [
+          "/tmp/code-kb-2.8.1-publish-smoke-lhlmw2dk/cargo-install-root/bin/code-kb",
+          "--version"
+        ],
+        "cwd": "/tmp",
+        "exit_code": 0,
+        "elapsed_seconds": 0.001,
+        "log": "/tmp/code-kb-2.8.1-publish-smoke-lhlmw2dk/logs/cargo_install-version.log",
+        "output": "code-kb 2.8.1\n"
+      },
+      "query": {
+        "argv": [
+          "/tmp/code-kb-2.8.1-publish-smoke-lhlmw2dk/cargo-install-root/bin/code-kb",
+          "--root",
+          "/home/murphy/source/code-kb/target/release-corpus/corpus/cobra",
+          "lookup",
+          "Command",
+          "--limit",
+          "1"
+        ],
+        "cwd": "/tmp",
+        "exit_code": 0,
+        "elapsed_seconds": 0.013,
+        "log": "/tmp/code-kb-2.8.1-publish-smoke-lhlmw2dk/logs/cargo_install-lookup-cobra-command.log",
+        "output": "Found 1 symbols matching \"Command\":\n\n- struct `Command` [command.go:54-260] id=1b7b87559b1d857968e7964d6c8099a7\n  Signature: type Command struct\n  Doc: Command is just that, a command for your application.\n\n[Showing 1 results (limit reached); increase limit to see more.]\n"
+      }
+    },
+    {
+      "name": "cargo_binstall",
+      "source": "GitHub release archive via crate metadata only; the strategy restricts fallback compilation",
+      "strategy": "cargo binstall code-kb-cli --version 2.8.1 --no-confirm --strategies crate-meta-data --disable-telemetry",
+      "binary_sha256": "304f2cc01c8d601f2264f2e86d24506d28eecba06f5c1b50f59576465e4c86e2",
+      "binary_sha256_valid": true,
+      "version_valid": true,
+      "query_valid": true,
+      "query_environment": {
+        "JULIE_EXTRACT_BIN": "unset",
+        "CODE_KB_BIN": "unset",
+        "CODE_KB_NO_TELEMETRY": "1",
+        "PATH_resolves_julie_to": "/home/murphy/source/code-kb/.tools/julie-extract"
+      },
+      "install": {
+        "argv": [
+          "cargo",
+          "binstall",
+          "code-kb-cli",
+          "--version",
+          "2.8.1",
+          "--no-confirm",
+          "--root",
+          "/tmp/code-kb-2.8.1-publish-smoke-lhlmw2dk/cargo-binstall-root",
+          "--strategies",
+          "crate-meta-data",
+          "--disable-telemetry"
+        ],
+        "cwd": "/tmp",
+        "exit_code": 0,
+        "elapsed_seconds": 3.883,
+        "log": "/tmp/code-kb-2.8.1-publish-smoke-lhlmw2dk/logs/cargo_binstall-install.log"
+      },
+      "version": {
+        "argv": [
+          "/tmp/code-kb-2.8.1-publish-smoke-lhlmw2dk/cargo-binstall-root/bin/code-kb",
+          "--version"
+        ],
+        "cwd": "/tmp",
+        "exit_code": 0,
+        "elapsed_seconds": 0.001,
+        "log": "/tmp/code-kb-2.8.1-publish-smoke-lhlmw2dk/logs/cargo_binstall-version.log",
+        "output": "code-kb 2.8.1\n"
+      },
+      "query": {
+        "argv": [
+          "/tmp/code-kb-2.8.1-publish-smoke-lhlmw2dk/cargo-binstall-root/bin/code-kb",
+          "--root",
+          "/home/murphy/source/code-kb/target/release-corpus/corpus/cobra",
+          "lookup",
+          "Command",
+          "--limit",
+          "1"
+        ],
+        "cwd": "/tmp",
+        "exit_code": 0,
+        "elapsed_seconds": 0.017,
+        "log": "/tmp/code-kb-2.8.1-publish-smoke-lhlmw2dk/logs/cargo_binstall-lookup-cobra-command.log",
+        "output": "Found 1 symbols matching \"Command\":\n\n- struct `Command` [command.go:54-260] id=1b7b87559b1d857968e7964d6c8099a7\n  Signature: type Command struct\n  Doc: Command is just that, a command for your application.\n\n[Showing 1 results (limit reached); increase limit to see more.]\n"
+      }
+    }
+  ]
+}

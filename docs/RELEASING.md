@@ -2,6 +2,10 @@
 
 This guide details the end-to-end release process for `code-kb`. Any agent or maintainer can follow these reproducible steps to publish a new release.
 
+Current published release: [v2.8.1](https://github.com/anortham/code-kb/releases/tag/v2.8.1),
+bundling Julie 3.9.1. See the [release notes](release-notes/v2.8.1.md) and
+[publication evidence](release-evidence/2026-10-21-v2.8.1-release.md).
+
 ---
 
 ## 1. Release Architecture & Principles

@@ -1,0 +1,448 @@
+{
+  "created_at_utc": "2026-10-21T15:49:26Z",
+  "repository": "anortham/code-kb",
+  "source": {
+    "branch": "main",
+    "commit": "c0668601df8e70ce7d33a2e55054fa63dc75171a",
+    "dirty_state": "clean per lead status report; no tracked edits made by this task"
+  },
+  "release": {
+    "tag": "v2.8.1",
+    "version": "2.8.1",
+    "url": "https://github.com/anortham/code-kb/releases/tag/v2.8.1",
+    "release_id": 419750043,
+    "tag_object": "f5a485a2ad8d353f737f36088c99d5937a9ee270",
+    "tag_target_commit": "c0668601df8e70ce7d33a2e55054fa63dc75171a",
+    "asset_metadata_stable_after_download": true,
+    "assets": [
+      {
+        "archive": "code-kb-v2.8.1-x86_64-unknown-linux-gnu.tar.gz",
+        "target": "x86_64-unknown-linux-gnu",
+        "size_bytes": 19324424,
+        "sha256": "26c900b8e7b7d6c30bb7a7b47cbb3af383e15a2b57e033b70118e01fbaa62fcb",
+        "github_api_digest": "sha256:26c900b8e7b7d6c30bb7a7b47cbb3af383e15a2b57e033b70118e01fbaa62fcb",
+        "sidecar": "code-kb-v2.8.1-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "sidecar_record": "26c900b8e7b7d6c30bb7a7b47cbb3af383e15a2b57e033b70118e01fbaa62fcb  code-kb-v2.8.1-x86_64-unknown-linux-gnu.tar.gz",
+        "sidecar_sha256": "b5682b9f559d2e262742a6a4ab4ca440049d8c0074adaf6ff71aa59468257a08",
+        "sidecar_github_api_digest": "sha256:b5682b9f559d2e262742a6a4ab4ca440049d8c0074adaf6ff71aa59468257a08",
+        "binaries": [
+          {
+            "member": "code-kb",
+            "binary_sha256": "304f2cc01c8d601f2264f2e86d24506d28eecba06f5c1b50f59576465e4c86e2",
+            "version_marker": "2.8.1",
+            "runtime_version": "code-kb 2.8.1"
+          },
+          {
+            "member": "julie-extract",
+            "binary_sha256": "777fe822a0eddbdfd9f357c018c7a1a881907bedc698f913736a30ffc0ce0d12",
+            "version_marker": "3.9.1",
+            "runtime_version": "julie-extract 3.9.1"
+          }
+        ]
+      },
+      {
+        "archive": "code-kb-v2.8.1-aarch64-unknown-linux-gnu.tar.gz",
+        "target": "aarch64-unknown-linux-gnu",
+        "size_bytes": 18750727,
+        "sha256": "9b0b6e3b5ef068700a3d1b550b3796dae7e75d741d84ca2438922e7281493e4c",
+        "github_api_digest": "sha256:9b0b6e3b5ef068700a3d1b550b3796dae7e75d741d84ca2438922e7281493e4c",
+        "sidecar": "code-kb-v2.8.1-aarch64-unknown-linux-gnu.tar.gz.sha256",
+        "sidecar_record": "9b0b6e3b5ef068700a3d1b550b3796dae7e75d741d84ca2438922e7281493e4c  code-kb-v2.8.1-aarch64-unknown-linux-gnu.tar.gz",
+        "sidecar_sha256": "3005604d11d5f4cada9cb0b94cba2598da2a1946756828504c528ef1ed53a79a",
+        "sidecar_github_api_digest": "sha256:3005604d11d5f4cada9cb0b94cba2598da2a1946756828504c528ef1ed53a79a",
+        "binaries": [
+          {
+            "member": "code-kb",
+            "binary_sha256": "0238a41951ee069509f4077a2d0a3abf12289c3e18357de8b13a752eaaeb5cba",
+            "version_marker": "2.8.1",
+            "runtime_version": "not run on this host"
+          },
+          {
+            "member": "julie-extract",
+            "binary_sha256": "a47de532c6d2095702c657976c73f9eddbd7c7a50cb696ff88e45ec3fe6b7d7e",
+            "version_marker": "3.9.1",
+            "runtime_version": "not run on this host"
+          }
+        ]
+      },
+      {
+        "archive": "code-kb-v2.8.1-aarch64-apple-darwin.tar.gz",
+        "target": "aarch64-apple-darwin",
+        "size_bytes": 18625630,
+        "sha256": "aeaf3609f62afb121acc1f280aa726353c4daa6ae2167f3809075f42a02fb119",
+        "github_api_digest": "sha256:aeaf3609f62afb121acc1f280aa726353c4daa6ae2167f3809075f42a02fb119",
+        "sidecar": "code-kb-v2.8.1-aarch64-apple-darwin.tar.gz.sha256",
+        "sidecar_record": "aeaf3609f62afb121acc1f280aa726353c4daa6ae2167f3809075f42a02fb119  code-kb-v2.8.1-aarch64-apple-darwin.tar.gz",
+        "sidecar_sha256": "b9302a57386c770758081e577e982033eee2ccb37378d782b902c214033d5092",
+        "sidecar_github_api_digest": "sha256:b9302a57386c770758081e577e982033eee2ccb37378d782b902c214033d5092",
+        "binaries": [
+          {
+            "member": "code-kb",
+            "binary_sha256": "527e2be1d611ecca151dbd242285db32695383e84633abdebbdf5ecfde6f60a6",
+            "version_marker": "2.8.1",
+            "runtime_version": "not run on this host"
+          },
+          {
+            "member": "julie-extract",
+            "binary_sha256": "838e8adf363aed24fc8fbfa1e34d4736c17f34055bf1f7775c2430b9733862d7",
+            "version_marker": "3.9.1",
+            "runtime_version": "not run on this host"
+          }
+        ]
+      },
+      {
+        "archive": "code-kb-v2.8.1-x86_64-apple-darwin.tar.gz",
+        "target": "x86_64-apple-darwin",
+        "size_bytes": 18811858,
+        "sha256": "a68bfb91f376fcdef2f03f0bade5339688c397cf61a9bef2b8bffe145f9836ca",
+        "github_api_digest": "sha256:a68bfb91f376fcdef2f03f0bade5339688c397cf61a9bef2b8bffe145f9836ca",
+        "sidecar": "code-kb-v2.8.1-x86_64-apple-darwin.tar.gz.sha256",
+        "sidecar_record": "a68bfb91f376fcdef2f03f0bade5339688c397cf61a9bef2b8bffe145f9836ca  code-kb-v2.8.1-x86_64-apple-darwin.tar.gz",
+        "sidecar_sha256": "118258f5111a39c127959168515a46e901aef74a7cf8ef985245160f14e1d99e",
+        "sidecar_github_api_digest": "sha256:118258f5111a39c127959168515a46e901aef74a7cf8ef985245160f14e1d99e",
+        "binaries": [
+          {
+            "member": "code-kb",
+            "binary_sha256": "6596dd61d363a2d342cba4677e1d1ffd65766f31e7f7a7caeec1259bcf95f598",
+            "version_marker": "2.8.1",
+            "runtime_version": "not run on this host"
+          },
+          {
+            "member": "julie-extract",
+            "binary_sha256": "59d62090da7940da00bd7410587e6f3e278a80b08be8abc5439bf2cfa5d8421b",
+            "version_marker": "3.9.1",
+            "runtime_version": "not run on this host"
+          }
+        ]
+      },
+      {
+        "archive": "code-kb-v2.8.1-x86_64-pc-windows-msvc.zip",
+        "target": "x86_64-pc-windows-msvc",
+        "size_bytes": 17776897,
+        "sha256": "f7ecd2e67a17633043031068550bb2e27cb63c8572d524a7e0941ddc917a5559",
+        "github_api_digest": "sha256:f7ecd2e67a17633043031068550bb2e27cb63c8572d524a7e0941ddc917a5559",
+        "sidecar": "code-kb-v2.8.1-x86_64-pc-windows-msvc.zip.sha256",
+        "sidecar_record": "f7ecd2e67a17633043031068550bb2e27cb63c8572d524a7e0941ddc917a5559 *code-kb-v2.8.1-x86_64-pc-windows-msvc.zip",
+        "sidecar_sha256": "c99e67145c042e55c5655af938190900e45c0bb2b4a78200c8f3bd69115a3f23",
+        "sidecar_github_api_digest": "sha256:c99e67145c042e55c5655af938190900e45c0bb2b4a78200c8f3bd69115a3f23",
+        "binaries": [
+          {
+            "member": "code-kb.exe",
+            "binary_sha256": "e61eb1e91b5a40438c33791210cb49bd5c9094e7053de7d18577695aba9e79a4",
+            "version_marker": "2.8.1",
+            "runtime_version": "not run on this host"
+          },
+          {
+            "member": "julie-extract.exe",
+            "binary_sha256": "e9eb3fc6e08feaa20d8758a81fd0746683fe08ad79daada36ad71b0dca8e1e79",
+            "version_marker": "3.9.1",
+            "runtime_version": "not run on this host"
+          }
+        ]
+      },
+      {
+        "archive": "code-kb-v2.8.1-aarch64-pc-windows-msvc.zip",
+        "target": "aarch64-pc-windows-msvc",
+        "size_bytes": 16867297,
+        "sha256": "7de14a904637566f2a8d29f3a10751328bbb2b5d940ad634b82d0d3b1a68f834",
+        "github_api_digest": "sha256:7de14a904637566f2a8d29f3a10751328bbb2b5d940ad634b82d0d3b1a68f834",
+        "sidecar": "code-kb-v2.8.1-aarch64-pc-windows-msvc.zip.sha256",
+        "sidecar_record": "7de14a904637566f2a8d29f3a10751328bbb2b5d940ad634b82d0d3b1a68f834 *code-kb-v2.8.1-aarch64-pc-windows-msvc.zip",
+        "sidecar_sha256": "8970f37c2df4a6b7c58ac79bbaf32cd9c2ad5a40c223b62759edc1d95f2a5624",
+        "sidecar_github_api_digest": "sha256:8970f37c2df4a6b7c58ac79bbaf32cd9c2ad5a40c223b62759edc1d95f2a5624",
+        "binaries": [
+          {
+            "member": "code-kb.exe",
+            "binary_sha256": "341d5776aaec4ddfa14dc03442c6f55e4a133682e610378ddfccc4624bbfe972",
+            "version_marker": "2.8.1",
+            "runtime_version": "not run on this host"
+          },
+          {
+            "member": "julie-extract.exe",
+            "binary_sha256": "59d06d95f378e7ebe5244553ad8b4fd63dbc933c931b8a875032930967a8c931",
+            "version_marker": "3.9.1",
+            "runtime_version": "not run on this host"
+          }
+        ]
+      }
+    ],
+    "published_asset_metadata_stable_after_final_recheck": true
+  },
+  "release_workflow": {
+    "run_id": 39626508187,
+    "url": "https://github.com/anortham/code-kb/actions/runs/39626508187",
+    "event": "push",
+    "branch": "v2.8.1",
+    "sha": "c0668601df8e70ce7d33a2e55054fa63dc75171a",
+    "status": "completed",
+    "conclusion": "success",
+    "matching_runs_for_tag_and_sha": 1,
+    "jobs": [
+      {
+        "id": 119313042199,
+        "name": "Verify release commit",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-10-21T15:40:35Z"
+      },
+      {
+        "id": 119317670966,
+        "name": "Build x86_64-unknown-linux-gnu",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-10-21T15:43:16Z"
+      },
+      {
+        "id": 119317670993,
+        "name": "Build aarch64-apple-darwin",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-10-21T15:44:32Z"
+      },
+      {
+        "id": 119317671048,
+        "name": "Build x86_64-pc-windows-msvc",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-10-21T15:45:25Z"
+      },
+      {
+        "id": 119317671162,
+        "name": "Build aarch64-pc-windows-msvc",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-10-21T15:44:40Z"
+      },
+      {
+        "id": 119317671284,
+        "name": "Build aarch64-unknown-linux-gnu",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-10-21T15:43:11Z"
+      },
+      {
+        "id": 119317671465,
+        "name": "Build x86_64-apple-darwin",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-10-21T15:47:27Z"
+      },
+      {
+        "id": 119321275755,
+        "name": "Create GitHub Release",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-10-21T15:47:48Z"
+      }
+    ],
+    "matching_runs_after_final_recheck": 1
+  },
+  "main_ci": {
+    "run_id": 39626508079,
+    "url": "https://github.com/anortham/code-kb/actions/runs/39626508079",
+    "status": "completed",
+    "conclusion": "success",
+    "sha": "c0668601df8e70ce7d33a2e55054fa63dc75171a",
+    "jobs": [
+      {
+        "id": 119313041305,
+        "name": "Lint & Style",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-10-21T15:32:51Z"
+      },
+      {
+        "id": 119313041445,
+        "name": "Test windows-11-arm",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-10-21T15:40:28Z"
+      },
+      {
+        "id": 119313041524,
+        "name": "Test ubuntu-latest",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-10-21T15:35:13Z"
+      },
+      {
+        "id": 119313041635,
+        "name": "Test windows-latest",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-10-21T15:37:49Z"
+      },
+      {
+        "id": 119313041694,
+        "name": "Test macos-latest",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-10-21T15:36:38Z"
+      },
+      {
+        "id": 119313041755,
+        "name": "Test ubuntu-24.04-arm",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-10-21T15:34:55Z"
+      }
+    ]
+  },
+  "verification": {
+    "helper": "/tmp/release-verify/verify_release_artifacts.py",
+    "helper_sha256": "3360b01599d336f30c794baa4fd0572b9c8e1a157754be057462fa02cc184d82",
+    "report": "/tmp/release-verify/code-kb-v2.8.1-verification.json",
+    "failures": [],
+    "verified_targets": 6,
+    "checks": [
+      "archive API digests",
+      "archive sidecars",
+      "embedded versions",
+      "binary formats and target machines"
+    ],
+    "targets": [
+      {
+        "archive": "code-kb-v2.8.1-x86_64-unknown-linux-gnu.tar.gz",
+        "archive_sha256": "26c900b8e7b7d6c30bb7a7b47cbb3af383e15a2b57e033b70118e01fbaa62fcb",
+        "target": "x86_64-unknown-linux-gnu",
+        "binaries": [
+          {
+            "member": "code-kb",
+            "binary_sha256": "304f2cc01c8d601f2264f2e86d24506d28eecba06f5c1b50f59576465e4c86e2",
+            "version_marker": "2.8.1",
+            "runtime_version": "code-kb 2.8.1"
+          },
+          {
+            "member": "julie-extract",
+            "binary_sha256": "777fe822a0eddbdfd9f357c018c7a1a881907bedc698f913736a30ffc0ce0d12",
+            "version_marker": "3.9.1",
+            "runtime_version": "julie-extract 3.9.1"
+          }
+        ]
+      },
+      {
+        "archive": "code-kb-v2.8.1-aarch64-unknown-linux-gnu.tar.gz",
+        "archive_sha256": "9b0b6e3b5ef068700a3d1b550b3796dae7e75d741d84ca2438922e7281493e4c",
+        "target": "aarch64-unknown-linux-gnu",
+        "binaries": [
+          {
+            "member": "code-kb",
+            "binary_sha256": "0238a41951ee069509f4077a2d0a3abf12289c3e18357de8b13a752eaaeb5cba",
+            "version_marker": "2.8.1",
+            "runtime_version": "not run on this host"
+          },
+          {
+            "member": "julie-extract",
+            "binary_sha256": "a47de532c6d2095702c657976c73f9eddbd7c7a50cb696ff88e45ec3fe6b7d7e",
+            "version_marker": "3.9.1",
+            "runtime_version": "not run on this host"
+          }
+        ]
+      },
+      {
+        "archive": "code-kb-v2.8.1-aarch64-apple-darwin.tar.gz",
+        "archive_sha256": "aeaf3609f62afb121acc1f280aa726353c4daa6ae2167f3809075f42a02fb119",
+        "target": "aarch64-apple-darwin",
+        "binaries": [
+          {
+            "member": "code-kb",
+            "binary_sha256": "527e2be1d611ecca151dbd242285db32695383e84633abdebbdf5ecfde6f60a6",
+            "version_marker": "2.8.1",
+            "runtime_version": "not run on this host"
+          },
+          {
+            "member": "julie-extract",
+            "binary_sha256": "838e8adf363aed24fc8fbfa1e34d4736c17f34055bf1f7775c2430b9733862d7",
+            "version_marker": "3.9.1",
+            "runtime_version": "not run on this host"
+          }
+        ]
+      },
+      {
+        "archive": "code-kb-v2.8.1-x86_64-apple-darwin.tar.gz",
+        "archive_sha256": "a68bfb91f376fcdef2f03f0bade5339688c397cf61a9bef2b8bffe145f9836ca",
+        "target": "x86_64-apple-darwin",
+        "binaries": [
+          {
+            "member": "code-kb",
+            "binary_sha256": "6596dd61d363a2d342cba4677e1d1ffd65766f31e7f7a7caeec1259bcf95f598",
+            "version_marker": "2.8.1",
+            "runtime_version": "not run on this host"
+          },
+          {
+            "member": "julie-extract",
+            "binary_sha256": "59d62090da7940da00bd7410587e6f3e278a80b08be8abc5439bf2cfa5d8421b",
+            "version_marker": "3.9.1",
+            "runtime_version": "not run on this host"
+          }
+        ]
+      },
+      {
+        "archive": "code-kb-v2.8.1-x86_64-pc-windows-msvc.zip",
+        "archive_sha256": "f7ecd2e67a17633043031068550bb2e27cb63c8572d524a7e0941ddc917a5559",
+        "target": "x86_64-pc-windows-msvc",
+        "binaries": [
+          {
+            "member": "code-kb.exe",
+            "binary_sha256": "e61eb1e91b5a40438c33791210cb49bd5c9094e7053de7d18577695aba9e79a4",
+            "version_marker": "2.8.1",
+            "runtime_version": "not run on this host"
+          },
+          {
+            "member": "julie-extract.exe",
+            "binary_sha256": "e9eb3fc6e08feaa20d8758a81fd0746683fe08ad79daada36ad71b0dca8e1e79",
+            "version_marker": "3.9.1",
+            "runtime_version": "not run on this host"
+          }
+        ]
+      },
+      {
+        "archive": "code-kb-v2.8.1-aarch64-pc-windows-msvc.zip",
+        "archive_sha256": "7de14a904637566f2a8d29f3a10751328bbb2b5d940ad634b82d0d3b1a68f834",
+        "target": "aarch64-pc-windows-msvc",
+        "binaries": [
+          {
+            "member": "code-kb.exe",
+            "binary_sha256": "341d5776aaec4ddfa14dc03442c6f55e4a133682e610378ddfccc4624bbfe972",
+            "version_marker": "2.8.1",
+            "runtime_version": "not run on this host"
+          },
+          {
+            "member": "julie-extract.exe",
+            "binary_sha256": "59d06d95f378e7ebe5244553ad8b4fd63dbc933c931b8a875032930967a8c931",
+            "version_marker": "3.9.1",
+            "runtime_version": "not run on this host"
+          }
+        ]
+      }
+    ],
+    "host_linux_versions": {
+      "code-kb": {
+        "path": "/home/murphy/source/code-kb/target/published-v2.8.1/code-kb",
+        "sha256": "304f2cc01c8d601f2264f2e86d24506d28eecba06f5c1b50f59576465e4c86e2",
+        "output": "code-kb 2.8.1"
+      },
+      "julie-extract": {
+        "path": "/home/murphy/source/code-kb/target/published-v2.8.1/julie-extract",
+        "sha256": "777fe822a0eddbdfd9f357c018c7a1a881907bedc698f913736a30ffc0ce0d12",
+        "output": "julie-extract 3.9.1"
+      }
+    }
+  },
+  "paths": {
+    "assets": "/tmp/release-verify/assets/code-kb-v2.8.1",
+    "extracted_host_binaries": "/home/murphy/source/code-kb/target/published-v2.8.1",
+    "metadata_initial": "/tmp/release-verify/code-kb-v2.8.1-assets.json",
+    "metadata_final": "/tmp/release-verify/code-kb-v2.8.1-release-metadata-final.json",
+    "release_run": "/tmp/release-verify/code-kb-v2.8.1-release-run.json",
+    "release_jobs": "/tmp/release-verify/code-kb-v2.8.1-release-jobs.json",
+    "tag_workflow_runs": "/tmp/release-verify/code-kb-v2.8.1-release-runs-by-tag.json",
+    "main_ci_run": "/tmp/release-verify/code-kb-v2.8.1-main-ci-run.json",
+    "main_ci_jobs": "/tmp/release-verify/code-kb-v2.8.1-main-ci-jobs.json",
+    "tag_ref": "/tmp/release-verify/code-kb-v2.8.1-git-tag-ref.json",
+    "tag_object": "/tmp/release-verify/code-kb-v2.8.1-git-tag-object.json",
+    "release_metadata_postverification": "/tmp/release-verify/code-kb-v2.8.1-release-metadata-postverification.json",
+    "release_run_postverification": "/tmp/release-verify/code-kb-v2.8.1-release-run-postverification.json",
+    "release_runs_postverification": "/tmp/release-verify/code-kb-v2.8.1-release-runs-postverification.json"
+  }
+}
