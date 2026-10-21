@@ -417,9 +417,6 @@ const SHADOW_TOP_LEVEL_SQL: &str = "SELECT symbol_id, COALESCE(signature, ''), k
        AND NOT (kind = 'method' AND language IN ('javascript', 'typescript', 'tsx', 'jsx', 'vue'))
      ORDER BY start_line > ?3, abs(?3 - start_line)";
 
-const JAVA_STATIC_IMPORT_SQL: &str = "SELECT signature FROM symbols
-     WHERE kind = 'import' AND path = ?1 AND name = ?2 AND signature LIKE 'import static %'";
-
 const IMPORT_SOURCES_SQL: &str = "SELECT COALESCE(json_extract(metadata_json, '$.source'), '')
      FROM symbols
      WHERE kind = 'import' AND path = ?1 AND json_valid(metadata_json)
@@ -2445,23 +2442,32 @@ impl<'a> Accounting<'a> {
         if row.language != "java" || !row.is_call() || row.has_qualifier() {
             return Ok(None);
         }
-        let signatures = self.with_statement(JAVA_STATIC_IMPORT_SQL, |stmt| {
+        let signatures = self.with_statement(JAVA_STATIC_IMPORTS_SQL, |stmt| {
             stmt.query_map(params![row.path, spec.name], |r| r.get::<_, String>(0))?
                 .collect::<Result<Vec<_>, _>>()
         })?;
-        let Some(class_path) = signatures.iter().find_map(|signature| {
-            let imported = signature
-                .strip_prefix("import static ")?
-                .trim_end_matches(';');
-            Some(imported.trim().rsplit_once('.')?.0.to_string())
-        }) else {
+        let class_paths: Vec<String> = signatures
+            .iter()
+            .filter_map(|signature| {
+                let imported = signature
+                    .strip_prefix("import static ")?
+                    .trim_end_matches(';');
+                Some(imported.trim().rsplit_once('.')?.0.to_string())
+            })
+            .collect();
+        let Some(class_path) = class_paths.first() else {
             return Ok(None);
         };
-        let class_file = format!("/{}.java", class_path.replace('.', "/"));
-        let names_target_class = spec
-            .group
-            .iter()
-            .any(|member| format!("/{}", member.path.replace('\\', "/")).ends_with(&class_file));
+        let distinct_class_paths: HashSet<&str> = class_paths.iter().map(String::as_str).collect();
+        let names_target_class = class_paths.iter().any(|class_path| {
+            let class_file = format!("/{}.java", class_path.replace('.', "/"));
+            spec.group
+                .iter()
+                .any(|member| format!("/{}", member.path.replace('\\', "/")).ends_with(&class_file))
+        });
+        if names_target_class && distinct_class_paths.len() > 1 {
+            return Ok(None);
+        }
         if names_target_class
             && self
                 .rows_at_path(CALLABLE_IN_FILE_SQL, &row.path, &[&spec.name], |r| {
@@ -2471,7 +2477,7 @@ impl<'a> Accounting<'a> {
         {
             return Ok(Some(Verdict::new(SiteLabel::Proven, IMPORT_BASIS, true)));
         }
-        let class_name = class_path.rsplit('.').next().unwrap_or(&class_path);
+        let class_name = class_path.rsplit('.').next().unwrap_or(class_path.as_str());
         let mut chain = HashSet::new();
         if let Some(caller) = row.caller_id.as_deref()
             && let Some(class) = self.definition_by_id(caller)?.and_then(|d| d.owner_name)

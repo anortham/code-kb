@@ -1492,6 +1492,63 @@ fn a_bare_java_call_through_a_static_import_of_the_class_file_is_proven() {
 }
 
 #[test]
+fn a_java_static_import_with_a_rival_owner_keeps_bare_calls_unresolved() {
+    let repo = scanned_repo(&[
+        (
+            "p/Util.java",
+            "package p;\n\npublic class Util {\n    public static void check(boolean value) {\n    }\n}\n",
+        ),
+        (
+            "q/Other.java",
+            "package q;\n\npublic class Other {\n    public static void check(String value) {\n    }\n}\n",
+        ),
+        (
+            "r/ExplicitUtilFirst.java",
+            "package r;\n\nimport static p.Util.check;\nimport static q.Other.check;\n\nclass ExplicitUtilFirst {\n    void run() {\n        check(true);\n        check(\"hello\");\n    }\n}\n",
+        ),
+        (
+            "r/ExplicitOtherFirst.java",
+            "package r;\n\nimport static q.Other.check;\nimport static p.Util.check;\n\nclass ExplicitOtherFirst {\n    void run() {\n        check(true);\n        check(\"hello\");\n    }\n}\n",
+        ),
+        (
+            "r/ExplicitThenOtherWildcard.java",
+            "package r;\n\nimport static p.Util.check;\nimport static q.Other.*;\n\nclass ExplicitThenOtherWildcard {\n    void run() {\n        check(true);\n        check(\"hello\");\n    }\n}\n",
+        ),
+        (
+            "r/OtherWildcardThenExplicit.java",
+            "package r;\n\nimport static q.Other.*;\nimport static p.Util.check;\n\nclass OtherWildcardThenExplicit {\n    void run() {\n        check(true);\n        check(\"hello\");\n    }\n}\n",
+        ),
+        (
+            "r/TargetWildcardThenOtherExplicit.java",
+            "package r;\n\nimport static p.Util.*;\nimport static q.Other.check;\n\nclass TargetWildcardThenOtherExplicit {\n    void run() {\n        check(true);\n        check(\"hello\");\n    }\n}\n",
+        ),
+        (
+            "r/OtherExplicitThenTargetWildcard.java",
+            "package r;\n\nimport static q.Other.check;\nimport static p.Util.*;\n\nclass OtherExplicitThenTargetWildcard {\n    void run() {\n        check(true);\n        check(\"hello\");\n    }\n}\n",
+        ),
+    ]);
+    let report = report(&repo, "check", Some("p/Util.java"));
+
+    for path in [
+        "r/ExplicitUtilFirst.java",
+        "r/ExplicitOtherFirst.java",
+        "r/ExplicitThenOtherWildcard.java",
+        "r/OtherWildcardThenExplicit.java",
+        "r/TargetWildcardThenOtherExplicit.java",
+        "r/OtherExplicitThenTargetWildcard.java",
+    ] {
+        for line in [8, 9] {
+            assert_eq!(
+                site_at(&report, path, line).label,
+                SiteLabel::Unresolved,
+                "{path}:{line}\n{}",
+                dump(&report)
+            );
+        }
+    }
+}
+
+#[test]
 fn a_bare_java_call_reaches_only_its_classes_and_its_static_imports() {
     let repo = scanned_repo(&[
         (

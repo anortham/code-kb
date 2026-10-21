@@ -12,6 +12,10 @@ add no rows to `~/.code-kb/telemetry.db`. It works in full-history clones under
 Each run checks out commits in its own detached worktrees under `<out>/trees/`, so two binaries
 never share an index. Remove a run folder with `rm -r <out>` and then `git -C <clone> worktree prune`.
 
+Each output directory records the binary's SHA-256 fingerprint. A run resumes only with the same
+binary contents; rebuilding it requires a new output directory, even when its version is unchanged.
+Older run directories without a fingerprint remain readable by `score` but cannot be resumed.
+
 ## Split
 
 A commit is dev when `int(sha[:8], 16) % 2 == 0`, else holdout. The split is fixed when a case is

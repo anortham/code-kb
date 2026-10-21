@@ -39,7 +39,7 @@ use crate::reference_report::{
 use crate::sync::{self, SyncError, ensure_fresh_file};
 use crate::workspace::{Workspace, is_hard_excluded};
 use arms::Verdict;
-use binding::TypedOverloads;
+use binding::{OverloadBinding, TypedOverloads};
 use fields::FieldChange;
 use git::{ChangedFile, Git, Hunks};
 pub use session::{
@@ -1584,11 +1584,9 @@ impl<'a> SiteLister<'a> {
             let (first, last) = site_span(labeled);
             let path = labeled.site.path.as_str();
             let touched = self.touches(path, first, last);
-            if !touched
-                && typed.is_some_and(|typed| {
-                    typed.binds_another(self.conn, &labeled.site.to_symbol_name, path, first)
-                })
-            {
+            let binding = typed
+                .map(|typed| typed.binding(self.conn, &labeled.site.to_symbol_name, path, first));
+            if !touched && binding == Some(OverloadBinding::Other) {
                 continue;
             }
             let language = self.language_of(path);
@@ -1599,7 +1597,10 @@ impl<'a> SiteLister<'a> {
             let verdict = range
                 .zip(count)
                 .and_then(|(range, count)| Some((range, count, range.accepts(&language, count)?)));
-            if !touched && verdict.is_some_and(|(_, _, fits)| fits) {
+            if !touched
+                && verdict.is_some_and(|(_, _, fits)| fits)
+                && binding.is_none_or(|binding| binding == OverloadBinding::Changed)
+            {
                 continue;
             }
             if !touched && verdict.is_none() && arguments.spread {

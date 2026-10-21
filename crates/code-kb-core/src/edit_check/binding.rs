@@ -37,6 +37,13 @@ pub(super) struct TypedOverloads {
     others: Vec<Vec<String>>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum OverloadBinding {
+    Changed,
+    Other,
+    Unknown,
+}
+
 impl TypedOverloads {
     /// `None` unless `subject` is a C# callable with a plain parameter list and another overload
     /// of the same owner has one too.
@@ -56,34 +63,40 @@ impl TypedOverloads {
         Ok((!others.is_empty()).then_some(Self { own, others }))
     }
 
-    /// Whether every call of `name` on the line binds another overload: its argument types are
-    /// all known and equal the parameter types of another overload, and not of the changed one.
-    pub(super) fn binds_another(
+    /// Which overload every call on the line selects by exact argument types.
+    pub(super) fn binding(
         &self,
         conn: &Connection,
         name: &str,
         path: &str,
         line: usize,
-    ) -> bool {
+    ) -> OverloadBinding {
         let Ok(mut stmt) = conn.prepare(CALL_ARGUMENT_TYPES_SQL) else {
-            return false;
+            return OverloadBinding::Unknown;
         };
         let Ok(rows) = stmt.query_map(
             params![name, path, path.replace('/', "\\"), line as i64],
             |row| row.get::<_, Option<String>>(0),
         ) else {
-            return false;
+            return OverloadBinding::Unknown;
         };
         let calls: Vec<Option<Vec<String>>> = rows
             .filter_map(Result::ok)
             .map(|types| types.and_then(|json| argument_types(&json)))
             .collect();
-        !calls.is_empty()
-            && calls.iter().all(|types| {
-                types.as_ref().is_some_and(|types| {
-                    *types != self.own && self.others.iter().any(|other| other == types)
-                })
+        if calls.is_empty() {
+            OverloadBinding::Unknown
+        } else if calls.iter().all(|types| types.as_ref() == Some(&self.own)) {
+            OverloadBinding::Changed
+        } else if calls.iter().all(|types| {
+            types.as_ref().is_some_and(|types| {
+                *types != self.own && self.others.iter().any(|other| other == types)
             })
+        }) {
+            OverloadBinding::Other
+        } else {
+            OverloadBinding::Unknown
+        }
     }
 }
 
@@ -123,17 +136,21 @@ fn parameter_type(segment: &str) -> Option<String> {
     Some(normalized(written))
 }
 
-/// A type name without whitespace, `global::`, or a namespace, with a framework name read as its
-/// C# keyword (`System.String` is `string`).
+/// A type name without whitespace or `global::`, with an explicit framework name read as its
+/// C# keyword (`System.String` is `string`). Other namespaces retain their identity.
 fn normalized(written: &str) -> String {
     let compact: String = written.split_whitespace().collect();
     let unqualified = compact.strip_prefix("global::").unwrap_or(&compact);
-    let head_end = unqualified.find('<').unwrap_or(unqualified.len());
-    let short = &unqualified[unqualified[..head_end].rfind('.').map_or(0, |dot| dot + 1)..];
-    ALIASES
-        .iter()
-        .find(|(framework, _)| *framework == short)
-        .map_or_else(|| short.to_string(), |(_, keyword)| keyword.to_string())
+    unqualified
+        .strip_prefix("System.")
+        .and_then(|framework| {
+            ALIASES
+                .iter()
+                .find(|(name, _)| *name == framework)
+                .map(|(_, keyword)| *keyword)
+        })
+        .unwrap_or(unqualified)
+        .to_string()
 }
 
 #[cfg(test)]
@@ -141,14 +158,19 @@ mod tests {
     use super::{normalized, parameter_type};
 
     #[test]
-    fn a_type_name_drops_its_namespace_and_reads_a_framework_name_as_its_keyword() {
+    fn a_type_name_keeps_its_namespace_and_reads_a_framework_name_as_its_keyword() {
         assert_eq!(normalized("System.String"), "string");
-        assert_eq!(normalized("global::Newtonsoft.Json.Linq.JValue"), "JValue");
+        assert_eq!(
+            normalized("global::Newtonsoft.Json.Linq.JValue"),
+            "Newtonsoft.Json.Linq.JValue"
+        );
         assert_eq!(normalized("List< int >"), "List<int>");
         assert_eq!(
             normalized("System.Collections.Generic.List<int>"),
-            "List<int>"
+            "System.Collections.Generic.List<int>"
         );
+        assert_eq!(normalized("Custom.String"), "Custom.String");
+        assert_eq!(normalized("String"), "String");
         assert_eq!(normalized("object?"), "object?");
     }
 

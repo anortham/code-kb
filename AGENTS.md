@@ -208,7 +208,9 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   nothing else but a static import (`import static C.name;` or `import static C.*;`), so a call
   of a method whose class is none of the caller's classes, the classes enclosing it, their
   ancestors, or a class it imports statically is excluded with the basis
-  ``a bare call reaches only the classes of `Caller` and its static imports``; an ancestor that
+  ``a bare call reaches only the classes of `Caller` and its static imports``. Static-import
+  owners are considered together; competing owners keep a target call unresolved rather than
+  choosing by import order. An ancestor that
   is not indexed does not change this, since a library class cannot extend a project class. An
   annotation element (`alternate = {…}`) is not a call, and julie records no supertype for an
   anonymous class (it hangs the methods on the field or method that builds it), so the rule
@@ -440,7 +442,9 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   `proven` and `likely` sites it did not reach, a count of the `unresolved` ones, and the tests to run.
   A C# call outside the diff whose argument types (julie's `arg_types`) are all known and equal the
   parameter types of another overload of the same owner, and not those of the changed one, binds
-  that overload and is no site of a parameter or signature change.
+  that overload and is no site of a parameter or signature change. Custom type namespaces stay
+  distinct; only explicit framework aliases such as `System.String` normalize to keywords. With
+  typed overload evidence, an accepted argument count alone never drops an unbound call.
   The base symbols come from a `julie-extract scan` of the base content of the changed files into
   `<root>/.code-kb/check/<pid>/`, removed after the call; the main index changes only by the refresh
   of the changed files. A check covers at most 200 files and 30 symbols and starts no step after 20 s, and the
@@ -466,8 +470,8 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   automatically cleans up the AST index database with no orphaned external state. Durable tool
   telemetry and token efficiency history are preserved centrally at `~/.code-kb/telemetry.db`.
   `tool_telemetry` records the MCP client (`clientInfo.name` of `initialize`), and `hook_telemetry`
-  records each Stop check: the event, the diff hash, the sites listed, whether it blocked, and
-  `followed` (the next Stop after a block changed a line of a listed site).
+  records each Stop check: the event, the session ID, the diff hash, the sites listed, whether it blocked, and
+  `followed` (the next Stop of that session after a block changed a line of a listed site).
 - Cross-platform agent hooks: `code-kb hook [SessionStart|SubagentStart|PreInvocation]` outputs agent routing instructions
   directly from the native binary without external runtime dependencies (Node.js, bash, python), formatting JSON
   natively for Claude Code/Cursor (`SessionStart`), Copilot, and Antigravity (`PreInvocation` injectSteps).

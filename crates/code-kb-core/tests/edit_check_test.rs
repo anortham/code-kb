@@ -2546,6 +2546,60 @@ fn a_csharp_call_whose_argument_types_select_another_overload_is_not_listed() {
 }
 
 #[test]
+fn a_csharp_call_is_not_bound_to_an_overload_with_a_different_namespace() {
+    for (left, right) in [("A.Token", "B.Token"), ("Custom.String", "string")] {
+        let repo = committed_repo(&[
+            (
+                "Types.cs",
+                "namespace A { public class Token {} }\nnamespace B { public class Token {} }\nnamespace Custom { public class String {} }\n",
+            ),
+            (
+                "Picker.cs",
+                &format!(
+                    "public class Picker {{\n    public void Pick({left} value) {{}}\n    public void Pick({right} value) {{}}\n}}\n"
+                ),
+            ),
+            (
+                "Use.cs",
+                &format!(
+                    "public class Use {{\n    public void Run(Picker picker, {left} item) {{ picker.Pick(item); }}\n}}\n"
+                ),
+            ),
+        ]);
+        write(
+            &repo.root,
+            "Picker.cs",
+            &format!(
+                "public class Picker {{\n    public void Pick({left} value, string suffix) {{}}\n    public void Pick({right} value) {{}}\n}}\n"
+            ),
+        );
+        assert_has(&text_of(&repo), "Use.cs:2  `Run`");
+    }
+}
+
+#[test]
+fn a_csharp_call_that_still_fits_the_changed_overload_is_not_listed() {
+    let repo = committed_repo(&[
+        (
+            "Picker.cs",
+            "public class Picker {\n    public void Pick(string value, int count = 0) {}\n    public void Pick(int value) {}\n}\n",
+        ),
+        (
+            "Use.cs",
+            "public class Use {\n    public void Run(Picker picker) { picker.Pick(\"value\", 2); }\n}\n",
+        ),
+    ]);
+    write(
+        &repo.root,
+        "Picker.cs",
+        "public class Picker {\n    public void Pick(string value, int count) {}\n    public void Pick(int value) {}\n}\n",
+    );
+    let text = text_of(&repo);
+    assert_has(&text, "parameters");
+    assert_lacks(&text, "`Run`");
+}
+
+#[test]
 fn a_swift_parameter_rename_lists_the_call_that_names_the_old_parameter() {
     let repo = committed_repo(&[
         (

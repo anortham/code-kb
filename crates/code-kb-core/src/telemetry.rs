@@ -256,6 +256,7 @@ fn init_telemetry_db(conn: &Connection) -> Result<(), QueryError> {
              id INTEGER PRIMARY KEY,
              timestamp TEXT NOT NULL,
              workspace_root TEXT NOT NULL,
+             session_id TEXT DEFAULT NULL,
              event TEXT NOT NULL,
              diff_hash TEXT NOT NULL,
              sites_listed INTEGER NOT NULL,
@@ -266,6 +267,23 @@ fn init_telemetry_db(conn: &Connection) -> Result<(), QueryError> {
          CREATE INDEX IF NOT EXISTS idx_tool_telemetry_ts ON tool_telemetry(timestamp DESC);
          DELETE FROM tool_telemetry WHERE timestamp < datetime('now', '-365 days');
          DELETE FROM hook_telemetry WHERE timestamp < datetime('now', '-365 days');",
+    )?;
+
+    let has_hook_session_id = {
+        let mut stmt = conn.prepare("PRAGMA table_info(hook_telemetry)")?;
+        let cols = stmt.query_map([], |row| row.get::<_, String>(1))?;
+        cols.flatten().any(|name| name == "session_id")
+    };
+    if !has_hook_session_id {
+        conn.execute(
+            "ALTER TABLE hook_telemetry ADD COLUMN session_id TEXT DEFAULT NULL",
+            [],
+        )?;
+    }
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_hook_telemetry_session_diff
+         ON hook_telemetry(workspace_root, session_id, diff_hash)",
+        [],
     )?;
 
     // Handle column migrations if table previously existed without workspace columns
@@ -446,6 +464,7 @@ pub fn record_tool_call(workspace_root: &Path, invocation: &ToolInvocation) {
 /// its block listed, and whether it blocked. Best-effort and non-panicking.
 pub fn record_hook_check(
     workspace_root: &Path,
+    session_id: &str,
     event: &str,
     diff_hash: &str,
     sites_listed: usize,
@@ -456,10 +475,11 @@ pub fn record_hook_check(
     }
     if let Ok(conn) = open_global_telemetry_db() {
         let _ = conn.execute(
-            "INSERT INTO hook_telemetry (timestamp, workspace_root, event, diff_hash, sites_listed, blocked)
-             VALUES (datetime('now'), ?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO hook_telemetry (timestamp, workspace_root, session_id, event, diff_hash, sites_listed, blocked)
+             VALUES (datetime('now'), ?1, ?2, ?3, ?4, ?5, ?6)",
             params![
                 normalized_root(workspace_root),
+                session_id,
                 event,
                 diff_hash,
                 sites_listed as i64,
@@ -471,15 +491,20 @@ pub fn record_hook_check(
 
 /// Records whether the agent edited a site of the block on `diff_hash` before the next stop.
 /// Best-effort and non-panicking.
-pub fn record_hook_followed(workspace_root: &Path, diff_hash: &str, followed: bool) {
+pub fn record_hook_followed(
+    workspace_root: &Path,
+    session_id: &str,
+    diff_hash: &str,
+    followed: bool,
+) {
     if is_telemetry_disabled() {
         return;
     }
     if let Ok(conn) = open_global_telemetry_db() {
         let _ = conn.execute(
-            "UPDATE hook_telemetry SET followed = ?3
-             WHERE workspace_root = ?1 AND diff_hash = ?2 AND blocked = 1 AND followed IS NULL",
-            params![normalized_root(workspace_root), diff_hash, followed as i64],
+            "UPDATE hook_telemetry SET followed = ?4
+             WHERE workspace_root = ?1 AND session_id = ?2 AND diff_hash = ?3 AND blocked = 1 AND followed IS NULL",
+            params![normalized_root(workspace_root), session_id, diff_hash, followed as i64],
         );
     }
 }
