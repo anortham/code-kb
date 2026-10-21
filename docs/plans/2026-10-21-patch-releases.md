@@ -29,3 +29,8 @@ The owner requested: "ok let's go through the release process for both". This au
 ## Verification ledger
 
 Keep command logs in /tmp and target release directories. Reuse same-source review gate evidence where valid; version/contract changes require affected checks. CI supplies native Windows/macOS results. A shut-down local Windows VM need not be started when the documented preflight accepts CI. No release is complete until all required workflow jobs and public artifact/install checks pass.
+
+- code-kb source PR52 passed all six required CI checks on f6a4833 (run39609828353).
+- Local pin candidate87f263d uses Julie3.9.1, binary SHA-25649d25aa51d8072c946c2a275c190068447848c604cfef11969cd180c3dbb75cb. Its archive hashes are temporary3.9.0 values and must be replaced before this branch is pushed.
+- Dogfood campaign: one discovery round, lead validation plus one Claude and one Codex participant. Round20261021T134404Z uses detached Flask d73fa1c worktrees. The initial Codex process received HTTP400 before inference because gpt-6.1-sol was unavailable to its ChatGPT account. Its log is preserved; only that participant was retried with locally advertised gpt-6-sol on the same candidate and Flask commit. No second discovery round or paid API fallback.
+- Nine reach-gate repositories have been materialized; every cache worktree is clean and at its pinned commit.
