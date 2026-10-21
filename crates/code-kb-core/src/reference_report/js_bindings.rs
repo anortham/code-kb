@@ -189,6 +189,39 @@ fn brace_close(text: &str, open: usize) -> Option<usize> {
     None
 }
 
+pub(super) fn unmatched_brace_before(text: &str) -> Option<usize> {
+    let bytes = text.as_bytes();
+    let mut delimiters = Vec::new();
+    let mut at = 0;
+    while at < bytes.len() {
+        if let Some(after) = comment_end(bytes, at, bytes.len()) {
+            at = after;
+            continue;
+        }
+        match bytes[at] {
+            b'\'' | b'"' | b'`' => at = quote_end(bytes, at, bytes.len())? + 1,
+            b'/' => return None,
+            b'(' | b'[' | b'{' => {
+                delimiters.push((bytes[at], at));
+                at += 1;
+            }
+            b')' | b']' | b'}' => {
+                let (opening, _) = delimiters.pop()?;
+                if !matches!(
+                    (opening, bytes[at]),
+                    (b'(', b')') | (b'[', b']') | (b'{', b'}')
+                ) {
+                    return None;
+                }
+                at += 1;
+            }
+            _ => at += 1,
+        }
+    }
+    let (opening, position) = delimiters.pop()?;
+    (opening == b'{').then_some(position)
+}
+
 /// The `(` of the innermost parentheses around `at`, within reach.
 fn enclosing_open(text: &str, at: usize) -> Option<usize> {
     let start = at.saturating_sub(MAX_LIST);

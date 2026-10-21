@@ -5147,6 +5147,297 @@ fn typescript_interface_and_abstract_class_methods_list_their_implementations() 
 }
 
 #[test]
+fn a_typescript_interface_method_in_object_shorthand_stays_an_unresolved_candidate() {
+    let repo = scanned_repo(&[(
+        "src/shapes.ts",
+        "export interface Shape {\n  tx(value: string): string;\n}\nfunction make(tx: (value: string) => string): Shape {\n  return { tx };\n}\n",
+    )]);
+    let target_line = line_of(&repo, "src/shapes.ts", "tx(value: string)");
+    let site_line = line_of(&repo, "src/shapes.ts", "return { tx }");
+    let report = report_at(&repo, "tx", "src/shapes.ts", target_line);
+
+    assert_eq!(report.counts.proven, 0, "{}", dump(&report));
+    assert_eq!(report.counts.unresolved, 1, "{}", dump(&report));
+    assert_site(
+        &report,
+        "src/shapes.ts",
+        site_line,
+        SiteLabel::Unresolved,
+        "2 definitions",
+    );
+    let binding_line = line_of(&repo, "src/shapes.ts", "function make(tx");
+    let local = report_at(&repo, "tx", "src/shapes.ts", binding_line);
+    let local_site = local
+        .sites
+        .iter()
+        .find(|site| site.site.start_line == Some(site_line))
+        .unwrap();
+
+    assert_ne!(local_site.label, SiteLabel::Excluded, "{}", dump(&local));
+}
+
+#[test]
+fn a_typescript_interface_method_candidate_adds_no_test_impact_edge() {
+    let repo = scanned_repo(&[
+        (
+            "package.json",
+            "{\"devDependencies\":{\"vitest\":\"^1\"}}\n",
+        ),
+        (
+            "src/shapes.ts",
+            "export interface Shape {\n  tx(value: string): string;\n}\n",
+        ),
+        (
+            "src/shapes.test.ts",
+            "test(\"shorthand\", (tx: (value: string) => string) => {\n  return { tx };\n});\n",
+        ),
+    ]);
+    let target_line = line_of(&repo, "src/shapes.ts", "tx(value: string)");
+    let site_line = line_of(&repo, "src/shapes.test.ts", "return { tx }");
+    let report = report_at(&repo, "tx", "src/shapes.ts", target_line);
+
+    assert_eq!(report.counts.proven, 0, "{}", dump(&report));
+    assert_eq!(report.counts.unresolved, 1, "{}", dump(&report));
+    assert!(report.tests.is_empty(), "{}", dump(&report));
+    assert_site(
+        &report,
+        "src/shapes.test.ts",
+        site_line,
+        SiteLabel::Unresolved,
+        "2 definitions",
+    );
+}
+
+#[test]
+fn a_typescript_interface_method_in_a_constructor_argument_stays_unresolved_on_crlf() {
+    let repo = scanned_repo(&[(
+        "src/shapes.ts",
+        "export interface Shape {\r\n  tx(value: string): string;\r\n}\r\nclass Box<T> { constructor(value: T) {} }\r\nfunction make(tx: (value: string) => string): Shape {\r\n  return new Box({ tx });\r\n}\r\n",
+    )]);
+    let target_line = line_of(&repo, "src/shapes.ts", "tx(value: string)");
+    let site_line = line_of(&repo, "src/shapes.ts", "return new Box({ tx }");
+    let report = report_at(&repo, "tx", "src/shapes.ts", target_line);
+
+    assert_eq!(report.counts.proven, 0, "{}", dump(&report));
+    assert_eq!(report.counts.unresolved, 1, "{}", dump(&report));
+    assert_site(
+        &report,
+        "src/shapes.ts",
+        site_line,
+        SiteLabel::Unresolved,
+        "2 definitions",
+    );
+}
+
+#[test]
+fn a_typescript_interface_method_in_a_multiline_overwrite_constructor_stays_unresolved() {
+    let repo = scanned_repo(&[(
+        "src/shapes.ts",
+        "export interface Shape {\n  tx(value: string): string;\n}\nfunction make(tx: (value: string) => string): Shape {\n  return new checks.$ZodCheckOverwrite({\n    check: \"overwrite\",\n    tx,\n  });\n}\n",
+    )]);
+    let target_line = line_of(&repo, "src/shapes.ts", "tx(value: string)");
+    let site_line = line_of(&repo, "src/shapes.ts", "    tx,");
+    let report = report_at(&repo, "tx", "src/shapes.ts", target_line);
+
+    assert_eq!(report.counts.proven, 0, "{}", dump(&report));
+    assert_eq!(report.counts.unresolved, 1, "{}", dump(&report));
+    assert_site(
+        &report,
+        "src/shapes.ts",
+        site_line,
+        SiteLabel::Unresolved,
+        "2 definitions",
+    );
+}
+
+#[test]
+fn a_typescript_interface_method_in_a_nested_multiline_call_argument_stays_excluded() {
+    let repo = scanned_repo(&[(
+        "src/shapes.ts",
+        "export interface Shape {\n  tx(value: string): string;\n}\nfunction make(tx: (value: string) => string) {\n  return new checks.$ZodCheckOverwrite({\n    check: \"overwrite\",\n    callback: transform(\"value\",\n      tx,\n    ),\n  });\n}\n",
+    )]);
+    let target_line = line_of(&repo, "src/shapes.ts", "tx(value: string)");
+    let binding_line = line_of(&repo, "src/shapes.ts", "function make(tx");
+    let site_line = line_of(&repo, "src/shapes.ts", "      tx,");
+    let report = report_at(&repo, "tx", "src/shapes.ts", target_line);
+
+    assert_site(
+        &report,
+        "src/shapes.ts",
+        site_line,
+        SiteLabel::Excluded,
+        &format!("resolves to `tx` (src/shapes.ts:{binding_line})"),
+    );
+}
+
+#[test]
+fn a_typescript_interface_method_in_an_unterminated_final_source_line_stays_unresolved() {
+    let repo = scanned_repo(&[(
+        "src/shapes.ts",
+        "export interface Shape {\n  tx(value: string): string;\n}\nfunction make(tx: (value: string) => string): Shape {\n  return { tx }; }",
+    )]);
+    let target_line = line_of(&repo, "src/shapes.ts", "tx(value: string)");
+    let site_line = line_of(&repo, "src/shapes.ts", "return { tx }");
+    let report = report_at(&repo, "tx", "src/shapes.ts", target_line);
+
+    assert_eq!(report.counts.proven, 0, "{}", dump(&report));
+    assert_eq!(report.counts.unresolved, 1, "{}", dump(&report));
+    assert_site(
+        &report,
+        "src/shapes.ts",
+        site_line,
+        SiteLabel::Unresolved,
+        "2 definitions",
+    );
+}
+
+#[test]
+fn a_typescript_interface_method_local_read_still_excludes_the_target() {
+    let repo = scanned_repo(&[(
+        "src/shapes.ts",
+        "export interface Shape {\n  tx(value: string): string;\n}\nfunction make(tx: (value: string) => string): string {\n  return tx(\"value\");\n}\n",
+    )]);
+    let target_line = line_of(&repo, "src/shapes.ts", "tx(value: string)");
+    let binding_line = line_of(&repo, "src/shapes.ts", "function make(tx");
+    let site_line = line_of(&repo, "src/shapes.ts", "return tx(");
+    let report = report_at(&repo, "tx", "src/shapes.ts", target_line);
+
+    assert_site(
+        &report,
+        "src/shapes.ts",
+        site_line,
+        SiteLabel::Excluded,
+        &format!("resolves to `tx` (src/shapes.ts:{binding_line})"),
+    );
+}
+
+#[test]
+fn a_typescript_interface_method_property_value_destructuring_and_block_reads_stay_excluded() {
+    let repo = scanned_repo(&[(
+        "src/shapes.ts",
+        "export interface Shape {\n  tx(value: string): string;\n}\ntype Fn = (value: string) => string;\nfunction make(tx: Fn, source: { tx: Fn }) {\n  const { tx: renamed } = source;\n  if (source) { tx; }\n  return { value: tx };\n}\n",
+    )]);
+    let target_line = line_of(&repo, "src/shapes.ts", "tx(value: string)");
+    let destructuring_line = line_of(&repo, "src/shapes.ts", "const { tx: renamed }");
+    let block_line = line_of(&repo, "src/shapes.ts", "if (source) { tx; }");
+    let property_value_line = line_of(&repo, "src/shapes.ts", "return { value: tx }");
+    let report = report_at(&repo, "tx", "src/shapes.ts", target_line);
+
+    assert_eq!(report.counts.unresolved, 0, "{}", dump(&report));
+    assert_site(
+        &report,
+        "src/shapes.ts",
+        block_line,
+        SiteLabel::Excluded,
+        "resolves to `tx` (src/shapes.ts:5)",
+    );
+    assert_site(
+        &report,
+        "src/shapes.ts",
+        property_value_line,
+        SiteLabel::Excluded,
+        "resolves to `tx` (src/shapes.ts:5)",
+    );
+    if report
+        .sites
+        .iter()
+        .any(|site| site.site.start_line == Some(destructuring_line))
+    {
+        assert_site(
+            &report,
+            "src/shapes.ts",
+            destructuring_line,
+            SiteLabel::Excluded,
+            "resolves to `tx` (src/shapes.ts:5)",
+        );
+    }
+}
+
+#[test]
+fn a_typescript_concrete_class_method_in_object_shorthand_still_excludes_the_target() {
+    let repo = scanned_repo(&[(
+        "src/shapes.ts",
+        "export class Shape {\n  tx(value: string): string { return value; }\n}\nfunction make(tx: (value: string) => string): Shape {\n  return { tx };\n}\n",
+    )]);
+    let target_line = line_of(&repo, "src/shapes.ts", "tx(value: string)");
+    let binding_line = line_of(&repo, "src/shapes.ts", "function make(tx");
+    let site_line = line_of(&repo, "src/shapes.ts", "return { tx }");
+    let report = report_at(&repo, "tx", "src/shapes.ts", target_line);
+
+    assert_site(
+        &report,
+        "src/shapes.ts",
+        site_line,
+        SiteLabel::Excluded,
+        &format!("resolves to `tx` (src/shapes.ts:{binding_line})"),
+    );
+}
+
+#[test]
+fn a_typescript_function_target_in_object_shorthand_still_excludes_a_same_named_parameter() {
+    let repo = scanned_repo(&[(
+        "src/shapes.ts",
+        "export function tx(value: string): string { return value; }\nfunction make(tx: (value: string) => string) {\n  return { tx };\n}\n",
+    )]);
+    let target_line = line_of(&repo, "src/shapes.ts", "function tx(");
+    let binding_line = line_of(&repo, "src/shapes.ts", "function make(tx");
+    let site_line = line_of(&repo, "src/shapes.ts", "return { tx }");
+    let report = report_at(&repo, "tx", "src/shapes.ts", target_line);
+
+    assert_site(
+        &report,
+        "src/shapes.ts",
+        site_line,
+        SiteLabel::Excluded,
+        &format!("resolves to `tx` (src/shapes.ts:{binding_line})"),
+    );
+}
+
+#[test]
+fn a_typescript_interface_method_does_not_reach_a_different_typed_owner() {
+    let repo = scanned_repo(&[(
+        "src/shapes.ts",
+        "export interface Shape {\n  tx(value: string): string;\n}\nclass Other { tx(value: string): string { return value; } }\nfunction use(other: Other) { return other.tx(\"value\"); }\n",
+    )]);
+    let target_line = line_of(&repo, "src/shapes.ts", "tx(value: string)");
+    let site_line = line_of(&repo, "src/shapes.ts", "other.tx(");
+    let report = report_at(&repo, "tx", "src/shapes.ts", target_line);
+
+    assert_site(
+        &report,
+        "src/shapes.ts",
+        site_line,
+        SiteLabel::Excluded,
+        "resolves to `Other.tx` (src/shapes.ts:4)",
+    );
+}
+
+#[test]
+fn a_typescript_interface_method_import_and_export_keep_the_external_binding_exclusion() {
+    let repo = scanned_repo(&[
+        (
+            "src/shapes.ts",
+            "export interface Shape {\n  tx(value: string): string;\n}\n",
+        ),
+        (
+            "src/use.ts",
+            "import { tx } from 'external';\nexport { tx };\nexport function use() { return tx(\"value\"); }\n",
+        ),
+    ]);
+    let target_line = line_of(&repo, "src/shapes.ts", "tx(value: string)");
+    let site_line = line_of(&repo, "src/use.ts", "return tx(");
+    let report = report_at(&repo, "tx", "src/shapes.ts", target_line);
+
+    assert_site(
+        &report,
+        "src/use.ts",
+        site_line,
+        SiteLabel::Excluded,
+        "receiver `tx` is imported from `external`",
+    );
+}
+
+#[test]
 fn java_interface_methods_list_the_methods_of_implementing_classes() {
     let repo = scanned_repo(&[
         (

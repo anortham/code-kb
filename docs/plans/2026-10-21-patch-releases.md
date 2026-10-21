@@ -16,6 +16,11 @@ The owner requested: "ok let's go through the release process for both". This au
 - Dogfood follow-up worker A owns Python runtime member resolution in queries/reference-report helpers, focused reference-report tests, and the paired agent-doc rule. Worker B owns edit-check handling/tests for required Python keyword-only arguments, with shared arity changes only if necessary. Lead owns their integration, edit-check documentation, and exact Flask repros.
 - Worker C owns a bounded file-mode blast-radius test-use supplement in ops.rs and blast-radius tests. It must reuse supported evidence and merge into nonempty results without full reports per file symbol. Lead owns formatter wording and its existing assertions.
 
+- The TypeScript dev-case worker owns the bounded shorthand detector and reference-report
+  regressions in `reference_report.rs`, `reference_report/js_bindings.rs`, and
+  `reference_report_test.rs`. The lead owns the paired agent-doc rule, review,
+  release gates and integration.
+
 ## Sequence and acceptance
 
 - [x] Prepare Julie3.9.1, schema8/report3/epoch10, corrected C# output marker; run local release/contract gates and build optimized binary.
@@ -46,3 +51,15 @@ Keep command logs in /tmp and target release directories. Reuse same-source revi
 - Initial full reach run passed270 symbols on all9 repositories, but source inspection of its dev disagreements found one actual false exclusion: TypeScript shorthand `tx` in an object literal also writes an interface member and must not be excluded solely by its same-named local value binding. A conservative fix is required before the code-kb tag; rerun the full reach gate after this behavior change. Two missing edges remain coverage gaps. No cases or holdout labels change.
 
 - Julie3.9.1 publication run39614728309 completed successfully. All six archives passed asset-digest, archive, architecture, embedded-version, and binary-checksum checks. Public hashes now replace the temporary values in code-kb; the restored public Linux binary reports3.9.1 with SHA-256777fe822a0eddbdfd9f357c018c7a1a881907bedc698f913736a30ffc0ce0d12.
+
+- Julie closeout is pushed on clean main at `3766aa0a`; tag `v3.9.1` still peels to
+  `992426e4`. The publication record explicitly covers the approved evidence-only
+  follow-up. `scripts/check-release-state.sh` passed.
+
+- The TypeScript fix now passes the exact multiline Zod constructor fixture.
+  It checks indexed member owners, reads at most a 512 KiB file prefix and a
+  4 KiB/64-line caller snippet, and retains only an unresolved property-write
+  candidate. The 412-test reference suite, local-value reference assertion,
+  strict workspace Clippy, formatting, doc sync and diff checks passed.
+  CRLF, final-line EOF, nested calls, ordinary local reads, imports, concrete
+  methods, unrelated owners and candidate-only test impact are covered.

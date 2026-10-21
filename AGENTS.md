@@ -393,6 +393,12 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   `for (const e of list) { … }`), the site reads the binding and is excluded with the basis
   `line N binds the name as a callback parameter, loop variable, or catch parameter`; an
   expression body (`(e) => e()`) and a loop body without braces keep the rule above.
+  A JavaScript or TypeScript object shorthand (`{ name }`) can read a local parameter or
+  variable and write a member at the same token. In supported return, initializer, and
+  constructor expressions, a selected field, property, or interface method stays unresolved
+  when only the local binding would exclude it. Its owner must be an indexed code type; a
+  concrete class method keeps the ordinary rules. Stronger exclusions still apply, the local
+  value keeps its own reference, and the candidate adds no impact edge.
   Reach sections: `reach_sections` in `reference_report/sections.rs` adds up to six sections
   after the sites are labeled: `Overrides`, `Overrides of`, `Constructions`, `Variant uses`,
   `Registrations`, and `Tests that call or use it`, where each test has a run command from

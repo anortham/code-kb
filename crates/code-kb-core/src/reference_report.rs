@@ -996,6 +996,176 @@ fn is_object_value(lines: &[&str], line: usize, column: usize, name: &str) -> bo
             .is_none_or(|c| matches!(c, ',' | '}'))
 }
 
+fn is_object_shorthand_site(text: &str, line: usize, column: usize, name: &str) -> bool {
+    let Some(source_line) = source_line(text, line) else {
+        return false;
+    };
+    let Some((_, after)) = source_line.split_at_checked(column) else {
+        return false;
+    };
+    if !matches!(
+        after_blanks_and_comments(after.get(name.len()..).unwrap_or(""))
+            .chars()
+            .next(),
+        Some(',' | '}')
+    ) {
+        return false;
+    }
+    let Some(site) = line_start_offset(text, line).and_then(|start| start.checked_add(column))
+    else {
+        return false;
+    };
+    if site > 4096 {
+        return false;
+    }
+    let Some(prefix) = text.get(..site) else {
+        return false;
+    };
+    let Some(open) = js_bindings::unmatched_brace_before(prefix) else {
+        return false;
+    };
+    let object_prefix = &prefix[open + 1..];
+    if object_prefix.contains('{') || object_prefix.contains('}') {
+        return false;
+    }
+    if before_blanks_and_comments(object_prefix)
+        .chars()
+        .next_back()
+        .is_some_and(|c| !matches!(c, '{' | ','))
+    {
+        return false;
+    }
+    let before_open = prefix[..open].trim_end();
+    let after_open = before_open.chars().next_back();
+    if after_open == Some('=')
+        && !before_open
+            .chars()
+            .rev()
+            .nth(1)
+            .is_some_and(|c| matches!(c, '=' | '!' | '<' | '>'))
+    {
+        return true;
+    }
+    if let Some(before_return) = before_open.strip_suffix("return")
+        && (before_return.is_empty()
+            || !is_word_char(before_return.chars().next_back().unwrap_or(' ')))
+        && !prefix[before_return.len() + "return".len()..open]
+            .chars()
+            .any(|c| matches!(c, '\n' | '\r'))
+    {
+        return true;
+    }
+    let Some(call_head) = before_open.strip_suffix('(') else {
+        return false;
+    };
+    let Some((before_new, constructor)) = call_head.rsplit_once("new ") else {
+        return false;
+    };
+    !constructor.is_empty()
+        && constructor.chars().all(|c| is_word_char(c) || c == '.')
+        && !before_new.chars().next_back().is_some_and(is_word_char)
+}
+
+fn line_start_offset(text: &str, line: usize) -> Option<usize> {
+    let breaks = line.checked_sub(1)?;
+    if breaks == 0 {
+        return Some(0);
+    }
+    text.match_indices('\n')
+        .nth(breaks - 1)
+        .map(|(at, _)| at + 1)
+}
+
+fn source_line(text: &str, line: usize) -> Option<&str> {
+    let start = line_start_offset(text, line)?;
+    text.get(start..)?
+        .split_inclusive('\n')
+        .next()
+        .map(|line| line.strip_suffix('\n').unwrap_or(line))
+        .map(|line| line.strip_suffix('\r').unwrap_or(line))
+}
+
+fn caller_source_through_site(
+    root: &Path,
+    path: &str,
+    scope_start_line: usize,
+    site_line: usize,
+) -> Option<String> {
+    if scope_start_line == 0 || site_line < scope_start_line {
+        return None;
+    }
+    const PREFIX_BYTE_CAP: u64 = 512 * 1024;
+    const SNIPPET_BYTE_CAP: usize = 4096;
+    const SNIPPET_LINE_CAP: usize = 64;
+    if site_line - scope_start_line >= SNIPPET_LINE_CAP {
+        return None;
+    }
+    let file = std::fs::File::open(root.join(path)).ok()?;
+    let file = std::io::Read::take(file, PREFIX_BYTE_CAP);
+    let mut source = std::io::BufReader::new(file);
+    for _ in 1..scope_start_line {
+        skip_source_line(&mut source)?;
+    }
+    let mut snippet = Vec::with_capacity(SNIPPET_BYTE_CAP);
+    for line in scope_start_line..=site_line {
+        append_source_line(
+            &mut source,
+            &mut snippet,
+            SNIPPET_BYTE_CAP,
+            line == site_line,
+        )?;
+    }
+    String::from_utf8(snippet).ok()
+}
+
+fn skip_source_line(reader: &mut impl std::io::BufRead) -> Option<()> {
+    loop {
+        let (consumed, newline) = {
+            let bytes = std::io::BufRead::fill_buf(reader).ok()?;
+            if bytes.is_empty() {
+                return None;
+            }
+            match bytes.iter().position(|byte| *byte == b'\n') {
+                Some(position) => (position + 1, true),
+                None => (bytes.len(), false),
+            }
+        };
+        std::io::BufRead::consume(reader, consumed);
+        if newline {
+            return Some(());
+        }
+    }
+}
+
+fn append_source_line(
+    reader: &mut std::io::BufReader<std::io::Take<std::fs::File>>,
+    output: &mut Vec<u8>,
+    byte_cap: usize,
+    allow_unterminated: bool,
+) -> Option<()> {
+    let mut copied = false;
+    loop {
+        let bytes = std::io::BufRead::fill_buf(reader).ok()?;
+        if bytes.is_empty() {
+            return (copied && allow_unterminated && reader.get_ref().limit() > 0).then_some(());
+        }
+        let count = bytes
+            .iter()
+            .position(|byte| *byte == b'\n')
+            .map_or(bytes.len(), |position| position + 1);
+        if output.len().saturating_add(count) > byte_cap {
+            return None;
+        }
+        let newline = bytes[count - 1] == b'\n';
+        output.extend_from_slice(&bytes[..count]);
+        std::io::BufRead::consume(reader, count);
+        copied = true;
+        if newline {
+            return Some(());
+        }
+    }
+}
+
 #[derive(Clone)]
 struct Definition {
     symbol_id: String,
@@ -1006,6 +1176,7 @@ struct Definition {
     decorated_start_line: Option<usize>,
     body_start_line: Option<usize>,
     owner_name: Option<String>,
+    owner_kind: Option<String>,
     local: bool,
     /// The lines of the function that holds this function, which alone names it in a language of
     /// [`LOCAL_FUNCTION_LANGUAGES`].
@@ -1029,7 +1200,22 @@ struct Definition {
     module_value: bool,
 }
 
+struct ShorthandSite {
+    target_member: bool,
+    shadow_id: Option<String>,
+}
+
 impl Definition {
+    fn is_js_shorthand_member_target(&self) -> bool {
+        language_family(&self.language) == "js"
+            && self
+                .owner_kind
+                .as_deref()
+                .is_some_and(|kind| CLASS_LIKE_KINDS.contains(&kind))
+            && (matches!(self.kind.as_str(), "field" | "property")
+                || self.kind == "method" && self.owner_kind.as_deref() == Some("interface"))
+    }
+
     fn is_value(&self) -> bool {
         matches!(
             self.kind.as_str(),
@@ -1365,6 +1551,7 @@ impl<'a> Accounting<'a> {
                         .as_deref()
                         .is_some_and(|k| CLASS_LIKE_KINDS.contains(&k))
                 }),
+                owner_kind: parent_kind.filter(|kind| CLASS_LIKE_KINDS.contains(&kind.as_str())),
                 local,
                 scope,
                 top_level: parent_id.is_none(),
@@ -1549,6 +1736,16 @@ impl<'a> Accounting<'a> {
         self.mark_result_variables(&mut rows)?;
         js_modules::complete_js_chains(self.root, &mut rows);
 
+        let shorthand_targets: Vec<&Definition> = definitions
+            .iter()
+            .filter(|definition| group_ids.contains(definition.symbol_id.as_str()))
+            .collect();
+        let shorthand_member_target = !shorthand_targets.is_empty()
+            && shorthand_targets
+                .iter()
+                .all(|definition| definition.is_js_shorthand_member_target());
+        let mut shorthand_shadows = HashMap::new();
+
         let mut order: Vec<usize> = (0..rows.len()).collect();
         order.sort_by(|&a, &b| {
             let (a, b) = (&rows[a], &rows[b]);
@@ -1572,7 +1769,11 @@ impl<'a> Accounting<'a> {
                 break;
             }
             let row = &rows[index];
-            match self.decide_cheap(row, spec, target, &group_ids, &claims)? {
+            let mut shorthand_site = ShorthandSite {
+                target_member: shorthand_member_target,
+                shadow_id: None,
+            };
+            match self.decide_cheap(row, spec, target, &group_ids, &claims, &mut shorthand_site)? {
                 Some(verdict) => {
                     verdicts.insert(row.key.clone(), verdict);
                 }
@@ -1593,6 +1794,9 @@ impl<'a> Accounting<'a> {
                     );
                 }
                 None => undecided.push(index),
+            }
+            if let Some(shadow) = shorthand_site.shadow_id {
+                shorthand_shadows.insert(row.key.clone(), shadow);
             }
         }
 
@@ -1695,7 +1899,13 @@ impl<'a> Accounting<'a> {
                     unchecked.push(index);
                     continue;
                 }
-                None => self.decide_late(row, &spec.group, &group_definitions, &rivals)?,
+                None => self.decide_late(
+                    row,
+                    &spec.group,
+                    &group_definitions,
+                    &rivals,
+                    shorthand_shadows.contains_key(&row.key),
+                )?,
             };
             verdicts.insert(row.key.clone(), verdict);
         }
@@ -2233,6 +2443,7 @@ impl<'a> Accounting<'a> {
         target: &Symbol,
         group_ids: &HashSet<&str>,
         claims: &HashMap<String, Claim>,
+        shorthand_site: &mut ShorthandSite,
     ) -> Result<Option<Verdict>, QueryError> {
         if !languages_compatible(&row.language, &target.language) {
             return Ok(Some(Verdict::new(
@@ -2295,6 +2506,34 @@ impl<'a> Accounting<'a> {
             )));
         }
         if let Some(shadow) = self.nearest_shadow(row, &spec.name, group_ids)? {
+            let mut shorthand_candidate = false;
+            if shorthand_site.target_member
+                && row.kind == "variable_ref"
+                && language_family(&row.language) == "js"
+                && let Some(column) = row.site_column
+                && shadow.local
+                && matches!(shadow.kind.as_str(), "parameter" | "variable")
+                && shadow.dynamic_import(&spec.name).is_none()
+                && let Some(caller_id) = row.caller_id.as_deref()
+                && let Some(caller) = self.definition_by_id(caller_id)?
+                && caller.path == row.path
+                && let Some(source) = caller_source_through_site(
+                    self.root,
+                    &row.path,
+                    caller.start_line,
+                    row.site_line,
+                )
+                && let Some(site_line) = row
+                    .site_line
+                    .checked_sub(caller.start_line)
+                    .and_then(|line| line.checked_add(1))
+            {
+                shorthand_candidate =
+                    is_object_shorthand_site(&source, site_line, column, &spec.name);
+            }
+            if shorthand_candidate {
+                shorthand_site.shadow_id = Some(shadow.symbol_id.clone());
+            }
             let dynamic = shadow.dynamic_import(&spec.name);
             if let Some((source, imported)) = &dynamic
                 && let Some(verdict) =
@@ -2306,7 +2545,7 @@ impl<'a> Accounting<'a> {
                 Some((source, _)) => !self.js_source_is_external(&row.path, source)?,
                 None => false,
             };
-            if !follows_project_module {
+            if !follows_project_module && !shorthand_candidate {
                 let basis = match self.js_binding_line(row, &spec.name)? {
                     Some(line) if line > shadow.start_line || shadow.start_line > row.site_line => {
                         format!(
@@ -2319,13 +2558,21 @@ impl<'a> Accounting<'a> {
             }
         }
         if let Some(line) = self.js_enclosing_binding_line(row, &spec.name)? {
-            return Ok(Some(Verdict::new(
-                SiteLabel::Excluded,
-                format!(
-                    "line {line} binds the name as a callback parameter, loop variable, or catch parameter"
-                ),
-                false,
-            )));
+            let is_shorthand_value_binding = match shorthand_site.shadow_id.as_deref() {
+                Some(shadow_id) => self
+                    .definition_by_id(shadow_id)?
+                    .is_some_and(|shadow| shadow.start_line == line),
+                None => false,
+            };
+            if !is_shorthand_value_binding {
+                return Ok(Some(Verdict::new(
+                    SiteLabel::Excluded,
+                    format!(
+                        "line {line} binds the name as a callback parameter, loop variable, or catch parameter"
+                    ),
+                    false,
+                )));
+            }
         }
         if let Some(verdict) = self.java_static_import(row, spec)? {
             return Ok(Some(verdict));
@@ -2342,28 +2589,34 @@ impl<'a> Accounting<'a> {
         if row.is_bare_use() && spec.group.iter().all(is_property_method) {
             return Ok(Some(self.bare_use_of_property_method(row, &spec.name)?));
         }
-        if let Some(verdict) = self.js_verdict(row, spec)? {
+        if let Some(verdict) = self.js_verdict(row, spec)?
+            && (shorthand_site.shadow_id.is_none() || verdict.label != SiteLabel::Proven)
+        {
             return Ok(Some(verdict));
         }
         if let Some(claim) = claims.get(&row.key)
             && let Some(basis) = &claim.basis
         {
-            if basis == IMPORT_BASIS {
-                if language_family(&row.language) == "js"
-                    && let Some(verdict) = self.external_import(row, &spec.name)?
-                {
-                    return Ok(Some(verdict));
+            let skip_proven_claim = shorthand_site.shadow_id.is_some()
+                && claimed_verdict(row, claim, 0, spec.builds_class).label == SiteLabel::Proven;
+            if !skip_proven_claim {
+                if basis == IMPORT_BASIS {
+                    if language_family(&row.language) == "js"
+                        && let Some(verdict) = self.external_import(row, &spec.name)?
+                    {
+                        return Ok(Some(verdict));
+                    }
+                    let others = self.other_import_matches(row, &spec.name, group_ids)?;
+                    if others > 0 {
+                        return Ok(Some(Verdict::new(
+                            SiteLabel::Unresolved,
+                            format!("the import matches {} definitions", others + 1),
+                            true,
+                        )));
+                    }
                 }
-                let others = self.other_import_matches(row, &spec.name, group_ids)?;
-                if others > 0 {
-                    return Ok(Some(Verdict::new(
-                        SiteLabel::Unresolved,
-                        format!("the import matches {} definitions", others + 1),
-                        true,
-                    )));
-                }
+                return Ok(Some(claimed_verdict(row, claim, 0, spec.builds_class)));
             }
-            return Ok(Some(claimed_verdict(row, claim, 0, spec.builds_class)));
         }
         if self.crate_path_names_owner(row, &spec.group)? {
             return Ok(Some(Verdict::new(
@@ -2375,6 +2628,7 @@ impl<'a> Accounting<'a> {
         if let Some(to) = row.to_symbol_id.as_deref()
             && !row.hidden_receiver
             && !group_ids.contains(to)
+            && shorthand_site.shadow_id.as_deref() != Some(to)
             && let Some(other) = self.definition_by_id(to)?
         {
             return Ok(Some(Verdict::new(
@@ -2610,6 +2864,7 @@ impl<'a> Accounting<'a> {
         group: &[Symbol],
         group_definitions: &[&Definition],
         rivals: &[&Definition],
+        shorthand_candidate: bool,
     ) -> Result<Verdict, QueryError> {
         if let Some(verdict) = self.outside_ancestors(row, group)? {
             return Ok(verdict);
@@ -2638,6 +2893,13 @@ impl<'a> Accounting<'a> {
                     "receiver `{object}` names the object `{}` is assigned on",
                     group[0].name
                 ),
+                false,
+            ));
+        }
+        if shorthand_candidate {
+            return Ok(Verdict::new(
+                SiteLabel::Unresolved,
+                format!("{} definitions", rivals.len() + 2),
                 false,
             ));
         }
@@ -2737,6 +2999,12 @@ impl<'a> Accounting<'a> {
             stmt.query_row(params![symbol_id], |row| {
                 let parent_kind: Option<String> = row.get(9)?;
                 let parent_name: Option<String> = row.get(8)?;
+                let kind: String = row.get(2)?;
+                let local = kind == "parameter"
+                    || kind == "variable"
+                        && parent_kind.as_deref().is_some_and(|kind| {
+                            matches!(kind, "function" | "method" | "constructor")
+                        });
                 Ok(Definition {
                     symbol_id: row.get(0)?,
                     name: row.get(1)?,
@@ -2749,9 +3017,11 @@ impl<'a> Accounting<'a> {
                             .as_deref()
                             .is_some_and(|k| CLASS_LIKE_KINDS.contains(&k))
                     }),
-                    local: false,
+                    owner_kind: parent_kind
+                        .filter(|kind| CLASS_LIKE_KINDS.contains(&kind.as_str())),
+                    local,
                     scope: None,
-                    kind: row.get(2)?,
+                    kind,
                     language: row.get(3)?,
                     signature: row.get(10)?,
                     owner_signature: row.get(11)?,
@@ -2777,6 +3047,10 @@ impl<'a> Accounting<'a> {
             .as_ref()
             .and_then(|owner| owner.signature.clone())
             .unwrap_or_default();
+        let owner_kind = owner
+            .as_ref()
+            .filter(|owner| CLASS_LIKE_KINDS.contains(&owner.kind.as_str()))
+            .map(|owner| owner.kind.clone());
         let owner_name = owner
             .filter(|owner| CLASS_LIKE_KINDS.contains(&owner.kind.as_str()))
             .map(|owner| owner.name);
@@ -2788,6 +3062,7 @@ impl<'a> Accounting<'a> {
             decorated_start_line: None,
             body_start_line: symbol.body_start_line,
             owner_name,
+            owner_kind,
             local: false,
             scope: None,
             kind: symbol.kind.clone(),
