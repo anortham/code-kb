@@ -910,3 +910,239 @@ fn a_call_in_a_function_nested_in_a_test_lists_the_enclosing_test() {
         "{text}"
     );
 }
+
+const CONFTEST: &str = "import pytest\n\n\n@pytest.fixture\ndef app():\n    return object()\n";
+const TEST_BASIC: &str = "def test_one(app):\n    assert app\n\n\ndef test_two():\n    assert True\n\n\ndef test_three():\n    value = 1\n    assert value\n";
+
+fn reasons(result: &code_kb_core::BlastRadiusResult) -> Vec<(&str, &str)> {
+    result
+        .likely_tests
+        .iter()
+        .map(|t| (t.name.as_str(), t.reason.as_str()))
+        .collect()
+}
+
+#[test]
+fn a_test_file_target_lists_the_tests_it_defines() {
+    let (_temp, workspace, conn) = scanned(&[
+        ("tests/conftest.py", CONFTEST),
+        ("tests/test_basic.py", TEST_BASIC),
+    ]);
+
+    let result =
+        blast_radius_op(&workspace, &conn, None, Some("tests/test_basic.py"), 2, 20).unwrap();
+
+    assert_eq!(
+        reasons(&result),
+        [
+            ("test_one", "in the target file"),
+            ("test_two", "in the target file"),
+            ("test_three", "in the target file"),
+        ],
+        "{}",
+        format_blast_radius(&result)
+    );
+}
+
+#[test]
+fn a_fixture_file_target_lists_the_tests_that_take_its_fixtures() {
+    let (_temp, workspace, conn) = scanned(&[
+        ("tests/conftest.py", CONFTEST),
+        ("tests/test_basic.py", TEST_BASIC),
+    ]);
+
+    let result =
+        blast_radius_op(&workspace, &conn, None, Some("tests/conftest.py"), 2, 20).unwrap();
+
+    assert_eq!(
+        reasons(&result),
+        [("test_one", "uses fixture `app`")],
+        "{}",
+        format_blast_radius(&result)
+    );
+}
+
+#[test]
+fn a_fixture_target_lists_the_tests_that_take_it() {
+    let (_temp, workspace, conn) = scanned(&[
+        ("tests/conftest.py", CONFTEST),
+        ("tests/test_basic.py", TEST_BASIC),
+    ]);
+
+    let result = blast_radius_op(
+        &workspace,
+        &conn,
+        Some("app"),
+        Some("tests/conftest.py"),
+        2,
+        20,
+    )
+    .unwrap();
+
+    assert_eq!(
+        reasons(&result),
+        [("test_one", "uses fixture `app`")],
+        "{}",
+        format_blast_radius(&result)
+    );
+}
+
+fn git(root: &std::path::Path, args: &[&str]) {
+    let output = std::process::Command::new("git")
+        .args(["-c", "core.autocrlf=false", "-c", "commit.gpgsign=false"])
+        .args(["-c", "user.name=Test", "-c", "user.email=test@example.com"])
+        .args(args)
+        .current_dir(root)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn changed_after_commit(
+    files: &[(&str, &str)],
+    edits: &[(&str, &str)],
+) -> (tempfile::TempDir, Workspace, Connection) {
+    find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+    let temp = safe_tempdir();
+    let root = temp.path().to_path_buf();
+    git(&root, &["init", "-q", "-b", "main"]);
+    for (path, content) in files {
+        let file = root.join(path);
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(file, content).unwrap();
+    }
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-q", "-m", "base"]);
+    for (path, content) in edits {
+        std::fs::write(root.join(path), content).unwrap();
+    }
+    let db = root.join(".code-kb").join("artifact.db");
+    let workspace = Workspace::new(root);
+    scan_workspace(&workspace, &db, true).expect("scan failed");
+    let conn = open_read_only(&db).unwrap();
+    (temp, workspace, conn)
+}
+
+#[test]
+fn the_tests_whose_own_lines_the_diff_changed_are_tests_to_run() {
+    let edited = TEST_BASIC
+        .replace("    assert True\n", "    assert True\n    assert 2\n")
+        .replace("    value = 1\n", "");
+    let (_temp, workspace, conn) = changed_after_commit(
+        &[
+            ("tests/conftest.py", CONFTEST),
+            ("tests/test_basic.py", TEST_BASIC),
+        ],
+        &[("tests/test_basic.py", &edited)],
+    );
+
+    let result = blast_radius_op(&workspace, &conn, None, None, 2, 20).unwrap();
+
+    assert_eq!(
+        reasons(&result),
+        [
+            ("test_two", "changed in the diff"),
+            ("test_three", "changed in the diff"),
+        ],
+        "{}",
+        format_blast_radius(&result)
+    );
+}
+
+#[test]
+fn a_fixture_the_diff_changed_lists_the_tests_that_take_it() {
+    let (_temp, workspace, conn) = changed_after_commit(
+        &[
+            ("tests/conftest.py", CONFTEST),
+            ("tests/test_basic.py", TEST_BASIC),
+        ],
+        &[(
+            "tests/conftest.py",
+            &CONFTEST.replace("return object()", "return dict()"),
+        )],
+    );
+
+    let result = blast_radius_op(&workspace, &conn, None, None, 2, 20).unwrap();
+
+    assert_eq!(
+        reasons(&result),
+        [("test_one", "uses fixture `app`")],
+        "{}",
+        format_blast_radius(&result)
+    );
+}
+
+#[test]
+fn a_project_in_a_folder_of_its_repository_reads_the_diff_from_that_folder() {
+    find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+    let temp = safe_tempdir();
+    let repo = temp.path().to_path_buf();
+    let root = repo.join("app");
+    git(&repo, &["init", "-q", "-b", "main"]);
+    for (path, content) in [
+        ("tests/conftest.py", CONFTEST),
+        ("tests/test_basic.py", TEST_BASIC),
+    ] {
+        let file = root.join(path);
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(file, content).unwrap();
+    }
+    git(&repo, &["add", "."]);
+    git(&repo, &["commit", "-q", "-m", "base"]);
+    std::fs::write(
+        root.join("tests/test_basic.py"),
+        TEST_BASIC.replace("    assert True\n", "    assert 2\n"),
+    )
+    .unwrap();
+    let db = root.join(".code-kb").join("artifact.db");
+    let workspace = Workspace::new(root);
+    scan_workspace(&workspace, &db, true).expect("scan failed");
+    let conn = open_read_only(&db).unwrap();
+
+    let result = blast_radius_op(&workspace, &conn, None, None, 2, 20).unwrap();
+
+    assert_eq!(result.seeds, ["tests/test_basic.py"]);
+    assert_eq!(
+        reasons(&result),
+        [("test_two", "changed in the diff")],
+        "{}",
+        format_blast_radius(&result)
+    );
+}
+
+#[test]
+fn a_test_in_a_changed_test_file_that_calls_changed_code_stays_a_test_to_run() {
+    let tests = "from pkg.helpers import helper\n\n\ndef test_one():\n    assert helper()\n\n\ndef test_two():\n    assert True\n\n\ndef test_three():\n    assert helper() == 1\n";
+    let (_temp, workspace, conn) = changed_after_commit(
+        &[
+            ("pyproject.toml", "[project]\nname = \"pkg\"\n"),
+            ("src/pkg/__init__.py", ""),
+            ("src/pkg/helpers.py", "def helper():\n    return 1\n"),
+            ("tests/test_basic.py", tests),
+        ],
+        &[
+            ("src/pkg/helpers.py", "def helper():\n    return 2\n"),
+            (
+                "tests/test_basic.py",
+                &tests.replace("    assert True\n", "    assert 2\n"),
+            ),
+        ],
+    );
+
+    let result = blast_radius_op(&workspace, &conn, None, None, 2, 20).unwrap();
+
+    assert_eq!(
+        reasons(&result),
+        [
+            ("test_two", "changed in the diff"),
+            ("test_one", "direct caller"),
+            ("test_three", "direct caller"),
+        ],
+        "{}",
+        format_blast_radius(&result)
+    );
+}

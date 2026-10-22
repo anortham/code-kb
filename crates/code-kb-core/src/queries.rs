@@ -1,6 +1,6 @@
 use rusqlite::{Connection, OptionalExtension, Row, ToSql, params};
 use rust_stemmers::{Algorithm, Stemmer};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use thiserror::Error;
 
 use crate::db::local_variable_predicate;
@@ -6032,6 +6032,51 @@ pub fn compute_blast_radius_scoped_with_ids(
     max_depth: usize,
     limit: usize,
 ) -> Result<BlastRadiusResult, QueryError> {
+    blast_radius_walk(
+        conn,
+        seed_symbols,
+        seed_ids,
+        symbol_path_filter,
+        seed_paths,
+        None,
+        max_depth,
+        limit,
+    )
+}
+
+/// Compute blast radius for the files a diff changed, each with the lines it touched. The walk
+/// starts from every symbol of each file, and a test, fixture, or setup member counts as changed
+/// only when its lines hold a touched line.
+pub fn compute_blast_radius_for_changes(
+    conn: &Connection,
+    changes: &BTreeMap<String, Vec<(usize, usize)>>,
+    max_depth: usize,
+    limit: usize,
+) -> Result<BlastRadiusResult, QueryError> {
+    let seed_paths: Vec<&str> = changes.keys().map(String::as_str).collect();
+    blast_radius_walk(
+        conn,
+        &[],
+        &[],
+        None,
+        &seed_paths,
+        Some(changes),
+        max_depth,
+        limit,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn blast_radius_walk(
+    conn: &Connection,
+    seed_symbols: &[&str],
+    seed_ids: &[&str],
+    symbol_path_filter: Option<&str>,
+    seed_paths: &[&str],
+    changed: Option<&BTreeMap<String, Vec<(usize, usize)>>>,
+    max_depth: usize,
+    limit: usize,
+) -> Result<BlastRadiusResult, QueryError> {
     validate_result_limit(limit)?;
     let max_depth = max_depth.min(MAX_BLAST_DEPTH);
     let mut resolved_seed_symbols = seed_symbols
@@ -6250,9 +6295,57 @@ pub fn compute_blast_radius_scoped_with_ids(
     let mut setups = Vec::new();
     let mut constructor_only_test_keys = HashSet::new();
     let mut non_constructor_test_keys = HashSet::new();
+    let target_ids: HashSet<&str> = resolved_seed_symbols
+        .iter()
+        .map(|symbol| symbol.symbol_id.as_str())
+        .collect();
+    for seed in seed_rows(
+        conn,
+        &seed_condition,
+        &params_vec[..max_depth_idx - 1],
+        lifecycle,
+    )? {
+        let origin = if target_ids.contains(seed.symbol_id.as_str()) {
+            SeedOrigin::Target
+        } else if let Some(changed) = changed {
+            let lines = changed
+                .get(&seed.path)
+                .map(Vec::as_slice)
+                .unwrap_or_default();
+            if !lines
+                .iter()
+                .any(|&(first, last)| first <= seed.end_line && seed.start_line <= last)
+            {
+                continue;
+            }
+            SeedOrigin::Diff
+        } else {
+            SeedOrigin::TargetFile
+        };
+        let callable = matches!(seed.kind.as_str(), "function" | "method");
+        let is_test_target = seed.is_test
+            || seed.test_container
+            || seed.is_fixture
+            || (is_test_path(&seed.path) && (seed.in_test_class || names_a_test(&seed.name)));
+        if !is_test_target || (origin != SeedOrigin::Target && !callable) {
+            continue;
+        }
+        for test in seed_tests(conn, &seed, origin)? {
+            if seen_test_keys.insert(format!("{}:{}", test.path, test.line)) {
+                non_constructor_test_keys.insert((test.path.clone(), test.line));
+                likely_tests.push(test);
+            }
+        }
+    }
     if !recursive_branches.is_empty() {
         let recursive_sql = recursive_branches.join("\n UNION \n");
         let not_documentation = not_documentation(conn, "s");
+        // A seed that the walk reaches again counts only as a test to run: a test in a changed test
+        // file that calls changed code. Its own change is the seed step's to report.
+        let reached_depth = "MIN(CASE WHEN iw.depth > 0 THEN iw.depth END)";
+        let reached_via = "MIN(CASE WHEN iw.depth > 0 THEN iw.via END)";
+        let test_path = test_path_predicate("s");
+        let test_name = names_a_test_sql("s");
         let sql = format!(
             "WITH RECURSIVE impact_walk(symbol_id, depth, via) AS (
                 SELECT symbol_id, 0, 0
@@ -6265,19 +6358,21 @@ pub fn compute_blast_radius_scoped_with_ids(
                 {recursive_sql}
             )
             SELECT s.name, s.kind, s.path, s.start_line, s.is_test, s.test_container,
-                   MIN(iw.depth) as min_depth, MIN(iw.via) as min_via,
+                   {reached_depth} as min_depth, {reached_via} as min_via,
                    {lifecycle} AS is_fixture, s.parent_symbol_id,
                    EXISTS (SELECT 1 FROM symbols owner
                            WHERE owner.symbol_id = s.parent_symbol_id
                              AND COALESCE(owner.test_container, 0) != 0) AS in_test_class,
-                   s.language, s.signature
+                   s.language, s.signature, MIN(iw.depth) = 0 AS is_seed
             FROM impact_walk iw
             CROSS JOIN symbols s ON iw.symbol_id = s.symbol_id
             WHERE s.kind NOT IN ({LOW_SIGNAL_KINDS_SQL})
               AND {not_documentation}
             GROUP BY s.symbol_id, s.name, s.kind, s.path, s.start_line, s.is_test, s.test_container
-            HAVING MIN(iw.depth) > 0
-            ORDER BY MIN(iw.depth) > {max_depth} ASC, MIN(iw.via) ASC, min_depth ASC, s.path ASC, s.name ASC
+            HAVING {reached_depth} IS NOT NULL
+               AND (MIN(iw.depth) > 0 OR s.is_test != 0 OR s.test_container != 0 OR is_fixture
+                    OR ({test_path} AND (in_test_class OR {test_name})))
+            ORDER BY {reached_depth} > {max_depth} ASC, {reached_via} ASC, min_depth ASC, s.path ASC, s.name ASC
             LIMIT 201"
         );
 
@@ -6302,6 +6397,7 @@ pub fn compute_blast_radius_scoped_with_ids(
                 row.get::<_, bool>(10)?,
                 row.get::<_, String>(11)?,
                 row.get::<_, Option<String>>(12)?,
+                row.get::<_, bool>(13)?,
             ))
         })?;
 
@@ -6320,6 +6416,7 @@ pub fn compute_blast_radius_scoped_with_ids(
                 in_test_class,
                 language,
                 signature,
+                is_seed,
             ) = r?;
             if depth > max_depth {
                 callers_beyond_depth = true;
@@ -6334,6 +6431,9 @@ pub fn compute_blast_radius_scoped_with_ids(
                 || test_container
                 || is_fixture
                 || (is_test_path(&path) && (in_test_class || names_a_test(&name)));
+            if is_seed && !is_test_target {
+                continue;
+            }
             let constructor_only = min_via > 0;
             if is_test_target {
                 let key = format!("{}:{}", path, line);
@@ -6344,11 +6444,7 @@ pub fn compute_blast_radius_scoped_with_ids(
                     non_constructor_test_keys.insert(test_key);
                 }
                 if seen_test_keys.insert(key) {
-                    let lowered = name.to_ascii_lowercase();
-                    let pytest_fixture = path.ends_with(".py")
-                        && !["setup", "teardown", "asyncsetup", "asyncteardown"]
-                            .iter()
-                            .any(|prefix| lowered.starts_with(prefix));
+                    let pytest_fixture = is_pytest_fixture(&name, &path);
                     let caller = if depth == 1 {
                         "direct caller".to_string()
                     } else {
@@ -6714,6 +6810,140 @@ fn fixture_users(
 }
 
 /// The tests declared in the class `class_id`, without its setup and teardown members.
+/// Why a seed symbol of a walk is there: it is the target, it is in a target file, or a diff
+/// changed its lines.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SeedOrigin {
+    Target,
+    TargetFile,
+    Diff,
+}
+
+impl SeedOrigin {
+    fn test_reason(self) -> &'static str {
+        match self {
+            SeedOrigin::Target => "the target is a test",
+            SeedOrigin::TargetFile => "in the target file",
+            SeedOrigin::Diff => "changed in the diff",
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            SeedOrigin::Target => "the target",
+            SeedOrigin::TargetFile | SeedOrigin::Diff => self.test_reason(),
+        }
+    }
+}
+
+struct SeedRow {
+    symbol_id: String,
+    name: String,
+    kind: String,
+    path: String,
+    start_line: usize,
+    end_line: usize,
+    is_test: bool,
+    test_container: bool,
+    is_fixture: bool,
+    parent: Option<String>,
+    in_test_class: bool,
+}
+
+/// The symbols a walk starts from, in path and line order.
+fn seed_rows(
+    conn: &Connection,
+    seed_condition: &str,
+    params: &[rusqlite::types::Value],
+    lifecycle: &str,
+) -> Result<Vec<SeedRow>, QueryError> {
+    let not_documentation = not_documentation(conn, "s");
+    let mut stmt = conn.prepare(&format!(
+        "SELECT s.symbol_id, s.name, s.kind, s.path, s.start_line, s.end_line, s.is_test,
+                s.test_container, {lifecycle}, s.parent_symbol_id,
+                EXISTS (SELECT 1 FROM symbols owner
+                        WHERE owner.symbol_id = s.parent_symbol_id
+                          AND COALESCE(owner.test_container, 0) != 0)
+         FROM symbols s
+         WHERE ({seed_condition})
+           AND s.kind NOT IN ({LOW_SIGNAL_KINDS_SQL})
+           AND {not_documentation}
+         ORDER BY s.path, s.start_line"
+    ))?;
+    let rows = stmt.query_map(rusqlite::params_from_iter(params), |row| {
+        Ok(SeedRow {
+            symbol_id: row.get(0)?,
+            name: row.get(1)?,
+            kind: row.get(2)?,
+            path: row.get::<_, String>(3)?.replace('\\', "/"),
+            start_line: row.get::<_, i64>(4)? as usize,
+            end_line: row.get::<_, i64>(5)? as usize,
+            is_test: row.get(6)?,
+            test_container: row.get(7)?,
+            is_fixture: row.get(8)?,
+            parent: row.get(9)?,
+            in_test_class: row.get(10)?,
+        })
+    })?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
+/// The tests to run because the seed `seed` changed: the seed itself when it is a test, the tests
+/// that take it when it is a pytest fixture, and the tests of its class when it is a setup member.
+/// A fixture or setup member that no test uses stays as its own row.
+fn seed_tests(
+    conn: &Connection,
+    seed: &SeedRow,
+    origin: SeedOrigin,
+) -> Result<Vec<TestTarget>, QueryError> {
+    let own_row = |reason: String| TestTarget {
+        name: seed.name.clone(),
+        path: seed.path.clone(),
+        line: seed.start_line,
+        reason,
+    };
+    if !seed.is_fixture {
+        return Ok(vec![own_row(origin.test_reason().to_string())]);
+    }
+    if is_pytest_fixture(&seed.name, &seed.path) {
+        let shown = fixture_name(conn, &seed.name, &seed.path);
+        let users = fixture_users(conn, &seed.name, &seed.path)?;
+        if users.is_empty() {
+            return Ok(vec![own_row(format!("fixture ({})", origin.label()))]);
+        }
+        return Ok(users
+            .into_iter()
+            .map(|test| TestTarget {
+                reason: format!("uses fixture `{shown}`"),
+                ..test
+            })
+            .collect());
+    }
+    let tests = match seed.parent.as_deref() {
+        Some(class_id) => tests_in_class(conn, class_id)?,
+        None => Vec::new(),
+    };
+    if tests.is_empty() {
+        return Ok(vec![own_row(format!("setup ({})", origin.label()))]);
+    }
+    Ok(tests
+        .into_iter()
+        .map(|test| TestTarget {
+            reason: format!("setup `{}` runs before it", seed.name),
+            ..test
+        })
+        .collect())
+}
+
+/// Whether a lifecycle member is a pytest fixture rather than a setup or teardown method.
+fn is_pytest_fixture(name: &str, path: &str) -> bool {
+    let lowered = name.to_ascii_lowercase();
+    path.ends_with(".py")
+        && !["setup", "teardown", "asyncsetup", "asyncteardown"]
+            .iter()
+            .any(|prefix| lowered.starts_with(prefix))
+}
+
 fn tests_in_class(conn: &Connection, class_id: &str) -> Result<Vec<TestTarget>, QueryError> {
     let not_lifecycle = if has_column(conn, "symbols", "test_lifecycle") {
         "COALESCE(test_lifecycle, 0) = 0"

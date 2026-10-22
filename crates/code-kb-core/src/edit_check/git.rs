@@ -133,6 +133,24 @@ impl Git {
         base: &str,
         files: &[ChangedFile],
     ) -> Result<Hunks, EditCheckError> {
+        self.hunks(base, files, new_range)
+    }
+
+    /// [`Git::new_side_hunks`], where a hunk that only removes lines touches the line before them.
+    pub(super) fn touched_lines(
+        &self,
+        base: &str,
+        files: &[ChangedFile],
+    ) -> Result<Hunks, EditCheckError> {
+        self.hunks(base, files, touched_range)
+    }
+
+    fn hunks(
+        &self,
+        base: &str,
+        files: &[ChangedFile],
+        range: fn(&str) -> Option<(usize, usize)>,
+    ) -> Result<Hunks, EditCheckError> {
         let mut hunks = Hunks::new();
         let mut tracked: Vec<&str> = Vec::new();
         for file in files {
@@ -167,7 +185,7 @@ impl Git {
         ];
         args.extend(tracked);
         let patch = self.stdout(&args)?;
-        hunks.extend(parse_hunks(&String::from_utf8_lossy(&patch)));
+        hunks.extend(parse_hunks(&String::from_utf8_lossy(&patch), range));
         Ok(hunks)
     }
 
@@ -201,7 +219,7 @@ fn parse_name_status(text: &str) -> Vec<ChangedFile> {
     files
 }
 
-fn parse_hunks(patch: &str) -> Hunks {
+fn parse_hunks(patch: &str, range: fn(&str) -> Option<(usize, usize)>) -> Hunks {
     let mut hunks = Hunks::new();
     let mut current: Option<String> = None;
     let mut in_header = false;
@@ -213,7 +231,7 @@ fn parse_hunks(patch: &str) -> Hunks {
             current = new_path(header);
         } else if line.starts_with("@@ ") {
             in_header = false;
-            if let (Some(path), Some(range)) = (&current, new_range(line)) {
+            if let (Some(path), Some(range)) = (&current, range(line)) {
                 hunks.entry(path.clone()).or_default().push(range);
             }
         }
@@ -274,6 +292,21 @@ fn new_range(header: &str) -> Option<(usize, usize)> {
     (count > 0).then(|| (start, start + count - 1))
 }
 
+/// [`new_range`], or for a hunk that adds no line, the line before the removed ones (`+4,0` removes
+/// lines after line 4), and line 1 when the removal starts the file.
+fn touched_range(header: &str) -> Option<(usize, usize)> {
+    new_range(header).or_else(|| {
+        let new_side = header.split_whitespace().nth(2)?.strip_prefix('+')?;
+        let start = new_side
+            .split_once(',')
+            .map_or(new_side, |(start, _)| start)
+            .parse::<usize>()
+            .ok()?
+            .max(1);
+        Some((start, start))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -283,6 +316,13 @@ mod tests {
         assert_eq!(new_range("@@ -3,2 +5,4 @@ fn x()"), Some((5, 8)));
         assert_eq!(new_range("@@ -3 +5 @@"), Some((5, 5)));
         assert_eq!(new_range("@@ -3,2 +2,0 @@"), None);
+    }
+
+    #[test]
+    fn a_hunk_that_only_removes_lines_touches_the_line_before_them() {
+        assert_eq!(touched_range("@@ -3,2 +5,4 @@ fn x()"), Some((5, 8)));
+        assert_eq!(touched_range("@@ -3,2 +2,0 @@"), Some((2, 2)));
+        assert_eq!(touched_range("@@ -1,2 +0,0 @@"), Some((1, 1)));
     }
 
     #[test]
@@ -306,7 +346,7 @@ mod tests {
     #[test]
     fn hunks_are_keyed_by_the_new_path_and_content_lines_are_not_headers() {
         let patch = "diff --git a/x.sql b/x.sql\n--- a/x.sql\n+++ b/x.sql\t\n@@ -1,2 +1,2 @@\n--- old comment\n+++ new comment\n@@ -9,0 +10,3 @@\n+a\n+b\n+c\ndiff --git a/gone.rs b/gone.rs\n--- a/gone.rs\n+++ /dev/null\n@@ -1,3 +0,0 @@\n-x\n";
-        let hunks = parse_hunks(patch);
+        let hunks = parse_hunks(patch, new_range);
         assert_eq!(hunks.get("x.sql"), Some(&vec![(1, 2), (10, 12)]));
         assert!(!hunks.contains_key("gone.rs"));
     }

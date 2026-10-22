@@ -71,6 +71,28 @@ pub fn require_repository(root: &Path) -> Result<(), EditCheckError> {
     Git::open(root).map(|_| ())
 }
 
+/// The files of `root` that differ from `HEAD` (every file before the first commit), with the
+/// lines the diff touched in each, relative to `root`. An untracked file is touched whole, and a
+/// file with no new-side line (a deletion, a mode change) has no range.
+pub fn uncommitted_changes(
+    root: &Path,
+) -> Result<BTreeMap<String, Vec<(usize, usize)>>, EditCheckError> {
+    let git = Git::open(root)?;
+    let base = match git.resolve("HEAD")? {
+        Some(sha) => sha,
+        None => git.empty_tree()?,
+    };
+    let files = git.changed_files(&base)?;
+    let mut touched = git.touched_lines(&base, &files)?;
+    Ok(files
+        .into_iter()
+        .map(|file| {
+            let lines = touched.remove(&file.path).unwrap_or_default();
+            (file.path, lines)
+        })
+        .collect())
+}
+
 /// The commit `HEAD` names in the repository that holds `root`: `None` outside a repository and
 /// before the first commit.
 pub fn head_commit(root: &Path) -> Option<String> {

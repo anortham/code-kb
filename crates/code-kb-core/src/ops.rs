@@ -771,20 +771,20 @@ pub fn blast_radius_selected_op(
         }
     });
 
+    let depth = if max_depth == 0 { 2 } else { max_depth.min(5) };
     let (seed_symbols, symbol_path_filter, seed_paths) = match (clean_symbol, clean_file) {
         (Some(s), Some(f)) => (vec![s], Some(f), vec![]),
         (Some(s), None) => (vec![s], None, vec![]),
         (None, Some(f)) => (vec![], None, vec![f]),
         (None, None) => {
-            let discovered = uncommitted_paths(workspace)?
-                .into_iter()
-                .filter(|path| !crate::workspace::is_hard_excluded(path))
-                .collect();
-            (vec![], None, discovered)
+            let mut changes = edit_check::uncommitted_changes(&workspace.root)?;
+            changes.retain(|path, _| !crate::workspace::is_hard_excluded(path));
+            return Ok(queries::compute_blast_radius_for_changes(
+                conn, &changes, depth, limit,
+            )?);
         }
     };
 
-    let depth = if max_depth == 0 { 2 } else { max_depth.min(5) };
     let seed_paths_refs: Vec<&str> = seed_paths.iter().map(|s| s.as_str()).collect();
     let res = queries::compute_blast_radius_scoped(
         conn,
@@ -799,36 +799,6 @@ pub fn blast_radius_selected_op(
         _ => None,
     };
     with_calling_tests(workspace, conn, target, res, limit)
-}
-
-/// The paths `git status` lists as changed, or the error `check_edit` gives outside a repository.
-fn uncommitted_paths(workspace: &Workspace) -> Result<Vec<String>, OpError> {
-    edit_check::require_repository(&workspace.canonical_root)?;
-    let output = std::process::Command::new("git")
-        .args(["status", "--porcelain"])
-        .current_dir(&workspace.root)
-        .output()
-        .map_err(|error| EditCheckError::Git(format!("could not run git: {error}")))?;
-    if !output.status.success() {
-        return Err(EditCheckError::Git(format!(
-            "git status failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        ))
-        .into());
-    }
-    Ok(String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .filter(|line| line.len() > 3)
-        .map(|line| {
-            let path_part = line.get(3..).unwrap_or("").trim();
-            let target = match path_part.split_once("->") {
-                Some((_, to)) => to.trim(),
-                None => path_part,
-            };
-            target.trim_matches('"').replace('\\', "/")
-        })
-        .filter(|path| !path.is_empty())
-        .collect())
 }
 
 /// Fills what the walk left empty from the callers report of `target`: the callers of its proven
