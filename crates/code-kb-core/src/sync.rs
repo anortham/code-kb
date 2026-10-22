@@ -108,16 +108,8 @@ fn julie_extract_candidates() -> Vec<PathBuf> {
 
     // The current directory is never searched: it may be another repository with its own
     // older `.tools/julie-extract`. A source build finds the checkout's `.tools` above `target/`.
-    if let Some(exe_dir) = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|d| d.to_path_buf()))
-    {
-        candidates.push(exe_dir.join(exe_name));
-        candidates.extend(
-            exe_dir
-                .ancestors()
-                .map(|dir| dir.join(".tools").join(exe_name)),
-        );
+    if let Ok(exe) = std::env::current_exe() {
+        candidates.extend(exe_dir_candidates(&exe, exe_name));
     }
 
     if let Ok(p) = which::which("julie-extract") {
@@ -128,6 +120,28 @@ fn julie_extract_candidates() -> Vec<PathBuf> {
         .into_iter()
         .filter(|p| p.is_file())
         .map(|p| crate::workspace::normalize_path(&p))
+        .collect()
+}
+
+/// The extractor next to `exe` and in each `.tools` folder above it, for the path as run and,
+/// when it is a symlink such as `~/.code-kb/bin/code-kb`, for the file it points to.
+fn exe_dir_candidates(exe: &Path, exe_name: &str) -> Vec<PathBuf> {
+    let mut dirs: Vec<PathBuf> = exe.parent().map(Path::to_path_buf).into_iter().collect();
+    if let Some(resolved) = std::fs::canonicalize(exe)
+        .ok()
+        .and_then(|p| p.parent().map(Path::to_path_buf))
+        && !dirs.contains(&resolved)
+    {
+        dirs.push(resolved);
+    }
+    dirs.iter()
+        .flat_map(|exe_dir| {
+            std::iter::once(exe_dir.join(exe_name)).chain(
+                exe_dir
+                    .ancestors()
+                    .map(|dir| dir.join(".tools").join(exe_name)),
+            )
+        })
         .collect()
 }
 
@@ -1029,6 +1043,29 @@ mod tests {
     }
 
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlinked_executable_also_searches_the_tools_above_its_target() {
+        let temp = crate::safe_tempdir();
+        let checkout = temp.path().join("checkout");
+        let release = checkout.join("target").join("release");
+        std::fs::create_dir_all(&release).unwrap();
+        std::fs::write(release.join("code-kb"), "").unwrap();
+        let link_dir = temp.path().join("home").join(".code-kb").join("bin");
+        std::fs::create_dir_all(&link_dir).unwrap();
+        std::os::unix::fs::symlink(release.join("code-kb"), link_dir.join("code-kb")).unwrap();
+
+        let candidates = exe_dir_candidates(&link_dir.join("code-kb"), "julie-extract");
+
+        let tools = checkout
+            .canonicalize()
+            .unwrap()
+            .join(".tools")
+            .join("julie-extract");
+        assert!(candidates.contains(&tools), "{candidates:?}");
+        assert_eq!(candidates[0], link_dir.join("julie-extract"));
+    }
 
     #[test]
     fn test_find_julie_extract_binary() {
