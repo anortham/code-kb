@@ -89,6 +89,32 @@ The plan (`docs/plans/2026-10-22-test-reach.md`) set two marks for the warnings.
   its real callers and stops at `express()`, which the index does not tie to `createApplication`;
   the answer warns that the walk stopped at depth 2.
 
+## Larger depths
+
+The reach build replayed the dev half at `--depth 3` and `--depth 5`:
+
+| Repo | Seed | Failing tests missed at depth 2 / 3 / 5 | Median listed at 2 / 3 / 5 | Cut at 2 / 3 / 5 |
+|---|---|---|---|---|
+| cobra | diff | 123 (90%) / 121 (89%) / 55 (40%) of 136 | 0% / 1% / 70% | 0 / 1 / 11 |
+| cobra | symbol | 121 (90%) / 119 (89%) / 17 (13%) of 134 | 0% / 1% / 70% | 0 / 1 / 11 |
+| express | diff | 916 (83%) / 910 (83%) / 909 (83%) of 1101 | 1% / 1% / 1% | 2 / 2 / 2 |
+| express | symbol | 944 (87%) / 937 (86%) / 932 (85%) of 1091 | 0% / 1% / 1% | 0 / 0 / 1 |
+| flask | diff | 338 (99%) / 337 (98%) / 337 (98%) of 343 | 0% / 0% / 0% | 0 / 0 / 0 |
+| flask | symbol | 338 (99%) / 337 (98%) / 337 (98%) of 343 | 0% / 0% / 0% | 1 / 1 / 1 |
+
+- Depth 3 finds 1 to 7 more failing tests in each row.
+- Depth 5 finds most Cobra failing tests, but the median Cobra answer lists 70% of the suite and
+  11 of 22 answers reach the 200-row ceiling. That is close to the full suite.
+- The default depth stays 2. The depth line says how many more tests depth 5 lists, so the agent
+  can choose.
+- The median case took 1.05, 0.9, and 1.25 s (cobra, express, flask) at depth 2, 1.2, 1.1, and
+  1.5 s at depth 3, and 1.2, 1.2, and 1.5 s at depth 5.
+- Depth 3 gave one silent miss. Flask `make_response` listed 2 tests and missed 32. The walk
+  stopped at depth 3, the open end `Flask.__call__` lay at depth 4, and depth 5 listed no more
+  tests, so neither warning applied. The open ends now come from the depth-5 walk when it runs.
+- Depth 5 gave one silent miss that no index can prevent: Flask `test_method_route` calls
+  `getattr(app, method)` with `method` from a parameter list.
+
 ## What the warnings do not change
 
 The warnings make an incomplete list say so; they add few tests. The tests that the answers miss

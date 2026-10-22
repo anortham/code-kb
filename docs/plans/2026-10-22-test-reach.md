@@ -93,5 +93,13 @@ Numbers: `docs/bug-replay-baseline.md`, sections "Reach build changes" and "Cost
   instead of 54% to 63%, and they miss the tests that the symbol answers miss.
 - Marks: no silent miss on either half; needless warnings 5 of 47 dev (11%) and 9 of 58 holdout
   (16%), both PASS. Two fixes came from holdout cases.
-- Gaps left: the default depth of 2, runtime entry points (`Flask.__call__`, `__exit__`), and
-  `express()`, which the index does not tie to the function that `module.exports` names.
+- Depth: on the dev half, depth 3 finds 1 to 7 more failing tests per row; depth 5 finds most
+  Cobra failing tests but lists 70% of the suite, and half its answers reach the 200-row
+  ceiling. The default stays 2; the depth line says what depth 5 adds.
+- Depth 3 showed a silent miss: the open end `Flask.__call__` lay past the depth, and depth 5
+  listed no more tests. The open ends now come from the depth-5 walk when it runs. The depth-2
+  marks do not change.
+- Gaps left: runtime entry points (`Flask.__call__`, `__exit__`) and `express()`, which the index
+  does not tie to the function that `module.exports` names. Each one reaches most of its suite,
+  so a tie would turn a warning into a list cut at the ceiling. The open-end warning stays the
+  answer for them.

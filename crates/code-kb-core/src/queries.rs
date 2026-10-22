@@ -6241,11 +6241,7 @@ fn blast_radius_walk(
     let collected = collect_walk(conn, &walk, &seeds, max_depth)?;
     let mut likely_tests = collected.likely_tests;
     let mut impacted_symbols = collected.impacted_symbols;
-    let open_ends = if probe_depth.is_none() {
-        Vec::new()
-    } else {
-        walk.open_ends(conn, collected.reached)?
-    };
+    let mut reached = collected.reached;
     let mut tests_past_depth = None;
     let mut tests_past_depth_cut = false;
     let mut past_depth_tests = Vec::new();
@@ -6254,6 +6250,7 @@ fn blast_radius_walk(
     {
         walk.extend(conn, walk_bound(probe_depth))?;
         let deeper = collect_walk(conn, &walk, &seeds, probe_depth)?;
+        reached = deeper.reached;
         let listed: HashSet<(&str, usize)> = likely_tests
             .iter()
             .map(|test| (test.path.as_str(), test.line))
@@ -6267,6 +6264,11 @@ fn blast_radius_walk(
         tests_past_depth = Some(past_depth_tests.len());
         tests_past_depth_cut = deeper.traversal_ceiling_reached;
     }
+    let open_ends = if probe_depth.is_none() {
+        Vec::new()
+    } else {
+        walk.open_ends(conn, reached)?
+    };
     let likely_tests_found = likely_tests.len();
     let impacted_symbols_found = impacted_symbols.len();
     let likely_tests_truncated = likely_tests.len() > limit;

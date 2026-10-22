@@ -1195,6 +1195,39 @@ fn a_method_that_no_indexed_code_calls_is_an_open_end_of_the_walk() {
 }
 
 #[test]
+fn an_open_end_past_the_depth_limit_warns_when_the_largest_depth_lists_no_more_tests() {
+    let (_temp, workspace, conn) = scanned(&[
+        ("pyproject.toml", "[project]\nname = \"pkg\"\n"),
+        ("src/pkg/__init__.py", ""),
+        ("src/pkg/app.py", WSGI_APP),
+        (
+            "tests/test_app.py",
+            "from pkg.app import handle\n\n\ndef test_handle():\n    assert handle(1) == 1\n",
+        ),
+    ]);
+
+    let result = blast_radius_op(&workspace, &conn, Some("handle"), None, 1, 20).unwrap();
+
+    let text = format_blast_radius(&result);
+    assert_eq!(
+        reasons(&result),
+        [("test_handle", "direct caller")],
+        "{text}"
+    );
+    assert_eq!(result.stopped_at_depth, Some(1), "{text}");
+    assert_eq!(result.tests_past_depth, Some(0), "{text}");
+    assert_eq!(
+        open_ends(&result),
+        [("__call__", "src/pkg/app.py", 2)],
+        "{text}"
+    );
+    assert!(
+        text.contains("  - method `App.__call__` (src/pkg/app.py:2)"),
+        "{text}"
+    );
+}
+
+#[test]
 fn a_walk_whose_every_caller_leads_to_a_test_has_no_open_end() {
     let (_temp, workspace, conn) = scanned(&[
         ("pyproject.toml", "[project]\nname = \"pkg\"\n"),

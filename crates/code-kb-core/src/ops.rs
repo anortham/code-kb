@@ -975,8 +975,6 @@ fn with_calling_tests(
     Ok(res)
 }
 
-/// The callers of the report's proven and likely sites that are not tests, as depth-1 rows in
-/// report order. A site outside any symbol is a row of its own at the site's line.
 /// Adds what the walk from the report's callers found: its tests, its open ends, and whether it
 /// stopped at the depth or the ceiling. Its rows sit one level below the target's callers.
 fn follow_deeper(res: &mut BlastRadiusResult, deeper: &BlastRadiusResult, depth: usize) {
@@ -1045,6 +1043,8 @@ fn one_level_deeper(reason: &str) -> String {
     reason.replacen("direct caller", "indirect caller [depth 2]", 1)
 }
 
+/// The callers of the report's proven and likely sites that are not tests, as depth-1 rows in
+/// report order. A site outside any symbol is a row of its own at the site's line.
 fn report_callers(
     conn: &Connection,
     report: &ReferenceReport,
