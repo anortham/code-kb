@@ -168,7 +168,9 @@ fn test_mcp_find_references_description_names_the_labels_and_keeps_its_schema() 
 fn test_mcp_find_references_counts_sites_as_its_result_count() {
     let repo = reference_baseline_repo();
     let root = repo.path();
-    let mut session = McpSession::start(serve_command(root));
+    let mut command = serve_command(root);
+    command.env("CODE_KB_INDEX_WAIT_MS", "60000");
+    let mut session = McpSession::start(command);
 
     let without_callers = session.call(
         "find_references",
@@ -4220,7 +4222,9 @@ fn blast_radius_without_a_target_outside_a_git_repository_is_the_check_edit_erro
     let expected = format!("not a git repository: {}", canonical_root(root).display());
 
     let mut command = serve_command(root);
-    command.env("GIT_CEILING_DIRECTORIES", ceiling);
+    command
+        .env("GIT_CEILING_DIRECTORIES", ceiling)
+        .env("CODE_KB_INDEX_WAIT_MS", "60000");
     let mut session = McpSession::start(command);
     for tool in ["blast_radius", "check_edit"] {
         let result = session.call(tool, json!({ "project_root": root }));
