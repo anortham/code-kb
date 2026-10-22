@@ -7094,8 +7094,9 @@ fn walk_caller_branches(
     recursive_branches
 }
 
-/// The test that encloses a function defined inside it, as `index` inside `test_url_processors`:
-/// the nearest enclosing function or method that is a test, never one that is setup or a fixture.
+/// The test that encloses a function defined inside it, as `index` inside `test_url_processors`,
+/// also through a class defined inside it: the nearest enclosing function or method that is a
+/// test, never one that is setup or a fixture.
 pub(crate) fn enclosing_walk_test(
     conn: &Connection,
     parent: Option<&str>,
@@ -7137,6 +7138,21 @@ pub(crate) fn enclosing_walk_test(
         else {
             return Ok(None);
         };
+        if matches!(
+            kind.as_str(),
+            "class"
+                | "struct"
+                | "interface"
+                | "trait"
+                | "enum"
+                | "record"
+                | "object"
+                | "protocol"
+                | "union"
+        ) {
+            next = parent;
+            continue;
+        }
         if !matches!(kind.as_str(), "function" | "method") || is_fixture {
             return Ok(None);
         }

@@ -482,8 +482,8 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   or type (a changed import or module-level constant); outside a git repository that
   call is the `check_edit` error `not a git repository: <root>` (MCP `isError`, CLI exit 1). A caller at depth 1 is a
   `direct caller`, a deeper one an `indirect caller [depth N]`. A caller defined inside a test
-  (a view function in a pytest test) is replaced by that test, ``encloses `index` (direct caller)``,
-  unless the test is setup or a fixture. A caller that julie flags as a
+  (a view function in a pytest test), also as a method of a class defined inside it, is replaced
+  by that test, ``encloses `index` (direct caller)``, unless the test is setup or a fixture. A caller that julie flags as a
   pytest fixture is replaced by the tests that take it as a parameter, by the name in its
   `@pytest.fixture(name=...)` when it has one: in its file, or under the directory of the
   `conftest.py` that defines it. A fixture that takes that fixture is replaced by the tests that
