@@ -1255,6 +1255,31 @@ fn a_method_of_a_class_defined_in_a_test_lists_that_test_and_is_no_open_end() {
 }
 
 #[test]
+fn a_helper_or_nested_class_of_a_test_class_is_no_test_to_run_but_its_callers_are() {
+    let (_temp, workspace, conn) = scanned(&[
+        ("pyproject.toml", "[project]\nname = \"pkg\"\n"),
+        (
+            "tests/test_shapes.py",
+            "class TestShapes:\n    class Payload:\n        def size(self):\n            return 1\n\n    class TestData:\n        def value(self):\n            return 2\n\n    def build(self):\n        return self.Payload()\n\n    def test_build(self):\n        assert self.build().size() == 1\n        assert self.TestData().value() == 2\n",
+        ),
+    ]);
+
+    for target in ["build", "Payload", "TestData"] {
+        let result = blast_radius_op(&workspace, &conn, Some(target), None, 2, 20).unwrap();
+
+        let text = format_blast_radius(&result);
+        assert!(!text.contains("the target is a test"), "{target}: {text}");
+        assert!(
+            result
+                .likely_tests
+                .iter()
+                .any(|test| test.name.ends_with("test_build")),
+            "{target}: {text}"
+        );
+    }
+}
+
+#[test]
 fn a_walk_whose_every_caller_leads_to_a_test_has_no_open_end() {
     let (_temp, workspace, conn) = scanned(&[
         ("pyproject.toml", "[project]\nname = \"pkg\"\n"),

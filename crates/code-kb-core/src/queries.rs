@@ -6667,7 +6667,7 @@ fn collect_walk(
         let is_test_target = seed.is_test
             || seed.test_container
             || seed.is_fixture
-            || (is_test_path(&seed.path) && (seed.in_test_class || names_a_test(&seed.name)));
+            || (callable && is_test_path(&seed.path) && names_a_test(&seed.name));
         if !is_test_target && can_be_open_end(&seed.kind) {
             reached.push(ReachedSymbol {
                 symbol_id: seed.symbol_id.clone(),
@@ -7138,18 +7138,7 @@ pub(crate) fn enclosing_walk_test(
         else {
             return Ok(None);
         };
-        if matches!(
-            kind.as_str(),
-            "class"
-                | "struct"
-                | "interface"
-                | "trait"
-                | "enum"
-                | "record"
-                | "object"
-                | "protocol"
-                | "union"
-        ) {
+        if kind == "class" {
             next = parent;
             continue;
         }
@@ -7323,7 +7312,6 @@ struct SeedRow {
     test_container: bool,
     is_fixture: bool,
     parent: Option<String>,
-    in_test_class: bool,
 }
 
 /// The symbols a walk starts from, in path and line order.
@@ -7336,10 +7324,7 @@ fn seed_rows(
     let not_documentation = not_documentation(conn, "s");
     let mut stmt = conn.prepare(&format!(
         "SELECT s.symbol_id, s.name, s.kind, s.path, s.start_line, s.end_line, s.is_test,
-                s.test_container, {lifecycle}, s.parent_symbol_id,
-                EXISTS (SELECT 1 FROM symbols owner
-                        WHERE owner.symbol_id = s.parent_symbol_id
-                          AND COALESCE(owner.test_container, 0) != 0)
+                s.test_container, {lifecycle}, s.parent_symbol_id
          FROM symbols s
          WHERE ({seed_condition})
            AND s.kind NOT IN ({LOW_SIGNAL_KINDS_SQL})
@@ -7358,7 +7343,6 @@ fn seed_rows(
             test_container: row.get(7)?,
             is_fixture: row.get(8)?,
             parent: row.get(9)?,
-            in_test_class: row.get(10)?,
         })
     })?;
     Ok(rows.collect::<Result<_, _>>()?)

@@ -9950,6 +9950,29 @@ fn a_python_class_inside_a_test_function_folds_into_that_test() {
 }
 
 #[test]
+fn a_helper_method_of_a_class_inside_a_test_function_folds_into_that_test() {
+    let repo = scanned_repo(&[
+        ("lib.py", "def target():\n    return 1\n"),
+        (
+            "tests/test_m.py",
+            "from lib import target\n\n\ndef test_module():\n    class Module:\n        @staticmethod\n        def create():\n            return target()\n\n    assert Module.create() == 1\n\n\ndef plain_helper():\n    class Orphan:\n        def build(self):\n            return target()\n\n    return Orphan().build()\n",
+        ),
+    ]);
+
+    let target = report(&repo, "target", None);
+
+    assert_eq!(
+        running(&target),
+        [format!(
+            "test_module tests/test_m.py:{} pytest tests/test_m.py::test_module",
+            line_of(&repo, "tests/test_m.py", "def test_module")
+        )],
+        "{}",
+        dump(&target)
+    );
+}
+
+#[test]
 fn a_python_test_in_a_class_pytest_does_not_collect_lists_without_a_command() {
     let repo = scanned_repo(&[
         ("lib.py", "def target():\n    return 1\n"),

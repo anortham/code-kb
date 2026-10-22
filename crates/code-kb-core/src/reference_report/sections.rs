@@ -2886,9 +2886,9 @@ fn load_test_symbol(
 }
 
 /// The test that `caller` stands for: the caller when julie flags it as a test or its name reads
-/// like one in a test file, else the test function that holds it as a helper. A Python class
-/// defined inside a function is part of that function. Setup, teardown, and fixture members are
-/// never tests, and neither are helpers inside them.
+/// like one in a test file, else the test function that holds it as a helper. A class defined
+/// inside a function is part of that function. Setup, teardown, and fixture members are never
+/// tests, and neither are helpers inside them.
 fn test_of(load: &mut rusqlite::Statement, caller: &str) -> Result<Option<TestSymbol>, QueryError> {
     let mut current = load_test_symbol(load, caller)?;
     for _ in 0..=MAX_HELPER_DEPTH {
@@ -2916,6 +2916,10 @@ fn test_of(load: &mut rusqlite::Statement, caller: &str) -> Result<Option<TestSy
             (Some(parent), Some(kind)) if TestSymbol::is_callable(kind) => {
                 load_test_symbol(load, parent)?
             }
+            (Some(_), Some("class")) => match class_chain(load, &symbol)?.held_by {
+                Some(function) => load_test_symbol(load, &function)?,
+                None => return Ok(None),
+            },
             _ => return Ok(None),
         };
     }

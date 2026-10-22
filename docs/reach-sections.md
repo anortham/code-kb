@@ -245,8 +245,9 @@ site when julie flags it as a test or its name reads like one in a test path
 (`names_a_test`), or else the test function that holds a helper caller, up to 4 levels up.
 A Python or Go function inside another function is a helper even when its name reads like a
 test: pytest does not collect it, and julie names a Go `t.Run` closure by its label, which
-`go test -run` cannot select alone. A helper folds into the test around it. A Python class
-defined inside a function is part of that function, so its tests fold into the function. Setup, teardown, and fixture members are not tests,
+`go test -run` cannot select alone. A helper folds into the test around it. A class defined
+inside a function is part of that function, so its tests and its other methods fold into the
+function. Setup, teardown, and fixture members are not tests,
 and neither are helpers inside them or the target itself. `CommandFinder` in
 `test_commands.rs` builds the command from marker files under the project root. It reads each
 folder once, never looks above the root, and returns no command for an unknown language or
