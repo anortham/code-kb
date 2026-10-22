@@ -10,8 +10,9 @@ use crate::formatters::{
     format_find_symbol_results, format_unindexed_file, render_outline_tree,
 };
 use crate::models::{
-    BlastRadiusResult, CallersReportSites, ContextSlice, ImpactedSymbol, LabeledSite, OpenEnd,
-    ReferenceReport, SiteLabel, Symbol, SymbolSearchResult, TestTarget, is_generated_lambda_name,
+    BlastRadiusResult, CallersReportSites, CallingTest, ContextSlice, ImpactedSymbol, LabeledSite,
+    OpenEnd, ReferenceReport, SiteLabel, Symbol, SymbolSearchResult, TestTarget,
+    is_generated_lambda_name,
 };
 use crate::queries::{self, QueryError};
 use crate::reference_report::{reference_report_for_impact, select_reference_target};
@@ -780,9 +781,9 @@ pub fn blast_radius_selected_op(
         (None, None) => {
             let mut changes = edit_check::uncommitted_changes(&workspace.root)?;
             changes.retain(|path, _| !crate::workspace::is_hard_excluded(path));
-            return Ok(queries::compute_blast_radius_for_changes(
-                conn, &changes, depth, limit,
-            )?);
+            let res = queries::compute_blast_radius_for_changes(conn, &changes, depth, limit)?;
+            let targets = queries::diff_targets(conn, &changes)?;
+            return with_report_tests(workspace, conn, targets, res, limit);
         }
     };
 
@@ -800,6 +801,64 @@ pub fn blast_radius_selected_op(
         _ => None,
     };
     with_calling_tests(workspace, conn, target, res, depth, limit)
+}
+
+fn report_test(test: CallingTest) -> TestTarget {
+    TestTarget {
+        reason: if test.name_only {
+            "calls it by name only (find_references)"
+        } else {
+            "calls it (find_references)"
+        }
+        .to_string(),
+        name: test.name,
+        path: test.path,
+        line: test.line,
+    }
+}
+
+/// Adds, after the walk's tests, the tests in the callers report of each function that a diff
+/// changed, and drops such a function from the open ends when its report has a proven or likely
+/// site. The walk follows resolved and pending rows by name; the report also ties a call through a
+/// receiver's type or by name alone.
+fn with_report_tests(
+    workspace: &Workspace,
+    conn: &Connection,
+    targets: Vec<Symbol>,
+    mut res: BlastRadiusResult,
+    limit: usize,
+) -> Result<BlastRadiusResult, OpError> {
+    if targets.is_empty() || res.traversal_ceiling_reached || res.likely_tests_truncated {
+        return Ok(res);
+    }
+    let mut seen: HashSet<(String, usize)> = res
+        .likely_tests
+        .iter()
+        .map(|test| (test.path.clone(), test.line))
+        .collect();
+    for target in &targets {
+        let Ok(report) = reference_report_for_impact(conn, &workspace.root, target) else {
+            continue;
+        };
+        if report.counts.proven + report.counts.likely > 0 {
+            let path = target.path.replace('\\', "/");
+            res.open_ends
+                .retain(|end| end.path != path || end.line != target.start_line);
+        }
+        for test in report.tests {
+            if seen.insert((test.path.clone(), test.line)) {
+                res.likely_tests.push(report_test(test));
+            }
+        }
+    }
+    if res.tests_past_depth.is_some() {
+        res.past_depth_tests.retain(|key| !seen.contains(key));
+        res.tests_past_depth = Some(res.past_depth_tests.len());
+    }
+    res.likely_tests_found = res.likely_tests.len();
+    res.likely_tests_truncated = res.likely_tests.len() > limit;
+    res.likely_tests.truncate(limit);
+    Ok(res)
 }
 
 /// Fills what the walk left empty from the callers report of `target`: the callers of its proven
@@ -881,21 +940,7 @@ fn with_calling_tests(
     if res.likely_tests_truncated {
         return Ok(res);
     }
-    let report_tests: Vec<TestTarget> = report
-        .tests
-        .into_iter()
-        .map(|test| TestTarget {
-            reason: if test.name_only {
-                "calls it by name only (find_references)"
-            } else {
-                "calls it (find_references)"
-            }
-            .to_string(),
-            name: test.name,
-            path: test.path,
-            line: test.line,
-        })
-        .collect();
+    let report_tests: Vec<TestTarget> = report.tests.into_iter().map(report_test).collect();
     let walked = std::mem::take(&mut res.likely_tests);
     let (first, then) = if needs_tests {
         (report_tests, walked)

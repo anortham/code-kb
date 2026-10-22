@@ -6067,8 +6067,9 @@ pub(crate) fn compute_blast_radius_from_callers(
 }
 
 /// Compute blast radius for the files a diff changed, each with the lines it touched. The walk
-/// starts from every symbol of each file, and a test, fixture, or setup member counts as changed
-/// only when its lines hold a touched line.
+/// starts from the innermost symbol that holds each touched line, or from every symbol of a file
+/// when a hunk touches only module-level lines, and a test, fixture, or setup member counts as
+/// changed only when its lines hold a touched line.
 pub fn compute_blast_radius_for_changes(
     conn: &Connection,
     changes: &BTreeMap<String, Vec<(usize, usize)>>,
@@ -6127,30 +6128,30 @@ fn blast_radius_walk(
         })?;
         resolved_seed_symbols.push(symbol);
     }
-    let mut seeds = Vec::new();
+    let mut seed_names = Vec::new();
     let seed_type = if (!seed_symbols.is_empty() || !seed_ids.is_empty()) && !seed_paths.is_empty()
     {
         for s in seed_symbols {
-            seeds.push(s.to_string());
+            seed_names.push(s.to_string());
         }
         for id in seed_ids {
-            seeds.push(id.to_string());
+            seed_names.push(id.to_string());
         }
         for p in seed_paths {
-            seeds.push(p.to_string());
+            seed_names.push(p.to_string());
         }
         "mixed".to_string()
     } else if !seed_symbols.is_empty() || !seed_ids.is_empty() {
         for s in seed_symbols {
-            seeds.push(s.to_string());
+            seed_names.push(s.to_string());
         }
         for id in seed_ids {
-            seeds.push(id.to_string());
+            seed_names.push(id.to_string());
         }
         "symbol".to_string()
     } else if !seed_paths.is_empty() {
         for p in seed_paths {
-            seeds.push(p.to_string());
+            seed_names.push(p.to_string());
         }
         "file".to_string()
     } else {
@@ -6208,17 +6209,6 @@ fn blast_radius_walk(
     }
 
     let seed_condition = where_clauses.join(" OR ");
-    let max_depth_idx = params_vec.len() + 1;
-    // One level past `max_depth` tells a walk that a deeper call would extend from one that ran out.
-    let walk_depth = if max_depth < MAX_BLAST_DEPTH {
-        max_depth + 1
-    } else {
-        max_depth
-    };
-    params_vec.push(rusqlite::types::Value::Integer(walk_depth as i64));
-
-    let mut traversal_ceiling_reached = false;
-    let mut callers_beyond_depth = false;
 
     let has_relationships: bool = conn
         .query_row(
@@ -6236,13 +6226,412 @@ fn blast_radius_walk(
         )
         .unwrap_or(false);
 
+    let seeds = WalkSeeds {
+        condition: &seed_condition,
+        params: &params_vec,
+        target_ids: resolved_seed_symbols
+            .iter()
+            .map(|symbol| symbol.symbol_id.as_str())
+            .collect(),
+        changed,
+        file_seed: seed_type == "file",
+    };
+    let mut walk = CallerWalk::start(conn, has_relationships, has_pending, &seeds)?;
+    walk.extend(conn, walk_bound(max_depth))?;
+    let collected = collect_walk(conn, &walk, &seeds, max_depth)?;
+    let mut likely_tests = collected.likely_tests;
+    let mut impacted_symbols = collected.impacted_symbols;
+    let open_ends = if probe_depth.is_none() {
+        Vec::new()
+    } else {
+        walk.open_ends(conn, collected.reached)?
+    };
+    let mut tests_past_depth = None;
+    let mut tests_past_depth_cut = false;
+    let mut past_depth_tests = Vec::new();
+    if let Some(probe_depth) =
+        probe_depth.filter(|&depth| collected.callers_beyond_depth && depth > max_depth)
+    {
+        walk.extend(conn, walk_bound(probe_depth))?;
+        let deeper = collect_walk(conn, &walk, &seeds, probe_depth)?;
+        let listed: HashSet<(&str, usize)> = likely_tests
+            .iter()
+            .map(|test| (test.path.as_str(), test.line))
+            .collect();
+        past_depth_tests = deeper
+            .likely_tests
+            .iter()
+            .filter(|test| !listed.contains(&(test.path.as_str(), test.line)))
+            .map(|test| (test.path.clone(), test.line))
+            .collect();
+        tests_past_depth = Some(past_depth_tests.len());
+        tests_past_depth_cut = deeper.traversal_ceiling_reached;
+    }
+    let likely_tests_found = likely_tests.len();
+    let impacted_symbols_found = impacted_symbols.len();
+    let likely_tests_truncated = likely_tests.len() > limit;
+    let impacted_symbols_truncated = impacted_symbols.len() > limit;
+    if likely_tests.len() > limit {
+        likely_tests.truncate(limit);
+    }
+    if impacted_symbols.len() > limit {
+        impacted_symbols.truncate(limit);
+    }
+
+    Ok(BlastRadiusResult {
+        seed_type,
+        seeds: seed_names,
+        likely_tests,
+        impacted_symbols,
+        likely_tests_truncated,
+        impacted_symbols_truncated,
+        traversal_ceiling_reached: collected.traversal_ceiling_reached,
+        limit_at_maximum: limit >= MAX_RESULT_LIMIT,
+        likely_tests_found,
+        impacted_symbols_found,
+        stopped_at_depth: collected.callers_beyond_depth.then_some(max_depth),
+        callers_report: None,
+        open_ends,
+        tests_past_depth,
+        tests_past_depth_cut,
+        past_depth_tests,
+    })
+}
+
+/// The walk depth for a `max_depth`: one level past it tells a walk that a deeper call would
+/// extend from one that ran out.
+fn walk_bound(max_depth: usize) -> usize {
+    if max_depth < MAX_BLAST_DEPTH {
+        max_depth + 1
+    } else {
+        max_depth
+    }
+}
+
+/// The seeds of one walk: the SQL condition that selects them and how each one came in.
+struct WalkSeeds<'a> {
+    condition: &'a str,
+    params: &'a [rusqlite::types::Value],
+    target_ids: HashSet<&'a str>,
+    changed: Option<&'a BTreeMap<String, Vec<(usize, usize)>>>,
+    file_seed: bool,
+}
+
+/// What a walk reached up to one depth, before `limit` cuts the lists.
+struct CollectedWalk {
+    likely_tests: Vec<TestTarget>,
+    impacted_symbols: Vec<ImpactedSymbol>,
+    traversal_ceiling_reached: bool,
+    callers_beyond_depth: bool,
+    reached: Vec<ReachedSymbol>,
+}
+
+/// The symbols that a caller walk reached, found level by level: each symbol once per `via` at
+/// its least depth, so a symbol that several paths reach is expanded once. `via` 1 marks a row
+/// that only a constructor step reached.
+struct CallerWalk {
+    level_sql: Option<String>,
+    rows: Vec<(String, usize, i64)>,
+    seen: HashSet<(String, i64, bool)>,
+    frontier: Vec<(String, usize, i64)>,
+    depth: usize,
+    expanded: HashSet<String>,
+    called: HashSet<String>,
+}
+
+impl CallerWalk {
+    fn start(
+        conn: &Connection,
+        has_relationships: bool,
+        has_pending: bool,
+        seeds: &WalkSeeds,
+    ) -> Result<Self, QueryError> {
+        let branches = walk_caller_branches(conn, has_relationships, has_pending, "?1");
+        let level_sql = (!branches.is_empty()).then(|| {
+            format!(
+                "WITH impact_walk(symbol_id, depth, via) AS ({WALK_ROWS_SQL})
+                 {}",
+                branches.join("\n UNION \n")
+            )
+        });
+        let mut walk = CallerWalk {
+            level_sql,
+            rows: Vec::new(),
+            seen: HashSet::new(),
+            frontier: Vec::new(),
+            depth: 0,
+            expanded: HashSet::new(),
+            called: HashSet::new(),
+        };
+        let spans = seed_spans(conn, seeds.condition, seeds.params)?;
+        let ids = match seeds.changed {
+            Some(changed) => changed_symbols(spans, changed).0,
+            None => spans.into_iter().map(|span| span.symbol_id).collect(),
+        };
+        for id in ids {
+            if walk.seen.insert((id.clone(), 0, false)) {
+                walk.rows.push((id.clone(), 0, 0));
+                walk.frontier.push((id, 0, 0));
+            }
+        }
+        Ok(walk)
+    }
+
+    /// Walks on until `bound` levels are done or no level adds a row.
+    fn extend(&mut self, conn: &Connection, bound: usize) -> Result<(), QueryError> {
+        let Some(sql) = &self.level_sql else {
+            return Ok(());
+        };
+        if self.depth >= bound || self.frontier.is_empty() {
+            return Ok(());
+        }
+        let mut stmt = conn.prepare(sql)?;
+        while self.depth < bound && !self.frontier.is_empty() {
+            let frontier = std::mem::take(&mut self.frontier);
+            for step in level_callers(&mut stmt, bound, &frontier)? {
+                let Some(caller) = step.caller else {
+                    continue;
+                };
+                if caller != step.origin {
+                    self.called.insert(step.origin);
+                }
+                if self.seen.insert((caller.clone(), step.via, true)) {
+                    self.rows.push((caller.clone(), step.depth, step.via));
+                    self.frontier.push((caller, step.depth, step.via));
+                }
+            }
+            self.expanded
+                .extend(frontier.into_iter().map(|(symbol_id, _, _)| symbol_id));
+            self.depth += 1;
+        }
+        Ok(())
+    }
+
+    /// The reached symbols that no caller step of the walk leaves, other than through a call to
+    /// themselves: the runtime, a framework, a library, or a call the index cannot tie calls them.
+    fn open_ends(
+        &mut self,
+        conn: &Connection,
+        reached: Vec<ReachedSymbol>,
+    ) -> Result<Vec<OpenEnd>, QueryError> {
+        let Some(sql) = &self.level_sql else {
+            return Ok(Vec::new());
+        };
+        let unexpanded: Vec<(String, usize, i64)> = reached
+            .iter()
+            .filter(|symbol| !self.expanded.contains(&symbol.symbol_id))
+            .map(|symbol| (symbol.symbol_id.clone(), symbol.depth, 0))
+            .collect();
+        if !unexpanded.is_empty() {
+            let mut stmt = conn.prepare(sql)?;
+            for step in level_callers(&mut stmt, MAX_BLAST_DEPTH + 1, &unexpanded)? {
+                if step.caller.is_some_and(|caller| caller != step.origin) {
+                    self.called.insert(step.origin);
+                }
+            }
+        }
+        let mut owner = conn.prepare(&format!(
+            "SELECT name FROM symbols WHERE symbol_id = ?1 AND kind IN {OWNER_KINDS}"
+        ))?;
+        let mut seen = HashSet::new();
+        let mut open_ends = Vec::new();
+        for symbol in reached {
+            if !seen.insert(symbol.symbol_id.clone()) || self.called.contains(&symbol.symbol_id) {
+                continue;
+            }
+            let owner = match symbol.parent.as_deref() {
+                Some(parent) => owner
+                    .query_row(params![parent], |row| row.get::<_, String>(0))
+                    .optional()?,
+                None => None,
+            };
+            open_ends.push(OpenEnd {
+                name: symbol.name,
+                kind: symbol.kind,
+                path: symbol.path,
+                line: symbol.line,
+                depth: symbol.depth,
+                owner,
+            });
+        }
+        Ok(open_ends)
+    }
+
+    fn rows_json(&self) -> String {
+        walk_rows_json(&self.rows)
+    }
+}
+
+/// The rows of `impact_walk` from a JSON array of `[symbol_id, depth, via]` in `?2`.
+const WALK_ROWS_SQL: &str = "SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]'),
+                                    json_extract(value, '$[2]')
+                             FROM json_each(?2)";
+
+fn walk_rows_json(rows: &[(String, usize, i64)]) -> String {
+    serde_json::Value::Array(
+        rows.iter()
+            .map(|(symbol_id, depth, via)| serde_json::json!([symbol_id, depth, via]))
+            .collect(),
+    )
+    .to_string()
+}
+
+/// The lines of one seed symbol. A `value` (a constant, an enum member, an export) has no
+/// callers of its own for the walk to follow.
+struct SeedSpan {
+    symbol_id: String,
+    path: String,
+    start_line: usize,
+    end_line: usize,
+    value: bool,
+}
+
+/// The symbols a diff changed: for each hunk, the innermost symbol that holds each of its lines,
+/// then every other symbol of a file where only a value or no symbol holds a hunk's lines, such
+/// as a changed import or module-level constant. The count is how many innermost holders lead.
+fn changed_symbols(
+    spans: Vec<SeedSpan>,
+    changed: &BTreeMap<String, Vec<(usize, usize)>>,
+) -> (Vec<String>, usize) {
+    let mut by_path: BTreeMap<&str, Vec<&SeedSpan>> = BTreeMap::new();
+    for span in &spans {
+        by_path.entry(span.path.as_str()).or_default().push(span);
+    }
+    let mut holders = Vec::new();
+    let mut whole_files = Vec::new();
+    let mut seen = HashSet::new();
+    for (path, file_spans) in by_path {
+        let hunks = changed.get(path).map(Vec::as_slice).unwrap_or_default();
+        let mut whole_file = hunks.is_empty();
+        for &(first, last) in hunks {
+            let held: Vec<&SeedSpan> = (first..=last)
+                .filter_map(|line| {
+                    file_spans
+                        .iter()
+                        .filter(|span| {
+                            !span.value && span.start_line <= line && line <= span.end_line
+                        })
+                        .min_by_key(|span| span.end_line - span.start_line)
+                        .copied()
+                })
+                .collect();
+            whole_file |= held.is_empty();
+            for span in held {
+                if seen.insert(span.symbol_id.as_str()) {
+                    holders.push(span.symbol_id.clone());
+                }
+            }
+        }
+        if whole_file {
+            whole_files.extend(file_spans);
+        }
+    }
+    let held = holders.len();
+    for span in whole_files {
+        if seen.insert(span.symbol_id.as_str()) {
+            holders.push(span.symbol_id.clone());
+        }
+    }
+    (holders, held)
+}
+
+fn seed_spans(
+    conn: &Connection,
+    condition: &str,
+    params: &[rusqlite::types::Value],
+) -> Result<Vec<SeedSpan>, QueryError> {
+    let mut stmt = conn.prepare(&format!(
+        "SELECT symbol_id, replace(path, '\\', '/'), start_line, end_line,
+                kind IN ('constant', 'enum_member', 'export')
+         FROM symbols
+         WHERE ({condition}) AND kind NOT IN ({LOW_SIGNAL_KINDS_SQL})
+         ORDER BY path, start_line"
+    ))?;
+    let spans = stmt.query_map(rusqlite::params_from_iter(params), |row| {
+        Ok(SeedSpan {
+            symbol_id: row.get(0)?,
+            path: row.get(1)?,
+            start_line: row.get::<_, i64>(2)? as usize,
+            end_line: row.get::<_, i64>(3)? as usize,
+            value: row.get(4)?,
+        })
+    })?;
+    Ok(spans.collect::<Result<Vec<_>, _>>()?)
+}
+
+/// Diffs that change more functions than this get no callers report for each one.
+const MAX_DIFF_TARGETS: usize = 5;
+
+/// The functions, methods, and constructors outside tests that hold a line of the diff, each the
+/// innermost symbol that holds it; none when there are more than [`MAX_DIFF_TARGETS`].
+pub(crate) fn diff_targets(
+    conn: &Connection,
+    changed: &BTreeMap<String, Vec<(usize, usize)>>,
+) -> Result<Vec<Symbol>, QueryError> {
+    let mut spans = Vec::new();
+    for path in changed.keys() {
+        spans.extend(seed_spans(
+            conn,
+            "replace(path, '\\', '/') = ?1",
+            &[rusqlite::types::Value::Text(path.clone())],
+        )?);
+    }
+    let (ids, held) = changed_symbols(spans, changed);
+    let mut targets = Vec::new();
+    for id in &ids[..held] {
+        let Some(symbol) = get_symbol_by_id(conn, id)? else {
+            continue;
+        };
+        if can_be_open_end(&symbol.kind)
+            && !symbol.is_test
+            && !symbol.test_container
+            && !is_test_path(&symbol.path)
+        {
+            targets.push(symbol);
+        }
+    }
+    if targets.len() > MAX_DIFF_TARGETS {
+        targets.clear();
+    }
+    Ok(targets)
+}
+
+/// One caller step of a walk level: the caller, its depth and `via`, and the row it leaves.
+struct CallerStep {
+    caller: Option<String>,
+    depth: usize,
+    via: i64,
+    origin: String,
+}
+
+/// The caller steps that leave each row of `frontier`.
+fn level_callers(
+    stmt: &mut rusqlite::Statement,
+    bound: usize,
+    frontier: &[(String, usize, i64)],
+) -> Result<Vec<CallerStep>, QueryError> {
+    let rows = stmt.query_map(params![bound as i64, walk_rows_json(frontier)], |row| {
+        Ok(CallerStep {
+            caller: row.get(0)?,
+            depth: row.get::<_, i64>(1)? as usize,
+            via: row.get(2)?,
+            origin: row.get(3)?,
+        })
+    })?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+}
+
+fn collect_walk(
+    conn: &Connection,
+    walk: &CallerWalk,
+    seeds: &WalkSeeds,
+    max_depth: usize,
+) -> Result<CollectedWalk, QueryError> {
+    let mut traversal_ceiling_reached = false;
+    let mut callers_beyond_depth = false;
     let mut likely_tests = Vec::new();
     let mut impacted_symbols = Vec::new();
     let mut seen_test_keys = HashSet::new();
-
-    let depth_bound = format!("?{max_depth_idx}");
-    let recursive_branches =
-        walk_caller_branches(conn, has_relationships, has_pending, &depth_bound);
 
     let lifecycle = if has_column(conn, "symbols", "test_lifecycle") {
         "COALESCE(s.test_lifecycle, 0) != 0"
@@ -6254,19 +6643,10 @@ fn blast_radius_walk(
     let mut reached = Vec::new();
     let mut constructor_only_test_keys = HashSet::new();
     let mut non_constructor_test_keys = HashSet::new();
-    let target_ids: HashSet<&str> = resolved_seed_symbols
-        .iter()
-        .map(|symbol| symbol.symbol_id.as_str())
-        .collect();
-    for seed in seed_rows(
-        conn,
-        &seed_condition,
-        &params_vec[..max_depth_idx - 1],
-        lifecycle,
-    )? {
-        let origin = if target_ids.contains(seed.symbol_id.as_str()) {
+    for seed in seed_rows(conn, seeds.condition, seeds.params, lifecycle)? {
+        let origin = if seeds.target_ids.contains(seed.symbol_id.as_str()) {
             SeedOrigin::Target
-        } else if let Some(changed) = changed {
+        } else if let Some(changed) = seeds.changed {
             let lines = changed
                 .get(&seed.path)
                 .map(Vec::as_slice)
@@ -6307,8 +6687,7 @@ fn blast_radius_walk(
             }
         }
     }
-    if !recursive_branches.is_empty() {
-        let recursive_sql = recursive_branches.join("\n UNION \n");
+    if walk.level_sql.is_some() {
         let not_documentation = not_documentation(conn, "s");
         // A seed that the walk reaches again counts only as a test to run: a test in a changed test
         // file that calls changed code. Its own change is the seed step's to report.
@@ -6316,17 +6695,9 @@ fn blast_radius_walk(
         let reached_via = "MIN(CASE WHEN iw.depth > 0 THEN iw.via END)";
         let test_path = test_path_predicate("s");
         let test_name = names_a_test_sql("s");
+        let walk_rows = WALK_ROWS_SQL.replace("?2", "?1");
         let sql = format!(
-            "WITH RECURSIVE impact_walk(symbol_id, depth, via) AS (
-                SELECT symbol_id, 0, 0
-                FROM symbols
-                WHERE ({seed_condition})
-                  AND kind NOT IN ({LOW_SIGNAL_KINDS_SQL})
-
-                UNION
-
-                {recursive_sql}
-            )
+            "WITH impact_walk(symbol_id, depth, via) AS ({walk_rows})
             SELECT s.name, s.kind, s.path, s.start_line, s.is_test, s.test_container,
                    {reached_depth} as min_depth, {reached_via} as min_via,
                    {lifecycle} AS is_fixture, s.parent_symbol_id,
@@ -6347,12 +6718,7 @@ fn blast_radius_walk(
         );
 
         let mut stmt = conn.prepare(&sql)?;
-        let param_refs: Vec<&dyn rusqlite::ToSql> = params_vec
-            .iter()
-            .map(|v| v as &dyn rusqlite::ToSql)
-            .collect();
-
-        let rows = stmt.query_map(param_refs.as_slice(), |row| {
+        let rows = stmt.query_map(params![walk.rows_json()], |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1)?,
@@ -6560,7 +6926,7 @@ fn blast_radius_walk(
     qualify_test_methods(conn, &mut likely_tests)?;
     // A whole-file target often reaches many unrelated tests only because they construct an app;
     // keep that coverage visible while collapsing each affected test file to one run target.
-    if seed_type == "file" {
+    if seeds.file_seed {
         let mut constructor_tests_by_file =
             std::collections::BTreeMap::<String, Vec<TestTarget>>::new();
         let mut other_tests = Vec::with_capacity(likely_tests.len());
@@ -6589,69 +6955,12 @@ fn blast_radius_walk(
         }
         likely_tests = other_tests;
     }
-    let open_ends = if probe_depth.is_none() {
-        Vec::new()
-    } else {
-        uncalled(conn, has_relationships, has_pending, reached)?
-    };
-    let mut tests_past_depth = None;
-    let mut tests_past_depth_cut = false;
-    let mut past_depth_tests = Vec::new();
-    if let Some(probe_depth) =
-        probe_depth.filter(|&depth| callers_beyond_depth && depth > max_depth)
-    {
-        let deeper = blast_radius_walk(
-            conn,
-            seed_symbols,
-            seed_ids,
-            symbol_path_filter,
-            seed_paths,
-            changed,
-            probe_depth,
-            MAX_RESULT_LIMIT,
-            None,
-        )?;
-        let listed: HashSet<(&str, usize)> = likely_tests
-            .iter()
-            .map(|test| (test.path.as_str(), test.line))
-            .collect();
-        past_depth_tests = deeper
-            .likely_tests
-            .iter()
-            .filter(|test| !listed.contains(&(test.path.as_str(), test.line)))
-            .map(|test| (test.path.clone(), test.line))
-            .collect();
-        tests_past_depth = Some(past_depth_tests.len());
-        tests_past_depth_cut = deeper.traversal_ceiling_reached;
-    }
-    let likely_tests_found = likely_tests.len();
-    let impacted_symbols_found = impacted_symbols.len();
-    let likely_tests_truncated = likely_tests.len() > limit;
-    let impacted_symbols_truncated = impacted_symbols.len() > limit;
-    if likely_tests.len() > limit {
-        likely_tests.truncate(limit);
-    }
-    if impacted_symbols.len() > limit {
-        impacted_symbols.truncate(limit);
-    }
-
-    Ok(BlastRadiusResult {
-        seed_type,
-        seeds,
+    Ok(CollectedWalk {
         likely_tests,
         impacted_symbols,
-        likely_tests_truncated,
-        impacted_symbols_truncated,
         traversal_ceiling_reached,
-        limit_at_maximum: limit >= MAX_RESULT_LIMIT,
-        likely_tests_found,
-        impacted_symbols_found,
-        stopped_at_depth: callers_beyond_depth.then_some(max_depth),
-        callers_report: None,
-        open_ends,
-        tests_past_depth,
-        tests_past_depth_cut,
-        past_depth_tests,
+        callers_beyond_depth,
+        reached,
     })
 }
 
@@ -6670,57 +6979,8 @@ fn can_be_open_end(kind: &str) -> bool {
     matches!(kind, "function" | "method" | "constructor")
 }
 
-/// The reached symbols that no caller step of the walk leaves, other than through a call to
-/// themselves: the runtime, a framework, a library, or a call the index cannot tie calls them.
-fn uncalled(
-    conn: &Connection,
-    has_relationships: bool,
-    has_pending: bool,
-    reached: Vec<ReachedSymbol>,
-) -> Result<Vec<OpenEnd>, QueryError> {
-    let branches = walk_caller_branches(conn, has_relationships, has_pending, "?2");
-    if reached.is_empty() || branches.is_empty() {
-        return Ok(Vec::new());
-    }
-    let mut called = conn.prepare(&format!(
-        "WITH impact_walk(symbol_id, depth, via) AS (SELECT ?1, 0, 0)
-         SELECT EXISTS (
-             SELECT 1 FROM ({branches})
-             WHERE from_symbol_id IS NOT NULL AND from_symbol_id != ?1
-         )",
-        branches = branches.join("\n UNION \n")
-    ))?;
-    let mut owner = conn.prepare(&format!(
-        "SELECT name FROM symbols WHERE symbol_id = ?1 AND kind IN {OWNER_KINDS}"
-    ))?;
-    let mut seen = HashSet::new();
-    let mut open_ends = Vec::new();
-    for symbol in reached {
-        if !seen.insert(symbol.symbol_id.clone())
-            || called.query_row(params![symbol.symbol_id, 1], |row| row.get::<_, bool>(0))?
-        {
-            continue;
-        }
-        let owner = match symbol.parent.as_deref() {
-            Some(parent) => owner
-                .query_row(params![parent], |row| row.get::<_, String>(0))
-                .optional()?,
-            None => None,
-        };
-        open_ends.push(OpenEnd {
-            name: symbol.name,
-            kind: symbol.kind,
-            path: symbol.path,
-            line: symbol.line,
-            depth: symbol.depth,
-            owner,
-        });
-    }
-    Ok(open_ends)
-}
-
-/// The steps from a symbol of `impact_walk` to its callers: resolved and pending calls by name, and
-/// the calls that build a constructor's class. `depth_bound` is the SQL value that bounds the depth.
+/// The caller steps of a walk over `impact_walk`: each selects the caller, its depth and `via`,
+/// and the row it leaves.
 fn walk_caller_branches(
     conn: &Connection,
     has_relationships: bool,
@@ -6731,7 +6991,7 @@ fn walk_caller_branches(
 
     if has_relationships {
         recursive_branches.push(format!(
-            "SELECT r.from_symbol_id, iw.depth + 1, iw.via
+            "SELECT r.from_symbol_id, iw.depth + 1, iw.via, iw.symbol_id
              FROM relationships r
              JOIN impact_walk iw ON r.to_symbol_id = iw.symbol_id
              JOIN symbols s_from ON r.from_symbol_id = s_from.symbol_id
@@ -6759,7 +7019,7 @@ fn walk_caller_branches(
         };
 
         recursive_branches.push(format!(
-            "SELECT p.from_symbol_id, iw.depth + 1, iw.via
+            "SELECT p.from_symbol_id, iw.depth + 1, iw.via, iw.symbol_id
              FROM pending_relationships p
              JOIN symbols s_target ON p.target_terminal_name = s_target.name
              JOIN impact_walk iw ON s_target.symbol_id = iw.symbol_id
@@ -6770,11 +7030,40 @@ fn walk_caller_branches(
         ));
     }
 
+    // julie stores a JavaScript call on an object (`res.send()`) only as an identifier. It reaches
+    // a function assigned on an object of the receiver's name (`res.send = function`), or on the
+    // caller's own object through `this`, when no other definition is assigned on that object.
+    if has_column(conn, "identifiers", "metadata_json") {
+        let at = "instr(t.signature, '.' || t.name || ' =')";
+        let assigned = format!("substr(t.signature, 1, {at} + length(t.name) + 2)");
+        recursive_branches.push(format!(
+            "SELECT i.containing_symbol_id AS from_symbol_id, iw.depth + 1, iw.via, iw.symbol_id
+             FROM impact_walk iw
+             CROSS JOIN symbols t ON t.symbol_id = iw.symbol_id
+             JOIN identifiers i ON i.name = t.name AND i.kind = 'call'
+             LEFT JOIN symbols c ON c.symbol_id = i.containing_symbol_id
+             WHERE iw.depth < {depth_bound}
+               AND t.kind IN ('function', 'method')
+               AND t.language IN ({JS_FAMILY_LANGUAGES_SQL})
+               AND i.language IN ({JS_FAMILY_LANGUAGES_SQL})
+               AND i.containing_symbol_id IS NOT NULL
+               AND {at} > 1
+               AND (json_extract(i.metadata_json, '$.receiver') || '.' || t.name || ' =' = {assigned}
+                    OR (json_extract(i.metadata_json, '$.receiver') = 'this'
+                        AND substr(c.signature, 1, {at}) = substr(t.signature, 1, {at})))
+               AND NOT EXISTS (
+                   SELECT 1 FROM symbols o
+                   WHERE o.name = t.name AND o.symbol_id != t.symbol_id
+                     AND o.language IN ({JS_FAMILY_LANGUAGES_SQL})
+                     AND substr(o.signature, 1, {at} + length(t.name) + 2) = {assigned})"
+        ));
+    }
+
     // A constructor runs wherever its class is built: `Flask()` reaches `Flask.__init__`. Rows
     // reached only this way (`via` 1) sort last: nearly every test builds the app.
     if has_relationships {
         recursive_branches.push(format!(
-            "SELECT r.from_symbol_id, iw.depth + 1, 1
+            "SELECT r.from_symbol_id, iw.depth + 1, 1, iw.symbol_id
              FROM impact_walk iw
              CROSS JOIN symbols ctor ON ctor.symbol_id = iw.symbol_id
              JOIN relationships r ON r.to_symbol_id = ctor.parent_symbol_id
@@ -6785,7 +7074,7 @@ fn walk_caller_branches(
     }
     if has_pending && has_pending_namespace_column(conn) {
         recursive_branches.push(format!(
-            "SELECT p.from_symbol_id, iw.depth + 1, 1
+            "SELECT p.from_symbol_id, iw.depth + 1, 1, iw.symbol_id
              FROM impact_walk iw
              CROSS JOIN symbols ctor ON ctor.symbol_id = iw.symbol_id
              CROSS JOIN symbols s_target ON s_target.symbol_id = ctor.parent_symbol_id

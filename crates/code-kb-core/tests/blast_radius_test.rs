@@ -836,7 +836,7 @@ fn sites_the_index_cannot_tie_to_the_target_are_counted_instead_of_reporting_no_
         ),
         (
             "lib/app.js",
-            "function handle(req, res) {\n  res.send('ok');\n}\nfunction relay(target) {\n  target.send('ok');\n}\nmodule.exports = { handle, relay };\n",
+            "var res = require('./response');\nfunction handle(list) {\n  list.push(res.send);\n}\nfunction relay(target) {\n  target.send('ok');\n}\nmodule.exports = { handle, relay };\n",
         ),
     ]);
 
@@ -1327,4 +1327,155 @@ fn a_test_that_only_the_callers_report_ties_to_the_target_joins_the_tests_the_wa
         "{}",
         format_blast_radius(&result)
     );
+}
+
+const JS_RESPONSE: &str = "var res = module.exports = {};\nres.send = function send(body) {\n  return format(body);\n};\nres.json = function json(obj) {\n  return this.send(obj);\n};\nfunction format(body) {\n  return String(body);\n}\n";
+
+const JS_RESPONSE_TEST: &str = "describe('res', function () {\n  it('should send a string', function () {\n    app.use(function (req, res) {\n      res.send('ok');\n    });\n  });\n  it('should send json', function () {\n    app.use(function (req, res) {\n      res.json({});\n    });\n  });\n  it('should post a body', function () {\n    request.send('ok');\n  });\n});\n";
+
+#[test]
+fn a_javascript_call_whose_receiver_names_the_object_a_method_is_assigned_on_reaches_its_test() {
+    let (_temp, workspace, conn) = scanned(&[
+        ("package.json", "{\"name\":\"fx\"}\n"),
+        ("lib/response.js", JS_RESPONSE),
+        ("test/res.send.js", JS_RESPONSE_TEST),
+    ]);
+
+    let result = blast_radius_op(
+        &workspace,
+        &conn,
+        Some("format"),
+        Some("lib/response.js"),
+        3,
+        20,
+    )
+    .unwrap();
+
+    let text = format_blast_radius(&result);
+    assert_eq!(
+        reasons(&result),
+        [
+            ("should send a string", "indirect caller [depth 2]"),
+            ("should send json", "indirect caller [depth 3]")
+        ],
+        "{text}"
+    );
+    assert!(result.open_ends.is_empty(), "{text}");
+}
+
+#[test]
+fn a_javascript_call_stays_untied_when_another_object_of_that_name_has_the_method() {
+    let (_temp, workspace, conn) = scanned(&[
+        ("package.json", "{\"name\":\"fx\"}\n"),
+        ("lib/response.js", JS_RESPONSE),
+        (
+            "lib/mock.js",
+            "var res = module.exports = {};\nres.send = function send(body) {\n  return body;\n};\n",
+        ),
+        ("test/res.send.js", JS_RESPONSE_TEST),
+    ]);
+
+    let result = blast_radius_op(
+        &workspace,
+        &conn,
+        Some("format"),
+        Some("lib/response.js"),
+        3,
+        20,
+    )
+    .unwrap();
+
+    let text = format_blast_radius(&result);
+    assert!(
+        !reasons(&result)
+            .iter()
+            .any(|(test, _)| *test == "should send a string"),
+        "{text}"
+    );
+}
+
+const TWO_HELPERS: &str = "LIMIT = 3\n\n\ndef parse(text):\n    return text.split()\n\n\ndef render(items):\n    return \" \".join(items)\n";
+
+const TWO_HELPER_TESTS: &str = "from pkg.util import parse, render\n\n\ndef test_parse():\n    assert parse(\"a b\") == [\"a\", \"b\"]\n\n\ndef test_render():\n    assert render([\"a\"]) == \"a\"\n";
+
+fn helper_project() -> [(&'static str, &'static str); 4] {
+    [
+        ("pyproject.toml", "[project]\nname = \"pkg\"\n"),
+        ("src/pkg/__init__.py", ""),
+        ("src/pkg/util.py", TWO_HELPERS),
+        ("tests/test_util.py", TWO_HELPER_TESTS),
+    ]
+}
+
+#[test]
+fn a_diff_inside_one_function_walks_from_that_function_only() {
+    let (_temp, workspace, conn) = changed_after_commit(
+        &helper_project(),
+        &[(
+            "src/pkg/util.py",
+            &TWO_HELPERS.replace("text.split()", "text.split(\" \")"),
+        )],
+    );
+
+    let result = blast_radius_op(&workspace, &conn, None, None, 2, 20).unwrap();
+
+    assert_eq!(
+        reasons(&result),
+        [("test_parse", "direct caller")],
+        "{}",
+        format_blast_radius(&result)
+    );
+}
+
+#[test]
+fn a_diff_outside_every_function_walks_from_the_whole_file() {
+    let (_temp, workspace, conn) = changed_after_commit(
+        &helper_project(),
+        &[(
+            "src/pkg/util.py",
+            &TWO_HELPERS.replace("LIMIT = 3", "LIMIT = 4"),
+        )],
+    );
+
+    let result = blast_radius_op(&workspace, &conn, None, None, 2, 20).unwrap();
+
+    assert_eq!(
+        reasons(&result),
+        [
+            ("test_parse", "direct caller"),
+            ("test_render", "direct caller")
+        ],
+        "{}",
+        format_blast_radius(&result)
+    );
+}
+
+#[test]
+fn a_diff_lists_the_tests_that_only_the_callers_report_of_a_changed_function_finds() {
+    let command = "class Command:\n    def execute(self):\n        return None\n";
+    let (_temp, workspace, conn) = changed_after_commit(
+        &[
+            ("pyproject.toml", "[project]\nname = \"app\"\n"),
+            ("src/app/__init__.py", ""),
+            ("src/app/command.py", command),
+            (
+                "tests/test_command.py",
+                "def test_execute(command):\n    assert command.execute() is None\n",
+            ),
+        ],
+        &[(
+            "src/app/command.py",
+            &command.replace("return None", "return 0"),
+        )],
+    );
+
+    let result = blast_radius_op(&workspace, &conn, None, None, 2, 20).unwrap();
+
+    let text = format_blast_radius(&result);
+    assert_eq!(
+        reasons(&result),
+        [("test_execute", "calls it by name only (find_references)")],
+        "{text}"
+    );
+    assert!(result.open_ends.is_empty(), "{text}");
 }

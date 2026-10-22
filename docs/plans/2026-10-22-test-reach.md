@@ -75,3 +75,23 @@ Numbers: `docs/bug-replay-baseline.md`. 96 planted bugs in cobra, express, and f
   report-test fix, so the holdout half is no longer clean for that rule.
 - Next gaps in reach, outside this plan: the default depth of 2, runtime entry points such as
   `Flask.__call__`, and JavaScript member calls that julie stores only as identifiers.
+
+## Reach round (2026-10-22)
+
+Numbers: `docs/bug-replay-baseline.md`, sections "Reach build changes" and "Cost".
+
+- `scripts/blast_perf.py` found that item 2 slowed `blast_radius`: Newtonsoft.Json p95 3.4 s to
+  11.7 s, Gson p50 0.15 s to 0.55 s. The depth-5 count walked again from the start, and the
+  open-end check ran one query per reached symbol.
+- The walk now goes level by level and expands each symbol once; the count and the check reuse
+  it. Against 2.9.0, p95 falls on Gson (2.5 s to 2.0 s) and Newtonsoft.Json (3.4 s to 2.0 s),
+  and the median rises by 5 to 65 ms.
+- The walk follows a JavaScript call that julie stores only as an identifier (`res.send()`)
+  when its receiver names the object the target is assigned on.
+- A diff answer walks from the changed functions, not from every symbol of the changed files,
+  and adds their callers-report tests. Flask and Cobra diff answers list about 0% of the suite
+  instead of 54% to 63%, and they miss the tests that the symbol answers miss.
+- Marks: no silent miss on either half; needless warnings 5 of 47 dev (11%) and 9 of 58 holdout
+  (16%), both PASS. Two fixes came from holdout cases.
+- Gaps left: the default depth of 2, runtime entry points (`Flask.__call__`, `__exit__`), and
+  `express()`, which the index does not tie to the function that `module.exports` names.
