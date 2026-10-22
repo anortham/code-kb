@@ -40,9 +40,9 @@
       one function with nearby context, or the code that calls it.
     </p>
     <p class="spec-line">
-      <span>80–98% fewer prompt tokens</span>
-      <span>0–5 ms per query</span>
-      <span>about 25 MB of memory</span>
+      <span>61–99% fewer tokens than a file read</span>
+      <span>1–50 ms for most queries</span>
+      <span>about 25–40 MB of memory</span>
       <span>42 languages</span>
     </p>
     <div class="hero-actions">
@@ -240,7 +240,7 @@ get_symbol_context("search_symbols_scoped")</pre>
             <tbody>
               <tr>
                 <td>Prompt tokens per lookup</td>
-                <td class="kept">85–98% fewer in measured examples</td>
+                <td class="kept">61–99% fewer than a full-file read in measured examples</td>
                 <td>5,000–15,000 per file read</td>
               </tr>
               <tr>
@@ -275,12 +275,12 @@ get_symbol_context("search_symbols_scoped")</pre>
               </tr>
               <tr>
                 <td>Query time</td>
-                <td class="kept">0–5 ms median</td>
+                <td class="kept">1–50 ms for most warm queries</td>
                 <td>Depends on the file and search command</td>
               </tr>
               <tr>
                 <td>Memory held by the server</td>
-                <td class="kept">About 25 MB</td>
+                <td class="kept">About 25–40 MB; 50–60 MB after a large callers report</td>
                 <td>No server process</td>
               </tr>
               <tr>
@@ -294,8 +294,10 @@ get_symbol_context("search_symbols_scoped")</pre>
         <aside class="note">
           <h3>About latency</h3>
           <p>
-            <code>code-kb stats</code> reports query times. In our measurements, most queries took
-            0 to 5 milliseconds. Agent response times also depend on the model and network.
+            <code>code-kb stats</code> reports query times. On the code-kb repository, a warm symbol body
+            or small skeleton took 1 to 4 milliseconds, and most other calls took 10 to 50 milliseconds.
+            A concept search or a callers report can take up to about 100 milliseconds.
+            Agent response times also depend on the model and network.
             See the comparison with earlier designs in the
             <a href="https://github.com/anortham/code-kb/blob/main/docs/plans/011-miller-julie-comparative-analysis-and-lessons.md" target="_blank" rel="noopener">architecture notes</a>.
           </p>
@@ -365,7 +367,7 @@ code-kb stats</pre>
             </tbody>
           </table>
         </div>
-        <p>Three more commands have no MCP tool: <code>code-kb search &lt;query&gt;</code> prints the ranked search with its score breakdown, <code>code-kb facts [category]</code> lists routes, queries, models, and config keys, and <code>code-kb stats</code> reports token savings and tool errors.</p>
+        <p>Four query commands have no MCP tool: <code>code-kb outline [path]</code> prints a folder's layout, which <code>file_skeleton</code> on a folder also returns, <code>code-kb search &lt;query&gt;</code> prints the ranked search with its score breakdown, <code>code-kb facts [category]</code> lists routes, queries, models, and config keys, and <code>code-kb stats</code> reports token savings and tool errors.</p>
       </div>
     </section>
 

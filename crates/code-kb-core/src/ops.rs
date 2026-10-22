@@ -1,4 +1,5 @@
 use rusqlite::Connection;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use thiserror::Error;
 
@@ -6,11 +7,14 @@ use crate::db::{DbError, ensure_fts_index_path};
 use crate::edit_check::{self, BaseRequest, EditCheck, EditCheckError, EditLimits, PendingCheck};
 use crate::formatters::{
     OutlineNode, add_path_to_outline, add_unsupported_to_outline, format_file_skeleton,
-    format_find_symbol_results, render_outline_tree,
+    format_find_symbol_results, format_unindexed_file, render_outline_tree,
 };
-use crate::models::{BlastRadiusResult, ContextSlice, Symbol, SymbolSearchResult, TestTarget};
+use crate::models::{
+    BlastRadiusResult, CallersReportSites, ContextSlice, ImpactedSymbol, LabeledSite,
+    ReferenceReport, SiteLabel, Symbol, SymbolSearchResult, TestTarget, is_generated_lambda_name,
+};
 use crate::queries::{self, QueryError};
-use crate::reference_report::{reference_report_for_edit, select_reference_target};
+use crate::reference_report::{reference_report_for_impact, select_reference_target};
 use crate::slicer::{self, SliceError};
 use crate::sync::{self, SyncError};
 use crate::workspace::{Workspace, WorkspaceError, paths_equal};
@@ -34,6 +38,16 @@ pub enum OpError {
         path: String,
         workspace: String,
         hint: String,
+    },
+    #[error(
+        "`{name}` has {count} overloads in {path}; get_symbol_context shows at most {max}. Pass one symbol_id below (CLI: `--symbol-id`), or call get_symbol_body for every body:\n{candidates}"
+    )]
+    TooManyOverloads {
+        name: String,
+        count: usize,
+        path: String,
+        max: usize,
+        candidates: String,
     },
     #[error(
         "symbol_id '{id}' is no longer indexed in {workspace}; run lookup_symbol and select a current id"
@@ -64,6 +78,13 @@ pub struct SymbolLookup {
     pub names: Vec<Symbol>,
     /// Ranked matches by name words, signatures, and docs that `names` does not already show.
     pub ranked: Vec<SymbolSearchResult>,
+    /// Close names, or the definitions a path filter excludes, when no row has the query as its
+    /// name; `names` never repeats one.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub suggestions: Vec<Symbol>,
+    /// The text of `suggestions` that precedes the ranked rows; `None` when `miss` holds it.
+    #[serde(skip)]
+    pub suggestion_hint: Option<String>,
     /// The text for a query that finds nothing: the bound workspace and close names.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub miss: Option<String>,
@@ -83,7 +104,8 @@ pub fn lookup_symbols_op(
     let names =
         queries::search_symbols_scoped(conn, query, kind, path_filter, include_tests, limit)?;
     let plain = !query.contains('.') && !query.contains("::");
-    let named_exactly = names.iter().any(|s| s.name.eq_ignore_ascii_case(query));
+    let has_query_name = |symbol: &Symbol| symbol.name.eq_ignore_ascii_case(query);
+    let named_exactly = names.iter().any(has_query_name);
     let mut ranked = Vec::new();
     if limit > 0 && plain && !named_exactly {
         ensure_fts_index_path(db_path)?;
@@ -98,13 +120,44 @@ pub fn lookup_symbols_op(
         ranked.retain(|hit| names.iter().all(|s| s.symbol_id != hit.symbol.symbol_id));
         ranked.truncate(limit);
     }
-    let miss = (limit > 0 && names.is_empty() && ranked.is_empty()).then(|| {
-        let (workspace, hint) = queries::symbol_not_found_parts(conn, query, path_filter);
+    let found_nothing = names.is_empty() && ranked.is_empty();
+    let one_word = !query.chars().any(char::is_whitespace);
+    let shows_query_name = named_exactly || ranked.iter().any(|hit| has_query_name(&hit.symbol));
+    let suggestions = if limit == 0 {
+        queries::NameSuggestions::default()
+    } else if found_nothing {
+        queries::name_suggestions(conn, query, path_filter, &|_| true)
+    } else if plain && one_word && !shows_query_name {
+        let kind = kind.map(queries::normalize_kind);
+        let new_name_of_kind = |s: &Symbol| {
+            kind.as_deref()
+                .is_none_or(|k| s.kind == k || crate::formatters::display_kind(s) == k)
+                && names
+                    .iter()
+                    .all(|row| !row.name.eq_ignore_ascii_case(&s.name))
+        };
+        let found = queries::name_suggestions(conn, query, path_filter, &new_name_of_kind);
+        if names.is_empty() || found.excluded_by.is_some() {
+            found
+        } else {
+            queries::NameSuggestions::default()
+        }
+    } else {
+        queries::NameSuggestions::default()
+    };
+    let suggestion_hint = suggestions.hint();
+    let miss = (limit > 0 && found_nothing).then(|| {
+        let hint = suggestion_hint
+            .clone()
+            .unwrap_or_else(|| queries::NO_SIMILAR_NAME.to_string());
+        let workspace = queries::workspace_name(conn);
         format!("No symbols found matching \"{query}\" in {workspace}. {hint}\n")
     });
     Ok(SymbolLookup {
         names,
         ranked,
+        suggestions: suggestions.symbols,
+        suggestion_hint: suggestion_hint.filter(|_| miss.is_none()),
         miss,
     })
 }
@@ -127,7 +180,18 @@ pub fn render_symbol_lookup(
             .iter_mut()
             .chain(ranked.iter_mut().map(|hit| &mut hit.symbol)),
     )?;
-    Ok(format_find_symbol_results(query, &names, &ranked, limit))
+    let Some(hint) = &lookup.suggestion_hint else {
+        return Ok(format_find_symbol_results(query, &names, &ranked, limit));
+    };
+    let mut sections = Vec::new();
+    if !names.is_empty() {
+        sections.push(format_find_symbol_results(query, &names, &[], limit));
+    }
+    sections.push(format!("{hint}\n"));
+    if !ranked.is_empty() {
+        sections.push(format_find_symbol_results(query, &[], &ranked, limit));
+    }
+    Ok(sections.join("\n"))
 }
 
 fn stale_symbol_id(conn: &Connection, id: &str) -> OpError {
@@ -334,7 +398,8 @@ pub fn get_context_slices_selected_op(
 }
 
 /// The current ids of the overloads a name selects, after their file is refreshed. Returns
-/// `ambiguity` for an id selector, for more than `max` overloads, or when the refresh left none.
+/// `ambiguity` for an id selector or when the refresh left none, and `TooManyOverloads` for more
+/// than `max`.
 fn overload_selectors(
     workspace: &Workspace,
     db_path: &Path,
@@ -357,8 +422,17 @@ fn overload_selectors(
     {
         overloads = queries::get_symbol_overloads(conn, name, scope.as_deref())?;
     }
-    if overloads.is_empty() || overloads.len() > max {
+    if overloads.is_empty() {
         return Err(ambiguity);
+    }
+    if overloads.len() > max {
+        return Err(OpError::TooManyOverloads {
+            name: overloads[0].name.clone(),
+            count: overloads.len(),
+            path: overloads[0].path.clone(),
+            max,
+            candidates: queries::candidate_id_lines(&overloads),
+        });
     }
     Ok(overloads
         .into_iter()
@@ -460,6 +534,23 @@ pub fn file_skeleton_op(
         queries::inherited_writes_among(conn, symbols.iter().map(|s| s.symbol_id.as_str()))?;
     symbols.retain(|symbol| !inherited.contains(&symbol.symbol_id));
     let file_meta = queries::get_file(conn, &rel_path)?;
+    if symbols.is_empty() {
+        match &file_meta {
+            None => {
+                return Ok(format_unindexed_file(
+                    &rel_path,
+                    "Not in the index: the scan skips this path.",
+                ));
+            }
+            Some(meta) if meta.language == "unsupported" => {
+                return Ok(format_unindexed_file(
+                    &rel_path,
+                    "Unsupported file: no extractor for the language.",
+                ));
+            }
+            Some(_) => {}
+        }
+    }
     let line_count = file_meta.and_then(|m| m.line_count.map(|l| l as usize));
     let parse_errors = queries::count_parse_diagnostics(conn, &rel_path);
 
@@ -680,38 +771,15 @@ pub fn blast_radius_selected_op(
         }
     });
 
-    let mut discovered = Vec::new();
     let (seed_symbols, symbol_path_filter, seed_paths) = match (clean_symbol, clean_file) {
         (Some(s), Some(f)) => (vec![s], Some(f), vec![]),
         (Some(s), None) => (vec![s], None, vec![]),
         (None, Some(f)) => (vec![], None, vec![f]),
         (None, None) => {
-            // Zero arguments: discover uncommitted working tree changes via git status
-            let git_status = std::process::Command::new("git")
-                .args(["status", "--porcelain"])
-                .current_dir(&workspace.root)
-                .output();
-
-            if let Ok(output) = git_status
-                && output.status.success()
-            {
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                for line in stdout.lines() {
-                    if line.len() > 3 {
-                        let path_part = line.get(3..).unwrap_or("").trim();
-                        let target = if let Some((_, to)) = path_part.split_once("->") {
-                            to.trim()
-                        } else {
-                            path_part
-                        };
-                        let p = target.trim_matches('"');
-                        let p_fwd = p.replace('\\', "/");
-                        if !p_fwd.is_empty() && !crate::workspace::is_hard_excluded(&p_fwd) {
-                            discovered.push(p_fwd);
-                        }
-                    }
-                }
-            }
+            let discovered = uncommitted_paths(workspace)?
+                .into_iter()
+                .filter(|path| !crate::workspace::is_hard_excluded(path))
+                .collect();
             (vec![], None, discovered)
         }
     };
@@ -733,9 +801,40 @@ pub fn blast_radius_selected_op(
     with_calling_tests(workspace, conn, target, res, limit)
 }
 
-/// The tests of the callers report of `target` when the walk found none, or `target` itself when
-/// it is a test: the walk follows resolved and pending rows by name, and the report also proves a
-/// call through a receiver's type.
+/// The paths `git status` lists as changed, or the error `check_edit` gives outside a repository.
+fn uncommitted_paths(workspace: &Workspace) -> Result<Vec<String>, OpError> {
+    edit_check::require_repository(&workspace.canonical_root)?;
+    let output = std::process::Command::new("git")
+        .args(["status", "--porcelain"])
+        .current_dir(&workspace.root)
+        .output()
+        .map_err(|error| EditCheckError::Git(format!("could not run git: {error}")))?;
+    if !output.status.success() {
+        return Err(EditCheckError::Git(format!(
+            "git status failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ))
+        .into());
+    }
+    Ok(String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter(|line| line.len() > 3)
+        .map(|line| {
+            let path_part = line.get(3..).unwrap_or("").trim();
+            let target = match path_part.split_once("->") {
+                Some((_, to)) => to.trim(),
+                None => path_part,
+            };
+            target.trim_matches('"').replace('\\', "/")
+        })
+        .filter(|path| !path.is_empty())
+        .collect())
+}
+
+/// Fills what the walk left empty from the callers report of `target`: the callers of its proven
+/// and likely sites when the walk found no impacted symbol, and its tests when the walk found no
+/// test, or `target` itself when it is a test. The walk follows resolved and pending rows by name,
+/// and the report also proves a call through a receiver's type.
 fn with_calling_tests(
     workspace: &Workspace,
     conn: &Connection,
@@ -746,13 +845,34 @@ fn with_calling_tests(
     let Some(target) = target else {
         return Ok(res);
     };
-    if !res.likely_tests.is_empty() || res.likely_tests_truncated || res.traversal_ceiling_reached {
+    if res.traversal_ceiling_reached {
+        return Ok(res);
+    }
+    let needs_tests = res.likely_tests.is_empty() && !res.likely_tests_truncated;
+    let needs_callers = res.impacted_symbols.is_empty() && !res.impacted_symbols_truncated;
+    if !needs_tests && !needs_callers {
         return Ok(res);
     }
     // The walk's answer stands alone; an index too old for the report keeps it.
-    let Ok(report) = reference_report_for_edit(conn, &workspace.root, &target, None) else {
+    let Ok(report) = reference_report_for_impact(conn, &workspace.root, &target) else {
         return Ok(res);
     };
+    if needs_callers {
+        res.impacted_symbols = report_callers(conn, &report)?;
+        res.impacted_symbols_found = res.impacted_symbols.len();
+        res.impacted_symbols_truncated = res.impacted_symbols.len() > limit;
+        res.impacted_symbols.truncate(limit);
+        res.callers_report = Some(CallersReportSites {
+            sites: report.counts.sites,
+            proven: report.counts.proven,
+            likely: report.counts.likely,
+            unresolved: report.counts.unresolved,
+            excluded: report.counts.excluded,
+        });
+    }
+    if !needs_tests {
+        return Ok(res);
+    }
     res.likely_tests = report
         .tests
         .into_iter()
@@ -780,6 +900,101 @@ fn with_calling_tests(
     res.likely_tests_truncated = res.likely_tests.len() > limit;
     res.likely_tests.truncate(limit);
     Ok(res)
+}
+
+/// The callers of the report's proven and likely sites that are not tests, as depth-1 rows in
+/// report order. A site outside any symbol is a row of its own at the site's line.
+fn report_callers(
+    conn: &Connection,
+    report: &ReferenceReport,
+) -> Result<Vec<ImpactedSymbol>, OpError> {
+    let tests: HashSet<&str> = report
+        .tests
+        .iter()
+        .map(|test| test.symbol_id.as_str())
+        .collect();
+    let mut callers: Vec<(&str, Vec<&LabeledSite>)> = Vec::new();
+    let mut positions: HashMap<&str, usize> = HashMap::new();
+    for labeled in report
+        .sites
+        .iter()
+        .filter(|labeled| matches!(labeled.label, SiteLabel::Proven | SiteLabel::Likely))
+    {
+        let caller = labeled.site.from_symbol_id.as_str();
+        match positions.get(caller).filter(|_| !caller.is_empty()) {
+            Some(&position) => callers[position].1.push(labeled),
+            None => {
+                positions.insert(caller, callers.len());
+                callers.push((caller, vec![labeled]));
+            }
+        }
+    }
+    let mut rows = Vec::new();
+    for (caller, sites) in callers {
+        let name_only = sites.iter().all(|labeled| {
+            labeled.label == SiteLabel::Likely && labeled.basis.starts_with("name only")
+        });
+        let reason = Some(
+            if name_only {
+                "direct caller (find_references, name only)"
+            } else {
+                "direct caller (find_references)"
+            }
+            .to_string(),
+        );
+        if caller.is_empty() {
+            let site = &sites[0].site;
+            rows.push(ImpactedSymbol {
+                name: "(no enclosing symbol)".to_string(),
+                kind: "code".to_string(),
+                path: site.path.replace('\\', "/"),
+                line: site.start_line.unwrap_or(0),
+                depth: 1,
+                enclosing_symbol_name: None,
+                reason,
+            });
+            continue;
+        }
+        if tests.contains(caller) {
+            continue;
+        }
+        let Some(symbol) = queries::get_symbol_by_id(conn, caller)? else {
+            continue;
+        };
+        if symbol.is_test
+            || symbol.test_container
+            || (queries::is_test_path(&symbol.path) && queries::names_a_test(&symbol.name))
+            || queries::enclosing_walk_test(conn, symbol.parent_symbol_id.as_deref())?.is_some()
+        {
+            continue;
+        }
+        let enclosing_symbol_name = if is_generated_lambda_name(
+            &symbol.name,
+            &symbol.language,
+            &symbol.kind,
+            symbol.signature.as_deref(),
+        ) {
+            symbol
+                .parent_symbol_id
+                .as_deref()
+                .map(|parent| queries::get_symbol_by_id(conn, parent))
+                .transpose()?
+                .flatten()
+                .map(|parent| parent.name)
+        } else {
+            None
+        };
+        rows.push(ImpactedSymbol {
+            name: symbol.name,
+            kind: symbol.kind,
+            path: symbol.path.replace('\\', "/"),
+            line: symbol.start_line,
+            depth: 1,
+            enclosing_symbol_name,
+            reason,
+        });
+    }
+    Ok(rows)
 }
 
 #[cfg(test)]

@@ -751,3 +751,103 @@ fn multiword_search_keeps_an_exact_name_hit_ahead_of_strong_fallbacks() {
 
     assert!(results.iter().any(|result| result.symbol.name == "fuse"));
 }
+
+const DIGIT_CORPUS: &[(&str, &str)] = &[(
+    "src/limits.rs",
+    "/// Upper bound on retries.\npub const MAX_RETRIES: u32 = 1;\n\n/// Slots in the ring.\npub const SLOT_COUNT: u32 = 7;\n\n/// Parses one thing from the input.\npub fn parse_thing(input: &str) -> usize {\n    input.len()\n}\n",
+)];
+
+fn searched_names(db_path: &Path, query: &str) -> Vec<String> {
+    let conn = open_read_only(db_path).unwrap();
+    fts_search_symbols_scoped(&conn, query, None, None, false, 20)
+        .unwrap()
+        .into_iter()
+        .map(|result| result.symbol.name)
+        .collect()
+}
+
+#[test]
+fn a_row_that_matches_only_a_digit_of_a_wordy_query_is_no_match() {
+    let (_dir, db) = scanned_repo(DIGIT_CORPUS);
+
+    assert!(searched_names(&db, "zzq1xyq7blorp").is_empty());
+    assert_eq!(searched_names(&db, "zzq1_thing"), ["parse_thing"]);
+}
+
+#[test]
+fn a_query_of_digits_still_finds_the_rows_that_hold_them() {
+    let (_dir, db) = scanned_repo(DIGIT_CORPUS);
+
+    assert!(searched_names(&db, "1").contains(&"MAX_RETRIES".to_string()));
+    assert!(searched_names(&db, "7").contains(&"SLOT_COUNT".to_string()));
+}
+
+#[test]
+fn a_word_past_the_doc_head_still_finds_its_row() {
+    let mut notes = String::from("# Release notes\n\n");
+    while notes.len() < 900 {
+        notes.push_str("The archive layout stays the same in this release. ");
+    }
+    notes.push_str("\n\nThe glimmerstone codec is new.\n");
+    let (_dir, db) = scanned_repo(&[("docs/notes.md", notes.as_str())]);
+
+    assert_eq!(searched_names(&db, "glimmerstone"), ["Release notes"]);
+    assert_eq!(searched_names(&db, "glimmerstone 2"), ["Release notes"]);
+}
+
+#[test]
+fn a_class_name_query_still_lists_the_members_of_that_class() {
+    let (_dir, db) = scanned_repo(&[(
+        "src/glimmer.py",
+        "class Glimmer:\n    def start(self):\n        return 1\n\n    def stop(self):\n        return 2\n",
+    )]);
+
+    let names = searched_names(&db, "Glimmer");
+    assert!(names.contains(&"start".to_string()), "{names:?}");
+    assert!(names.contains(&"stop".to_string()), "{names:?}");
+}
+
+#[test]
+fn a_digit_in_a_wordy_query_does_not_crowd_out_the_word_matches() {
+    let mut limits = String::new();
+    for i in 0..200 {
+        limits.push_str(&format!("pub const LIMIT_{i}: u32 = 1;\n"));
+    }
+    let mut files: Vec<(String, String)> = vec![("src/limits.rs".into(), limits)];
+    for i in 0..5 {
+        files.push((
+            format!("docs/guide_{i}.md"),
+            format!("# Guide {i}\n\nThis page covers one thing about the release.\n"),
+        ));
+    }
+    let files: Vec<(&str, &str)> = files
+        .iter()
+        .map(|(path, content)| (path.as_str(), content.as_str()))
+        .collect();
+    let (_dir, db) = scanned_repo(&files);
+
+    let plain = searched_names(&db, "thing");
+    let with_digit = searched_names(&db, "zzq1_thing");
+    assert_eq!(plain.len(), 5, "{plain:?}");
+    assert!(
+        plain.iter().all(|name| with_digit.contains(name)),
+        "{plain:?} vs {with_digit:?}"
+    );
+}
+
+#[test]
+fn a_heading_that_names_the_query_is_still_found() {
+    let (_dir, db) = scanned_repo(&[(
+        "docs/replay.md",
+        "# Edit replay cases\n\nThe harness replays the check on real commits.\n",
+    )]);
+    let conn = open_read_only(&db).unwrap();
+
+    let rows = fts_search_symbols_scoped(&conn, "replay cases", None, None, false, 20).unwrap();
+
+    assert_eq!(
+        rows.first().map(|r| r.symbol.name.as_str()),
+        Some("Edit replay cases")
+    );
+    assert!(rows[0].score < 0.0);
+}

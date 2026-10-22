@@ -1549,6 +1549,39 @@ fn a_name_with_overloads_in_one_class_returns_every_overload() {
 }
 
 #[test]
+fn a_context_read_of_more_overloads_than_it_shows_names_the_cap_and_every_id() {
+    let (_repo, ws, db) = scanned(&[(
+        "src/Codec.cs",
+        "public static class Codec\n{\n    public static int Read(string a) => 1;\n    public static int Read(string a, int b) => 2;\n    public static int Read(string a, int b, int c) => 3;\n    public static int Read(int a) => 4;\n    public static int Read(int a, int b) => 5;\n}\n",
+    )]);
+    let conn = open_read_only(&db).unwrap();
+    let read = SymbolSelector::Name("Read".to_string());
+
+    let error = get_context_slices_selected_op(&ws, &db, &conn, &read, None, false)
+        .unwrap_err()
+        .to_string();
+    let bodies = get_symbol_bodies_selected_op(&ws, &db, &conn, &read, None).unwrap();
+
+    assert!(
+        error.starts_with(
+            "`Read` has 5 overloads in src/Codec.cs; get_symbol_context shows at most 4. Pass one symbol_id below (CLI: `--symbol-id`), or call get_symbol_body for every body:\n"
+        ),
+        "{error}"
+    );
+    assert!(!error.contains("Ambiguous symbol"), "{error}");
+    assert_eq!(bodies.len(), 5);
+    for body in &bodies {
+        assert!(
+            error.contains(&format!(
+                "- method `Read` in src/Codec.cs:{} (id={})",
+                body.0.start_line, body.0.symbol_id
+            )),
+            "{error}"
+        );
+    }
+}
+
+#[test]
 fn an_app_factory_in_a_test_folder_is_not_a_related_test() {
     let (_repo, ws, db) = scanned(&[
         (
@@ -1646,5 +1679,67 @@ fn a_decorated_body_and_context_start_their_range_at_the_first_decorator() {
     assert!(
         contexts.contains("### Target: `static_folder` (src/scaffold.py:5-7)"),
         "{contexts}"
+    );
+}
+
+#[test]
+fn a_skeleton_of_script_and_reexport_files_names_their_top_level_rows() {
+    find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+    let dir = safe_tempdir();
+    let root = dir.path();
+    fs::create_dir_all(root.join("pkg")).unwrap();
+    fs::write(
+        root.join("server.js"),
+        "var express = require('express');\nvar app = express();\n\napp.get('/', function (req, res) {\n  res.send('ok');\n});\n\nvar port = 3000;\napp.listen(port);\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("pkg/__init__.py"),
+        "from .app import Flask as Flask\nfrom .app import Request as Request\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("pkg/app.py"),
+        "class Flask:\n    pass\n\nclass Request:\n    pass\n",
+    )
+    .unwrap();
+    fs::write(root.join("LICENSE"), "Permission is hereby granted.\n").unwrap();
+    fs::create_dir_all(root.join("node_modules/dep")).unwrap();
+    fs::write(
+        root.join("node_modules/dep/index.js"),
+        "function dep() {}\n",
+    )
+    .unwrap();
+    let ws = Workspace::new(root.to_path_buf());
+    let db = root.join(".code-kb/artifact.db");
+    scan_workspace(&ws, &db, true).unwrap();
+    let conn = open_read_only(&db).unwrap();
+
+    let script = file_skeleton_op(&ws, &db, &conn, "server.js").unwrap();
+    assert!(
+        script.contains(
+            "// Nothing to outline. Top-level rows: 1 import (`express` L1); 2 variables (`app` L2, `port` L8)."
+        ),
+        "{script}"
+    );
+
+    let reexports = file_skeleton_op(&ws, &db, &conn, "pkg/__init__.py").unwrap();
+    assert!(
+        reexports.contains(
+            "// Nothing to outline. Top-level rows: 2 imports (`Flask` L1, `Request` L2)."
+        ),
+        "{reexports}"
+    );
+
+    let classes = file_skeleton_op(&ws, &db, &conn, "pkg/app.py").unwrap();
+    assert!(!classes.contains("Nothing to outline"), "{classes}");
+
+    assert_eq!(
+        file_skeleton_op(&ws, &db, &conn, "LICENSE").unwrap(),
+        "// File: LICENSE\n\n// Unsupported file: no extractor for the language. Read the file.\n"
+    );
+    assert_eq!(
+        file_skeleton_op(&ws, &db, &conn, "node_modules/dep/index.js").unwrap(),
+        "// File: node_modules/dep/index.js\n\n// Not in the index: the scan skips this path. Read the file.\n"
     );
 }

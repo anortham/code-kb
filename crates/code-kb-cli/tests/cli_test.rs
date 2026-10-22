@@ -716,6 +716,7 @@ fn test_cli_lookup_prints_the_text_of_the_mcp_lookup_symbol_for_a_concept_an_exa
         "bakoff",
         "fn send_again()",
         "function that retries",
+        "send_agian",
     ];
 
     let cli_texts: Vec<String> = queries
@@ -737,7 +738,7 @@ fn test_cli_lookup_prints_the_text_of_the_mcp_lookup_symbol_for_a_concept_an_exa
         .collect();
     let mcp_texts = mcp_lookup_texts(root, &queries);
 
-    assert_eq!(cli_texts.len(), 5);
+    assert_eq!(cli_texts.len(), 6);
     for (query, (cli, mcp)) in queries.iter().zip(cli_texts.iter().zip(&mcp_texts)) {
         assert_eq!(cli, mcp, "query {query}");
     }
@@ -775,6 +776,24 @@ fn test_cli_lookup_prints_the_text_of_the_mcp_lookup_symbol_for_a_concept_an_exa
     let lookup: serde_json::Value = serde_json::from_slice(&json.stdout).unwrap();
     assert_eq!(lookup["names"][0]["name"], "retry_count");
     assert_eq!(lookup["ranked"][0]["symbol"]["name"], "send_again");
+    assert!(lookup.get("suggestions").is_none(), "{lookup}");
+
+    let hint = mcp_texts[5]
+        .find("Did you mean one of:\n  - function `send_again` (src/net.rs:6)")
+        .unwrap_or_else(|| panic!("{}", mcp_texts[5]));
+    let header = mcp_texts[5]
+        .find("full-text matches for \"send_agian\":")
+        .unwrap_or_else(|| panic!("{}", mcp_texts[5]));
+    assert!(hint < header, "{}", mcp_texts[5]);
+    let json = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .args(["--json", "lookup", "send_agian"])
+        .output()
+        .unwrap();
+    let typo: serde_json::Value = serde_json::from_slice(&json.stdout).unwrap();
+    assert_eq!(typo["suggestions"][0]["name"], "send_again");
+    assert!(typo.get("miss").is_none(), "{typo}");
 }
 
 #[test]
@@ -2628,6 +2647,37 @@ fn test_guidance_names_no_removed_mcp_tool_outside_a_removal_note() {
 }
 
 #[test]
+fn test_readme_and_site_match_the_contract_memory_latency_and_cli_only_commands() {
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let root = manifest_dir.parent().unwrap().parent().unwrap();
+    let read = |doc: &str| std::fs::read_to_string(root.join(doc)).unwrap();
+    assert!(read("AGENTS.md").contains("Retained memory is about 25–40 MB"));
+    for doc in ["README.md", "docs/site/index.html"] {
+        let text = read(doc);
+        assert!(
+            text.contains("25–40 MB"),
+            "{doc} disagrees with the retained memory in AGENTS.md"
+        );
+        assert!(!text.contains("about 25 MB"), "{doc} claims 25 MB");
+        for claim in ["Sub-5ms", "0–5 ms", "0 to 5 milliseconds"] {
+            assert!(!text.contains(claim), "{doc} claims `{claim}`");
+        }
+        let line = text
+            .lines()
+            .find(|line| line.contains("have no MCP tool"))
+            .unwrap_or_else(|| panic!("{doc} omits the CLI-only commands"));
+        assert!(line.contains("Four query commands"), "{doc}: {line}");
+        for command in ["outline", "search", "facts", "stats"] {
+            assert!(
+                line.contains(&format!("`{command}`"))
+                    || line.contains(&format!("code-kb {command}")),
+                "{doc} omits `{command}` from the CLI-only commands"
+            );
+        }
+    }
+}
+
+#[test]
 fn test_guidance_documents_the_edit_check() {
     let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let root = manifest_dir.parent().unwrap().parent().unwrap();
@@ -2727,5 +2777,92 @@ fn test_routing_block_sync_contract() {
     assert_eq!(
         hook_copy, compiled_copy,
         "hooks/code-kb-routing-block.md and crates/code-kb-cli/src/routing-block.md must be byte-for-byte identical"
+    );
+}
+
+fn project_with_junk_index(source: &str) -> tempfile::TempDir {
+    let temp_dir = code_kb_core::safe_tempdir();
+    let root = temp_dir.path();
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"junk_index\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("src/lib.rs"), source).unwrap();
+    let db = root.join(".code-kb").join("artifact.db");
+    std::fs::create_dir_all(db.parent().unwrap()).unwrap();
+    std::fs::write(&db, b"not a database ".repeat(4096)).unwrap();
+    std::fs::write(root.join(".code-kb/artifact.db-wal"), b"stale").unwrap();
+    temp_dir
+}
+
+#[test]
+fn test_cli_lookup_rebuilds_an_index_that_is_not_a_database() {
+    code_kb_core::find_julie_extract_binary().expect("julie-extract must be present");
+    let project = project_with_junk_index("pub fn survives_corruption() {}\n");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .env(
+            "CODE_KB_TELEMETRY_DIR",
+            project.path().join(".telemetry_test"),
+        )
+        .arg("--root")
+        .arg(project.path())
+        .args(["lookup", "survives_corruption"])
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        stdout.contains("function `survives_corruption` ["),
+        "{stdout}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_cli_names_the_scan_remedy_when_an_unreadable_index_cannot_be_rebuilt() {
+    use std::os::unix::fs::PermissionsExt;
+    let project = project_with_junk_index("pub fn never_indexed() {}\n");
+    let tools = tempfile::tempdir().unwrap();
+    let fake = tools.path().join("julie-extract");
+    std::fs::write(
+        &fake,
+        format!(
+            "#!/bin/sh\ncase \"$1\" in --version) echo 'julie-extract {}'; exit 0;; esac\necho 'simulated scan failure' >&2\nexit 2\n",
+            code_kb_core::PINNED_JULIE_VERSION
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .env("JULIE_EXTRACT_BIN", &fake)
+        .env(
+            "CODE_KB_TELEMETRY_DIR",
+            project.path().join(".telemetry_test"),
+        )
+        .arg("--root")
+        .arg(project.path())
+        .args(["lookup", "never_indexed"])
+        .output()
+        .unwrap();
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let root = code_kb_core::Workspace::new(project.path().to_path_buf()).canonical_root;
+    assert!(!output.status.success(), "{stderr}");
+    assert!(stderr.contains("simulated scan failure"), "{stderr}");
+    assert!(
+        stderr.contains(&format!(
+            "Run `code-kb scan --root {}` to rebuild the index.",
+            root.display()
+        )),
+        "{stderr}"
     );
 }

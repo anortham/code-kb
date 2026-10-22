@@ -1,5 +1,6 @@
 pub use rusqlite::Connection;
-use rusqlite::OpenFlags;
+use rusqlite::{OpenFlags, OptionalExtension};
+use std::collections::HashMap;
 use std::path::Path;
 use thiserror::Error;
 
@@ -47,6 +48,37 @@ pub fn open_read_only(path: &Path) -> Result<Connection, DbError> {
 
     Ok(conn)
 }
+
+/// True when the file at `path` exists but SQLite cannot read it as a database: a non-empty file
+/// without the SQLite header, or one that SQLite reports as not a database or corrupt. An empty
+/// file is an empty database to SQLite, and a missing or busy file is not flagged.
+pub fn is_unreadable_database(path: &Path) -> bool {
+    use std::io::Read;
+    let mut header = Vec::with_capacity(SQLITE_HEADER.len());
+    let read = std::fs::File::open(path).and_then(|file| {
+        file.take(SQLITE_HEADER.len() as u64)
+            .read_to_end(&mut header)
+    });
+    match read {
+        Err(_) | Ok(0) => return false,
+        Ok(_) if header != SQLITE_HEADER => return true,
+        Ok(_) => {}
+    }
+    let error = match open_read_only(path) {
+        Ok(conn) => match conn.query_row("SELECT count(*) FROM sqlite_master", [], |_| Ok(())) {
+            Ok(()) => return false,
+            Err(e) => e,
+        },
+        Err(DbError::OpenFailed(_, e) | DbError::PragmaFailed(e) | DbError::Sqlite(e)) => e,
+        Err(_) => return false,
+    };
+    matches!(
+        error.sqlite_error_code(),
+        Some(rusqlite::ErrorCode::NotADatabase | rusqlite::ErrorCode::DatabaseCorrupt)
+    )
+}
+
+const SQLITE_HEADER: &[u8] = b"SQLite format 3\0";
 
 /// Safely flushes all committed transactions from the WAL file into the main database file
 /// and truncates the WAL to zero bytes. Returns an error if the database is busy and unable to truncate.
@@ -317,8 +349,11 @@ const IMPL_OWNER_KINDS: &str = "'class', 'struct', 'enum', 'union', 'interface',
 /// julie leaves `parent_symbol_id` empty on a Rust method whose `impl` block is in another file
 /// than its type, and names the type as `impl_type_name` in `metadata_json`. Links each such
 /// method to the type with that name nearest to its file, so every query that reads the parent
-/// sees the owner. Equally near types leave the method unlinked. julie's `ON DELETE SET NULL`
-/// clears a link when it rewrites the type's file, and the next call links the method again.
+/// sees the owner. Equally near types leave the method unlinked. julie also leaves it empty on
+/// every Go method and names the type as `receiver_type`; Go declares that type in the method's
+/// package, its folder, so the method links to the one type with that name in its folder. julie's
+/// `ON DELETE SET NULL` clears a link when it rewrites the type's file, and the next call links
+/// the method again.
 pub fn link_impl_owners(conn: &Connection) -> rusqlite::Result<()> {
     let has_metadata: bool = conn.query_row(
         "SELECT count(*) = 1 FROM pragma_table_info('symbols') WHERE name = 'metadata_json'",
@@ -344,7 +379,8 @@ pub fn link_impl_owners(conn: &Connection) -> rusqlite::Result<()> {
             Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
         })?
         .collect::<rusqlite::Result<_>>()?;
-    if unlinked.is_empty() {
+    let mut links = go_receiver_links(conn)?;
+    if unlinked.is_empty() && links.is_empty() {
         return Ok(());
     }
 
@@ -352,12 +388,13 @@ pub fn link_impl_owners(conn: &Connection) -> rusqlite::Result<()> {
         "SELECT symbol_id, path FROM symbols
          WHERE name = ?1 AND language = ?2 AND kind IN ({IMPL_OWNER_KINDS})"
     ))?;
-    let mut links = Vec::new();
-    for (method_id, method_path, language, type_name) in &unlinked {
+    for (method_id, method_path, language, type_name) in unlinked {
         let candidates: Vec<(String, String)> = owners
-            .query_map([type_name, language], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .query_map([&type_name, &language], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })?
             .collect::<rusqlite::Result<_>>()?;
-        if let Some(owner_id) = nearest_owner(method_path, &candidates) {
+        if let Some(owner_id) = nearest_owner(&method_path, &candidates) {
             links.push((owner_id.to_string(), method_id));
         }
     }
@@ -374,10 +411,116 @@ pub fn link_impl_owners(conn: &Connection) -> rusqlite::Result<()> {
                AND EXISTS (SELECT 1 FROM symbols WHERE symbol_id = ?1)",
         )?;
         for (owner_id, method_id) in &links {
-            link.execute([owner_id, *method_id])?;
+            link.execute([owner_id, method_id])?;
         }
     }
     tx.commit()
+}
+
+/// `(owner, method)` pairs for the Go methods with no parent whose receiver type is declared
+/// once in the method's package: its folder, narrowed by the `package` clause when an external
+/// test package shares the folder, and then by the method's own file.
+fn go_receiver_links(conn: &Connection) -> rusqlite::Result<Vec<(String, String)>> {
+    const UNLINKED: &str = "parent_symbol_id IS NULL AND language = 'go' AND kind = 'method'";
+    conn.execute_batch(&format!(
+        "CREATE INDEX IF NOT EXISTS idx_symbols_unlinked_go_method ON symbols(symbol_id) WHERE {UNLINKED};"
+    ))?;
+    let unlinked: Vec<(String, String, String)> = conn
+        .prepare(&format!(
+            "SELECT symbol_id, path, json_extract(metadata_json, '$.receiver_type')
+             FROM symbols
+             WHERE {UNLINKED} AND json_valid(metadata_json)
+               AND json_extract(metadata_json, '$.receiver_type') IS NOT NULL"
+        ))?
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
+        .collect::<rusqlite::Result<_>>()?;
+    if unlinked.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut owners = conn.prepare(&format!(
+        "SELECT symbol_id, path FROM symbols
+         WHERE name = ?1 AND language = 'go' AND kind IN ({IMPL_OWNER_KINDS})"
+    ))?;
+    let mut types: HashMap<String, Vec<(String, String)>> = HashMap::new();
+    let mut packages = GoPackages::new(conn)?;
+    let mut links = Vec::new();
+    for (method_id, method_path, receiver) in unlinked {
+        let type_name = go_receiver_type_name(&receiver);
+        if type_name.is_empty() {
+            continue;
+        }
+        if !types.contains_key(type_name) {
+            let candidates = owners
+                .query_map([type_name], |row| Ok((row.get(0)?, row.get(1)?)))?
+                .collect::<rusqlite::Result<_>>()?;
+            types.insert(type_name.to_string(), candidates);
+        }
+        let folder = parent_folder(&method_path);
+        let mut in_folder: Vec<&(String, String)> = types[type_name]
+            .iter()
+            .filter(|(_, path)| parent_folder(path) == folder)
+            .collect();
+        if in_folder.len() > 1 {
+            let package = packages.of(&method_path)?;
+            let mut same_package = Vec::new();
+            for candidate in in_folder {
+                if packages.of(&candidate.1)? == package {
+                    same_package.push(candidate);
+                }
+            }
+            in_folder = same_package;
+        }
+        if in_folder.len() > 1 {
+            in_folder.retain(|(_, path)| *path == method_path);
+        }
+        if let [(owner_id, _)] = in_folder.as_slice() {
+            links.push((owner_id.clone(), method_id));
+        }
+    }
+    Ok(links)
+}
+
+/// The `package` clause of each Go file, read once per file.
+struct GoPackages<'c> {
+    statement: rusqlite::Statement<'c>,
+    names: HashMap<String, Option<String>>,
+}
+
+impl<'c> GoPackages<'c> {
+    fn new(conn: &'c Connection) -> rusqlite::Result<Self> {
+        let statement = conn.prepare(
+            "SELECT name FROM symbols WHERE path = ?1 AND language = 'go' AND kind = 'module' LIMIT 1",
+        )?;
+        Ok(Self {
+            statement,
+            names: HashMap::new(),
+        })
+    }
+
+    fn of(&mut self, path: &str) -> rusqlite::Result<Option<String>> {
+        if let Some(name) = self.names.get(path) {
+            return Ok(name.clone());
+        }
+        let name = self
+            .statement
+            .query_row([path], |row| row.get(0))
+            .optional()?;
+        self.names.insert(path.to_string(), name.clone());
+        Ok(name)
+    }
+}
+
+/// The type name of a Go receiver, without a pointer, parentheses, or type parameters:
+/// `*List[T]` is `List`.
+pub(crate) fn go_receiver_type_name(receiver: &str) -> &str {
+    let bare =
+        receiver.trim_matches(|c: char| c == '*' || c == '(' || c == ')' || c.is_whitespace());
+    bare.split('[').next().unwrap_or(bare).trim()
+}
+
+pub(crate) fn parent_folder(path: &str) -> &str {
+    path.rfind(['/', '\\']).map_or("", |end| &path[..end])
 }
 
 /// The candidate whose folder shares the most leading folders with `path`, unless two tie.
@@ -493,6 +636,14 @@ mod tests {
         let tied = owners(&["crates/a/src/x.rs", "crates/a/src/y.rs"]);
         assert_eq!(nearest_owner("crates/a/src/z/w.rs", &tied), None);
         assert_eq!(nearest_owner("crates/a/src/z/w.rs", &[]), None);
+    }
+
+    #[test]
+    fn go_receiver_type_name_drops_the_pointer_and_type_parameters() {
+        assert_eq!(go_receiver_type_name("*List[T]"), "List");
+        assert_eq!(go_receiver_type_name("Pair[K, V]"), "Pair");
+        assert_eq!(go_receiver_type_name("(*Command)"), "Command");
+        assert_eq!(go_receiver_type_name("Name"), "Name");
     }
 
     #[test]

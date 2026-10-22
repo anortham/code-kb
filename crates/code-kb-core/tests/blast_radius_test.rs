@@ -621,6 +621,49 @@ fn a_go_method_called_through_a_receiver_in_a_test_lists_that_test() {
         .collect();
     assert_eq!(
         tests,
+        [("TestSetHelpCommand", "command_test.go", "direct caller")],
+        "{}",
+        format_blast_radius(&result)
+    );
+}
+
+#[test]
+fn a_go_method_whose_receiver_type_is_declared_twice_lists_the_test_that_calls_it_by_name() {
+    find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+    let temp = safe_tempdir();
+    let root = temp.path().to_path_buf();
+    for (path, content) in [
+        ("go.mod", "module example.com/cmd\n\ngo 1.22\n"),
+        ("command.go", "package cmd\n\ntype Command struct{}\n"),
+        (
+            "help.go",
+            "package cmd\n\nfunc (c *Command) SetHelpCommand(cmd *Command) {}\n",
+        ),
+        (
+            "command_windows.go",
+            "package cmd\n\ntype Command struct{}\n",
+        ),
+        (
+            "command_test.go",
+            "package cmd\n\nimport \"testing\"\n\nfunc TestSetHelpCommand(t *testing.T) {\n\tc := &Command{}\n\tc.SetHelpCommand(&Command{})\n}\n",
+        ),
+    ] {
+        std::fs::write(root.join(path), content).unwrap();
+    }
+    let db = root.join(".code-kb").join("artifact.db");
+    let workspace = Workspace::new(root.clone());
+    scan_workspace(&workspace, &db, true).expect("scan failed");
+    let conn = open_read_only(&db).unwrap();
+
+    let result = blast_radius_op(&workspace, &conn, Some("SetHelpCommand"), None, 2, 20).unwrap();
+
+    let tests: Vec<(&str, &str, &str)> = result
+        .likely_tests
+        .iter()
+        .map(|t| (t.name.as_str(), t.path.as_str(), t.reason.as_str()))
+        .collect();
+    assert_eq!(
+        tests,
         [(
             "TestSetHelpCommand",
             "command_test.go",
@@ -667,5 +710,221 @@ fn a_test_target_that_no_test_calls_lists_itself() {
         [("test/res.attachment.js", 3, "the target is a test")],
         "{}",
         format_blast_radius(&result)
+    );
+}
+
+#[test]
+fn a_go_method_reached_through_receiver_calls_lists_the_test_that_calls_its_caller() {
+    find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+    let temp = safe_tempdir();
+    let root = temp.path().to_path_buf();
+    for (path, content) in [
+        ("go.mod", "module example.com/cmd\n\ngo 1.22\n"),
+        (
+            "command.go",
+            "package cmd\n\ntype Command struct{}\n\nfunc (c *Command) Execute() error {\n\t_, err := c.ExecuteC()\n\treturn err\n}\n\nfunc (c *Command) ExecuteC() (*Command, error) {\n\treturn c, c.execute()\n}\n",
+        ),
+        (
+            "command_exec.go",
+            "package cmd\n\nfunc (c *Command) execute() error {\n\treturn nil\n}\n",
+        ),
+        (
+            "command_test.go",
+            "package cmd\n\nimport \"testing\"\n\nfunc TestExecute(t *testing.T) {\n\troot := &Command{}\n\troot.Execute()\n}\n",
+        ),
+    ] {
+        std::fs::write(root.join(path), content).unwrap();
+    }
+    let db = root.join(".code-kb").join("artifact.db");
+    let workspace = Workspace::new(root.clone());
+    scan_workspace(&workspace, &db, true).expect("scan failed");
+    let conn = open_read_only(&db).unwrap();
+
+    let result = blast_radius_op(&workspace, &conn, Some("execute"), None, 3, 20).unwrap();
+    let text = format_blast_radius(&result);
+
+    let impacted: Vec<&str> = result
+        .impacted_symbols
+        .iter()
+        .map(|s| s.name.as_str())
+        .collect();
+    assert!(impacted.contains(&"ExecuteC"), "{text}");
+    assert!(impacted.contains(&"Execute"), "{text}");
+    let tests: Vec<&str> = result
+        .likely_tests
+        .iter()
+        .map(|t| t.name.as_str())
+        .collect();
+    assert_eq!(tests, ["TestExecute"], "{text}");
+}
+
+fn scanned(files: &[(&str, &str)]) -> (tempfile::TempDir, Workspace, Connection) {
+    find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+    let temp = safe_tempdir();
+    let root = temp.path().to_path_buf();
+    for (path, content) in files {
+        let file = root.join(path);
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(file, content).unwrap();
+    }
+    let db = root.join(".code-kb").join("artifact.db");
+    let workspace = Workspace::new(root);
+    scan_workspace(&workspace, &db, true).expect("scan failed");
+    let conn = open_read_only(&db).unwrap();
+    (temp, workspace, conn)
+}
+
+#[test]
+fn a_caller_that_only_the_callers_report_ties_to_the_target_is_a_depth_one_impacted_symbol() {
+    let (_temp, workspace, conn) = scanned(&[(
+        "src/app/command.py",
+        "class Command:\n    def execute(self):\n        return None\n\n\ndef run(cmd):\n    return cmd.execute()\n",
+    )]);
+
+    let result = blast_radius_op(&workspace, &conn, Some("execute"), None, 2, 20).unwrap();
+
+    let impacted: Vec<(&str, &str, usize, usize, Option<&str>)> = result
+        .impacted_symbols
+        .iter()
+        .map(|s| {
+            (
+                s.name.as_str(),
+                s.path.as_str(),
+                s.line,
+                s.depth,
+                s.reason.as_deref(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        impacted,
+        [(
+            "run",
+            "src/app/command.py",
+            6,
+            1,
+            Some("direct caller (find_references, name only)")
+        )]
+    );
+    let text = format_blast_radius(&result);
+    assert!(!text.contains("No downstream callers"), "{text}");
+    assert!(
+        text.contains(
+            "  - [depth 1] function `run` [line 6] (direct caller (find_references, name only))"
+        ),
+        "{text}"
+    );
+    let json = serde_json::to_value(&result).unwrap();
+    assert_eq!(
+        json["impacted_symbols"][0]["reason"],
+        "direct caller (find_references, name only)"
+    );
+    assert_eq!(json["callers_report"]["likely"], 1);
+}
+
+#[test]
+fn sites_the_index_cannot_tie_to_the_target_are_counted_instead_of_reporting_no_callers() {
+    let (_temp, workspace, conn) = scanned(&[
+        ("package.json", "{\"name\":\"fx\"}\n"),
+        (
+            "lib/response.js",
+            "var res = module.exports = {};\nres.send = function send(body) {\n  return body;\n};\n",
+        ),
+        (
+            "lib/other.js",
+            "var out = module.exports = {};\nout.send = function send(body) {\n  return body;\n};\n",
+        ),
+        (
+            "lib/app.js",
+            "function handle(req, res) {\n  res.send('ok');\n}\nfunction relay(target) {\n  target.send('ok');\n}\nmodule.exports = { handle, relay };\n",
+        ),
+    ]);
+
+    let result = blast_radius_op(
+        &workspace,
+        &conn,
+        Some("send"),
+        Some("lib/response.js"),
+        2,
+        20,
+    )
+    .unwrap();
+
+    let impacted: Vec<(&str, Option<&str>)> = result
+        .impacted_symbols
+        .iter()
+        .map(|s| (s.name.as_str(), s.reason.as_deref()))
+        .collect();
+    assert_eq!(
+        impacted,
+        [("handle", Some("direct caller (find_references)"))]
+    );
+    assert_eq!(result.callers_report.as_ref().unwrap().unresolved, 1);
+    let text = format_blast_radius(&result);
+    assert!(!text.contains("No downstream callers"), "{text}");
+    assert!(
+        text.contains(
+            "The index could not tie 1 more site of the name to this definition; find_references lists it."
+        ),
+        "{text}"
+    );
+}
+
+#[test]
+fn a_call_in_a_function_nested_in_a_test_lists_the_enclosing_test() {
+    let (_temp, workspace, conn) = scanned(&[
+        ("pyproject.toml", "[project]\nname = \"pkg\"\n"),
+        ("src/pkg/__init__.py", ""),
+        (
+            "src/pkg/helpers.py",
+            "def url_for(endpoint):\n    return \"/\" + endpoint\n",
+        ),
+        (
+            "tests/test_basic.py",
+            "from pkg.helpers import url_for\n\n\ndef test_url_processors(app):\n    @app.route(\"/\")\n    def index():\n        return url_for(\"about\")\n\n    assert index() == \"/about\"\n",
+        ),
+    ]);
+
+    let result = blast_radius_op(&workspace, &conn, Some("url_for"), None, 2, 20).unwrap();
+
+    let tests: Vec<(&str, &str, usize, &str)> = result
+        .likely_tests
+        .iter()
+        .map(|t| (t.name.as_str(), t.path.as_str(), t.line, t.reason.as_str()))
+        .collect();
+    assert_eq!(
+        tests,
+        [(
+            "test_url_processors",
+            "tests/test_basic.py",
+            4,
+            "encloses `index` (direct caller)"
+        )],
+        "{}",
+        format_blast_radius(&result)
+    );
+    assert!(result.impacted_symbols.is_empty());
+    let text = format_blast_radius(&result);
+    assert!(
+        text.contains("Every caller that find_references ties to this definition is a test.\n"),
+        "{text}"
+    );
+}
+
+#[test]
+fn blast_radius_without_a_target_outside_a_git_repository_is_an_error() {
+    let temp = tempfile::tempdir().unwrap();
+    let workspace = Workspace::new(temp.path().to_path_buf());
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+
+    let error = blast_radius_op(&workspace, &conn, None, None, 2, 20).unwrap_err();
+
+    assert_eq!(
+        error.to_string(),
+        format!(
+            "not a git repository: {}",
+            workspace.canonical_root.display()
+        )
     );
 }

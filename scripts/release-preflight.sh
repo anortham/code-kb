@@ -154,12 +154,25 @@ echo "OK (CI passed on ${CI_SHA:0:7})"
 echo -n "[9/11] Checking the real-project corpus report... "
 CORPUS_REPORT="${REPO_ROOT}/target/release-corpus/report.md"
 PIN_VER=$(python3 -c "import json;print(json.load(open('${REPO_ROOT}/scripts/julie-pins.json'))['version'])")
-if [[ ! -f "${CORPUS_REPORT}" ]] \
-  || ! grep -q "^## Result: PASS" "${CORPUS_REPORT}" \
-  || ! grep -q "new: code-kb ${WS_VER}, julie-extract ${PIN_VER}" "${CORPUS_REPORT}" \
-  || [[ $(stat -c %Y "${CORPUS_REPORT}") -lt $(git log -1 --format=%ct HEAD) ]]; then
+CORPUS_ERROR=""
+if [[ ! -f "${CORPUS_REPORT}" ]]; then
+  CORPUS_ERROR="no report at ${CORPUS_REPORT}"
+elif ! grep -q "^## Result: PASS" "${CORPUS_REPORT}"; then
+  CORPUS_ERROR="the result is not '## Result: PASS'"
+elif ! grep -q "new: code-kb ${WS_VER}, julie-extract ${PIN_VER}" "${CORPUS_REPORT}"; then
+  CORPUS_ERROR="the report is not for code-kb ${WS_VER} with julie-extract ${PIN_VER}"
+else
+  CORPUS_MTIME=$(python3 -c 'import os, sys; print(int(os.path.getmtime(sys.argv[1])))' "${CORPUS_REPORT}" 2>/dev/null || true)
+  if [[ ! "${CORPUS_MTIME}" =~ ^[0-9]+$ ]]; then
+    CORPUS_ERROR="cannot read the modification time of ${CORPUS_REPORT}"
+  elif (( CORPUS_MTIME < $(git log -1 --format=%ct HEAD) )); then
+    CORPUS_ERROR="the report is older than the HEAD commit"
+  fi
+fi
+if [[ -n "${CORPUS_ERROR}" ]]; then
   echo "FAIL"
-  echo "error: run scripts/release-corpus-check.py on this commit with code-kb ${WS_VER} and" >&2
+  echo "error: ${CORPUS_ERROR}." >&2
+  echo "       Run scripts/release-corpus-check.py on this commit with code-kb ${WS_VER} and" >&2
   echo "       julie-extract ${PIN_VER}, get PASS, and review its call-edge samples (docs/RELEASING.md)." >&2
   exit 1
 fi

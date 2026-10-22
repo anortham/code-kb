@@ -26,6 +26,14 @@ pub enum SyncError {
     Walk(#[from] ignore::Error),
     #[error("extractor did not index the requested file: {0}")]
     TargetNotIndexed(String),
+    #[error(
+        "the index at '{db}' is not a readable database, and its rebuild failed: {cause}. {remedy}"
+    )]
+    UnreadableIndex {
+        db: String,
+        cause: String,
+        remedy: String,
+    },
 }
 
 pub const PINNED_JULIE_VERSION: &str = "3.9.1";
@@ -350,9 +358,10 @@ pub fn scan_workspace(workspace: &Workspace, db_path: &Path, force: bool) -> Res
 }
 
 /// Rebuilds the index when it was written by a `julie-extract` other than the one in use or
-/// at another extraction level. Returns `true` when a rebuild ran. An index that a newer
-/// `julie-extract` wrote is kept, so an older binary never replaces it. The rebuild scans a
-/// fresh artifact because the extractor refuses to write into one with an older schema.
+/// at another extraction level, or when SQLite cannot read it as a database. Returns `true`
+/// when a rebuild ran. An index that a newer `julie-extract` wrote is kept, so an older binary
+/// never replaces it. The rebuild scans a fresh artifact because the extractor refuses to write
+/// into one with an older schema.
 pub fn ensure_index_matches_extractor(
     workspace: &Workspace,
     db_path: &Path,
@@ -367,6 +376,15 @@ pub fn ensure_index_matches_extractor(
         .and_then(|file| file.lock().map(|()| file))
         .map_err(|e| warn!(db = %db_path.display(), "Index rebuild lock unavailable: {e}"))
         .ok();
+    if crate::db::is_unreadable_database(db_path) {
+        warn!(db = %db_path.display(), "Index is not a readable SQLite database; rebuilding");
+        rebuild_index(workspace, db_path).map_err(|e| SyncError::UnreadableIndex {
+            db: db_path.display().to_string(),
+            cause: e.to_string().trim_end().to_string(),
+            remedy: scan_remedy(&workspace.canonical_root),
+        })?;
+        return Ok(true);
+    }
     let Some((recorded, level)) = other_writer(db_path, extractor_version) else {
         return Ok(false);
     };
@@ -389,6 +407,14 @@ pub fn ensure_index_matches_extractor(
     );
     rebuild_index(workspace, db_path)?;
     Ok(true)
+}
+
+/// The command that rebuilds the index of `root` from scratch.
+pub fn scan_remedy(root: &Path) -> String {
+    format!(
+        "Run `code-kb scan --root {}` to rebuild the index.",
+        root.display()
+    )
 }
 
 /// True when the index records a `julie-extract` version or extraction level other than the ones

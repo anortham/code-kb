@@ -1138,6 +1138,56 @@ fn test_failed_rebuild_keeps_the_previous_index() {
     assert!(get_symbol_by_name(&conn, "foo_fn", None).unwrap().is_some());
 }
 
+fn overwrite_with_junk(db_path: &std::path::Path) {
+    fs::write(db_path, b"not a database ".repeat(4096)).unwrap();
+    for suffix in ["-wal", "-shm"] {
+        fs::write(format!("{}{suffix}", db_path.display()), b"stale").unwrap();
+    }
+}
+
+#[test]
+fn test_index_that_is_not_a_database_is_rebuilt() {
+    let temp_dir = safe_tempdir();
+    let root = temp_dir.path().to_path_buf();
+    let db_path = root.join(".code-kb").join("artifact.db");
+    let ws = scanned_calc_index(&root, &db_path);
+    overwrite_with_junk(&db_path);
+
+    assert!(ensure_index_matches_extractor(&ws, &db_path, &installed_extractor_version()).unwrap());
+
+    for suffix in ["-wal", "-shm"] {
+        let sidecar = format!("{}{suffix}", db_path.display());
+        assert_ne!(fs::read(&sidecar).ok().as_deref(), Some(&b"stale"[..]));
+    }
+    let conn = open_read_only(&db_path).unwrap();
+    assert!(get_symbol_by_name(&conn, "foo_fn", None).unwrap().is_some());
+    assert!(
+        !ensure_index_matches_extractor(&ws, &db_path, &installed_extractor_version()).unwrap()
+    );
+}
+
+#[test]
+fn test_failed_rebuild_of_an_index_that_is_not_a_database_names_the_scan_remedy() {
+    let temp_dir = safe_tempdir();
+    let root = temp_dir.path().join("repo");
+    let db_path = temp_dir.path().join("index").join("artifact.db");
+    let ws = scanned_calc_index(&root, &db_path);
+    overwrite_with_junk(&db_path);
+    fs::remove_dir_all(&root).unwrap();
+
+    let error = ensure_index_matches_extractor(&ws, &db_path, &installed_extractor_version())
+        .unwrap_err()
+        .to_string();
+
+    assert!(
+        error.contains(&format!(
+            "Run `code-kb scan --root {}` to rebuild the index.",
+            ws.canonical_root.display()
+        )),
+        "{error}"
+    );
+}
+
 #[test]
 fn test_scan_replaces_an_empty_artifact_file() {
     find_julie_extract_binary().expect("julie-extract binary must be present for tests");

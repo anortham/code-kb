@@ -3178,6 +3178,25 @@ fn test_mcp_lookup_symbol_is_described_as_the_one_tool_for_a_name_or_a_concept()
 }
 
 #[test]
+fn test_mcp_get_symbol_context_description_names_the_overload_cap() {
+    let repo = setup_test_repo();
+    let mut session = McpSession::start(serve_command(repo.path()));
+
+    let listed = session.request("tools/list", json!({}));
+    let context = listed["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|tool| tool["name"] == "get_symbol_context")
+        .unwrap();
+
+    assert_eq!(
+        context["description"],
+        "A symbol's body with the signatures of what it calls, its parameter types, and its tests, in one call. Overloads return one context each, at most 4. Use before you change a function."
+    );
+}
+
+#[test]
 fn test_mcp_check_edit_is_described_and_takes_an_optional_base() {
     let repo = setup_test_repo();
     let mut session = McpSession::start(serve_command(repo.path()));
@@ -4191,4 +4210,119 @@ fn test_mcp_parked_root_loses_its_watcher_at_the_next_call() {
         assert!(Instant::now() < deadline, "{later}");
         std::thread::sleep(Duration::from_millis(100));
     }
+}
+
+#[test]
+fn blast_radius_without_a_target_outside_a_git_repository_is_the_check_edit_error() {
+    let project = cargo_project("pub fn a() { b(); }\npub fn b() {}\n");
+    let root = project.path();
+    let ceiling = root.parent().unwrap();
+    let expected = format!("not a git repository: {}", canonical_root(root).display());
+
+    let mut command = serve_command(root);
+    command.env("GIT_CEILING_DIRECTORIES", ceiling);
+    let mut session = McpSession::start(command);
+    for tool in ["blast_radius", "check_edit"] {
+        let result = session.call(tool, json!({ "project_root": root }));
+        assert_eq!(result["isError"], true, "{tool}: {result}");
+        assert!(result_text(&result).contains(&expected), "{tool}: {result}");
+    }
+    session.finish();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+        .env("GIT_CEILING_DIRECTORIES", ceiling)
+        .arg("--root")
+        .arg(root)
+        .arg("blast-radius")
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains(&expected),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn corrupt_index(project: &Path) {
+    let db = project.join(".code-kb").join("artifact.db");
+    std::fs::create_dir_all(db.parent().unwrap()).unwrap();
+    std::fs::write(&db, b"not a database ".repeat(4096)).unwrap();
+    std::fs::write(project.join(".code-kb/artifact.db-wal"), b"stale").unwrap();
+}
+
+#[test]
+fn test_mcp_first_call_rebuilds_an_index_that_is_not_a_database() {
+    let launch = tempfile::tempdir().unwrap();
+    let target = cargo_project("pub fn survives_corruption() {}\n");
+    corrupt_index(target.path());
+    let mut command = serve_command(launch.path());
+    command.env("CODE_KB_INDEX_WAIT_MS", "60000");
+    let mut session = McpSession::start(command);
+
+    let result = session.call(
+        "lookup_symbol",
+        json!({"query": "survives_corruption", "project_root": target.path()}),
+    );
+
+    assert_ne!(result["isError"], true, "{result}");
+    assert!(
+        result_text(&result).contains("function `survives_corruption` ["),
+        "{result}"
+    );
+}
+
+#[test]
+fn test_mcp_startup_rebuilds_an_index_that_is_not_a_database() {
+    let target = cargo_project("pub fn survives_corruption() {}\n");
+    corrupt_index(target.path());
+    let mut command = serve_command(target.path());
+    command.env("CODE_KB_INDEX_WAIT_MS", "60000");
+    let mut session = McpSession::start(command);
+
+    let result = session.call(
+        "lookup_symbol",
+        json!({"query": "survives_corruption", "project_root": target.path()}),
+    );
+
+    assert_ne!(result["isError"], true, "{result}");
+    assert!(
+        result_text(&result).contains("function `survives_corruption` ["),
+        "{result}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_mcp_names_the_scan_remedy_when_an_unreadable_index_cannot_be_rebuilt() {
+    let launch = tempfile::tempdir().unwrap();
+    let target = cargo_project("pub fn never_indexed() {}\n");
+    corrupt_index(target.path());
+    let tools = tempfile::tempdir().unwrap();
+    let wrapper = extractor_wrapper(tools.path(), "echo 'simulated scan failure' >&2; exit 2");
+    let mut command = serve_command(launch.path());
+    command
+        .env("JULIE_EXTRACT_BIN", &wrapper)
+        .env("CODE_KB_INDEX_WAIT_MS", "60000");
+    let mut session = McpSession::start(command);
+    let arguments = json!({"query": "never_indexed", "project_root": target.path()});
+    let remedy = format!(
+        "Run `code-kb scan --root {}` to rebuild the index.",
+        canonical_root(target.path()).display()
+    );
+
+    let first = session.call("lookup_symbol", arguments.clone());
+    let second = session.call("lookup_symbol", arguments);
+
+    for result in [&first, &second] {
+        let text = result_text(result);
+        assert_eq!(result["isError"], true, "{result}");
+        assert!(text.contains(&remedy), "{text}");
+        assert!(!text.contains("retried"), "{text}");
+    }
+    assert!(
+        result_text(&first).contains("simulated scan failure"),
+        "{first}"
+    );
 }

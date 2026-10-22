@@ -2202,6 +2202,157 @@ fn a_receiver_named_for_the_object_stays_unresolved_when_a_rival_is_assigned_on_
     );
 }
 
+const JS_LOCAL_MOCK: &[(&str, &str)] = &[
+    (
+        "lib/response.js",
+        "var res = Object.create(proto);\nmodule.exports = res;\n\nres.send = function send(body) {\n  return body;\n};\n",
+    ),
+    (
+        "test/router.js",
+        "it('dispatches', function () {\n  var res = {\n    send: function (val) {\n      return val;\n    }\n  };\n  res.send(1);\n});\n",
+    ),
+    (
+        "test/other.js",
+        "it('sends', function () {\n  return request(app, function (req, res) {\n    res.send(2);\n  });\n});\n",
+    ),
+];
+
+#[test]
+fn a_method_of_a_local_object_never_excludes_a_receiver_outside_its_scope() {
+    let repo = scanned_repo(JS_LOCAL_MOCK);
+    let report = report(&repo, "send", Some("lib/response.js"));
+
+    assert_site(
+        &report,
+        "test/other.js",
+        3,
+        SiteLabel::Likely,
+        "receiver `res` names the object `send` is assigned on",
+    );
+    assert_site(
+        &report,
+        "test/router.js",
+        7,
+        SiteLabel::Excluded,
+        "resolves to `send` (test/router.js:3)",
+    );
+}
+
+#[test]
+fn a_method_of_a_local_object_ties_only_the_receivers_inside_its_scope() {
+    let repo = scanned_repo(JS_LOCAL_MOCK);
+    let report = report(&repo, "send", Some("test/router.js"));
+
+    assert_site(
+        &report,
+        "test/router.js",
+        7,
+        SiteLabel::Proven,
+        "qualified path",
+    );
+    assert_site(
+        &report,
+        "test/other.js",
+        3,
+        SiteLabel::Unresolved,
+        "2 definitions",
+    );
+}
+
+const JS_NESTED_LOCAL_MOCK: &[(&str, &str)] = &[
+    (
+        "lib/response.js",
+        "var res = Object.create(proto);\nmodule.exports = res;\n\nres.send = function send(body) {\n  return body;\n};\n",
+    ),
+    (
+        "test/router.js",
+        "it('dispatches', function () {\n  var ctx = {\n    res: {\n      send: function (val) {\n        return val;\n      }\n    }\n  };\n  ctx.res.send(1);\n});\n",
+    ),
+    (
+        "test/other.js",
+        "it('sends', function () {\n  return request(app, function (req, res) {\n    res.send(2);\n  });\n});\n",
+    ),
+];
+
+#[test]
+fn a_method_of_a_nested_local_object_never_excludes_a_receiver_outside_its_scope() {
+    let repo = scanned_repo(JS_NESTED_LOCAL_MOCK);
+    let report = report(&repo, "send", Some("lib/response.js"));
+
+    assert_site(
+        &report,
+        "test/other.js",
+        3,
+        SiteLabel::Likely,
+        "receiver `res` names the object `send` is assigned on",
+    );
+    assert_site(
+        &report,
+        "test/router.js",
+        9,
+        SiteLabel::Excluded,
+        "resolves to `send` (test/router.js:4)",
+    );
+}
+
+#[test]
+fn a_method_of_a_nested_local_object_ties_only_the_receivers_inside_its_scope() {
+    let repo = scanned_repo(JS_NESTED_LOCAL_MOCK);
+    let report = report(&repo, "send", Some("test/router.js"));
+
+    assert_site(
+        &report,
+        "test/router.js",
+        9,
+        SiteLabel::Proven,
+        "qualified path",
+    );
+    assert_site(
+        &report,
+        "test/other.js",
+        3,
+        SiteLabel::Unresolved,
+        "2 definitions",
+    );
+}
+
+const JS_RETURNED_LOCAL_OBJECT: &[(&str, &str)] = &[
+    (
+        "lib/bus.js",
+        "var bus = {};\nmodule.exports = bus;\n\nbus.dispatch = function dispatch(event) {\n  return event;\n};\n",
+    ),
+    (
+        "lib/store.js",
+        "function createStore() {\n  const store = {\n    dispatch(action) {\n      return action;\n    },\n  };\n  return store;\n}\nmodule.exports = createStore;\n",
+    ),
+    (
+        "src/app.js",
+        "const createStore = require('../lib/store');\nfunction main() {\n  const store = createStore();\n  store.dispatch(1);\n}\nmodule.exports = main;\n",
+    ),
+];
+
+#[test]
+fn a_returned_local_object_stays_a_rival_outside_its_scope() {
+    let repo = scanned_repo(JS_RETURNED_LOCAL_OBJECT);
+    let bus = report(&repo, "dispatch", Some("lib/bus.js"));
+    let store = report(&repo, "dispatch", Some("lib/store.js"));
+
+    assert_site(
+        &bus,
+        "src/app.js",
+        4,
+        SiteLabel::Unresolved,
+        "2 definitions",
+    );
+    assert_site(
+        &store,
+        "src/app.js",
+        4,
+        SiteLabel::Unresolved,
+        "2 definitions",
+    );
+}
+
 const JS_WORKSPACE: &[(&str, &str)] = &[
     (
         "packages/lib/package.json",
@@ -11644,4 +11795,90 @@ fn a_const_that_holds_a_call_result_never_reaches_a_top_level_function() {
         "a call on a call result never reaches the top-level `refine`",
     );
     assert_not_excluded(&report, "src/vars.ts", 11);
+}
+
+#[test]
+fn a_go_receiver_typed_with_the_package_of_the_owner_or_an_embedding_type_is_not_excluded() {
+    let repo = scanned_repo(&[
+        ("go.mod", "module fx\n\ngo 1.21\n"),
+        (
+            "geom/geom.go",
+            "package geom\n\ntype Point struct {\n\tX int\n}\n\nfunc (p *Point) Norm(k int) int {\n\treturn p.X * k\n}\n\ntype Wrapper struct {\n\t*Point\n}\n",
+        ),
+        (
+            "use/use.go",
+            "package use\n\nimport (\n\t\"bytes\"\n\n\t\"fx/geom\"\n)\n\nfunc ByValue() int {\n\tp := geom.Point{X: 1}\n\treturn p.Norm(3)\n}\n\nfunc ByPointer(q *geom.Point) int {\n\treturn q.Norm(1)\n}\n\nfunc ByWrapper(w geom.Wrapper) int {\n\treturn w.Norm(2)\n}\n\nfunc ByBuffer(b bytes.Buffer) int {\n\treturn b.Norm(2)\n}\n",
+        ),
+    ]);
+    let report = report(&repo, "Point.Norm", None);
+
+    for needle in ["return p.Norm(3)", "return q.Norm(1)", "return w.Norm(2)"] {
+        assert_not_excluded(&report, "use/use.go", line_of(&repo, "use/use.go", needle));
+    }
+    assert_site(
+        &report,
+        "use/use.go",
+        line_of(&repo, "use/use.go", "return b.Norm(2)"),
+        SiteLabel::Excluded,
+        "receiver `b` has type `bytes.Buffer`",
+    );
+}
+
+#[test]
+fn a_go_receiver_typed_with_an_alias_of_the_owner_is_not_excluded() {
+    let repo = scanned_repo(&[
+        ("go.mod", "module fx\n\ngo 1.21\n"),
+        (
+            "geom/geom.go",
+            "package geom\n\ntype Point struct {\n\tX int\n}\n\nfunc (p *Point) Norm(k int) int {\n\treturn p.X * k\n}\n\ntype Alias = Point\n\ntype Named Point\n\nfunc ViaAlias(a *Alias) int {\n\treturn a.Norm(2)\n}\n\nfunc ViaNamed(n Named) int {\n\treturn n.Norm(3)\n}\n",
+        ),
+        (
+            "use/tp.go",
+            "package use\n\nimport \"fx/geom\"\n\ntype Local = geom.Point\n\ntype Chain = Local\n\nfunc ViaRemoteAlias(l *Local) int {\n\treturn l.Norm(7)\n}\n\nfunc ViaVar() int {\n\tvar v Local\n\treturn v.Norm(8)\n}\n\nfunc ViaChain(c Chain) int {\n\treturn c.Norm(9)\n}\n",
+        ),
+    ]);
+    let report = report(&repo, "Point.Norm", None);
+
+    assert_not_excluded(
+        &report,
+        "geom/geom.go",
+        line_of(&repo, "geom/geom.go", "return a.Norm(2)"),
+    );
+    for needle in ["return l.Norm(7)", "return v.Norm(8)", "return c.Norm(9)"] {
+        assert_not_excluded(&report, "use/tp.go", line_of(&repo, "use/tp.go", needle));
+    }
+    assert_site(
+        &report,
+        "geom/geom.go",
+        line_of(&repo, "geom/geom.go", "return n.Norm(3)"),
+        SiteLabel::Excluded,
+        "receiver `n` has type `Named`",
+    );
+}
+
+#[test]
+fn a_go_receiver_whose_package_cannot_be_the_owner_package_is_excluded() {
+    let repo = scanned_repo(&[
+        ("go.mod", "module fx\n\ngo 1.21\n"),
+        (
+            "buf/buf.go",
+            "package buf\n\ntype Buffer struct{}\n\nfunc (b *Buffer) Grow(n int) {}\n",
+        ),
+        (
+            "use/use.go",
+            "package use\n\nimport (\n\t\"bytes\"\n\n\t\"fx/buf\"\n\tb2 \"fx/buf\"\n)\n\nfunc Std(b *bytes.Buffer) {\n\tb.Grow(1)\n}\n\nfunc Own(b *buf.Buffer) {\n\tb.Grow(2)\n}\n\nfunc Renamed(b *b2.Buffer) {\n\tb.Grow(3)\n}\n",
+        ),
+    ]);
+    let report = report(&repo, "Buffer.Grow", None);
+
+    assert_site(
+        &report,
+        "use/use.go",
+        line_of(&repo, "use/use.go", "b.Grow(1)"),
+        SiteLabel::Excluded,
+        "receiver `b` has type `bytes.Buffer`",
+    );
+    for needle in ["b.Grow(2)", "b.Grow(3)"] {
+        assert_not_excluded(&report, "use/use.go", line_of(&repo, "use/use.go", needle));
+    }
 }

@@ -66,6 +66,11 @@ pub enum EditCheckError {
     Query(#[from] QueryError),
 }
 
+/// `Ok` when `root` is inside a git work tree, else [`EditCheckError::NotARepository`].
+pub fn require_repository(root: &Path) -> Result<(), EditCheckError> {
+    Git::open(root).map(|_| ())
+}
+
 /// The commit `HEAD` names in the repository that holds `root`: `None` outside a repository and
 /// before the first commit.
 pub fn head_commit(root: &Path) -> Option<String> {
@@ -744,13 +749,16 @@ impl Row {
 }
 
 const IMPL_OWNERS_SQL: &str = "SELECT symbol_id,
-            CASE WHEN json_valid(metadata_json)
-                 THEN json_extract(metadata_json, '$.impl_type_name') END
+            CASE WHEN NOT json_valid(metadata_json) THEN NULL
+                 WHEN language = 'go' AND kind = 'method'
+                 THEN json_extract(metadata_json, '$.receiver_type')
+                 ELSE json_extract(metadata_json, '$.impl_type_name') END
      FROM symbols
      WHERE path = ?1 OR path = ?2";
 
 /// The symbols of `path` with their parent names. A Rust method whose `impl` block is in another
-/// file than its type keeps the type named in its metadata, linked to a parent row or not.
+/// file than its type, and a Go method whose receiver type is in another file, keeps the type
+/// named in its metadata, linked to a parent row or not.
 fn rows_of(conn: &Connection, path: &str) -> Result<Vec<Row>, QueryError> {
     let symbols = load_file_symbols(conn, path)?;
     let mut stmt = conn.prepare(IMPL_OWNERS_SQL)?;
@@ -760,7 +768,9 @@ fn rows_of(conn: &Connection, path: &str) -> Result<Vec<Row>, QueryError> {
         })?
         .collect::<Result<Vec<_>, _>>()?
         .into_iter()
-        .filter_map(|(id, owner)| owner.map(|owner| (id, owner)))
+        .filter_map(|(id, owner)| {
+            owner.map(|owner| (id, crate::db::go_receiver_type_name(&owner).to_string()))
+        })
         .collect();
     let names: HashMap<&str, (&str, Option<&str>)> = symbols
         .iter()

@@ -2143,6 +2143,43 @@ fn a_member_access_on_an_unknown_type_or_to_a_private_module_function_is_not_a_r
 }
 
 #[test]
+fn a_member_access_to_a_private_module_function_in_jsx_or_vue_is_not_a_reference() {
+    let (_repo, db_path) = scanned_repo(&[
+        (
+            "src/series.jsx",
+            "const error = () => 1;\n\nexport function run() {\n  return error();\n}\n",
+        ),
+        (
+            "src/Panel.vue",
+            "<template><div>{{ total() }}</div></template>\n<script>\nconst failure = () => 1;\n\nexport default {\n  methods: { total() { return failure(); } },\n};\n</script>\n",
+        ),
+        (
+            "src/use.js",
+            "export function read(parsed) {\n  const c = parsed.error;\n  const d = parsed.failure;\n  return [c, d];\n}\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+    let paths = |name: &str, path: &str| -> Vec<String> {
+        find_references_scoped(&conn, name, "callers", 20, false, Some(path))
+            .unwrap()
+            .into_iter()
+            .map(|r| r.path)
+            .collect()
+    };
+
+    assert!(
+        !paths("error", "src/series.jsx").contains(&"src/use.js".to_string()),
+        "{:?}",
+        paths("error", "src/series.jsx")
+    );
+    assert!(
+        !paths("failure", "src/Panel.vue").contains(&"src/use.js".to_string()),
+        "{:?}",
+        paths("failure", "src/Panel.vue")
+    );
+}
+
+#[test]
 fn related_tests_leave_out_setup_methods_helper_classes_ambiguous_names_and_documents() {
     let (_repo, db_path) = scanned_repo(&[
         (
@@ -2923,6 +2960,10 @@ fn lambda_callers_render_the_enclosing_symbol_without_changing_json_names() {
             "tests/test_cli.py",
             "class ScriptInfo:\n    def __init__(self, create_app):\n        self.create_app = create_app\n\ndef test_scriptinfo():\n    ScriptInfo(create_app=lambda: Flask(\"testapp\"))\n",
         ),
+        (
+            "cli.py",
+            "def make_info(info_class):\n    return info_class(create_app=lambda: Flask(\"app\"))\n",
+        ),
     ]);
     let conn = open_read_only(&db).unwrap();
     let flask_id: String = conn
@@ -2960,24 +3001,26 @@ fn lambda_callers_render_the_enclosing_symbol_without_changing_json_names() {
     let blast = compute_blast_radius(&conn, &["Flask"], &[], 2, 20).unwrap();
     let blast_text = format_blast_radius(&blast);
     assert!(
-        blast_text.contains("`<lambda> in test_scriptinfo`"),
+        blast_text.contains("`<lambda> in make_info`"),
         "{blast_text}"
     );
     assert!(
-        blast
-            .impacted_symbols
-            .iter()
-            .any(|symbol| symbol.name.starts_with("lambda_")),
-        "{:?}",
-        blast.impacted_symbols
+        blast_text.contains("`test_scriptinfo` [line 5] (encloses `<lambda>` (direct caller))"),
+        "{blast_text}"
     );
+    let impacted_lambda = blast
+        .impacted_symbols
+        .iter()
+        .find(|symbol| symbol.name.starts_with("lambda_"))
+        .expect("the lambda in make_info should be impacted");
     let blast_json = serde_json::to_value(&blast).unwrap();
     let lambda_json = blast_json["impacted_symbols"]
         .as_array()
         .unwrap()
         .iter()
         .find(|symbol| {
-            symbol.get("name").and_then(serde_json::Value::as_str) == Some(raw_lambda_name)
+            symbol.get("name").and_then(serde_json::Value::as_str)
+                == Some(impacted_lambda.name.as_str())
         })
         .expect("JSON should retain the raw lambda name");
     assert!(lambda_json.get("enclosing_symbol_name").is_none());
@@ -3106,10 +3149,173 @@ fn a_lookup_that_matches_nothing_suggests_close_names() {
     );
     assert!(typo_text.contains("Did you mean one of:"), "{typo_text}");
     assert!(typo_text.contains("`backoff`"), "{typo_text}");
+    let suggested: Vec<_> = typo.suggestions.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(suggested, ["backoff"]);
     assert!(
         unknown_text.contains("No similar name is indexed; check the workspace and spelling."),
         "{unknown_text}"
     );
+}
+
+#[test]
+fn a_typo_that_finds_ranked_rows_also_suggests_the_close_name_first() {
+    let (_repo, db_path) = scanned_repo(&[(
+        "src/app.py",
+        "def make_response(rv):\n    return rv\n\n\ndef make_context():\n    return {}\n",
+    )]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let lookup = lookup_symbols_op(&db_path, &conn, "make_respnse", None, None, false, 20).unwrap();
+    let text = render_symbol_lookup(&conn, "make_respnse", &lookup, 20).unwrap();
+
+    let suggested: Vec<_> = lookup.suggestions.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(suggested, ["make_response"]);
+    assert!(!lookup.ranked.is_empty() && lookup.miss.is_none());
+    let hint = text
+        .find("Did you mean one of:\n  - function `make_response` (src/app.py:1)")
+        .unwrap_or_else(|| panic!("{text}"));
+    let header = text
+        .find("No exact name match;")
+        .unwrap_or_else(|| panic!("{text}"));
+    assert!(hint < header, "{text}");
+}
+
+#[test]
+fn a_lookup_that_lists_the_close_names_or_the_exact_name_suggests_nothing() {
+    let (_repo, db_path) = scanned_repo(&[("src/net.rs", RETRY_SOURCE)]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    for query in ["retry", "send_again", "backoff"] {
+        let lookup = lookup_symbols_op(&db_path, &conn, query, None, None, false, 20).unwrap();
+        let text = render_symbol_lookup(&conn, query, &lookup, 20).unwrap();
+
+        assert!(lookup.suggestions.is_empty(), "{query}: {text}");
+        assert!(!text.contains("Did you mean"), "{query}: {text}");
+    }
+}
+
+const URL_FOR_FILES: [(&str, &str); 6] = [
+    (
+        "src/app/helpers.py",
+        "def url_for(endpoint):\n    return endpoint\n",
+    ),
+    ("src/app/__init__.py", "from .helpers import url_for\n"),
+    ("examples/a/auth.py", "from app import url_for\n"),
+    ("examples/b/blog.py", "from app import url_for\n"),
+    ("examples/c/views.py", "from app import url_for\n"),
+    ("examples/d/pages.py", "from app import url_for\n"),
+];
+
+#[test]
+fn a_typo_of_a_name_that_many_files_import_suggests_the_definition_not_the_imports() {
+    let (_repo, db_path) = scanned_repo(&URL_FOR_FILES);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let lookup = lookup_symbols_op(&db_path, &conn, "url_fr", None, None, false, 20).unwrap();
+    let text = render_symbol_lookup(&conn, "url_fr", &lookup, 20).unwrap();
+    let refs_error = find_references_scoped(&conn, "url_fr", "callers", 20, false, None)
+        .unwrap_err()
+        .to_string();
+
+    let suggested: Vec<_> = lookup
+        .suggestions
+        .iter()
+        .map(|s| (s.kind.as_str(), s.name.as_str()))
+        .collect();
+    assert_eq!(suggested, [("function", "url_for")], "{text}");
+    assert!(
+        text.contains("Did you mean one of:\n  - function `url_for` (src/app/helpers.py:1)"),
+        "{text}"
+    );
+    assert!(
+        refs_error.contains("Did you mean one of:\n  - function `url_for` (src/app/helpers.py:1)"),
+        "{refs_error}"
+    );
+    assert!(!refs_error.contains("import `url_for`"), "{refs_error}");
+}
+
+#[test]
+fn a_concept_query_of_several_words_suggests_no_names() {
+    let (_repo, db_path) = scanned_repo(&URL_FOR_FILES);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let lookup = lookup_symbols_op(&db_path, &conn, "url for", None, None, false, 20).unwrap();
+    let text = render_symbol_lookup(&conn, "url for", &lookup, 20).unwrap();
+
+    assert!(lookup.suggestions.is_empty(), "{text}");
+    assert!(!text.contains("Did you mean"), "{text}");
+}
+
+#[test]
+fn a_prefix_lookup_cut_by_kind_or_limit_suggests_no_name_it_already_lists() {
+    let (_repo, db_path) = scanned_repo(&[(
+        "src/app.py",
+        "def make_response(rv):\n    return rv\n\n\nclass App:\n    def make_response(self, rv):\n        return rv\n",
+    )]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let by_kind = lookup_symbols_op(
+        &db_path,
+        &conn,
+        "make_resp",
+        Some("method"),
+        None,
+        false,
+        20,
+    )
+    .unwrap();
+    let by_kind_text = render_symbol_lookup(&conn, "make_resp", &by_kind, 20).unwrap();
+    let by_limit = lookup_symbols_op(&db_path, &conn, "make_resp", None, None, false, 1).unwrap();
+    let by_limit_text = render_symbol_lookup(&conn, "make_resp", &by_limit, 1).unwrap();
+
+    assert_eq!(by_kind.names.len(), 1, "{by_kind_text}");
+    assert!(by_kind.suggestions.is_empty(), "{by_kind_text}");
+    assert!(!by_kind_text.contains("Did you mean"), "{by_kind_text}");
+    assert_eq!(by_limit.names.len(), 1, "{by_limit_text}");
+    assert!(by_limit.suggestions.is_empty(), "{by_limit_text}");
+    assert!(!by_limit_text.contains("Did you mean"), "{by_limit_text}");
+}
+
+#[test]
+fn a_prefix_lookup_whose_limit_cuts_other_names_suggests_none_of_them() {
+    let (_repo, db_path) = scanned_repo(&[(
+        "src/app.py",
+        "def make_config():\n    return 1\n\n\ndef make_context():\n    return 2\n\n\ndef make_response(rv):\n    return rv\n",
+    )]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    for query in ["make_", ""] {
+        let lookup = lookup_symbols_op(&db_path, &conn, query, None, None, false, 1).unwrap();
+        let text = render_symbol_lookup(&conn, query, &lookup, 1).unwrap();
+
+        assert_eq!(lookup.names.len(), 1, "{query}: {text}");
+        assert!(lookup.suggestions.is_empty(), "{query}: {text}");
+        assert!(!text.contains("Did you mean"), "{query}: {text}");
+    }
+}
+
+#[test]
+fn a_typo_with_a_kind_filter_suggests_only_names_of_that_kind() {
+    let (_repo, db_path) = scanned_repo(&[(
+        "src/app.py",
+        "def make_response(rv):\n    return rv\n\n\nclass App:\n    def make_response(self, rv):\n        return rv\n",
+    )]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let lookup = lookup_symbols_op(
+        &db_path,
+        &conn,
+        "make_respnse",
+        Some("method"),
+        None,
+        false,
+        20,
+    )
+    .unwrap();
+    let text = render_symbol_lookup(&conn, "make_respnse", &lookup, 20).unwrap();
+
+    let kinds: Vec<_> = lookup.suggestions.iter().map(|s| s.kind.as_str()).collect();
+    assert_eq!(kinds, ["method"], "{text}");
 }
 
 #[test]
@@ -3134,4 +3340,169 @@ fn a_zero_limit_lookup_finds_nothing_and_suggests_nothing() {
 
     assert!(lookup.names.is_empty() && lookup.ranked.is_empty());
     assert!(lookup.miss.is_none());
+}
+
+fn parent_name(conn: &rusqlite::Connection, name: &str, path: &str) -> Option<(String, String)> {
+    conn.query_row(
+        "SELECT p.name, p.path FROM symbols s JOIN symbols p ON p.symbol_id = s.parent_symbol_id
+         WHERE s.name = ?1 AND s.path = ?2",
+        [name, path],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )
+    .ok()
+}
+
+#[test]
+fn go_methods_belong_to_the_receiver_type_of_their_package() {
+    let command = "package cmd\n\ntype Command struct {\n\tUse string\n}\n\nfunc (c *Command) Execute() error {\n\treturn c.execute()\n}\n";
+    let (temp_dir, db_path) = scanned_repo(&[
+        ("go.mod", "module example.com/app\n\ngo 1.22\n"),
+        ("cmd/command.go", command),
+        (
+            "cmd/command_exec.go",
+            "package cmd\n\nfunc (c *Command) execute() error {\n\treturn nil\n}\n\nfunc (l *List[T]) Push(v T) {}\n",
+        ),
+        (
+            "cmd/list.go",
+            "package cmd\n\ntype List[T any] struct {\n\titems []T\n}\n",
+        ),
+        (
+            "other/command.go",
+            "package other\n\ntype Command struct{}\n",
+        ),
+        ("tags/sys_linux.go", "package tags\n\ntype sys struct{}\n"),
+        ("tags/sys_windows.go", "package tags\n\ntype sys struct{}\n"),
+        (
+            "tags/name.go",
+            "package tags\n\nfunc (s sys) Name() string {\n\treturn \"\"\n}\n",
+        ),
+        ("geom/point.go", "package geom\n\ntype Point struct{}\n"),
+        (
+            "orphan/point.go",
+            "package orphan\n\nfunc (p *Point) X() int {\n\treturn 0\n}\n",
+        ),
+    ]);
+    let workspace = Workspace::new(temp_dir.path().to_path_buf());
+    let conn = open_read_only(&db_path).unwrap();
+    let in_cmd = Some(("Command".to_string(), "cmd/command.go".to_string()));
+
+    assert_eq!(parent_name(&conn, "Execute", "cmd/command.go"), in_cmd);
+    assert_eq!(parent_name(&conn, "execute", "cmd/command_exec.go"), in_cmd);
+    assert_eq!(
+        parent_name(&conn, "Push", "cmd/command_exec.go"),
+        Some(("List".to_string(), "cmd/list.go".to_string()))
+    );
+    assert_eq!(parent_name(&conn, "Name", "tags/name.go"), None);
+    assert_eq!(parent_name(&conn, "X", "orphan/point.go"), None);
+    assert!(
+        get_symbol_by_name(&conn, "Command.execute", Some("cmd"))
+            .unwrap()
+            .is_some()
+    );
+
+    let skeleton = file_skeleton_op(&workspace, &db_path, &conn, "cmd/command_exec.go").unwrap();
+    assert!(skeleton.contains("execute"), "{skeleton}");
+
+    fs::write(
+        temp_dir.path().join("cmd/command.go"),
+        command.replace("Use string", "Use string\n\tShort string"),
+    )
+    .unwrap();
+    update_file(&workspace, &db_path, "cmd/command.go").unwrap();
+    assert_eq!(parent_name(&conn, "execute", "cmd/command_exec.go"), in_cmd);
+}
+
+#[test]
+fn a_go_method_links_to_the_type_of_its_own_package_beside_an_external_test_package() {
+    let (_temp_dir, db_path) = scanned_repo(&[
+        ("go.mod", "module example.com/app\n\ngo 1.22\n"),
+        ("cog/cog.go", "package cog\n\nfunc Run() {}\n"),
+        (
+            "cog/hebbian_test.go",
+            "package cog\n\ntype mockStore struct{}\n\nfunc (m *mockStore) Get() int {\n\treturn 0\n}\n",
+        ),
+        (
+            "cog/proof_test.go",
+            "package cog_test\n\ntype mockStore struct{}\n",
+        ),
+        (
+            "cog/put_test.go",
+            "package cog_test\n\nfunc (m *mockStore) Put() {}\n",
+        ),
+        (
+            "tags/sys_linux.go",
+            "package tags\n\ntype sys struct{}\n\nfunc (s sys) Linux() {}\n",
+        ),
+        ("tags/sys_windows.go", "package tags\n\ntype sys struct{}\n"),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    assert_eq!(
+        parent_name(&conn, "Get", "cog/hebbian_test.go"),
+        Some(("mockStore".to_string(), "cog/hebbian_test.go".to_string()))
+    );
+    assert_eq!(
+        parent_name(&conn, "Put", "cog/put_test.go"),
+        Some(("mockStore".to_string(), "cog/proof_test.go".to_string()))
+    );
+    assert_eq!(
+        parent_name(&conn, "Linux", "tags/sys_linux.go"),
+        Some(("sys".to_string(), "tags/sys_linux.go".to_string()))
+    );
+}
+
+#[test]
+fn a_lookup_whose_only_full_text_matches_are_digits_reports_a_miss() {
+    let (_repo, db_path) = scanned_repo(&[(
+        "src/limits.rs",
+        "pub const MAX_RETRIES: u32 = 1;\n\npub const SLOT_COUNT: u32 = 7;\n",
+    )]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let lookup =
+        lookup_symbols_op(&db_path, &conn, "zzq1xyq7blorp", None, None, false, 20).unwrap();
+    let text = render_symbol_lookup(&conn, "zzq1xyq7blorp", &lookup, 20).unwrap();
+
+    assert!(
+        lookup.names.is_empty() && lookup.ranked.is_empty(),
+        "{text}"
+    );
+    assert!(
+        text.starts_with("No symbols found matching \"zzq1xyq7blorp\" in "),
+        "{text}"
+    );
+}
+
+const COMMAND_FILES: &[(&str, &str)] = &[
+    (
+        ".mcp.json",
+        "{\n  \"mcpServers\": {\n    \"tools\": {\n      \"command\": \"node\"\n    }\n  }\n}\n",
+    ),
+    (".ci/config.yaml", "command: run\n"),
+    ("src/main.py", "command = \"all\"\n"),
+];
+
+#[test]
+fn a_lookup_lists_code_rows_before_config_rows_of_the_same_rank() {
+    let (_repo, db_path) = scanned_repo(COMMAND_FILES);
+    let conn = open_read_only(&db_path).unwrap();
+
+    for query in ["command", "Command"] {
+        let paths: Vec<_> = search_symbols_scoped(&conn, query, None, None, false, 20)
+            .unwrap()
+            .into_iter()
+            .map(|s| s.path)
+            .collect();
+
+        assert_eq!(
+            paths.first().map(String::as_str),
+            Some("src/main.py"),
+            "{query}: {paths:?}"
+        );
+        assert!(paths.iter().any(|p| p == ".mcp.json"), "{query}: {paths:?}");
+        assert!(
+            paths.iter().any(|p| p == ".ci/config.yaml"),
+            "{query}: {paths:?}"
+        );
+    }
 }

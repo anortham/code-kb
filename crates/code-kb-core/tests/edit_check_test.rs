@@ -1901,7 +1901,7 @@ fn a_removed_go_method_lists_the_caller_that_reaches_it_through_a_receiver() {
     let repo = go_method_repo();
     write(&repo.root, "geom/geom.go", GO_POINT_WITHOUT_NORM);
     let text = text_of(&repo);
-    assert_has(&text, "method `Norm` (geom/geom.go): removed");
+    assert_has(&text, "method `Point.Norm` (geom/geom.go): removed");
     assert_has(&text, "use/use.go:7  `UsesNorm`");
 }
 
@@ -1912,7 +1912,7 @@ fn a_renamed_go_method_lists_the_caller_of_the_old_name() {
     let text = text_of(&repo);
     assert_has(
         &text,
-        "method `Norm` (geom/geom.go): renamed to `Magnitude`",
+        "method `Point.Norm` (geom/geom.go): renamed to `Magnitude`",
     );
     assert_has(&text, "use/use.go:7  `UsesNorm`");
 }
@@ -1927,7 +1927,7 @@ fn a_removed_go_method_does_not_list_a_caller_that_another_type_with_the_name_ca
     ]);
     write(&repo.root, "geom/geom.go", GO_POINT_WITHOUT_NORM);
     let text = text_of(&repo);
-    assert_has(&text, "method `Norm` (geom/geom.go): removed");
+    assert_has(&text, "method `Point.Norm` (geom/geom.go): removed");
     assert_lacks(&text, "UsesOther");
     assert_has(&text, "Unresolved outside the diff:");
 }
@@ -3776,8 +3776,8 @@ fn a_removed_go_method_counts_the_calls_that_other_types_with_the_name_can_take(
         "func (a A) Norm() int {\n\treturn 1\n}\n\n",
         "",
     );
-    assert_has(&text, "method `Norm` (geom/g.go): removed");
-    assert_has(&text, "Unresolved outside the diff: 3");
+    assert_has(&text, "method `A.Norm` (geom/g.go): removed");
+    assert_has(&text, "Unresolved outside the diff: 2");
 }
 
 #[test]
@@ -4292,4 +4292,51 @@ fn a_removed_csharp_type_skips_a_use_whose_file_does_not_open_its_namespace() {
     );
     assert_has(&text, "src/Tests/Opened.cs:7");
     assert_lacks(&text, "GameObject.cs");
+}
+
+#[test]
+fn a_go_method_whose_type_is_in_another_file_is_named_with_its_type() {
+    let text = edited_text(
+        &[
+            ("go.mod", GO_MOD),
+            (
+                "command.go",
+                "package fx\n\ntype Command struct{}\n\nfunc (c *Command) Run() {\n\tc.execute(1)\n}\n",
+            ),
+            (
+                "exec.go",
+                "package fx\n\nfunc (c *Command) execute(a int) {}\n",
+            ),
+        ],
+        "exec.go",
+        "execute(a int)",
+        "execute(a, b int)",
+    );
+    assert_has(
+        &text,
+        "method `Command.execute` (exec.go): parameters 1 → 2",
+    );
+    assert_has(&text, "command.go:6  `Run`  passes 1 arg; takes 2");
+}
+
+#[test]
+fn a_removed_go_method_counts_the_calls_through_an_alias_of_its_type() {
+    let text = edited_text(
+        &[
+            ("go.mod", GO_MOD),
+            (
+                "geom/g.go",
+                "package geom\n\ntype A struct{}\n\nfunc (a A) Norm() int {\n\treturn 1\n}\n\ntype B struct{}\n\nfunc (b B) Norm() int {\n\treturn 2\n}\n\ntype AA = A\n",
+            ),
+            (
+                "use/u.go",
+                "package use\n\nimport \"fx/geom\"\n\ntype Local = geom.A\n\nfunc UseAlias(a geom.AA) int {\n\treturn a.Norm()\n}\n\nfunc UseLocal(l Local) int {\n\treturn l.Norm()\n}\n\nfunc UseB(b geom.B) int {\n\treturn b.Norm()\n}\n",
+            ),
+        ],
+        "geom/g.go",
+        "func (a A) Norm() int {\n\treturn 1\n}\n\n",
+        "",
+    );
+    assert_has(&text, "method `A.Norm` (geom/g.go): removed");
+    assert_has(&text, "Unresolved outside the diff: 2");
 }

@@ -101,7 +101,7 @@
       "_meta": {
         "anthropic/alwaysLoad": true
       },
-      "description": "A symbol's body with the signatures of what it calls, its parameter types, and its tests, in one call. Use before you change a function.",
+      "description": "A symbol's body with the signatures of what it calls, its parameter types, and its tests, in one call. Overloads return one context each, at most 4. Use before you change a function.",
       "inputSchema": {
         "properties": {
           "file_path": {

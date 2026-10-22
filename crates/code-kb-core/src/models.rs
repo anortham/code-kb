@@ -382,6 +382,20 @@ pub struct BlastRadiusResult {
     /// The depth limit of a walk that has callers beyond it, so a deeper walk may find more.
     #[serde(default)]
     pub stopped_at_depth: Option<usize>,
+    /// The site counts of the target's callers report, when its callers stand in for a walk that
+    /// found no impacted symbol.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub callers_report: Option<CallersReportSites>,
+}
+
+/// How the callers report labeled the sites of the target's name.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct CallersReportSites {
+    pub sites: usize,
+    pub proven: usize,
+    pub likely: usize,
+    pub unresolved: usize,
+    pub excluded: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -402,4 +416,7 @@ pub struct ImpactedSymbol {
     /// Text-only owner context for generated lambda names; omitted from JSON.
     #[serde(skip)]
     pub enclosing_symbol_name: Option<String>,
+    /// Why a row that the callers report found, not the walk, is impacted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
 }

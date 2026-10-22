@@ -401,7 +401,7 @@ const GO: &[(&str, &str)] = &[
     ),
     (
         "c/use.go",
-        "package c\n\nfunc use(m Mystery) {\n\tm.Take(m.Pair(1, 2))\n\tm.Take(1)\n\tm.Take(1, 2, 3)\n\tm.Many()\n\tm.Many(1, \"a\", \"b\", \"c\")\n\tm.Many([]string{}...)\n\tm.Do(1, 2)\n\tm.Do(1, 2, 3)\n\tm.Do()\n}\n",
+        "package c\n\nfunc use() { m := mystery()\n\tm.Take(m.Pair(1, 2))\n\tm.Take(1)\n\tm.Take(1, 2, 3)\n\tm.Many()\n\tm.Many(1, \"a\", \"b\", \"c\")\n\tm.Many([]string{}...)\n\tm.Do(1, 2)\n\tm.Do(1, 2, 3)\n\tm.Do()\n}\n",
     ),
 ];
 
@@ -1160,7 +1160,7 @@ const GO_GROUPED: &[(&str, &str)] = &[
     ),
     (
         "use.go",
-        "package main\n\nfunc use(m Mystery) {\n\tm.Pair(1, 2, 3)\n\tm.Triple(1, 2, 3, 4)\n\tm.Mixed(1, 2, 3, 4)\n\tm.M2(1, 2, 3, 4)\n\tm.M4(1, 2, 3, 4, 5, 6)\n\tm.Group(1, 2, 3, 4)\n\tm.Pair(1, 2)\n\tm.M2(1, 2)\n}\n",
+        "package main\n\nfunc use() { m := mystery()\n\tm.Pair(1, 2, 3)\n\tm.Triple(1, 2, 3, 4)\n\tm.Mixed(1, 2, 3, 4)\n\tm.M2(1, 2, 3, 4)\n\tm.M4(1, 2, 3, 4, 5, 6)\n\tm.Group(1, 2, 3, 4)\n\tm.Pair(1, 2)\n\tm.M2(1, 2)\n}\n",
     ),
 ];
 

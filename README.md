@@ -4,7 +4,7 @@
 
 `code-kb` is a fast, lightweight code-intelligence engine and Model Context Protocol (MCP) server designed specifically for AI coding agents. 
 
-Backed by the rich AST fact tables produced by [`julie-extractors`](https://github.com/anortham/julie-extractors), `code-kb` provides progressive disclosure, semantic symbol navigation, and surgical context slicing—enabling agents to navigate and understand codebases with **80–90% fewer tokens** without burning context on full file reads or noisy text grep. Agents edit with their native filesystem tools; code-kb automatically refreshes indexed files after filesystem changes.
+Backed by the rich AST fact tables produced by [`julie-extractors`](https://github.com/anortham/julie-extractors), `code-kb` provides progressive disclosure, semantic symbol navigation, and surgical context slicing—enabling agents to navigate and understand codebases with responses **61–99% smaller than a full-file read** in [measured examples](docs/reviews/2026-09-26-project-evaluation.md#what-the-token-measurements-establish), without burning context on full file reads or noisy text grep. Agents edit with their native filesystem tools; code-kb automatically refreshes indexed files after filesystem changes.
 
 ---
 
@@ -23,8 +23,8 @@ Traditional AI coding agents burn massive amounts of context loading entire sour
 
 ## Key Principles
 
-- **Small Retained Memory:** Written in Rust, zero heavy runtimes (no web dashboard, no GPU models), retained process memory is about 25 MB. The plugin launcher is a small Node script that replaces itself with the native binary via `process.execve` on supported POSIX Node 22+ runtimes (or waits via `spawn` on Windows/older Node).
-- **Sub-5ms Query Latency:** Direct SQLite queries in WAL mode with zero in-memory heap bloat.
+- **Small Retained Memory:** Written in Rust, zero heavy runtimes (no web dashboard, no GPU models), retained process memory is about 25–40 MB, and about 50–60 MB after a callers report of a common name in a large project. The plugin launcher is a small Node script that replaces itself with the native binary via `process.execve` on supported POSIX Node 22+ runtimes (or waits via `spawn` on Windows/older Node).
+- **Millisecond Query Latency:** Direct SQLite queries in WAL mode with zero in-memory heap bloat. On this repository a warm symbol body or small skeleton takes 1–4 ms, and most other calls take 10–50 ms; a concept search or a callers report can take up to about 100 ms.
 - **One `project_root` on Every Call:** Every tool takes `project_root`, the absolute path of the project or git worktree the agent works in (`lookup_symbol(project_root="/path/to/project", query="...")`). A root in every call cannot go stale, so a move to a worktree never answers from the old index.
 - **CLI-First Parity:** Every MCP tool has an exact 1:1 CLI command for instantaneous terminal verification and dogfooding.
 - **Continuous 3-Tier Sync:** Tool-driven updates, JIT staleness guards before reads, and a debounced background watcher with a Git storm circuit breaker.
@@ -444,15 +444,15 @@ git worktree you work in. The table does not repeat it. `path` and `file_path` a
 
 | Tool | Purpose | Key Parameters | Aliases |
 | :--- | :--- | :--- | :--- |
-| `file_skeleton` | File outline with function & method bodies stripped (80–90% token savings); a directory returns its layout and main exports. | `file_path` (req) | `file`, `path` |
-| `lookup_symbol` | Find symbols by name, qualified name (`Type::method`), prefix, or concept. A query that names no symbol exactly also lists the ranked matches under `No exact name match; N full-text matches`. The ranking credits each query term once from its strongest field (name, signature, docstring), weighted by the term's rarity across the index, plus kind and path priors; substrings inside identifiers are found (`sha256` finds `parseSha256Sidecar`). When nothing matches, the answer names the workspace and lists up to three similar names. Test functions, test containers, and rows from test files are hidden unless `is_test` is true, except a row whose name equals the query. | `query` (req), `path` (opt), `kind` (opt), `is_test` (opt), `limit` (opt) | `name`, `q` |
+| `file_skeleton` | File outline with function & method bodies stripped (61–90% smaller than the file in measured examples); a directory returns its layout and main exports. | `file_path` (req) | `file`, `path` |
+| `lookup_symbol` | Find symbols by name, qualified name (`Type::method`), prefix, or concept. A query that names no symbol exactly also lists the ranked matches under `No exact name match; N full-text matches`. The ranking credits each query term once from its strongest field (name, signature, docstring), weighted by the term's rarity across the index, plus kind and path priors; substrings inside identifiers are found (`sha256` finds `parseSha256Sidecar`). When nothing matches, the answer names the workspace and lists up to three similar names, definitions before imports; a one-word query that no row names exactly lists them before the ranked matches too (CLI `lookup --json`: `suggestions`). Test functions, test containers, and rows from test files are hidden unless `is_test` is true, except a row whose name equals the query. | `query` (req), `path` (opt), `kind` (opt), `is_test` (opt), `limit` (opt) | `name`, `q` |
 | `get_symbol_body` | Slices the source of a symbol from disk as written, with its declaration and decorators; a name with overloads in one class returns each overload. | Exactly one `symbol_name` or current-index `symbol_id`; `file_path` (opt, a file or a folder) | `symbol`, `name`, `path` |
-| `get_symbol_context` | Surgical bundle: target body + callee signatures + parameter types + tests; up to four overloads in one class return a bundle each. | Exactly one `symbol_name` or current-index `symbol_id`; `file_path` (opt, a file or a folder), `include_external` (opt, def: false) | `symbol`, `name`, `path` |
+| `get_symbol_context` | Surgical bundle: target body + callee signatures + parameter types + tests; up to four overloads in one class return a bundle each, and more return an error that lists each overload's id. | Exactly one `symbol_name` or current-index `symbol_id`; `file_path` (opt, a file or a folder), `include_external` (opt, def: false) | `symbol`, `name`, `path` |
 | `find_references` | Callers: every indexed site of the name, each labeled proven, likely, unresolved, or excluded with its evidence and, for a call, its argument count (a count that no definition of the target accepts excludes a `likely` or `unresolved` Python, Java, C#, Go, Rust, Kotlin, or TypeScript call), plus a whole-word text count that accounts for every line of the name. After the sites, up to six sections list what else a change may reach: `Overrides` and `Overrides of` (same-named methods in subtypes and in ancestors), `Constructions` (lines that build a class, struct, or record), `Variant uses` (functions that name variants of an enum), `Registrations` (route facts that register a function as a handler), and `Tests that call it` (each with the command that runs it). The sections never change a label or a count; CLI `refs --json` adds them as arrays. Callees: the calls a symbol makes (filters external stdlib noise). Qualify overloaded names. | Exactly one `symbol_name` or current-index `symbol_id`; `file_path` (opt), `direction` ("callers" \| "callees", def: callers), `limit` (opt, def: 20, listed rows only), `include_external` (opt, def: false) | `symbol`, `name`, `file`, `path` |
 | `blast_radius` | Multi-hop reverse reachability (CTEs). Lists the tests the call graph reaches; when the walk finds none for one symbol, it lists the tests of its callers report, or the target itself when it is a test. When no test is found, it says whether a larger `depth` may find some, and to run the full test suite. | `symbol` or current-index `symbol_id` (opt), `file` (opt guard for an ID), `depth` (opt, def: 2), `limit` (opt) | `name`, `path`, `impact` |
 | `check_edit` | After you edit: the symbols whose shape changed against the session base (or `base`, or `HEAD`) and every site of each that your diff did not reach. Run it before you say a change is done. | `base` (opt, a git revision) | |
 
-Four CLI commands have no MCP tool: `outline` (a folder's layout; `file_skeleton` on a folder returns the same), `search` (the ranked search with `--explain`), `facts` (routes, SQL queries, models, and config keys), and `stats` (token savings and tool errors).
+Four query commands have no MCP tool: `outline` (a folder's layout; `file_skeleton` on a folder returns the same), `search` (the ranked search with `--explain`), `facts` (routes, SQL queries, models, and config keys), and `stats` (token savings and tool errors).
 
 ### After you edit: `check_edit` and the Stop hooks
 
@@ -528,6 +528,7 @@ code-kb blast-radius
 # After you edit: the symbols whose shape changed and the sites your diff did not reach
 code-kb check
 code-kb check --base main
+code-kb check --fail-on-proven   # exit 3 when a proven site is outside the diff
 
 # Query framework structural facts (or omit category to list all detected categories)
 code-kb facts

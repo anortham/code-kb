@@ -5,15 +5,16 @@ use std::time::Duration;
 
 use code_kb_core::workspace::{NO_PROJECT_MARKER_REASON, paths_equal};
 use code_kb_core::{
-    Connection, SymbolSelector, WatcherHandle, Workspace, WorkspaceError, blast_radius_selected_op,
-    create_index, edit_check_op, ensure_fts_index_path, ensure_index_matches_extractor,
-    file_sizes_for_paths, file_skeleton_op, find_references_for_symbol_ext, format_blast_radius,
-    format_context_slices, format_edit_check, format_reference_report, format_references,
-    format_symbol_bodies, get_context_slices_selected_op, get_symbol_bodies_selected_op,
-    installed_extractor_version, is_project_root, lookup_symbols_op, open_global_telemetry_db,
+    Connection, MAX_CONTEXT_OVERLOADS, SymbolSelector, SyncError, WatcherHandle, Workspace,
+    WorkspaceError, blast_radius_selected_op, create_index, edit_check_op, ensure_fts_index_path,
+    ensure_index_matches_extractor, file_sizes_for_paths, file_skeleton_op,
+    find_references_for_symbol_ext, format_blast_radius, format_context_slices, format_edit_check,
+    format_reference_report, format_references, format_symbol_bodies,
+    get_context_slices_selected_op, get_symbol_bodies_selected_op, installed_extractor_version,
+    is_project_root, is_unreadable_database, lookup_symbols_op, open_global_telemetry_db,
     open_read_only, reconcile_offline_edits, record_tool_call, record_tool_call_conn,
-    reference_report, render_symbol_lookup, resolve_symbol_op, select_reference_target,
-    start_watcher,
+    reference_report, render_symbol_lookup, resolve_symbol_op, scan_remedy,
+    select_reference_target, start_watcher,
 };
 
 use super::protocol::{CallToolResult, JsonRpcRequest, JsonRpcResponse, Tool};
@@ -101,8 +102,10 @@ fn spawn_index_prepare(workspace: &Workspace, db_path: &Path) -> Option<IndexPre
     let ws = workspace.clone();
     let db = db_path.to_path_buf();
     Some(std::thread::spawn(move || {
-        if let Err(e) = ensure_index_matches_extractor(&ws, &db, &installed_extractor_version()) {
-            tracing::warn!("Index version check failed: {e}");
+        match ensure_index_matches_extractor(&ws, &db, &installed_extractor_version()) {
+            Err(e @ SyncError::UnreadableIndex { .. }) => return Err(e.to_string()),
+            Err(e) => tracing::warn!("Index version check failed: {e}"),
+            Ok(_) => {}
         }
         if !db.exists() {
             tracing::info!(ws = %ws.canonical_root.display(), "Database not found; running automatic initial scan");
@@ -342,7 +345,7 @@ impl McpServer {
             },
             Tool {
                 name: "get_symbol_context".to_string(),
-                description: "A symbol's body with the signatures of what it calls, its parameter types, and its tests, in one call. Use before you change a function.".to_string(),
+                description: format!("A symbol's body with the signatures of what it calls, its parameter types, and its tests, in one call. Overloads return one context each, at most {MAX_CONTEXT_OVERLOADS}. Use before you change a function."),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -699,11 +702,21 @@ impl McpServer {
 
         if let Some(e) = prepare_error {
             self._watcher = None;
-            self.reconcile = spawn_index_prepare(&self.workspace, &self.db_path);
-            let msg = format!(
-                "Index preparation of '{}' failed: {e}; it will be retried on the next tool call",
-                self.workspace.canonical_root.display()
-            );
+            let root = self.workspace.canonical_root.display();
+            let msg = if is_unreadable_database(&self.db_path) {
+                let remedy = scan_remedy(&self.workspace.canonical_root);
+                let e = e.trim_end();
+                if e.contains(&remedy) {
+                    format!("Index preparation of '{root}' failed: {e}")
+                } else {
+                    format!("Index preparation of '{root}' failed: {e}. {remedy}")
+                }
+            } else {
+                self.reconcile = spawn_index_prepare(&self.workspace, &self.db_path);
+                format!(
+                    "Index preparation of '{root}' failed: {e}; it will be retried on the next tool call"
+                )
+            };
             tracing::error!("{}", msg);
             let mut err_res = CallToolResult::error(msg);
             err_res.reconcile_ms = reconcile_ms;
@@ -718,7 +731,14 @@ impl McpServer {
         let conn = match open_read_only(&self.db_path) {
             Ok(c) => c,
             Err(e) => {
-                let msg = format!("Failed to open database: {e}");
+                let msg = if is_unreadable_database(&self.db_path) {
+                    format!(
+                        "Failed to open database: {e}. {}",
+                        scan_remedy(&self.workspace.canonical_root)
+                    )
+                } else {
+                    format!("Failed to open database: {e}")
+                };
                 tracing::error!("{}", msg);
                 let mut err_res = CallToolResult::error(msg);
                 err_res.reconcile_ms = reconcile_ms;

@@ -659,8 +659,13 @@ fn search_symbols_sql(variables_wanted: bool, include_tests: bool, limit: usize)
     }
 
     sql.push_str(
-        " ORDER BY (name = :query) DESC, (name LIKE :prefix ESCAPE '\\') DESC, (kind IN ('function', 'struct', 'class', 'trait', 'method', 'enum', 'interface', 'type')) DESC, (COALESCE(signature, '') LIKE 'self.%') ASC, length(name) ASC, path ASC LIMIT ",
+        " ORDER BY (name = :query) DESC, (name LIKE :prefix ESCAPE '\\') DESC, (kind IN ('function', 'struct', 'class', 'trait', 'method', 'enum', 'interface', 'type')) DESC, ",
     );
+    sql.push_str(&format!(
+        "(language IN ({})) ASC, ",
+        non_code_language_list()
+    ));
+    sql.push_str("(COALESCE(signature, '') LIKE 'self.%') ASC, length(name) ASC, path ASC LIMIT ");
     sql.push_str(&limit.to_string());
     sql
 }
@@ -859,7 +864,8 @@ pub fn folds_into_import_line(query: &str, row: &Symbol, has_definition: bool) -
 /// as an alternative inside its own required term, so a camelCase symbol, which FTS5 indexes as
 /// one token, still matches. A query of two or three words also tries their concatenation.
 /// English stop words are dropped unless the whole query is stop words, and tokens under three
-/// characters get no prefix wildcard.
+/// characters get no prefix wildcard. A digit part (`1` in `zzq1_thing`) is left out of the OR
+/// query when another part remains, because it matches every `= 1` in the index.
 pub fn sanitize_fts5_query(query: &str) -> (String, String) {
     let raw_words = query_words(query);
     let split: Vec<(Vec<&str>, Option<&str>)> = raw_words
@@ -873,15 +879,25 @@ pub fn sanitize_fts5_query(query: &str) -> (String, String) {
     let any_content = split
         .iter()
         .any(|(parts, _)| parts.iter().any(|p| !is_stop_word(p)));
+    let any_word = split.iter().any(|(parts, _)| {
+        parts
+            .iter()
+            .any(|p| (!any_content || !is_stop_word(p)) && !is_digit_word(p))
+    });
 
     let mut and_groups: Vec<String> = Vec::new();
     let mut or_terms: Vec<String> = Vec::new();
     for (parts, whole) in split {
-        let parts: Vec<String> = parts
+        let parts: Vec<&str> = parts
             .into_iter()
             .filter(|p| !any_content || !is_stop_word(p))
-            .map(fts5_term)
             .collect();
+        let or_parts = parts
+            .iter()
+            .filter(|p| !any_word || !is_digit_word(p))
+            .map(|p| fts5_term(p));
+        or_terms.extend(or_parts);
+        let parts: Vec<String> = parts.into_iter().map(fts5_term).collect();
         let whole = whole.map(fts5_term);
         let group = match (parts.is_empty(), whole.as_deref()) {
             (true, None) => continue,
@@ -890,7 +906,6 @@ pub fn sanitize_fts5_query(query: &str) -> (String, String) {
             (false, Some(w)) => format!("(({}) OR {w})", parts.join(" ")),
         };
         and_groups.push(group);
-        or_terms.extend(parts);
         or_terms.extend(whole);
     }
 
@@ -938,8 +953,8 @@ fn query_words(query: &str) -> Vec<&str> {
 
 /// Lowercase terms of three or more characters for the trigram name index: every query word
 /// and every identifier part of it (`collapse_name` -> `collapse_name`, `collapse`, `name`),
-/// deduplicated. Stop words are dropped unless every term is a stop word. Empty when no term
-/// qualifies.
+/// deduplicated. Stop words are dropped unless every term is a stop word, and digit terms unless
+/// every term is digits. Empty when no term qualifies.
 fn trigram_name_terms(query: &str) -> Vec<String> {
     let mut terms: Vec<String> = Vec::new();
     for word in query_words(query) {
@@ -952,6 +967,8 @@ fn trigram_name_terms(query: &str) -> Vec<String> {
     }
     let any_content = terms.iter().any(|t| !is_stop_word(t));
     terms.retain(|t| !any_content || !is_stop_word(t));
+    let any_word = terms.iter().any(|t| !is_digit_word(t));
+    terms.retain(|t| !any_word || !is_digit_word(t));
     terms
 }
 
@@ -1298,7 +1315,12 @@ pub(crate) fn collect_search_candidates(
         )
     };
     let mut owner_stmt = conn.prepare(&owner_sql)?;
-    for word in rerank_words(query).iter().filter(|w| w.len() >= 3) {
+    let owner_words = rerank_words(query);
+    let any_word = owner_words.iter().any(|w| !is_digit_word(w));
+    for word in owner_words
+        .iter()
+        .filter(|w| w.len() >= 3 && (!any_word || !is_digit_word(w)))
+    {
         let phrase = format!("\"{word}\"");
         let owner_rows = owner_stmt
             .query_map(
@@ -1690,7 +1712,11 @@ pub fn fts_search_symbols_explained(
         ranked = rerank_with(candidates, query, include_tests, Some(&idf));
         rerank_us += started.elapsed().as_micros();
     }
-    let unique_query_terms: HashSet<String> = rerank_words(query).into_iter().collect();
+    let query_words = rerank_words(query);
+    if query_words.iter().any(|word| !is_digit_word(word)) {
+        ranked.retain(|(_, breakdown)| holds_a_query_word(breakdown));
+    }
+    let unique_query_terms: HashSet<String> = query_words.into_iter().collect();
     let min_multi_term_results = ((limit * 3).div_ceil(4)).max(15).min(limit);
     let multi_term_results = ranked
         .iter()
@@ -1888,6 +1914,29 @@ fn credited_field_bonus(terms: &[(String, String, f64)]) -> f64 {
     } else {
         0.0
     }
+}
+
+fn is_digit_word(word: &str) -> bool {
+    word.chars().all(|c| c.is_ascii_digit())
+}
+
+/// The branches whose admission proves a query word other than a digit: the whole query as the
+/// name, an FTS5 word match, a name substring, or the class a word names. Retrieval leaves the
+/// digit words out of the branches that match any one word.
+const WORD_PROOF_BRANCHES: &[&str] = &["exact", "word", "name", "owner"];
+
+/// True when the row credits a query word other than a digit, or when a recall branch proved one,
+/// as FTS5 does for a word past the doc head that the rerank reads. Only owner-context members,
+/// which a digit (`= 1`) can admit, are left to fail it.
+fn holds_a_query_word(explain: &SearchExplain) -> bool {
+    explain
+        .terms
+        .iter()
+        .any(|(word, _, credit)| *credit > 0.0 && !is_digit_word(word))
+        || explain
+            .branches
+            .iter()
+            .any(|branch| WORD_PROOF_BRANCHES.contains(&branch.as_str()))
 }
 
 fn covered_query_term_count(terms: &[(String, String, f64)]) -> usize {
@@ -2797,9 +2846,18 @@ fn get_symbol_by_name_internal(
 }
 
 fn ambiguous_symbol(name: &str, candidates: &[Symbol]) -> QueryError {
-    let mut candidate_list = String::new();
+    QueryError::AmbiguousSymbol(
+        name.to_string(),
+        candidates.len(),
+        candidate_id_lines(candidates),
+    )
+}
+
+/// One `- kind `name` in path:line (id=…)` line for each candidate.
+pub(crate) fn candidate_id_lines(candidates: &[Symbol]) -> String {
+    let mut lines = String::new();
     for s in candidates {
-        candidate_list.push_str(&format!(
+        lines.push_str(&format!(
             "- {} `{}` in {}:{} (id={})\n",
             crate::formatters::display_kind(s),
             s.name,
@@ -2808,7 +2866,7 @@ fn ambiguous_symbol(name: &str, candidates: &[Symbol]) -> QueryError {
             s.symbol_id
         ));
     }
-    QueryError::AmbiguousSymbol(name.to_string(), candidates.len(), candidate_list)
+    lines
 }
 
 /// The overloads a name selects: one symbol, or every symbol with that name, owner, and file.
@@ -2964,25 +3022,41 @@ fn near_names_by_trigram(
         .filter(|(distance, _)| *distance <= budget)
         .collect();
     scored.sort_by_key(|(distance, symbol)| (*distance, symbol.name.chars().count()));
-    Ok(scored
-        .into_iter()
-        .map(|(_, symbol)| symbol)
-        .take(3)
-        .collect())
+    Ok(scored.into_iter().map(|(_, symbol)| symbol).collect())
 }
 
-/// Up to three indexed symbols whose names are close to `name`. Never fails.
+/// Up to three indexed symbols whose names are close to `name`, definitions before imports.
+/// Never fails.
 pub fn suggest_symbol_names(
     conn: &Connection,
     name: &str,
     path_filter: Option<&str>,
 ) -> Vec<Symbol> {
+    let mut found = symbol_name_candidates(conn, name, path_filter);
+    found.truncate(SUGGESTED_NAMES);
+    found
+}
+
+const SUGGESTED_NAMES: usize = 3;
+const SUGGESTION_POOL: usize = 20;
+
+/// The close names of `name`, best first: definitions before imports, and no import of a name
+/// that one of them defines, so the imports of a widely used name never hide its definition.
+fn symbol_name_candidates(conn: &Connection, name: &str, path_filter: Option<&str>) -> Vec<Symbol> {
     let (ancestors, terminal) = split_qualified_name(name);
     let mut found =
-        search_symbols_scoped(conn, terminal, None, path_filter, false, 3).unwrap_or_default();
+        search_symbols_scoped(conn, terminal, None, path_filter, false, SUGGESTION_POOL)
+            .unwrap_or_default();
     if found.is_empty() && terminal.chars().count() >= 4 {
         found = near_names_by_trigram(conn, terminal, path_filter).unwrap_or_default();
     }
+    let defined: HashSet<String> = found
+        .iter()
+        .filter(|symbol| symbol.kind != "import")
+        .map(|symbol| symbol.name.clone())
+        .collect();
+    found.retain(|symbol| symbol.kind != "import" || !defined.contains(&symbol.name));
+    found.sort_by_key(|symbol| symbol.kind == "import");
     if let Some(parent) = ancestors.last().copied() {
         let mut ranked: Vec<(bool, Symbol)> = found
             .into_iter()
@@ -2997,7 +3071,6 @@ pub fn suggest_symbol_names(
         ranked.sort_by_key(|(demoted, _)| *demoted);
         found = ranked.into_iter().map(|(_, symbol)| symbol).collect();
     }
-    found.truncate(3);
     found
 }
 
@@ -3076,34 +3149,73 @@ pub fn symbol_not_found_parts(
     name: &str,
     path_filter: Option<&str>,
 ) -> (String, String) {
-    let list = |candidates: &[Symbol]| {
-        candidates
+    let hint = name_suggestions(conn, name, path_filter, &|_| true)
+        .hint()
+        .unwrap_or_else(|| NO_SIMILAR_NAME.to_string());
+    (workspace_name(conn), hint)
+}
+
+/// The hint for a name with no definition and no close name.
+pub const NO_SIMILAR_NAME: &str = "No similar name is indexed; check the workspace and spelling.";
+
+/// The names to offer for a name that no row has.
+#[derive(Debug, Clone, Default)]
+pub struct NameSuggestions {
+    /// The path filter that excludes every row of `symbols`, which then all have the name.
+    pub excluded_by: Option<String>,
+    /// Up to three close names, or the definitions of the name outside `excluded_by`.
+    pub symbols: Vec<Symbol>,
+}
+
+impl NameSuggestions {
+    /// The `Did you mean one of:` text, or the definitions elsewhere; `None` with no symbol.
+    pub fn hint(&self) -> Option<String> {
+        if self.symbols.is_empty() {
+            return None;
+        }
+        let list = self
+            .symbols
             .iter()
             .map(|s| format!("  - {} `{}` ({}:{})", s.kind, s.name, s.path, s.start_line))
             .collect::<Vec<_>>()
-            .join("\n")
-    };
+            .join("\n");
+        Some(match &self.excluded_by {
+            Some(path) => format!("`{path}` does not define it; it is defined in:\n{list}"),
+            None => format!("Did you mean one of:\n{list}"),
+        })
+    }
+}
+
+/// The definitions of `name` that `path_filter` excludes, or else the close names that
+/// [`suggest_symbol_names`] finds; only symbols that `keep` accepts, at most three.
+pub fn name_suggestions(
+    conn: &Connection,
+    name: &str,
+    path_filter: Option<&str>,
+    keep: &dyn Fn(&Symbol) -> bool,
+) -> NameSuggestions {
     let terminal = split_qualified_name(name).1;
-    if let Some(path) = path_filter {
-        let elsewhere: Vec<Symbol> = suggest_symbol_names(conn, name, None)
+    let pick = |path_filter: Option<&str>, accept: &dyn Fn(&Symbol) -> bool| {
+        let mut found: Vec<Symbol> = symbol_name_candidates(conn, name, path_filter)
             .into_iter()
-            .filter(|s| s.name == terminal)
+            .filter(|symbol| keep(symbol) && accept(symbol))
             .collect();
+        found.truncate(SUGGESTED_NAMES);
+        found
+    };
+    if let Some(path) = path_filter {
+        let elsewhere = pick(None, &|symbol| symbol.name == terminal);
         if !elsewhere.is_empty() {
-            let hint = format!(
-                "`{path}` does not define it; it is defined in:\n{}",
-                list(&elsewhere)
-            );
-            return (workspace_name(conn), hint);
+            return NameSuggestions {
+                excluded_by: Some(path.to_string()),
+                symbols: elsewhere,
+            };
         }
     }
-    let candidates = suggest_symbol_names(conn, name, path_filter);
-    let hint = if candidates.is_empty() {
-        "No similar name is indexed; check the workspace and spelling.".to_string()
-    } else {
-        format!("Did you mean one of:\n{}", list(&candidates))
-    };
-    (workspace_name(conn), hint)
+    NameSuggestions {
+        excluded_by: None,
+        symbols: pick(path_filter, &|_| true),
+    }
 }
 
 /// The workspace name and the recovery hint for a file that is not indexed.
@@ -3266,14 +3378,20 @@ fn relative_import_matches(value: &str, target: &str) -> String {
 }
 
 /// Languages whose files import each other's names, so a name-only reference may cross them.
-const JS_FAMILY_LANGUAGES: &str = "'javascript', 'typescript', 'tsx', 'jsx', 'vue'";
+pub(crate) const JS_FAMILY_LANGUAGES: [&str; 5] = ["javascript", "typescript", "tsx", "jsx", "vue"];
+pub(crate) const JS_FAMILY_LANGUAGES_SQL: &str = js_family_sql!();
+
+pub(crate) fn is_js_family(language: &str) -> bool {
+    JS_FAMILY_LANGUAGES.contains(&language)
+}
+
 /// SQL that holds when a name-only identifier in `identifier` may refer to `target` across
 /// languages: the same language, the JavaScript family, Razor and C#, or QML to C++.
 fn identifier_language_matches(identifier: &str, target: &str) -> String {
     format!(
         "({target}.language = {identifier}.language
-          OR ({identifier}.language IN ({JS_FAMILY_LANGUAGES})
-              AND {target}.language IN ({JS_FAMILY_LANGUAGES}))
+          OR ({identifier}.language IN ({JS_FAMILY_LANGUAGES_SQL})
+              AND {target}.language IN ({JS_FAMILY_LANGUAGES_SQL}))
           OR ({identifier}.language IN ('razor', 'csharp')
               AND {target}.language IN ('razor', 'csharp'))
           OR ({identifier}.language = 'qml' AND {target}.language = 'cpp'))"
@@ -3713,6 +3831,33 @@ pub(crate) fn enclosing_scope_sql(target: &str) -> String {
     )
 }
 
+const BINDING_VALUE_KINDS: &str = "'variable', 'constant', 'property', 'field'";
+
+/// SQL predicate: row `p` lies where the owner `owner` is named. A function, method, or
+/// constructor that holds the owner as a variable or constant, or as a property or field of the
+/// object literal of one (`var ctx = { res: { send() {…} } }`), is the only scope that names
+/// it; any other owner is named everywhere.
+pub(crate) fn owner_binding_in_scope_sql(owner: &str) -> String {
+    format!(
+        "NOT EXISTS (
+            WITH RECURSIVE binding(symbol_id, kind, parent_symbol_id, held_kind, depth) AS (
+                SELECT {owner}.symbol_id, {owner}.kind, {owner}.parent_symbol_id, NULL, 0
+                UNION ALL
+                SELECT holder.symbol_id, holder.kind, holder.parent_symbol_id, binding.kind,
+                       binding.depth + 1
+                FROM symbols holder JOIN binding ON holder.symbol_id = binding.parent_symbol_id
+                WHERE binding.kind IN ({BINDING_VALUE_KINDS}) AND binding.depth < 8
+            )
+            SELECT 1 FROM binding
+            JOIN symbols binding_scope ON binding_scope.symbol_id = binding.symbol_id
+            WHERE binding.held_kind IN ('variable', 'constant')
+              AND binding_scope.kind IN ('function', 'method', 'constructor')
+              AND NOT (binding_scope.path = p.path
+                       AND p.start_line BETWEEN binding_scope.start_line AND binding_scope.end_line)
+        )"
+    )
+}
+
 /// SQL predicate that decides whether a pending call edge `p` (with caller `s_from`) points at
 /// the candidate definition `target` (whose parent symbol is joined as `parent`).
 pub(crate) fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> String {
@@ -3768,6 +3913,7 @@ pub(crate) fn pending_target_predicate(conn: &Connection, target: &str, parent: 
     let implicit_receiver_languages = implicit_receiver_language_list();
     let enclosing = enclosing_scope_sql(target);
     let rust_path = rust_path_rule(target, ns);
+    let owner_in_scope = owner_binding_in_scope_sql(parent);
     format!(
         "(
             NOT (p.kind IS 'extends' AND p.from_symbol_id = {target}.symbol_id)
@@ -3776,10 +3922,11 @@ pub(crate) fn pending_target_predicate(conn: &Connection, target: &str, parent: 
                 {target}.parent_symbol_id IS NOT NULL
                 AND {parent}.name IS NOT NULL
                 AND (
-                    EXISTS (SELECT 1 FROM {ns} WHERE value = {parent}.name)
+                    EXISTS (SELECT 1 FROM {ns} WHERE value = {parent}.name) AND {owner_in_scope}
                     OR (EXISTS (SELECT 1 FROM {ns} WHERE value = 'Self')
                         AND s_from.parent_symbol_id = {target}.parent_symbol_id)
                     OR (p.target_receiver IS NOT NULL AND p.target_receiver != '' AND {parent}.name = p.target_receiver
+                        AND {owner_in_scope}
                         {receiver_import_elsewhere})
                     OR ((p.target_receiver IN ('self', 'this', 'cls', 'Self', 'super')
                          OR EXISTS (SELECT 1 FROM {ns} WHERE value = 'Self'))
@@ -3927,6 +4074,17 @@ pub(crate) const DOCUMENTATION_LANGUAGES: &[&str] = &[
 pub(crate) fn documentation_language_list() -> String {
     DOCUMENTATION_LANGUAGES
         .iter()
+        .map(|l| format!("'{l}'"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// The languages of data, configuration, and prose files, whose lookup rows follow the code rows
+/// of the same rank: the documentation languages and Go's module files.
+fn non_code_language_list() -> String {
+    DOCUMENTATION_LANGUAGES
+        .iter()
+        .chain(&["gomod", "gosum"])
         .map(|l| format!("'{l}'"))
         .collect::<Vec<_>>()
         .join(", ")
@@ -4219,7 +4377,7 @@ pub(crate) fn direct_identifier_rows(
                          AND (scope.kind IN ('function', 'method', 'constructor')
                               OR (scope.symbol_id IS NULL
                                   AND target.path != i.path
-                                  AND target.language IN ('javascript', 'typescript', 'tsx')
+                                  AND target.language IN ({JS_FAMILY_LANGUAGES_SQL})
                                   AND COALESCE(target.visibility, 'private') = 'private'))
                    ))
                    AND NOT COALESCE((i.kind = 'member_access'
@@ -4927,7 +5085,7 @@ fn import_sites_from(
         })
         .collect();
     let source = format!(
-        "(CASE WHEN i.language IN ('javascript', 'typescript', 'tsx', 'jsx', 'vue') THEN
+        "(CASE WHEN i.language IN ({JS_FAMILY_LANGUAGES_SQL}) THEN
              CASE{extensions} ELSE module_path.value END
            ELSE module_path.value END)"
     );
@@ -4961,7 +5119,7 @@ fn import_sites_from(
                OR module_path.value != '' AND replace(module_path.value, '.', '') = ''
                AND substr({import_dir}, 1, length({target_dir})) = {target_dir}
            )
-           AND NOT (i.language IN ({JS_FAMILY_LANGUAGES}) AND {relative} AND NOT {relative_match})
+           AND NOT (i.language IN ({JS_FAMILY_LANGUAGES_SQL}) AND {relative} AND NOT {relative_match})
          ORDER BY 1, 2",
         docs = documentation_language_list()
     ))?;
@@ -5862,6 +6020,7 @@ pub fn compute_blast_radius_scoped(
 }
 
 const MAX_BLAST_DEPTH: usize = 5;
+const MAX_ENCLOSING_SCOPES: usize = 8;
 
 /// Compute blast radius with exact current-index IDs kept as traversal seeds.
 pub fn compute_blast_radius_scoped_with_ids(
@@ -5938,6 +6097,7 @@ pub fn compute_blast_radius_scoped_with_ids(
             likely_tests_found: 0,
             impacted_symbols_found: 0,
             stopped_at_depth: None,
+            callers_report: None,
         });
     };
 
@@ -6218,6 +6378,34 @@ pub fn compute_blast_radius_scoped_with_ids(
                         reason,
                     });
                 }
+            } else if let Some(test) = enclosing_walk_test(conn, parent.as_deref())? {
+                let test_key = (test.path.clone(), test.line);
+                if constructor_only {
+                    constructor_only_test_keys.insert(test_key);
+                } else {
+                    non_constructor_test_keys.insert(test_key);
+                }
+                if seen_test_keys.insert(format!("{}:{}", test.path, test.line)) {
+                    let caller = if depth == 1 {
+                        "direct caller".to_string()
+                    } else {
+                        format!("indirect caller [depth {depth}]")
+                    };
+                    let nested = if is_generated_lambda_name(
+                        &name,
+                        &language,
+                        &kind,
+                        signature.as_deref(),
+                    ) {
+                        "<lambda>"
+                    } else {
+                        name.as_str()
+                    };
+                    likely_tests.push(TestTarget {
+                        reason: format!("encloses `{nested}` ({caller})"),
+                        ..test
+                    });
+                }
             } else {
                 let enclosing_symbol_name =
                     if is_generated_lambda_name(&name, &language, &kind, signature.as_deref()) {
@@ -6237,6 +6425,7 @@ pub fn compute_blast_radius_scoped_with_ids(
                     line,
                     depth,
                     enclosing_symbol_name,
+                    reason: None,
                 });
             }
         }
@@ -6344,7 +6533,67 @@ pub fn compute_blast_radius_scoped_with_ids(
         likely_tests_found,
         impacted_symbols_found,
         stopped_at_depth: callers_beyond_depth.then_some(max_depth),
+        callers_report: None,
     })
+}
+
+/// The test that encloses a function defined inside it, as `index` inside `test_url_processors`:
+/// the nearest enclosing function or method that is a test, never one that is setup or a fixture.
+pub(crate) fn enclosing_walk_test(
+    conn: &Connection,
+    parent: Option<&str>,
+) -> Result<Option<TestTarget>, QueryError> {
+    let Some(parent) = parent else {
+        return Ok(None);
+    };
+    let lifecycle = if has_column(conn, "symbols", "test_lifecycle") {
+        "COALESCE(s.test_lifecycle, 0) != 0"
+    } else {
+        "0"
+    };
+    let mut stmt = conn.prepare(&format!(
+        "SELECT s.name, s.kind, s.path, s.start_line, s.is_test, {lifecycle}, s.parent_symbol_id,
+                EXISTS (SELECT 1 FROM symbols owner
+                        WHERE owner.symbol_id = s.parent_symbol_id
+                          AND COALESCE(owner.test_container, 0) != 0)
+         FROM symbols s WHERE s.symbol_id = ?1"
+    ))?;
+    let mut next = Some(parent.to_string());
+    for _ in 0..MAX_ENCLOSING_SCOPES {
+        let Some(id) = next.take() else {
+            return Ok(None);
+        };
+        let Some((name, kind, path, line, is_test, is_fixture, parent, in_test_class)) = stmt
+            .query_row([&id], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?.replace('\\', "/"),
+                    row.get::<_, i64>(3)? as usize,
+                    row.get::<_, bool>(4)?,
+                    row.get::<_, bool>(5)?,
+                    row.get::<_, Option<String>>(6)?,
+                    row.get::<_, bool>(7)?,
+                ))
+            })
+            .optional()?
+        else {
+            return Ok(None);
+        };
+        if !matches!(kind.as_str(), "function" | "method") || is_fixture {
+            return Ok(None);
+        }
+        if is_test || (is_test_path(&path) && (in_test_class || names_a_test(&name))) {
+            return Ok(Some(TestTarget {
+                name,
+                path,
+                line,
+                reason: String::new(),
+            }));
+        }
+        next = parent;
+    }
+    Ok(None)
 }
 
 /// Prefixes a test method with its class, as `TestRoutes::test_simple`, so the name selects the
@@ -6639,6 +6888,17 @@ mod tests {
         assert_eq!(count_parse_diagnostics(&conn, "src/lib.rs"), 2);
         assert_eq!(count_parse_diagnostics(&conn, "src\\lib.rs"), 2);
         assert_eq!(count_parse_diagnostics(&conn, "src/clean.rs"), 0);
+    }
+
+    #[test]
+    fn js_family_sql_lists_the_js_family_languages() {
+        let quoted: Vec<String> = JS_FAMILY_LANGUAGES
+            .iter()
+            .map(|language| format!("'{language}'"))
+            .collect();
+        assert_eq!(JS_FAMILY_LANGUAGES_SQL, quoted.join(", "));
+        assert!(JS_FAMILY_LANGUAGES.iter().all(|l| is_js_family(l)));
+        assert!(!is_js_family("python"));
     }
 
     #[test]
@@ -7706,11 +7966,32 @@ mod tests {
         );
         assert_eq!(
             trigram_name_terms("parse the sha256 sidecar"),
-            vec!["parse", "sha256", "sha", "256", "sidecar"]
+            vec!["parse", "sha256", "sha", "sidecar"]
         );
         assert_eq!(trigram_name_terms("isReady"), vec!["isready", "ready"]);
         assert_eq!(trigram_name_terms("the before"), vec!["the", "before"]);
+        assert_eq!(trigram_name_terms("8080 404"), vec!["8080", "404"]);
         assert!(trigram_name_terms("ab").is_empty());
+    }
+
+    #[test]
+    fn the_or_query_leaves_out_digit_parts_only_beside_a_word() {
+        assert_eq!(
+            sanitize_fts5_query("zzq1_thing").1,
+            "\"zzq\"* OR \"thing\"* OR \"zzq1_thing\"*"
+        );
+        assert_eq!(
+            sanitize_fts5_query("retry 3 times").1,
+            "\"retry\"* OR \"times\"* OR \"retry3times\"*"
+        );
+        assert_eq!(
+            sanitize_fts5_query("retry 3 times").0,
+            "(\"retry\"* AND \"3\" AND \"times\"*) OR \"retry3times\"*"
+        );
+        assert_eq!(
+            sanitize_fts5_query("8080 1").1,
+            "\"8080\"* OR \"1\" OR \"80801\"*"
+        );
     }
 
     #[test]

@@ -1104,3 +1104,96 @@ fn check_with_an_unknown_base_prints_the_revision_sentence_once() {
     let sentence = "git revision `nonexistent` does not exist in this repository";
     assert_eq!(stderr.matches(sentence).count(), 1, "{stderr}");
 }
+
+fn rename_area(repo: &Repo, also_second: bool) {
+    write(
+        &repo.root,
+        "src/geometry.rs",
+        "pub fn surface(w: i32, h: i32) -> i32 {\n    w * h\n}\n",
+    );
+    write(
+        &repo.root,
+        "src/first.rs",
+        "use crate::geometry;\n\npub fn first() -> i32 {\n    crate::geometry::surface(2, 3)\n}\n",
+    );
+    if also_second {
+        write(
+            &repo.root,
+            "src/second.rs",
+            "use crate::geometry;\n\npub fn second() -> i32 {\n    crate::geometry::surface(4, 5)\n}\n",
+        );
+    }
+}
+
+fn run_check(root: &Path, args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+        .arg("--root")
+        .arg(root)
+        .args(args)
+        .output()
+        .unwrap()
+}
+
+#[test]
+fn check_exits_zero_on_a_proven_site_outside_the_diff_without_fail_on_proven() {
+    let repo = rust_function_repo();
+    rename_area(&repo, false);
+
+    let output = run_check(&repo.root, &["check"]);
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(text.contains("src/second.rs:4"), "{text}");
+}
+
+#[test]
+fn check_with_fail_on_proven_exits_three_after_the_report_on_a_proven_site_outside_the_diff() {
+    let repo = rust_function_repo();
+    rename_area(&repo, false);
+
+    let output = run_check(&repo.root, &["check", "--fail-on-proven"]);
+    assert_eq!(
+        output.status.code(),
+        Some(3),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(text.contains("src/second.rs:4"), "{text}");
+
+    let json_output = run_check(&repo.root, &["--json", "check", "--fail-on-proven"]);
+    assert_eq!(json_output.status.code(), Some(3));
+    let check: Value = serde_json::from_slice(&json_output.stdout).unwrap();
+    assert_eq!(check["changes"][0]["proven"][0]["path"], "src/second.rs");
+}
+
+#[test]
+fn check_with_fail_on_proven_exits_zero_when_the_diff_reaches_every_site() {
+    let repo = rust_function_repo();
+    rename_area(&repo, true);
+
+    let output = run_check(&repo.root, &["check", "--fail-on-proven"]);
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(!text.contains("src/second.rs:4"), "{text}");
+}
+
+#[test]
+fn check_with_fail_on_proven_exits_one_on_an_error() {
+    let repo = rust_function_repo();
+    let output = run_check(
+        &repo.root,
+        &["check", "--fail-on-proven", "--base", "nonexistent"],
+    );
+    assert_eq!(output.status.code(), Some(1));
+}

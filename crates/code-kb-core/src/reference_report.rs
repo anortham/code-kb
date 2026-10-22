@@ -14,9 +14,9 @@ use crate::queries::{
     QueryError, built_receiver_sql, class_chain_sql, constructed_class, direct_identifier_rows,
     documentation_language_list, enclosing_scope_sql, get_symbol_by_name,
     grouped_member_access_rows, has_column, implicit_receiver_language_list, import_sites,
-    import_sites_of_absent, inherited_writes_among, module_import_binding_sql, path_proximity,
-    pending_target_predicate, populate_lambda_enclosing_names, receiver_type_sql,
-    symbol_not_found_parts,
+    import_sites_of_absent, inherited_writes_among, is_js_family, module_import_binding_sql,
+    owner_binding_in_scope_sql, path_proximity, pending_target_predicate,
+    populate_lambda_enclosing_names, receiver_type_sql, symbol_not_found_parts,
 };
 use crate::text_scan::scan_word;
 
@@ -114,6 +114,27 @@ pub fn reference_report_for_edit(
             absent_target: crate::queries::get_symbol_by_id(conn, &target.symbol_id)?.is_none(),
         },
         absent_condition,
+    )
+}
+
+/// The report `blast_radius` reads when its walk finds no caller or no test: the labels and the
+/// reach sections of `find_references`, without the whole-word text scan.
+pub fn reference_report_for_impact(
+    conn: &Connection,
+    root: &Path,
+    target: &Symbol,
+) -> Result<ReferenceReport, QueryError> {
+    report_with(
+        conn,
+        root,
+        target,
+        ACCOUNTING_TIME_LIMIT,
+        ReportMode {
+            text_scan: false,
+            arity_exclusion: true,
+            absent_target: false,
+        },
+        None,
     )
 }
 
@@ -274,7 +295,7 @@ fn cannot_see_for_language(language: &str) -> Vec<String> {
     let mut items = Vec::new();
     match language {
         "python" => items.push("calls through getattr() or names built at runtime".to_string()),
-        "javascript" | "typescript" | "tsx" | "jsx" | "vue" => items
+        language if is_js_family(language) => items
             .push("calls through computed property names or values built at runtime".to_string()),
         "rust" => items.push("calls inside macro bodies".to_string()),
         "java" | "csharp" | "kotlin" => {
@@ -412,11 +433,15 @@ const SHADOW_IN_CHAIN_SQL: &str = "WITH RECURSIVE chain(symbol_id, depth) AS (
      ORDER BY chain.depth, d.start_line > ?5, abs(?5 - d.start_line)";
 
 /// An ownerless JavaScript method is an object-literal member or a property, which binds no name.
-const SHADOW_TOP_LEVEL_SQL: &str = "SELECT symbol_id, COALESCE(signature, ''), kind FROM symbols
+const SHADOW_TOP_LEVEL_SQL: &str = concat!(
+    "SELECT symbol_id, COALESCE(signature, ''), kind FROM symbols
      WHERE name = ?1 AND path = ?2 AND parent_symbol_id IS NULL
        AND kind NOT IN ('import', 'export', 'module', 'namespace')
-       AND NOT (kind = 'method' AND language IN ('javascript', 'typescript', 'tsx', 'jsx', 'vue'))
-     ORDER BY start_line > ?3, abs(?3 - start_line)";
+       AND NOT (kind = 'method' AND language IN (",
+    js_family_sql!(),
+    "))
+     ORDER BY start_line > ?3, abs(?3 - start_line)"
+);
 
 const IMPORT_SOURCES_SQL: &str = "SELECT COALESCE(json_extract(metadata_json, '$.source'), '')
      FROM symbols
@@ -452,6 +477,20 @@ const SOURCE_FILES_SQL: &str = "SELECT 1 FROM files
      WHERE '/' || replace(replace(path, '\\', '/'), '-', '_') LIKE ?1 ESCAPE '\\'
         OR '/' || replace(replace(path, '\\', '/'), '-', '_') LIKE ?2 ESCAPE '\\'
      LIMIT 1";
+
+const MAX_GO_ALIAS_HOPS: usize = 4;
+
+const GO_ALIAS_TARGETS_SQL: &str = "SELECT path, json_extract(metadata_json, '$.alias_target')
+     FROM symbols
+     WHERE name = ?1 AND language = 'go' AND kind IN ('type', 'type_alias')
+       AND json_valid(metadata_json)
+       AND json_extract(metadata_json, '$.alias_target') IS NOT NULL";
+
+const GO_IMPORT_PATHS_SQL: &str = "SELECT COALESCE(signature, '') FROM symbols
+     WHERE path = ?1 AND name = ?2 AND language = 'go' AND kind = 'import'";
+
+const GO_PACKAGE_SQL: &str = "SELECT name FROM symbols
+     WHERE path = ?1 AND language = 'go' AND kind = 'module' LIMIT 1";
 
 const RECEIVER_TYPE_SQL: &str = "WITH RECURSIVE chain(symbol_id, depth) AS (
          SELECT ?1, 0
@@ -507,9 +546,13 @@ const RECEIVER_DECLARATIONS_SQL: &str = "WITH RECURSIVE chain(symbol_id, depth) 
        AND r.kind IN ('variable', 'constant')
      ORDER BY 1, 3 DESC";
 
-const JS_IMPORTER_PATHS_SQL: &str = "SELECT DISTINCT replace(path, '\\', '/') FROM symbols
+const JS_IMPORTER_PATHS_SQL: &str = concat!(
+    "SELECT DISTINCT replace(path, '\\', '/') FROM symbols
      WHERE kind = 'import' AND name = ?1
-       AND language IN ('javascript', 'typescript', 'tsx', 'jsx', 'vue')";
+       AND language IN (",
+    js_family_sql!(),
+    ")"
+);
 
 const MEMBER_ACCESS_PATHS_SQL: &str =
     "SELECT DISTINCT path FROM identifiers WHERE name = ?1 AND kind = 'member_access'";
@@ -2262,11 +2305,13 @@ impl<'a> Accounting<'a> {
             let (path, start, end) = row?;
             add(path, start, end);
         }
-        let mut stmt = self.conn.prepare(
+        let mut stmt = self.conn.prepare(concat!(
             "SELECT path, start_line, end_line, COALESCE(signature, '') FROM symbols
              WHERE name = ?1 AND kind = 'variable'
-               AND language IN ('javascript', 'typescript', 'tsx', 'jsx', 'vue')",
-        )?;
+               AND language IN (",
+            js_family_sql!(),
+            ")"
+        ))?;
         for row in stmt.query_map(params![name], |row| {
             Ok((
                 row.get::<_, String>(0)?,
@@ -2871,7 +2916,7 @@ impl<'a> Accounting<'a> {
         }
         if let Some(receiver) = row.qualifier().filter(|_| row.namespace.len() <= 1)
             && let Some(type_name) = self.receiver_type(row, receiver)?
-            && !self.owner_related(&type_name, group)?
+            && !self.receiver_type_related(row, &type_name, group)?
         {
             return Ok(Verdict::new(
                 SiteLabel::Excluded,
@@ -3795,6 +3840,101 @@ impl<'a> Accounting<'a> {
         Ok(Some(only.clone()))
     }
 
+    /// True when a call through a receiver of type `type_name` may reach the target group. A Go
+    /// type is read without its pointer and type parameters, through its project aliases, and with
+    /// a package name only when that name can name the package of an owner.
+    fn receiver_type_related(
+        &self,
+        row: &NameRow,
+        type_name: &str,
+        group: &[Symbol],
+    ) -> Result<bool, QueryError> {
+        if row.language == "go" {
+            self.go_type_related(&row.path, type_name, group, 0)
+        } else {
+            self.owner_related(type_name, group)
+        }
+    }
+
+    fn go_type_related(
+        &self,
+        path: &str,
+        type_name: &str,
+        group: &[Symbol],
+        hops: usize,
+    ) -> Result<bool, QueryError> {
+        let bare = crate::db::go_receiver_type_name(type_name);
+        let (package, name) = match bare.rsplit_once('.') {
+            Some((package, name)) => (Some(package), name),
+            None => (None, bare),
+        };
+        let named = match package {
+            None => true,
+            Some(package) => self.go_package_may_own(path, package, group)?,
+        };
+        if named && self.owner_related(name, group)? {
+            return Ok(true);
+        }
+        if hops >= MAX_GO_ALIAS_HOPS {
+            return Ok(false);
+        }
+        let aliases = self.with_statement(GO_ALIAS_TARGETS_SQL, |stmt| {
+            stmt.query_map(params![name], |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+            })?
+            .collect::<Result<Vec<_>, _>>()
+        })?;
+        for (alias_path, target) in aliases {
+            if self.go_type_related(&alias_path, &target, group, hops + 1)? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    /// Whether the package name `package`, written in the file `path`, can name the package of an
+    /// owner of the group: through an import of that file, or as the owner's package name or
+    /// folder when the file has no import of that name.
+    fn go_package_may_own(
+        &self,
+        path: &str,
+        package: &str,
+        group: &[Symbol],
+    ) -> Result<bool, QueryError> {
+        let imports = self.with_statement(GO_IMPORT_PATHS_SQL, |stmt| {
+            stmt.query_map(params![path, package], |r| r.get::<_, String>(0))?
+                .collect::<Result<Vec<_>, _>>()
+        })?;
+        for member in group {
+            let folder = crate::db::parent_folder(&member.path);
+            let folder_name = folder
+                .rsplit(['/', '\\'])
+                .next()
+                .filter(|name| !name.is_empty());
+            let package_name = self.with_statement(GO_PACKAGE_SQL, |stmt| {
+                stmt.query_row(params![member.path], |r| r.get::<_, String>(0))
+                    .optional()
+            })?;
+            let names_owner =
+                |name: &str| Some(name) == folder_name || Some(name) == package_name.as_deref();
+            if imports.is_empty() {
+                if names_owner(package) {
+                    return Ok(true);
+                }
+                continue;
+            }
+            for signature in &imports {
+                let Some(import_path) = go_import_path(signature) else {
+                    return Ok(true);
+                };
+                if import_path.rsplit('/').take(2).any(names_owner) {
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
+    }
+
     /// True when `type_name` is an owner of the target group or shares an inheritance chain
     /// with one, so a call through it may still reach the target.
     fn owner_related(&self, type_name: &str, group: &[Symbol]) -> Result<bool, QueryError> {
@@ -4271,7 +4411,7 @@ fn shared_leading_segments(a: &str, b: &str) -> usize {
 
 fn language_family(language: &str) -> &str {
     match language {
-        "javascript" | "typescript" | "tsx" | "jsx" | "vue" => "js",
+        language if is_js_family(language) => "js",
         "java" | "kotlin" | "scala" | "groovy" => "jvm",
         "c" | "cpp" | "objc" | "objcpp" | "qml" => "c",
         "csharp" | "razor" | "vbnet" | "fsharp" => "dotnet",
@@ -4391,6 +4531,7 @@ fn evidence_sql(conn: &Connection, target: &str, parent: &str) -> String {
           AND NOT {qualifier_reaches_owner})"
     );
     let package_proximity = path_proximity(&format!("{target}.path"), "p.path");
+    let owner_in_scope = owner_binding_in_scope_sql(parent);
     let built = built_receiver_sql(conn, target)
         .map(|built| {
             format!(
@@ -4402,7 +4543,7 @@ fn evidence_sql(conn: &Connection, target: &str, parent: &str) -> String {
     format!(
         "CASE
             WHEN {has_namespace} AND {parent}.name IS NOT NULL
-                 AND EXISTS (SELECT 1 FROM {ns} WHERE value = {parent}.name)
+                 AND EXISTS (SELECT 1 FROM {ns} WHERE value = {parent}.name) AND {owner_in_scope}
                  THEN 'qualified path'
             WHEN {has_namespace} AND {target}.parent_symbol_id IS NULL THEN 'qualified path'
             WHEN {target}.parent_symbol_id IS NOT NULL AND {names_self}
@@ -4410,6 +4551,7 @@ fn evidence_sql(conn: &Connection, target: &str, parent: &str) -> String {
             WHEN {target}.parent_symbol_id IS NOT NULL
                  AND ({self_receiver} OR {names_self}) AND {receiver_chain} THEN 'class chain'
             WHEN {has_receiver} AND {parent}.name = p.target_receiver AND NOT {foreign_qualifier}
+                 AND {owner_in_scope}
                  THEN 'qualified path'
             WHEN {has_receiver} AND {target}.parent_symbol_id IS NULL AND {module_receiver}
                  THEN 'import'
@@ -4433,6 +4575,12 @@ fn evidence_sql(conn: &Connection, target: &str, parent: &str) -> String {
                 END
          END"
     )
+}
+
+/// The import path of a Go import row (`import g "fx/geom"`).
+fn go_import_path(signature: &str) -> Option<&str> {
+    let (_, rest) = signature.split_once('"')?;
+    rest.split_once('"').map(|(path, _)| path)
 }
 
 #[cfg(test)]

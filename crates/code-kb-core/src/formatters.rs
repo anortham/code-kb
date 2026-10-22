@@ -3,9 +3,9 @@ use std::path::Path;
 
 use crate::edit_check::{BaseSource, EditCheck, EditSite, ShapeChange};
 use crate::models::{
-    BlastRadiusResult, CallingTest, ConstructionSite, ContextSlice, ImpactedSymbol, LabeledSite,
-    OverrideRow, ReferenceReport, ReferenceSite, Registration, SearchExplain, SiteLabel, Symbol,
-    SymbolSearchResult, VariantUse,
+    BlastRadiusResult, CallersReportSites, CallingTest, ConstructionSite, ContextSlice,
+    ImpactedSymbol, LabeledSite, OverrideRow, ReferenceReport, ReferenceSite, Registration,
+    SearchExplain, SiteLabel, Symbol, SymbolSearchResult, VariantUse,
 };
 
 /// Format progressive disclosure file skeleton with implementation bodies stripped.
@@ -30,7 +30,7 @@ pub fn format_file_skeleton(
     }
 
     if symbols.is_empty() {
-        out.push_str("// No exported symbols indexed.\n");
+        out.push_str("// No symbols are indexed for this file.\n");
         return out;
     }
 
@@ -45,19 +45,65 @@ pub fn format_file_skeleton(
         children_map.entry(parent).or_default().push(s);
     }
 
-    // Render top-level symbols and their children
-    if let Some(roots) = children_map.get(&None) {
-        for root in roots {
-            render_symbol_skeleton(&mut out, root, None, &children_map, 0);
-        }
-    } else {
-        // If parent relationships are missing or flat, render all sorted by line
-        for s in symbols {
-            render_symbol_skeleton(&mut out, s, None, &children_map, 0);
-        }
+    let roots: Vec<&Symbol> = match children_map.get(&None) {
+        Some(roots) => roots.clone(),
+        None => symbols.iter().collect(),
+    };
+    if !roots.iter().any(|root| is_shown(root, None)) {
+        out.push_str(&hidden_rows_summary(&roots));
+        return out;
+    }
+    for root in roots {
+        render_symbol_skeleton(&mut out, root, None, &children_map, 0);
     }
 
     out
+}
+
+/// The answer for a file whose symbols are all hidden from the skeleton: the top-level rows
+/// grouped by kind, with the first three names of each group.
+fn hidden_rows_summary(roots: &[&Symbol]) -> String {
+    const NAMES_PER_KIND: usize = 3;
+    let mut groups: Vec<(&str, Vec<&Symbol>)> = Vec::new();
+    for root in roots {
+        let kind = display_kind(root);
+        match groups
+            .iter_mut()
+            .find(|(group_kind, _)| *group_kind == kind)
+        {
+            Some((_, rows)) => rows.push(root),
+            None => groups.push((kind, vec![root])),
+        }
+    }
+    let groups: Vec<String> = groups
+        .iter()
+        .map(|(kind, rows)| {
+            let mut names: Vec<String> = rows
+                .iter()
+                .take(NAMES_PER_KIND)
+                .map(|row| format!("`{}` L{}", row.name, row.start_line))
+                .collect();
+            if rows.len() > NAMES_PER_KIND {
+                names.push(format!("+{} more", rows.len() - NAMES_PER_KIND));
+            }
+            format!(
+                "{} {} ({})",
+                rows.len(),
+                plural(rows.len(), kind),
+                names.join(", ")
+            )
+        })
+        .collect();
+    format!(
+        "// Nothing to outline. Top-level rows: {}.\n\
+         // get_symbol_body with one of these names and this file_path shows its source; read the file for the rest.\n",
+        groups.join("; ")
+    )
+}
+
+/// The skeleton of a file whose symbols the index cannot hold: `reason` says why.
+pub fn format_unindexed_file(file_path: &str, reason: &str) -> String {
+    format!("// File: {file_path}\n\n// {reason} Read the file.\n")
 }
 
 fn is_container_kind(kind: &str) -> bool {
@@ -2084,8 +2130,13 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
                     for s in syms {
                         let name =
                             displayed_symbol_name(&s.name, s.enclosing_symbol_name.as_deref());
+                        let reason = s
+                            .reason
+                            .as_deref()
+                            .map(|reason| format!(" ({reason})"))
+                            .unwrap_or_default();
                         out.push_str(&format!(
-                            "  - [depth {}] {} `{}` [line {}]\n",
+                            "  - [depth {}] {} `{}` [line {}]{reason}\n",
                             s.depth, s.kind, name, s.line
                         ));
                     }
@@ -2103,23 +2154,52 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
                 ));
             }
         }
+        if let Some(report) = &result.callers_report
+            && report.unresolved > 0
+        {
+            out.push_str(&untied_sites(report, " more"));
+        }
     } else if result.impacted_symbols_truncated || result.traversal_ceiling_reached {
         out.push_str("### Downstream Impact (0 returned)\n");
     } else {
-        out.push_str(
-            "### Downstream Impact (0 returned)\nNo downstream callers found within depth.\n",
-        );
+        out.push_str("### Downstream Impact (0 returned)\n");
+        match &result.callers_report {
+            Some(report) if report.proven + report.likely > 0 => {
+                out.push_str(
+                    "Every caller that find_references ties to this definition is a test.\n",
+                );
+                if report.unresolved > 0 {
+                    out.push_str(&untied_sites(report, " more"));
+                }
+            }
+            Some(report) if report.unresolved > 0 => out.push_str(&untied_sites(report, "")),
+            Some(report) if report.sites > 0 => out.push_str(&format!(
+                "find_references ties all {} {} of the name to other definitions.\n",
+                report.sites,
+                plural(report.sites, "site")
+            )),
+            _ => out.push_str("No downstream callers found within depth.\n"),
+        }
     }
 
     out
+}
+
+fn untied_sites(report: &CallersReportSites, more: &str) -> String {
+    let count = report.unresolved;
+    format!(
+        "The index could not tie {count}{more} {} of the name to this definition; find_references lists {}.\n",
+        plural(count, "site"),
+        if count == 1 { "it" } else { "them" }
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::models::{
-        ImpactedSymbol, LabeledSite, ReferenceCounts, ReferenceReport, ReferenceTarget, SiteLabel,
-        TestTarget, TextOnlyLines, TextScanSummary,
+        CallersReportSites, ImpactedSymbol, LabeledSite, ReferenceCounts, ReferenceReport,
+        ReferenceTarget, SiteLabel, TestTarget, TextOnlyLines, TextScanSummary,
     };
 
     fn structural_fact(key: Option<&str>) -> crate::models::StructuralFact {
@@ -3145,6 +3225,7 @@ mod tests {
                 line: 42,
                 depth: 1,
                 enclosing_symbol_name: None,
+                reason: None,
             }],
             traversal_ceiling_reached: false,
             likely_tests_truncated: false,
@@ -3153,6 +3234,7 @@ mod tests {
             likely_tests_found: 0,
             impacted_symbols_found: 0,
             stopped_at_depth: None,
+            callers_report: None,
         };
 
         let formatted = format_blast_radius(&res);
@@ -3184,6 +3266,7 @@ mod tests {
                 line: 1,
                 depth: 1,
                 enclosing_symbol_name: None,
+                reason: None,
             },
             ImpactedSymbol {
                 name: "service_fn".into(),
@@ -3192,6 +3275,7 @@ mod tests {
                 line: 20,
                 depth: 1,
                 enclosing_symbol_name: None,
+                reason: None,
             },
             ImpactedSymbol {
                 name: "api_handler".into(),
@@ -3200,6 +3284,7 @@ mod tests {
                 line: 45,
                 depth: 2,
                 enclosing_symbol_name: None,
+                reason: None,
             },
         ];
 
@@ -3215,6 +3300,7 @@ mod tests {
             likely_tests_found: 0,
             impacted_symbols_found: 0,
             stopped_at_depth: None,
+            callers_report: None,
         };
 
         let formatted = format_blast_radius(&res);
@@ -3350,6 +3436,7 @@ mod tests {
                 line: i,
                 depth: 1,
                 enclosing_symbol_name: None,
+                reason: None,
             })
             .collect();
 
@@ -3365,6 +3452,7 @@ mod tests {
             likely_tests_found: 0,
             impacted_symbols_found: 0,
             stopped_at_depth: None,
+            callers_report: None,
         };
 
         let formatted = format_blast_radius(&res);
@@ -3385,6 +3473,7 @@ mod tests {
             likely_tests_found: 0,
             impacted_symbols_found: 0,
             stopped_at_depth: None,
+            callers_report: None,
         };
 
         let formatted = format_blast_radius(&res);
@@ -3411,6 +3500,72 @@ mod tests {
             "No test reaches it within depth 2; a larger `depth` may find some. Otherwise run the full test suite.\n"
         ));
         assert!(!formatted.contains("through the index"));
+    }
+
+    #[test]
+    fn blast_radius_with_callers_report_sites_never_claims_no_callers() {
+        let unresolved_only = BlastRadiusResult {
+            seed_type: "symbol".into(),
+            seeds: vec!["send".into()],
+            likely_tests: Vec::new(),
+            impacted_symbols: Vec::new(),
+            likely_tests_truncated: false,
+            impacted_symbols_truncated: false,
+            traversal_ceiling_reached: false,
+            limit_at_maximum: false,
+            likely_tests_found: 0,
+            impacted_symbols_found: 0,
+            stopped_at_depth: None,
+            callers_report: Some(CallersReportSites {
+                sites: 390,
+                unresolved: 154,
+                excluded: 236,
+                ..CallersReportSites::default()
+            }),
+        };
+        let formatted = format_blast_radius(&unresolved_only);
+        assert!(!formatted.contains("No downstream callers"), "{formatted}");
+        assert!(formatted.contains(
+            "### Downstream Impact (0 returned)\nThe index could not tie 154 sites of the name to this definition; find_references lists them.\n"
+        ), "{formatted}");
+
+        let excluded_only = BlastRadiusResult {
+            callers_report: Some(CallersReportSites {
+                sites: 2,
+                excluded: 2,
+                ..CallersReportSites::default()
+            }),
+            ..unresolved_only.clone()
+        };
+        let formatted = format_blast_radius(&excluded_only);
+        assert!(!formatted.contains("No downstream callers"), "{formatted}");
+        assert!(
+            formatted
+                .contains("find_references ties all 2 sites of the name to other definitions.\n"),
+            "{formatted}"
+        );
+
+        let test_callers_only = BlastRadiusResult {
+            callers_report: Some(CallersReportSites {
+                sites: 3,
+                likely: 2,
+                unresolved: 1,
+                ..CallersReportSites::default()
+            }),
+            ..unresolved_only.clone()
+        };
+        let formatted = format_blast_radius(&test_callers_only);
+        assert!(formatted.contains(
+            "Every caller that find_references ties to this definition is a test.\nThe index could not tie 1 more site of the name to this definition; find_references lists it.\n"
+        ), "{formatted}");
+
+        let no_sites = BlastRadiusResult {
+            callers_report: Some(CallersReportSites::default()),
+            ..unresolved_only
+        };
+        assert!(
+            format_blast_radius(&no_sites).contains("No downstream callers found within depth.\n")
+        );
     }
 
     fn skeleton_row(
@@ -3736,6 +3891,108 @@ mod tests {
              } // L11-52\n\
              \n\
              signal clicked(); // L60-60\n"
+        );
+    }
+
+    fn script_row(language: &str, kind: &str, name: &str, signature: &str, line: usize) -> Symbol {
+        Symbol {
+            language: language.into(),
+            ..skeleton_row(name, None, kind, name, signature, (line, line), None)
+        }
+    }
+
+    #[test]
+    fn a_skeleton_with_only_top_level_variables_and_imports_names_them() {
+        let syms = vec![
+            script_row(
+                "javascript",
+                "import",
+                "express",
+                "var express = require('../../')",
+                7,
+            ),
+            script_row(
+                "javascript",
+                "variable",
+                "app",
+                "var app = module.exports = express()",
+                8,
+            ),
+            script_row(
+                "javascript",
+                "import",
+                "logger",
+                "var logger = require('morgan')",
+                9,
+            ),
+            script_row(
+                "javascript",
+                "import",
+                "cookieParser",
+                "var cookieParser = require('cookie-parser')",
+                10,
+            ),
+            script_row("javascript", "variable", "minute", "var minute = 60000", 40),
+        ];
+
+        assert_eq!(
+            format_file_skeleton("examples/cookies/index.js", &syms, Some(53), 0),
+            "// File: examples/cookies/index.js (Lines 1-53)\n\
+             \n\
+             // Nothing to outline. Top-level rows: 3 imports (`express` L7, `logger` L9, `cookieParser` L10); 2 variables (`app` L8, `minute` L40).\n\
+             // get_symbol_body with one of these names and this file_path shows its source; read the file for the rest.\n"
+        );
+    }
+
+    #[test]
+    fn a_python_skeleton_with_only_imports_counts_them_and_names_the_first_three() {
+        let syms: Vec<Symbol> = ["json", "abort", "redirect", "Flask", "Blueprint"]
+            .iter()
+            .enumerate()
+            .map(|(index, name)| {
+                script_row(
+                    "python",
+                    "import",
+                    name,
+                    &format!("from .app import {name} as {name}"),
+                    index + 1,
+                )
+            })
+            .collect();
+
+        assert_eq!(
+            format_file_skeleton("src/flask/__init__.py", &syms, Some(39), 0),
+            "// File: src/flask/__init__.py (Lines 1-39)\n\
+             \n\
+             // Nothing to outline. Top-level rows: 5 imports (`json` L1, `abort` L2, `redirect` L3, +2 more).\n\
+             // get_symbol_body with one of these names and this file_path shows its source; read the file for the rest.\n"
+        );
+    }
+
+    #[test]
+    fn a_skeleton_that_shows_a_row_adds_no_summary_of_hidden_rows() {
+        let syms = vec![
+            script_row(
+                "javascript",
+                "import",
+                "express",
+                "var express = require('express')",
+                1,
+            ),
+            script_row("javascript", "function", "start", "function start()", 3),
+        ];
+
+        let out = format_file_skeleton("index.js", &syms, Some(5), 0);
+
+        assert!(out.contains("function start()"), "{out}");
+        assert!(!out.contains("Nothing to outline"), "{out}");
+    }
+
+    #[test]
+    fn a_skeleton_of_a_file_without_symbols_says_so() {
+        assert_eq!(
+            format_file_skeleton("notes.js", &[], Some(4), 0),
+            "// File: notes.js (Lines 1-4)\n\n// No symbols are indexed for this file.\n"
         );
     }
 

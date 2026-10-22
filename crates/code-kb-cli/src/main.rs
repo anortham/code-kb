@@ -1,5 +1,6 @@
 use clap::{Args, Parser, Subcommand};
 use std::path::{Path, PathBuf};
+use std::process::ExitCode;
 
 use code_kb_core::workspace::NO_PROJECT_MARKER_REASON;
 use code_kb_core::{
@@ -239,6 +240,9 @@ pub struct CheckArgs {
     /// Git revision to compare with (default: the session base, else HEAD).
     #[arg(long)]
     pub base: Option<String>,
+    /// Exit with code 3 after the report when a change has a proven site outside the diff (default: exit 0; errors exit 1; usage errors exit 2).
+    #[arg(long)]
+    pub fail_on_proven: bool,
 }
 
 #[derive(Debug, Args)]
@@ -327,7 +331,7 @@ pub struct HookArgs {
     pub event: String,
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() -> anyhow::Result<ExitCode> {
     let cli = Cli::parse();
 
     // Handle Hook command immediately without requiring workspace discovery or database
@@ -337,7 +341,7 @@ fn main() -> anyhow::Result<()> {
 
         if hooks::is_stop_event(event) {
             hooks::run_stop(event);
-            return Ok(());
+            return Ok(ExitCode::SUCCESS);
         }
 
         let content = if let Ok(custom) = std::fs::read_to_string("hooks/code-kb-routing-block.md")
@@ -378,7 +382,7 @@ fn main() -> anyhow::Result<()> {
         if event.eq_ignore_ascii_case("SessionStart") {
             hooks::record_session_start();
         }
-        return Ok(());
+        return Ok(ExitCode::SUCCESS);
     }
 
     // Discover workspace
@@ -452,7 +456,7 @@ fn main() -> anyhow::Result<()> {
         } else {
             print!("{}", code_kb_core::format_telemetry_summary(&summary));
         }
-        return Ok(());
+        return Ok(ExitCode::SUCCESS);
     }
 
     // Handle BugReport command (does not require artifact.db)
@@ -473,7 +477,7 @@ fn main() -> anyhow::Result<()> {
             println!("{}", bundle.markdown_body.trim_end());
             println!("\nGitHub Issue URL:\n{}", bundle.github_issue_url);
         }
-        return Ok(());
+        return Ok(ExitCode::SUCCESS);
     }
 
     // Handle Logs command (does not require existing database)
@@ -493,13 +497,13 @@ fn main() -> anyhow::Result<()> {
             }
             None => println!("No log files found yet in {}", log_dir.display()),
         }
-        return Ok(());
+        return Ok(ExitCode::SUCCESS);
     }
 
     // Handle Serve command
     if let Command::Serve(_) = &cli.command {
         let mut server = mcp::McpServer::new(workspace, cli.db.as_deref())?;
-        return server.run_stdio();
+        return server.run_stdio().map(|()| ExitCode::SUCCESS);
     }
 
     // Locate database
@@ -513,7 +517,7 @@ fn main() -> anyhow::Result<()> {
         );
         scan_workspace(&workspace, &db_path, args.force)?;
         println!("Database updated at '{}'.", db_path.display());
-        return Ok(());
+        return Ok(ExitCode::SUCCESS);
     }
 
     let project_root = Workspace::from_project_root(&workspace.canonical_root.to_string_lossy());
@@ -781,6 +785,9 @@ fn main() -> anyhow::Result<()> {
             } else {
                 print!("{}", format_edit_check(&check));
             }
+            if args.fail_on_proven && check.changes.iter().any(|change| !change.proven.is_empty()) {
+                return Ok(ExitCode::from(3));
+            }
         }
         Command::Facts(args) => {
             let rel_path = args.path.as_deref().map(|p| workspace.relativize_filter(p));
@@ -849,5 +856,5 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
-    Ok(())
+    Ok(ExitCode::SUCCESS)
 }
