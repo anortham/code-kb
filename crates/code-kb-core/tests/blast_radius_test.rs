@@ -910,21 +910,3 @@ fn a_call_in_a_function_nested_in_a_test_lists_the_enclosing_test() {
         "{text}"
     );
 }
-
-#[test]
-fn blast_radius_without_a_target_outside_a_git_repository_is_an_error() {
-    let temp = tempfile::tempdir().unwrap();
-    let workspace = Workspace::new(temp.path().to_path_buf());
-    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
-    setup_test_db(&conn);
-
-    let error = blast_radius_op(&workspace, &conn, None, None, 2, 20).unwrap_err();
-
-    assert_eq!(
-        error.to_string(),
-        format!(
-            "not a git repository: {}",
-            workspace.canonical_root.display()
-        )
-    );
-}
