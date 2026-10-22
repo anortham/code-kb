@@ -34,14 +34,14 @@ locked packages.
 ## Run and score
 
 ```
-scripts/bug_replay.py run --code-kb PATH --out DIR [--repo NAME] [--split dev|holdout|all]
+scripts/bug_replay.py run --code-kb PATH --out DIR [--repo NAME] [--split dev|holdout|all] [--depth N]
 scripts/bug_replay.py score --run DIR [--split dev|holdout|all] [--json]
 ```
 
 - `run` checks out each commit in a detached worktree under `<out>/trees/` and records
   `code-kb blast-radius --json --limit 200` for two seeds: the innermost function, method, or type
   that holds the bug line (`--symbol-id`), and the git diff with the bug applied (no target). The
-  depth is the default, 2. The run records the binary's SHA-256 fingerprint, as `edit_replay.py`
+  depth is the binary's default, or `--depth`. The run records the binary's SHA-256 fingerprint, as `edit_replay.py`
   does; a rebuilt binary needs a new output directory.
 - `score` prints one row per repository and seed:
   - the failing test files and tests that the answer left out, and the bugs whose failing files

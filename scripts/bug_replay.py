@@ -9,7 +9,7 @@ diff of the bug, and `score` counts the failing tests the answers left out.
 Usage:
   scripts/bug_replay.py truth --repo NAME [--commits 50] [--tries 4]
   scripts/bug_replay.py recheck --repo NAME
-  scripts/bug_replay.py run --code-kb PATH --out DIR [--repo NAME] [--split dev|holdout|all]
+  scripts/bug_replay.py run --code-kb PATH --out DIR [--repo NAME] [--split dev|holdout|all] [--depth N]
   scripts/bug_replay.py score --run DIR [--split dev|holdout|all] [--json]
 
 `run` and `score` take the dev half unless `--split` names another; tune on dev only.
@@ -488,19 +488,20 @@ def trim_answer(answer):
     return trimmed
 
 
-def run_case(binary, tree, case):
+def run_case(binary, tree, case, depth=None):
     checkout(tree, case["commit"])
     mutant = case["mutant"]
     record = {"repo": case["repo"], "language": case["language"], "commit": case["commit"], "split": case["split"],
               "path": mutant["path"], "line": mutant["line"]}
+    depth_args = ("--depth", str(depth)) if depth else ()
     blast(binary, tree, "--file", mutant["path"], "--depth", "1")
     symbol = enclosing_symbol(tree, mutant["path"], mutant["line"])
     if symbol:
         record["symbol"] = {"id": symbol[0], "name": symbol[1], "kind": symbol[2]}
-        record["symbol_answer"] = trim_answer(blast(binary, tree, "--symbol-id", symbol[0]))
+        record["symbol_answer"] = trim_answer(blast(binary, tree, "--symbol-id", symbol[0], *depth_args))
     apply_mutant(tree, mutant)
     try:
-        record["diff_answer"] = trim_answer(blast(binary, tree))
+        record["diff_answer"] = trim_answer(blast(binary, tree, *depth_args))
     finally:
         git(tree, "checkout", "-q", "--", mutant["path"])
     return record
@@ -531,7 +532,7 @@ def cmd_run(args):
             continue
         tree = replay_tree(clone_dir(REPOS_DIR, corpus_entry(case["repo"])), out / "trees", case["repo"])
         started = time.monotonic()
-        record = run_case(binary, tree, case)
+        record = run_case(binary, tree, case, args.depth)
         record["seconds"] = round(time.monotonic() - started, 1)
         with results.open("a") as sink:
             sink.write(json.dumps(record) + "\n")
@@ -655,6 +656,7 @@ def main(argv=None):
     run.add_argument("--out", required=True)
     run.add_argument("--repo", action="append")
     run.add_argument("--split", choices=("dev", "holdout", "all"), default="dev")
+    run.add_argument("--depth", type=int, help="the blast-radius depth; the binary's default when left out")
     run.set_defaults(func=cmd_run)
     scored = commands.add_parser("score", help="count the failing tests the answers left out")
     scored.add_argument("--run", required=True)
