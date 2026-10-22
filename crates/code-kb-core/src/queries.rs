@@ -5,9 +5,9 @@ use thiserror::Error;
 
 use crate::db::local_variable_predicate;
 use crate::models::{
-    BlastRadiusResult, FileFact, ImpactedSymbol, LiteralFact, ReferenceSite, SearchExplain,
-    StructuralFact, Symbol, SymbolSearchResult, TestTarget, TypeFact, has_generated_lambda_name,
-    is_generated_lambda_name,
+    BlastRadiusResult, FileFact, ImpactedSymbol, LiteralFact, OpenEnd, ReferenceSite,
+    SearchExplain, StructuralFact, Symbol, SymbolSearchResult, TestTarget, TypeFact,
+    has_generated_lambda_name, is_generated_lambda_name,
 };
 
 #[derive(Debug, Error)]
@@ -6019,7 +6019,7 @@ pub fn compute_blast_radius_scoped(
     )
 }
 
-const MAX_BLAST_DEPTH: usize = 5;
+pub(crate) const MAX_BLAST_DEPTH: usize = 5;
 const MAX_ENCLOSING_SCOPES: usize = 8;
 
 /// Compute blast radius with exact current-index IDs kept as traversal seeds.
@@ -6041,6 +6041,28 @@ pub fn compute_blast_radius_scoped_with_ids(
         None,
         max_depth,
         limit,
+        Some(MAX_BLAST_DEPTH),
+    )
+}
+
+/// Compute blast radius from the callers of a target that only its callers report found, one
+/// level below the target, so a walk to the largest depth counts the tests past `max_depth`.
+pub(crate) fn compute_blast_radius_from_callers(
+    conn: &Connection,
+    caller_ids: &[&str],
+    max_depth: usize,
+    limit: usize,
+) -> Result<BlastRadiusResult, QueryError> {
+    blast_radius_walk(
+        conn,
+        &[],
+        caller_ids,
+        None,
+        &[],
+        None,
+        max_depth,
+        limit,
+        Some(MAX_BLAST_DEPTH - 1),
     )
 }
 
@@ -6063,6 +6085,7 @@ pub fn compute_blast_radius_for_changes(
         Some(changes),
         max_depth,
         limit,
+        Some(MAX_BLAST_DEPTH),
     )
 }
 
@@ -6076,6 +6099,7 @@ fn blast_radius_walk(
     changed: Option<&BTreeMap<String, Vec<(usize, usize)>>>,
     max_depth: usize,
     limit: usize,
+    probe_depth: Option<usize>,
 ) -> Result<BlastRadiusResult, QueryError> {
     validate_result_limit(limit)?;
     let max_depth = max_depth.min(MAX_BLAST_DEPTH);
@@ -6143,6 +6167,10 @@ fn blast_radius_walk(
             impacted_symbols_found: 0,
             stopped_at_depth: None,
             callers_report: None,
+            open_ends: Vec::new(),
+            tests_past_depth: None,
+            tests_past_depth_cut: false,
+            past_depth_tests: Vec::new(),
         });
     };
 
@@ -6212,79 +6240,9 @@ fn blast_radius_walk(
     let mut impacted_symbols = Vec::new();
     let mut seen_test_keys = HashSet::new();
 
-    let mut recursive_branches = Vec::new();
-
-    if has_relationships {
-        recursive_branches.push(format!(
-            "SELECT r.from_symbol_id, iw.depth + 1, iw.via
-             FROM relationships r
-             JOIN impact_walk iw ON r.to_symbol_id = iw.symbol_id
-             JOIN symbols s_from ON r.from_symbol_id = s_from.symbol_id
-             WHERE iw.depth < ?{max_depth_idx}
-               AND s_from.kind NOT IN ({LOW_SIGNAL_KINDS_SQL})"
-        ));
-    }
-
-    if has_pending {
-        let (parent_join, ns_condition) = if conn
-            .query_row(
-                "SELECT 1 FROM pragma_table_info('pending_relationships') WHERE name='target_namespace_json'",
-                [],
-                |_| Ok(true),
-            )
-            .unwrap_or(false)
-        {
-            (
-                "LEFT JOIN symbols s_target_parent ON s_target.parent_symbol_id = s_target_parent.symbol_id
-            LEFT JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id",
-                format!("AND {pred}", pred = pending_target_predicate(conn, "s_target", "s_target_parent")),
-            )
-        } else {
-            ("", String::new())
-        };
-
-        recursive_branches.push(format!(
-            "SELECT p.from_symbol_id, iw.depth + 1, iw.via
-             FROM pending_relationships p
-             JOIN symbols s_target ON p.target_terminal_name = s_target.name
-             JOIN impact_walk iw ON s_target.symbol_id = iw.symbol_id
-             {parent_join}
-             WHERE iw.depth < ?{max_depth_idx}
-               AND s_target.kind NOT IN ({LOW_SIGNAL_KINDS_SQL})
-               {ns_condition}"
-        ));
-    }
-
-    // A constructor runs wherever its class is built: `Flask()` reaches `Flask.__init__`. Rows
-    // reached only this way (`via` 1) sort last: nearly every test builds the app.
-    if has_relationships {
-        recursive_branches.push(format!(
-            "SELECT r.from_symbol_id, iw.depth + 1, 1
-             FROM impact_walk iw
-             CROSS JOIN symbols ctor ON ctor.symbol_id = iw.symbol_id
-             JOIN relationships r ON r.to_symbol_id = ctor.parent_symbol_id
-             WHERE iw.depth < ?{max_depth_idx}
-               AND ctor.kind = 'constructor'
-               AND +r.kind = 'calls'"
-        ));
-    }
-    if has_pending && has_pending_namespace_column(conn) {
-        recursive_branches.push(format!(
-            "SELECT p.from_symbol_id, iw.depth + 1, 1
-             FROM impact_walk iw
-             CROSS JOIN symbols ctor ON ctor.symbol_id = iw.symbol_id
-             CROSS JOIN symbols s_target ON s_target.symbol_id = ctor.parent_symbol_id
-             JOIN pending_relationships p ON p.target_terminal_name = s_target.name
-             LEFT JOIN symbols s_target_parent ON s_target.parent_symbol_id = s_target_parent.symbol_id
-             LEFT JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
-             WHERE iw.depth < ?{max_depth_idx}
-               AND ctor.kind = 'constructor'
-               AND s_target.kind IN ('class', 'struct', 'record')
-               AND +p.kind = 'calls'
-               AND {pred}",
-            pred = pending_target_predicate(conn, "s_target", "s_target_parent")
-        ));
-    }
+    let depth_bound = format!("?{max_depth_idx}");
+    let recursive_branches =
+        walk_caller_branches(conn, has_relationships, has_pending, &depth_bound);
 
     let lifecycle = if has_column(conn, "symbols", "test_lifecycle") {
         "COALESCE(s.test_lifecycle, 0) != 0"
@@ -6293,6 +6251,7 @@ fn blast_radius_walk(
     };
     let mut fixtures = Vec::new();
     let mut setups = Vec::new();
+    let mut reached = Vec::new();
     let mut constructor_only_test_keys = HashSet::new();
     let mut non_constructor_test_keys = HashSet::new();
     let target_ids: HashSet<&str> = resolved_seed_symbols
@@ -6327,6 +6286,17 @@ fn blast_radius_walk(
             || seed.test_container
             || seed.is_fixture
             || (is_test_path(&seed.path) && (seed.in_test_class || names_a_test(&seed.name)));
+        if !is_test_target && can_be_open_end(&seed.kind) {
+            reached.push(ReachedSymbol {
+                symbol_id: seed.symbol_id.clone(),
+                name: seed.name.clone(),
+                kind: seed.kind.clone(),
+                path: seed.path.clone(),
+                line: seed.start_line,
+                depth: 0,
+                parent: seed.parent.clone(),
+            });
+        }
         if !is_test_target || (origin != SeedOrigin::Target && !callable) {
             continue;
         }
@@ -6363,7 +6333,7 @@ fn blast_radius_walk(
                    EXISTS (SELECT 1 FROM symbols owner
                            WHERE owner.symbol_id = s.parent_symbol_id
                              AND COALESCE(owner.test_container, 0) != 0) AS in_test_class,
-                   s.language, s.signature, MIN(iw.depth) = 0 AS is_seed
+                   s.language, s.signature, MIN(iw.depth) = 0 AS is_seed, s.symbol_id
             FROM impact_walk iw
             CROSS JOIN symbols s ON iw.symbol_id = s.symbol_id
             WHERE s.kind NOT IN ({LOW_SIGNAL_KINDS_SQL})
@@ -6398,6 +6368,7 @@ fn blast_radius_walk(
                 row.get::<_, String>(11)?,
                 row.get::<_, Option<String>>(12)?,
                 row.get::<_, bool>(13)?,
+                row.get::<_, String>(14)?,
             ))
         })?;
 
@@ -6417,6 +6388,7 @@ fn blast_radius_walk(
                 language,
                 signature,
                 is_seed,
+                symbol_id,
             ) = r?;
             if depth > max_depth {
                 callers_beyond_depth = true;
@@ -6503,6 +6475,17 @@ fn blast_radius_walk(
                     });
                 }
             } else {
+                if can_be_open_end(&kind) {
+                    reached.push(ReachedSymbol {
+                        symbol_id,
+                        name: name.clone(),
+                        kind: kind.clone(),
+                        path: path.clone(),
+                        line,
+                        depth,
+                        parent: parent.clone(),
+                    });
+                }
                 let enclosing_symbol_name =
                     if is_generated_lambda_name(&name, &language, &kind, signature.as_deref()) {
                         match parent.as_deref() {
@@ -6606,6 +6589,41 @@ fn blast_radius_walk(
         }
         likely_tests = other_tests;
     }
+    let open_ends = if probe_depth.is_none() {
+        Vec::new()
+    } else {
+        uncalled(conn, has_relationships, has_pending, reached)?
+    };
+    let mut tests_past_depth = None;
+    let mut tests_past_depth_cut = false;
+    let mut past_depth_tests = Vec::new();
+    if let Some(probe_depth) =
+        probe_depth.filter(|&depth| callers_beyond_depth && depth > max_depth)
+    {
+        let deeper = blast_radius_walk(
+            conn,
+            seed_symbols,
+            seed_ids,
+            symbol_path_filter,
+            seed_paths,
+            changed,
+            probe_depth,
+            MAX_RESULT_LIMIT,
+            None,
+        )?;
+        let listed: HashSet<(&str, usize)> = likely_tests
+            .iter()
+            .map(|test| (test.path.as_str(), test.line))
+            .collect();
+        past_depth_tests = deeper
+            .likely_tests
+            .iter()
+            .filter(|test| !listed.contains(&(test.path.as_str(), test.line)))
+            .map(|test| (test.path.clone(), test.line))
+            .collect();
+        tests_past_depth = Some(past_depth_tests.len());
+        tests_past_depth_cut = deeper.traversal_ceiling_reached;
+    }
     let likely_tests_found = likely_tests.len();
     let impacted_symbols_found = impacted_symbols.len();
     let likely_tests_truncated = likely_tests.len() > limit;
@@ -6630,7 +6648,159 @@ fn blast_radius_walk(
         impacted_symbols_found,
         stopped_at_depth: callers_beyond_depth.then_some(max_depth),
         callers_report: None,
+        open_ends,
+        tests_past_depth,
+        tests_past_depth_cut,
+        past_depth_tests,
     })
+}
+
+/// A symbol the walk reached whose callers it may not have seen.
+struct ReachedSymbol {
+    symbol_id: String,
+    name: String,
+    kind: String,
+    path: String,
+    line: usize,
+    depth: usize,
+    parent: Option<String>,
+}
+
+fn can_be_open_end(kind: &str) -> bool {
+    matches!(kind, "function" | "method" | "constructor")
+}
+
+/// The reached symbols that no caller step of the walk leaves, other than through a call to
+/// themselves: the runtime, a framework, a library, or a call the index cannot tie calls them.
+fn uncalled(
+    conn: &Connection,
+    has_relationships: bool,
+    has_pending: bool,
+    reached: Vec<ReachedSymbol>,
+) -> Result<Vec<OpenEnd>, QueryError> {
+    let branches = walk_caller_branches(conn, has_relationships, has_pending, "?2");
+    if reached.is_empty() || branches.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut called = conn.prepare(&format!(
+        "WITH impact_walk(symbol_id, depth, via) AS (SELECT ?1, 0, 0)
+         SELECT EXISTS (
+             SELECT 1 FROM ({branches})
+             WHERE from_symbol_id IS NOT NULL AND from_symbol_id != ?1
+         )",
+        branches = branches.join("\n UNION \n")
+    ))?;
+    let mut owner = conn.prepare(&format!(
+        "SELECT name FROM symbols WHERE symbol_id = ?1 AND kind IN {OWNER_KINDS}"
+    ))?;
+    let mut seen = HashSet::new();
+    let mut open_ends = Vec::new();
+    for symbol in reached {
+        if !seen.insert(symbol.symbol_id.clone())
+            || called.query_row(params![symbol.symbol_id, 1], |row| row.get::<_, bool>(0))?
+        {
+            continue;
+        }
+        let owner = match symbol.parent.as_deref() {
+            Some(parent) => owner
+                .query_row(params![parent], |row| row.get::<_, String>(0))
+                .optional()?,
+            None => None,
+        };
+        open_ends.push(OpenEnd {
+            name: symbol.name,
+            kind: symbol.kind,
+            path: symbol.path,
+            line: symbol.line,
+            depth: symbol.depth,
+            owner,
+        });
+    }
+    Ok(open_ends)
+}
+
+/// The steps from a symbol of `impact_walk` to its callers: resolved and pending calls by name, and
+/// the calls that build a constructor's class. `depth_bound` is the SQL value that bounds the depth.
+fn walk_caller_branches(
+    conn: &Connection,
+    has_relationships: bool,
+    has_pending: bool,
+    depth_bound: &str,
+) -> Vec<String> {
+    let mut recursive_branches = Vec::new();
+
+    if has_relationships {
+        recursive_branches.push(format!(
+            "SELECT r.from_symbol_id, iw.depth + 1, iw.via
+             FROM relationships r
+             JOIN impact_walk iw ON r.to_symbol_id = iw.symbol_id
+             JOIN symbols s_from ON r.from_symbol_id = s_from.symbol_id
+             WHERE iw.depth < {depth_bound}
+               AND s_from.kind NOT IN ({LOW_SIGNAL_KINDS_SQL})"
+        ));
+    }
+
+    if has_pending {
+        let (parent_join, ns_condition) = if conn
+            .query_row(
+                "SELECT 1 FROM pragma_table_info('pending_relationships') WHERE name='target_namespace_json'",
+                [],
+                |_| Ok(true),
+            )
+            .unwrap_or(false)
+        {
+            (
+                "LEFT JOIN symbols s_target_parent ON s_target.parent_symbol_id = s_target_parent.symbol_id
+            LEFT JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id",
+                format!("AND {pred}", pred = pending_target_predicate(conn, "s_target", "s_target_parent")),
+            )
+        } else {
+            ("", String::new())
+        };
+
+        recursive_branches.push(format!(
+            "SELECT p.from_symbol_id, iw.depth + 1, iw.via
+             FROM pending_relationships p
+             JOIN symbols s_target ON p.target_terminal_name = s_target.name
+             JOIN impact_walk iw ON s_target.symbol_id = iw.symbol_id
+             {parent_join}
+             WHERE iw.depth < {depth_bound}
+               AND s_target.kind NOT IN ({LOW_SIGNAL_KINDS_SQL})
+               {ns_condition}"
+        ));
+    }
+
+    // A constructor runs wherever its class is built: `Flask()` reaches `Flask.__init__`. Rows
+    // reached only this way (`via` 1) sort last: nearly every test builds the app.
+    if has_relationships {
+        recursive_branches.push(format!(
+            "SELECT r.from_symbol_id, iw.depth + 1, 1
+             FROM impact_walk iw
+             CROSS JOIN symbols ctor ON ctor.symbol_id = iw.symbol_id
+             JOIN relationships r ON r.to_symbol_id = ctor.parent_symbol_id
+             WHERE iw.depth < {depth_bound}
+               AND ctor.kind = 'constructor'
+               AND +r.kind = 'calls'"
+        ));
+    }
+    if has_pending && has_pending_namespace_column(conn) {
+        recursive_branches.push(format!(
+            "SELECT p.from_symbol_id, iw.depth + 1, 1
+             FROM impact_walk iw
+             CROSS JOIN symbols ctor ON ctor.symbol_id = iw.symbol_id
+             CROSS JOIN symbols s_target ON s_target.symbol_id = ctor.parent_symbol_id
+             JOIN pending_relationships p ON p.target_terminal_name = s_target.name
+             LEFT JOIN symbols s_target_parent ON s_target.parent_symbol_id = s_target_parent.symbol_id
+             LEFT JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
+             WHERE iw.depth < {depth_bound}
+               AND ctor.kind = 'constructor'
+               AND s_target.kind IN ('class', 'struct', 'record')
+               AND +p.kind = 'calls'
+               AND {pred}",
+            pred = pending_target_predicate(conn, "s_target", "s_target_parent")
+        ));
+    }
+    recursive_branches
 }
 
 /// The test that encloses a function defined inside it, as `index` inside `test_url_processors`:
@@ -6809,7 +6979,6 @@ fn fixture_users(
     Ok(users)
 }
 
-/// The tests declared in the class `class_id`, without its setup and teardown members.
 /// Why a seed symbol of a walk is there: it is the target, it is in a target file, or a diff
 /// changed its lines.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -6944,6 +7113,7 @@ fn is_pytest_fixture(name: &str, path: &str) -> bool {
             .any(|prefix| lowered.starts_with(prefix))
 }
 
+/// The tests declared in the class `class_id`, without its setup and teardown members.
 fn tests_in_class(conn: &Connection, class_id: &str) -> Result<Vec<TestTarget>, QueryError> {
     let not_lifecycle = if has_column(conn, "symbols", "test_lifecycle") {
         "COALESCE(test_lifecycle, 0) = 0"

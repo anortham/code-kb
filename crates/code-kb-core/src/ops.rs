@@ -10,7 +10,7 @@ use crate::formatters::{
     format_find_symbol_results, format_unindexed_file, render_outline_tree,
 };
 use crate::models::{
-    BlastRadiusResult, CallersReportSites, ContextSlice, ImpactedSymbol, LabeledSite,
+    BlastRadiusResult, CallersReportSites, ContextSlice, ImpactedSymbol, LabeledSite, OpenEnd,
     ReferenceReport, SiteLabel, Symbol, SymbolSearchResult, TestTarget, is_generated_lambda_name,
 };
 use crate::queries::{self, QueryError};
@@ -752,7 +752,8 @@ pub fn blast_radius_selected_op(
             if max_depth == 0 { 2 } else { max_depth.min(5) },
             limit,
         )?;
-        return with_calling_tests(workspace, conn, Some(selected), res, limit);
+        let depth = if max_depth == 0 { 2 } else { max_depth.min(5) };
+        return with_calling_tests(workspace, conn, Some(selected), res, depth, limit);
     }
     let symbol = selector.as_ref().and_then(|selector| match selector {
         SymbolSelector::Name(name) => Some(name.as_str()),
@@ -798,18 +799,21 @@ pub fn blast_radius_selected_op(
         [name] => select_reference_target(conn, name, symbol_path_filter.as_deref()).ok(),
         _ => None,
     };
-    with_calling_tests(workspace, conn, target, res, limit)
+    with_calling_tests(workspace, conn, target, res, depth, limit)
 }
 
 /// Fills what the walk left empty from the callers report of `target`: the callers of its proven
-/// and likely sites when the walk found no impacted symbol, and its tests when the walk found no
-/// test, or `target` itself when it is a test. The walk follows resolved and pending rows by name,
-/// and the report also proves a call through a receiver's type.
+/// and likely sites when the walk found no impacted symbol, and its tests, or `target` itself when
+/// it is a test. The report's tests lead when the walk found no test and follow the walk's tests
+/// otherwise. The walk follows resolved and pending rows by name, and the report also proves a
+/// call through a receiver's type, so the walk goes on from the callers the report found, one
+/// level deeper.
 fn with_calling_tests(
     workspace: &Workspace,
     conn: &Connection,
     target: Option<Symbol>,
     mut res: BlastRadiusResult,
+    depth: usize,
     limit: usize,
 ) -> Result<BlastRadiusResult, OpError> {
     let Some(target) = target else {
@@ -827,8 +831,39 @@ fn with_calling_tests(
     let Ok(report) = reference_report_for_impact(conn, &workspace.root, &target) else {
         return Ok(res);
     };
+    if report.counts.proven + report.counts.likely > 0 {
+        let path = target.path.replace('\\', "/");
+        res.open_ends
+            .retain(|end| end.path != path || end.line != target.start_line);
+    }
+    let mut deeper = None;
     if needs_callers {
-        res.impacted_symbols = report_callers(conn, &report)?;
+        let callers = report_callers(conn, &report)?;
+        let ids: Vec<&str> = callers.iter().filter_map(|(id, _)| id.as_deref()).collect();
+        if depth > 1 && !ids.is_empty() {
+            deeper = Some(queries::compute_blast_radius_from_callers(
+                conn,
+                &ids,
+                depth - 1,
+                limit,
+            )?);
+        }
+        res.impacted_symbols = callers.into_iter().map(|(_, row)| row).collect();
+        if let Some(deeper) = &deeper {
+            let mut seen: HashSet<(String, usize)> = res
+                .impacted_symbols
+                .iter()
+                .map(|row| (row.path.clone(), row.line))
+                .collect();
+            for row in &deeper.impacted_symbols {
+                if seen.insert((row.path.clone(), row.line)) {
+                    res.impacted_symbols.push(ImpactedSymbol {
+                        depth: row.depth + 1,
+                        ..row.clone()
+                    });
+                }
+            }
+        }
         res.impacted_symbols_found = res.impacted_symbols.len();
         res.impacted_symbols_truncated = res.impacted_symbols.len() > limit;
         res.impacted_symbols.truncate(limit);
@@ -840,10 +875,13 @@ fn with_calling_tests(
             excluded: report.counts.excluded,
         });
     }
-    if !needs_tests {
+    if let Some(deeper) = &deeper {
+        follow_deeper(&mut res, deeper, depth);
+    }
+    if res.likely_tests_truncated {
         return Ok(res);
     }
-    res.likely_tests = report
+    let report_tests: Vec<TestTarget> = report
         .tests
         .into_iter()
         .map(|test| TestTarget {
@@ -858,7 +896,14 @@ fn with_calling_tests(
             line: test.line,
         })
         .collect();
-    if res.likely_tests.is_empty() && (target.is_test || target.test_container) {
+    let walked = std::mem::take(&mut res.likely_tests);
+    let (first, then) = if needs_tests {
+        (report_tests, walked)
+    } else {
+        (walked, report_tests)
+    };
+    res.likely_tests = first;
+    if res.likely_tests.is_empty() && then.is_empty() && (target.is_test || target.test_container) {
         res.likely_tests.push(TestTarget {
             name: target.name,
             path: target.path.replace('\\', "/"),
@@ -866,18 +911,99 @@ fn with_calling_tests(
             reason: "the target is a test".to_string(),
         });
     }
+    let mut seen: HashSet<(String, usize)> = res
+        .likely_tests
+        .iter()
+        .map(|test| (test.path.clone(), test.line))
+        .collect();
+    res.likely_tests.extend(
+        then.into_iter()
+            .filter(|test| seen.insert((test.path.clone(), test.line))),
+    );
+    if res.tests_past_depth.is_some() {
+        res.past_depth_tests.retain(|key| !seen.contains(key));
+        res.tests_past_depth = Some(res.past_depth_tests.len());
+    }
     res.likely_tests_found = res.likely_tests.len();
-    res.likely_tests_truncated = res.likely_tests.len() > limit;
+    res.likely_tests_truncated |= res.likely_tests.len() > limit;
     res.likely_tests.truncate(limit);
     Ok(res)
 }
 
 /// The callers of the report's proven and likely sites that are not tests, as depth-1 rows in
 /// report order. A site outside any symbol is a row of its own at the site's line.
+/// Adds what the walk from the report's callers found: its tests, its open ends, and whether it
+/// stopped at the depth or the ceiling. Its rows sit one level below the target's callers.
+fn follow_deeper(res: &mut BlastRadiusResult, deeper: &BlastRadiusResult, depth: usize) {
+    let mut tests: HashSet<(String, usize)> = res
+        .likely_tests
+        .iter()
+        .map(|test| (test.path.clone(), test.line))
+        .collect();
+    for test in &deeper.likely_tests {
+        if tests.insert((test.path.clone(), test.line)) {
+            res.likely_tests.push(TestTarget {
+                reason: one_level_deeper(&test.reason),
+                ..test.clone()
+            });
+        }
+    }
+    res.likely_tests_found = res.likely_tests.len();
+    let mut ends: HashSet<(String, usize)> = res
+        .open_ends
+        .iter()
+        .map(|end| (end.path.clone(), end.line))
+        .collect();
+    for end in &deeper.open_ends {
+        if ends.insert((end.path.clone(), end.line)) {
+            res.open_ends.push(OpenEnd {
+                depth: end.depth + 1,
+                ..end.clone()
+            });
+        }
+    }
+    if deeper.stopped_at_depth.is_some() {
+        res.stopped_at_depth = Some(depth);
+    }
+    if deeper.tests_past_depth.is_some() {
+        res.past_depth_tests = deeper
+            .past_depth_tests
+            .iter()
+            .filter(|key| !tests.contains(*key))
+            .cloned()
+            .collect();
+        res.tests_past_depth = Some(res.past_depth_tests.len());
+        res.tests_past_depth_cut = deeper.tests_past_depth_cut;
+    }
+    res.traversal_ceiling_reached |= deeper.traversal_ceiling_reached;
+    res.likely_tests_truncated |= deeper.likely_tests_truncated;
+}
+
+/// The reason of a test row one call further from the target: `direct caller` becomes
+/// `indirect caller [depth 2]`, and `indirect caller [depth N]` becomes depth N + 1.
+fn one_level_deeper(reason: &str) -> String {
+    const INDIRECT: &str = "indirect caller [depth ";
+    if let Some(start) = reason.find(INDIRECT) {
+        let digits = start + INDIRECT.len();
+        if let Some(end) = reason[digits..].find(']')
+            && let Ok(depth) = reason[digits..digits + end].parse::<usize>()
+        {
+            return format!(
+                "{}{INDIRECT}{}{}",
+                &reason[..start],
+                depth + 1,
+                &reason[digits + end..]
+            );
+        }
+        return reason.to_string();
+    }
+    reason.replacen("direct caller", "indirect caller [depth 2]", 1)
+}
+
 fn report_callers(
     conn: &Connection,
     report: &ReferenceReport,
-) -> Result<Vec<ImpactedSymbol>, OpError> {
+) -> Result<Vec<(Option<String>, ImpactedSymbol)>, OpError> {
     let tests: HashSet<&str> = report
         .tests
         .iter()
@@ -914,15 +1040,18 @@ fn report_callers(
         );
         if caller.is_empty() {
             let site = &sites[0].site;
-            rows.push(ImpactedSymbol {
-                name: "(no enclosing symbol)".to_string(),
-                kind: "code".to_string(),
-                path: site.path.replace('\\', "/"),
-                line: site.start_line.unwrap_or(0),
-                depth: 1,
-                enclosing_symbol_name: None,
-                reason,
-            });
+            rows.push((
+                None,
+                ImpactedSymbol {
+                    name: "(no enclosing symbol)".to_string(),
+                    kind: "code".to_string(),
+                    path: site.path.replace('\\', "/"),
+                    line: site.start_line.unwrap_or(0),
+                    depth: 1,
+                    enclosing_symbol_name: None,
+                    reason,
+                },
+            ));
             continue;
         }
         if tests.contains(caller) {
@@ -954,15 +1083,18 @@ fn report_callers(
         } else {
             None
         };
-        rows.push(ImpactedSymbol {
-            name: symbol.name,
-            kind: symbol.kind,
-            path: symbol.path.replace('\\', "/"),
-            line: symbol.start_line,
-            depth: 1,
-            enclosing_symbol_name,
-            reason,
-        });
+        rows.push((
+            Some(symbol.symbol_id),
+            ImpactedSymbol {
+                name: symbol.name,
+                kind: symbol.kind,
+                path: symbol.path.replace('\\', "/"),
+                line: symbol.start_line,
+                depth: 1,
+                enclosing_symbol_name,
+                reason,
+            },
+        ));
     }
     Ok(rows)
 }
@@ -973,8 +1105,21 @@ mod tests {
 
     use rusqlite::Connection;
 
-    use super::codebase_outline_op;
+    use super::{codebase_outline_op, one_level_deeper};
     use crate::workspace::Workspace;
+
+    #[test]
+    fn a_test_one_call_further_from_the_target_is_one_level_deeper() {
+        assert_eq!(
+            one_level_deeper("direct caller"),
+            "indirect caller [depth 2]"
+        );
+        assert_eq!(
+            one_level_deeper("encloses `index` (indirect caller [depth 2])"),
+            "encloses `index` (indirect caller [depth 3])"
+        );
+        assert_eq!(one_level_deeper("uses fixture `app`"), "uses fixture `app`");
+    }
 
     #[test]
     fn codebase_outline_accepts_absolute_workspace_root_filter() {

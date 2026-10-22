@@ -1146,3 +1146,185 @@ fn a_test_in_a_changed_test_file_that_calls_changed_code_stays_a_test_to_run() {
         format_blast_radius(&result)
     );
 }
+
+const WSGI_APP: &str = "class App:\n    def __call__(self, environ):\n        return self.wsgi_app(environ)\n\n    def wsgi_app(self, environ):\n        return handle(environ)\n\n\ndef handle(environ):\n    return environ\n";
+
+fn open_ends(result: &code_kb_core::BlastRadiusResult) -> Vec<(&str, &str, usize)> {
+    result
+        .open_ends
+        .iter()
+        .map(|end| (end.name.as_str(), end.path.as_str(), end.line))
+        .collect()
+}
+
+#[test]
+fn a_method_that_no_indexed_code_calls_is_an_open_end_of_the_walk() {
+    let (_temp, workspace, conn) = scanned(&[
+        ("pyproject.toml", "[project]\nname = \"pkg\"\n"),
+        ("src/pkg/__init__.py", ""),
+        ("src/pkg/app.py", WSGI_APP),
+        (
+            "tests/test_app.py",
+            "from pkg.app import handle\n\n\ndef test_handle():\n    assert handle(1) == 1\n",
+        ),
+    ]);
+
+    let result = blast_radius_op(&workspace, &conn, Some("handle"), None, 2, 20).unwrap();
+
+    let text = format_blast_radius(&result);
+    assert_eq!(
+        reasons(&result),
+        [("test_handle", "direct caller")],
+        "{text}"
+    );
+    assert_eq!(
+        open_ends(&result),
+        [("__call__", "src/pkg/app.py", 2)],
+        "{text}"
+    );
+    assert!(
+        text.contains("No indexed code calls these symbols"),
+        "{text}"
+    );
+    assert!(
+        text.contains("  - method `App.__call__` (src/pkg/app.py:2)"),
+        "{text}"
+    );
+    let json = serde_json::to_value(&result).unwrap();
+    assert_eq!(json["open_ends"][0]["name"], "__call__");
+}
+
+#[test]
+fn a_walk_whose_every_caller_leads_to_a_test_has_no_open_end() {
+    let (_temp, workspace, conn) = scanned(&[
+        ("pyproject.toml", "[project]\nname = \"pkg\"\n"),
+        ("src/pkg/__init__.py", ""),
+        (
+            "src/pkg/util.py",
+            "def helper():\n    return 1\n\n\ndef outer():\n    return helper()\n",
+        ),
+        (
+            "tests/test_util.py",
+            "from pkg.util import outer\n\n\ndef test_outer():\n    assert outer() == 1\n",
+        ),
+    ]);
+
+    let result = blast_radius_op(&workspace, &conn, Some("helper"), None, 3, 20).unwrap();
+
+    let text = format_blast_radius(&result);
+    assert_eq!(
+        reasons(&result),
+        [("test_outer", "indirect caller [depth 2]")],
+        "{text}"
+    );
+    assert!(result.open_ends.is_empty(), "{text}");
+    assert!(!text.contains("No indexed code calls"), "{text}");
+    let json = serde_json::to_value(&result).unwrap();
+    assert!(json.get("open_ends").is_none(), "{json}");
+}
+
+fn add_test(conn: &Connection, test: &str, calls: &str) {
+    conn.execute(
+        "INSERT INTO symbols (symbol_id, file_id, path, language, name, kind, start_line,
+            start_column, end_line, end_column, start_byte, end_byte, is_test, test_container)
+         VALUES (?1, 'f2', 'tests/lib_test.rs', 'rust', ?1, 'function', ?2, 0, ?2, 0, 0, 1, 1, 0)",
+        rusqlite::params![test, test.len() as i64],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO relationships VALUES (?1, ?2, 'calls', 'tests/lib_test.rs', 1, 0)",
+        rusqlite::params![test, calls],
+    )
+    .unwrap();
+}
+
+#[test]
+fn a_test_list_cut_by_the_depth_limit_says_how_many_more_tests_the_largest_depth_lists() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+    call_chain(&conn, &["a", "b", "c", "d"]);
+    add_test(&conn, "test_b", "b");
+    add_test(&conn, "test_dd", "d");
+
+    let res = compute_blast_radius_scoped(&conn, &["a"], None, &[], 2, 20).unwrap();
+
+    let text = format_blast_radius(&res);
+    assert_eq!(
+        reasons(&res),
+        [("test_b", "indirect caller [depth 2]")],
+        "{text}"
+    );
+    assert_eq!(res.stopped_at_depth, Some(2));
+    assert_eq!(res.tests_past_depth, Some(1));
+    assert!(
+        text.contains("The walk stopped at depth 2. A `depth` of 5 lists 1 more test."),
+        "{text}"
+    );
+}
+
+#[test]
+fn a_walk_whose_callers_past_the_depth_reach_no_other_test_gives_no_depth_warning() {
+    let temp = safe_tempdir();
+    let conn = open_read_write(&temp.path().join("index.db")).unwrap();
+    setup_test_db(&conn);
+    call_chain(&conn, &["a", "b", "c", "d"]);
+    add_test(&conn, "test_b", "b");
+
+    let res = compute_blast_radius_scoped(&conn, &["a"], None, &[], 2, 20).unwrap();
+
+    let text = format_blast_radius(&res);
+    assert_eq!(res.stopped_at_depth, Some(2));
+    assert_eq!(res.tests_past_depth, Some(0));
+    assert!(!text.contains("The walk stopped"), "{text}");
+}
+
+#[test]
+fn the_walk_goes_on_from_the_callers_that_only_the_callers_report_finds() {
+    let (_temp, workspace, conn) = scanned(&[
+        (
+            "src/app/command.py",
+            "class Command:\n    def execute(self):\n        return None\n\n\ndef run(cmd):\n    return cmd.execute()\n",
+        ),
+        (
+            "tests/test_command.py",
+            "from app.command import Command, run\n\n\ndef test_run():\n    assert run(Command()) is None\n",
+        ),
+    ]);
+
+    let result = blast_radius_op(&workspace, &conn, Some("execute"), None, 2, 20).unwrap();
+
+    let text = format_blast_radius(&result);
+    assert_eq!(
+        reasons(&result),
+        [("test_run", "indirect caller [depth 2]")],
+        "{text}"
+    );
+    assert!(result.open_ends.is_empty(), "{text}");
+}
+
+#[test]
+fn a_test_that_only_the_callers_report_ties_to_the_target_joins_the_tests_the_walk_found() {
+    let (_temp, workspace, conn) = scanned(&[
+        (
+            "src/app/command.py",
+            "class Command:\n    def execute(self):\n        return None\n",
+        ),
+        (
+            "tests/test_command.py",
+            "from app.command import Command\n\n\ndef test_built():\n    cmd = Command()\n    assert cmd.execute() is None\n\n\ndef test_passed(thing):\n    assert thing.execute() is None\n",
+        ),
+    ]);
+
+    let result = blast_radius_op(&workspace, &conn, Some("execute"), None, 2, 20).unwrap();
+
+    assert_eq!(
+        reasons(&result),
+        [
+            ("test_built", "direct caller"),
+            ("test_passed", "calls it by name only (find_references)"),
+        ],
+        "{}",
+        format_blast_radius(&result)
+    );
+}

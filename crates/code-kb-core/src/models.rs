@@ -386,6 +386,35 @@ pub struct BlastRadiusResult {
     /// found no impacted symbol.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub callers_report: Option<CallersReportSites>,
+    /// Symbols the walk reached that no indexed code calls, so tests that reach the target
+    /// through them are not listed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub open_ends: Vec<OpenEnd>,
+    /// When the walk stopped at a depth below the largest, the tests that a walk at the largest
+    /// depth adds to the list.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tests_past_depth: Option<usize>,
+    /// The walk at the largest depth stopped at the 200-row ceiling, so `tests_past_depth` is a
+    /// lower bound.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub tests_past_depth_cut: bool,
+    /// The path and line of each test that `tests_past_depth` counts.
+    #[serde(skip)]
+    pub(crate) past_depth_tests: Vec<(String, usize)>,
+}
+
+/// A symbol where the walk stopped because the index shows no caller of it, such as a method
+/// that the runtime or a framework calls.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct OpenEnd {
+    pub name: String,
+    pub kind: String,
+    pub path: String,
+    pub line: usize,
+    pub depth: usize,
+    /// Text-only owner name, as `App` for `App.__call__`; omitted from JSON.
+    #[serde(skip)]
+    pub owner: Option<String>,
 }
 
 /// How the callers report labeled the sites of the target's name.

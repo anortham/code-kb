@@ -4,8 +4,8 @@ use std::path::Path;
 use crate::edit_check::{BaseSource, EditCheck, EditSite, ShapeChange};
 use crate::models::{
     BlastRadiusResult, CallersReportSites, CallingTest, ConstructionSite, ContextSlice,
-    ImpactedSymbol, LabeledSite, OverrideRow, ReferenceReport, ReferenceSite, Registration,
-    SearchExplain, SiteLabel, Symbol, SymbolSearchResult, VariantUse,
+    ImpactedSymbol, LabeledSite, OpenEnd, OverrideRow, ReferenceReport, ReferenceSite,
+    Registration, SearchExplain, SiteLabel, Symbol, SymbolSearchResult, VariantUse,
 };
 
 /// Format progressive disclosure file skeleton with implementation bodies stripped.
@@ -2013,6 +2013,35 @@ fn edit_site_row(site: &EditSite) -> String {
     format!("      {}:{}  {caller}{note}\n", site.path, site.line)
 }
 
+/// The warning for the symbols where the walk stopped because no indexed code calls them.
+fn open_ends_text(open_ends: &[OpenEnd]) -> String {
+    const SHOWN: usize = 3;
+    if open_ends.is_empty() {
+        return String::new();
+    }
+    let mut out = String::from(
+        "### Open Ends\nNo indexed code calls these symbols, so the walk stopped at them. The runtime, a framework, a library, or a call that the index cannot tie calls them. The list above does not show the tests that reach the target through them:\n",
+    );
+    for end in open_ends.iter().take(SHOWN) {
+        let name = match &end.owner {
+            Some(owner) => format!("{owner}.{}", end.name),
+            None => end.name.clone(),
+        };
+        out.push_str(&format!(
+            "  - {} `{name}` ({}:{})\n",
+            end.kind, end.path, end.line
+        ));
+    }
+    if open_ends.len() > SHOWN {
+        out.push_str(&format!(
+            "  - {} more in CLI --json.\n",
+            open_ends.len() - SHOWN
+        ));
+    }
+    out.push('\n');
+    out
+}
+
 /// Format blast radius and likely test targets into token-dense markdown.
 pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
     if result.seed_type == "none" {
@@ -2076,19 +2105,53 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
                 t.name, t.line, t.reason
             ));
         }
+        if let (Some(depth), Some(more)) = (result.stopped_at_depth, result.tests_past_depth)
+            && more > 0
+        {
+            let at_least = if result.tests_past_depth_cut {
+                "at least "
+            } else {
+                ""
+            };
+            out.push_str(&format!(
+                "The walk stopped at depth {depth}. A `depth` of {} lists {at_least}{more} more {}.\n",
+                crate::queries::MAX_BLAST_DEPTH,
+                plural(more, "test")
+            ));
+        }
 
         out.push('\n');
     } else if result.likely_tests_truncated || result.traversal_ceiling_reached {
         out.push_str("### Likely Tests to Run (0 returned)\n\n");
     } else if let Some(depth) = result.stopped_at_depth {
+        let largest = crate::queries::MAX_BLAST_DEPTH;
+        let advice = match result.tests_past_depth {
+            Some(0) => {
+                format!("No test reaches it within depth {largest}. Run the full test suite.")
+            }
+            Some(more) => format!(
+                "No test reaches it within depth {depth}. A `depth` of {largest} lists {}{more} {}.",
+                if result.tests_past_depth_cut {
+                    "at least "
+                } else {
+                    ""
+                },
+                plural(more, "test")
+            ),
+            None => format!(
+                "No test reaches it within depth {depth}; a larger `depth` may find some. Otherwise run the full test suite."
+            ),
+        };
         out.push_str(&format!(
-            "### Likely Tests to Run (0 returned)\nNo test reaches it within depth {depth}; a larger `depth` may find some. Otherwise run the full test suite.\n\n",
+            "### Likely Tests to Run (0 returned)\n{advice}\n\n"
         ));
     } else {
         out.push_str(
             "### Likely Tests to Run (0 returned)\nNo test reaches it through the index. Run the full test suite.\n\n",
         );
     }
+
+    out.push_str(&open_ends_text(&result.open_ends));
 
     if !result.impacted_symbols.is_empty() {
         let total = result.impacted_symbols.len();
@@ -3235,6 +3298,10 @@ mod tests {
             impacted_symbols_found: 0,
             stopped_at_depth: None,
             callers_report: None,
+            open_ends: Vec::new(),
+            tests_past_depth: None,
+            tests_past_depth_cut: false,
+            past_depth_tests: Vec::new(),
         };
 
         let formatted = format_blast_radius(&res);
@@ -3301,6 +3368,10 @@ mod tests {
             impacted_symbols_found: 0,
             stopped_at_depth: None,
             callers_report: None,
+            open_ends: Vec::new(),
+            tests_past_depth: None,
+            tests_past_depth_cut: false,
+            past_depth_tests: Vec::new(),
         };
 
         let formatted = format_blast_radius(&res);
@@ -3453,6 +3524,10 @@ mod tests {
             impacted_symbols_found: 0,
             stopped_at_depth: None,
             callers_report: None,
+            open_ends: Vec::new(),
+            tests_past_depth: None,
+            tests_past_depth_cut: false,
+            past_depth_tests: Vec::new(),
         };
 
         let formatted = format_blast_radius(&res);
@@ -3474,6 +3549,10 @@ mod tests {
             impacted_symbols_found: 0,
             stopped_at_depth: None,
             callers_report: None,
+            open_ends: Vec::new(),
+            tests_past_depth: None,
+            tests_past_depth_cut: false,
+            past_depth_tests: Vec::new(),
         };
 
         let formatted = format_blast_radius(&res);
@@ -3500,6 +3579,24 @@ mod tests {
             "No test reaches it within depth 2; a larger `depth` may find some. Otherwise run the full test suite.\n"
         ));
         assert!(!formatted.contains("through the index"));
+
+        let deeper_tests = BlastRadiusResult {
+            tests_past_depth: Some(3),
+            tests_past_depth_cut: true,
+            ..cut_by_depth.clone()
+        };
+        assert!(format_blast_radius(&deeper_tests).contains(
+            "No test reaches it within depth 2. A `depth` of 5 lists at least 3 tests.\n"
+        ));
+
+        let no_deeper_test = BlastRadiusResult {
+            tests_past_depth: Some(0),
+            ..cut_by_depth
+        };
+        assert!(
+            format_blast_radius(&no_deeper_test)
+                .contains("No test reaches it within depth 5. Run the full test suite.\n")
+        );
     }
 
     #[test]
@@ -3522,6 +3619,10 @@ mod tests {
                 excluded: 236,
                 ..CallersReportSites::default()
             }),
+            open_ends: Vec::new(),
+            tests_past_depth: None,
+            tests_past_depth_cut: false,
+            past_depth_tests: Vec::new(),
         };
         let formatted = format_blast_radius(&unresolved_only);
         assert!(!formatted.contains("No downstream callers"), "{formatted}");
