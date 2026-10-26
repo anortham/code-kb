@@ -3,7 +3,7 @@ id: accuracy-pivot-callers-answers-an-agent-can-trust
 title: "Accuracy pivot: callers answers an agent can trust"
 status: active
 created: 2026-10-17T17:10:13.294Z
-updated: 2026-10-26T21:24:56.588Z
+updated: 2026-10-26T22:00:51.905Z
 tags:
   - project-direction
   - accuracy
@@ -31,7 +31,7 @@ The review fixes are verified locally: failed refreshes now return errors and re
 
 ## Active implementation
 
-Worktree: /home/murphy/.codex/worktrees/1e6f/code-kb, branch fix/cross-language-review, based on aeebe72. All task work remains there. Batch A: real-extractor conformance for all 42 languages, argument semantics, construction semantics, bounded report recovery/test fallback, and release-evidence validation. Removed member reads and callable value dependencies follow finalized argument/construction behavior. The plan records source-backed ownership, verification, and prior authorization. Missing applicable extractor facts remain gaps; coverage labels cannot certify them away. No paid agent runs, push, PR, or release is authorized.
+Worktree: /home/murphy/.codex/worktrees/1e6f/code-kb, branch fix/cross-language-review, based on aeebe72. All task work remains there. Batch A: real-extractor conformance for all 42 languages, argument semantics, construction semantics, bounded report recovery/test fallback, and release-evidence validation. Removed member reads and callable value dependencies now run in parallel through a single orchestration owner with explicit private interface handoffs. Task 8 adds narrow fact normalization for CSS custom-function declarations. Real conformance is also driving shared skeleton/reference fixes; current implementation status and rulings are in the plan and ignored SDD ledger. The plan records source-backed ownership, verification, and prior authorization. Missing applicable extractor facts remain gaps; coverage labels cannot certify them away. No paid agent runs, push, PR, or release is authorized.
 
 ## Constraints
 

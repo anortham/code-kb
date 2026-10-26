@@ -68,9 +68,10 @@ Commit mode: `parallel-lead-commit` for every task. Workers do not stage, commit
 | 1: Pinned-language conformance | A | `evals/languages/**`, `crates/code-kb-core/tests/language_conformance_test.rs`, `docs/language-support.md` | No | None - safe parallel batch. |
 | 2: Argument semantics | A | `crates/code-kb-core/src/edit_check/signatures.rs`, `crates/code-kb-core/src/reference_report/arity.rs`, `crates/code-kb-core/tests/edit_check_arguments_test.rs` | No | None - safe parallel batch. |
 | 3: Construction semantics | A | `crates/code-kb-core/src/edit_check/fields.rs`, `crates/code-kb-core/src/reference_report/sections.rs`, `crates/code-kb-core/tests/edit_check_fields_test.rs` | No | None - safe parallel batch; preserve FieldChange's existing interface. |
-| 4: Removed members and callable values | B | `crates/code-kb-core/src/edit_check.rs`, `crates/code-kb-core/src/reference_report.rs`, `crates/code-kb-core/tests/edit_check_members_test.rs`, optional new `crates/code-kb-core/src/edit_check/members.rs` | Yes | Review tasks 2 and 3 first; orchestration consumes their finalized semantics. |
-| 5: Actionable output recovery | A | `crates/code-kb-core/src/formatters.rs`, `crates/code-kb-core/src/test_commands.rs`, `crates/code-kb-cli/src/main.rs`, `crates/code-kb-cli/src/mcp/server.rs`, `crates/code-kb-cli/src/mcp/protocol.rs`, `crates/code-kb-cli/tests/report_recovery_test.rs`, optional new `crates/code-kb-core/src/report_pages.rs` | No | None - safe parallel batch; new core exports are integrated by the lead. |
+| 4: Removed members and callable values | A | `crates/code-kb-core/src/edit_check.rs`, `crates/code-kb-core/src/reference_report.rs`, `crates/code-kb-core/tests/edit_check_members_test.rs`, optional new `crates/code-kb-core/src/edit_check/members.rs` | No | None - safe parallel batch; this task is the single orchestration owner for explicit interface handoffs from tasks 2 and 3. |
+| 5: Actionable output recovery | A | `crates/code-kb-core/src/formatters.rs`, `crates/code-kb-core/src/test_commands.rs`, `crates/code-kb-core/src/queries.rs`, `crates/code-kb-core/src/ops.rs`, `crates/code-kb-cli/src/main.rs`, `crates/code-kb-cli/src/mcp/server.rs`, `crates/code-kb-cli/src/mcp/protocol.rs`, `crates/code-kb-cli/tests/report_recovery_test.rs`, optional new `crates/code-kb-core/src/report_pages.rs` | No | None - safe parallel batch; new core exports are integrated by the lead. |
 | 6: Evaluation and release evidence | A | `scripts/release-preflight.sh`, `scripts/release-dogfood.sh`, `scripts/reach_gate.py`, `scripts/test_reach_gate.py`, `scripts/test_release_evidence.py`, optional new `scripts/release_evidence.py`, `docs/RELEASING.md`, `docs/plans/2026-09-23-retrieval-value-and-optional-routing.md`, dedicated fresh local evaluation fixtures under `evals/review-2026-10-26/**` | No | None - safe parallel batch. |
+| 8: Extractor fact compatibility | A | `crates/code-kb-core/src/db.rs`, `crates/code-kb-core/src/sync.rs`, `crates/code-kb-core/tests/extractor_compat_test.rs` | No | None - safe parallel batch; preserve existing public lifecycle APIs. |
 | 7: Integration and documentation | C | `AGENTS.md`, `CLAUDE.md`, `README.md`, `docs/edit-check.md`, `docs/argument-counts.md`, `docs/reach-sections.md`, review/plan files, `.memories/**`, `crates/code-kb-core/src/lib.rs`, `.github/workflows/ci.yml` | Yes | Finalize the evidence and inventory after all implementation tasks. |
 
 ### Task 1: Pinned-language conformance
@@ -125,7 +126,7 @@ Commit mode: `parallel-lead-commit` for every task. Workers do not stage, commit
 
 **Files:** Modify `edit_check/fields.rs` and `reference_report/sections.rs`; create `tests/edit_check_fields_test.rs`, all under `crates/code-kb-core/`.
 
-**Interfaces:** Preserve FieldChange and its existing construction-check entry points. Orchestration changes go through the lead/task 4 owner.
+**Interfaces:** Preserve FieldChange and its existing construction-check entry points. A connection-aware private helper may add indexed constructor context and owner declaration lines when the extractor omits defaults; orchestration changes go through the lead/task 4 owner.
 
 **Contract inputs:** Field-name change detection already works more broadly than construction reasoning. Constructor synthesis and custom constructors have different rules.
 
@@ -155,9 +156,9 @@ Commit mode: `parallel-lead-commit` for every task. Workers do not stage, commit
 
 **File ownership:** `crates/code-kb-core/src/edit_check.rs`, `crates/code-kb-core/src/reference_report.rs`, `crates/code-kb-core/tests/edit_check_members_test.rs`, optional new `crates/code-kb-core/src/edit_check/members.rs`.
 
-**Serialization required:** Yes.
+**Serialization required:** No.
 
-**Dependency reason:** Review tasks 2 and 3 first; orchestration consumes their finalized semantics.
+**Dependency reason:** None - safe parallel batch; this task is the single orchestration owner for explicit interface handoffs from tasks 2 and 3. Final verification consumes their completed semantics.
 
 **What to build:** Report uses of removed members across applicable languages and surface changed-callable value/callback dependencies with appropriate uncertainty. Handle declarations versus writes and inherited definitions so a removal still satisfied by an ancestor is not a proven break.
 
@@ -171,13 +172,13 @@ Commit mode: `parallel-lead-commit` for every task. Workers do not stage, commit
 
 ### Task 5: Actionable output recovery and test fallback
 
-**Files:** Modify core `formatters.rs` and `test_commands.rs`, CLI `main.rs` and `mcp/{server,protocol}.rs`; create `crates/code-kb-cli/tests/report_recovery_test.rs` and an optional core `report_pages.rs` helper.
+**Files:** Modify core `formatters.rs`, `test_commands.rs`, `queries.rs`, and `ops.rs`, CLI `main.rs` and `mcp/{server,protocol}.rs`; create `crates/code-kb-cli/tests/report_recovery_test.rs` and an optional core `report_pages.rs` helper.
 
 **Interfaces:** Existing seven MCP tools and exact CLI counterparts. Add compatible optional recovery controls to existing reports only when needed, keeping default summaries compact. New core exports are integrated by the lead.
 
 **Contract inputs:** Counts must remain complete, pages bounded and deterministically ordered, project roots/filters fixed by each call. Each page sees the current index; document restart behavior after changes. Never retain a report/session repository graph in RAM.
 
-**File ownership:** `crates/code-kb-core/src/formatters.rs`, `crates/code-kb-core/src/test_commands.rs`, `crates/code-kb-cli/src/main.rs`, `crates/code-kb-cli/src/mcp/server.rs`, `crates/code-kb-cli/src/mcp/protocol.rs`, `crates/code-kb-cli/tests/report_recovery_test.rs`, optional new `crates/code-kb-core/src/report_pages.rs`.
+**File ownership:** `crates/code-kb-core/src/formatters.rs`, `crates/code-kb-core/src/test_commands.rs`, `crates/code-kb-core/src/queries.rs`, `crates/code-kb-core/src/ops.rs`, `crates/code-kb-cli/src/main.rs`, `crates/code-kb-cli/src/mcp/server.rs`, `crates/code-kb-cli/src/mcp/protocol.rs`, `crates/code-kb-cli/tests/report_recovery_test.rs`, optional new `crates/code-kb-core/src/report_pages.rs`.
 
 **Serialization required:** No.
 
@@ -240,3 +241,28 @@ Commit mode: `parallel-lead-commit` for every task. Workers do not stage, commit
 - [ ] Every identified applicable gap is fixed or has a genuine externally blocked dependency with a concrete repro and required action.
 - [ ] Branch gates and post-edit checks pass, and live memory/output evidence is recorded without overstating agent outcomes.
 - [ ] Intentional local commits include plan/docs/memory; all task state is reconciled and no push/release occurs.
+
+
+### Task 8: Extractor fact compatibility
+
+**Files:** Modify `crates/code-kb-core/src/db.rs` and `crates/code-kb-core/src/sync.rs`; create `crates/code-kb-core/tests/extractor_compat_test.rs`.
+
+**Interfaces:** Preserve existing public scan/update/query APIs and symbol IDs. Apply narrow normalization to already-extracted facts through the shared index lifecycle; source spans and written signatures remain intact.
+
+**Contract inputs:** Real CSS `@function --anchor_css() { result: 41; }` is extracted by pinned Julie as a namespace named `@function --anchor_css()`, while its call identifier is `--anchor_css`. The declaration signature carries an unambiguous function name. Current CSS syntax is grounded in https://drafts.csswg.org/css-mixins-1/ . Ordinary selectors/custom properties remain unaffected.
+
+**File ownership:** `crates/code-kb-core/src/db.rs`, `crates/code-kb-core/src/sync.rs`, `crates/code-kb-core/tests/extractor_compat_test.rs`.
+
+**Serialization required:** No.
+
+**Dependency reason:** None - safe parallel batch; preserve existing public lifecycle APIs.
+
+**What to build:** Normalize the pinned extractor's explicit custom-function declaration facts so lookup and reference consumers agree on names and callable kinds. Apply the same correction to existing indexes, new scans, worktree copies, and incremental updates without a new extractor release or a source-text parser.
+
+**Approach:** Add a failing real-extractor public lookup/reference/body case first. Reuse the existing lifecycle post-processing shape used for implementation owner linking, giving any broader shared helper an accurate name. Normalize only explicit matching CSS declarations, preserve IDs/spans/signatures, make the operation idempotent and bounded, and avoid a separate retained repository collection. Coordinate reference classifier changes with task 4 and skeleton rendering with task 5.
+
+**Acceptance criteria:**
+- [ ] Explicit custom functions are looked up by their callable name, and extracted call identifiers can reach their matching declarations.
+- [ ] Source body spans and ordinary selectors/properties/at-rules remain correct; ambiguous/unsupported forms are not guessed.
+- [ ] Existing-index and incremental update tests prove correction is repeatable and survives rewrites without stale names.
+- [ ] Dedicated tests pass; verified diff and evidence are handed to the lead.

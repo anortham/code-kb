@@ -30,8 +30,8 @@ symbol search, and surgical context slicing with minimal token consumption.
   reason to mark that language out of scope. Mark a capability not applicable
   only when the language does not have the relevant construct.
 - Add real-extraction regression cases for affected languages, including valid
-  code that must remain accepted. Keep the language coverage inventory current
-  when changing a capability or the extractor pin.
+  code that must remain accepted. Keep `docs/language-support.md` current when
+  changing a capability or the extractor pin.
 - Report missing coverage explicitly. A partial or unsupported check must not
   claim that an edit is safe or that there are no callers or tests.
 
