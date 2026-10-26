@@ -5,8 +5,8 @@ use std::time::Duration;
 
 use code_kb_core::workspace::{NO_PROJECT_MARKER_REASON, paths_equal};
 use code_kb_core::{
-    Connection, MAX_CONTEXT_OVERLOADS, SymbolSelector, SyncError, WatcherHandle, Workspace,
-    WorkspaceError, blast_radius_selected_op, create_index, edit_check_op, ensure_fts_index_path,
+    Connection, MAX_CONTEXT_OVERLOADS, SymbolSelector, WatcherHandle, Workspace, WorkspaceError,
+    blast_radius_selected_op, create_index, edit_check_op, ensure_fts_index_path,
     ensure_index_matches_extractor, file_sizes_for_paths, file_skeleton_op,
     find_references_for_symbol_ext, format_blast_radius, format_context_slices, format_edit_check,
     format_reference_report, format_references, format_symbol_bodies,
@@ -24,6 +24,18 @@ const PROJECT_ROOT_DESCRIPTION: &str =
     "Absolute path of the project or git worktree you work in. Change it when you move to another.";
 
 type IndexPrepare = std::thread::JoinHandle<Result<Option<WatcherHandle>, String>>;
+
+fn index_prepare_panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
+    let message = payload
+        .downcast_ref::<&str>()
+        .map(|message| (*message).to_string())
+        .or_else(|| payload.downcast_ref::<String>().cloned())
+        .unwrap_or_else(|| "unknown preparation panic".to_string());
+    format!(
+        "Index preparation thread panicked: {}",
+        message.chars().take(512).collect::<String>()
+    )
+}
 
 pub struct McpServer {
     pub workspace: Workspace,
@@ -102,28 +114,17 @@ fn spawn_index_prepare(workspace: &Workspace, db_path: &Path) -> Option<IndexPre
     let ws = workspace.clone();
     let db = db_path.to_path_buf();
     Some(std::thread::spawn(move || {
-        match ensure_index_matches_extractor(&ws, &db, &installed_extractor_version()) {
-            Err(e @ SyncError::UnreadableIndex { .. }) => return Err(e.to_string()),
-            Err(e) => tracing::warn!("Index version check failed: {e}"),
-            Ok(_) => {}
-        }
+        ensure_index_matches_extractor(&ws, &db, &installed_extractor_version())
+            .map_err(|e| e.to_string())?;
         if !db.exists() {
             tracing::info!(ws = %ws.canonical_root.display(), "Database not found; running automatic initial scan");
             create_index(&ws, &db).map_err(|e| e.to_string())?;
         }
         ensure_fts_index_path(&db).map_err(|e| e.to_string())?;
-        let watcher = start_watcher(ws.clone(), db.clone()).ok();
-        match open_read_only(&db) {
-            Ok(conn) => {
-                if let Err(e) = reconcile_offline_edits(&ws, &db, &conn) {
-                    tracing::warn!(ws = %ws.canonical_root.display(), "Offline reconcile failed: {e}");
-                }
-            }
-            Err(e) => {
-                tracing::warn!(ws = %ws.canonical_root.display(), "Offline reconcile skipped: {e}")
-            }
-        }
-        Ok(watcher)
+        let watcher = start_watcher(ws.clone(), db.clone()).map_err(|e| e.to_string())?;
+        let conn = open_read_only(&db).map_err(|e| e.to_string())?;
+        reconcile_offline_edits(&ws, &db, &conn).map_err(|e| e.to_string())?;
+        Ok(Some(watcher))
     }))
 }
 
@@ -636,9 +637,12 @@ impl McpServer {
 
     fn handle_call_tool_inner(&mut self, name: &str, arguments: &Value) -> CallToolResult {
         tracing::info!(tool = name, args = %arguments, "MCP tool called");
+        if !requires_project_root(name) {
+            return CallToolResult::error(format!("Unknown tool: '{name}'"));
+        }
 
         let rec_start = std::time::Instant::now();
-        let (reconcile_ms, prepare_error) = match self.reconcile.take() {
+        let (mut reconcile_ms, prepare_error) = match self.reconcile.take() {
             Some(prepare) => {
                 let wait = Duration::from_millis(
                     std::env::var("CODE_KB_INDEX_WAIT_MS")
@@ -659,7 +663,10 @@ impl McpServer {
                     started.query_ms = Some(0);
                     return started;
                 }
-                let prepared = prepare.join().unwrap_or(Ok(None));
+                let prepared = match prepare.join() {
+                    Ok(result) => result,
+                    Err(panic) => Err(index_prepare_panic_message(panic)),
+                };
                 let waited = Some(rec_start.elapsed().as_millis() as u64);
                 match prepared {
                     Ok(watcher) => {
@@ -725,19 +732,38 @@ impl McpServer {
         }
 
         if self._watcher.is_none() {
-            self._watcher = start_watcher(self.workspace.clone(), self.db_path.clone()).ok();
+            match start_watcher(self.workspace.clone(), self.db_path.clone()) {
+                Ok(watcher) => self._watcher = Some(watcher),
+                Err(e) => {
+                    self.reconcile = spawn_index_prepare(&self.workspace, &self.db_path);
+                    let root = self.workspace.canonical_root.display();
+                    let msg = format!(
+                        "Could not establish freshness for '{root}': failed to start the file watcher: {e}; it will be retried on the next tool call. {}",
+                        scan_remedy(&self.workspace.canonical_root)
+                    );
+                    tracing::error!("{}", msg);
+                    let mut err_res = CallToolResult::error(msg);
+                    err_res.reconcile_ms = reconcile_ms;
+                    err_res.query_ms = Some(0);
+                    return err_res;
+                }
+            }
         }
 
         let conn = match open_read_only(&self.db_path) {
             Ok(c) => c,
             Err(e) => {
+                let root = self.workspace.canonical_root.display();
                 let msg = if is_unreadable_database(&self.db_path) {
                     format!(
-                        "Failed to open database: {e}. {}",
+                        "Failed to open the index for '{root}': {e}. {}",
                         scan_remedy(&self.workspace.canonical_root)
                     )
                 } else {
-                    format!("Failed to open database: {e}")
+                    format!(
+                        "Failed to open the index for '{root}': {e}; it will be retried on the next tool call. {}",
+                        scan_remedy(&self.workspace.canonical_root)
+                    )
                 };
                 tracing::error!("{}", msg);
                 let mut err_res = CallToolResult::error(msg);
@@ -746,6 +772,48 @@ impl McpServer {
                 return err_res;
             }
         };
+
+        if let Some(watcher) = self._watcher.as_ref()
+            && let Some((generation, failure)) = watcher.pending_failure()
+        {
+            let root = self.workspace.canonical_root.display().to_string();
+            let recovery_start = std::time::Instant::now();
+            let recovery = reconcile_offline_edits(&self.workspace, &self.db_path, &conn);
+            reconcile_ms =
+                Some(reconcile_ms.unwrap_or(0) + recovery_start.elapsed().as_millis() as u64);
+            if let Err(e) = recovery {
+                let error = e.to_string();
+                let remedy = scan_remedy(&self.workspace.canonical_root);
+                let remedy = if error.contains(&remedy) {
+                    String::new()
+                } else {
+                    format!(" {remedy}")
+                };
+                let msg = format!(
+                    "Could not re-establish a fresh index for '{root}' after a watcher refresh failure ({failure}): {error}; it will be retried on the next tool call.{remedy}"
+                );
+                tracing::error!("{}", msg);
+                let mut err_res = CallToolResult::error(msg);
+                err_res.reconcile_ms = reconcile_ms;
+                err_res.query_ms = Some(0);
+                return err_res;
+            }
+            if !watcher.clear_failure_if_unchanged(generation) {
+                let later_failure = watcher
+                    .pending_failure()
+                    .map(|(_, failure)| failure)
+                    .unwrap_or(failure);
+                let msg = format!(
+                    "Could not establish a fresh index for '{root}': another watcher refresh failed during recovery ({later_failure}); it will be retried on the next tool call. {}",
+                    scan_remedy(&self.workspace.canonical_root)
+                );
+                tracing::error!("{}", msg);
+                let mut err_res = CallToolResult::error(msg);
+                err_res.reconcile_ms = reconcile_ms;
+                err_res.query_ms = Some(0);
+                return err_res;
+            }
+        }
 
         let query_start = std::time::Instant::now();
         let mut result = match name {
@@ -1211,6 +1279,70 @@ impl McpServer {
                 -32601,
                 format!("Method not found: {}", request.method),
             )),
+        }
+    }
+}
+
+#[cfg(test)]
+mod prepare_tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn a_panicked_prepare_returns_an_error_and_retries() {
+        let temp_dir = code_kb_core::safe_tempdir();
+        let root = temp_dir.path().to_path_buf();
+        std::fs::write(
+            root.join("Cargo.toml"),
+            "[package]\nname = \"fixture\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(root.join("src/lib.rs"), "pub fn recovered_symbol() {}\n").unwrap();
+        let workspace = Workspace::new(root.clone());
+        let db_path = root.join(".code-kb/artifact.db");
+        code_kb_core::scan_workspace(&workspace, &db_path, true).unwrap();
+        let prepare = std::thread::spawn(|| -> Result<Option<WatcherHandle>, String> {
+            panic!("controlled preparation panic")
+        });
+        let mut server = McpServer {
+            workspace,
+            db_path,
+            explicit_db: None,
+            _watcher: None,
+            telemetry_conn: None,
+            reconcile: Some(prepare),
+            launch_root: root.clone(),
+            parked: Vec::new(),
+            prepared: true,
+            client: None,
+        };
+        let arguments = json!({
+            "project_root": root,
+            "query": "recovered_symbol"
+        });
+
+        let failed = server.handle_call_tool("lookup_symbol", &arguments);
+        assert!(failed.is_error, "{}", failed.content[0].text);
+        assert!(
+            failed.content[0]
+                .text
+                .contains("controlled preparation panic"),
+            "{}",
+            failed.content[0].text
+        );
+        assert!(failed.content[0].text.contains("retried"));
+
+        let deadline = Instant::now() + Duration::from_secs(20);
+        loop {
+            let recovered = server.handle_call_tool("lookup_symbol", &arguments);
+            let text = &recovered.content[0].text;
+            if !recovered.is_error && !text.starts_with("Indexing ") {
+                assert!(text.contains("function `recovered_symbol` ["), "{text}");
+                break;
+            }
+            assert!(Instant::now() < deadline, "{text}");
+            std::thread::sleep(Duration::from_millis(50));
         }
     }
 }

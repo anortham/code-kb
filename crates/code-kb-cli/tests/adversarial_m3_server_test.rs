@@ -61,6 +61,13 @@ fn scanned_repo(code: &str) -> (tempfile::TempDir, PathBuf, String) {
     (temp_dir, db_path, code.to_string())
 }
 
+fn rename_case_only(from: &Path, to: &Path) {
+    let name = from.file_name().expect("source path has a file name");
+    let intermediate = from.with_file_name(format!("{}.case-change", name.to_string_lossy()));
+    fs::rename(from, &intermediate).unwrap();
+    fs::rename(intermediate, to).unwrap();
+}
+
 fn toggle_drive_letter(path_str: &str) -> String {
     if path_str.len() >= 2 && path_str.as_bytes()[1] == b':' {
         let first = path_str.chars().next().unwrap();
@@ -475,91 +482,46 @@ fn test_adversarial_mcp_project_root_casing_slash_and_uri_churn_answers_from_one
 fn test_adversarial_reconcile_offline_edits_seen_table_nocase_collation() {
     let temp = code_kb_core::safe_tempdir();
     let root = temp.path().to_path_buf();
-    let db_path = root.join("test.db");
-    let conn = rusqlite::Connection::open(&db_path).unwrap();
-
-    conn.execute_batch(
-        "CREATE TABLE files (
-            file_id TEXT PRIMARY KEY,
-            path TEXT NOT NULL,
-            language TEXT,
-            content_hash TEXT,
-            content_bytes INTEGER,
-            line_count INTEGER,
-            indexed_at TEXT
-        );
-        CREATE TABLE symbols (
-            symbol_id TEXT PRIMARY KEY,
-            file_id TEXT,
-            path TEXT NOT NULL
-        );",
-    )
-    .unwrap();
-
     let src_dir = root.join("src");
     fs::create_dir_all(&src_dir).unwrap();
+    for (name, content) in [
+        ("MAIN.RS", "fn main() {}\n"),
+        ("util.rs", "pub fn util() {}\n"),
+        ("mixedcase.rs", "pub fn mixed() {}\n"),
+        ("deleted_file.rs", "pub fn deleted() {}\n"),
+    ] {
+        fs::write(src_dir.join(name), content).unwrap();
+    }
 
-    // Create 3 files on disk:
-    // 1. main.rs (lowercase on disk)
-    // 2. UTIL.RS (uppercase on disk)
-    // 3. MixedCase.rs (mixed on disk)
-    let f1_path = src_dir.join("main.rs");
-    let f1_content = "fn main() {}\n";
-    fs::write(&f1_path, f1_content).unwrap();
-    let f1_hash = format!("blake3:{}", blake3::hash(f1_content.as_bytes()).to_hex());
+    let scan_out = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+        .arg("--root")
+        .arg(&root)
+        .arg("scan")
+        .output()
+        .expect("Failed to initialize test repo via scan");
+    assert!(
+        scan_out.status.success(),
+        "scan failed: {}",
+        String::from_utf8_lossy(&scan_out.stderr)
+    );
 
-    let f2_path = src_dir.join("UTIL.RS");
-    let f2_content = "pub fn util() {}\n";
-    fs::write(&f2_path, f2_content).unwrap();
-    let f2_hash = format!("blake3:{}", blake3::hash(f2_content.as_bytes()).to_hex());
-
-    let f3_path = src_dir.join("MixedCase.rs");
-    let f3_content = "pub fn mixed() {}\n";
-    fs::write(&f3_path, f3_content).unwrap();
-    let f3_hash = format!("blake3:{}", blake3::hash(f3_content.as_bytes()).to_hex());
-
-    // Insert into SQLite `files` with OPPOSITE casing:
-    // 1. src/MAIN.RS in DB vs src/main.rs on disk
-    // 2. src/util.rs in DB vs src/UTIL.RS on disk
-    // 3. src/mixedcase.rs in DB vs src/MixedCase.rs on disk
-    // 4. src/deleted_file.rs in DB but NOT on disk (must be deleted)
-    conn.execute(
-        "INSERT INTO files VALUES ('f1', 'src/MAIN.RS', 'rust', ?1, ?2, 1, '2026-09-14')",
-        rusqlite::params![f1_hash, f1_content.len() as i64],
-    )
-    .unwrap();
-
-    conn.execute(
-        "INSERT INTO files VALUES ('f2', 'src/util.rs', 'rust', ?1, ?2, 1, '2026-09-14')",
-        rusqlite::params![f2_hash, f2_content.len() as i64],
-    )
-    .unwrap();
-
-    conn.execute(
-        "INSERT INTO files VALUES ('f3', 'src/mixedcase.rs', 'rust', ?1, ?2, 1, '2026-09-14')",
-        rusqlite::params![f3_hash, f3_content.len() as i64],
-    )
-    .unwrap();
-
-    conn.execute(
-        "INSERT INTO files VALUES ('f4', 'src/deleted_file.rs', 'rust', 'hash_del', 100, 1, '2026-09-14')",
-        [],
-    )
-    .unwrap();
-
-    // Create a new untracked file on disk
-    let f_new_path = src_dir.join("new_feature.rs");
-    fs::write(&f_new_path, "pub fn new_fn() {}\n").unwrap();
+    let db_path = root.join(".code-kb").join("artifact.db");
+    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    for (scanned_name, disk_name) in [
+        ("MAIN.RS", "main.rs"),
+        ("util.rs", "UTIL.RS"),
+        ("mixedcase.rs", "MixedCase.rs"),
+    ] {
+        rename_case_only(&src_dir.join(scanned_name), &src_dir.join(disk_name));
+    }
+    fs::remove_file(src_dir.join("deleted_file.rs")).unwrap();
+    fs::write(src_dir.join("new_feature.rs"), "pub fn new_fn() {}\n").unwrap();
 
     let ws = code_kb_core::Workspace::new(root);
-
-    // Run reconcile_offline_edits
     let report = code_kb_core::sync::reconcile_offline_edits(&ws, &db_path, &conn)
         .expect("reconcile_offline_edits must succeed");
 
-    // EMPIRICAL ASSERTIONS:
-    // 1. Files with casing differences (src/MAIN.RS, src/util.rs, src/mixedcase.rs)
-    //    MUST NOT be marked deleted due to COLLATE NOCASE!
     assert!(
         !report.deleted.contains(&"src/MAIN.RS".to_string()),
         "src/MAIN.RS was erroneously marked deleted despite main.rs existing on disk!"
@@ -572,8 +534,6 @@ fn test_adversarial_reconcile_offline_edits_seen_table_nocase_collation() {
         !report.deleted.contains(&"src/mixedcase.rs".to_string()),
         "src/mixedcase.rs was erroneously marked deleted despite MixedCase.rs existing on disk!"
     );
-
-    // 2. The genuine deleted file MUST be detected
     assert!(
         report.deleted.contains(&"src/deleted_file.rs".to_string()),
         "src/deleted_file.rs should be detected as deleted: {:?}",
@@ -585,8 +545,6 @@ fn test_adversarial_reconcile_offline_edits_seen_table_nocase_collation() {
         "ONLY the genuinely deleted file should be in report.deleted: {:?}",
         report.deleted
     );
-
-    // 3. The new file on disk MUST be detected as added
     assert!(
         report.added.iter().any(|p| p.ends_with("new_feature.rs")),
         "new_feature.rs must be detected as added: {:?}",

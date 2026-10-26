@@ -1,37 +1,15 @@
 use code_kb_core::db::{Connection, open_read_write};
 use code_kb_core::queries::*;
-use code_kb_core::sync::reconcile_offline_edits;
+use code_kb_core::sync::{reconcile_offline_edits, scan_workspace};
 #[allow(unused_imports)]
 use code_kb_core::workspace::{
     Workspace, normalize_path, parse_file_uri, paths_equal, strip_prefix_lossy,
 };
-use sha2::Digest;
 use std::path::{Path, PathBuf};
 
 #[test]
 fn test_sync_reconcile_case_mismatch_and_verbatim() {
     let temp = code_kb_core::safe_tempdir();
-    let db_path = temp.path().join("test.db");
-    let conn = open_read_write(&db_path).unwrap();
-
-    conn.execute_batch(
-        "CREATE TABLE files (
-            file_id TEXT PRIMARY KEY,
-            path TEXT NOT NULL,
-            language TEXT,
-            content_hash TEXT,
-            content_bytes INTEGER,
-            line_count INTEGER,
-            indexed_at TEXT
-        );
-        CREATE TABLE symbols (
-            symbol_id TEXT PRIMARY KEY,
-            file_id TEXT,
-            path TEXT NOT NULL
-        );",
-    )
-    .unwrap();
-
     let src_dir = temp.path().join("src");
     std::fs::create_dir_all(&src_dir).unwrap();
     let main_file = src_dir.join("main.rs");
@@ -43,21 +21,11 @@ fn test_sync_reconcile_case_mismatch_and_verbatim() {
     std::fs::write(&main_file, main_content).unwrap();
     std::fs::write(&lib_file, lib_content).unwrap();
 
-    let main_hash = hex::encode(sha2::Sha256::digest(main_content.as_bytes()));
-    let lib_hash = hex::encode(sha2::Sha256::digest(lib_content.as_bytes()));
+    let db_path = temp.path().join(".code-kb").join("artifact.db");
+    let ws = Workspace::new(temp.path().to_path_buf());
+    scan_workspace(&ws, &db_path, false).unwrap();
+    let conn = open_read_write(&db_path).unwrap();
 
-    conn.execute(
-        "INSERT INTO files VALUES ('f1', 'src/main.rs', 'rust', ?1, ?2, 1, '2026-09-14T00:00:00Z')",
-        rusqlite::params![main_hash, main_content.len() as i64],
-    )
-    .unwrap();
-    conn.execute(
-        "INSERT INTO files VALUES ('f2', 'src/lib.rs', 'rust', ?1, ?2, 1, '2026-09-14T00:00:00Z')",
-        rusqlite::params![lib_hash, lib_content.len() as i64],
-    )
-    .unwrap();
-
-    // 1. Scenario A: Inverted drive letter casing
     #[allow(unused_mut)]
     let mut ws_cased = Workspace::new(temp.path().to_path_buf());
     #[cfg(windows)]
@@ -85,7 +53,6 @@ fn test_sync_reconcile_case_mismatch_and_verbatim() {
         report_cased.modified
     );
 
-    // 2. Scenario B: Verbatim prefix on workspace canonical root
     #[allow(unused_mut)]
     let mut ws_verbatim = Workspace::new(temp.path().to_path_buf());
     #[cfg(windows)]
@@ -108,7 +75,6 @@ fn test_sync_reconcile_case_mismatch_and_verbatim() {
         report_verbatim.modified
     );
 
-    // 3. Scenario C: Trailing slash on canonical root
     let mut ws_trailing = Workspace::new(temp.path().to_path_buf());
     let trailing_str = format!("{}/", ws_trailing.canonical_root.to_string_lossy());
     ws_trailing.canonical_root = PathBuf::from(trailing_str);
@@ -120,7 +86,6 @@ fn test_sync_reconcile_case_mismatch_and_verbatim() {
         report_trailing.deleted
     );
 
-    // 4. Scenario D: Real edit on disk with drive case mismatch
     let new_lib_content = "pub fn add(a: i32, b: i32) -> i32 { a + b + 1 }\n";
     std::fs::write(&lib_file, new_lib_content).unwrap();
 

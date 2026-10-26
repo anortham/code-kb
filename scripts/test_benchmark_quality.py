@@ -16,6 +16,69 @@ SPEC.loader.exec_module(benchmark_quality)
 
 
 class BenchmarkQualityTest(unittest.TestCase):
+    def run_main_with_lookup_output(self, lookup_output=None):
+        source_paths = (
+            "crates/code-kb-core/src/queries.rs",
+            "crates/code-kb-cli/src/mcp/server.rs",
+            "crates/code-kb-core/src/workspace.rs",
+            "crates/code-kb-core/src/ops.rs",
+            "crates/code-kb-core/src/formatters.rs",
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            for rel_path in source_paths:
+                path = Path(temp_dir, rel_path)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("fixture\n", encoding="utf-8")
+
+            def measured(_, args, __, ___):
+                output = "ok"
+                if args[:2] == ["--json", "symbol"]:
+                    query = args[2]
+                    if query == "search_symbols_scoped" and lookup_output is not None:
+                        output = lookup_output
+                    elif query == "load_scoped":
+                        output = json.dumps({
+                            "names": [{"name": "load_scoped"}],
+                            "ranked": [{"symbol": {"name": "load_scoped_files"}}],
+                        })
+                    else:
+                        target = {
+                            "search_symbols_scoped": "search_symbols_scoped",
+                            "load_scoped": "load_scoped_files",
+                            "QueryError": "QueryError",
+                        }[query]
+                        symbol = {"name": target}
+                        if "--path" in args:
+                            symbol["path"] = "crates/code-kb-core/src/queries.rs"
+                        output = json.dumps({"names": [symbol], "ranked": []})
+                elif args[:2] == ["--json", "search"]:
+                    output = json.dumps([{"symbol": {"name": "sanitize_fts5_query"}}])
+                elif args[:1] == ["--json"] and "blast-radius" in args:
+                    output = json.dumps({
+                        "likely_tests": [{"name": "test_conservative_pending_resolution_ignores_unmatched_namespace"}]
+                    })
+                return {
+                    "output": output,
+                    "tokens": 1,
+                    "cold_ms": 1.0,
+                    "median_ms": 1.0,
+                    "p95_ms": 1.0,
+                    "raw_samples_ms": [1.0],
+                    "warm_samples_ms": [1.0],
+                    "peak_rss_mb": 1.0,
+                }
+
+            with patch.object(sys, "argv", [
+                "benchmark_quality.py",
+                "--binary", sys.executable,
+                "--cwd", temp_dir,
+                "--skip-mcp",
+                "--json-output", "report.json",
+            ]), patch.object(benchmark_quality, "measure_memory_and_latency", side_effect=measured), contextlib.redirect_stdout(io.StringIO()):
+                benchmark_quality.main()
+            return json.loads(Path(temp_dir, "report.json").read_text(encoding="utf-8"))
+
     def test_mcp_result_rejects_error_and_mismatched_id(self):
         with self.assertRaisesRegex(RuntimeError, "did not match"):
             benchmark_quality.mcp_result({"id": 2, "result": {}}, 1, "tool")
@@ -65,6 +128,16 @@ class BenchmarkQualityTest(unittest.TestCase):
         self.assertIn("metadata", report)
         self.assertFalse(report["metadata"]["workloads"]["cli"])
         self.assertFalse(report["metadata"]["workloads"]["persistent_mcp"])
+
+    def test_main_ranks_structured_lookup_results(self):
+        report = self.run_main_with_lookup_output()
+        self.assertEqual([query["rank"] for query in report["queries"]], [1, 2, 1, 1, 1, 1])
+
+    def test_main_rejects_invalid_query_results(self):
+        for output in ("not JSON", "[]"):
+            with self.subTest(output=output):
+                with self.assertRaisesRegex(RuntimeError, "Exact Symbol Lookup"):
+                    self.run_main_with_lookup_output(output)
 
 
 if __name__ == "__main__":

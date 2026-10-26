@@ -3319,6 +3319,57 @@ fn a_typo_with_a_kind_filter_suggests_only_names_of_that_kind() {
 }
 
 #[test]
+fn a_lookup_miss_applies_its_kind_filter_to_suggestions() {
+    let (_repo, db_path) = scanned_repo(&[(
+        "src/app.py",
+        "class Widget: pass\n\ndef unrelated(): return 1\n",
+    )]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let unfiltered = lookup_symbols_op(&db_path, &conn, "Widgt", None, None, false, 20).unwrap();
+    let filtered =
+        lookup_symbols_op(&db_path, &conn, "Widgt", Some("function"), None, false, 20).unwrap();
+
+    let unfiltered_names: Vec<_> = unfiltered
+        .suggestions
+        .iter()
+        .map(|symbol| symbol.name.as_str())
+        .collect();
+    assert!(unfiltered.names.is_empty() && unfiltered.ranked.is_empty());
+    assert_eq!(unfiltered_names, ["Widget"]);
+    assert!(filtered.names.is_empty() && filtered.ranked.is_empty());
+    assert!(filtered.suggestions.is_empty());
+}
+
+#[test]
+fn a_lookup_miss_accepts_a_display_kind_alias_for_suggestions() {
+    let (_repo, db_path) = scanned_repo(&[(
+        "src/app.py",
+        "class App:\n    def __init__(self):\n        self.client = 1\n\n\ndef cllienta(): pass\n",
+    )]);
+    let conn = open_read_only(&db_path).unwrap();
+
+    let lookup = lookup_symbols_op(
+        &db_path,
+        &conn,
+        "cllientz",
+        Some("attribute"),
+        None,
+        false,
+        20,
+    )
+    .unwrap();
+
+    let names: Vec<_> = lookup
+        .suggestions
+        .iter()
+        .map(|symbol| symbol.name.as_str())
+        .collect();
+    assert!(lookup.names.is_empty() && lookup.ranked.is_empty());
+    assert_eq!(names, ["client"]);
+}
+
+#[test]
 fn a_ranked_row_that_a_name_row_shows_is_listed_once() {
     let (_repo, db_path) = scanned_repo(&[("src/net.rs", RETRY_SOURCE)]);
     let conn = open_read_only(&db_path).unwrap();

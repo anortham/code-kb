@@ -1,5 +1,32 @@
 use std::process::Command;
 
+#[cfg(unix)]
+fn extractor_wrapper_failing_update(
+    dir: &std::path::Path,
+    active_marker: &std::path::Path,
+    failure_record: &std::path::Path,
+    rel_path: &str,
+) -> std::path::PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    let real = code_kb_core::find_julie_extract_binary().expect("julie-extract is installed");
+    let wrapper = dir.join("julie-extract-failing-update");
+    std::fs::write(
+        &wrapper,
+        format!(
+            "#!/bin/sh\nif [ -e '{}' ] && [ \"$1\" = update ]; then\n  for arg in \"$@\"; do\n    if [ \"$arg\" = '{}' ]; then : > '{}'; echo 'controlled incremental failure' >&2; exit 2; fi\n  done\nfi\nexec '{}' \"$@\"\n",
+            active_marker.display(),
+            rel_path,
+            failure_record.display(),
+            real.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let output = Command::new(&wrapper).arg("--version").output().unwrap();
+    assert!(output.status.success(), "{output:?}");
+    wrapper
+}
+
 #[test]
 fn cli_references_and_blast_radius_handle_lambdas_and_lambda_named_functions() {
     let repo = code_kb_core::safe_tempdir();
@@ -1023,6 +1050,18 @@ fn cli_read_tools_reject_missing_empty_and_conflicting_selectors() {
 fn cli_blast_radius_rejects_empty_ids_and_keeps_git_discovery() {
     let repo = setup_test_repo();
     let root = repo.path();
+    std::fs::remove_dir_all(root.join(".code-kb")).unwrap();
+    let scan = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .arg("--root")
+        .arg(root)
+        .arg("scan")
+        .output()
+        .unwrap();
+    assert!(
+        scan.status.success(),
+        "{}",
+        String::from_utf8_lossy(&scan.stderr)
+    );
     std::fs::write(root.join(".code-kb/.gitignore"), "*\n").unwrap();
     assert!(
         Command::new("git")
@@ -2435,6 +2474,88 @@ fn test_cli_query_builds_and_refreshes_the_index_without_scan() {
     )
     .unwrap();
     assert!(lookup("added_while_no_server_ran").contains("added_while_no_server_ran"));
+}
+
+#[cfg(unix)]
+#[test]
+fn test_cli_offline_reconcile_failure_does_not_return_stale_results() {
+    let temp_dir = code_kb_core::safe_tempdir();
+    let root = temp_dir.path();
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"fixture\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("src/lib.rs"), "pub fn old_symbol() {}\n").unwrap();
+
+    let workspace = code_kb_core::Workspace::new(root.to_path_buf());
+    let db_path = root.join(".code-kb/artifact.db");
+    code_kb_core::scan_workspace(&workspace, &db_path, true).unwrap();
+    std::fs::write(root.join("src/lib.rs"), "pub fn current_symbol() {}\n").unwrap();
+
+    let tools = tempfile::tempdir().unwrap();
+    let active_marker = tools.path().join("fail-refresh");
+    let failure_record = tools.path().join("failed-path");
+    std::fs::write(&active_marker, "fail").unwrap();
+    let wrapper = extractor_wrapper_failing_update(
+        tools.path(),
+        &active_marker,
+        &failure_record,
+        "src/lib.rs",
+    );
+
+    let failed = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .env("JULIE_EXTRACT_BIN", &wrapper)
+        .arg("--root")
+        .arg(root)
+        .arg("lookup")
+        .arg("old_symbol")
+        .output()
+        .unwrap();
+    let error = String::from_utf8_lossy(&failed.stderr);
+    assert!(
+        !failed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&failed.stdout)
+    );
+    assert!(
+        failed.stdout.is_empty(),
+        "{}",
+        String::from_utf8_lossy(&failed.stdout)
+    );
+    assert!(error.contains(&root.display().to_string()), "{error}");
+    assert!(error.contains("controlled incremental failure"), "{error}");
+    assert!(error.contains("code-kb scan --root"), "{error}");
+
+    let conn = code_kb_core::open_read_only(&db_path).unwrap();
+    assert!(
+        code_kb_core::get_symbol_by_name(&conn, "old_symbol", Some("src/lib.rs"))
+            .unwrap()
+            .is_some()
+    );
+    assert!(
+        code_kb_core::get_symbol_by_name(&conn, "current_symbol", Some("src/lib.rs"))
+            .unwrap()
+            .is_none()
+    );
+    drop(conn);
+
+    std::fs::remove_file(active_marker).unwrap();
+    let recovered = Command::new(env!("CARGO_BIN_EXE_code-kb"))
+        .env("JULIE_EXTRACT_BIN", &wrapper)
+        .arg("--root")
+        .arg(root)
+        .arg("lookup")
+        .arg("current_symbol")
+        .output()
+        .unwrap();
+    assert!(
+        recovered.status.success(),
+        "{}",
+        String::from_utf8_lossy(&recovered.stderr)
+    );
+    assert!(String::from_utf8_lossy(&recovered.stdout).contains("current_symbol"));
 }
 
 #[test]

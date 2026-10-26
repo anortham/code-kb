@@ -42,6 +42,52 @@ def mcp_result(response: dict[str, Any], request_id: int, operation: str) -> dic
     return result
 
 
+def rank_query_output(spec: dict[str, Any], output: str) -> int | None:
+    try:
+        parsed = json.loads(output)
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise RuntimeError(f"{spec['name']} returned invalid JSON: {exc}") from exc
+
+    shape = spec["json_shape"]
+    if shape == "lookup":
+        if not isinstance(parsed, dict) or not isinstance(parsed.get("names"), list) or not isinstance(parsed.get("ranked"), list):
+            raise RuntimeError(f"{spec['name']} returned an invalid lookup result")
+        items = parsed["names"]
+        if any(not isinstance(item, dict) or not isinstance(item.get("name"), str) for item in items):
+            raise RuntimeError(f"{spec['name']} returned an invalid lookup name row")
+        ranked_symbols = []
+        for item in parsed["ranked"]:
+            symbol = item.get("symbol") if isinstance(item, dict) else None
+            if not isinstance(symbol, dict) or not isinstance(symbol.get("name"), str):
+                raise RuntimeError(f"{spec['name']} returned an invalid ranked lookup row")
+            ranked_symbols.append(symbol)
+        items = [*items, *ranked_symbols]
+    elif shape == "search":
+        if not isinstance(parsed, list) or any(
+            not isinstance(item, dict)
+            or not isinstance(item.get("symbol"), dict)
+            or not isinstance(item["symbol"].get("name"), str)
+            for item in parsed
+        ):
+            raise RuntimeError(f"{spec['name']} returned an invalid search result")
+        items = parsed
+    elif shape == "blast_radius":
+        likely_tests = parsed.get("likely_tests") if isinstance(parsed, dict) else None
+        if not isinstance(likely_tests, list) or any(
+            not isinstance(item, dict) or not isinstance(item.get("name"), str)
+            for item in likely_tests
+        ):
+            raise RuntimeError(f"{spec['name']} returned an invalid blast-radius result")
+        items = parsed
+    else:
+        raise RuntimeError(f"{spec['name']} has an unknown JSON result shape: {shape}")
+
+    rank = spec["eval_fn"](items, spec["target"])
+    if rank is not None and (isinstance(rank, bool) or not isinstance(rank, int) or rank < 1):
+        raise RuntimeError(f"{spec['name']} produced an invalid rank: {rank!r}")
+    return rank
+
+
 def contains_symbol_declaration(result: dict[str, Any], symbol: str, path: str) -> bool:
     content = result.get("content", [])
     text = "".join(item.get("text", "") for item in content if isinstance(item, dict))
@@ -582,47 +628,49 @@ def main():
                     "name": "Exact Symbol Lookup",
                     "args": ["--json", "symbol", "search_symbols_scoped"],
                     "target": "search_symbols_scoped",
+                    "json_shape": "lookup",
                     "eval_fn": lambda items, tgt: next((idx + 1 for idx, it in enumerate(items) if it.get("name") == tgt), None),
                 },
                 {
                     "name": "Prefix Symbol Lookup",
                     "args": ["--json", "symbol", "load_scoped"],
                     "target": "load_scoped_files",
+                    "json_shape": "lookup",
                     "eval_fn": lambda items, tgt: next((idx + 1 for idx, it in enumerate(items) if it.get("name") == tgt), None),
                 },
                 {
                     "name": "Conceptual FTS5 Search",
                     "args": ["--json", "search", "sanitize FTS5 query"],
                     "target": "sanitize_fts5_query",
+                    "json_shape": "search",
                     "eval_fn": lambda items, tgt: next((idx + 1 for idx, it in enumerate(items) if it.get("symbol", {}).get("name") == tgt), None),
                 },
                 {
                     "name": "Unscoped Symbol Search",
                     "args": ["--json", "symbol", "QueryError"],
                     "target": "QueryError",
+                    "json_shape": "lookup",
                     "eval_fn": lambda items, tgt: next((idx + 1 for idx, it in enumerate(items) if it.get("name") == tgt), None),
                 },
                 {
                     "name": "Scoped Search (--path)",
                     "args": ["--json", "symbol", "QueryError", "--path", "crates/code-kb-core"],
                     "target": "QueryError",
+                    "json_shape": "lookup",
                     "eval_fn": lambda items, tgt: next((idx + 1 for idx, it in enumerate(items) if it.get("name") == tgt and "crates/code-kb-core" in it.get("path", "")), None),
                 },
                 {
                     "name": "Blast Radius Test Prediction",
                     "args": ["--json", "blast-radius", "find_callee_signatures"],
                     "target": "test_conservative_pending_resolution_ignores_unmatched_namespace",
+                    "json_shape": "blast_radius",
                     "eval_fn": lambda obj, tgt: next((idx + 1 for idx, t in enumerate(obj.get("likely_tests", [])) if t.get("name") == tgt), None) if isinstance(obj, dict) else None,
                 },
             ]
 
             for spec in search_specs:
                 res = measure_memory_and_latency(binary, spec["args"], args.cwd, args.iterations)
-                try:
-                    parsed = json.loads(res["output"])
-                    rank = spec["eval_fn"](parsed, spec["target"])
-                except Exception:
-                    rank = None
+                rank = rank_query_output(spec, res["output"])
 
                 rank_1 = (rank == 1)
                 top_5 = (rank is not None and rank <= 5)

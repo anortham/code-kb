@@ -2,6 +2,7 @@ use ignore::WalkBuilder;
 use notify::RecursiveMode;
 use notify_debouncer_full::{DebouncedEvent, Debouncer, RecommendedCache, new_debouncer};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use thiserror::Error;
 use tracing::{info, warn};
@@ -21,6 +22,48 @@ pub enum WatcherError {
 pub struct WatcherHandle {
     // Retaining debouncer keeps the background notify thread running
     _debouncer: Debouncer<notify::RecommendedWatcher, RecommendedCache>,
+    failures: Arc<Mutex<WatcherFailureState>>,
+}
+
+#[derive(Default)]
+struct WatcherFailureState {
+    generation: u64,
+    failure: Option<String>,
+}
+
+impl WatcherHandle {
+    pub fn pending_failure(&self) -> Option<(u64, String)> {
+        let failures = self
+            .failures
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        failures
+            .failure
+            .as_ref()
+            .map(|failure| (failures.generation, failure.clone()))
+    }
+
+    pub fn clear_failure_if_unchanged(&self, generation: u64) -> bool {
+        let mut failures = self
+            .failures
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if failures.generation != generation {
+            return false;
+        }
+        failures.failure = None;
+        true
+    }
+}
+
+fn record_failure(failures: &Arc<Mutex<WatcherFailureState>>, failure: String) {
+    let mut failures = failures
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    failures.generation = failures.generation.wrapping_add(1);
+    if failures.failure.is_none() {
+        failures.failure = Some(failure.chars().take(512).collect());
+    }
 }
 
 /// Starts debounced background file watcher with git storm circuit breaker.
@@ -30,8 +73,9 @@ pub fn start_watcher(
 ) -> Result<WatcherHandle, WatcherError> {
     let ws_clone = workspace.clone();
     let db_clone = db_path.clone();
+    let failures = Arc::new(Mutex::new(WatcherFailureState::default()));
+    let callback_failures = Arc::clone(&failures);
 
-    // 150ms debounce window
     let mut debouncer = new_debouncer(
         Duration::from_millis(150),
         None,
@@ -40,6 +84,7 @@ pub fn start_watcher(
                 Ok(evts) => evts,
                 Err(err) => {
                     warn!("File watcher error: {:?}", err);
+                    record_failure(&callback_failures, format!("File watcher error: {err:?}"));
                     return;
                 }
             };
@@ -59,6 +104,10 @@ pub fn start_watcher(
                 Some(m) => m,
                 None => {
                     warn!("Failed to initialize ignore matcher for workspace root; skipping tick");
+                    record_failure(
+                        &callback_failures,
+                        "Failed to initialize ignore matcher for workspace root".to_string(),
+                    );
                     return;
                 }
             };
@@ -85,6 +134,10 @@ pub fn start_watcher(
                             ignore_matcher.matched_with_errors(Path::new(&rel_str), is_dir);
                         if let Some(error) = error {
                             warn!("Failed to load ignore rule: {error}");
+                            record_failure(
+                                &callback_failures,
+                                format!("Failed to load ignore rule: {error}"),
+                            );
                         }
                         if matched.is_ignore() {
                             continue;
@@ -98,13 +151,9 @@ pub fn start_watcher(
                 return;
             }
 
-            // Deduplicate paths in this window
             relevant_files.sort_by(|a, b| a.1.cmp(&b.1));
             relevant_files.dedup_by(|a, b| a.1 == b.1);
 
-            // Git checkout storm circuit-breaker:
-            // If more than 50 files changed within the debounce window,
-            // cancel micro-updates and run a single bulk scan.
             if relevant_files.len() > 50 {
                 tracing::debug!(
                     "Git storm detected ({} files changed in window). Running bulk scan...",
@@ -112,52 +161,83 @@ pub fn start_watcher(
                 );
                 if let Err(e) = scan_workspace(&ws_clone, &db_clone, false) {
                     warn!("Bulk scan failed during git storm: {e}");
+                    record_failure(
+                        &callback_failures,
+                        format!("Bulk scan failed during git storm: {e}"),
+                    );
                 }
                 return;
             }
 
-            // Otherwise, process incremental updates in lock-free WAL mode
-            let conn_opt = crate::db::open_read_only(&db_clone).ok();
+            let conn = match crate::db::open_read_only(&db_clone) {
+                Ok(conn) => conn,
+                Err(e) => {
+                    warn!("Failed to open index during watcher update: {e}");
+                    record_failure(
+                        &callback_failures,
+                        format!("Failed to open index during watcher update: {e}"),
+                    );
+                    return;
+                }
+            };
             for (abs, rel) in relevant_files {
                 if abs.exists() && abs.is_file() {
-                    let mut handled = false;
-                    if let Some(ref conn) = conn_opt
-                        && let Ok(_fresh) = ensure_fresh_file(&ws_clone, &db_clone, conn, &rel)
-                    {
-                        handled = true;
-                    }
-                    if !handled {
-                        let _ = update_file(&ws_clone, &db_clone, &rel);
+                    let result = match ensure_fresh_file(&ws_clone, &db_clone, &conn, &rel) {
+                        Ok(_) => Ok(()),
+                        Err(_) => update_file(&ws_clone, &db_clone, &rel),
+                    };
+                    if let Err(e) = result {
+                        warn!("Failed to refresh '{}' from watcher: {e}", rel);
+                        record_failure(
+                            &callback_failures,
+                            format!("Failed to refresh '{rel}' from watcher: {e}"),
+                        );
                     }
                 } else if !abs.exists() {
-                    let mut child_paths = Vec::new();
-                    let local_conn;
-                    let conn_ref = match conn_opt.as_ref() {
-                        Some(c) => Some(c),
-                        None => {
-                            local_conn = crate::db::open_read_only(&db_clone).ok();
-                            local_conn.as_ref()
+                    let escaped = crate::queries::escape_like(&rel);
+                    let pattern = format!("{escaped}/%");
+                    let child_paths_result = conn
+                        .prepare("SELECT path FROM files WHERE path LIKE ?1 ESCAPE '\\' LIMIT 51")
+                        .and_then(|mut stmt| {
+                            let rows = stmt.query_map([&pattern], |r| r.get::<_, String>(0))?;
+                            rows.collect::<Result<Vec<_>, _>>()
+                        });
+                    let child_paths = match child_paths_result {
+                        Ok(paths) => paths,
+                        Err(e) => {
+                            warn!("Failed to read indexed paths for deleted '{}': {e}", rel);
+                            record_failure(
+                                &callback_failures,
+                                format!("Failed to read indexed paths for deleted '{rel}': {e}"),
+                            );
+                            continue;
                         }
                     };
-                    if let Some(conn) = conn_ref {
-                        let escaped = crate::queries::escape_like(&rel);
-                        let pattern = format!("{escaped}/%");
-                        if let Ok(mut stmt) = conn.prepare(
-                            "SELECT path FROM files WHERE path LIKE ?1 ESCAPE '\\' LIMIT 51",
-                        ) && let Ok(rows) = stmt.query_map([&pattern], |r| r.get::<_, String>(0))
-                        {
-                            for child in rows.flatten() {
-                                child_paths.push(child);
-                            }
-                        }
-                    }
                     if child_paths.len() > 50 {
-                        let _ = scan_workspace(&ws_clone, &db_clone, false);
+                        if let Err(e) = scan_workspace(&ws_clone, &db_clone, false) {
+                            warn!("Bulk scan failed after deletion of '{}': {e}", rel);
+                            record_failure(
+                                &callback_failures,
+                                format!("Bulk scan failed after deletion of '{rel}': {e}"),
+                            );
+                        }
                     } else {
                         for child in child_paths {
-                            let _ = delete_file(&ws_clone, &db_clone, &child);
+                            if let Err(e) = delete_file(&ws_clone, &db_clone, &child) {
+                                warn!("Failed to remove deleted file '{}': {e}", child);
+                                record_failure(
+                                    &callback_failures,
+                                    format!("Failed to remove deleted file '{child}': {e}"),
+                                );
+                            }
                         }
-                        let _ = delete_file(&ws_clone, &db_clone, &rel);
+                        if let Err(e) = delete_file(&ws_clone, &db_clone, &rel) {
+                            warn!("Failed to remove deleted file '{}': {e}", rel);
+                            record_failure(
+                                &callback_failures,
+                                format!("Failed to remove deleted file '{rel}': {e}"),
+                            );
+                        }
                     }
                 }
             }
@@ -174,6 +254,7 @@ pub fn start_watcher(
 
     Ok(WatcherHandle {
         _debouncer: debouncer,
+        failures,
     })
 }
 

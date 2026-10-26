@@ -543,6 +543,12 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
 ### 6. Index Freshness
 - A debounced watcher refreshes filesystem changes, startup reconciles changes made while no server ran,
   and body and skeleton reads refresh their target file before answering.
+- A known reconciliation or watcher failure is an error for indexed reads, never a successful stale
+  answer. Reconciliation preserves completed updates and unreadable files' existing rows, but reports
+  bounded failure details with the project root and a recovery action. MCP retries failed preparation
+  or reconciliation on subsequent calls; a watcher failure clears only after successful reconciliation
+  with no newer failure. A failed watcher start is also reported. The unreadable-index rebuild guard
+  retains its no-automatic-retry rule below.
 - Only the active root keeps a watcher; a root the server switched away from loses its watcher by
   the next call. When a call switches roots, the watcher and the offline
   reconcile restart for the new root.

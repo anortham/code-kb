@@ -683,7 +683,6 @@ fn test_reconcile_offline_edits_preserves_unreadable_directory_records() {
     scan_workspace(&ws, &db_path, true).unwrap();
     let conn = open_read_only(&db_path).unwrap();
 
-    // Add a new file at root that should still be indexed even if src is unreadable
     let new_file = root.join("top.rs");
     fs::write(&new_file, "pub fn top_symbol() {}\n").unwrap();
 
@@ -691,8 +690,14 @@ fn test_reconcile_offline_edits_preserves_unreadable_directory_records() {
     let result = reconcile_offline_edits(&ws, &db_path, &conn);
     fs::set_permissions(&src_dir, fs::Permissions::from_mode(0o755)).unwrap();
 
-    let report = result.expect("reconciliation should not abort on unreadable directory");
-    assert!(report.added.contains(&"top.rs".to_string()));
+    let error = result.unwrap_err().to_string();
+    assert!(error.contains(&root.display().to_string()), "{error}");
+    assert!(error.contains("code-kb scan --root"), "{error}");
+    assert!(
+        get_symbol_by_name(&conn, "top_symbol", Some("top.rs"))
+            .unwrap()
+            .is_some()
+    );
     assert!(
         get_symbol_by_name(&conn, "locked_symbol", Some("src/locked.rs"))
             .unwrap()
@@ -718,20 +723,18 @@ fn test_reconcile_offline_edits_continues_when_individual_update_fails() {
     scan_workspace(&ws, &db_path, true).unwrap();
     let conn = open_read_only(&db_path).unwrap();
 
-    // Add another valid file and an unreadable file that will fail during update_file
     fs::write(src_dir.join("another.rs"), "pub fn another_symbol() {}\n").unwrap();
     let unreadable_path = src_dir.join("unreadable.rs");
     fs::write(&unreadable_path, "pub fn unreadable_symbol() {}\n").unwrap();
     fs::set_permissions(&unreadable_path, fs::Permissions::from_mode(0o000)).unwrap();
 
     let result = reconcile_offline_edits(&ws, &db_path, &conn);
-    // Restore permissions so cleanup succeeds
     fs::set_permissions(&unreadable_path, fs::Permissions::from_mode(0o644)).unwrap();
 
-    let report =
-        result.expect("reconciliation should succeed even when an individual update fails");
-    assert!(report.added.contains(&"src/another.rs".to_string()));
-    assert!(report.added.contains(&"src/unreadable.rs".to_string()));
+    let error = result.unwrap_err().to_string();
+    assert!(error.contains(&root.display().to_string()), "{error}");
+    assert!(error.contains("src/unreadable.rs"), "{error}");
+    assert!(error.contains("code-kb scan --root"), "{error}");
     assert!(
         get_symbol_by_name(&conn, "another_symbol", Some("src/another.rs"))
             .unwrap()
@@ -756,6 +759,55 @@ fn test_reconcile_offline_edits_continues_when_individual_update_fails() {
             .unwrap()
             .is_some(),
         "A file whose update failed once must be retried and indexed"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_reconcile_offline_edits_fails_when_hash_read_fails() {
+    let _extract_bin =
+        find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+
+    let temp_dir = safe_tempdir();
+    let root = temp_dir.path().to_path_buf();
+    let src_dir = root.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
+    let file_path = src_dir.join("same_size.rs");
+    let old_content = "pub fn old_name() {}\n";
+    let new_content = "pub fn new_name() {}\n";
+    assert_eq!(old_content.len(), new_content.len());
+    fs::write(&file_path, old_content).unwrap();
+
+    let ws = Workspace::new(root.clone());
+    let db_path = root.join("test.db");
+    scan_workspace(&ws, &db_path, true).unwrap();
+    let conn = open_read_only(&db_path).unwrap();
+
+    fs::write(&file_path, new_content).unwrap();
+    fs::set_permissions(&file_path, fs::Permissions::from_mode(0o000)).unwrap();
+    let result = reconcile_offline_edits(&ws, &db_path, &conn);
+    fs::set_permissions(&file_path, fs::Permissions::from_mode(0o644)).unwrap();
+
+    let error = result.unwrap_err().to_string();
+    assert!(error.contains(&root.display().to_string()), "{error}");
+    assert!(error.contains("src/same_size.rs"), "{error}");
+    assert!(error.contains("code-kb scan --root"), "{error}");
+    assert!(
+        get_symbol_by_name(&conn, "old_name", Some("src/same_size.rs"))
+            .unwrap()
+            .is_some()
+    );
+    assert!(
+        get_symbol_by_name(&conn, "new_name", Some("src/same_size.rs"))
+            .unwrap()
+            .is_none()
+    );
+
+    reconcile_offline_edits(&ws, &db_path, &conn).unwrap();
+    assert!(
+        get_symbol_by_name(&conn, "new_name", Some("src/same_size.rs"))
+            .unwrap()
+            .is_some()
     );
 }
 

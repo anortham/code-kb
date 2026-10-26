@@ -519,6 +519,62 @@ fn extractor_wrapper(dir: &Path, scan_prelude: &str) -> PathBuf {
     wrapper
 }
 
+#[cfg(unix)]
+fn extractor_wrapper_with_failures(
+    dir: &Path,
+    active_marker: &Path,
+    failure_record: &Path,
+    failures: &[(&str, &str)],
+) -> PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    let real = code_kb_core::find_julie_extract_binary().expect("julie-extract is installed");
+    let wrapper = dir.join("julie-extract-with-failures");
+    let cases = failures
+        .iter()
+        .map(|(operation, path)| format!("'{operation}:{path}'"))
+        .collect::<Vec<_>>()
+        .join("|");
+    std::fs::write(
+        &wrapper,
+        format!(
+            "#!/bin/sh\nif [ -e '{}' ]; then\n  for arg in \"$@\"; do\n    case \"$1:$arg\" in\n      {cases}) : > '{}'; echo 'controlled incremental failure' >&2; exit 2;;\n    esac\n  done\nfi\nexec '{}' \"$@\"\n",
+            active_marker.display(),
+            failure_record.display(),
+            real.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let output = Command::new(&wrapper).arg("--version").output().unwrap();
+    assert!(output.status.success(), "{output:?}");
+    wrapper
+}
+
+#[cfg(unix)]
+fn extractor_wrapper_with_scan_failure(
+    dir: &Path,
+    active_marker: &Path,
+    failure_record: &Path,
+) -> PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    let real = code_kb_core::find_julie_extract_binary().expect("julie-extract is installed");
+    let wrapper = dir.join("julie-extract-with-scan-failure");
+    std::fs::write(
+        &wrapper,
+        format!(
+            "#!/bin/sh\nif [ \"$1\" = scan ] && [ -e '{}' ]; then : > '{}'; echo 'controlled version rebuild failure' >&2; exit 2; fi\nexec '{}' \"$@\"\n",
+            active_marker.display(),
+            failure_record.display(),
+            real.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let output = Command::new(&wrapper).arg("--version").output().unwrap();
+    assert!(output.status.success(), "{output:?}");
+    wrapper
+}
+
 fn canonical_root(dir: &Path) -> PathBuf {
     code_kb_core::Workspace::new(dir.to_path_buf()).canonical_root
 }
@@ -533,11 +589,14 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
 
     let src_dir = root.join("src");
     std::fs::create_dir_all(&src_dir).unwrap();
-    std::fs::write(src_dir.join("other.cpp"), "int other() { return 0; }\n").unwrap();
+    let other_content = "int other() { return 0; }\n";
+    std::fs::write(src_dir.join("other.cpp"), other_content).unwrap();
     let content = "pub struct Workspace {\n    pub root: String,\n}\nstruct Parent { int run() { return 1; } int run(int) { return 2; } };\nint first() { Parent p; return p.run(); }\nint second() { Parent p; return p.run(2); }\n";
     std::fs::write(src_dir.join("workspace.rs"), content).unwrap();
     let bytes = content.len() as i64;
     let hash = format!("blake3:{}", blake3::hash(content.as_bytes()).to_hex());
+    let other_bytes = other_content.len() as i64;
+    let other_hash = format!("blake3:{}", blake3::hash(other_content.as_bytes()).to_hex());
 
     let conn = code_kb_core::open_read_write(&db_path).unwrap();
     conn.execute_batch(
@@ -577,6 +636,11 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
     conn.execute(
         "INSERT INTO files VALUES ('f1', 'src/workspace.rs', 'rust', ?1, ?2, 3, '2026-01-01')",
         rusqlite::params![hash, bytes],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO files VALUES ('f2', 'src/other.cpp', 'cpp', ?1, ?2, 1, '2026-01-01')",
+        rusqlite::params![other_hash, other_bytes],
     )
     .unwrap();
     let parent_start = content.find("struct Parent").unwrap() as i64;
@@ -1420,54 +1484,14 @@ fn test_mcp_project_root_switches_between_main_checkout_and_worktree() {
     let main_content = "pub fn main_fn() {}\n";
     std::fs::write(&main_file, main_content).unwrap();
 
-    // Set up main repo DB
     let main_db = main_root.join(".code-kb").join("artifact.db");
-    let conn = code_kb_core::open_read_write(&main_db).unwrap();
-    conn.execute_batch(
-        "CREATE TABLE files (
-            file_id TEXT PRIMARY KEY, path TEXT, language TEXT, content_hash TEXT,
-            content_bytes INTEGER, line_count INTEGER, indexed_at TEXT
-        );
-        CREATE TABLE symbols (
-            symbol_id TEXT PRIMARY KEY, file_id TEXT, path TEXT, language TEXT, name TEXT, kind TEXT,
-            signature TEXT, doc_comment TEXT, visibility TEXT, parent_symbol_id TEXT,
-            start_line INTEGER, start_column INTEGER, end_line INTEGER, end_column INTEGER,
-            start_byte INTEGER, end_byte INTEGER, body_start_line INTEGER,
-            body_start_column INTEGER, body_end_line INTEGER, body_end_column INTEGER,
-            body_start_byte INTEGER, body_end_byte INTEGER, body_hash TEXT,
-            semantic_group TEXT, is_test INTEGER, test_container INTEGER
-        );
-        CREATE TABLE relationships (
-            relationship_id TEXT PRIMARY KEY, from_symbol_id TEXT, to_symbol_id TEXT,
-            kind TEXT, path TEXT, start_line INTEGER, start_column INTEGER
-        );
-        CREATE TABLE pending_relationships (
-            from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT,
-            path TEXT, start_line INTEGER, start_column INTEGER
-        );",
+    code_kb_core::sync::scan_workspace(
+        &code_kb_core::Workspace::new(main_root.clone()),
+        &main_db,
+        false,
     )
     .unwrap();
-    let bytes = main_content.len() as i64;
-    let hash = format!("blake3:{}", blake3::hash(main_content.as_bytes()).to_hex());
-    conn.execute(
-        "INSERT INTO files VALUES ('f1', 'src/main.rs', 'rust', ?1, ?2, 1, '2026-01-01')",
-        rusqlite::params![hash, bytes],
-    )
-    .unwrap();
-    conn.execute(
-        "INSERT INTO symbols VALUES (
-            's1', 'f1', 'src/main.rs', 'rust', 'main_fn', 'function',
-            'pub fn main_fn()', NULL, 'pub', NULL,
-            1, 0, 1, 19, 0, ?1, 1, 0, 1, 19, 0, ?1, 'b3:hash',
-            NULL, 0, 0
-        )",
-        rusqlite::params![bytes],
-    )
-    .unwrap();
-    code_kb_core::db::ensure_fts_index(&conn).unwrap();
-    drop(conn);
 
-    // Set up worktree: .git file pointing to main gitdir, plus its own DB
     std::fs::create_dir_all(wt_root.join(".code-kb")).unwrap();
     std::fs::create_dir_all(wt_root.join("src")).unwrap();
     let gitdir_path = main_root.join(".git").join("worktrees").join("feature-x");
@@ -1483,57 +1507,17 @@ fn test_mcp_project_root_switches_between_main_checkout_and_worktree() {
     std::fs::write(&wt_file, wt_content).unwrap();
 
     let wt_db = wt_root.join(".code-kb").join("artifact.db");
-    let conn_wt = code_kb_core::open_read_write(&wt_db).unwrap();
-    conn_wt.execute_batch(
-        "CREATE TABLE files (
-            file_id TEXT PRIMARY KEY, path TEXT, language TEXT, content_hash TEXT,
-            content_bytes INTEGER, line_count INTEGER, indexed_at TEXT
-        );
-        CREATE TABLE symbols (
-            symbol_id TEXT PRIMARY KEY, file_id TEXT, path TEXT, language TEXT, name TEXT, kind TEXT,
-            signature TEXT, doc_comment TEXT, visibility TEXT, parent_symbol_id TEXT,
-            start_line INTEGER, start_column INTEGER, end_line INTEGER, end_column INTEGER,
-            start_byte INTEGER, end_byte INTEGER, body_start_line INTEGER,
-            body_start_column INTEGER, body_end_line INTEGER, body_end_column INTEGER,
-            body_start_byte INTEGER, body_end_byte INTEGER, body_hash TEXT,
-            semantic_group TEXT, is_test INTEGER, test_container INTEGER
-        );
-        CREATE TABLE relationships (
-            relationship_id TEXT PRIMARY KEY, from_symbol_id TEXT, to_symbol_id TEXT,
-            kind TEXT, path TEXT, start_line INTEGER, start_column INTEGER
-        );
-        CREATE TABLE pending_relationships (
-            from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT,
-            path TEXT, start_line INTEGER, start_column INTEGER
-        );",
+    code_kb_core::sync::scan_workspace(
+        &code_kb_core::Workspace::new(wt_root.clone()),
+        &wt_db,
+        false,
     )
     .unwrap();
-    let wt_bytes = wt_content.len() as i64;
-    let wt_hash = format!("blake3:{}", blake3::hash(wt_content.as_bytes()).to_hex());
-    conn_wt
-        .execute(
-            "INSERT INTO files VALUES ('f2', 'src/feature.rs', 'rust', ?1, ?2, 1, '2026-01-01')",
-            rusqlite::params![wt_hash, wt_bytes],
-        )
-        .unwrap();
-    conn_wt
-        .execute(
-            "INSERT INTO symbols VALUES (
-            's2', 'f2', 'src/feature.rs', 'rust', 'feature_fn', 'function',
-            'pub fn feature_fn()', NULL, 'pub', NULL,
-            1, 0, 1, 22, 0, ?1, 1, 0, 1, 22, 0, ?1, 'b3:hash',
-            NULL, 0, 0
-        )",
-            rusqlite::params![wt_bytes],
-        )
-        .unwrap();
-    code_kb_core::db::ensure_fts_index(&conn_wt).unwrap();
-    drop(conn_wt);
 
     // Spawn server pointing to main_root
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
-            .env("CODE_KB_TELEMETRY_DIR", main_root.join(".telemetry_test"))
+            .env("CODE_KB_TELEMETRY_DIR", temp_dir.path().join("telemetry"))
             .arg("serve")
             .arg("--root")
             .arg(&main_root)
@@ -1585,7 +1569,10 @@ fn test_mcp_project_root_switches_between_main_checkout_and_worktree() {
     let resp2: Value = serde_json::from_str(&resp_line2).unwrap();
     assert_eq!(resp2["id"], 2);
     let main_text = resp2["result"]["content"][0]["text"].as_str().unwrap();
-    assert!(main_text.starts_with("Found 1 symbols matching \"main_fn\":"));
+    assert!(
+        main_text.starts_with("Found 1 symbols matching \"main_fn\":"),
+        "{main_text}"
+    );
     assert!(main_text.contains("- function `main_fn` [src/main.rs:1-1]"));
 
     // 3. Query file_skeleton with absolute path to file in worktree
@@ -4015,6 +4002,299 @@ fn test_mcp_failed_initial_scan_is_retried_on_the_next_call() {
 
 #[cfg(unix)]
 #[test]
+fn test_mcp_version_check_failure_does_not_answer_from_the_existing_index() {
+    let launch = setup_test_repo();
+    let target = cargo_project("pub fn version_guard_symbol() {}\n");
+    let telemetry = tempfile::tempdir().unwrap();
+    cli_scan(target.path(), None, telemetry.path());
+    let db_path = target.path().join(".code-kb/artifact.db");
+    let conn = code_kb_core::Connection::open(&db_path).unwrap();
+    conn.execute(
+        "UPDATE artifact_metadata SET value = '0.0.1' WHERE key = 'binary_version'",
+        [],
+    )
+    .unwrap();
+    drop(conn);
+
+    let tools = tempfile::tempdir().unwrap();
+    let active_marker = tools.path().join("fail-version-rebuild");
+    let failure_record = tools.path().join("failed-scan");
+    std::fs::write(&active_marker, "fail").unwrap();
+    let wrapper =
+        extractor_wrapper_with_scan_failure(tools.path(), &active_marker, &failure_record);
+    let mut command = serve_command(launch.path());
+    command
+        .env("JULIE_EXTRACT_BIN", &wrapper)
+        .env("CODE_KB_INDEX_WAIT_MS", "60000");
+    let mut session = McpSession::start(command);
+    let arguments = json!({
+        "project_root": target.path(),
+        "query": "version_guard_symbol"
+    });
+
+    for _ in 0..2 {
+        let failed = session.call("lookup_symbol", arguments.clone());
+        let text = result_text(&failed);
+        assert_eq!(failed["isError"], true, "{failed}");
+        assert!(text.contains(&canonical_root(target.path()).display().to_string()));
+        assert!(
+            text.contains("controlled version rebuild failure"),
+            "{text}"
+        );
+        assert!(text.contains("retried"), "{text}");
+        assert!(
+            !text.contains("function `version_guard_symbol` ["),
+            "{text}"
+        );
+    }
+
+    std::fs::remove_file(active_marker).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        let recovered = session.call("lookup_symbol", arguments.clone());
+        if result_text(&recovered).contains("function `version_guard_symbol` [") {
+            assert_ne!(recovered["isError"], true, "{recovered}");
+            break;
+        }
+        assert_eq!(recovered["isError"], true, "{recovered}");
+        assert!(Instant::now() < deadline, "{recovered}");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn test_mcp_offline_update_and_delete_failures_return_errors_and_retry() {
+    let launch = setup_test_repo();
+    let update_project = cargo_project("pub fn old_update_symbol() {}\n");
+    let delete_project = cargo_project("pub fn deleted_symbol() {}\n");
+    let healthy_project = cargo_project("pub fn healthy_symbol() {}\n");
+    let telemetry = tempfile::tempdir().unwrap();
+    cli_scan(update_project.path(), None, telemetry.path());
+    cli_scan(delete_project.path(), None, telemetry.path());
+    cli_scan(healthy_project.path(), None, telemetry.path());
+
+    std::fs::write(
+        update_project.path().join("src/lib.rs"),
+        "pub fn new_update_symbol() {}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        update_project.path().join("src/another.rs"),
+        "pub fn another_update_symbol() {}\n",
+    )
+    .unwrap();
+    std::fs::remove_file(delete_project.path().join("src/lib.rs")).unwrap();
+
+    let tools = tempfile::tempdir().unwrap();
+    let active_marker = tools.path().join("fail-refresh");
+    let failure_record = tools.path().join("failed-path");
+    std::fs::write(&active_marker, "fail").unwrap();
+    let wrapper = extractor_wrapper_with_failures(
+        tools.path(),
+        &active_marker,
+        &failure_record,
+        &[("update", "src/lib.rs"), ("delete", "src/lib.rs")],
+    );
+    let mut command = serve_command(launch.path());
+    command
+        .env("JULIE_EXTRACT_BIN", &wrapper)
+        .env("CODE_KB_INDEX_WAIT_MS", "60000");
+    let mut session = McpSession::start(command);
+
+    let update_arguments = json!({
+        "query": "old_update_symbol",
+        "project_root": update_project.path()
+    });
+    let failed_update = session.call("lookup_symbol", update_arguments.clone());
+    let update_text = result_text(&failed_update);
+    assert_eq!(failed_update["isError"], true, "{failed_update}");
+    assert!(update_text.contains(&canonical_root(update_project.path()).display().to_string()));
+    assert!(
+        update_text.contains("controlled incremental failure"),
+        "{update_text}"
+    );
+    assert!(update_text.contains("code-kb scan --root"), "{update_text}");
+    assert!(
+        !update_text.contains("`old_update_symbol` ["),
+        "{update_text}"
+    );
+    let update_conn =
+        code_kb_core::open_read_only(&update_project.path().join(".code-kb/artifact.db")).unwrap();
+    assert!(
+        code_kb_core::get_symbol_by_name(
+            &update_conn,
+            "another_update_symbol",
+            Some("src/another.rs")
+        )
+        .unwrap()
+        .is_some()
+    );
+    assert!(
+        code_kb_core::get_symbol_by_name(&update_conn, "old_update_symbol", Some("src/lib.rs"))
+            .unwrap()
+            .is_some()
+    );
+    assert!(
+        code_kb_core::get_symbol_by_name(&update_conn, "new_update_symbol", Some("src/lib.rs"))
+            .unwrap()
+            .is_none()
+    );
+    drop(update_conn);
+
+    let repeated_update = session.call("lookup_symbol", update_arguments.clone());
+    assert_eq!(repeated_update["isError"], true, "{repeated_update}");
+
+    let healthy = session.call(
+        "lookup_symbol",
+        json!({
+            "query": "healthy_symbol",
+            "project_root": healthy_project.path()
+        }),
+    );
+    assert_ne!(healthy["isError"], true, "{healthy}");
+    assert!(result_text(&healthy).contains("function `healthy_symbol` ["));
+
+    let failed_delete = session.call(
+        "lookup_symbol",
+        json!({
+            "query": "deleted_symbol",
+            "project_root": delete_project.path()
+        }),
+    );
+    let delete_text = result_text(&failed_delete);
+    assert_eq!(failed_delete["isError"], true, "{failed_delete}");
+    assert!(delete_text.contains(&canonical_root(delete_project.path()).display().to_string()));
+    assert!(
+        delete_text.contains("controlled incremental failure"),
+        "{delete_text}"
+    );
+    assert!(delete_text.contains("code-kb scan --root"), "{delete_text}");
+
+    let still_failed_update = session.call("lookup_symbol", update_arguments.clone());
+    assert_eq!(
+        still_failed_update["isError"], true,
+        "{still_failed_update}"
+    );
+
+    std::fs::remove_file(&active_marker).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        let recovered = session.call("lookup_symbol", update_arguments.clone());
+        if result_text(&recovered).contains("function `new_update_symbol` [") {
+            assert_ne!(recovered["isError"], true, "{recovered}");
+            break;
+        }
+        assert_eq!(recovered["isError"], true, "{recovered}");
+        assert!(Instant::now() < deadline, "{recovered}");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        let deleted = session.call(
+            "lookup_symbol",
+            json!({
+                "query": "deleted_symbol",
+                "project_root": delete_project.path()
+            }),
+        );
+        if deleted["isError"] != true {
+            assert!(
+                !result_text(&deleted).contains("function `deleted_symbol` ["),
+                "{}",
+                result_text(&deleted)
+            );
+            break;
+        }
+        assert!(Instant::now() < deadline, "{deleted}");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn test_mcp_watcher_failure_stays_pending_through_unrelated_successful_event() {
+    let launch = setup_test_repo();
+    let target = cargo_project("pub fn original_symbol() {}\n");
+    let telemetry = tempfile::tempdir().unwrap();
+    cli_scan(target.path(), None, telemetry.path());
+
+    let tools = tempfile::tempdir().unwrap();
+    let active_marker = tools.path().join("fail-refresh");
+    let failure_record = tools.path().join("failed-path");
+    std::fs::write(&active_marker, "fail").unwrap();
+    let wrapper = extractor_wrapper_with_failures(
+        tools.path(),
+        &active_marker,
+        &failure_record,
+        &[("update", "src/lib.rs")],
+    );
+    let mut command = serve_command(launch.path());
+    command
+        .env("JULIE_EXTRACT_BIN", &wrapper)
+        .env("CODE_KB_INDEX_WAIT_MS", "60000");
+    let mut session = McpSession::start(command);
+    let target_root = target.path();
+    let initial = session.call(
+        "lookup_symbol",
+        json!({"query": "original_symbol", "project_root": target_root}),
+    );
+    assert_ne!(initial["isError"], true, "{initial}");
+
+    std::fs::write(
+        target_root.join("src/lib.rs"),
+        "pub fn latest_symbol_after_retry() {}\n",
+    )
+    .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while !failure_record.exists() {
+        assert!(
+            Instant::now() < deadline,
+            "watcher did not attempt the failed update"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
+
+    std::fs::write(
+        target_root.join("src/other.rs"),
+        "pub fn unrelated_symbol() {}\n",
+    )
+    .unwrap();
+    let db_path = target_root.join(".code-kb/artifact.db");
+    loop {
+        let conn = code_kb_core::open_read_only(&db_path).unwrap();
+        if code_kb_core::get_symbol_by_name(&conn, "unrelated_symbol", Some("src/other.rs"))
+            .unwrap()
+            .is_some()
+        {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "unrelated watcher update did not complete"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
+
+    let pending = session.call(
+        "lookup_symbol",
+        json!({"query": "unrelated_symbol", "project_root": target_root}),
+    );
+    assert_eq!(pending["isError"], true, "{pending}");
+    assert!(result_text(&pending).contains("controlled incremental failure"));
+
+    std::fs::remove_file(&active_marker).unwrap();
+    let recovered = session.call(
+        "lookup_symbol",
+        json!({"query": "latest_symbol_after_retry", "project_root": target_root}),
+    );
+    assert_ne!(recovered["isError"], true, "{recovered}");
+    assert!(result_text(&recovered).contains("function `latest_symbol_after_retry` ["));
+}
+
+#[cfg(unix)]
+#[test]
 fn test_mcp_switching_back_reuses_the_running_prepare() {
     let launch = setup_test_repo();
     let target = cargo_project("pub fn slow_scan() {}\n");
@@ -4083,6 +4363,33 @@ fn test_mcp_serve_launched_in_a_folder_that_is_not_a_project_logs_to_the_global_
         .map(|entry| std::fs::read_to_string(entry.unwrap().path()).unwrap())
         .collect::<String>();
     assert!(log.contains("Startup index skipped"), "{log}");
+}
+
+#[cfg(unix)]
+#[test]
+fn test_mcp_unknown_tool_is_rejected_while_initial_scan_fails() {
+    let launch = cargo_project("pub fn launch() {}\n");
+    let tools = tempfile::tempdir().unwrap();
+    let active_marker = tools.path().join("fail-scan");
+    let failure_record = tools.path().join("failure-record");
+    std::fs::write(&active_marker, "fail").unwrap();
+    let wrapper =
+        extractor_wrapper_with_scan_failure(tools.path(), &active_marker, &failure_record);
+    let mut command = serve_command(launch.path());
+    command
+        .env("JULIE_EXTRACT_BIN", &wrapper)
+        .env("CODE_KB_INDEX_WAIT_MS", "60000");
+    let mut session = McpSession::start(command);
+
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !failure_record.exists() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert!(failure_record.exists());
+
+    let result = session.call("edit_file", json!({"file_path": "src/lib.rs"}));
+    assert_eq!(result["isError"], true, "{result}");
+    assert_eq!(result_text(&result), "Unknown tool: 'edit_file'");
 }
 
 #[test]

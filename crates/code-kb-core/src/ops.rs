@@ -124,15 +124,18 @@ pub fn lookup_symbols_op(
     let found_nothing = names.is_empty() && ranked.is_empty();
     let one_word = !query.chars().any(char::is_whitespace);
     let shows_query_name = named_exactly || ranked.iter().any(|hit| has_query_name(&hit.symbol));
+    let kind = kind.map(queries::normalize_kind);
+    let matches_kind = |symbol: &Symbol| {
+        kind.as_deref()
+            .is_none_or(|k| symbol.kind == k || crate::formatters::display_kind(symbol) == k)
+    };
     let suggestions = if limit == 0 {
         queries::NameSuggestions::default()
     } else if found_nothing {
-        queries::name_suggestions(conn, query, path_filter, &|_| true)
+        queries::name_suggestions(conn, query, path_filter, &matches_kind)
     } else if plain && one_word && !shows_query_name {
-        let kind = kind.map(queries::normalize_kind);
         let new_name_of_kind = |s: &Symbol| {
-            kind.as_deref()
-                .is_none_or(|k| s.kind == k || crate::formatters::display_kind(s) == k)
+            matches_kind(s)
                 && names
                     .iter()
                     .all(|row| !row.name.eq_ignore_ascii_case(&s.name))

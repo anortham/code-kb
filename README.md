@@ -93,7 +93,9 @@ You do not need to run `code-kb scan` by hand. The first `code-kb` tool call or 
 a repository creates `<workspace>/.code-kb/artifact.db` and runs the initial scan. A git
 worktree copies its parent repository's index instead of scanning again. Files that changed
 while no session ran, for example after a branch switch, are reconciled before the first
-answer. Pre-index a large repository before a session with:
+answer. If a refresh fails, indexed reads return an error naming the project and the cause
+instead of serving stale results. Fix the reported filesystem or extractor issue and retry
+the call; completed updates are preserved. Pre-index a large repository before a session with:
 
 ```bash
 code-kb scan
@@ -343,7 +345,7 @@ parse, including the `.pragma library` and `.import` directives. KDE test files 
 `autotests/` and files named `tst_*.qml` are hidden from
 search by default; `--include-tests` shows them.
 
-Current source builds use julie-extract 3.7.0. QML references retain inline component
+Source builds use the julie-extract version pinned in [scripts/julie-pins.json](scripts/julie-pins.json). QML references retain inline component
 ownership, respect shadowed `id` names, and resolve `parent` and `this` from their
 enclosing object. QML `import` directives appear as structural facts. Qt JavaScript
 `.import` symbols preserve their exact spans, so body reads exclude trailing comments.
@@ -449,7 +451,7 @@ git worktree you work in. The table does not repeat it. `path` and `file_path` a
 | `get_symbol_body` | Slices the source of a symbol from disk as written, with its declaration and decorators; a name with overloads in one class returns each overload. | Exactly one `symbol_name` or current-index `symbol_id`; `file_path` (opt, a file or a folder) | `symbol`, `name`, `path` |
 | `get_symbol_context` | Surgical bundle: target body + callee signatures + parameter types + tests; up to four overloads in one class return a bundle each, and more return an error that lists each overload's id. | Exactly one `symbol_name` or current-index `symbol_id`; `file_path` (opt, a file or a folder), `include_external` (opt, def: false) | `symbol`, `name`, `path` |
 | `find_references` | Callers: every indexed site of the name, each labeled proven, likely, unresolved, or excluded with its evidence and, for a call, its argument count (a count that no definition of the target accepts excludes a `likely` or `unresolved` Python, Java, C#, Go, Rust, Kotlin, or TypeScript call), plus a whole-word text count that accounts for every line of the name. After the sites, up to six sections list what else a change may reach: `Overrides` and `Overrides of` (same-named methods in subtypes and in ancestors), `Constructions` (lines that build a class, struct, or record), `Variant uses` (functions that name variants of an enum), `Registrations` (route facts that register a function as a handler), and `Tests that call it` (each with the command that runs it). The sections never change a label or a count; CLI `refs --json` adds them as arrays. Callees: the calls a symbol makes (filters external stdlib noise). Qualify overloaded names. | Exactly one `symbol_name` or current-index `symbol_id`; `file_path` (opt), `direction` ("callers" \| "callees", def: callers), `limit` (opt, def: 20, listed rows only), `include_external` (opt, def: false) | `symbol`, `name`, `file`, `path` |
-| `blast_radius` | Multi-hop reverse reachability (CTEs). Lists the tests the call graph reaches; when the walk finds none for one symbol, it lists the tests of its callers report, or the target itself when it is a test. When no test is found, it says whether a larger `depth` may find some, and to run the full test suite. | `symbol` or current-index `symbol_id` (opt), `file` (opt guard for an ID), `depth` (opt, def: 2), `limit` (opt) | `name`, `path`, `impact` |
+| `blast_radius` | Traces callers across multiple steps. Lists the tests the call graph reaches; when the walk finds none for one symbol, it lists the tests of its callers report, or the target itself when it is a test. When no test is found, it says whether a larger `depth` may find some, and to run the full test suite. | `symbol` or current-index `symbol_id` (opt), `file` (opt guard for an ID), `depth` (opt, def: 2), `limit` (opt) | `name`, `path`, `impact` |
 | `check_edit` | After you edit: the symbols whose shape changed against the session base (or `base`, or `HEAD`) and every site of each that your diff did not reach. Run it before you say a change is done. | `base` (opt, a git revision) | |
 
 Four query commands have no MCP tool: `outline` (a folder's layout; `file_skeleton` on a folder returns the same), `search` (the ranked search with `--explain`), `facts` (routes, SQL queries, models, and config keys), and `stats` (token savings and tool errors).

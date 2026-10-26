@@ -34,6 +34,23 @@ pub enum SyncError {
         cause: String,
         remedy: String,
     },
+    #[error(
+        "Could not establish a fresh index for '{root}' ({failure_count} failure(s)): {details}. Fix the reported filesystem or extractor issue, then retry. {remedy}"
+    )]
+    ReconciliationIncomplete {
+        root: String,
+        failure_count: usize,
+        details: String,
+        remedy: String,
+    },
+    #[error(
+        "Could not establish a fresh index for '{root}': reconciliation failed: {cause}. Fix the reported issue, then retry. {remedy}"
+    )]
+    ReconciliationFailed {
+        root: String,
+        cause: String,
+        remedy: String,
+    },
 }
 
 pub const PINNED_JULIE_VERSION: &str = "3.9.1";
@@ -647,6 +664,52 @@ fn extract_error_path(err: &ignore::Error) -> Option<&Path> {
     }
 }
 
+#[derive(Default)]
+struct ReconcileFailures {
+    count: usize,
+    details: Vec<String>,
+}
+
+impl ReconcileFailures {
+    fn record(&mut self, detail: impl Into<String>) {
+        self.count += 1;
+        if self.details.len() < 5 {
+            self.details.push(detail.into().chars().take(256).collect());
+        }
+    }
+
+    fn summary(&self) -> String {
+        let mut summary = self.details.join("; ");
+        let remaining = self.count.saturating_sub(self.details.len());
+        if remaining > 0 {
+            summary.push_str(&format!("; and {remaining} more reconciliation failure(s)"));
+        }
+        summary
+    }
+}
+
+fn retain_unreadable_path(
+    path: &Path,
+    root: &Path,
+    prefixes: &mut Vec<String>,
+    unreadable_root: &mut bool,
+) {
+    let path = dunce::simplified(path);
+    match crate::workspace::strip_prefix_lossy(path, root) {
+        Some(relative) => {
+            let relative = crate::workspace::to_forward_slash(relative)
+                .trim_start_matches('/')
+                .to_string();
+            if relative.is_empty() || relative == "." {
+                *unreadable_root = true;
+            } else {
+                prefixes.push(relative);
+            }
+        }
+        None => *unreadable_root = true,
+    }
+}
+
 /// Cold-start background sweep: checks filesystem against SQLite `files` records.
 /// Streams disk checks and uses an in-memory SQLite index to eliminate repository-wide heap HashMaps.
 /// Creates a missing index. A git worktree copies its parent repository's index and
@@ -758,8 +821,22 @@ pub fn reconcile_offline_edits(
     db_path: &Path,
     conn: &Connection,
 ) -> Result<ReconcileReport, SyncError> {
-    // Ensure artifact_metadata root_path matches workspace canonical root
-    // (self-heals worktrees where artifact.db was copied from a parent repository)
+    match reconcile_offline_edits_inner(workspace, db_path, conn) {
+        Err(error @ SyncError::ReconciliationIncomplete { .. }) => Err(error),
+        Err(error) => Err(SyncError::ReconciliationFailed {
+            root: workspace.canonical_root.display().to_string(),
+            cause: error.to_string(),
+            remedy: scan_remedy(&workspace.canonical_root),
+        }),
+        Ok(report) => Ok(report),
+    }
+}
+
+fn reconcile_offline_edits_inner(
+    workspace: &Workspace,
+    db_path: &Path,
+    conn: &Connection,
+) -> Result<ReconcileReport, SyncError> {
     let stored_root: Option<String> = conn
         .query_row(
             "SELECT value FROM artifact_metadata WHERE key = 'root_path'",
@@ -775,7 +852,6 @@ pub fn reconcile_offline_edits(
 
     let mut report = ReconcileReport::default();
 
-    // In-memory table to track paths seen on disk without allocating repository-wide HashMaps in heap
     let temp_conn = Connection::open_in_memory().map_err(SyncError::Db)?;
     temp_conn
         .execute(
@@ -820,25 +896,48 @@ pub fn reconcile_offline_edits(
         .map_err(SyncError::Db)?;
 
     let mut unreadable_prefixes: Vec<String> = Vec::new();
+    let mut unreadable_root = false;
+    let mut failures = ReconcileFailures::default();
 
     for result in walker {
         let entry = match result {
             Ok(e) => e,
             Err(e) => {
                 warn!("Reconciliation walker encountered error: {e}");
+                failures.record(format!("Workspace traversal failed: {e}"));
                 if let Some(path) = extract_error_path(&e) {
-                    let norm_path = dunce::simplified(path);
-                    if let Some(rel) =
-                        crate::workspace::strip_prefix_lossy(norm_path, &workspace.canonical_root)
-                    {
-                        unreadable_prefixes.push(crate::workspace::to_forward_slash(rel));
-                    }
+                    retain_unreadable_path(
+                        path,
+                        &workspace.canonical_root,
+                        &mut unreadable_prefixes,
+                        &mut unreadable_root,
+                    );
+                } else {
+                    unreadable_root = true;
                 }
                 continue;
             }
         };
 
-        if entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
+        let file_type = match entry.file_type() {
+            Some(file_type) => file_type,
+            None => {
+                let path = entry.path();
+                failures.record(format!(
+                    "Failed to determine file type for '{}'",
+                    path.display()
+                ));
+                retain_unreadable_path(
+                    path,
+                    &workspace.canonical_root,
+                    &mut unreadable_prefixes,
+                    &mut unreadable_root,
+                );
+                continue;
+            }
+        };
+
+        if file_type.is_file() {
             let path = entry.path();
             let norm_path = dunce::simplified(path);
             if let Some(rel) =
@@ -852,7 +951,13 @@ pub fn reconcile_offline_edits(
                     Ok(m) => m,
                     Err(e) => {
                         warn!("Failed to read metadata for '{}': {e}", path.display());
-                        let _ = insert_seen_stmt.execute([&rel_str]);
+                        failures.record(format!(
+                            "Failed to read metadata for '{}': {e}",
+                            path.display()
+                        ));
+                        insert_seen_stmt
+                            .execute([&rel_str])
+                            .map_err(SyncError::Db)?;
                         continue;
                     }
                 };
@@ -878,6 +983,10 @@ pub fn reconcile_offline_edits(
                                     "Failed to read '{}' for hash verification: {e}",
                                     path.display()
                                 );
+                                failures.record(format!(
+                                    "Failed to read '{}' for hash verification: {e}",
+                                    path.display()
+                                ));
                                 false
                             }
                         }
@@ -905,22 +1014,23 @@ pub fn reconcile_offline_edits(
         .map_err(SyncError::Db)?;
 
     let mut file_rows = files_stmt.query([]).map_err(SyncError::Db)?;
-    while let Some(row) = file_rows.next().map_err(SyncError::Db)? {
-        let indexed_path: String = row.get(0).map_err(SyncError::Db)?;
+    if !unreadable_root {
+        while let Some(row) = file_rows.next().map_err(SyncError::Db)? {
+            let indexed_path: String = row.get(0).map_err(SyncError::Db)?;
 
-        // If the indexed file belongs to an unreadable directory, preserve it
-        let in_unreadable_prefix = unreadable_prefixes.iter().any(|prefix| {
-            indexed_path == *prefix || indexed_path.starts_with(&format!("{prefix}/"))
-        });
-        if in_unreadable_prefix {
-            continue;
-        }
+            let in_unreadable_prefix = unreadable_prefixes.iter().any(|prefix| {
+                indexed_path == *prefix || indexed_path.starts_with(&format!("{prefix}/"))
+            });
+            if in_unreadable_prefix {
+                continue;
+            }
 
-        let mut seen_rows = exists_seen_stmt
-            .query([&indexed_path])
-            .map_err(SyncError::Db)?;
-        if seen_rows.next().map_err(SyncError::Db)?.is_none() {
-            report.deleted.push(indexed_path);
+            let mut seen_rows = exists_seen_stmt
+                .query([&indexed_path])
+                .map_err(SyncError::Db)?;
+            if seen_rows.next().map_err(SyncError::Db)?.is_none() {
+                report.deleted.push(indexed_path);
+            }
         }
     }
 
@@ -945,32 +1055,57 @@ pub fn reconcile_offline_edits(
         let changed_paths = report.added.iter().chain(&report.modified);
         let changed_headers = changed_paths.clone().any(|path| is_header_path(path));
         if total_changes > 50 || changed_headers {
-            scan_workspace(workspace, db_path, false)?;
-            remember_skipped_files(workspace, db_path, conn, changed_paths)?;
+            match scan_workspace(workspace, db_path, false) {
+                Ok(()) => {
+                    if let Err(e) = remember_skipped_files(workspace, db_path, conn, changed_paths)
+                    {
+                        failures.record(format!("Failed to update skipped-file records: {e}"));
+                    }
+                }
+                Err(e) => failures.record(format!("Bulk reconciliation scan failed: {e}")),
+            }
         } else {
             let mut updated: Vec<&String> = Vec::new();
             for added in &report.added {
                 match update_file(workspace, db_path, added) {
                     Ok(()) => updated.push(added),
-                    Err(e) => warn!("Failed to index added file '{}': {e}", added),
+                    Err(e) => {
+                        warn!("Failed to index added file '{}': {e}", added);
+                        failures.record(format!("Failed to index added file '{added}': {e}"));
+                    }
                 }
             }
             for modified in &report.modified {
                 match update_file(workspace, db_path, modified) {
                     Ok(()) => updated.push(modified),
-                    Err(e) => warn!("Failed to index modified file '{}': {e}", modified),
+                    Err(e) => {
+                        warn!("Failed to index modified file '{}': {e}", modified);
+                        failures.record(format!("Failed to index modified file '{modified}': {e}"));
+                    }
                 }
             }
             for deleted in &report.deleted {
                 if let Err(e) = delete_file(workspace, db_path, deleted) {
                     warn!("Failed to remove deleted file '{}': {e}", deleted);
+                    failures.record(format!("Failed to remove deleted file '{deleted}': {e}"));
                 }
             }
-            remember_skipped_files(workspace, db_path, conn, updated.into_iter())?;
+            if let Err(e) = remember_skipped_files(workspace, db_path, conn, updated.into_iter()) {
+                failures.record(format!("Failed to update skipped-file records: {e}"));
+            }
         }
     }
 
-    Ok(report)
+    if failures.count == 0 {
+        Ok(report)
+    } else {
+        Err(SyncError::ReconciliationIncomplete {
+            root: workspace.canonical_root.display().to_string(),
+            failure_count: failures.count,
+            details: failures.summary(),
+            remedy: scan_remedy(&workspace.canonical_root),
+        })
+    }
 }
 
 /// A file the extractor reports as unsupported keeps no `files` row, so every reconcile

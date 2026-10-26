@@ -41,7 +41,7 @@ A project with no index gets one on the first call. If the answer is
 Edit with the host's own file tools. code-kb refreshes the index when files change. Call
 `check_edit` before you say the change is done.
 
-Three CLI commands have no MCP tool. `code-kb facts [category]` lists routes, SQL, models, and config keys; no category lists the categories. `code-kb search <query> [--explain]` prints the ranked matches with their score breakdown. `code-kb stats` reports token savings and tool errors.
+Four query commands have no dedicated MCP tool. `code-kb outline` returns a folder's layout, also available through `file_skeleton` on a folder. `code-kb facts [category]` lists routes, SQL, models, and config keys; no category lists the categories. `code-kb search <query> [--explain]` prints the ranked matches with their score breakdown. `code-kb stats` reports token savings and tool errors.
 
 ## Rules
 

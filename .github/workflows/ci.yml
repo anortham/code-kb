@@ -28,6 +28,9 @@ jobs:
       - name: Sync Contract (AGENTS.md vs CLAUDE.md)
         if: ${{ !cancelled() }}
         run: cmp AGENTS.md CLAUDE.md
+      - name: Python Harness Tests
+        if: ${{ !cancelled() }}
+        run: python3 -B -m unittest discover -s scripts -p 'test_*.py'
       - name: Plugin launcher and manifests
         if: ${{ !cancelled() }}
         run: node --test tests/plugin/*.test.cjs
