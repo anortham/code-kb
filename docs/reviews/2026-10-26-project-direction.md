@@ -4,7 +4,8 @@ Reviewed on 2026-10-26, starting from `main` at `d1ab7d9` (v2.9.1), with
 julie-extract 3.9.1. The initial checkout was clean and had one worktree.
 
 **Recommendation:** keep the smaller tool surface and the accuracy direction.
-Make the next milestone about agents completing correct edits with less rework.
+Make the next milestone about agents completing correct edits with less rework
+across every language supported by the pinned julie-extractors.
 The current product is a useful navigation and evidence engine; its reference,
 test-selection, and edit-check answers still require judgment about coverage.
 Smaller responses and honest warnings are valuable, but neither establishes
@@ -40,6 +41,24 @@ that shared policy and test the same source sites through all three interfaces.
 Moving large functions into more files would not by itself improve correctness.
 When repeated source parsing compensates for missing AST facts, prefer adding
 the reusable fact in julie-extractors over another independent parser here.
+
+**Language coverage needs explicit review.** The owner's requirement is support
+for every language julie-extractors supports. Indexing and basic navigation use
+the shared extracted records, but advanced analysis adds language-specific rules.
+Extracting a language does not establish that every applicable check works for
+it. The current implementation has concrete coverage limits:
+
+| Check | Current language/type gate | Evidence |
+| --- | --- | --- |
+| Accepted argument ranges | Python, Java, C#, Go, Rust, Kotlin, TypeScript/TSX | `rule_language` in [arity.rs](../../crates/code-kb-core/src/reference_report/arity.rs) returns no rule for other languages. Applicability depends on the language's call semantics. |
+| Named-parameter rename detection | Python, Kotlin, C#, Swift | `NAMED_ARGUMENT_LANGUAGES` in [signatures.rs](../../crates/code-kb-core/src/edit_check/signatures.rs) omits other languages with named arguments, including PHP, Scala, Ruby, and Dart. |
+| Field changes and affected constructions | Rust structs, Go structs, Python dataclasses, Java records | `owner_of` in [fields.rs](../../crates/code-kb-core/src/edit_check/fields.rs) rejects other owners, including C# records, Kotlin data classes, and Swift structs. |
+
+These are verified examples, not a complete language-by-capability inventory.
+Language-specific rules are necessary where semantics differ. Missing equivalent
+capabilities in other applicable languages are coverage gaps. The initial
+Python-first recommendation over-weighted the Flask dogfood examples; the next
+work must address the cross-language requirement explicitly.
 
 **Three concrete defects were reproduced during this review.**
 
@@ -87,7 +106,12 @@ not a controlled comparison against competent native retrieval.
 
 **Next work, in priority order.**
 
-1. **Establish a fresh outcome baseline alongside the next feature slice.**
+1. **Establish language coverage and a fresh outcome baseline.** Inventory every
+   language in the pinned extractor against each applicable tool capability,
+   distinguishing implemented, limited, missing, and not applicable. Add
+   conformance cases for every supported language; identify whether each gap
+   needs an extractor fact or code-kb behavior. Choose fresh agent tasks across
+   language families rather than treating Flask results as representative.
    Reuse the [existing comparison plan](../plans/2026-09-23-retrieval-value-and-optional-routing.md),
    updating its obsolete tool names and versions. Compare native tools with
    native tools plus the current code-kb under the same model, harness, tasks,
@@ -98,17 +122,18 @@ not a controlled comparison against competent native retrieval.
    indexing, and observed tokens. Record tool adoption separately: enforced
    calls are not proof of value. Paid runs require a separate budget approval.
 
-2. **Trial a `check_edit` extension where real edits escape it.** My preferred
-   first feature slice is removed class/instance attributes, followed by
-   functions passed as values if the task baseline supports that priority. The
+2. **Close applicable edit-check gaps across languages.** Removed members and
+   functions passed as values are candidate capabilities to investigate using
+   the coverage inventory. Implement shared detection over Julie facts where
+   possible, with language rules and tests for differing semantics. The
    [v2.9.1 dogfood](2026-10-22-v2.9.1-dogfood.md) records concrete examples:
    `Request.routing_exception`, `App.subdomain_matching`,
-   `Flask.request_class`, and `_async_wrapper=self.ensure_sync`. These are
-   candidate capability additions to the existing shape-check contract, not
-   evidence that every body change should produce a warning. Acceptance should
-   include newly caught required edits, unchanged valid edits, false blocks,
-   and latency on fresh cases. Keep blocking limited to evidence strong enough
-   to justify it.
+   `Flask.request_class`, and `_async_wrapper=self.ensure_sync`. Keep those as
+   Python regression cases, alongside equivalent cases in other applicable
+   languages. Select the implementation order from the verified gaps and fresh
+   tasks. Acceptance should include newly caught required edits, unchanged valid
+   edits, false blocks, and latency. Keep blocking limited to evidence strong
+   enough to justify it.
 
 3. **Make an incomplete answer give a usable next action.** Preserve uncertainty
    labels and open-end warnings. Supply an executable broader test command
@@ -139,15 +164,16 @@ not a controlled comparison against competent native retrieval.
    covers nine projects across seven languages, while planted test-reach bugs
    cover three projects and release dogfood uses Flask. Tie future release
    reports to the relevant source or binary fingerprint; accepting an arbitrary
-   ancestor PASS does not establish that later semantic changes were checked. Allow docs/version-only
-   changes without requiring an expensive rerun.
+   ancestor PASS does not establish that later semantic changes were checked.
+   Allow docs/version-only changes without requiring an expensive rerun.
 
 **Defer:** more general MCP tools, native editing/test execution inside code-kb,
 an embeddings runtime, compiler-scale resolution, and a broad architecture
 rewrite. Each needs a demonstrated failed workflow and a measurable improvement
-over the existing fallback. Stronger edit checking with clear coverage and
-recovery is the proposed next product slice; fresh agent-task results should
-determine whether it earns that investment ahead of retrieval improvements.
+over the existing fallback. Stronger edit checking across applicable languages,
+with clear coverage and recovery, is the proposed next product slice; fresh
+agent-task results should determine whether it earns that investment ahead of
+retrieval improvements.
 
 The review covers recent changes, tool contracts and plugin guidance, index
 lifecycle, shared query architecture, evaluation/release evidence, and local
