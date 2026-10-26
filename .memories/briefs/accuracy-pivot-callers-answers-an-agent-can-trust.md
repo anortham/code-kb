@@ -3,7 +3,7 @@ id: accuracy-pivot-callers-answers-an-agent-can-trust
 title: "Accuracy pivot: callers answers an agent can trust"
 status: active
 created: 2026-10-17T17:10:13.294Z
-updated: 2026-10-26T21:03:34.900Z
+updated: 2026-10-26T21:24:56.588Z
 tags:
   - project-direction
   - accuracy
@@ -25,9 +25,13 @@ Accuracy and usefulness still have measured limits. Existing edit and planted-bu
 
 ## Completed project review
 
-The full assessment is in docs/reviews/2026-10-26-project-direction.md. It recommends retaining the lean tools, an explicit language-by-capability inventory and conformance coverage, fresh held-out tasks across language families, and actionable incomplete-result handling. The initial Python-first edit-check recommendation was corrected after the owner's clarification: removed-member and callback handling must be evaluated across applicable languages. These are recommendations, not approval for new product scope.
+The full assessment is in docs/reviews/2026-10-26-project-direction.md. It recommends retaining the lean tools, an explicit language-by-capability inventory and conformance coverage, fresh held-out tasks across language families, and actionable incomplete-result handling. The initial Python-first edit-check recommendation was corrected after the owner's clarification: removed-member and callback handling must be evaluated across applicable languages. The owner authorized implementing the review fixes on 2026-10-26, with explicit all-language coverage and matching AGENTS.md/CLAUDE.md guidance. The active implementation plan is docs/plans/2026-10-26-cross-language-review-fixes.md.
 
 The review fixes are verified locally: failed refreshes now return errors and retry rather than answering from stale indexes; unknown tools are rejected before preparation; lookup miss suggestions respect kind filters; the benchmark parses current output and fails on malformed results; stale graders and CI coverage are repaired. Legacy integration fixtures were made compatible with real updates. Verification passed: 1,663 Rust tests, 149 Python tests, 20 plugin tests, release build, Clippy, formatting, and guidance synchronization. All work stayed in the original main checkout; no push or release was performed.
+
+## Active implementation
+
+Worktree: /home/murphy/.codex/worktrees/1e6f/code-kb, branch fix/cross-language-review, based on aeebe72. All task work remains there. Batch A: real-extractor conformance for all 42 languages, argument semantics, construction semantics, bounded report recovery/test fallback, and release-evidence validation. Removed member reads and callable value dependencies follow finalized argument/construction behavior. The plan records source-backed ownership, verification, and prior authorization. Missing applicable extractor facts remain gaps; coverage labels cannot certify them away. No paid agent runs, push, PR, or release is authorized.
 
 ## Constraints
 

@@ -19,6 +19,22 @@ symbol search, and surgical context slicing with minimal token consumption.
 - Non-goals: Do not add web dashboards, GPU embedding runtimes, daemon watchers
   outside the 1:1 MCP session, or workspace registries.
 
+## Language Support
+
+- Every language reported by the pinned `julie-extract languages --json` is in
+  scope, including programming, markup, configuration, and data languages.
+- Build common behavior on Julie's extracted facts. Language-specific rules
+  must reflect actual semantic differences, not a preferred language or corpus.
+- Check each capability in every language where its construct applies. A
+  missing extractor fact or consumer implementation is a coverage gap, not a
+  reason to mark that language out of scope. Mark a capability not applicable
+  only when the language does not have the relevant construct.
+- Add real-extraction regression cases for affected languages, including valid
+  code that must remain accepted. Keep the language coverage inventory current
+  when changing a capability or the extractor pin.
+- Report missing coverage explicitly. A partial or unsupported check must not
+  claim that an edit is safe or that there are no callers or tests.
+
 ## Build and Test
 
 The build fails until the pinned `julie-extract` is in `.tools/`, so a fresh clone runs the
