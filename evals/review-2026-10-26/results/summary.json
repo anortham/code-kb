@@ -1,0 +1,1806 @@
+{
+  "schema": 1,
+  "freeze_commit": "8e07b094486c0f8c5d9ceca76ef79a882196cb7f",
+  "scored_runs": 72,
+  "outcomes": {
+    "answer_received": 72
+  },
+  "raw_mechanical_passes": 36,
+  "source_review_acceptances": 63,
+  "semantic_source_passes": 72,
+  "routing_violations": {
+    "literal-config-exact-error-current-r2": [
+      "An MCP action preceded the first native literal-content search despite the literal-first policy. This run cannot establish a compliant literal-routing cost comparison."
+    ],
+    "literal-config-exact-error-current-r3": [
+      "An MCP action preceded the first native literal-content search despite the literal-first policy. This run cannot establish a compliant literal-routing cost comparison."
+    ]
+  },
+  "tasks": {
+    "csharp-default-argument-caller": {
+      "native": {
+        "raw_mechanical_passes": 3,
+        "accepted": 3,
+        "semantic_source_passes": 3,
+        "observations": {
+          "input_tokens": [
+            51017,
+            49633,
+            49486
+          ],
+          "output_tokens": [
+            634,
+            804,
+            635
+          ],
+          "cache_tokens": [
+            46208,
+            43648,
+            36096
+          ],
+          "tool_calls": [
+            3,
+            4,
+            4
+          ],
+          "code_kb_calls": [
+            0,
+            0,
+            0
+          ],
+          "uncached_input_tokens": [
+            4809,
+            5985,
+            13390
+          ],
+          "warm_wall_seconds": [
+            35.86216692400194,
+            33.14377592300298,
+            26.421352017998288
+          ],
+          "cold_index_seconds": [
+            null,
+            null,
+            null
+          ],
+          "index_inclusive_seconds": [
+            35.86216692400194,
+            33.14377592300298,
+            26.421352017998288
+          ]
+        },
+        "medians": {
+          "input_tokens": 49633,
+          "output_tokens": 635,
+          "cache_tokens": 43648,
+          "tool_calls": 4,
+          "code_kb_calls": 0,
+          "uncached_input_tokens": 5985,
+          "warm_wall_seconds": 33.14377592300298,
+          "cold_index_seconds": null,
+          "index_inclusive_seconds": 33.14377592300298
+        },
+        "adoption_common": {
+          "numerator": 0,
+          "denominator": 0
+        },
+        "adoption_all_structural": {
+          "numerator": 0,
+          "denominator": 0
+        },
+        "routing_violations": 0
+      },
+      "current": {
+        "raw_mechanical_passes": 3,
+        "accepted": 3,
+        "semantic_source_passes": 3,
+        "observations": {
+          "input_tokens": [
+            103929,
+            99792,
+            121777
+          ],
+          "output_tokens": [
+            1297,
+            1412,
+            1041
+          ],
+          "cache_tokens": [
+            84096,
+            87808,
+            85760
+          ],
+          "tool_calls": [
+            15,
+            17,
+            15
+          ],
+          "code_kb_calls": [
+            12,
+            13,
+            12
+          ],
+          "uncached_input_tokens": [
+            19833,
+            11984,
+            36017
+          ],
+          "warm_wall_seconds": [
+            46.85841610200441,
+            44.64311267300218,
+            40.584429270005785
+          ],
+          "cold_index_seconds": [
+            0.032088170999486465,
+            0.06456533999880776,
+            0.06421091899392195
+          ],
+          "index_inclusive_seconds": [
+            46.8905042730039,
+            44.70767801300099,
+            40.64864018899971
+          ]
+        },
+        "medians": {
+          "input_tokens": 103929,
+          "output_tokens": 1297,
+          "cache_tokens": 85760,
+          "tool_calls": 15,
+          "code_kb_calls": 12,
+          "uncached_input_tokens": 19833,
+          "warm_wall_seconds": 44.64311267300218,
+          "cold_index_seconds": 0.06421091899392195,
+          "index_inclusive_seconds": 44.70767801300099
+        },
+        "adoption_common": {
+          "numerator": 28,
+          "denominator": 28
+        },
+        "adoption_all_structural": {
+          "numerator": 34,
+          "denominator": 34
+        },
+        "routing_violations": 0
+      },
+      "revised": {
+        "raw_mechanical_passes": 3,
+        "accepted": 3,
+        "semantic_source_passes": 3,
+        "observations": {
+          "input_tokens": [
+            84849,
+            98974,
+            99854
+          ],
+          "output_tokens": [
+            1003,
+            1103,
+            952
+          ],
+          "cache_tokens": [
+            65280,
+            82304,
+            80640
+          ],
+          "tool_calls": [
+            8,
+            13,
+            12
+          ],
+          "code_kb_calls": [
+            5,
+            9,
+            7
+          ],
+          "uncached_input_tokens": [
+            19569,
+            16670,
+            19214
+          ],
+          "warm_wall_seconds": [
+            37.7698723969952,
+            37.71510761800164,
+            35.25400807099504
+          ],
+          "cold_index_seconds": [
+            0.06429033700260334,
+            0.03204339899821207,
+            0.03205344700108981
+          ],
+          "index_inclusive_seconds": [
+            37.8341627339978,
+            37.74715101699985,
+            35.28606151799613
+          ]
+        },
+        "medians": {
+          "input_tokens": 98974,
+          "output_tokens": 1003,
+          "cache_tokens": 80640,
+          "tool_calls": 12,
+          "code_kb_calls": 7,
+          "uncached_input_tokens": 19214,
+          "warm_wall_seconds": 37.71510761800164,
+          "cold_index_seconds": 0.03205344700108981,
+          "index_inclusive_seconds": 37.74715101699985
+        },
+        "adoption_common": {
+          "numerator": 17,
+          "denominator": 17
+        },
+        "adoption_all_structural": {
+          "numerator": 19,
+          "denominator": 19
+        },
+        "routing_violations": 0
+      }
+    },
+    "go-ambiguous-method-test-reach": {
+      "native": {
+        "raw_mechanical_passes": 0,
+        "accepted": 0,
+        "semantic_source_passes": 3,
+        "observations": {
+          "input_tokens": [
+            50204,
+            51420,
+            49446
+          ],
+          "output_tokens": [
+            862,
+            842,
+            840
+          ],
+          "cache_tokens": [
+            36224,
+            46464,
+            33024
+          ],
+          "tool_calls": [
+            4,
+            3,
+            4
+          ],
+          "code_kb_calls": [
+            0,
+            0,
+            0
+          ],
+          "uncached_input_tokens": [
+            13980,
+            4956,
+            16422
+          ],
+          "warm_wall_seconds": [
+            24.21392117399955,
+            27.21947413500311,
+            34.25946922299772
+          ],
+          "cold_index_seconds": [
+            null,
+            null,
+            null
+          ],
+          "index_inclusive_seconds": [
+            24.21392117399955,
+            27.21947413500311,
+            34.25946922299772
+          ]
+        },
+        "medians": {
+          "input_tokens": 50204,
+          "output_tokens": 842,
+          "cache_tokens": 36224,
+          "tool_calls": 4,
+          "code_kb_calls": 0,
+          "uncached_input_tokens": 13980,
+          "warm_wall_seconds": 27.21947413500311,
+          "cold_index_seconds": null,
+          "index_inclusive_seconds": 27.21947413500311
+        },
+        "adoption_common": {
+          "numerator": 0,
+          "denominator": 0
+        },
+        "adoption_all_structural": {
+          "numerator": 0,
+          "denominator": 0
+        },
+        "routing_violations": 0
+      },
+      "current": {
+        "raw_mechanical_passes": 0,
+        "accepted": 0,
+        "semantic_source_passes": 3,
+        "observations": {
+          "input_tokens": [
+            117974,
+            122841,
+            116761
+          ],
+          "output_tokens": [
+            1601,
+            1637,
+            1591
+          ],
+          "cache_tokens": [
+            82176,
+            82048,
+            97792
+          ],
+          "tool_calls": [
+            19,
+            21,
+            17
+          ],
+          "code_kb_calls": [
+            15,
+            16,
+            13
+          ],
+          "uncached_input_tokens": [
+            35798,
+            40793,
+            18969
+          ],
+          "warm_wall_seconds": [
+            48.62743743199826,
+            56.954530944,
+            55.18567117499333
+          ],
+          "cold_index_seconds": [
+            0.031961356005922426,
+            0.032166049000807106,
+            0.031876806999207474
+          ],
+          "index_inclusive_seconds": [
+            48.65939878800418,
+            56.986696993000805,
+            55.21754798199254
+          ]
+        },
+        "medians": {
+          "input_tokens": 117974,
+          "output_tokens": 1601,
+          "cache_tokens": 82176,
+          "tool_calls": 19,
+          "code_kb_calls": 15,
+          "uncached_input_tokens": 35798,
+          "warm_wall_seconds": 55.18567117499333,
+          "cold_index_seconds": 0.031961356005922426,
+          "index_inclusive_seconds": 55.21754798199254
+        },
+        "adoption_common": {
+          "numerator": 33,
+          "denominator": 33
+        },
+        "adoption_all_structural": {
+          "numerator": 43,
+          "denominator": 43
+        },
+        "routing_violations": 0
+      },
+      "revised": {
+        "raw_mechanical_passes": 0,
+        "accepted": 0,
+        "semantic_source_passes": 3,
+        "observations": {
+          "input_tokens": [
+            82633,
+            117627,
+            99899
+          ],
+          "output_tokens": [
+            1178,
+            1531,
+            1391
+          ],
+          "cache_tokens": [
+            63872,
+            98304,
+            80768
+          ],
+          "tool_calls": [
+            9,
+            15,
+            14
+          ],
+          "code_kb_calls": [
+            6,
+            10,
+            10
+          ],
+          "uncached_input_tokens": [
+            18761,
+            19323,
+            19131
+          ],
+          "warm_wall_seconds": [
+            38.97382536299847,
+            55.78916226000001,
+            42.407446876000904
+          ],
+          "cold_index_seconds": [
+            0.06436474899965106,
+            0.03226521799660986,
+            0.03209051800513407
+          ],
+          "index_inclusive_seconds": [
+            39.03819011199812,
+            55.82142747799662,
+            42.43953739400604
+          ]
+        },
+        "medians": {
+          "input_tokens": 99899,
+          "output_tokens": 1391,
+          "cache_tokens": 80768,
+          "tool_calls": 14,
+          "code_kb_calls": 10,
+          "uncached_input_tokens": 19131,
+          "warm_wall_seconds": 42.407446876000904,
+          "cold_index_seconds": 0.03226521799660986,
+          "index_inclusive_seconds": 42.43953739400604
+        },
+        "adoption_common": {
+          "numerator": 4,
+          "denominator": 4
+        },
+        "adoption_all_structural": {
+          "numerator": 8,
+          "denominator": 8
+        },
+        "routing_violations": 0
+      }
+    },
+    "java-framework-entry-test-reach": {
+      "native": {
+        "raw_mechanical_passes": 3,
+        "accepted": 3,
+        "semantic_source_passes": 3,
+        "observations": {
+          "input_tokens": [
+            36924,
+            49833,
+            62653
+          ],
+          "output_tokens": [
+            685,
+            699,
+            681
+          ],
+          "cache_tokens": [
+            33280,
+            24064,
+            58624
+          ],
+          "tool_calls": [
+            4,
+            4,
+            4
+          ],
+          "code_kb_calls": [
+            0,
+            0,
+            0
+          ],
+          "uncached_input_tokens": [
+            3644,
+            25769,
+            4029
+          ],
+          "warm_wall_seconds": [
+            23.311280675996386,
+            25.214817247004248,
+            24.16860325200105
+          ],
+          "cold_index_seconds": [
+            null,
+            null,
+            null
+          ],
+          "index_inclusive_seconds": [
+            23.311280675996386,
+            25.214817247004248,
+            24.16860325200105
+          ]
+        },
+        "medians": {
+          "input_tokens": 49833,
+          "output_tokens": 685,
+          "cache_tokens": 33280,
+          "tool_calls": 4,
+          "code_kb_calls": 0,
+          "uncached_input_tokens": 4029,
+          "warm_wall_seconds": 24.16860325200105,
+          "cold_index_seconds": null,
+          "index_inclusive_seconds": 24.16860325200105
+        },
+        "adoption_common": {
+          "numerator": 0,
+          "denominator": 0
+        },
+        "adoption_all_structural": {
+          "numerator": 0,
+          "denominator": 0
+        },
+        "routing_violations": 0
+      },
+      "current": {
+        "raw_mechanical_passes": 3,
+        "accepted": 3,
+        "semantic_source_passes": 3,
+        "observations": {
+          "input_tokens": [
+            99453,
+            81388,
+            118565
+          ],
+          "output_tokens": [
+            995,
+            963,
+            1185
+          ],
+          "cache_tokens": [
+            62976,
+            61952,
+            108544
+          ],
+          "tool_calls": [
+            12,
+            12,
+            17
+          ],
+          "code_kb_calls": [
+            9,
+            9,
+            14
+          ],
+          "uncached_input_tokens": [
+            36477,
+            19436,
+            10021
+          ],
+          "warm_wall_seconds": [
+            31.433943889001966,
+            27.78397452700301,
+            36.42664135499945
+          ],
+          "cold_index_seconds": [
+            0.0322140090065659,
+            0.06442360899382038,
+            0.06436046199814882
+          ],
+          "index_inclusive_seconds": [
+            31.466157898008532,
+            27.84839813599683,
+            36.491001816997596
+          ]
+        },
+        "medians": {
+          "input_tokens": 99453,
+          "output_tokens": 995,
+          "cache_tokens": 62976,
+          "tool_calls": 12,
+          "code_kb_calls": 9,
+          "uncached_input_tokens": 19436,
+          "warm_wall_seconds": 31.433943889001966,
+          "cold_index_seconds": 0.06436046199814882,
+          "index_inclusive_seconds": 31.466157898008532
+        },
+        "adoption_common": {
+          "numerator": 24,
+          "denominator": 24
+        },
+        "adoption_all_structural": {
+          "numerator": 30,
+          "denominator": 30
+        },
+        "routing_violations": 0
+      },
+      "revised": {
+        "raw_mechanical_passes": 3,
+        "accepted": 3,
+        "semantic_source_passes": 3,
+        "observations": {
+          "input_tokens": [
+            104522,
+            116891,
+            101166
+          ],
+          "output_tokens": [
+            1150,
+            1086,
+            1108
+          ],
+          "cache_tokens": [
+            78208,
+            107648,
+            68736
+          ],
+          "tool_calls": [
+            14,
+            12,
+            12
+          ],
+          "code_kb_calls": [
+            9,
+            8,
+            8
+          ],
+          "uncached_input_tokens": [
+            26314,
+            9243,
+            32430
+          ],
+          "warm_wall_seconds": [
+            37.325165894995735,
+            32.109693532001984,
+            37.506911033000506
+          ],
+          "cold_index_seconds": [
+            0.03224587799923029,
+            0.03220704100385774,
+            0.06411174299864797
+          ],
+          "index_inclusive_seconds": [
+            37.357411772994965,
+            32.14190057300584,
+            37.571022775999154
+          ]
+        },
+        "medians": {
+          "input_tokens": 104522,
+          "output_tokens": 1108,
+          "cache_tokens": 78208,
+          "tool_calls": 12,
+          "code_kb_calls": 8,
+          "uncached_input_tokens": 26314,
+          "warm_wall_seconds": 37.325165894995735,
+          "cold_index_seconds": 0.03224587799923029,
+          "index_inclusive_seconds": 37.357411772994965
+        },
+        "adoption_common": {
+          "numerator": 19,
+          "denominator": 19
+        },
+        "adoption_all_structural": {
+          "numerator": 23,
+          "denominator": 23
+        },
+        "routing_violations": 0
+      }
+    },
+    "javascript-commonjs-test-reach": {
+      "native": {
+        "raw_mechanical_passes": 0,
+        "accepted": 3,
+        "semantic_source_passes": 3,
+        "observations": {
+          "input_tokens": [
+            49883,
+            49289,
+            49268
+          ],
+          "output_tokens": [
+            688,
+            683,
+            729
+          ],
+          "cache_tokens": [
+            35840,
+            35456,
+            35712
+          ],
+          "tool_calls": [
+            5,
+            3,
+            3
+          ],
+          "code_kb_calls": [
+            0,
+            0,
+            0
+          ],
+          "uncached_input_tokens": [
+            14043,
+            13833,
+            13556
+          ],
+          "warm_wall_seconds": [
+            29.18755657500151,
+            23.79986682899471,
+            24.560941905998334
+          ],
+          "cold_index_seconds": [
+            null,
+            null,
+            null
+          ],
+          "index_inclusive_seconds": [
+            29.18755657500151,
+            23.79986682899471,
+            24.560941905998334
+          ]
+        },
+        "medians": {
+          "input_tokens": 49289,
+          "output_tokens": 688,
+          "cache_tokens": 35712,
+          "tool_calls": 3,
+          "code_kb_calls": 0,
+          "uncached_input_tokens": 13833,
+          "warm_wall_seconds": 24.560941905998334,
+          "cold_index_seconds": null,
+          "index_inclusive_seconds": 24.560941905998334
+        },
+        "adoption_common": {
+          "numerator": 0,
+          "denominator": 0
+        },
+        "adoption_all_structural": {
+          "numerator": 0,
+          "denominator": 0
+        },
+        "routing_violations": 0
+      },
+      "current": {
+        "raw_mechanical_passes": 0,
+        "accepted": 3,
+        "semantic_source_passes": 3,
+        "observations": {
+          "input_tokens": [
+            98140,
+            98895,
+            99142
+          ],
+          "output_tokens": [
+            986,
+            1073,
+            956
+          ],
+          "cache_tokens": [
+            78848,
+            80256,
+            80512
+          ],
+          "tool_calls": [
+            16,
+            17,
+            17
+          ],
+          "code_kb_calls": [
+            13,
+            13,
+            12
+          ],
+          "uncached_input_tokens": [
+            19292,
+            18639,
+            18630
+          ],
+          "warm_wall_seconds": [
+            27.996848332993977,
+            31.89591471500171,
+            31.193867059002514
+          ],
+          "cold_index_seconds": [
+            0.06410529300046619,
+            0.06424561000312679,
+            0.06439041999692563
+          ],
+          "index_inclusive_seconds": [
+            28.060953625994443,
+            31.960160325004836,
+            31.25825747899944
+          ]
+        },
+        "medians": {
+          "input_tokens": 98895,
+          "output_tokens": 986,
+          "cache_tokens": 80256,
+          "tool_calls": 17,
+          "code_kb_calls": 13,
+          "uncached_input_tokens": 18639,
+          "warm_wall_seconds": 31.193867059002514,
+          "cold_index_seconds": 0.06424561000312679,
+          "index_inclusive_seconds": 31.25825747899944
+        },
+        "adoption_common": {
+          "numerator": 29,
+          "denominator": 29
+        },
+        "adoption_all_structural": {
+          "numerator": 38,
+          "denominator": 38
+        },
+        "routing_violations": 0
+      },
+      "revised": {
+        "raw_mechanical_passes": 0,
+        "accepted": 3,
+        "semantic_source_passes": 3,
+        "observations": {
+          "input_tokens": [
+            99655,
+            98150,
+            95554
+          ],
+          "output_tokens": [
+            961,
+            1032,
+            868
+          ],
+          "cache_tokens": [
+            80768,
+            66432,
+            77696
+          ],
+          "tool_calls": [
+            10,
+            12,
+            10
+          ],
+          "code_kb_calls": [
+            6,
+            8,
+            7
+          ],
+          "uncached_input_tokens": [
+            18887,
+            31718,
+            17858
+          ],
+          "warm_wall_seconds": [
+            32.89498097699834,
+            33.44445024799643,
+            32.59194572200067
+          ],
+          "cold_index_seconds": [
+            0.03206006399705075,
+            0.06416680800612085,
+            0.032242738001514226
+          ],
+          "index_inclusive_seconds": [
+            32.92704104099539,
+            33.50861705600255,
+            32.62418846000219
+          ]
+        },
+        "medians": {
+          "input_tokens": 98150,
+          "output_tokens": 961,
+          "cache_tokens": 77696,
+          "tool_calls": 10,
+          "code_kb_calls": 7,
+          "uncached_input_tokens": 18887,
+          "warm_wall_seconds": 32.89498097699834,
+          "cold_index_seconds": 0.032242738001514226,
+          "index_inclusive_seconds": 32.92704104099539
+        },
+        "adoption_common": {
+          "numerator": 20,
+          "denominator": 20
+        },
+        "adoption_all_structural": {
+          "numerator": 21,
+          "denominator": 21
+        },
+        "routing_violations": 0
+      }
+    },
+    "literal-config-exact-error": {
+      "native": {
+        "raw_mechanical_passes": 3,
+        "accepted": 3,
+        "semantic_source_passes": 3,
+        "observations": {
+          "input_tokens": [
+            49594,
+            36647,
+            50308
+          ],
+          "output_tokens": [
+            251,
+            334,
+            375
+          ],
+          "cache_tokens": [
+            45952,
+            21376,
+            46080
+          ],
+          "tool_calls": [
+            3,
+            2,
+            3
+          ],
+          "code_kb_calls": [
+            0,
+            0,
+            0
+          ],
+          "uncached_input_tokens": [
+            3642,
+            15271,
+            4228
+          ],
+          "warm_wall_seconds": [
+            18.333668182996917,
+            17.929748417001974,
+            19.64312081800017
+          ],
+          "cold_index_seconds": [
+            null,
+            null,
+            null
+          ],
+          "index_inclusive_seconds": [
+            18.333668182996917,
+            17.929748417001974,
+            19.64312081800017
+          ]
+        },
+        "medians": {
+          "input_tokens": 49594,
+          "output_tokens": 334,
+          "cache_tokens": 45952,
+          "tool_calls": 3,
+          "code_kb_calls": 0,
+          "uncached_input_tokens": 4228,
+          "warm_wall_seconds": 18.333668182996917,
+          "cold_index_seconds": null,
+          "index_inclusive_seconds": 18.333668182996917
+        },
+        "adoption_common": {
+          "numerator": 0,
+          "denominator": 0
+        },
+        "adoption_all_structural": {
+          "numerator": 0,
+          "denominator": 0
+        },
+        "routing_violations": 0
+      },
+      "current": {
+        "raw_mechanical_passes": 3,
+        "accepted": 3,
+        "semantic_source_passes": 3,
+        "observations": {
+          "input_tokens": [
+            80372,
+            80382,
+            64939
+          ],
+          "output_tokens": [
+            652,
+            652,
+            540
+          ],
+          "cache_tokens": [
+            55424,
+            62080,
+            60032
+          ],
+          "tool_calls": [
+            8,
+            10,
+            6
+          ],
+          "code_kb_calls": [
+            4,
+            6,
+            4
+          ],
+          "uncached_input_tokens": [
+            24948,
+            18302,
+            4907
+          ],
+          "warm_wall_seconds": [
+            29.489367037997,
+            36.96556191599666,
+            46.58199704800063
+          ],
+          "cold_index_seconds": [
+            0.06437736299994867,
+            0.06417052699544001,
+            0.06416422399342991
+          ],
+          "index_inclusive_seconds": [
+            29.553744400996948,
+            37.0297324429921,
+            46.64616127199406
+          ]
+        },
+        "medians": {
+          "input_tokens": 80372,
+          "output_tokens": 652,
+          "cache_tokens": 60032,
+          "tool_calls": 8,
+          "code_kb_calls": 4,
+          "uncached_input_tokens": 18302,
+          "warm_wall_seconds": 36.96556191599666,
+          "cold_index_seconds": 0.06417052699544001,
+          "index_inclusive_seconds": 37.0297324429921
+        },
+        "adoption_common": {
+          "numerator": 4,
+          "denominator": 4
+        },
+        "adoption_all_structural": {
+          "numerator": 6,
+          "denominator": 6
+        },
+        "routing_violations": 2
+      },
+      "revised": {
+        "raw_mechanical_passes": 3,
+        "accepted": 3,
+        "semantic_source_passes": 3,
+        "observations": {
+          "input_tokens": [
+            79143,
+            57059,
+            63446
+          ],
+          "output_tokens": [
+            548,
+            369,
+            339
+          ],
+          "cache_tokens": [
+            71552,
+            41856,
+            46080
+          ],
+          "tool_calls": [
+            6,
+            3,
+            4
+          ],
+          "code_kb_calls": [
+            2,
+            0,
+            0
+          ],
+          "uncached_input_tokens": [
+            7591,
+            15203,
+            17366
+          ],
+          "warm_wall_seconds": [
+            43.59392660600133,
+            20.09441002800304,
+            19.135078610001074
+          ],
+          "cold_index_seconds": [
+            0.032140593000804074,
+            0.03208520699990913,
+            0.03202011100074742
+          ],
+          "index_inclusive_seconds": [
+            43.62606719900214,
+            20.12649523500295,
+            19.16709872100182
+          ]
+        },
+        "medians": {
+          "input_tokens": 63446,
+          "output_tokens": 369,
+          "cache_tokens": 46080,
+          "tool_calls": 4,
+          "code_kb_calls": 0,
+          "uncached_input_tokens": 15203,
+          "warm_wall_seconds": 20.09441002800304,
+          "cold_index_seconds": 0.03208520699990913,
+          "index_inclusive_seconds": 20.12649523500295
+        },
+        "adoption_common": {
+          "numerator": 2,
+          "denominator": 2
+        },
+        "adoption_all_structural": {
+          "numerator": 2,
+          "denominator": 2
+        },
+        "routing_violations": 0
+      }
+    },
+    "python-registration-concept": {
+      "native": {
+        "raw_mechanical_passes": 3,
+        "accepted": 3,
+        "semantic_source_passes": 3,
+        "observations": {
+          "input_tokens": [
+            62593,
+            50053,
+            49417
+          ],
+          "output_tokens": [
+            828,
+            885,
+            742
+          ],
+          "cache_tokens": [
+            35840,
+            24448,
+            35456
+          ],
+          "tool_calls": [
+            4,
+            4,
+            4
+          ],
+          "code_kb_calls": [
+            0,
+            0,
+            0
+          ],
+          "uncached_input_tokens": [
+            26753,
+            25605,
+            13961
+          ],
+          "warm_wall_seconds": [
+            28.223222761000216,
+            28.882353691995377,
+            24.820265991998895
+          ],
+          "cold_index_seconds": [
+            null,
+            null,
+            null
+          ],
+          "index_inclusive_seconds": [
+            28.223222761000216,
+            28.882353691995377,
+            24.820265991998895
+          ]
+        },
+        "medians": {
+          "input_tokens": 50053,
+          "output_tokens": 828,
+          "cache_tokens": 35456,
+          "tool_calls": 4,
+          "code_kb_calls": 0,
+          "uncached_input_tokens": 25605,
+          "warm_wall_seconds": 28.223222761000216,
+          "cold_index_seconds": null,
+          "index_inclusive_seconds": 28.223222761000216
+        },
+        "adoption_common": {
+          "numerator": 0,
+          "denominator": 0
+        },
+        "adoption_all_structural": {
+          "numerator": 0,
+          "denominator": 0
+        },
+        "routing_violations": 0
+      },
+      "current": {
+        "raw_mechanical_passes": 3,
+        "accepted": 3,
+        "semantic_source_passes": 3,
+        "observations": {
+          "input_tokens": [
+            81904,
+            80327,
+            80212
+          ],
+          "output_tokens": [
+            1072,
+            1091,
+            1171
+          ],
+          "cache_tokens": [
+            63616,
+            61952,
+            62464
+          ],
+          "tool_calls": [
+            12,
+            11,
+            12
+          ],
+          "code_kb_calls": [
+            9,
+            8,
+            9
+          ],
+          "uncached_input_tokens": [
+            18288,
+            18375,
+            17748
+          ],
+          "warm_wall_seconds": [
+            34.099657425998885,
+            32.99210710900661,
+            39.36626925299788
+          ],
+          "cold_index_seconds": [
+            0.06435084099939559,
+            0.06410857899754774,
+            0.06413685999723384
+          ],
+          "index_inclusive_seconds": [
+            34.16400826699828,
+            33.05621568800416,
+            39.430406112995115
+          ]
+        },
+        "medians": {
+          "input_tokens": 80327,
+          "output_tokens": 1091,
+          "cache_tokens": 62464,
+          "tool_calls": 12,
+          "code_kb_calls": 9,
+          "uncached_input_tokens": 18288,
+          "warm_wall_seconds": 34.099657425998885,
+          "cold_index_seconds": 0.06413685999723384,
+          "index_inclusive_seconds": 34.16400826699828
+        },
+        "adoption_common": {
+          "numerator": 23,
+          "denominator": 23
+        },
+        "adoption_all_structural": {
+          "numerator": 26,
+          "denominator": 26
+        },
+        "routing_violations": 0
+      },
+      "revised": {
+        "raw_mechanical_passes": 3,
+        "accepted": 3,
+        "semantic_source_passes": 3,
+        "observations": {
+          "input_tokens": [
+            80725,
+            99119,
+            82642
+          ],
+          "output_tokens": [
+            959,
+            1128,
+            1166
+          ],
+          "cache_tokens": [
+            62592,
+            80768,
+            64000
+          ],
+          "tool_calls": [
+            9,
+            11,
+            12
+          ],
+          "code_kb_calls": [
+            5,
+            7,
+            8
+          ],
+          "uncached_input_tokens": [
+            18133,
+            18351,
+            18642
+          ],
+          "warm_wall_seconds": [
+            32.09532197399676,
+            36.90886739000416,
+            31.58485538399691
+          ],
+          "cold_index_seconds": [
+            0.06425722899439279,
+            0.06414527999731945,
+            0.032050148001872
+          ],
+          "index_inclusive_seconds": [
+            32.159579202991154,
+            36.97301267000148,
+            31.616905531998782
+          ]
+        },
+        "medians": {
+          "input_tokens": 82642,
+          "output_tokens": 1128,
+          "cache_tokens": 64000,
+          "tool_calls": 11,
+          "code_kb_calls": 7,
+          "uncached_input_tokens": 18351,
+          "warm_wall_seconds": 32.09532197399676,
+          "cold_index_seconds": 0.06414527999731945,
+          "index_inclusive_seconds": 32.159579202991154
+        },
+        "adoption_common": {
+          "numerator": 18,
+          "denominator": 18
+        },
+        "adoption_all_structural": {
+          "numerator": 20,
+          "denominator": 20
+        },
+        "routing_violations": 0
+      }
+    },
+    "rust-handler-test-reach": {
+      "native": {
+        "raw_mechanical_passes": 0,
+        "accepted": 3,
+        "semantic_source_passes": 3,
+        "observations": {
+          "input_tokens": [
+            49069,
+            48692,
+            48899
+          ],
+          "output_tokens": [
+            798,
+            851,
+            869
+          ],
+          "cache_tokens": [
+            45312,
+            35584,
+            45184
+          ],
+          "tool_calls": [
+            3,
+            3,
+            3
+          ],
+          "code_kb_calls": [
+            0,
+            0,
+            0
+          ],
+          "uncached_input_tokens": [
+            3757,
+            13108,
+            3715
+          ],
+          "warm_wall_seconds": [
+            32.78895479699713,
+            29.536946302003344,
+            31.743637460000173
+          ],
+          "cold_index_seconds": [
+            null,
+            null,
+            null
+          ],
+          "index_inclusive_seconds": [
+            32.78895479699713,
+            29.536946302003344,
+            31.743637460000173
+          ]
+        },
+        "medians": {
+          "input_tokens": 48899,
+          "output_tokens": 851,
+          "cache_tokens": 45184,
+          "tool_calls": 3,
+          "code_kb_calls": 0,
+          "uncached_input_tokens": 3757,
+          "warm_wall_seconds": 31.743637460000173,
+          "cold_index_seconds": null,
+          "index_inclusive_seconds": 31.743637460000173
+        },
+        "adoption_common": {
+          "numerator": 0,
+          "denominator": 0
+        },
+        "adoption_all_structural": {
+          "numerator": 0,
+          "denominator": 0
+        },
+        "routing_violations": 0
+      },
+      "current": {
+        "raw_mechanical_passes": 0,
+        "accepted": 3,
+        "semantic_source_passes": 3,
+        "observations": {
+          "input_tokens": [
+            98149,
+            99401,
+            99776
+          ],
+          "output_tokens": [
+            1195,
+            1133,
+            1114
+          ],
+          "cache_tokens": [
+            71424,
+            80512,
+            81152
+          ],
+          "tool_calls": [
+            13,
+            12,
+            14
+          ],
+          "code_kb_calls": [
+            10,
+            9,
+            11
+          ],
+          "uncached_input_tokens": [
+            26725,
+            18889,
+            18624
+          ],
+          "warm_wall_seconds": [
+            39.77970437700424,
+            40.023274325001694,
+            45.66631974700431
+          ],
+          "cold_index_seconds": [
+            0.06449101599719143,
+            0.03199915600271197,
+            0.0641174519987544
+          ],
+          "index_inclusive_seconds": [
+            39.84419539300143,
+            40.055273481004406,
+            45.73043719900306
+          ]
+        },
+        "medians": {
+          "input_tokens": 99401,
+          "output_tokens": 1133,
+          "cache_tokens": 80512,
+          "tool_calls": 13,
+          "code_kb_calls": 10,
+          "uncached_input_tokens": 18889,
+          "warm_wall_seconds": 40.023274325001694,
+          "cold_index_seconds": 0.0641174519987544,
+          "index_inclusive_seconds": 40.055273481004406
+        },
+        "adoption_common": {
+          "numerator": 25,
+          "denominator": 25
+        },
+        "adoption_all_structural": {
+          "numerator": 30,
+          "denominator": 30
+        },
+        "routing_violations": 0
+      },
+      "revised": {
+        "raw_mechanical_passes": 0,
+        "accepted": 3,
+        "semantic_source_passes": 3,
+        "observations": {
+          "input_tokens": [
+            80859,
+            98659,
+            81356
+          ],
+          "output_tokens": [
+            1081,
+            977,
+            1021
+          ],
+          "cache_tokens": [
+            75648,
+            80128,
+            62976
+          ],
+          "tool_calls": [
+            10,
+            13,
+            11
+          ],
+          "code_kb_calls": [
+            6,
+            8,
+            7
+          ],
+          "uncached_input_tokens": [
+            5211,
+            18531,
+            18380
+          ],
+          "warm_wall_seconds": [
+            43.43754133299808,
+            38.661166933998174,
+            35.31080700700113
+          ],
+          "cold_index_seconds": [
+            0.06455291499878513,
+            0.03198932499799412,
+            0.06414834399765823
+          ],
+          "index_inclusive_seconds": [
+            43.502094247996865,
+            38.69315625899617,
+            35.37495535099879
+          ]
+        },
+        "medians": {
+          "input_tokens": 81356,
+          "output_tokens": 1021,
+          "cache_tokens": 75648,
+          "tool_calls": 11,
+          "code_kb_calls": 7,
+          "uncached_input_tokens": 18380,
+          "warm_wall_seconds": 38.661166933998174,
+          "cold_index_seconds": 0.06414834399765823,
+          "index_inclusive_seconds": 38.69315625899617
+        },
+        "adoption_common": {
+          "numerator": 17,
+          "denominator": 17
+        },
+        "adoption_all_structural": {
+          "numerator": 21,
+          "denominator": 21
+        },
+        "routing_violations": 0
+      }
+    },
+    "typescript-signature-change": {
+      "native": {
+        "raw_mechanical_passes": 0,
+        "accepted": 3,
+        "semantic_source_passes": 3,
+        "observations": {
+          "input_tokens": [
+            50128,
+            51697,
+            50510
+          ],
+          "output_tokens": [
+            1021,
+            918,
+            935
+          ],
+          "cache_tokens": [
+            36352,
+            23552,
+            43648
+          ],
+          "tool_calls": [
+            3,
+            4,
+            3
+          ],
+          "code_kb_calls": [
+            0,
+            0,
+            0
+          ],
+          "uncached_input_tokens": [
+            13776,
+            28145,
+            6862
+          ],
+          "warm_wall_seconds": [
+            34.85456761599926,
+            25.821902719006175,
+            26.225658966999617
+          ],
+          "cold_index_seconds": [
+            null,
+            null,
+            null
+          ],
+          "index_inclusive_seconds": [
+            34.85456761599926,
+            25.821902719006175,
+            26.225658966999617
+          ]
+        },
+        "medians": {
+          "input_tokens": 50510,
+          "output_tokens": 935,
+          "cache_tokens": 36352,
+          "tool_calls": 3,
+          "code_kb_calls": 0,
+          "uncached_input_tokens": 13776,
+          "warm_wall_seconds": 26.225658966999617,
+          "cold_index_seconds": null,
+          "index_inclusive_seconds": 26.225658966999617
+        },
+        "adoption_common": {
+          "numerator": 0,
+          "denominator": 0
+        },
+        "adoption_all_structural": {
+          "numerator": 0,
+          "denominator": 0
+        },
+        "routing_violations": 0
+      },
+      "current": {
+        "raw_mechanical_passes": 0,
+        "accepted": 3,
+        "semantic_source_passes": 3,
+        "observations": {
+          "input_tokens": [
+            104504,
+            85329,
+            106078
+          ],
+          "output_tokens": [
+            1434,
+            1423,
+            1624
+          ],
+          "cache_tokens": [
+            84224,
+            65280,
+            85376
+          ],
+          "tool_calls": [
+            21,
+            20,
+            21
+          ],
+          "code_kb_calls": [
+            17,
+            17,
+            18
+          ],
+          "uncached_input_tokens": [
+            20280,
+            20049,
+            20702
+          ],
+          "warm_wall_seconds": [
+            38.41580457600503,
+            42.437584556006186,
+            45.654953648998344
+          ],
+          "cold_index_seconds": [
+            0.03215859000192722,
+            0.06426918299985118,
+            0.03221027499967022
+          ],
+          "index_inclusive_seconds": [
+            38.44796316600696,
+            42.50185373900604,
+            45.687163923998014
+          ]
+        },
+        "medians": {
+          "input_tokens": 104504,
+          "output_tokens": 1434,
+          "cache_tokens": 84224,
+          "tool_calls": 21,
+          "code_kb_calls": 17,
+          "uncached_input_tokens": 20280,
+          "warm_wall_seconds": 42.437584556006186,
+          "cold_index_seconds": 0.03221027499967022,
+          "index_inclusive_seconds": 42.50185373900604
+        },
+        "adoption_common": {
+          "numerator": 32,
+          "denominator": 32
+        },
+        "adoption_all_structural": {
+          "numerator": 52,
+          "denominator": 52
+        },
+        "routing_violations": 0
+      },
+      "revised": {
+        "raw_mechanical_passes": 0,
+        "accepted": 3,
+        "semantic_source_passes": 3,
+        "observations": {
+          "input_tokens": [
+            105516,
+            84196,
+            84608
+          ],
+          "output_tokens": [
+            1430,
+            1241,
+            1307
+          ],
+          "cache_tokens": [
+            75264,
+            73600,
+            74240
+          ],
+          "tool_calls": [
+            10,
+            10,
+            10
+          ],
+          "code_kb_calls": [
+            6,
+            6,
+            6
+          ],
+          "uncached_input_tokens": [
+            30252,
+            10596,
+            10368
+          ],
+          "warm_wall_seconds": [
+            46.19953024999995,
+            39.990318609001406,
+            39.074016286002006
+          ],
+          "cold_index_seconds": [
+            0.03224215699447086,
+            0.03204008800094016,
+            0.06434494999848539
+          ],
+          "index_inclusive_seconds": [
+            46.23177240699442,
+            40.022358697002346,
+            39.13836123600049
+          ]
+        },
+        "medians": {
+          "input_tokens": 84608,
+          "output_tokens": 1307,
+          "cache_tokens": 74240,
+          "tool_calls": 10,
+          "code_kb_calls": 6,
+          "uncached_input_tokens": 10596,
+          "warm_wall_seconds": 39.990318609001406,
+          "cold_index_seconds": 0.03224215699447086,
+          "index_inclusive_seconds": 40.022358697002346
+        },
+        "adoption_common": {
+          "numerator": 7,
+          "denominator": 7
+        },
+        "adoption_all_structural": {
+          "numerator": 7,
+          "denominator": 7
+        },
+        "routing_violations": 0
+      }
+    }
+  },
+  "billing": "unavailable",
+  "decision_tolerance": 0.1,
+  "totals": {
+    "native": {
+      "input_tokens": 1196663,
+      "output_tokens": 17589,
+      "cache_tokens": 903424,
+      "wall_seconds": 650.1672736059991,
+      "code_kb_calls": 0
+    },
+    "current": {
+      "input_tokens": 2340030,
+      "output_tokens": 27838,
+      "cache_tokens": 1826304,
+      "wall_seconds": 951.057388494024,
+      "code_kb_calls": 273
+    },
+    "revised": {
+      "input_tokens": 2197102,
+      "output_tokens": 24929,
+      "cache_tokens": 1759360,
+      "wall_seconds": 879.868410402989,
+      "code_kb_calls": 154
+    }
+  },
+  "telemetry": {
+    "current": {
+      "query_samples": 273,
+      "query_p50_ms": 1,
+      "query_p95_ms": 25,
+      "max_query_ms": 36,
+      "median_index_seconds": 0.06415054199533188
+    },
+    "revised": {
+      "query_samples": 154,
+      "query_p50_ms": 4.0,
+      "query_p95_ms": 25,
+      "max_query_ms": 35,
+      "median_index_seconds": 0.032242447497992544
+    }
+  }
+}

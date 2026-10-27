@@ -1,0 +1,1280 @@
+{
+  "schema": 1,
+  "status": "complete",
+  "summary": {
+    "python-registration-concept": {
+      "accepted": 9,
+      "total": 9,
+      "mechanical_rejections": 0
+    },
+    "javascript-commonjs-test-reach": {
+      "accepted": 9,
+      "total": 9,
+      "mechanical_rejections": 9
+    },
+    "structural_adoption": {
+      "current": {
+        "kb_first": 64,
+        "structural_actions": 64
+      },
+      "revised": {
+        "kb_first": 41,
+        "structural_actions": 41
+      }
+    },
+    "confirmed_product_defects": [
+      "blast_radius recommends cargo test --workspace for a Python task when the fixture root contains a Rust Cargo workspace; the reviewed answers correctly reject it as Python test-command evidence."
+    ],
+    "frozen_oracle_mismatch": "The JavaScript oracle uses synthetic test_registration_route_uses_the_exported_handler, but the source test title is the string registration route uses the exported handler. All nine answers name the source title and are accepted by source review despite mechanical test-name rejection. No frozen oracle or grader was changed."
+  },
+  "runs": [
+    {
+      "run_id": "python-registration-concept-native-r1",
+      "accepted": true,
+      "reasons": [
+        "The source registers POST /register above register_account at python/app.py:10-11; build_registration_response at line 6 is a helper called by that handler, not the route.",
+        "test_register_account_route posts to /register and asserts status 201 at python/test_app.py:1-3. No Python test configuration or client fixture is supplied, so the unavailable command is appropriate."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Lists likely instruction, test, route, and runner-configuration paths."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": null,
+          "basis": "Searches Python paths for registration and test terms to locate the handler and focused test."
+        },
+        {
+          "id": "item_4",
+          "category": "tests",
+          "kb_first": null,
+          "basis": "Reads the handler and test, checks the configured route literal, and searches for runner configuration; the main purpose is to verify the handler-to-test path."
+        },
+        {
+          "id": "item_5",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture files and references to pytest, unittest, and client setup to assess command availability."
+        }
+      ],
+      "notes": "Source review confirmed the claims and the extra helper symbol is accurate and explicitly distinguished from the route handler."
+    },
+    {
+      "run_id": "python-registration-concept-current-r1",
+      "accepted": true,
+      "reasons": [
+        "The source registers POST /register above register_account at python/app.py:10-11; build_registration_response at line 6 is a helper called by that handler, not the route.",
+        "test_register_account_route posts to /register and asserts status 201 at python/test_app.py:1-3. No Python test configuration or client fixture is supplied, so the unavailable command is appropriate."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks the working directory."
+        },
+        {
+          "id": "item_3",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Searches for Python test-runner and project documentation/configuration files."
+        },
+        {
+          "id": "item_4",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb concept search locates the registration handler."
+        },
+        {
+          "id": "item_5",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Enumerates fixture files after the concept search."
+        },
+        {
+          "id": "item_6",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb skeleton inspects the handler file before reading its source."
+        },
+        {
+          "id": "item_7",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb skeleton locates the focused test declaration."
+        },
+        {
+          "id": "item_8",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb test-inclusive lookup searches the Python scope for the focused test."
+        },
+        {
+          "id": "item_9",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb reads the register_account body."
+        },
+        {
+          "id": "item_10",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb reads the helper body to distinguish it from the route."
+        },
+        {
+          "id": "item_11",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb reads the test body."
+        },
+        {
+          "id": "item_12",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks references and route registration for the handler."
+        },
+        {
+          "id": "item_13",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb blast radius checks indexed test impact."
+        }
+      ],
+      "notes": "The blast-radius result recommended cargo test --workspace because the fixture root also contains a Rust workspace. That is bad test-command advice for this Python task; the answer correctly leaves the Python command unavailable. The explanation that Flask's runtime dispatch is not linked to the test is consistent with the index result and source."
+    },
+    {
+      "run_id": "python-registration-concept-revised-r1",
+      "accepted": true,
+      "reasons": [
+        "The source registers POST /register above register_account at python/app.py:10-11; build_registration_response at line 6 is a helper called by that handler, not the route.",
+        "test_register_account_route posts to /register and asserts status 201 at python/test_app.py:1-3. No Python test configuration or client fixture is supplied, so the unavailable command is appropriate."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Searches for instruction and test-runner configuration files."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb concept search locates the registration handler."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Enumerates fixture files after the concept search."
+        },
+        {
+          "id": "item_5",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Checks the lengths of the two small Python files before reading them directly, as revised guidance permits."
+        },
+        {
+          "id": "item_6",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks handler references and its route registration."
+        },
+        {
+          "id": "item_7",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb test-inclusive lookup searches for the focused test."
+        },
+        {
+          "id": "item_8",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the small handler and test files directly after code-kb checks; also checks the registration literal."
+        },
+        {
+          "id": "item_9",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb blast radius checks indexed test impact."
+        },
+        {
+          "id": "item_10",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb test-inclusive lookup confirms the test symbol."
+        }
+      ],
+      "notes": "The small-file reads follow revised guidance. The answer correctly separates the helper from the route and reports the test command as unavailable."
+    },
+    {
+      "run_id": "python-registration-concept-native-r2",
+      "accepted": true,
+      "reasons": [
+        "The source registers POST /register above register_account at python/app.py:10-11; build_registration_response at line 6 is a helper called by that handler, not the route.",
+        "test_register_account_route posts to /register and asserts status 201 at python/test_app.py:1-3. No Python test configuration or client fixture is supplied, so the unavailable command is appropriate."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Lists likely instruction, test, route, and runner-configuration paths."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": null,
+          "basis": "Searches Python paths for registration and route terms to locate the handler and focused test."
+        },
+        {
+          "id": "item_4",
+          "category": "tests",
+          "kb_first": null,
+          "basis": "Reads the handler and test, checks registration configuration, and searches for test-runner setup; main purpose is source/test verification."
+        },
+        {
+          "id": "item_5",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Searches fixture files for test configuration and uses Git to inventory tracked files."
+        }
+      ],
+      "notes": "The extra config literal is accurate and does not confuse the configured path with the Flask handler."
+    },
+    {
+      "run_id": "python-registration-concept-current-r2",
+      "accepted": true,
+      "reasons": [
+        "The source registers POST /register above register_account at python/app.py:10-11; build_registration_response at line 6 is a helper called by that handler, not the route.",
+        "test_register_account_route posts to /register and asserts status 201 at python/test_app.py:1-3. No Python test configuration or client fixture is supplied, so the unavailable command is appropriate."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Searches for test, documentation, and project configuration files."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb concept lookup searches Python definitions and tests for account registration."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Searches for project configuration files after the code-kb lookup."
+        },
+        {
+          "id": "item_5",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb skeleton inspects the handler file."
+        },
+        {
+          "id": "item_6",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Enumerates fixture files."
+        },
+        {
+          "id": "item_7",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks handler references and route registration."
+        },
+        {
+          "id": "item_8",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb skeleton locates the focused test declaration."
+        },
+        {
+          "id": "item_9",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb reads the handler body."
+        },
+        {
+          "id": "item_10",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb reads the helper body."
+        },
+        {
+          "id": "item_11",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb reads the test body."
+        },
+        {
+          "id": "item_12",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb blast radius checks indexed test impact."
+        }
+      ],
+      "notes": "Correctly reports that no runnable Python command is evidenced."
+    },
+    {
+      "run_id": "python-registration-concept-current-r3",
+      "accepted": true,
+      "reasons": [
+        "The source registers POST /register above register_account at python/app.py:10-11; build_registration_response at line 6 is a helper called by that handler, not the route.",
+        "test_register_account_route posts to /register and asserts status 201 at python/test_app.py:1-3. The answer explicitly rejects cargo test --workspace as evidence for a Python command."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Searches for instruction and test-runner configuration files."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb concept lookup locates the handler and helper."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Searches candidate project configuration paths."
+        },
+        {
+          "id": "item_5",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb skeleton inspects the handler file."
+        },
+        {
+          "id": "item_6",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb skeleton locates the focused test."
+        },
+        {
+          "id": "item_7",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks handler references and route registration."
+        },
+        {
+          "id": "item_8",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb test-inclusive lookup searches for the test symbol."
+        },
+        {
+          "id": "item_9",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb reads the handler body."
+        },
+        {
+          "id": "item_10",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb reads the helper body."
+        },
+        {
+          "id": "item_11",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb reads the test body."
+        },
+        {
+          "id": "item_12",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb blast radius checks indexed test impact."
+        },
+        {
+          "id": "item_13",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks the remaining fixture files after code-kb analysis."
+        }
+      ],
+      "notes": "The blast-radius result recommended cargo test --workspace because the fixture root also contains a Rust workspace. This is confirmed wrong test-command advice for the Python target; the answer correctly says it is not a Python command and leaves the command unavailable."
+    },
+    {
+      "run_id": "python-registration-concept-revised-r2",
+      "accepted": true,
+      "reasons": [
+        "The source registers POST /register above register_account at python/app.py:10-11; build_registration_response at line 6 is a helper called by that handler, not the route.",
+        "test_register_account_route posts to /register and asserts status 201 at python/test_app.py:1-3. The answer correctly rejects the unrelated Cargo workspace command and reports no evidenced Python test command."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks directory and likely project/test configuration files."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb concept lookup locates the handler."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Enumerates fixture files."
+        },
+        {
+          "id": "item_5",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb skeleton inspects the handler."
+        },
+        {
+          "id": "item_6",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb skeleton locates the focused test."
+        },
+        {
+          "id": "item_7",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks handler references and route registration."
+        },
+        {
+          "id": "item_8",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb blast radius inspects test impact; its broader command is unrelated to Python."
+        },
+        {
+          "id": "item_9",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Directly reads the short handler, test, registration config, and Cargo manifest as revised guidance permits for small files."
+        },
+        {
+          "id": "item_10",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb test-inclusive lookup searches for the test symbol."
+        },
+        {
+          "id": "item_11",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb checks callees of the handler to confirm its helper chain."
+        },
+        {
+          "id": "item_12",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Searches remaining hidden fixture files for runner/setup configuration."
+        }
+      ],
+      "notes": "Blast radius recommends cargo test --workspace for a Python task because the fixture root includes Rust. The answer correctly identifies it as inapplicable and does not invent a Python command."
+    },
+    {
+      "run_id": "python-registration-concept-revised-r3",
+      "accepted": true,
+      "reasons": [
+        "The source registers POST /register above register_account at python/app.py:10-11; build_registration_response at line 6 is a helper called by that handler, not the route.",
+        "test_register_account_route posts to /register and asserts status 201 at python/test_app.py:1-3. No Python test configuration or client fixture is supplied, so the unavailable command is appropriate."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Searches for project instructions and Python test-runner configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb concept lookup locates account registration symbols."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Enumerates fixture files."
+        },
+        {
+          "id": "item_5",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb skeleton inspects the handler."
+        },
+        {
+          "id": "item_6",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb skeleton locates the focused test."
+        },
+        {
+          "id": "item_7",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks handler references."
+        },
+        {
+          "id": "item_8",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Native literal search checks the route, configured error text, and test-runner references."
+        },
+        {
+          "id": "item_9",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb test-inclusive lookup searches for the focused test."
+        },
+        {
+          "id": "item_10",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb reads the handler body."
+        },
+        {
+          "id": "item_11",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb reads the helper body."
+        },
+        {
+          "id": "item_12",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb reads the test body."
+        },
+        {
+          "id": "item_13",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Directly reads the short handler, test, registration config, and Cargo manifest to validate source and command availability."
+        }
+      ],
+      "notes": "The native literal search and short-file reads follow the revised policy. The answer reports the test command as unavailable rather than repeating any unrelated Cargo advice."
+    },
+    {
+      "run_id": "python-registration-concept-native-r3",
+      "accepted": true,
+      "reasons": [
+        "The source registers POST /register above register_account at python/app.py:10-11; build_registration_response at line 6 is a helper called by that handler, not the route.",
+        "test_register_account_route posts to /register and asserts status 201 at python/test_app.py:1-3. No Python test configuration or client fixture is supplied, so the unavailable command is appropriate."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Searches likely instruction, test, route, and runner-configuration paths."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": null,
+          "basis": "Searches fixture files and Python/config source for registration and runner terms to locate the handler and test."
+        },
+        {
+          "id": "item_4",
+          "category": "tests",
+          "kb_first": null,
+          "basis": "Reads the handler and test, checks the configured route, and validates source evidence; main purpose is handler/test verification."
+        },
+        {
+          "id": "item_5",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks for Python runner configuration and a client fixture."
+        }
+      ],
+      "notes": "The extra registration-config mention is accurate; it is not presented as the Flask handler."
+    },
+    {
+      "run_id": "javascript-commonjs-test-reach-native-r1",
+      "accepted": true,
+      "reasons": [
+        "registration.cjs exports registerAccount at line 5. app.cjs imports it at line 1, registers it for POST /register at line 4, and exports createApp at line 8.",
+        "The actual focused test title is the string `registration route uses the exported handler` at registration.test.cjs:3. It calls createApp at line 4, posts to /register at line 5, and asserts status 201 at line 6. The fixture has no JavaScript test-runner configuration or evidenced command."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Searches for project instructions, package metadata, tests, and documentation."
+        },
+        {
+          "id": "item_3",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Prints all three short JavaScript source files for direct inspection."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Enumerates fixture files."
+        },
+        {
+          "id": "item_5",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks the JavaScript folder contents."
+        },
+        {
+          "id": "item_6",
+          "category": "definition",
+          "kb_first": null,
+          "basis": "Searches source for CommonJS exports, route-builder and handler names, and possible test commands."
+        }
+      ],
+      "notes": "The source-backed answer is accepted despite mechanical rejection: the frozen oracle expects the synthetic identifier `test_registration_route_uses_the_exported_handler`, while the source and answer use the actual test title. No oracle or grader changes were made."
+    },
+    {
+      "run_id": "javascript-commonjs-test-reach-current-r1",
+      "accepted": true,
+      "reasons": [
+        "registration.cjs exports registerAccount at line 5. app.cjs imports it at line 1, registers it for POST /register at line 4, and exports createApp at line 8.",
+        "The actual focused test title is the string `registration route uses the exported handler` at registration.test.cjs:3. It calls createApp at line 4, posts to /register at line 5, and asserts status 201 at line 6. The fixture has no JavaScript test-runner configuration or evidenced command."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks likely instruction, package, test, and documentation files."
+        },
+        {
+          "id": "item_3",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb folder skeleton inspects the JavaScript layout and exports."
+        },
+        {
+          "id": "item_4",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb test-inclusive lookup searches for registration test coverage."
+        },
+        {
+          "id": "item_5",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb skeleton inspects app.cjs."
+        },
+        {
+          "id": "item_6",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb skeleton inspects registration.cjs."
+        },
+        {
+          "id": "item_7",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb skeleton identifies the test file's title and extent."
+        },
+        {
+          "id": "item_8",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup locates registerAccount."
+        },
+        {
+          "id": "item_9",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb test-inclusive lookup searches the test title."
+        },
+        {
+          "id": "item_10",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb reads createApp."
+        },
+        {
+          "id": "item_11",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb reads registerAccount."
+        },
+        {
+          "id": "item_12",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb reads the actual titled test body."
+        },
+        {
+          "id": "item_13",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb finds the registerAccount use in createApp."
+        },
+        {
+          "id": "item_14",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Enumerates fixture files."
+        },
+        {
+          "id": "item_15",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Searches exact CommonJS export, require, and route literals after code-kb navigation."
+        },
+        {
+          "id": "item_16",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb verifies createApp's test caller."
+        },
+        {
+          "id": "item_17",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb blast radius identifies the test through the public builder."
+        }
+      ],
+      "notes": "Mechanical grade is false only because the oracle's test identifier does not match the actual quoted test title. Source verification confirms the answer's title and public-export chain; no oracle or grader changes were made. A lookup for the oracle's fabricated underscored name correctly finds no such source symbol."
+    },
+    {
+      "run_id": "javascript-commonjs-test-reach-native-r2",
+      "accepted": true,
+      "reasons": [
+        "registration.cjs exports registerAccount at line 5. app.cjs imports it at line 1, registers it for POST /register at line 4, and exports createApp at line 8.",
+        "The actual focused test title is the string `registration route uses the exported handler` at registration.test.cjs:3. It calls createApp at line 4, posts to /register at line 5, and asserts status 201 at line 6. The fixture has no JavaScript test-runner configuration or evidenced command."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Searches for package, tests, route files, and documentation."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": null,
+          "basis": "Enumerates files and searches CommonJS exports and registration names to trace the handler."
+        },
+        {
+          "id": "item_4",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the short builder, handler, test, and config files, then checks the directory and for a test command."
+        }
+      ],
+      "notes": "Mechanical grade is false only because the oracle substitutes an underscored test identifier for the actual test title. The answer accurately reports the literal source title and CommonJS chain; no oracle or grader changes were made."
+    },
+    {
+      "run_id": "javascript-commonjs-test-reach-current-r2",
+      "accepted": true,
+      "reasons": [
+        "registration.cjs exports registerAccount at line 5. app.cjs imports it at line 1, registers it for POST /register at line 4, and exports createApp at line 8.",
+        "The actual focused test title is the string `registration route uses the exported handler` at registration.test.cjs:3. It calls createApp at line 4, posts to /register at line 5, and asserts status 201 at line 6. The fixture has no JavaScript test-runner configuration or evidenced command."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks likely instructions, package metadata, tests, and documentation."
+        },
+        {
+          "id": "item_3",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb test-inclusive lookup searches registration coverage."
+        },
+        {
+          "id": "item_4",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb folder skeleton inspects the JavaScript layout."
+        },
+        {
+          "id": "item_5",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Enumerates source and configuration files."
+        },
+        {
+          "id": "item_6",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb skeleton inspects app.cjs."
+        },
+        {
+          "id": "item_7",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb skeleton locates the actual test title."
+        },
+        {
+          "id": "item_8",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb skeleton inspects registration.cjs."
+        },
+        {
+          "id": "item_9",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb test-inclusive lookup searches the literal test title."
+        },
+        {
+          "id": "item_10",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup locates registerAccount and its import."
+        },
+        {
+          "id": "item_11",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb reads createApp."
+        },
+        {
+          "id": "item_12",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb reads the actual titled test body."
+        },
+        {
+          "id": "item_13",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Enumerates hidden fixture files."
+        },
+        {
+          "id": "item_14",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb finds the registerAccount use in createApp."
+        },
+        {
+          "id": "item_15",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Searches CommonJS export, require, route, and test-runner literals after code-kb navigation."
+        },
+        {
+          "id": "item_16",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb reads registerAccount."
+        },
+        {
+          "id": "item_17",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb verifies createApp's test caller."
+        },
+        {
+          "id": "item_18",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb blast radius identifies the public-export test."
+        }
+      ],
+      "notes": "Mechanical grade is false only because the oracle's underscored test identifier differs from the actual title. The answer correctly states the source title and chain; no oracle or grader changes were made."
+    },
+    {
+      "run_id": "javascript-commonjs-test-reach-revised-r1",
+      "accepted": true,
+      "reasons": [
+        "registration.cjs exports registerAccount at line 5. app.cjs imports it at line 1, registers it for POST /register at line 4, and exports createApp at line 8.",
+        "The actual focused test title is the string `registration route uses the exported handler` at registration.test.cjs:3. It calls createApp at line 4, posts to /register at line 5, and asserts status 201 at line 6. The fixture has no JavaScript test-runner configuration or evidenced command."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Searches for package, test, and documentation files."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup searches registration symbols."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Lists source files and checks the JavaScript folder."
+        },
+        {
+          "id": "item_5",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the three short JavaScript files directly, as revised guidance permits."
+        },
+        {
+          "id": "item_6",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb test-inclusive lookup searches route-related tests."
+        },
+        {
+          "id": "item_7",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup locates registerAccount."
+        },
+        {
+          "id": "item_8",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb finds registerAccount's use in createApp."
+        },
+        {
+          "id": "item_9",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup locates createApp."
+        },
+        {
+          "id": "item_10",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the small source files directly to validate the export and route chain."
+        },
+        {
+          "id": "item_11",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb verifies createApp's test caller."
+        }
+      ],
+      "notes": "Mechanical grade is false only because the oracle's synthetic test identifier differs from the actual title. The answer matches the title and verifies the public export chain; no oracle or grader changes were made."
+    },
+    {
+      "run_id": "javascript-commonjs-test-reach-revised-r2",
+      "accepted": true,
+      "reasons": [
+        "registration.cjs exports registerAccount at line 5. app.cjs imports it at line 1, registers it for POST /register at line 4, and exports createApp at line 8.",
+        "The actual focused test title is the string `registration route uses the exported handler` at registration.test.cjs:3. It calls createApp at line 4, posts to /register at line 5, and asserts status 201 at line 6. The fixture has no JavaScript test-runner configuration or evidenced command."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Searches for instruction, package, test, and route files."
+        },
+        {
+          "id": "item_3",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb test-inclusive concept lookup searches registration test coverage."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Enumerates JavaScript and configuration files."
+        },
+        {
+          "id": "item_5",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb folder skeleton inspects the JavaScript layout."
+        },
+        {
+          "id": "item_6",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb lookup searches the literal test title."
+        },
+        {
+          "id": "item_7",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Checks the lengths of the short JavaScript source files before reading them."
+        },
+        {
+          "id": "item_8",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the short app, handler, test, and config files directly, as revised guidance permits."
+        },
+        {
+          "id": "item_9",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb locates registerAccount."
+        },
+        {
+          "id": "item_10",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb locates createApp."
+        },
+        {
+          "id": "item_11",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb blast radius checks test impact."
+        },
+        {
+          "id": "item_12",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb verifies createApp's test caller."
+        },
+        {
+          "id": "item_13",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb verifies registerAccount's use in createApp."
+        }
+      ],
+      "notes": "Mechanical grade is false only because the oracle's synthetic test identifier differs from the actual title. The answer also repeats that title under `symbols`; source shows it is the `test(...)` string label, not a separate declaration, and the same title is correctly given under `tests`. The requested test and route chain are correct; no oracle or grader changes were made."
+    },
+    {
+      "run_id": "javascript-commonjs-test-reach-current-r3",
+      "accepted": true,
+      "reasons": [
+        "registration.cjs exports registerAccount at line 5. app.cjs imports it at line 1, registers it for POST /register at line 4, and exports createApp at line 8.",
+        "The actual focused test title is the string `registration route uses the exported handler` at registration.test.cjs:3. It calls createApp at line 4, posts to /register at line 5, and asserts status 201 at line 6. The fixture has no JavaScript test-runner configuration or evidenced command."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks the working directory."
+        },
+        {
+          "id": "item_3",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Searches likely instruction, package, test, and route files."
+        },
+        {
+          "id": "item_4",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb test-inclusive lookup searches registration tests."
+        },
+        {
+          "id": "item_5",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb folder skeleton inspects the JavaScript layout."
+        },
+        {
+          "id": "item_6",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks source and package file availability."
+        },
+        {
+          "id": "item_7",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb skeleton locates the test title."
+        },
+        {
+          "id": "item_8",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb skeleton inspects registration.cjs."
+        },
+        {
+          "id": "item_9",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb skeleton inspects app.cjs."
+        },
+        {
+          "id": "item_10",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup locates createApp."
+        },
+        {
+          "id": "item_11",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup locates registerAccount."
+        },
+        {
+          "id": "item_12",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Searches CommonJS export, require, route, and possible test-command literals after structural lookups."
+        },
+        {
+          "id": "item_13",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks registerAccount's use in createApp."
+        },
+        {
+          "id": "item_14",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks createApp's test caller."
+        },
+        {
+          "id": "item_15",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb reads createApp."
+        },
+        {
+          "id": "item_16",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb reads registerAccount."
+        },
+        {
+          "id": "item_17",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb reads the actual titled test body."
+        },
+        {
+          "id": "item_18",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Enumerates remaining fixture files."
+        }
+      ],
+      "notes": "Mechanical grade is false only because the oracle's synthetic identifier differs from the actual title. The answer accurately reports the source test and export chain; no oracle or grader changes were made."
+    },
+    {
+      "run_id": "javascript-commonjs-test-reach-native-r3",
+      "accepted": true,
+      "reasons": [
+        "registration.cjs exports registerAccount at line 5. app.cjs imports it at line 1, registers it for POST /register at line 4, and exports createApp at line 8.",
+        "The actual focused test title is the string `registration route uses the exported handler` at registration.test.cjs:3. It calls createApp at line 4, posts to /register at line 5, and asserts status 201 at line 6. The fixture has no JavaScript test-runner configuration or evidenced command."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Searches likely instruction, package, test, and route files."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": null,
+          "basis": "Searches JavaScript files for handler, export, import, and registration names."
+        },
+        {
+          "id": "item_4",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the short builder, handler, test, and config files to check the chain and test."
+        }
+      ],
+      "notes": "Mechanical grade is false only because the oracle's synthetic test identifier differs from the literal source title. The answer names the actual test and public CommonJS path; no oracle or grader changes were made."
+    },
+    {
+      "run_id": "javascript-commonjs-test-reach-revised-r3",
+      "accepted": true,
+      "reasons": [
+        "registration.cjs exports registerAccount at line 5. app.cjs imports it at line 1, registers it for POST /register at line 4, and exports createApp at line 8.",
+        "The actual focused test title is the string `registration route uses the exported handler` at registration.test.cjs:3. It calls createApp at line 4, posts to /register at line 5, and asserts status 201 at line 6. The fixture has no JavaScript test-runner configuration or evidenced command."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Searches likely instruction, package, test, route, and documentation files."
+        },
+        {
+          "id": "item_3",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Lists source files and checks JavaScript directory contents."
+        },
+        {
+          "id": "item_4",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb concept lookup searches registration symbols."
+        },
+        {
+          "id": "item_5",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the short JavaScript source files before code-kb calls, as revised guidance permits."
+        },
+        {
+          "id": "item_6",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb test-inclusive lookup searches route-related tests."
+        },
+        {
+          "id": "item_7",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup locates registerAccount."
+        },
+        {
+          "id": "item_8",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup locates createApp."
+        },
+        {
+          "id": "item_9",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks registerAccount's use by createApp."
+        },
+        {
+          "id": "item_10",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks the createApp test caller."
+        },
+        {
+          "id": "item_11",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb blast radius checks test impact."
+        }
+      ],
+      "notes": "Mechanical grade is false only because the oracle's synthetic identifier differs from the actual title. The direct reads are permitted revised small-file reads; the answer correctly reports the source title and chain. No oracle or grader changes were made."
+    }
+  ]
+}

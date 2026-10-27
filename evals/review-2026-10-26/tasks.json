@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "status": "reserved; no agent comparison run",
+  "status": "regression/tuning; used in the 72-run controlled pilot; no longer held out",
   "fixture": "fixture/",
   "tasks": [
     {

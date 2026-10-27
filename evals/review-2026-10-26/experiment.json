@@ -32,15 +32,17 @@
     "evals/review-2026-10-26/guidance/current.md": "129af33a8ff33f202eda6e9d4a6b23ccb2561a3ac04d3717d86ddfe371b603bd",
     "evals/review-2026-10-26/guidance/native.md": "550269b50c3b3f27f350f801f759ead4d156f5ed4845dfac96baa3599c32c65d",
     "evals/review-2026-10-26/guidance/revised.md": "8ff0a7974ecb9cea536bce84cf735ee67f67869e44541ea6079d5e9a5fd7decf",
-    "evals/review-2026-10-26/oracles.json": "cdcd54a02de9670e86ef0020e3116373cdd515d50d3a27f22bb0467b0716f6c9",
-    "evals/review-2026-10-26/tasks.json": "6a73214a12d476795666fac1da90b7f39f9f10ce3143749353b42f70defc195a",
+    "evals/review-2026-10-26/oracles.json": "070cfcbf9354fead3a434220d0e085ad2fc94dff416afabf30860ceb03093d1c",
+    "evals/review-2026-10-26/tasks.json": "bf320780c1f03023295f76c5d8d06704e627045d0337b9ea7896f184462f2ff1",
     "evals/review-2026-10-26/tool-definitions.json": "82b8b94a56ccb90fa340325fc9de5575d6d2308a09e3fc1db053c5c8a086d617",
     "scripts/agent_comparison.py": "a5fc78317d0e269d12c5f726e1eefee7cd3ce49df62930b0bf74033b101957ca",
-    "scripts/comparison_campaign.py": "fab882ef450141cd498219769277fb3cf346b88728c7512343b9d31dc00f4955",
-    "scripts/comparison_metrics.py": "e77b5b417de29cf2d37b8e3b8becf10196ccd0e4547368879ec8708fd56dfecd"
+    "scripts/comparison_campaign.py": "5eee6dc2cc3eb4129184adf42766843e95bcfb46913a43a5d6d25847c2815526",
+    "scripts/comparison_metrics.py": "ef25b4126dbe60b7188881c341b80d8624089e768d1a0f6051f9cbb74e8d7470"
   },
   "harness": "codex-cli 0.164.0",
   "julie_version": "3.9.1",
   "model": "gpt-6.1-sol",
-  "schema": 1
+  "schema": 1,
+  "status": "regression configuration after completed pilot; original measured manifest is results/frozen-experiment.json",
+  "baseline_manifest_sha256": "8e73c99ed06bf6e2efeacb322e452dabad7d83cd3638da274afb608802d22a8d"
 }

@@ -95,9 +95,9 @@ Commit mode: `parallel-lead-commit`. Workers do not stage, commit, checkpoint, o
 **Approach:** Reuse existing parser/telemetry patterns, extend only for actual observed events, and test missing usage, invalid output, answer leakage, wrong owners/tests, and native-arm tool contamination.
 
 - [x] Tests demonstrate correct counts, missing-metric behavior, negative grading, isolated staging, and balanced scheduling.
-- [ ] Every scheduled trial has a recorded outcome or an explicit infrastructure failure; no silent drop/replacement.
-- [ ] Every accepted answer is reviewed against source; instructions/adoption are assessed independently from answer correctness.
-- [ ] Outcome table distinguishes task success, tokens, latency, startup, unavailable billing, and inference limits.
+- [x] Every scheduled trial has a recorded outcome or an explicit infrastructure failure; no silent drop/replacement.
+- [x] Every accepted answer is reviewed against source; instructions/adoption are assessed independently from answer correctness.
+- [x] Outcome table distinguishes task success, tokens, latency, startup, unavailable billing, and inference limits.
 
 ### 3. Close confirmed defects and evidence
 
@@ -158,3 +158,5 @@ Runtime follow-up order after the frozen set:
 Astra reviewed these boundaries. Language compatibility permits further call matching; it never proves an edge. Indexed, bounded type/owner queries must preserve the memory invariant. No general type-inference engine is in scope.
 
 The Java scored transcript also exposes unrelated Rust/TypeScript callee signatures in context. Include the demonstrated dependency query in the shared call-compatibility fix; related-type binding is a separate query and remains the type-context owner’s scope.
+
+Task2 evidence is complete in [the baseline report](../reviews/2026-10-26-agent-comparison.md). The original72outcomes and all689actions are retained; future regression-data corrections do not replace measured grades. Independent runner/scope fixes are committed in eb163ea; remaining graph/type/receiver repairs keep Task3 open.

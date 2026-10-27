@@ -253,6 +253,89 @@ class GradeAnswerTest(unittest.TestCase):
         self.assertTrue(grade_answer(joined_manifest, oracle)["mechanical_pass"])
         self.assertFalse(grade_answer(incorrect, oracle)["mechanical_pass"])
 
+    def test_declared_command_alternatives_accept_only_exact_token_forms(self):
+        oracle = {
+            "symbols": [{"name": "send", "file": "rust/src/lib.rs", "line": 4}],
+            "tests": ["rust/tests/invitation.rs::handler_sends_invitation"],
+            "acceptance": [
+                "Run `cargo test --manifest-path evals/review-2026-10-26/fixture/Cargo.toml handler_sends_invitation`."
+            ],
+            "command_alternatives": [
+                "cargo test -p review-cross-language-fixture --test invitation handler_sends_invitation",
+                "cargo test -p review-cross-language-fixture --test invitation handler_sends_invitation -- --exact",
+            ],
+        }
+        accepted = (
+            "cargo test -p review-cross-language-fixture --test invitation handler_sends_invitation",
+            "cargo test -p review-cross-language-fixture --test invitation handler_sends_invitation -- --exact",
+            'cargo test -p review-cross-language-fixture --test invitation "handler_sends_invitation" -- --exact',
+        )
+        rejected = (
+            "cargo test -p other-fixture --test invitation handler_sends_invitation",
+            "cargo test -p review-cross-language-fixture --test other handler_sends_invitation",
+            "cargo test -p review-cross-language-fixture --test invitation another_test -- --exact",
+            "cargo test -p review-cross-language-fixture --test invitation handler_sends_invitation -- --ignored",
+            "cargo test",
+        )
+
+        for command in accepted:
+            with self.subTest(command=command):
+                result = grade_answer(
+                    answer(
+                        [symbol("send", "rust/src/lib.rs", 4)],
+                        [test("handler_sends_invitation", "rust/tests/invitation.rs", command, "evidenced")],
+                    ),
+                    oracle,
+                )
+
+                self.assertTrue(result["mechanical_pass"])
+                self.assertTrue(result["review_required"])
+                self.assertTrue(any("source review" in check for check in result["checks"]))
+
+        for command in rejected:
+            with self.subTest(command=command):
+                result = grade_answer(
+                    answer(
+                        [symbol("send", "rust/src/lib.rs", 4)],
+                        [test("handler_sends_invitation", "rust/tests/invitation.rs", command, "evidenced")],
+                    ),
+                    oracle,
+                )
+
+                self.assertFalse(result["mechanical_pass"])
+
+        base_oracle = {
+            "symbols": [{"name": "send", "file": "rust/src/lib.rs", "line": 4}],
+            "tests": ["rust/tests/invitation.rs::handler_sends_invitation"],
+            "acceptance": [
+                "Run `cargo test --manifest-path evals/review-2026-10-26/fixture/Cargo.toml handler_sends_invitation`."
+            ],
+        }
+        command = "cargo test -p review-cross-language-fixture --test invitation handler_sends_invitation"
+        response = answer(
+            [symbol("send", "rust/src/lib.rs", 4)],
+            [test("handler_sends_invitation", "rust/tests/invitation.rs", command, "evidenced")],
+        )
+
+        alternative_cases = (
+            (False, None),
+            (True, None),
+            (True, "cargo test -p review-cross-language-fixture --test invitation handler_sends_invitation"),
+            (True, [None]),
+            (True, ['"']),
+            (True, []),
+        )
+        for present, alternatives in alternative_cases:
+            with self.subTest(present=present, alternatives=alternatives):
+                oracle = dict(base_oracle)
+                if present:
+                    oracle["command_alternatives"] = alternatives
+
+                result = grade_answer(response, oracle)
+
+                self.assertFalse(result["mechanical_pass"])
+                self.assertTrue(any("focused command" in failure for failure in result["failures"]))
+
     def test_unavailable_command_is_required_when_oracle_says_no_build_file(self):
         oracle = {
             "symbols": [],

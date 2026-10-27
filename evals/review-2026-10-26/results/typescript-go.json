@@ -1,0 +1,1546 @@
+{
+  "schema": 1,
+  "status": "complete",
+  "review_scope": [
+    "typescript-signature-change",
+    "go-ambiguous-method-test-reach"
+  ],
+  "summary": {
+    "typescript-signature-change": {
+      "accepted": 9,
+      "semantic_pass": 9,
+      "total": 9,
+      "mechanical_pass": 0,
+      "mechanical_rejections": 9,
+      "frozen_oracle_mismatch": "The oracle expects test_invitation_route_passes_display_name, but the source test is the literal title invitation route passes display name. The expected name is not declared. The unavailable-command check is attached to the unmatched expected test, so all otherwise source-correct answers also fail that check."
+    },
+    "go-ambiguous-method-test-reach": {
+      "accepted": 0,
+      "semantic_pass": 9,
+      "total": 9,
+      "mechanical_pass": 0,
+      "mechanical_rejections": 9,
+      "strict_rejection": "Every answer reports MailService.Send in symbols[] even while explicitly explaining that it is not reached. The frozen oracle separates this row under excluded_candidates and rejects the extra symbol/conflicting owner. The answer is source-correct about the receiver and target; the raw strict rejection is preserved."
+    },
+    "confirmed_product_defects": [
+      "In all six current/revised TypeScript runs, blast_radius on InvitationService.send includes unrelated Java and Rust callers/tests, while find_references correctly marks those sites as other-language exclusions. The source chain only reaches the TypeScript route and test.",
+      "In all six current/revised Go runs, find_references on InvitationService.Send excludes the real Go ServeHTTP call at go/invitation.go:20 because it stops at receiver h (InvitationHandler) and does not follow the typed field h.service (*InvitationService).",
+      "In all six current/revised Go runs, blast_radius on InvitationService.Send recommends the unrelated C# Invite caller and InvitationControllerTests::Invite_sends_invitation. The Go test is in go/invitation_test.go."
+    ],
+    "reviewer_only_observations": [
+      "Non-scored reproduction: get_symbol_context was called with project_root=/home/murphy/.codex/worktrees/1e6f/code-kb and file_path=evals/review-2026-10-26/fixture/typescript for symbol_name=submitInvitation, postInvitation, and post. Each Types section reports pub struct InvitationService at evals/review-2026-10-26/fixture/rust/src/lib.rs:1. Source instead imports InvitationService from ../service in typescript/controllers/invitation.ts:1; the TypeScript class is typescript/service.ts:3, and each TypeScript function parameter is typed InvitationService. The same context output still resolves submitInvitation\u2019s send dependency to typescript/service.ts:4. This is a real consumer-facing false type fact that can mislead a coding agent, although the shown call dependency remains TypeScript. These calls were not campaign actions and are excluded from trial metrics. No original reviewer-only transcript or selected symbol IDs were retained; current-root lookups for reproduction give TS class ID 7f3fef3e8a3b3107098c7a3e6b38c803 and Rust struct ID edadee2dfbe2f5d0654b1121e38c4375."
+    ],
+    "source_files_reviewed": [
+      "evals/review-2026-10-26/fixture/typescript/service.ts",
+      "evals/review-2026-10-26/fixture/typescript/controllers/invitation.ts",
+      "evals/review-2026-10-26/fixture/typescript/routes.ts",
+      "evals/review-2026-10-26/fixture/typescript/app.ts",
+      "evals/review-2026-10-26/fixture/typescript/invitation.test.ts",
+      "evals/review-2026-10-26/fixture/go/invitation.go",
+      "evals/review-2026-10-26/fixture/go/invitation_test.go",
+      "evals/review-2026-10-26/fixture/config/registration.json"
+    ]
+  },
+  "runs": [
+    {
+      "run_id": "typescript-signature-change-native-r1",
+      "accepted": true,
+      "semantic_pass": true,
+      "mechanical_pass": false,
+      "reasons": [
+        "The required declarations match source: InvitationRequest and InvitationService.send in typescript/service.ts; submitInvitation in typescript/controllers/invitation.ts; postInvitation in typescript/routes.ts; and post in typescript/app.ts.",
+        "The source test is declared as the literal title \"invitation route passes display name\" at typescript/invitation.test.ts:4 and calls post with displayName at line 5. All route layers forward the same request object. The fixture has no TypeScript package/test runner configuration, so command_status unavailable with command null is correct."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": null,
+          "basis": "Searches fixture source for the requested declaration names and their call path."
+        },
+        {
+          "id": "item_4",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the short fixture source or test files directly to verify declarations and the source call path."
+        }
+      ],
+      "notes": "The frozen oracle uses nonexistent terminal name test_invitation_route_passes_display_name; source declares a string test title instead. The answer names the real test, so all nine mechanical failures are oracle-name mismatches. No frozen oracle/grader changes were made."
+    },
+    {
+      "run_id": "typescript-signature-change-current-r1",
+      "accepted": true,
+      "semantic_pass": true,
+      "mechanical_pass": false,
+      "reasons": [
+        "The required declarations match source: InvitationRequest and InvitationService.send in typescript/service.ts; submitInvitation in typescript/controllers/invitation.ts; postInvitation in typescript/routes.ts; and post in typescript/app.ts.",
+        "The source test is declared as the literal title \"invitation route passes display name\" at typescript/invitation.test.ts:4 and calls post with displayName at line 5. All route layers forward the same request object. The fixture has no TypeScript package/test runner configuration, so command_status unavailable with command null is correct."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb lookup locates the focused test declaration."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_5",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the source interface (typescript/service.ts)."
+        },
+        {
+          "id": "item_6",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the source interface (typescript/routes.ts)."
+        },
+        {
+          "id": "item_7",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the source interface (typescript/app.ts)."
+        },
+        {
+          "id": "item_8",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the source interface (typescript/controllers/invitation.ts)."
+        },
+        {
+          "id": "item_9",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb outlines the focused test file (typescript/invitation.test.ts)."
+        },
+        {
+          "id": "item_10",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks callers of the selected symbol."
+        },
+        {
+          "id": "item_11",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb impact lookup reports the TypeScript test plus unrelated Java/Rust callers and tests; those cross-language results are false positives."
+        },
+        {
+          "id": "item_12",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb reads the type or request contract (selected symbol)."
+        },
+        {
+          "id": "item_13",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb reads the type or request contract (selected symbol)."
+        },
+        {
+          "id": "item_14",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb reads the caller body (selected symbol) to verify the call chain."
+        },
+        {
+          "id": "item_15",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb reads the type or request contract (selected symbol)."
+        },
+        {
+          "id": "item_16",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb reads the caller body (selected symbol) to verify the call chain."
+        },
+        {
+          "id": "item_17",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb reads the caller body (selected symbol) to verify the call chain."
+        },
+        {
+          "id": "item_18",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_19",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks callers of the selected symbol."
+        },
+        {
+          "id": "item_20",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks callers of the selected symbol."
+        },
+        {
+          "id": "item_21",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks callers of the selected symbol."
+        },
+        {
+          "id": "item_22",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        }
+      ],
+      "notes": "The frozen oracle uses nonexistent terminal name test_invitation_route_passes_display_name; source declares a string test title instead. The answer names the real test, so all nine mechanical failures are oracle-name mismatches. No frozen oracle/grader changes were made."
+    },
+    {
+      "run_id": "typescript-signature-change-revised-r1",
+      "accepted": true,
+      "semantic_pass": true,
+      "mechanical_pass": false,
+      "reasons": [
+        "The required declarations match source: InvitationRequest and InvitationService.send in typescript/service.ts; submitInvitation in typescript/controllers/invitation.ts; postInvitation in typescript/routes.ts; and post in typescript/app.ts.",
+        "The source test is declared as the literal title \"invitation route passes display name\" at typescript/invitation.test.ts:4 and calls post with displayName at line 5. All route layers forward the same request object. The fixture has no TypeScript package/test runner configuration, so command_status unavailable with command null is correct."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup searches for the requested definition (invitation)."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_5",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the short fixture source or test files directly to verify declarations and the source call path."
+        },
+        {
+          "id": "item_6",
+          "category": "callers",
+          "kb_first": null,
+          "basis": "Code-kb checks callers of the selected symbol. This follows a native small-file read that exposed the source chain, so revised-policy ordering is ambiguous for this step."
+        },
+        {
+          "id": "item_7",
+          "category": "tests",
+          "kb_first": null,
+          "basis": "Code-kb impact lookup reports the TypeScript test plus unrelated Java/Rust callers and tests; those cross-language results are false positives. This follows a native small-file read that exposed the source chain, so revised-policy ordering is ambiguous for this step."
+        },
+        {
+          "id": "item_8",
+          "category": "callers",
+          "kb_first": null,
+          "basis": "Code-kb checks callers of the selected symbol. This follows a native small-file read that exposed the source chain, so revised-policy ordering is ambiguous for this step."
+        },
+        {
+          "id": "item_9",
+          "category": "callers",
+          "kb_first": null,
+          "basis": "Code-kb checks callers of the selected symbol. This follows a native small-file read that exposed the source chain, so revised-policy ordering is ambiguous for this step."
+        },
+        {
+          "id": "item_10",
+          "category": "callers",
+          "kb_first": null,
+          "basis": "Code-kb checks callers of the selected symbol. This follows a native small-file read that exposed the source chain, so revised-policy ordering is ambiguous for this step."
+        },
+        {
+          "id": "item_11",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads short TypeScript fixture files directly; this action reads separate, unrelated JavaScript examples."
+        }
+      ],
+      "notes": "The frozen oracle uses nonexistent terminal name test_invitation_route_passes_display_name; source declares a string test title instead. The answer names the real test, so all nine mechanical failures are oracle-name mismatches. No frozen oracle/grader changes were made."
+    },
+    {
+      "run_id": "typescript-signature-change-revised-r2",
+      "accepted": true,
+      "semantic_pass": true,
+      "mechanical_pass": false,
+      "reasons": [
+        "The required declarations match source: InvitationRequest and InvitationService.send in typescript/service.ts; submitInvitation in typescript/controllers/invitation.ts; postInvitation in typescript/routes.ts; and post in typescript/app.ts.",
+        "The source test is declared as the literal title \"invitation route passes display name\" at typescript/invitation.test.ts:4 and calls post with displayName at line 5. All route layers forward the same request object. The fixture has no TypeScript package/test runner configuration, so command_status unavailable with command null is correct."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup searches for the requested definition (invitation)."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_5",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks callers of the selected symbol."
+        },
+        {
+          "id": "item_6",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb impact lookup reports the TypeScript test plus unrelated Java/Rust callers and tests; those cross-language results are false positives."
+        },
+        {
+          "id": "item_7",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_8",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the short fixture source or test files directly to verify declarations and the source call path."
+        },
+        {
+          "id": "item_9",
+          "category": "callers",
+          "kb_first": null,
+          "basis": "Code-kb checks callers of the selected symbol. This follows a native small-file read that exposed the source chain, so revised-policy ordering is ambiguous for this step."
+        },
+        {
+          "id": "item_10",
+          "category": "callers",
+          "kb_first": null,
+          "basis": "Code-kb checks callers of the selected symbol. This follows a native small-file read that exposed the source chain, so revised-policy ordering is ambiguous for this step."
+        },
+        {
+          "id": "item_11",
+          "category": "callers",
+          "kb_first": null,
+          "basis": "Code-kb checks callers of the selected symbol. This follows a native small-file read that exposed the source chain, so revised-policy ordering is ambiguous for this step."
+        }
+      ],
+      "notes": "The frozen oracle uses nonexistent terminal name test_invitation_route_passes_display_name; source declares a string test title instead. The answer names the real test, so all nine mechanical failures are oracle-name mismatches. No frozen oracle/grader changes were made."
+    },
+    {
+      "run_id": "typescript-signature-change-native-r2",
+      "accepted": true,
+      "semantic_pass": true,
+      "mechanical_pass": false,
+      "reasons": [
+        "The required declarations match source: InvitationRequest and InvitationService.send in typescript/service.ts; submitInvitation in typescript/controllers/invitation.ts; postInvitation in typescript/routes.ts; and post in typescript/app.ts.",
+        "The source test is declared as the literal title \"invitation route passes display name\" at typescript/invitation.test.ts:4 and calls post with displayName at line 5. All route layers forward the same request object. The fixture has no TypeScript package/test runner configuration, so command_status unavailable with command null is correct."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": null,
+          "basis": "Searches fixture source for the requested declaration names and their call path."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_5",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the short fixture source or test files directly to verify declarations and the source call path."
+        }
+      ],
+      "notes": "The frozen oracle uses nonexistent terminal name test_invitation_route_passes_display_name; source declares a string test title instead. The answer names the real test, so all nine mechanical failures are oracle-name mismatches. No frozen oracle/grader changes were made."
+    },
+    {
+      "run_id": "typescript-signature-change-current-r2",
+      "accepted": true,
+      "semantic_pass": true,
+      "mechanical_pass": false,
+      "reasons": [
+        "The required declarations match source: InvitationRequest and InvitationService.send in typescript/service.ts; submitInvitation in typescript/controllers/invitation.ts; postInvitation in typescript/routes.ts; and post in typescript/app.ts.",
+        "The source test is declared as the literal title \"invitation route passes display name\" at typescript/invitation.test.ts:4 and calls post with displayName at line 5. All route layers forward the same request object. The fixture has no TypeScript package/test runner configuration, so command_status unavailable with command null is correct."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb lookup locates the focused test declaration."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_5",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the source interface (typescript/service.ts)."
+        },
+        {
+          "id": "item_6",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the source interface (typescript/app.ts)."
+        },
+        {
+          "id": "item_7",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the source interface (typescript/routes.ts)."
+        },
+        {
+          "id": "item_8",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the source interface (typescript/controllers/invitation.ts)."
+        },
+        {
+          "id": "item_9",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb outlines the focused test file (typescript/invitation.test.ts)."
+        },
+        {
+          "id": "item_10",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks callers of the selected symbol."
+        },
+        {
+          "id": "item_11",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb impact lookup reports the TypeScript test plus unrelated Java/Rust callers and tests; those cross-language results are false positives."
+        },
+        {
+          "id": "item_12",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb reads the type or request contract (InvitationRequest)."
+        },
+        {
+          "id": "item_13",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb reads the caller body (post) to verify the call chain."
+        },
+        {
+          "id": "item_14",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb reads the type or request contract (InvitationService.send)."
+        },
+        {
+          "id": "item_15",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb reads the caller body (postInvitation) to verify the call chain."
+        },
+        {
+          "id": "item_16",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb reads the caller body (submitInvitation) to verify the call chain."
+        },
+        {
+          "id": "item_17",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb reads the focused test body."
+        },
+        {
+          "id": "item_18",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks callers of the selected symbol."
+        },
+        {
+          "id": "item_19",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks callers of the selected symbol."
+        },
+        {
+          "id": "item_20",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_21",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks callers of the selected symbol."
+        }
+      ],
+      "notes": "The frozen oracle uses nonexistent terminal name test_invitation_route_passes_display_name; source declares a string test title instead. The answer names the real test, so all nine mechanical failures are oracle-name mismatches. No frozen oracle/grader changes were made. One answer also repeats the real test declaration under symbols[]; that extra row is source-true, and the mechanical grader did not reject it."
+    },
+    {
+      "run_id": "typescript-signature-change-current-r3",
+      "accepted": true,
+      "semantic_pass": true,
+      "mechanical_pass": false,
+      "reasons": [
+        "The required declarations match source: InvitationRequest and InvitationService.send in typescript/service.ts; submitInvitation in typescript/controllers/invitation.ts; postInvitation in typescript/routes.ts; and post in typescript/app.ts.",
+        "The source test is declared as the literal title \"invitation route passes display name\" at typescript/invitation.test.ts:4 and calls post with displayName at line 5. All route layers forward the same request object. The fixture has no TypeScript package/test runner configuration, so command_status unavailable with command null is correct."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup searches for the requested definition (invitation)."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_5",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the source interface (typescript/service.ts)."
+        },
+        {
+          "id": "item_6",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the source interface (typescript/routes.ts)."
+        },
+        {
+          "id": "item_7",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the source interface (typescript/controllers/invitation.ts)."
+        },
+        {
+          "id": "item_8",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the source interface (typescript/app.ts)."
+        },
+        {
+          "id": "item_9",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb outlines the focused test file (typescript/invitation.test.ts)."
+        },
+        {
+          "id": "item_10",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks callers of the selected symbol."
+        },
+        {
+          "id": "item_11",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb impact lookup reports the TypeScript test plus unrelated Java/Rust callers and tests; those cross-language results are false positives."
+        },
+        {
+          "id": "item_12",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb reads the type or request contract (selected symbol)."
+        },
+        {
+          "id": "item_13",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb reads the type or request contract (selected symbol)."
+        },
+        {
+          "id": "item_14",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb reads the caller body (selected symbol) to verify the call chain."
+        },
+        {
+          "id": "item_15",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb reads the caller body (selected symbol) to verify the call chain."
+        },
+        {
+          "id": "item_16",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks callers of the selected symbol."
+        },
+        {
+          "id": "item_17",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb reads the caller body (selected symbol) to verify the call chain."
+        },
+        {
+          "id": "item_18",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb lookup locates the focused test declaration."
+        },
+        {
+          "id": "item_19",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks callers of the selected symbol."
+        },
+        {
+          "id": "item_20",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks callers of the selected symbol."
+        },
+        {
+          "id": "item_21",
+          "category": "definition",
+          "kb_first": null,
+          "basis": "Searches fixture source for the requested declaration names and their call path."
+        },
+        {
+          "id": "item_22",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb reads the type or request contract (selected symbol)."
+        }
+      ],
+      "notes": "The frozen oracle uses nonexistent terminal name test_invitation_route_passes_display_name; source declares a string test title instead. The answer names the real test, so all nine mechanical failures are oracle-name mismatches. No frozen oracle/grader changes were made."
+    },
+    {
+      "run_id": "typescript-signature-change-revised-r3",
+      "accepted": true,
+      "semantic_pass": true,
+      "mechanical_pass": false,
+      "reasons": [
+        "The required declarations match source: InvitationRequest and InvitationService.send in typescript/service.ts; submitInvitation in typescript/controllers/invitation.ts; postInvitation in typescript/routes.ts; and post in typescript/app.ts.",
+        "The source test is declared as the literal title \"invitation route passes display name\" at typescript/invitation.test.ts:4 and calls post with displayName at line 5. All route layers forward the same request object. The fixture has no TypeScript package/test runner configuration, so command_status unavailable with command null is correct."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup searches for the requested definition (invitation)."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_5",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks callers of the selected symbol."
+        },
+        {
+          "id": "item_6",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_7",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb impact lookup reports the TypeScript test plus unrelated Java/Rust callers and tests; those cross-language results are false positives."
+        },
+        {
+          "id": "item_8",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the short fixture source or test files directly to verify declarations and the source call path."
+        },
+        {
+          "id": "item_9",
+          "category": "callers",
+          "kb_first": null,
+          "basis": "Code-kb checks callers of the selected symbol. This follows a native small-file read that exposed the source chain, so revised-policy ordering is ambiguous for this step."
+        },
+        {
+          "id": "item_10",
+          "category": "callers",
+          "kb_first": null,
+          "basis": "Code-kb checks callers of the selected symbol. This follows a native small-file read that exposed the source chain, so revised-policy ordering is ambiguous for this step."
+        },
+        {
+          "id": "item_11",
+          "category": "callers",
+          "kb_first": null,
+          "basis": "Code-kb checks callers of the selected symbol. This follows a native small-file read that exposed the source chain, so revised-policy ordering is ambiguous for this step."
+        }
+      ],
+      "notes": "The frozen oracle uses nonexistent terminal name test_invitation_route_passes_display_name; source declares a string test title instead. The answer names the real test, so all nine mechanical failures are oracle-name mismatches. No frozen oracle/grader changes were made."
+    },
+    {
+      "run_id": "typescript-signature-change-native-r3",
+      "accepted": true,
+      "semantic_pass": true,
+      "mechanical_pass": false,
+      "reasons": [
+        "The required declarations match source: InvitationRequest and InvitationService.send in typescript/service.ts; submitInvitation in typescript/controllers/invitation.ts; postInvitation in typescript/routes.ts; and post in typescript/app.ts.",
+        "The source test is declared as the literal title \"invitation route passes display name\" at typescript/invitation.test.ts:4 and calls post with displayName at line 5. All route layers forward the same request object. The fixture has no TypeScript package/test runner configuration, so command_status unavailable with command null is correct."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": null,
+          "basis": "Searches fixture source for the requested declaration names and their call path."
+        },
+        {
+          "id": "item_4",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the short fixture source or test files directly to verify declarations and the source call path."
+        }
+      ],
+      "notes": "The frozen oracle uses nonexistent terminal name test_invitation_route_passes_display_name; source declares a string test title instead. The answer names the real test, so all nine mechanical failures are oracle-name mismatches. No frozen oracle/grader changes were made."
+    },
+    {
+      "run_id": "go-ambiguous-method-test-reach-native-r1",
+      "accepted": false,
+      "semantic_pass": true,
+      "mechanical_pass": false,
+      "reasons": [
+        "Source review confirms InvitationHandler.service is *InvitationService at go/invitation.go:17, ServeHTTP calls h.service.Send at line 20, and TestInvitationRoute constructs that handler at go/invitation_test.go:9 before invoking it at line 10.",
+        "The answer explicitly says MailService.Send at go/invitation.go:13 is not reached, so the explanation is semantically correct. The frozen answer contract places it in symbols[]; the strict oracle treats this excluded candidate as a prohibited extra symbol and reports conflicting owners, so the raw mechanical rejection remains."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": null,
+          "basis": "Searches fixture source for the requested declaration names and their call path."
+        },
+        {
+          "id": "item_4",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the short fixture source or test files directly to verify declarations and the source call path."
+        },
+        {
+          "id": "item_5",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        }
+      ],
+      "notes": "Focused test has no assertions. config/registration.json maps invitation to /invite; the fixture contains no go.mod or runnable Go test command. Where a run mentions C# tool output, the answer rejects it and does not include it as a focused test."
+    },
+    {
+      "run_id": "go-ambiguous-method-test-reach-current-r1",
+      "accepted": false,
+      "semantic_pass": true,
+      "mechanical_pass": false,
+      "reasons": [
+        "Source review confirms InvitationHandler.service is *InvitationService at go/invitation.go:17, ServeHTTP calls h.service.Send at line 20, and TestInvitationRoute constructs that handler at go/invitation_test.go:9 before invoking it at line 10.",
+        "The answer explicitly says MailService.Send at go/invitation.go:13 is not reached, so the explanation is semantically correct. The frozen answer contract places it in symbols[]; the strict oracle treats this excluded candidate as a prohibited extra symbol and reports conflicting owners, so the raw mechanical rejection remains."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb lookup locates the focused test declaration."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_5",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the source interface (go/invitation.go)."
+        },
+        {
+          "id": "item_6",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the source interface (go/invitation_test.go)."
+        },
+        {
+          "id": "item_7",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup searches for the requested definition (InvitationHandler)."
+        },
+        {
+          "id": "item_8",
+          "category": "definition",
+          "kb_first": null,
+          "basis": "Searches fixture source for the requested declaration names and their call path."
+        },
+        {
+          "id": "item_9",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb inspects the handler body, dependencies, and related tests to trace the call path."
+        },
+        {
+          "id": "item_10",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb reads the type or request contract (InvitationHandler)."
+        },
+        {
+          "id": "item_11",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb reads the focused test body."
+        },
+        {
+          "id": "item_12",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup searches for the requested definition (Send)."
+        },
+        {
+          "id": "item_13",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Searches exact route/query literals and related fixture/config text; runner mentions in the same command are secondary."
+        },
+        {
+          "id": "item_14",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb impact lookup reports the real Go test and an unrelated C# caller/test; the cross-language result is unsupported by this source path."
+        },
+        {
+          "id": "item_15",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb reads the requested definition (selected symbol)."
+        },
+        {
+          "id": "item_16",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb caller lookup excludes the valid Go call at go/invitation.go:20 because it types h but does not follow h.service, whose declared type is *InvitationService."
+        },
+        {
+          "id": "item_17",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb reads the requested definition (selected symbol)."
+        },
+        {
+          "id": "item_18",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup searches for the requested definition (ServeHTTP)."
+        },
+        {
+          "id": "item_19",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks callers of the selected symbol."
+        },
+        {
+          "id": "item_20",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb impact lookup selects likely affected tests for the requested symbol."
+        }
+      ],
+      "notes": "Focused test has no assertions. config/registration.json maps invitation to /invite; the fixture contains no go.mod or runnable Go test command. Where a run mentions C# tool output, the answer rejects it and does not include it as a focused test."
+    },
+    {
+      "run_id": "go-ambiguous-method-test-reach-revised-r1",
+      "accepted": false,
+      "semantic_pass": true,
+      "mechanical_pass": false,
+      "reasons": [
+        "Source review confirms InvitationHandler.service is *InvitationService at go/invitation.go:17, ServeHTTP calls h.service.Send at line 20, and TestInvitationRoute constructs that handler at go/invitation_test.go:9 before invoking it at line 10.",
+        "The answer explicitly says MailService.Send at go/invitation.go:13 is not reached, so the explanation is semantically correct. The frozen answer contract places it in symbols[]; the strict oracle treats this excluded candidate as a prohibited extra symbol and reports conflicting owners, so the raw mechanical rejection remains."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup searches for the requested definition (invitation)."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_5",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the short fixture source or test files directly to verify declarations and the source call path."
+        },
+        {
+          "id": "item_6",
+          "category": "tests",
+          "kb_first": null,
+          "basis": "Code-kb lookup locates the focused test declaration. This follows a native small-file read that exposed the source chain, so revised-policy ordering is ambiguous for this step."
+        },
+        {
+          "id": "item_7",
+          "category": "callers",
+          "kb_first": null,
+          "basis": "Code-kb caller lookup excludes the valid Go call at go/invitation.go:20 because it types h but does not follow h.service, whose declared type is *InvitationService. This follows a native small-file read that exposed the source chain, so revised-policy ordering is ambiguous for this step."
+        },
+        {
+          "id": "item_8",
+          "category": "tests",
+          "kb_first": null,
+          "basis": "Code-kb lookup locates the focused test declaration. This follows a native small-file read that exposed the source chain, so revised-policy ordering is ambiguous for this step."
+        },
+        {
+          "id": "item_9",
+          "category": "tests",
+          "kb_first": null,
+          "basis": "Code-kb impact lookup reports the real Go test and an unrelated C# caller/test; the cross-language result is unsupported by this source path. This follows a native small-file read that exposed the source chain, so revised-policy ordering is ambiguous for this step."
+        },
+        {
+          "id": "item_10",
+          "category": "tests",
+          "kb_first": null,
+          "basis": "Code-kb lookup locates the focused test declaration. This follows a native small-file read that exposed the source chain, so revised-policy ordering is ambiguous for this step."
+        }
+      ],
+      "notes": "Focused test has no assertions. config/registration.json maps invitation to /invite; the fixture contains no go.mod or runnable Go test command. Where a run mentions C# tool output, the answer rejects it and does not include it as a focused test."
+    },
+    {
+      "run_id": "go-ambiguous-method-test-reach-revised-r2",
+      "accepted": false,
+      "semantic_pass": true,
+      "mechanical_pass": false,
+      "reasons": [
+        "Source review confirms InvitationHandler.service is *InvitationService at go/invitation.go:17, ServeHTTP calls h.service.Send at line 20, and TestInvitationRoute constructs that handler at go/invitation_test.go:9 before invoking it at line 10.",
+        "The answer explicitly says MailService.Send at go/invitation.go:13 is not reached, so the explanation is semantically correct. The frozen answer contract places it in symbols[]; the strict oracle treats this excluded candidate as a prohibited extra symbol and reports conflicting owners, so the raw mechanical rejection remains."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb lookup locates the focused test declaration."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_5",
+          "category": "ambiguous",
+          "kb_first": null,
+          "basis": "Code-kb outlines a directory containing both source and test files; the structural purpose overlaps."
+        },
+        {
+          "id": "item_6",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_7",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the source interface (go/invitation.go)."
+        },
+        {
+          "id": "item_8",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the source interface (go/invitation_test.go)."
+        },
+        {
+          "id": "item_9",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb lookup locates the focused test declaration."
+        },
+        {
+          "id": "item_10",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the short fixture source or test files directly to verify declarations and the source call path."
+        },
+        {
+          "id": "item_11",
+          "category": "tests",
+          "kb_first": null,
+          "basis": "Code-kb impact lookup reports the real Go test and an unrelated C# caller/test; the cross-language result is unsupported by this source path. This follows a native small-file read that exposed the source chain, so revised-policy ordering is ambiguous for this step."
+        },
+        {
+          "id": "item_12",
+          "category": "callers",
+          "kb_first": null,
+          "basis": "Code-kb caller lookup excludes the valid Go call at go/invitation.go:20 because it types h but does not follow h.service, whose declared type is *InvitationService. This follows a native small-file read that exposed the source chain, so revised-policy ordering is ambiguous for this step."
+        },
+        {
+          "id": "item_13",
+          "category": "definition",
+          "kb_first": null,
+          "basis": "Code-kb lookup searches for the requested definition (Send). This follows a native small-file read that exposed the source chain, so revised-policy ordering is ambiguous for this step."
+        },
+        {
+          "id": "item_14",
+          "category": "callers",
+          "kb_first": null,
+          "basis": "Code-kb checks callers of the selected symbol. This follows a native small-file read that exposed the source chain, so revised-policy ordering is ambiguous for this step."
+        },
+        {
+          "id": "item_15",
+          "category": "tests",
+          "kb_first": null,
+          "basis": "Code-kb lookup locates the focused test declaration. This follows a native small-file read that exposed the source chain, so revised-policy ordering is ambiguous for this step."
+        },
+        {
+          "id": "item_16",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        }
+      ],
+      "notes": "Focused test has no assertions. config/registration.json maps invitation to /invite; the fixture contains no go.mod or runnable Go test command. Where a run mentions C# tool output, the answer rejects it and does not include it as a focused test."
+    },
+    {
+      "run_id": "go-ambiguous-method-test-reach-native-r2",
+      "accepted": false,
+      "semantic_pass": true,
+      "mechanical_pass": false,
+      "reasons": [
+        "Source review confirms InvitationHandler.service is *InvitationService at go/invitation.go:17, ServeHTTP calls h.service.Send at line 20, and TestInvitationRoute constructs that handler at go/invitation_test.go:9 before invoking it at line 10.",
+        "The answer explicitly says MailService.Send at go/invitation.go:13 is not reached, so the explanation is semantically correct. The frozen answer contract places it in symbols[]; the strict oracle treats this excluded candidate as a prohibited extra symbol and reports conflicting owners, so the raw mechanical rejection remains."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": null,
+          "basis": "Searches fixture source for the requested declaration names and their call path."
+        },
+        {
+          "id": "item_4",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the short fixture source or test files directly to verify declarations and the source call path."
+        }
+      ],
+      "notes": "Focused test has no assertions. config/registration.json maps invitation to /invite; the fixture contains no go.mod or runnable Go test command. Where a run mentions C# tool output, the answer rejects it and does not include it as a focused test."
+    },
+    {
+      "run_id": "go-ambiguous-method-test-reach-current-r2",
+      "accepted": false,
+      "semantic_pass": true,
+      "mechanical_pass": false,
+      "reasons": [
+        "Source review confirms InvitationHandler.service is *InvitationService at go/invitation.go:17, ServeHTTP calls h.service.Send at line 20, and TestInvitationRoute constructs that handler at go/invitation_test.go:9 before invoking it at line 10.",
+        "The answer explicitly says MailService.Send at go/invitation.go:13 is not reached, so the explanation is semantically correct. The frozen answer contract places it in symbols[]; the strict oracle treats this excluded candidate as a prohibited extra symbol and reports conflicting owners, so the raw mechanical rejection remains."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb lookup locates the focused test declaration."
+        },
+        {
+          "id": "item_4",
+          "category": "ambiguous",
+          "kb_first": null,
+          "basis": "Code-kb outlines a directory containing both source and test files; the structural purpose overlaps."
+        },
+        {
+          "id": "item_5",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_6",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the source interface (go/invitation.go)."
+        },
+        {
+          "id": "item_7",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the source interface (go/invitation_test.go)."
+        },
+        {
+          "id": "item_8",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup searches for the requested definition (InvitationHandler)."
+        },
+        {
+          "id": "item_9",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb lookup locates the focused test declaration."
+        },
+        {
+          "id": "item_10",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_11",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb reads the type or request contract (InvitationHandler)."
+        },
+        {
+          "id": "item_12",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb inspects the handler body, dependencies, and related tests to trace the call path."
+        },
+        {
+          "id": "item_13",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup searches for the requested definition (Send)."
+        },
+        {
+          "id": "item_14",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb reads the focused test body."
+        },
+        {
+          "id": "item_15",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_16",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb reads the requested definition (selected symbol)."
+        },
+        {
+          "id": "item_17",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb reads the requested definition (selected symbol)."
+        },
+        {
+          "id": "item_18",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb caller lookup excludes the valid Go call at go/invitation.go:20 because it types h but does not follow h.service, whose declared type is *InvitationService."
+        },
+        {
+          "id": "item_19",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Searches exact route/query literals and related fixture/config text; runner mentions in the same command are secondary."
+        },
+        {
+          "id": "item_20",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb impact lookup reports the real Go test and an unrelated C# caller/test; the cross-language result is unsupported by this source path."
+        },
+        {
+          "id": "item_21",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb impact lookup selects likely affected tests for the requested symbol."
+        },
+        {
+          "id": "item_22",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks callers of the selected symbol."
+        }
+      ],
+      "notes": "Focused test has no assertions. config/registration.json maps invitation to /invite; the fixture contains no go.mod or runnable Go test command. Where a run mentions C# tool output, the answer rejects it and does not include it as a focused test."
+    },
+    {
+      "run_id": "go-ambiguous-method-test-reach-current-r3",
+      "accepted": false,
+      "semantic_pass": true,
+      "mechanical_pass": false,
+      "reasons": [
+        "Source review confirms InvitationHandler.service is *InvitationService at go/invitation.go:17, ServeHTTP calls h.service.Send at line 20, and TestInvitationRoute constructs that handler at go/invitation_test.go:9 before invoking it at line 10.",
+        "The answer explicitly says MailService.Send at go/invitation.go:13 is not reached, so the explanation is semantically correct. The frozen answer contract places it in symbols[]; the strict oracle treats this excluded candidate as a prohibited extra symbol and reports conflicting owners, so the raw mechanical rejection remains."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb lookup locates the focused test declaration."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_5",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the source interface (go/invitation.go)."
+        },
+        {
+          "id": "item_6",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the source interface (go/invitation_test.go)."
+        },
+        {
+          "id": "item_7",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_8",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup searches for the requested definition (Send)."
+        },
+        {
+          "id": "item_9",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb reads the type or request contract (ServeHTTP)."
+        },
+        {
+          "id": "item_10",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb reads the focused test body."
+        },
+        {
+          "id": "item_11",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb reads the type or request contract (InvitationHandler)."
+        },
+        {
+          "id": "item_12",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb reads the requested definition (selected symbol)."
+        },
+        {
+          "id": "item_13",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb reads the requested definition (selected symbol)."
+        },
+        {
+          "id": "item_14",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb caller lookup excludes the valid Go call at go/invitation.go:20 because it types h but does not follow h.service, whose declared type is *InvitationService."
+        },
+        {
+          "id": "item_15",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb impact lookup reports the real Go test and an unrelated C# caller/test; the cross-language result is unsupported by this source path."
+        },
+        {
+          "id": "item_16",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks callers of the selected symbol."
+        },
+        {
+          "id": "item_17",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb impact lookup selects likely affected tests for the requested symbol."
+        },
+        {
+          "id": "item_18",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Searches exact route/query literals and related fixture/config text; runner mentions in the same command are secondary."
+        }
+      ],
+      "notes": "Focused test has no assertions. config/registration.json maps invitation to /invite; the fixture contains no go.mod or runnable Go test command. Where a run mentions C# tool output, the answer rejects it and does not include it as a focused test."
+    },
+    {
+      "run_id": "go-ambiguous-method-test-reach-revised-r3",
+      "accepted": false,
+      "semantic_pass": true,
+      "mechanical_pass": false,
+      "reasons": [
+        "Source review confirms InvitationHandler.service is *InvitationService at go/invitation.go:17, ServeHTTP calls h.service.Send at line 20, and TestInvitationRoute constructs that handler at go/invitation_test.go:9 before invoking it at line 10.",
+        "The answer explicitly says MailService.Send at go/invitation.go:13 is not reached, so the explanation is semantically correct. The frozen answer contract places it in symbols[]; the strict oracle treats this excluded candidate as a prohibited extra symbol and reports conflicting owners, so the raw mechanical rejection remains."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup searches for the requested definition (invitation)."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_5",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the source interface (go/invitation.go)."
+        },
+        {
+          "id": "item_6",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the source interface (go/invitation_test.go)."
+        },
+        {
+          "id": "item_7",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the short fixture source or test files directly to verify declarations and the source call path."
+        },
+        {
+          "id": "item_8",
+          "category": "definition",
+          "kb_first": null,
+          "basis": "Code-kb lookup searches for the requested definition (Send). This follows a native small-file read that exposed the source chain, so revised-policy ordering is ambiguous for this step."
+        },
+        {
+          "id": "item_9",
+          "category": "callers",
+          "kb_first": null,
+          "basis": "Code-kb caller lookup excludes the valid Go call at go/invitation.go:20 because it types h but does not follow h.service, whose declared type is *InvitationService. This follows a native small-file read that exposed the source chain, so revised-policy ordering is ambiguous for this step."
+        },
+        {
+          "id": "item_10",
+          "category": "tests",
+          "kb_first": null,
+          "basis": "Code-kb impact lookup selects likely affected tests for the requested symbol. This follows a native small-file read that exposed the source chain, so revised-policy ordering is ambiguous for this step."
+        },
+        {
+          "id": "item_11",
+          "category": "tests",
+          "kb_first": null,
+          "basis": "Code-kb lookup locates the focused test declaration. This follows a native small-file read that exposed the source chain, so revised-policy ordering is ambiguous for this step."
+        },
+        {
+          "id": "item_12",
+          "category": "tests",
+          "kb_first": null,
+          "basis": "Code-kb impact lookup reports the real Go test and an unrelated C# caller/test; the cross-language result is unsupported by this source path. This follows a native small-file read that exposed the source chain, so revised-policy ordering is ambiguous for this step."
+        },
+        {
+          "id": "item_13",
+          "category": "tests",
+          "kb_first": null,
+          "basis": "Code-kb impact lookup selects likely affected tests for the requested symbol. This follows a native small-file read that exposed the source chain, so revised-policy ordering is ambiguous for this step."
+        },
+        {
+          "id": "item_14",
+          "category": "callers",
+          "kb_first": null,
+          "basis": "Code-kb checks callers of the selected symbol. This follows a native small-file read that exposed the source chain, so revised-policy ordering is ambiguous for this step."
+        },
+        {
+          "id": "item_15",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the short fixture source or test files directly to verify declarations and the source call path."
+        }
+      ],
+      "notes": "Focused test has no assertions. config/registration.json maps invitation to /invite; the fixture contains no go.mod or runnable Go test command. Where a run mentions C# tool output, the answer rejects it and does not include it as a focused test."
+    },
+    {
+      "run_id": "go-ambiguous-method-test-reach-native-r3",
+      "accepted": false,
+      "semantic_pass": true,
+      "mechanical_pass": false,
+      "reasons": [
+        "Source review confirms InvitationHandler.service is *InvitationService at go/invitation.go:17, ServeHTTP calls h.service.Send at line 20, and TestInvitationRoute constructs that handler at go/invitation_test.go:9 before invoking it at line 10.",
+        "The answer explicitly says MailService.Send at go/invitation.go:13 is not reached, so the explanation is semantically correct. The frozen answer contract places it in symbols[]; the strict oracle treats this excluded candidate as a prohibited extra symbol and reports conflicting owners, so the raw mechanical rejection remains."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or runner/build configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": null,
+          "basis": "Searches fixture source for the requested declaration names and their call path."
+        },
+        {
+          "id": "item_4",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the short fixture source or test files directly to verify declarations and the source call path."
+        },
+        {
+          "id": "item_5",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Searches exact route/query literals and related fixture/config text; runner mentions in the same command are secondary."
+        }
+      ],
+      "notes": "Focused test has no assertions. config/registration.json maps invitation to /invite; the fixture contains no go.mod or runnable Go test command. Where a run mentions C# tool output, the answer rejects it and does not include it as a focused test."
+    }
+  ]
+}

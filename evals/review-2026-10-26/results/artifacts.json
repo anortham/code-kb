@@ -1,0 +1,8 @@
+{
+  "raw_archive_sha256": "8a14825261594b3c2a33c128a380cb5f67f28bea9ccde7c270cc1fedef442bdb",
+  "frozen_manifest_sha256": "8e73c99ed06bf6e2efeacb322e452dabad7d83cd3638da274afb608802d22a8d",
+  "scored_runs": 72,
+  "calibration_initial_calls": 3,
+  "calibration_infrastructure_retries": 1,
+  "scored_retries": 0
+}

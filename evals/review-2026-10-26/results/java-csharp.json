@@ -1,0 +1,1349 @@
+{
+  "schema": 1,
+  "status": "complete",
+  "review_scope": [
+    "java-framework-entry-test-reach",
+    "csharp-default-argument-caller"
+  ],
+  "summary": {
+    "java-framework-entry-test-reach": {
+      "accepted": 9,
+      "semantic_pass": 9,
+      "total": 9,
+      "mechanical_pass": 9,
+      "mechanical_rejections": 0
+    },
+    "csharp-default-argument-caller": {
+      "accepted": 9,
+      "semantic_pass": 9,
+      "total": 9,
+      "mechanical_pass": 9,
+      "mechanical_rejections": 0
+    },
+    "confirmed_product_defects": [
+      "In Java current-r3, revised-r1, and revised-r3 runs, blast_radius for InvitationService.send treats unrelated Rust handler_sends_invitation and handle_invitation as likely impact. In current-r3, get_symbol_context also reports unrelated Rust and TypeScript send signatures as dependencies of InvitationController.post. The fixture contains same-name functions in those languages, but no cross-language call chain; find_references correctly excludes those cross-language sites. Reviewed answers omit the false results. Reproduction evidence is current-r3/attempt-001/events.jsonl item_16, revised-r1/attempt-001/events.jsonl item_10, and revised-r3/attempt-001/events.jsonl item_8; the extra context edges are current-r3 item_11.",
+      "In csharp-default-argument-caller-current-r1, get_symbol_context for InvitationController.Invite reports Go InvitationService.Send as a dependency and unrelated Java, Rust, and TypeScript tests as related. The C# fixture source only calls its Review.InvitationService; the cross-language results are false positives. Evidence: csharp-default-argument-caller-current-r1/attempt-001/events.jsonl item_10."
+    ],
+    "line_precision_note": "Current Java answers use line 6 (the @Test annotation) as the test symbol start; the declaration is line 7. The frozen oracle requires the test path/name but specifies no Java test line, so this does not change acceptance. In C# current-r2/current-r3 answers use line 7 ([Fact]) for the test symbol; its method declaration is line 8. The oracle specifies no C# test declaration line.",
+    "pending_note": ""
+  },
+  "runs": [
+    {
+      "run_id": "java-framework-entry-test-reach-native-r1",
+      "accepted": true,
+      "reasons": [
+        "The fixture test constructs InvitationController with a real InvitationService and calls controller.post at java/src/test/java/review/InvitationControllerTest.java:8-9. InvitationController.post delegates to service.send at java/src/main/java/review/InvitationController.java:10-11; InvitationService.send returns its email argument at java/src/main/java/review/InvitationService.java:4-5.",
+        "The answer identifies the fixture source chain and the exact test path/name, with no extra owners or tests. The JUnit 5 test exists, but the Java subtree has no pom.xml, Gradle build, runner script, or documented test command, so the unavailable-command result is supported."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or Java build/test configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the short Java source/test files directly for source verification; this is the allowed whole-small-file fallback."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or Java build/test configuration."
+        },
+        {
+          "id": "item_5",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or Java build/test configuration."
+        }
+      ],
+      "notes": "The source-backed answer is accepted; mechanical grading also passes."
+    },
+    {
+      "run_id": "java-framework-entry-test-reach-native-r2",
+      "accepted": true,
+      "reasons": [
+        "The fixture test constructs InvitationController with a real InvitationService and calls controller.post at java/src/test/java/review/InvitationControllerTest.java:8-9. InvitationController.post delegates to service.send at java/src/main/java/review/InvitationController.java:10-11; InvitationService.send returns its email argument at java/src/main/java/review/InvitationService.java:4-5.",
+        "The answer identifies the fixture source chain and the exact test path/name, with no extra owners or tests. The JUnit 5 test exists, but the Java subtree has no pom.xml, Gradle build, runner script, or documented test command, so the unavailable-command result is supported."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or Java build/test configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the short Java source/test files directly for source verification; this is the allowed whole-small-file fallback."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or Java build/test configuration."
+        },
+        {
+          "id": "item_5",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or Java build/test configuration."
+        }
+      ],
+      "notes": "The source-backed answer is accepted; mechanical grading also passes."
+    },
+    {
+      "run_id": "java-framework-entry-test-reach-native-r3",
+      "accepted": true,
+      "reasons": [
+        "The fixture test constructs InvitationController with a real InvitationService and calls controller.post at java/src/test/java/review/InvitationControllerTest.java:8-9. InvitationController.post delegates to service.send at java/src/main/java/review/InvitationController.java:10-11; InvitationService.send returns its email argument at java/src/main/java/review/InvitationService.java:4-5.",
+        "The answer identifies the fixture source chain and the exact test path/name, with no extra owners or tests. The JUnit 5 test exists, but the Java subtree has no pom.xml, Gradle build, runner script, or documented test command, so the unavailable-command result is supported."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or Java build/test configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": null,
+          "basis": "Searches Java source for the requested method and its call path, alongside test-runner terms."
+        },
+        {
+          "id": "item_4",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the short Java source/test files directly for source verification; this is the allowed whole-small-file fallback."
+        },
+        {
+          "id": "item_5",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or Java build/test configuration."
+        }
+      ],
+      "notes": "The source-backed answer is accepted; mechanical grading also passes. The statement that this fixture implements no invitation delivery is confined to this source: send simply returns its email argument."
+    },
+    {
+      "run_id": "java-framework-entry-test-reach-current-r1",
+      "accepted": true,
+      "reasons": [
+        "The fixture test constructs InvitationController with a real InvitationService and calls controller.post at java/src/test/java/review/InvitationControllerTest.java:8-9. InvitationController.post delegates to service.send at java/src/main/java/review/InvitationController.java:10-11; InvitationService.send returns its email argument at java/src/main/java/review/InvitationService.java:4-5.",
+        "The answer identifies the fixture source chain and the exact test path/name, with no extra owners or tests. The JUnit 5 test exists, but the Java subtree has no pom.xml, Gradle build, runner script, or documented test command, so the unavailable-command result is supported."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or Java build/test configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb test-inclusive lookup locates the focused Java test."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or Java build/test configuration."
+        },
+        {
+          "id": "item_5",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the Java source declarations in java/src/main/java/review/InvitationController.java before body inspection."
+        },
+        {
+          "id": "item_6",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb outlines the focused JUnit test declaration."
+        },
+        {
+          "id": "item_7",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the Java source declarations in java/src/main/java/review/InvitationService.java before body inspection."
+        },
+        {
+          "id": "item_8",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or Java build/test configuration."
+        },
+        {
+          "id": "item_9",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb reads the Java method body to verify the source call chain."
+        },
+        {
+          "id": "item_10",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb reads the Java method body to verify the source call chain."
+        },
+        {
+          "id": "item_11",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb reads the focused JUnit test body."
+        },
+        {
+          "id": "item_12",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks indexed callers/reference sites for the selected Java symbol."
+        },
+        {
+          "id": "item_13",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks indexed callers/reference sites for the selected Java symbol."
+        }
+      ],
+      "notes": "The source-backed answer is accepted; mechanical grading also passes. The answer gives line 6 for the test symbol, which is the @Test annotation; the method declaration is line 7. The frozen oracle does not set a Java test declaration-line requirement."
+    },
+    {
+      "run_id": "java-framework-entry-test-reach-current-r2",
+      "accepted": true,
+      "reasons": [
+        "The fixture test constructs InvitationController with a real InvitationService and calls controller.post at java/src/test/java/review/InvitationControllerTest.java:8-9. InvitationController.post delegates to service.send at java/src/main/java/review/InvitationController.java:10-11; InvitationService.send returns its email argument at java/src/main/java/review/InvitationService.java:4-5.",
+        "The answer identifies the fixture source chain and the exact test path/name, with no extra owners or tests. The JUnit 5 test exists, but the Java subtree has no pom.xml, Gradle build, runner script, or documented test command, so the unavailable-command result is supported."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or Java build/test configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb test-inclusive lookup locates the focused Java test."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or Java build/test configuration."
+        },
+        {
+          "id": "item_5",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the Java source declarations in java/src/main/java/review/InvitationController.java before body inspection."
+        },
+        {
+          "id": "item_6",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb outlines the focused JUnit test declaration."
+        },
+        {
+          "id": "item_7",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the Java source declarations in java/src/main/java/review/InvitationService.java before body inspection."
+        },
+        {
+          "id": "item_8",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or Java build/test configuration."
+        },
+        {
+          "id": "item_9",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb reads the Java method body to verify the source call chain."
+        },
+        {
+          "id": "item_10",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb reads the Java method body to verify the source call chain."
+        },
+        {
+          "id": "item_11",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb reads the focused JUnit test body."
+        },
+        {
+          "id": "item_12",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks indexed callers/reference sites for the selected Java symbol."
+        },
+        {
+          "id": "item_13",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks indexed callers/reference sites for the selected Java symbol."
+        }
+      ],
+      "notes": "The source-backed answer is accepted; mechanical grading also passes. The answer gives line 6 for the test symbol, which is the @Test annotation; the method declaration is line 7. The frozen oracle does not set a Java test declaration-line requirement."
+    },
+    {
+      "run_id": "java-framework-entry-test-reach-current-r3",
+      "accepted": true,
+      "reasons": [
+        "The fixture test constructs InvitationController with a real InvitationService and calls controller.post at java/src/test/java/review/InvitationControllerTest.java:8-9. InvitationController.post delegates to service.send at java/src/main/java/review/InvitationController.java:10-11; InvitationService.send returns its email argument at java/src/main/java/review/InvitationService.java:4-5.",
+        "The answer identifies the fixture source chain and the exact test path/name, with no extra owners or tests. The JUnit 5 test exists, but the Java subtree has no pom.xml, Gradle build, runner script, or documented test command, so the unavailable-command result is supported."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks the working directory."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb searches Java symbols for the controller/service definition."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or Java build/test configuration."
+        },
+        {
+          "id": "item_5",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Code-kb outlines the Java fixture tree to locate relevant files."
+        },
+        {
+          "id": "item_6",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb searches Java symbols for the controller/service definition."
+        },
+        {
+          "id": "item_7",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the Java source declarations in java/src/main/java/review/InvitationController.java before body inspection."
+        },
+        {
+          "id": "item_8",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb searches Java symbols for the controller/service definition."
+        },
+        {
+          "id": "item_9",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Code-kb outlines the Java fixture tree to locate relevant files."
+        },
+        {
+          "id": "item_10",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb test-inclusive lookup locates the focused Java test."
+        },
+        {
+          "id": "item_11",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb retrieves the selected method body, dependency signatures, and related tests."
+        },
+        {
+          "id": "item_12",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb outlines the focused JUnit test declaration."
+        },
+        {
+          "id": "item_13",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the Java source declarations in java/src/main/java/review/InvitationService.java before body inspection."
+        },
+        {
+          "id": "item_14",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or Java build/test configuration."
+        },
+        {
+          "id": "item_15",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb reads the focused JUnit test body."
+        },
+        {
+          "id": "item_16",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb reports indexed impact and candidate tests for the selected Java symbol."
+        },
+        {
+          "id": "item_17",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks indexed callers/reference sites for the selected Java symbol."
+        },
+        {
+          "id": "item_18",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb reads the Java method body to verify the source call chain."
+        }
+      ],
+      "notes": "The source-backed answer is accepted; mechanical grading also passes. The answer gives line 6 for the test symbol, which is the @Test annotation; the method declaration is line 7. The frozen oracle does not set a Java test declaration-line requirement. Recorded action item_16 blast_radius lists unrelated Rust handler_sends_invitation and handle_invitation as likely impact; this is a confirmed cross-language false positive, but the answer omits it. Recorded action item_11 get_symbol_context also returns Rust and TypeScript send signatures as dependencies of the Java post method; source does not support those edges, and the answer omits them."
+    },
+    {
+      "run_id": "java-framework-entry-test-reach-revised-r1",
+      "accepted": true,
+      "reasons": [
+        "The fixture test constructs InvitationController with a real InvitationService and calls controller.post at java/src/test/java/review/InvitationControllerTest.java:8-9. InvitationController.post delegates to service.send at java/src/main/java/review/InvitationController.java:10-11; InvitationService.send returns its email argument at java/src/main/java/review/InvitationService.java:4-5.",
+        "The answer identifies the fixture source chain and the exact test path/name, with no extra owners or tests. The JUnit 5 test exists, but the Java subtree has no pom.xml, Gradle build, runner script, or documented test command, so the unavailable-command result is supported."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or Java build/test configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb searches Java symbols for the controller/service definition."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or Java build/test configuration."
+        },
+        {
+          "id": "item_5",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb test-inclusive lookup locates the focused Java test."
+        },
+        {
+          "id": "item_6",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or Java build/test configuration."
+        },
+        {
+          "id": "item_7",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks indexed callers/reference sites for the selected Java symbol."
+        },
+        {
+          "id": "item_8",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb outlines the focused JUnit test declaration."
+        },
+        {
+          "id": "item_9",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the short Java source/test files directly for source verification; this is the allowed whole-small-file fallback."
+        },
+        {
+          "id": "item_10",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb reports indexed impact and candidate tests for the selected Java symbol."
+        },
+        {
+          "id": "item_11",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the Java source declarations in java/src/main/java/review/InvitationController.java before body inspection."
+        },
+        {
+          "id": "item_12",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb test-inclusive lookup locates the focused Java test."
+        },
+        {
+          "id": "item_13",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the Java source declarations in java/src/main/java/review/InvitationService.java before body inspection."
+        },
+        {
+          "id": "item_14",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb searches Java symbols for the controller/service definition."
+        },
+        {
+          "id": "item_15",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the short Java source/test files directly for source verification; this is the allowed whole-small-file fallback."
+        }
+      ],
+      "notes": "The source-backed answer is accepted; mechanical grading also passes. Recorded action item_10 blast_radius lists unrelated Rust handler_sends_invitation and handle_invitation as likely impact; this is a confirmed cross-language false positive, but the answer omits it."
+    },
+    {
+      "run_id": "java-framework-entry-test-reach-revised-r2",
+      "accepted": true,
+      "reasons": [
+        "The fixture test constructs InvitationController with a real InvitationService and calls controller.post at java/src/test/java/review/InvitationControllerTest.java:8-9. InvitationController.post delegates to service.send at java/src/main/java/review/InvitationController.java:10-11; InvitationService.send returns its email argument at java/src/main/java/review/InvitationService.java:4-5.",
+        "The answer identifies the fixture source chain and the exact test path/name, with no extra owners or tests. The JUnit 5 test exists, but the Java subtree has no pom.xml, Gradle build, runner script, or documented test command, so the unavailable-command result is supported."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or Java build/test configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb test-inclusive lookup locates the focused Java test."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or Java build/test configuration."
+        },
+        {
+          "id": "item_5",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Code-kb outlines the Java fixture tree to locate relevant files."
+        },
+        {
+          "id": "item_6",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or Java build/test configuration."
+        },
+        {
+          "id": "item_7",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb test-inclusive lookup locates the focused Java test."
+        },
+        {
+          "id": "item_8",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the Java source declarations in java/src/main/java/review/InvitationService.java before body inspection."
+        },
+        {
+          "id": "item_9",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines the Java source declarations in java/src/main/java/review/InvitationController.java before body inspection."
+        },
+        {
+          "id": "item_10",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb outlines the focused JUnit test declaration."
+        },
+        {
+          "id": "item_11",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks indexed callers/reference sites for the selected Java symbol."
+        },
+        {
+          "id": "item_12",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the short Java source/test files directly for source verification; this is the allowed whole-small-file fallback."
+        },
+        {
+          "id": "item_13",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks indexed callers/reference sites for the selected Java symbol."
+        }
+      ],
+      "notes": "The source-backed answer is accepted; mechanical grading also passes."
+    },
+    {
+      "run_id": "java-framework-entry-test-reach-revised-r3",
+      "accepted": true,
+      "reasons": [
+        "The fixture test constructs InvitationController with a real InvitationService and calls controller.post at java/src/test/java/review/InvitationControllerTest.java:8-9. InvitationController.post delegates to service.send at java/src/main/java/review/InvitationController.java:10-11; InvitationService.send returns its email argument at java/src/main/java/review/InvitationService.java:4-5.",
+        "The answer identifies the fixture source chain and the exact test path/name, with no extra owners or tests. The JUnit 5 test exists, but the Java subtree has no pom.xml, Gradle build, runner script, or documented test command, so the unavailable-command result is supported."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or Java build/test configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb searches Java symbols for the controller/service definition."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or Java build/test configuration."
+        },
+        {
+          "id": "item_5",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks indexed callers/reference sites for the selected Java symbol."
+        },
+        {
+          "id": "item_6",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture instructions, file inventory, or Java build/test configuration."
+        },
+        {
+          "id": "item_7",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Code-kb outlines the Java fixture tree to locate relevant files."
+        },
+        {
+          "id": "item_8",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb reports indexed impact and candidate tests for the selected Java symbol."
+        },
+        {
+          "id": "item_9",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the short Java source/test files directly for source verification; this is the allowed whole-small-file fallback."
+        },
+        {
+          "id": "item_10",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb test-inclusive lookup locates the focused Java test."
+        },
+        {
+          "id": "item_11",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb searches Java symbols for the controller/service definition."
+        },
+        {
+          "id": "item_12",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks indexed callers/reference sites for the selected Java symbol."
+        },
+        {
+          "id": "item_13",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb test-inclusive lookup locates the focused Java test."
+        }
+      ],
+      "notes": "The source-backed answer is accepted; mechanical grading also passes. Recorded action item_8 blast_radius lists unrelated Rust handler_sends_invitation and handle_invitation as likely impact; this is a confirmed cross-language false positive, but the answer omits it."
+    },
+    {
+      "run_id": "csharp-default-argument-caller-native-r1",
+      "accepted": true,
+      "reasons": [
+        "InvitationController.Invite calls service.Send(email) at csharp/InvitationController.cs:5, passing one argument. InvitationService.Send declares string? note = null at csharp/InvitationService.cs:5, so the omitted optional argument remains valid.",
+        "Invite_sends_invitation is the xUnit [Fact] at csharp/InvitationControllerTests.cs:7-12; it constructs the controller and service at line 10 and calls Invite at line 11. The fixture has no C# project or solution, so no runnable C# test command is evidenced.",
+        "The answer names the requested Send and Invite declarations and the exact focused test, preserves the omitted note argument, and gives command_status unavailable. No wrong owners/tests or unsupported source claims appear."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture inventory, instructions, or C# project/test-runner configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": null,
+          "basis": "Searches the fixture for the requested C# declarations and also checks project/test metadata."
+        },
+        {
+          "id": "item_4",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the three short C# fixture files directly for source verification; this is the allowed whole-small-file fallback."
+        }
+      ],
+      "notes": "The answer is accepted and mechanically passes. The one-argument call preserves note = null, and the test directly invokes the controller path."
+    },
+    {
+      "run_id": "csharp-default-argument-caller-native-r2",
+      "accepted": true,
+      "reasons": [
+        "InvitationController.Invite calls service.Send(email) at csharp/InvitationController.cs:5, passing one argument. InvitationService.Send declares string? note = null at csharp/InvitationService.cs:5, so the omitted optional argument remains valid.",
+        "Invite_sends_invitation is the xUnit [Fact] at csharp/InvitationControllerTests.cs:7-12; it constructs the controller and service at line 10 and calls Invite at line 11. The fixture has no C# project or solution, so no runnable C# test command is evidenced.",
+        "The answer names the requested Send and Invite declarations and the exact focused test, preserves the omitted note argument, and gives command_status unavailable. No wrong owners/tests or unsupported source claims appear."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture inventory, instructions, or C# project/test-runner configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": null,
+          "basis": "Searches the fixture for the requested C# declarations and also checks project/test metadata."
+        },
+        {
+          "id": "item_4",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the three short C# fixture files directly for source verification; this is the allowed whole-small-file fallback."
+        },
+        {
+          "id": "item_5",
+          "category": "definition",
+          "kb_first": null,
+          "basis": "Searches the fixture for the requested C# declarations and also checks project/test metadata."
+        }
+      ],
+      "notes": "The answer is accepted and mechanically passes. The one-argument call preserves note = null, and the test directly invokes the controller path."
+    },
+    {
+      "run_id": "csharp-default-argument-caller-native-r3",
+      "accepted": true,
+      "reasons": [
+        "InvitationController.Invite calls service.Send(email) at csharp/InvitationController.cs:5, passing one argument. InvitationService.Send declares string? note = null at csharp/InvitationService.cs:5, so the omitted optional argument remains valid.",
+        "Invite_sends_invitation is the xUnit [Fact] at csharp/InvitationControllerTests.cs:7-12; it constructs the controller and service at line 10 and calls Invite at line 11. The fixture has no C# project or solution, so no runnable C# test command is evidenced.",
+        "The answer names the requested Send and Invite declarations and the exact focused test, preserves the omitted note argument, and gives command_status unavailable. No wrong owners/tests or unsupported source claims appear."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture inventory, instructions, or C# project/test-runner configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": null,
+          "basis": "Searches the fixture for the requested C# declarations and also checks project/test metadata."
+        },
+        {
+          "id": "item_4",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the three short C# fixture files directly for source verification; this is the allowed whole-small-file fallback."
+        },
+        {
+          "id": "item_5",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture inventory, instructions, or C# project/test-runner configuration."
+        }
+      ],
+      "notes": "The answer is accepted and mechanically passes. The one-argument call preserves note = null, and the test directly invokes the controller path."
+    },
+    {
+      "run_id": "csharp-default-argument-caller-current-r1",
+      "accepted": true,
+      "reasons": [
+        "InvitationController.Invite calls service.Send(email) at csharp/InvitationController.cs:5, passing one argument. InvitationService.Send declares string? note = null at csharp/InvitationService.cs:5, so the omitted optional argument remains valid.",
+        "Invite_sends_invitation is the xUnit [Fact] at csharp/InvitationControllerTests.cs:7-12; it constructs the controller and service at line 10 and calls Invite at line 11. The fixture has no C# project or solution, so no runnable C# test command is evidenced.",
+        "The answer names the requested Send and Invite declarations and the exact focused test, preserves the omitted note argument, and gives command_status unavailable. No wrong owners/tests or unsupported source claims appear."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture inventory, instructions, or C# project/test-runner configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb searches for 'Invitation'; broad matches are followed by C#-scoped source inspection."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture inventory, instructions, or C# project/test-runner configuration."
+        },
+        {
+          "id": "item_5",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines C# declarations in csharp/InvitationService.cs before body inspection."
+        },
+        {
+          "id": "item_6",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines C# declarations in csharp/InvitationController.cs before body inspection."
+        },
+        {
+          "id": "item_7",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb outlines the focused xUnit test before source inspection."
+        },
+        {
+          "id": "item_8",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture inventory, instructions, or C# project/test-runner configuration."
+        },
+        {
+          "id": "item_9",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb reports the indexed downstream method and candidate test for the selected C# service method."
+        },
+        {
+          "id": "item_10",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb retrieves Invite context, but the result also includes an unrelated Go Send dependency and Java/Rust/TypeScript tests; source does not support those cross-language edges."
+        },
+        {
+          "id": "item_11",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb reads the focused xUnit test body."
+        },
+        {
+          "id": "item_12",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb reads InvitationService.Send to verify the optional parameter declaration and default."
+        },
+        {
+          "id": "item_13",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks indexed caller sites for the selected C# method."
+        },
+        {
+          "id": "item_14",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb reads the controller caller body to verify the omitted argument and delegation."
+        },
+        {
+          "id": "item_15",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks indexed caller sites for the selected C# method."
+        },
+        {
+          "id": "item_16",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb test-inclusive lookup locates Invite_sends_invitation."
+        }
+      ],
+      "notes": "The answer is accepted and mechanically passes. The one-argument call preserves note = null, and the test directly invokes the controller path. Recorded action item_10 get_symbol_context also lists Go InvitationService.Send as a dependency and unrelated Java, Rust, and TypeScript tests as related; C# source has no links to those files, and the final answer omits them."
+    },
+    {
+      "run_id": "csharp-default-argument-caller-current-r2",
+      "accepted": true,
+      "reasons": [
+        "InvitationController.Invite calls service.Send(email) at csharp/InvitationController.cs:5, passing one argument. InvitationService.Send declares string? note = null at csharp/InvitationService.cs:5, so the omitted optional argument remains valid.",
+        "Invite_sends_invitation is the xUnit [Fact] at csharp/InvitationControllerTests.cs:7-12; it constructs the controller and service at line 10 and calls Invite at line 11. The fixture has no C# project or solution, so no runnable C# test command is evidenced.",
+        "The answer names the requested Send and Invite declarations and the exact focused test, preserves the omitted note argument, and gives command_status unavailable. No wrong owners/tests or unsupported source claims appear."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks the working directory."
+        },
+        {
+          "id": "item_3",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture inventory, instructions, or C# project/test-runner configuration."
+        },
+        {
+          "id": "item_4",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb searches for 'Invitation'; broad matches are followed by C#-scoped source inspection."
+        },
+        {
+          "id": "item_5",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture inventory, instructions, or C# project/test-runner configuration."
+        },
+        {
+          "id": "item_6",
+          "category": "ambiguous",
+          "kb_first": null,
+          "basis": "Code-kb outlines a folder containing both C# source and test files; its purpose overlaps definition and test discovery."
+        },
+        {
+          "id": "item_7",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines C# declarations in csharp/InvitationService.cs before body inspection."
+        },
+        {
+          "id": "item_8",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines C# declarations in csharp/InvitationController.cs before body inspection."
+        },
+        {
+          "id": "item_9",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb outlines the focused xUnit test before source inspection."
+        },
+        {
+          "id": "item_10",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture inventory, instructions, or C# project/test-runner configuration."
+        },
+        {
+          "id": "item_11",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb reads InvitationService.Send to verify the optional parameter declaration and default."
+        },
+        {
+          "id": "item_12",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb reads the controller caller body to verify the omitted argument and delegation."
+        },
+        {
+          "id": "item_13",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb reads the focused xUnit test body."
+        },
+        {
+          "id": "item_14",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks indexed caller sites for the selected C# method."
+        },
+        {
+          "id": "item_15",
+          "category": "ambiguous",
+          "kb_first": null,
+          "basis": "Code-kb cannot resolve InvitationService.Send without a symbol ID because C# and Go both define that qualified name; the next call selects the C# ID."
+        },
+        {
+          "id": "item_16",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb reports the indexed downstream method and candidate test for the selected C# service method."
+        },
+        {
+          "id": "item_17",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks indexed caller sites for the selected C# method."
+        },
+        {
+          "id": "item_18",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb reads the controller caller body to verify the omitted argument and delegation."
+        }
+      ],
+      "notes": "The answer is accepted and mechanically passes. The one-argument call preserves note = null, and the test directly invokes the controller path. The answer gives line 7 for the test symbol, which is the [Fact] attribute; the method declaration is line 8. The frozen oracle requires the test path/name but specifies no C# test line. Code-kb blast_radius item_item_15 reports a legitimate C#/Go ambiguity for InvitationService.Send; item_item_16 selects the exact C# symbol ID and returns the expected caller/test. The final answer is correct."
+    },
+    {
+      "run_id": "csharp-default-argument-caller-current-r3",
+      "accepted": true,
+      "reasons": [
+        "InvitationController.Invite calls service.Send(email) at csharp/InvitationController.cs:5, passing one argument. InvitationService.Send declares string? note = null at csharp/InvitationService.cs:5, so the omitted optional argument remains valid.",
+        "Invite_sends_invitation is the xUnit [Fact] at csharp/InvitationControllerTests.cs:7-12; it constructs the controller and service at line 10 and calls Invite at line 11. The fixture has no C# project or solution, so no runnable C# test command is evidenced.",
+        "The answer names the requested Send and Invite declarations and the exact focused test, preserves the omitted note argument, and gives command_status unavailable. No wrong owners/tests or unsupported source claims appear."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture inventory, instructions, or C# project/test-runner configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb searches for 'Invitation'; broad matches are followed by C#-scoped source inspection."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture inventory, instructions, or C# project/test-runner configuration."
+        },
+        {
+          "id": "item_5",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb outlines the focused xUnit test before source inspection."
+        },
+        {
+          "id": "item_6",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines C# declarations in csharp/InvitationController.cs before body inspection."
+        },
+        {
+          "id": "item_7",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines C# declarations in csharp/InvitationService.cs before body inspection."
+        },
+        {
+          "id": "item_8",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb searches for 'Send'; broad matches are followed by C#-scoped source inspection."
+        },
+        {
+          "id": "item_9",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb reads InvitationService.Send to verify the optional parameter declaration and default."
+        },
+        {
+          "id": "item_10",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb reads the controller caller body to verify the omitted argument and delegation."
+        },
+        {
+          "id": "item_11",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture inventory, instructions, or C# project/test-runner configuration."
+        },
+        {
+          "id": "item_12",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks indexed caller sites for the selected C# method."
+        },
+        {
+          "id": "item_13",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb reads the focused xUnit test body."
+        },
+        {
+          "id": "item_14",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks indexed caller sites for the selected C# method."
+        },
+        {
+          "id": "item_15",
+          "category": "ambiguous",
+          "kb_first": null,
+          "basis": "Code-kb cannot resolve InvitationService.Send without a symbol ID because C# and Go both define that qualified name; the next call selects the C# ID."
+        },
+        {
+          "id": "item_16",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb reports the indexed downstream method and candidate test for the selected C# service method."
+        }
+      ],
+      "notes": "The answer is accepted and mechanically passes. The one-argument call preserves note = null, and the test directly invokes the controller path. The answer gives line 7 for the test symbol, which is the [Fact] attribute; the method declaration is line 8. The frozen oracle requires the test path/name but specifies no C# test line. Code-kb blast_radius item_item_15 reports a legitimate C#/Go ambiguity for InvitationService.Send; item_item_16 selects the exact C# symbol ID and returns the expected caller/test. The final answer is correct."
+    },
+    {
+      "run_id": "csharp-default-argument-caller-revised-r1",
+      "accepted": true,
+      "reasons": [
+        "InvitationController.Invite calls service.Send(email) at csharp/InvitationController.cs:5, passing one argument. InvitationService.Send declares string? note = null at csharp/InvitationService.cs:5, so the omitted optional argument remains valid.",
+        "Invite_sends_invitation is the xUnit [Fact] at csharp/InvitationControllerTests.cs:7-12; it constructs the controller and service at line 10 and calls Invite at line 11. The fixture has no C# project or solution, so no runnable C# test command is evidenced.",
+        "The answer names the requested Send and Invite declarations and the exact focused test, preserves the omitted note argument, and gives command_status unavailable. No wrong owners/tests or unsupported source claims appear."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture inventory, instructions, or C# project/test-runner configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb searches for 'Invitation'; broad matches are followed by C#-scoped source inspection."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture inventory, instructions, or C# project/test-runner configuration."
+        },
+        {
+          "id": "item_5",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the three short C# fixture files directly for source verification; this is the allowed whole-small-file fallback."
+        },
+        {
+          "id": "item_6",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lists scoped C# symbols to identify the requested service/controller declarations."
+        },
+        {
+          "id": "item_7",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks indexed caller sites for the selected C# method."
+        },
+        {
+          "id": "item_8",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks indexed caller sites for the selected C# method."
+        },
+        {
+          "id": "item_9",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb reports the indexed downstream method and candidate test for the selected C# service method."
+        }
+      ],
+      "notes": "The answer is accepted and mechanically passes. The one-argument call preserves note = null, and the test directly invokes the controller path."
+    },
+    {
+      "run_id": "csharp-default-argument-caller-revised-r2",
+      "accepted": true,
+      "reasons": [
+        "InvitationController.Invite calls service.Send(email) at csharp/InvitationController.cs:5, passing one argument. InvitationService.Send declares string? note = null at csharp/InvitationService.cs:5, so the omitted optional argument remains valid.",
+        "Invite_sends_invitation is the xUnit [Fact] at csharp/InvitationControllerTests.cs:7-12; it constructs the controller and service at line 10 and calls Invite at line 11. The fixture has no C# project or solution, so no runnable C# test command is evidenced.",
+        "The answer names the requested Send and Invite declarations and the exact focused test, preserves the omitted note argument, and gives command_status unavailable. No wrong owners/tests or unsupported source claims appear."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks the working directory."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb searches for 'invitation'; broad matches are followed by C#-scoped source inspection."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture inventory, instructions, or C# project/test-runner configuration."
+        },
+        {
+          "id": "item_5",
+          "category": "ambiguous",
+          "kb_first": null,
+          "basis": "Code-kb outlines a folder containing both C# source and test files; its purpose overlaps definition and test discovery."
+        },
+        {
+          "id": "item_6",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture inventory, instructions, or C# project/test-runner configuration."
+        },
+        {
+          "id": "item_7",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb searches for 'InvitationService'; broad matches are followed by C#-scoped source inspection."
+        },
+        {
+          "id": "item_8",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines C# declarations in csharp/InvitationController.cs before body inspection."
+        },
+        {
+          "id": "item_9",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb outlines the focused xUnit test before source inspection."
+        },
+        {
+          "id": "item_10",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb outlines C# declarations in csharp/InvitationService.cs before body inspection."
+        },
+        {
+          "id": "item_11",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lists scoped C# symbols to identify the requested service/controller declarations."
+        },
+        {
+          "id": "item_12",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks indexed caller sites for the selected C# method."
+        },
+        {
+          "id": "item_13",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb reports the indexed downstream method and candidate test for the selected C# service method."
+        },
+        {
+          "id": "item_14",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the three short C# fixture files directly for source verification; this is the allowed whole-small-file fallback."
+        }
+      ],
+      "notes": "The answer is accepted and mechanically passes. The one-argument call preserves note = null, and the test directly invokes the controller path."
+    },
+    {
+      "run_id": "csharp-default-argument-caller-revised-r3",
+      "accepted": true,
+      "reasons": [
+        "InvitationController.Invite calls service.Send(email) at csharp/InvitationController.cs:5, passing one argument. InvitationService.Send declares string? note = null at csharp/InvitationService.cs:5, so the omitted optional argument remains valid.",
+        "Invite_sends_invitation is the xUnit [Fact] at csharp/InvitationControllerTests.cs:7-12; it constructs the controller and service at line 10 and calls Invite at line 11. The fixture has no C# project or solution, so no runnable C# test command is evidenced.",
+        "The answer names the requested Send and Invite declarations and the exact focused test, preserves the omitted note argument, and gives command_status unavailable. No wrong owners/tests or unsupported source claims appear."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture inventory, instructions, or C# project/test-runner configuration."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb searches for 'invitation'; broad matches are followed by C#-scoped source inspection."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture inventory, instructions, or C# project/test-runner configuration."
+        },
+        {
+          "id": "item_5",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb searches for 'InvitationService'; broad matches are followed by C#-scoped source inspection."
+        },
+        {
+          "id": "item_6",
+          "category": "ambiguous",
+          "kb_first": null,
+          "basis": "Code-kb outlines a folder containing both C# source and test files; its purpose overlaps definition and test discovery."
+        },
+        {
+          "id": "item_7",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture inventory, instructions, or C# project/test-runner configuration."
+        },
+        {
+          "id": "item_8",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the three short C# fixture files directly for source verification; this is the allowed whole-small-file fallback."
+        },
+        {
+          "id": "item_9",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lists scoped C# symbols to identify the requested service/controller declarations."
+        },
+        {
+          "id": "item_10",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks indexed caller sites for the selected C# method."
+        },
+        {
+          "id": "item_11",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb checks indexed caller sites for the selected C# method."
+        },
+        {
+          "id": "item_12",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb reports the indexed downstream method and candidate test for the selected C# service method."
+        },
+        {
+          "id": "item_13",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Checks fixture inventory, instructions, or C# project/test-runner configuration."
+        }
+      ],
+      "notes": "The answer is accepted and mechanically passes. The one-argument call preserves note = null, and the test directly invokes the controller path."
+    }
+  ]
+}

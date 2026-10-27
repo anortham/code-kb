@@ -220,7 +220,7 @@ format check, whitespace check, and AGENTS/CLAUDE synchronization check passed.
 `check_edit` identified the two expected shape changes: new reconciliation error
 variants and the watcher's private failure state. The error uses were reviewed
 and compiled; no missed required edit was found. Its unresolved sites and known
-coverage omissions were not treated as proof of safety. No paid agent comparison,
+coverage omissions were not treated as proof of safety. At that initial stage, no paid agent comparison,
 push, release, or Windows/macOS test run was performed.
 
 **Local cross-language follow-up.** The approved implementation keeps the seven
@@ -263,11 +263,7 @@ Curried F# calls and dynamic binding remain conservative. The inventory records
 these limits without calling them N/A or presenting an empty result as proof of
 safety.
 
-Eight fresh task prompts and separate oracles are prepared under
-`evals/review-2026-10-26/`, with an updated comparison procedure. No paid agent
-comparison was run. That comparison and reusable upstream facts remain the next
-sources of evidence for retrieval and test-reach work; the current changes do
-not establish a task-success, time, or token-cost improvement.
+The eight task prompts and separate oracles under `evals/review-2026-10-26/` were subsequently used in the controlled pilot linked below. They are now regression/tuning cases. These earlier implementation checks alone did not establish task-success, time, or token-cost improvement.
 
 
 **Cross-language Linux verification:** 1,818 Rust tests, 172 Python harness tests,
@@ -299,3 +295,12 @@ Windows Clippy with denied warnings, formatting, and the locked release build
 also passed. The final evidence commit changes documentation and memory only;
 production code remains the verified runtime slice. The built Windows executable
 started successfully, and the VM was shut down after verification.
+
+
+## Controlled comparison follow-up
+
+The [72-run pilot](2026-10-26-agent-comparison.md) is complete. All runs returned answers without scored infrastructure retries. Each arm has the same strict reviewed result, 21/24. All 72 answers identify the requested source facts correctly; nine Go answers retain strict rejection because they list an explicitly excluded alternative in the symbol array. The report keeps that contract ambiguity, 27 mechanical false negatives, and two literal-routing violations visible.
+
+Native tools cost less on several of these tiny fixtures. Revised guidance uses fewer MCP calls than current guidance without improving task success over native tools. This does not establish a global routing default or performance on completed edits. No tool was added or removed, and production routing remains unchanged.
+
+The experiment exposed concrete consumer errors: cross-language impact/dependency/test edges, lost typed-field receiver chains, related types chosen from another language, and unsupported broader runner scope. Agents often recovered from source, so correct final answers do not validate those tool results. The broader runner/scope repair is locally committed as `eb163ea`; the remaining consumer fixes are undergoing real-extractor regression and integration verification. The [retained evidence](../../evals/review-2026-10-26/results/observations.json) preserves every original outcome. Full final verification will be recorded with the completed fixes.

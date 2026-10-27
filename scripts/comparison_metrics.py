@@ -322,11 +322,25 @@ def _expected_command(oracle: dict[str, Any]) -> str | None:
     return None
 
 
-def _command_matches(actual: Any, expected: str) -> bool:
+def _command_matches(actual: Any, expected: str, alternatives: Any = None) -> bool:
     if not isinstance(actual, str):
         return False
     try:
         actual_parts = shlex.split(actual)
+    except ValueError:
+        return False
+
+    alternative_parts: list[list[str]] = []
+    if isinstance(alternatives, list):
+        try:
+            if all(isinstance(command, str) and command.strip() for command in alternatives):
+                alternative_parts = [shlex.split(command) for command in alternatives]
+        except ValueError:
+            alternative_parts = []
+    if alternative_parts and all(alternative_parts) and actual_parts in alternative_parts:
+        return True
+
+    try:
         expected_parts = shlex.split(expected)
     except ValueError:
         return False
@@ -505,11 +519,11 @@ def grade_answer(answer: dict, oracle: dict) -> dict:
         matching_command = any(
             any(_answer_test_matches(row, file, name) for file, name in expected_tests)
             and row.get("command_status") == "evidenced"
-            and _command_matches(row.get("command"), expected_command)
+            and _command_matches(row.get("command"), expected_command, oracle.get("command_alternatives"))
             for row in valid_tests
         )
         if matching_command:
-            checks.append("focused command matches the oracle, including permitted fixture relocation")
+            checks.append("focused command matches the required command or a declared alternative")
         else:
             failures.append("missing the focused command required by the oracle")
     elif any(

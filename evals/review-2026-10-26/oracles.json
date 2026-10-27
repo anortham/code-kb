@@ -3,71 +3,193 @@
   "tasks": {
     "python-registration-concept": {
       "symbols": [
-        {"name": "register_account", "file": "python/app.py", "line": 10, "definition_line": 11}
+        {
+          "name": "register_account",
+          "file": "python/app.py",
+          "line": 10,
+          "definition_line": 11
+        }
       ],
-      "tests": ["python/test_app.py::test_register_account_route"],
-      "acceptance": ["The account registration route is served by register_account.", "build_registration_response is a helper, not the route handler."]
+      "tests": [
+        "python/test_app.py::test_register_account_route"
+      ],
+      "acceptance": [
+        "The account registration route is served by register_account.",
+        "build_registration_response is a helper, not the route handler."
+      ]
     },
     "javascript-commonjs-test-reach": {
       "symbols": [
-        {"name": "registerAccount", "file": "javascript/registration.cjs", "line": 1},
-        {"name": "createApp", "file": "javascript/app.cjs", "line": 3}
+        {
+          "name": "registerAccount",
+          "file": "javascript/registration.cjs",
+          "line": 1
+        },
+        {
+          "name": "createApp",
+          "file": "javascript/app.cjs",
+          "line": 3
+        }
       ],
-      "tests": ["javascript/registration.test.cjs::test_registration_route_uses_the_exported_handler"],
-      "acceptance": ["The handler is exported from registration.cjs.", "The test reaches it through app.cjs and the CommonJS exports."]
+      "tests": [
+        "javascript/registration.test.cjs::registration route uses the exported handler"
+      ],
+      "acceptance": [
+        "The handler is exported from registration.cjs.",
+        "The test reaches it through app.cjs and the CommonJS exports."
+      ]
     },
     "typescript-signature-change": {
       "symbols": [
-        {"name": "InvitationRequest", "file": "typescript/service.ts", "line": 1},
-        {"name": "send", "file": "typescript/service.ts", "line": 4},
-        {"name": "submitInvitation", "file": "typescript/controllers/invitation.ts", "line": 3},
-        {"name": "postInvitation", "file": "typescript/routes.ts", "line": 4},
-        {"name": "post", "file": "typescript/app.ts", "line": 4}
+        {
+          "name": "InvitationRequest",
+          "file": "typescript/service.ts",
+          "line": 1
+        },
+        {
+          "name": "send",
+          "file": "typescript/service.ts",
+          "line": 4
+        },
+        {
+          "name": "submitInvitation",
+          "file": "typescript/controllers/invitation.ts",
+          "line": 3
+        },
+        {
+          "name": "postInvitation",
+          "file": "typescript/routes.ts",
+          "line": 4
+        },
+        {
+          "name": "post",
+          "file": "typescript/app.ts",
+          "line": 4
+        }
       ],
-      "tests": ["typescript/invitation.test.ts::test_invitation_route_passes_display_name"],
-      "acceptance": ["The change crosses the service, controller, route, app, and test.", "The case has no runnable package test command; say that the broader test command is unavailable."]
+      "tests": [
+        "typescript/invitation.test.ts::invitation route passes display name"
+      ],
+      "acceptance": [
+        "The change crosses the service, controller, route, app, and test.",
+        "The case has no runnable package test command; say that the broader test command is unavailable."
+      ]
     },
     "go-ambiguous-method-test-reach": {
       "symbols": [
-        {"name": "Send", "file": "go/invitation.go", "line": 7},
-        {"name": "ServeHTTP", "file": "go/invitation.go", "line": 19}
+        {
+          "name": "Send",
+          "file": "go/invitation.go",
+          "line": 7
+        },
+        {
+          "name": "ServeHTTP",
+          "file": "go/invitation.go",
+          "line": 19
+        }
       ],
       "excluded_candidates": [
-        {"name": "Send", "file": "go/invitation.go", "line": 13, "owner": "MailService"}
+        {
+          "name": "Send",
+          "file": "go/invitation.go",
+          "line": 13,
+          "owner": "MailService"
+        }
       ],
-      "tests": ["go/invitation_test.go::TestInvitationRoute"],
-      "acceptance": ["InvitationHandler calls InvitationService.Send.", "MailService.Send is a same-name decoy and is not reached by this handler."]
+      "tests": [
+        "go/invitation_test.go::TestInvitationRoute"
+      ],
+      "acceptance": [
+        "InvitationHandler calls InvitationService.Send.",
+        "MailService.Send is a same-name decoy and is not reached by this handler."
+      ]
     },
     "java-framework-entry-test-reach": {
       "symbols": [
-        {"name": "send", "file": "java/src/main/java/review/InvitationService.java", "line": 4},
-        {"name": "post", "file": "java/src/main/java/review/InvitationController.java", "line": 10}
+        {
+          "name": "send",
+          "file": "java/src/main/java/review/InvitationService.java",
+          "line": 4
+        },
+        {
+          "name": "post",
+          "file": "java/src/main/java/review/InvitationController.java",
+          "line": 10
+        }
       ],
-      "tests": ["java/src/test/java/review/InvitationControllerTest.java::post_sends_invitation"],
-      "acceptance": ["The controller calls InvitationService.send.", "The focused test reaches send through InvitationController.post.", "The focused test uses JUnit 5, but no Java build file is present, so no runnable test command is evidenced."]
+      "tests": [
+        "java/src/test/java/review/InvitationControllerTest.java::post_sends_invitation"
+      ],
+      "acceptance": [
+        "The controller calls InvitationService.send.",
+        "The focused test reaches send through InvitationController.post.",
+        "The focused test uses JUnit 5, but no Java build file is present, so no runnable test command is evidenced."
+      ]
     },
     "csharp-default-argument-caller": {
       "symbols": [
-        {"name": "Send", "file": "csharp/InvitationService.cs", "line": 5},
-        {"name": "Invite", "file": "csharp/InvitationController.cs", "line": 5}
+        {
+          "name": "Send",
+          "file": "csharp/InvitationService.cs",
+          "line": 5
+        },
+        {
+          "name": "Invite",
+          "file": "csharp/InvitationController.cs",
+          "line": 5
+        }
       ],
-      "tests": ["csharp/InvitationControllerTests.cs::Invite_sends_invitation"],
-      "acceptance": ["InvitationController.Invite calls InvitationService.Send.", "The call omits the optional note and must remain valid.", "The focused test uses xUnit, but no C# project file is present, so no runnable test command is evidenced."]
+      "tests": [
+        "csharp/InvitationControllerTests.cs::Invite_sends_invitation"
+      ],
+      "acceptance": [
+        "InvitationController.Invite calls InvitationService.Send.",
+        "The call omits the optional note and must remain valid.",
+        "The focused test uses xUnit, but no C# project file is present, so no runnable test command is evidenced."
+      ]
     },
     "rust-handler-test-reach": {
       "symbols": [
-        {"name": "send", "file": "rust/src/lib.rs", "line": 4},
-        {"name": "handle_invitation", "file": "rust/src/lib.rs", "line": 9}
+        {
+          "name": "send",
+          "file": "rust/src/lib.rs",
+          "line": 4
+        },
+        {
+          "name": "handle_invitation",
+          "file": "rust/src/lib.rs",
+          "line": 9
+        }
       ],
-      "tests": ["rust/tests/invitation.rs::handler_sends_invitation"],
-      "acceptance": ["handle_invitation calls InvitationService::send.", "Run `cargo test --manifest-path evals/review-2026-10-26/fixture/Cargo.toml handler_sends_invitation`."]
+      "tests": [
+        "rust/tests/invitation.rs::handler_sends_invitation"
+      ],
+      "acceptance": [
+        "handle_invitation calls InvitationService::send.",
+        "Run `cargo test --manifest-path evals/review-2026-10-26/fixture/Cargo.toml handler_sends_invitation`."
+      ],
+      "command_alternatives": [
+        "cargo test -p review-cross-language-fixture --test invitation handler_sends_invitation",
+        "cargo test -p review-cross-language-fixture --test invitation handler_sends_invitation -- --exact"
+      ]
     },
     "literal-config-exact-error": {
       "literals": [
-        {"value": "account email required", "file": "config/registration.json", "line": 7},
-        {"value": "/register", "file": "config/registration.json", "line": 3}
+        {
+          "value": "account email required",
+          "file": "config/registration.json",
+          "line": 7
+        },
+        {
+          "value": "/register",
+          "file": "config/registration.json",
+          "line": 3
+        }
       ],
-      "acceptance": ["The exact string and endpoint are literal values in registration.json.", "Use native literal search; no symbol lookup is needed."]
+      "acceptance": [
+        "The exact string and endpoint are literal values in registration.json.",
+        "Use native literal search; no symbol lookup is needed."
+      ]
     }
   }
 }

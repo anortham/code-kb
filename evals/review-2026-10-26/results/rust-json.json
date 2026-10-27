@@ -1,0 +1,1015 @@
+{
+  "schema": 1,
+  "status": "complete",
+  "runs": [
+    {
+      "run_id": "rust-handler-test-reach-current-r1",
+      "accepted": true,
+      "semantic_pass": true,
+      "reasons": [
+        "Source confirms public handle_invitation at rust/src/lib.rs:9 delegates to InvitationService.send at line4; the integration test at rust/tests/invitation.rs:4 calls the handler and asserts success.",
+        "The workspace member, package name, integration target and test filter support the reported command. Both actual command variants were executed in an isolated fixture copy and ran one passing test."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Inspects working directory, fixture paths, or literal Cargo configuration; no named-definition lookup replaces a code-kb step."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup_symbol inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Inspects working directory, fixture paths, or literal Cargo configuration; no named-definition lookup replaces a code-kb step."
+        },
+        {
+          "id": "item_5",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb file_skeleton inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_6",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Inspects working directory, fixture paths, or literal Cargo configuration; no named-definition lookup replaces a code-kb step."
+        },
+        {
+          "id": "item_7",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb file_skeleton inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_8",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb get_symbol_context inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_9",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup_symbol inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_10",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb get_symbol_body inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_11",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb find_references inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_12",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb blast_radius inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_13",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb get_symbol_body inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_14",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb find_references inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        }
+      ],
+      "notes": "Raw mechanical rejection is retained. The frozen command matcher misses a source-equivalent package/target form, which the protocol explicitly permits. No paid trial was rerun."
+    },
+    {
+      "run_id": "rust-handler-test-reach-current-r2",
+      "accepted": true,
+      "semantic_pass": true,
+      "reasons": [
+        "Source confirms public handle_invitation at rust/src/lib.rs:9 delegates to InvitationService.send at line4; the integration test at rust/tests/invitation.rs:4 calls the handler and asserts success.",
+        "The workspace member, package name, integration target and test filter support the reported command. Both actual command variants were executed in an isolated fixture copy and ran one passing test."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Inspects working directory, fixture paths, or literal Cargo configuration; no named-definition lookup replaces a code-kb step."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup_symbol inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Inspects working directory, fixture paths, or literal Cargo configuration; no named-definition lookup replaces a code-kb step."
+        },
+        {
+          "id": "item_5",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb file_skeleton inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_6",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb find_references inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_7",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Inspects working directory, fixture paths, or literal Cargo configuration; no named-definition lookup replaces a code-kb step."
+        },
+        {
+          "id": "item_8",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb file_skeleton inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_9",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb find_references inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_10",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb get_symbol_body inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_11",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb get_symbol_body inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_12",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup_symbol inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_13",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb get_symbol_body inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        }
+      ],
+      "notes": "Raw mechanical rejection is retained. The frozen command matcher misses a source-equivalent package/target form, which the protocol explicitly permits. No paid trial was rerun."
+    },
+    {
+      "run_id": "rust-handler-test-reach-current-r3",
+      "accepted": true,
+      "semantic_pass": true,
+      "reasons": [
+        "Source confirms public handle_invitation at rust/src/lib.rs:9 delegates to InvitationService.send at line4; the integration test at rust/tests/invitation.rs:4 calls the handler and asserts success.",
+        "The workspace member, package name, integration target and test filter support the reported command. Both actual command variants were executed in an isolated fixture copy and ran one passing test."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Inspects working directory, fixture paths, or literal Cargo configuration; no named-definition lookup replaces a code-kb step."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup_symbol inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Inspects working directory, fixture paths, or literal Cargo configuration; no named-definition lookup replaces a code-kb step."
+        },
+        {
+          "id": "item_5",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb file_skeleton inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_6",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb file_skeleton inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_7",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb blast_radius inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_8",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Inspects working directory, fixture paths, or literal Cargo configuration; no named-definition lookup replaces a code-kb step."
+        },
+        {
+          "id": "item_9",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb find_references inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_10",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb get_symbol_body inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_11",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup_symbol inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_12",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb get_symbol_body inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_13",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb find_references inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_14",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb get_symbol_body inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_15",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb find_references inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        }
+      ],
+      "notes": "Raw mechanical rejection is retained. The frozen command matcher misses a source-equivalent package/target form, which the protocol explicitly permits. No paid trial was rerun."
+    },
+    {
+      "run_id": "rust-handler-test-reach-native-r1",
+      "accepted": true,
+      "semantic_pass": true,
+      "reasons": [
+        "Source confirms public handle_invitation at rust/src/lib.rs:9 delegates to InvitationService.send at line4; the integration test at rust/tests/invitation.rs:4 calls the handler and asserts success.",
+        "The workspace member, package name, integration target and test filter support the reported command. Both actual command variants were executed in an isolated fixture copy and ran one passing test."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Inspects working directory, fixture paths, or literal Cargo configuration; no named-definition lookup replaces a code-kb step."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": null,
+          "basis": "Native search locates invitation declarations and test references."
+        },
+        {
+          "id": "item_4",
+          "category": "tests",
+          "kb_first": null,
+          "basis": "Reads the actual handler, service, test, and manifests to verify the test command."
+        }
+      ],
+      "notes": "Raw mechanical rejection is retained. The frozen command matcher misses a source-equivalent package/target form, which the protocol explicitly permits. No paid trial was rerun."
+    },
+    {
+      "run_id": "rust-handler-test-reach-native-r2",
+      "accepted": true,
+      "semantic_pass": true,
+      "reasons": [
+        "Source confirms public handle_invitation at rust/src/lib.rs:9 delegates to InvitationService.send at line4; the integration test at rust/tests/invitation.rs:4 calls the handler and asserts success.",
+        "The workspace member, package name, integration target and test filter support the reported command. Both actual command variants were executed in an isolated fixture copy and ran one passing test."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Inspects working directory, fixture paths, or literal Cargo configuration; no named-definition lookup replaces a code-kb step."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": null,
+          "basis": "Native search locates invitation declarations and test references."
+        },
+        {
+          "id": "item_4",
+          "category": "tests",
+          "kb_first": null,
+          "basis": "Reads the actual handler, service, test, and manifests to verify the test command."
+        }
+      ],
+      "notes": "Raw mechanical rejection is retained. The frozen command matcher misses a source-equivalent package/target form, which the protocol explicitly permits. No paid trial was rerun."
+    },
+    {
+      "run_id": "rust-handler-test-reach-native-r3",
+      "accepted": true,
+      "semantic_pass": true,
+      "reasons": [
+        "Source confirms public handle_invitation at rust/src/lib.rs:9 delegates to InvitationService.send at line4; the integration test at rust/tests/invitation.rs:4 calls the handler and asserts success.",
+        "The workspace member, package name, integration target and test filter support the reported command. Both actual command variants were executed in an isolated fixture copy and ran one passing test."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Inspects working directory, fixture paths, or literal Cargo configuration; no named-definition lookup replaces a code-kb step."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": null,
+          "basis": "Native search locates invitation declarations and test references."
+        },
+        {
+          "id": "item_4",
+          "category": "tests",
+          "kb_first": null,
+          "basis": "Reads the actual handler, service, test, and manifests to verify the test command."
+        }
+      ],
+      "notes": "Raw mechanical rejection is retained. The frozen command matcher misses a source-equivalent package/target form, which the protocol explicitly permits. No paid trial was rerun."
+    },
+    {
+      "run_id": "rust-handler-test-reach-revised-r1",
+      "accepted": true,
+      "semantic_pass": true,
+      "reasons": [
+        "Source confirms public handle_invitation at rust/src/lib.rs:9 delegates to InvitationService.send at line4; the integration test at rust/tests/invitation.rs:4 calls the handler and asserts success.",
+        "The workspace member, package name, integration target and test filter support the reported command. Both actual command variants were executed in an isolated fixture copy and ran one passing test."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Inspects working directory, fixture paths, or literal Cargo configuration; no named-definition lookup replaces a code-kb step."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup_symbol inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Inspects working directory, fixture paths, or literal Cargo configuration; no named-definition lookup replaces a code-kb step."
+        },
+        {
+          "id": "item_5",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb file_skeleton inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_6",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb find_references inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_7",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the complete small Rust source/test and checks manifest evidence; revised guidance permits direct small-file reads."
+        },
+        {
+          "id": "item_8",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb get_symbol_body inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_9",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup_symbol inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_10",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb blast_radius inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_11",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the complete small Rust source/test and checks manifest evidence; revised guidance permits direct small-file reads."
+        }
+      ],
+      "notes": "Raw mechanical rejection is retained. The frozen command matcher misses a source-equivalent package/target form, which the protocol explicitly permits. No paid trial was rerun."
+    },
+    {
+      "run_id": "rust-handler-test-reach-revised-r2",
+      "accepted": true,
+      "semantic_pass": true,
+      "reasons": [
+        "Source confirms public handle_invitation at rust/src/lib.rs:9 delegates to InvitationService.send at line4; the integration test at rust/tests/invitation.rs:4 calls the handler and asserts success.",
+        "The workspace member, package name, integration target and test filter support the reported command. Both actual command variants were executed in an isolated fixture copy and ran one passing test."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Inspects working directory, fixture paths, or literal Cargo configuration; no named-definition lookup replaces a code-kb step."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup_symbol inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Inspects working directory, fixture paths, or literal Cargo configuration; no named-definition lookup replaces a code-kb step."
+        },
+        {
+          "id": "item_5",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb file_skeleton inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_6",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb file_skeleton inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_7",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Inspects working directory, fixture paths, or literal Cargo configuration; no named-definition lookup replaces a code-kb step."
+        },
+        {
+          "id": "item_8",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the complete small Rust source/test and checks manifest evidence; revised guidance permits direct small-file reads."
+        },
+        {
+          "id": "item_9",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup_symbol inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_10",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb blast_radius inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_11",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup_symbol inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_12",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb find_references inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_13",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Inspects working directory, fixture paths, or literal Cargo configuration; no named-definition lookup replaces a code-kb step."
+        },
+        {
+          "id": "item_14",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb find_references inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        }
+      ],
+      "notes": "Raw mechanical rejection is retained. The frozen command matcher misses a source-equivalent package/target form, which the protocol explicitly permits. No paid trial was rerun."
+    },
+    {
+      "run_id": "rust-handler-test-reach-revised-r3",
+      "accepted": true,
+      "semantic_pass": true,
+      "reasons": [
+        "Source confirms public handle_invitation at rust/src/lib.rs:9 delegates to InvitationService.send at line4; the integration test at rust/tests/invitation.rs:4 calls the handler and asserts success.",
+        "The workspace member, package name, integration target and test filter support the reported command. Both actual command variants were executed in an isolated fixture copy and ran one passing test."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Inspects working directory, fixture paths, or literal Cargo configuration; no named-definition lookup replaces a code-kb step."
+        },
+        {
+          "id": "item_3",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup_symbol inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_4",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Inspects working directory, fixture paths, or literal Cargo configuration; no named-definition lookup replaces a code-kb step."
+        },
+        {
+          "id": "item_5",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb file_skeleton inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_6",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb file_skeleton inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_7",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Inspects working directory, fixture paths, or literal Cargo configuration; no named-definition lookup replaces a code-kb step."
+        },
+        {
+          "id": "item_8",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb find_references inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_9",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Reads the complete small Rust source/test and checks manifest evidence; revised guidance permits direct small-file reads."
+        },
+        {
+          "id": "item_10",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb lookup_symbol inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_11",
+          "category": "callers",
+          "kb_first": true,
+          "basis": "Code-kb find_references inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        },
+        {
+          "id": "item_12",
+          "category": "tests",
+          "kb_first": true,
+          "basis": "Code-kb blast_radius inspects the Rust declarations, call chain, or test; scoped arguments/selected IDs remain in the transcript."
+        }
+      ],
+      "notes": "Raw mechanical rejection is retained. The frozen command matcher misses a source-equivalent package/target form, which the protocol explicitly permits. No paid trial was rerun."
+    },
+    {
+      "run_id": "literal-config-exact-error-current-r1",
+      "accepted": true,
+      "semantic_pass": true,
+      "reasons": [
+        "Source config/registration.json:7 defines errors.email_required as account email required; line3 defines routes.registration as /register.",
+        "Answers describe configured values rather than asserting an evidenced runtime error path; no tests or code definitions are required. Extra JSON-key rows in current-r3 are accurate."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Lists fixture paths or checks the working directory."
+        },
+        {
+          "id": "item_3",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Native text search or complete configuration read verifies exact JSON values and locations."
+        },
+        {
+          "id": "item_4",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Code-kb is used for orientation or JSON literal evidence; this is outside the common structural adoption denominator."
+        },
+        {
+          "id": "item_5",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Native text search or complete configuration read verifies exact JSON values and locations."
+        },
+        {
+          "id": "item_6",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb locates a named handler/helper while checking whether the configuration is used by runtime code."
+        },
+        {
+          "id": "item_7",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb locates a named handler/helper while checking whether the configuration is used by runtime code."
+        },
+        {
+          "id": "item_8",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Code-kb is used for orientation or JSON literal evidence; this is outside the common structural adoption denominator."
+        },
+        {
+          "id": "item_9",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Native text search or complete configuration read verifies exact JSON values and locations."
+        }
+      ],
+      "routing_violations": [],
+      "notes": "Task asks for literals. Structural lookups in some runs check the unsupported runtime premise separately; their cost is retained. Literal-first violations are recorded independently from correct answers."
+    },
+    {
+      "run_id": "literal-config-exact-error-current-r2",
+      "accepted": true,
+      "semantic_pass": true,
+      "reasons": [
+        "Source config/registration.json:7 defines errors.email_required as account email required; line3 defines routes.registration as /register.",
+        "Answers describe configured values rather than asserting an evidenced runtime error path; no tests or code definitions are required. Extra JSON-key rows in current-r3 are accurate."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Lists fixture paths or checks the working directory."
+        },
+        {
+          "id": "item_3",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Code-kb is used for orientation or JSON literal evidence; this is outside the common structural adoption denominator."
+        },
+        {
+          "id": "item_4",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Native text search or complete configuration read verifies exact JSON values and locations."
+        },
+        {
+          "id": "item_5",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Code-kb is used for orientation or JSON literal evidence; this is outside the common structural adoption denominator."
+        },
+        {
+          "id": "item_6",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb locates a named handler/helper while checking whether the configuration is used by runtime code."
+        },
+        {
+          "id": "item_7",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb locates a named handler/helper while checking whether the configuration is used by runtime code."
+        },
+        {
+          "id": "item_8",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Native text search or complete configuration read verifies exact JSON values and locations."
+        },
+        {
+          "id": "item_9",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Native text search or complete configuration read verifies exact JSON values and locations."
+        },
+        {
+          "id": "item_10",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb inspects source interfaces while investigating the task premise; current guidance requires skeleton-first."
+        },
+        {
+          "id": "item_11",
+          "category": "interface",
+          "kb_first": true,
+          "basis": "Code-kb inspects source interfaces while investigating the task premise; current guidance requires skeleton-first."
+        }
+      ],
+      "routing_violations": [
+        "An MCP action preceded the first native literal-content search despite the literal-first policy. This run cannot establish a compliant literal-routing cost comparison."
+      ],
+      "notes": "Task asks for literals. Structural lookups in some runs check the unsupported runtime premise separately; their cost is retained. Literal-first violations are recorded independently from correct answers."
+    },
+    {
+      "run_id": "literal-config-exact-error-current-r3",
+      "accepted": true,
+      "semantic_pass": true,
+      "reasons": [
+        "Source config/registration.json:7 defines errors.email_required as account email required; line3 defines routes.registration as /register.",
+        "Answers describe configured values rather than asserting an evidenced runtime error path; no tests or code definitions are required. Extra JSON-key rows in current-r3 are accurate."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Lists fixture paths or checks the working directory."
+        },
+        {
+          "id": "item_3",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Code-kb is used for orientation or JSON literal evidence; this is outside the common structural adoption denominator."
+        },
+        {
+          "id": "item_4",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Native text search or complete configuration read verifies exact JSON values and locations."
+        },
+        {
+          "id": "item_5",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Code-kb is used for orientation or JSON literal evidence; this is outside the common structural adoption denominator."
+        },
+        {
+          "id": "item_6",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Code-kb is used for orientation or JSON literal evidence; this is outside the common structural adoption denominator."
+        },
+        {
+          "id": "item_7",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Code-kb is used for orientation or JSON literal evidence; this is outside the common structural adoption denominator."
+        }
+      ],
+      "routing_violations": [
+        "An MCP action preceded the first native literal-content search despite the literal-first policy. This run cannot establish a compliant literal-routing cost comparison."
+      ],
+      "notes": "Task asks for literals. Structural lookups in some runs check the unsupported runtime premise separately; their cost is retained. Literal-first violations are recorded independently from correct answers."
+    },
+    {
+      "run_id": "literal-config-exact-error-native-r1",
+      "accepted": true,
+      "semantic_pass": true,
+      "reasons": [
+        "Source config/registration.json:7 defines errors.email_required as account email required; line3 defines routes.registration as /register.",
+        "Answers describe configured values rather than asserting an evidenced runtime error path; no tests or code definitions are required. Extra JSON-key rows in current-r3 are accurate."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Lists fixture paths or checks the working directory."
+        },
+        {
+          "id": "item_3",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Native text search or complete configuration read verifies exact JSON values and locations."
+        },
+        {
+          "id": "item_4",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Native text search or complete configuration read verifies exact JSON values and locations."
+        }
+      ],
+      "routing_violations": [],
+      "notes": "Task asks for literals. Structural lookups in some runs check the unsupported runtime premise separately; their cost is retained. Literal-first violations are recorded independently from correct answers."
+    },
+    {
+      "run_id": "literal-config-exact-error-native-r2",
+      "accepted": true,
+      "semantic_pass": true,
+      "reasons": [
+        "Source config/registration.json:7 defines errors.email_required as account email required; line3 defines routes.registration as /register.",
+        "Answers describe configured values rather than asserting an evidenced runtime error path; no tests or code definitions are required. Extra JSON-key rows in current-r3 are accurate."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Lists fixture paths or checks the working directory."
+        },
+        {
+          "id": "item_3",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Native text search or complete configuration read verifies exact JSON values and locations."
+        }
+      ],
+      "routing_violations": [],
+      "notes": "Task asks for literals. Structural lookups in some runs check the unsupported runtime premise separately; their cost is retained. Literal-first violations are recorded independently from correct answers."
+    },
+    {
+      "run_id": "literal-config-exact-error-native-r3",
+      "accepted": true,
+      "semantic_pass": true,
+      "reasons": [
+        "Source config/registration.json:7 defines errors.email_required as account email required; line3 defines routes.registration as /register.",
+        "Answers describe configured values rather than asserting an evidenced runtime error path; no tests or code definitions are required. Extra JSON-key rows in current-r3 are accurate."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Lists fixture paths or checks the working directory."
+        },
+        {
+          "id": "item_3",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Native text search or complete configuration read verifies exact JSON values and locations."
+        },
+        {
+          "id": "item_4",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Native text search or complete configuration read verifies exact JSON values and locations."
+        }
+      ],
+      "routing_violations": [],
+      "notes": "Task asks for literals. Structural lookups in some runs check the unsupported runtime premise separately; their cost is retained. Literal-first violations are recorded independently from correct answers."
+    },
+    {
+      "run_id": "literal-config-exact-error-revised-r1",
+      "accepted": true,
+      "semantic_pass": true,
+      "reasons": [
+        "Source config/registration.json:7 defines errors.email_required as account email required; line3 defines routes.registration as /register.",
+        "Answers describe configured values rather than asserting an evidenced runtime error path; no tests or code definitions are required. Extra JSON-key rows in current-r3 are accurate."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Lists fixture paths or checks the working directory."
+        },
+        {
+          "id": "item_3",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Native text search or complete configuration read verifies exact JSON values and locations."
+        },
+        {
+          "id": "item_4",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Native text search or complete configuration read verifies exact JSON values and locations."
+        },
+        {
+          "id": "item_5",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb locates a named handler/helper while checking whether the configuration is used by runtime code."
+        },
+        {
+          "id": "item_6",
+          "category": "definition",
+          "kb_first": true,
+          "basis": "Code-kb locates a named handler/helper while checking whether the configuration is used by runtime code."
+        },
+        {
+          "id": "item_7",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Native text search or complete configuration read verifies exact JSON values and locations."
+        }
+      ],
+      "routing_violations": [],
+      "notes": "Task asks for literals. Structural lookups in some runs check the unsupported runtime premise separately; their cost is retained. Literal-first violations are recorded independently from correct answers."
+    },
+    {
+      "run_id": "literal-config-exact-error-revised-r2",
+      "accepted": true,
+      "semantic_pass": true,
+      "reasons": [
+        "Source config/registration.json:7 defines errors.email_required as account email required; line3 defines routes.registration as /register.",
+        "Answers describe configured values rather than asserting an evidenced runtime error path; no tests or code definitions are required. Extra JSON-key rows in current-r3 are accurate."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Lists fixture paths or checks the working directory."
+        },
+        {
+          "id": "item_3",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Native text search or complete configuration read verifies exact JSON values and locations."
+        },
+        {
+          "id": "item_4",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Native text search or complete configuration read verifies exact JSON values and locations."
+        }
+      ],
+      "routing_violations": [],
+      "notes": "Task asks for literals. Structural lookups in some runs check the unsupported runtime premise separately; their cost is retained. Literal-first violations are recorded independently from correct answers."
+    },
+    {
+      "run_id": "literal-config-exact-error-revised-r3",
+      "accepted": true,
+      "semantic_pass": true,
+      "reasons": [
+        "Source config/registration.json:7 defines errors.email_required as account email required; line3 defines routes.registration as /register.",
+        "Answers describe configured values rather than asserting an evidenced runtime error path; no tests or code definitions are required. Extra JSON-key rows in current-r3 are accurate."
+      ],
+      "unsupported_claims": [],
+      "actions": [
+        {
+          "id": "item_2",
+          "category": "setup",
+          "kb_first": null,
+          "basis": "Lists fixture paths or checks the working directory."
+        },
+        {
+          "id": "item_3",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Native text search or complete configuration read verifies exact JSON values and locations."
+        },
+        {
+          "id": "item_4",
+          "category": "small_file",
+          "kb_first": null,
+          "basis": "Checks small-file lengths before direct reading, permitted by revised guidance."
+        },
+        {
+          "id": "item_5",
+          "category": "literal",
+          "kb_first": null,
+          "basis": "Native text search or complete configuration read verifies exact JSON values and locations."
+        }
+      ],
+      "routing_violations": [],
+      "notes": "Task asks for literals. Structural lookups in some runs check the unsupported runtime premise separately; their cost is retained. Literal-first violations are recorded independently from correct answers."
+    }
+  ]
+}

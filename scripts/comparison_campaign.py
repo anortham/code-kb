@@ -31,7 +31,7 @@ HIDDEN_ROOTS = (
     Path("/home/murphy/.claude"),
     Path("/home/murphy/.local/bin"),
 )
-COMMON_INSTRUCTIONS = """This task is read-only. Do not edit, create, or delete project files, and do not run mutating commands. The arm-specific navigation policy below takes precedence over generic routing hints in MCP tool descriptions. Report every requested declaration using its terminal name and the containing type in owner (null for no owner), with a repository-relative file and line. Explain the source chain. For each focused test, give an exact command only when the fixture evidences one; otherwise set command to null, command_status to unavailable, and explain why."""
+COMMON_INSTRUCTIONS = """This task is read-only. Do not edit, create, or delete project files, and do not run mutating commands. The arm-specific navigation policy below takes precedence over generic routing hints in MCP tool descriptions. Report every requested declaration using its terminal name and the containing type in owner (null for no owner), with a repository-relative file and line. List only selected definitions in symbols; describe excluded alternatives in explanation. Explain the source chain. For each focused test, give an exact command only when the fixture evidences one; otherwise set command to null, command_status to unavailable, and explain why."""
 
 
 def parse_args(argv=None):
