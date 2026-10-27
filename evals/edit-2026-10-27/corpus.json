@@ -1,0 +1,74 @@
+{
+  "schema": 1,
+  "status": "candidate pins; task eligibility and readiness must be verified before freeze",
+  "minimum_production_files": 50,
+  "minimum_production_lines": 10000,
+  "repositories": [
+    {
+      "id": "sqlglot",
+      "language": "python",
+      "url": "https://github.com/tobymao/sqlglot.git",
+      "commit": "feb0e08aba28a29590596bb3f5761fbaeb0e98b9"
+    },
+    {
+      "id": "minijinja",
+      "language": "rust",
+      "url": "https://github.com/mitsuhiko/minijinja.git",
+      "commit": "81787c4eab656f3a4f4e92dea53f303a36f1685c"
+    },
+    {
+      "id": "hcl",
+      "language": "go",
+      "url": "https://github.com/hashicorp/hcl.git",
+      "commit": "4a347c448ee961e556dde0fad522a996e04c00c0"
+    },
+    {
+      "id": "date-fns",
+      "language": "typescript",
+      "url": "https://github.com/date-fns/date-fns.git",
+      "commit": "a9739fb3e5384a810e90d7376446f6d84ecc5029"
+    },
+    {
+      "id": "commons-lang",
+      "language": "java",
+      "url": "https://github.com/apache/commons-lang.git",
+      "commit": "a5d6c5ed8847b2b14dacf062b646f94d6cc61a10"
+    },
+    {
+      "id": "nodatime",
+      "language": "csharp",
+      "url": "https://github.com/nodatime/nodatime.git",
+      "commit": "649ce5a1c8ddf439eaed7b3bf9157882363cb937"
+    }
+  ],
+  "exclusions": [
+    "code-kb",
+    "julie",
+    "miller",
+    "io",
+    "phoebe",
+    "hermes-agent",
+    "flask",
+    "express",
+    "zod",
+    "gson",
+    "cobra",
+    "newtonsoft-json",
+    "goldfish",
+    "jsonschema2pojo",
+    "alamofire",
+    "jq",
+    "moshi",
+    "nlohmann-json",
+    "radzen-blazor",
+    "sinatra"
+  ],
+  "exclusion_evidence": [
+    "evals/reach/corpus.json",
+    "scripts/release-corpus.txt",
+    "evals/bug-replay/README.md",
+    "docs/reviews/2026-09-26-builtin-search-comparison.md",
+    "docs/reviews/2026-09-26-project-evaluation.md",
+    "docs/reviews/2026-09-26-receiver-reference-reliability-data.json"
+  ]
+}

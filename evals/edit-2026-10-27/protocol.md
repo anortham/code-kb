@@ -1,0 +1,73 @@
+# Completed edits on larger repositories
+
+## Purpose and authority
+
+Measure whether code-kb helps an agent finish correct changes in larger codebases. The owner directed continued work on October 27 after approving the project-direction repairs. This protocol authorizes local preparation, implementation, tests, and commits. It preserves the original 72-run navigation pilot and its outcomes.
+
+Paid dispatch is a separate gate. The proposed study has six tasks, native and code-kb arms, and two repeats: at most 24 scored calls. Allow two non-task calibration calls and two infrastructure retries, at most 28 provider calls total. Freeze the final task set, executable hashes, model, limits, and an explicit budget receipt before dispatch. The prior pilot's paid authorization is not an unlimited replay budget. No model CLI call is needed for readiness or runner verification.
+
+No push, publication, release, global configuration change, or change to production routing is included. All 42 pinned Julie languages remain in scope; this sample covers six programming languages and cannot establish all-language agent performance.
+
+## Corpus eligibility
+
+The candidates in `corpus.json` are pinned public repositories with no recorded exposure in code-kb's retrieval, reach, replay, dogfood, or release-scan corpora. "Untouched" means untouched by those code-kb evaluations, not absent from model training. Retain upstream licenses and source identities.
+
+Each selected repository must have at least 50 production source files and 10,000 production source lines, counted outside dependencies, generated output, examples, and tests. Record the counting rules and actual totals before selecting its task. A task uses the full source snapshot rather than a small extracted fixture.
+
+Select a source-backed, planted change that requires understanding at least two production files. It may repair a seeded regression or finish a partial contract migration. Do not describe a planted defect as an upstream bug. A reference patch must touch at least two production files; acceptance is behavior, not exact patch equality. Preserve the task request, seeded input, hidden checks, reference repair, and readiness failures. Do not replace a difficult task after scored results exist.
+
+## Three execution environments
+
+Preparation obtains reviewed dependencies with a sanitized environment and no host credentials. The agent receives a fresh seeded snapshot, canonical public tests, reviewed dependency inputs, disposable build output, and tools for its arm. Grading reconstructs the patch in a fresh snapshot, restores canonical tests/configuration, adds hidden checks, and runs trusted commands without provider credentials or network.
+
+Use an allowlist of system/tool/dependency mounts. Do not expose the host root or bind an entire orchestration directory writable. Agent and grader must not see control manifests, seed diffs, reference patches, hidden checks, other trials, source checkouts, host instructions, or host environment secrets. The outer agent process may use its explicitly mounted provider authentication; Codex command permissions deny its private profile, and sandbox self-tests prove this without a model call. Grading has no authentication mount. Source, test commands, and emitted agent text are untrusted data.
+
+Keep host-native HOME and CODEX_HOME identities; isolate their filesystem contents rather than repurposing those variables. Canonical tests, instructions, build configuration, dependency locks, and Git metadata are protected. The agent may add tests but may not weaken existing tests or change dependency/build scripts. Final protected-path changes invalidate the attempt. Agent commands have no network. Preparation network access must be explicit; the grader never receives it.
+
+The trial Git history contains only its seeded snapshot, without an upstream remote, earlier commits, reference changes, or hidden tests. Native runs have no code-kb index/server. The code-kb arm gets the same frozen binary, extractor, seven tools, and guidance for every trial. Source changes refresh its index normally.
+
+## Patch evidence
+
+Compare the final tree to a trusted seed manifest, independently of the agent's Git index. Include additions, ignored/untracked source, deletions, executable bits, directories, and symlink targets. Exclude only declared generated roots and managed metadata, never arbitrary Git ignore rules. Reject special files, path traversal, escaping links, and protected-path changes. Bound entries and changed payload size. Stop descendants before capture; preserve partial patches on timeout and other failures.
+
+A bundle contains a versioned JSON change list and content-addressed blobs. Replay checks seed identity, blob hashes, path safety, protected paths, and final manifest equality before testing. Never execute a modified build script on the host. Do not grade the mutable trial directly.
+
+## Readiness and acceptance
+
+Each case needs three retained checks in the execution sandbox: the pinned upstream baseline passes its selected regression commands; the seeded input fails the intended acceptance check for the expected reason; and the reference repair passes acceptance and required regression commands. Dependency setup failures and unrelated baseline failures mean unready, not an agent failure or a waived test.
+
+Success requires a completed agent attempt, a valid replayable patch, unchanged protected inputs, and passing trusted behavioral/regression checks on the reconstructed tree. Keep those outcomes separate. A timeout can leave a passing patch but is not a completed run. Agent claims, command selection, test discovery, and exit zero alone do not establish success. Source review checks required callers, tests, regressions, and unsupported certainty.
+
+Tasks use `cases/<id>/case.json`, `request.md`, `seed.patch`, `reference.patch`, and `checks/`. The case JSON has schema 1; `id`, `repo_id`, `request`, `seed_patch`, `reference_patch`, `hidden_files` (destination/source pairs), `public_commands`, `hidden_commands` (argv, cwd, timeout_seconds), `protected_paths`, `generated_roots`, `expected_seed_failure` (command ID, nonzero exit status, diagnostic fragment), and a `production_files` list. Paths are relative, inside their root, with forward slashes. Commands are argument arrays, not shell strings. Upstream baseline and readiness records remain outside the agent view.
+
+Use `hidden_files: [{"path": "relative/destination", "source": "checks/file"}]`. Every command has `id`, `argv`, `cwd`, and `timeout_seconds`. The failure record has `command_id`, `exit_codes` (nonzero integers), and `diagnostic_contains` (literal text). Optional `setup_commands` use the same command shape for reviewed preparation; `runtime_setup_commands` materialize dependencies offline in each fresh project before its agent or grader starts. `dependency_inputs` and `tool_inputs` are arrays of required mount names. Use `/usr/bin/env` in a trusted argv when a command needs explicit language cache variables. Do not override HOME or CODEX_HOME.
+
+Record `task_kind` as `regression`, `feature`, or `migration`. Feature/migration inputs may have an empty `seed.patch` when the pinned source itself lacks the requested contract. That means no mutation, not missing preparation. Baseline public regression checks must pass, the intended task check must fail, and the reference must pass both. Optional `eligibility` records production file/line counts and the counting rule. `production_files` lists exact affected production paths, not the whole inventory.
+
+Canonical dependency inputs can be copied into disposable `/state` when a package manager needs writable locks/cache metadata. Restore that state independently for each agent and grader; changes there never become patch evidence. Preserve fixed in-container paths across preparation and replay. Templates must exclude project build outputs, canonical project binaries, hidden tests, and control data. Grading starts fresh project build outputs and verifies it tests the reconstructed source rather than an installed copy of the subject package. Check actual test execution; exit zero with no expected tests is not success.
+
+## Study controls
+
+The proposed comparison uses the installed `codex-cli 0.164.0`, model `gpt-6.1-sol`, high effort, native and current production code-kb guidance. A trial has a 900-second wall limit; every grader command has its own verified limit. Each task runs native/code-kb in repeat one, then code-kb/native in repeat two. Keep toolchain/dependency snapshots identical within each pair. Record cold indexing separately and report both warm and index-inclusive time.
+
+Freeze controls and successful isolation/readiness before calibration or scored dispatch. Retain every attempt and partial artifact. Retry only an explicitly classified provider/transport/startup failure without a completed answer, as a new retained attempt. Timeouts, wrong patches, protection violations, ordinary tool errors, and test failures are outcomes. No best-of-retries substitution or paid rerun to improve results.
+
+Record actual input/output/cached tokens, task time, indexing, tool adoption, native fallback, patch size, missed edits, repair rounds, and acceptance. Missing metrics stay unavailable. Billing remains unavailable unless the provider actually supplies it; never infer dollars from token counts. Two repeats per cell are a bounded pilot. Report all observations and paired medians, use a 10% practical tolerance, and call mixed outcomes inconclusive. Do not change global routing from this sample.
+
+Read the project/provider policy and redact the complete outgoing task/source bundle immediately before any dispatch. No dependency is added to code-kb. Review public-repository setup commands before running them in the preparation sandbox.
+
+## Implementation contracts
+
+`scripts/edit_snapshot.py` provides `snapshot_tree(root, *, excluded=())`, `capture_bundle(seed_manifest, root, output, *, protected=(), excluded=(), max_bytes=33554432)`, and `apply_bundle(seed_root, bundle, destination, *, protected=(), excluded=())`. Paths accept Path/string values. Snapshots are schema-1 JSON objects with sorted entries and a deterministic digest. Entries describe directories, regular file SHA-256/size/executable bit, or relative symlink targets. A bundle records seed/final identities, changes, blob hashes, and violations. Capture preserves invalid-attempt evidence; apply refuses violations or mismatched identities. Replay returns the final snapshot. No source execution occurs in this module.
+
+Snapshot keys are `schema`, `entries`, and `digest`; hash the canonical JSON entry list. An entry has `path` and `kind` (`file`, `directory`, or `symlink`); files also have `sha256`, `size`, and `executable`, and links have `target`. Bundles have `schema`, `seed_digest`, `final_digest`, `changes`, and `violations`. Changes have `path`, `before`, and `after` entries (null for absence). Changed file bytes live in `blobs/<sha256>` beside `bundle.json`. Return that bundle object from capture. Validate blob storage itself against links/traversal. Replay destinations must not already exist.
+
+There are no implicit Git ignores or metadata exclusions. Include and protect the fresh seeded `.git` metadata; explicitly exclude only managed index/build/dependency roots. Reject overlap that would hide protected inputs from integrity checking. Protect canonical test files individually so new test files remain possible; a protected directory protects every descendant. Directory and executable-bit changes are part of replay identity.
+
+`scripts/edit_sandbox.py` provides a `run` CLI with `--project`, `--state`, `--output`, `--timeout`, `--mode` (`prepare`, `agent`, `grade`), repeated `--dependency name=path`, `--tool name=path`, and `--protect relative/path`, followed by `--` and an argv. Project maps to `/workspace/project`, dependencies to `/deps/<name>`, tools to `/tools/<name>`, and disposable state to `/state`. Logs stay host-owned and outside mounts. Default network is disabled; an explicit `--network` is allowed only in preparation. Agent mode handles trusted provider access separately from no-network agent commands and requires the verified private-profile denial configuration. Preparation and grading are usable without Codex/authentication. JSON output records exit status, timeout, elapsed time, process cleanup, and retained log paths. A Python entry point with the same semantics may support orchestration; document its exact signature before handoff.
+
+Only agent mode accepts `--private-profile` and `--auth-file`. It launches the trusted installed Codex CLI, not an arbitrary shell with provider access. The private profile is bound at the host-native Codex profile path; the trusted CLI's custom profile must explicitly deny command reads there and disable command networking. The built-in `:workspace` profile alone is insufficient. Empty private profiles support actual `codex sandbox` probes without authentication or model calls.
+
+`scripts/edit_evaluation.py` consumes those contracts and the case/corpus files. Its local commands prepare snapshots, check readiness, run a fake-agent end-to-end attempt, reconstruct and grade bundles, validate a frozen campaign manifest, and summarize outcomes. No code path may invoke a provider before a manifest-bound budget/authorization record and successful controls exist. Reuse `comparison_metrics.summarize_trace` for emitted metrics; do not change the old read-only runner or grader.
+
+Official permission-profile behavior is documented in [OpenAI Docs](https://learn.chatgpt.com/docs/permissions). Confirm the installed CLI's writable profile and deny rules with actual `codex sandbox` tests. Profiles and outer filesystem isolation are separate controls.
