@@ -1,0 +1,1081 @@
+use std::{fs, path::PathBuf};
+
+use code_kb_core::{
+    db::open_read_only,
+    find_references_for_symbol,
+    models::{LabeledSite, ReferenceReport, SiteLabel},
+    ops::blast_radius_op,
+    reference_report::{reference_report, reference_report_for_edit, select_reference_target},
+    safe_tempdir,
+    sync::{find_julie_extract_binary, scan_workspace},
+    workspace::Workspace,
+};
+use rusqlite::{Connection, params};
+
+struct Repo {
+    root: PathBuf,
+    db: PathBuf,
+    _temp: tempfile::TempDir,
+}
+
+fn scanned_repo(files: &[(&str, &str)]) -> Repo {
+    find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+    let temp = safe_tempdir();
+    let root = temp.path().to_path_buf();
+    for (path, content) in files {
+        let full = root.join(path);
+        fs::create_dir_all(full.parent().unwrap()).unwrap();
+        fs::write(full, content).unwrap();
+    }
+    let db = root.join(".code-kb").join("artifact.db");
+    scan_workspace(&Workspace::new(root.clone()), &db, true).expect("scan failed");
+    Repo {
+        root,
+        db,
+        _temp: temp,
+    }
+}
+
+fn type_facts(conn: &Connection, path: &str) -> Vec<(String, String, String, String)> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT COALESCE(parent.name, ''), symbol.name, symbol.kind, fact.resolved_type
+             FROM type_facts fact
+             JOIN symbols symbol ON symbol.symbol_id = fact.symbol_id
+             LEFT JOIN symbols parent ON parent.symbol_id = symbol.parent_symbol_id
+             WHERE symbol.path = ?1
+             ORDER BY symbol.start_line, symbol.start_column",
+        )
+        .unwrap();
+    stmt.query_map(params![path], |row| {
+        Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+    })
+    .unwrap()
+    .collect::<Result<Vec<_>, _>>()
+    .unwrap()
+}
+
+fn report(repo: &Repo, name: &str, path: &str) -> ReferenceReport {
+    let conn = open_read_only(&repo.db).unwrap();
+    let target = select_reference_target(&conn, name, Some(path)).unwrap();
+    let result = reference_report(&conn, &repo.root, &target, false);
+    result.unwrap()
+}
+
+fn line_of(repo: &Repo, path: &str, needle: &str) -> usize {
+    fs::read_to_string(repo.root.join(path))
+        .unwrap()
+        .lines()
+        .position(|line| line.contains(needle))
+        .map(|line| line + 1)
+        .unwrap()
+}
+
+fn line_of_after(repo: &Repo, path: &str, needle: &str, after: usize) -> usize {
+    fs::read_to_string(repo.root.join(path))
+        .unwrap()
+        .lines()
+        .enumerate()
+        .find(|(line, text)| *line + 1 > after && text.contains(needle))
+        .map(|(line, _)| line + 1)
+        .unwrap()
+}
+
+fn site_at<'a>(report: &'a ReferenceReport, path: &str, line: usize) -> &'a LabeledSite {
+    report
+        .sites
+        .iter()
+        .find(|site| site.site.path == path && site.site.start_line == Some(line))
+        .unwrap_or_else(|| panic!("missing site at {path}:{line}: {:?}", report.sites))
+}
+
+#[test]
+fn a_typed_field_receiver_chain_proves_its_service_and_excludes_a_decoy() {
+    let repo = scanned_repo(&[
+        ("go.mod", "module fx\n\ngo 1.21\n"),
+        (
+            "service/invitation.go",
+            "package service\n\ntype InvitationService struct{}\n\nfunc (*InvitationService) Send() {}\n",
+        ),
+        (
+            "service/mail.go",
+            "package service\n\ntype MailService struct{}\n\nfunc (*MailService) Send() {}\n",
+        ),
+        (
+            "handler/invitation.go",
+            "package handler\n\nimport \"fx/service\"\n\ntype InvitationServiceGroup struct {\n\tservice *service.InvitationService\n}\n\ntype InvitationHandler struct {\n\tgroup *InvitationServiceGroup\n}\n\nfunc (h *InvitationHandler) ServeHTTP() {\n\th.group.service.Send()\n}\n",
+        ),
+        (
+            "handler/mail.go",
+            "package handler\n\nimport \"fx/service\"\n\ntype MailServiceGroup struct {\n\tservice *service.MailService\n}\n\ntype MailHandler struct {\n\tgroup *MailServiceGroup\n}\n\nfunc (h *MailHandler) ServeHTTP() {\n\th.group.service.Send()\n}\n",
+        ),
+    ]);
+    let conn = open_read_only(&repo.db).unwrap();
+    let facts = type_facts(&conn, "handler/invitation.go");
+    assert!(
+        facts.contains(&(
+            String::from("InvitationServiceGroup"),
+            String::from("service"),
+            String::from("field"),
+            String::from("service.InvitationService")
+        )),
+        "InvitationServiceGroup field fact missing: {facts:?}"
+    );
+    assert!(
+        facts.iter().any(|(_, name, _, resolved_type)| {
+            name == "h" && resolved_type == "InvitationHandler"
+        }),
+        "InvitationHandler receiver fact missing: {facts:?}"
+    );
+    drop(conn);
+
+    let report = report(&repo, "InvitationService.Send", "service/invitation.go");
+    let invitation_line = line_of(&repo, "handler/invitation.go", "h.group.service.Send()");
+    let mail_line = line_of(&repo, "handler/mail.go", "h.group.service.Send()");
+
+    assert_eq!(
+        site_at(&report, "handler/mail.go", mail_line).label,
+        SiteLabel::Excluded
+    );
+    let invitation = site_at(&report, "handler/invitation.go", invitation_line);
+    assert_eq!(invitation.label, SiteLabel::Proven, "{invitation:?}");
+}
+
+#[test]
+fn a_mixed_plain_and_nested_call_batch_keeps_both_evidence_paths() {
+    let repo = scanned_repo(&[
+        ("go.mod", "module fx\n\ngo 1.21\n"),
+        (
+            "service.go",
+            "package app\n\ntype InvitationService struct{}\nfunc (*InvitationService) Send() {}\ntype Handler struct { service InvitationService }\nfunc (*Handler) Send() {}\nfunc (h *Handler) Invoke() {\n\th.service.Send()\n\th.Send()\n}\n",
+        ),
+    ]);
+    let report = report(&repo, "InvitationService.Send", "service.go");
+    let nested_line = line_of(&repo, "service.go", "h.service.Send()");
+    let plain_line = line_of(&repo, "service.go", "h.Send()");
+
+    assert_eq!(
+        site_at(&report, "service.go", nested_line).label,
+        SiteLabel::Proven
+    );
+    assert_eq!(
+        site_at(&report, "service.go", plain_line).label,
+        SiteLabel::Excluded
+    );
+}
+
+#[test]
+fn a_removed_target_keeps_typed_receiver_chain_evidence_after_rescan() {
+    let repo = scanned_repo(&[
+        ("go.mod", "module fx\n\ngo 1.21\n"),
+        (
+            "service/invitation.go",
+            "package service\n\ntype InvitationService struct{}\n\nfunc (*InvitationService) Send() {}\n",
+        ),
+        (
+            "handler/invitation.go",
+            "package handler\n\nimport \"fx/service\"\n\ntype InvitationHandler struct {\n\tservice *service.InvitationService\n}\n\nfunc (h *InvitationHandler) ServeHTTP() {\n\th.service.Send()\n}\n",
+        ),
+    ]);
+    let target = {
+        let conn = open_read_only(&repo.db).unwrap();
+        select_reference_target(
+            &conn,
+            "InvitationService.Send",
+            Some("service/invitation.go"),
+        )
+        .unwrap()
+    };
+    fs::write(
+        repo.root.join("service/invitation.go"),
+        "package service\n\ntype InvitationService struct{}\n",
+    )
+    .unwrap();
+    scan_workspace(&Workspace::new(repo.root.clone()), &repo.db, true).expect("rescan failed");
+
+    let conn = open_read_only(&repo.db).unwrap();
+    let missing_target_count = conn
+        .query_row(
+            "SELECT COUNT(*) FROM symbols WHERE symbol_id = ?1",
+            params![target.symbol_id],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap();
+    assert_eq!(missing_target_count, 0);
+    let report = reference_report_for_edit(&conn, &repo.root, &target, None).unwrap();
+    let line = line_of(&repo, "handler/invitation.go", "h.service.Send()");
+    let site = site_at(&report, "handler/invitation.go", line);
+    assert_eq!(site.label, SiteLabel::Proven, "{site:?}");
+}
+
+#[test]
+fn a_java_typed_field_receiver_chain_proves_its_service_and_excludes_a_decoy() {
+    let repo = scanned_repo(&[(
+        "G.java",
+        r#"class InvitationService { void send() {} }
+class MailService { void send() {} }
+class InvitationHandler {
+    InvitationService service;
+    void handle(InvitationHandler h) { h.service.send(); }
+}
+class MailHandler {
+    MailService service;
+    void handle(MailHandler mail) { mail.service.send(); }
+}
+"#,
+    )]);
+    let conn = open_read_only(&repo.db).unwrap();
+    let facts = type_facts(&conn, "G.java");
+    assert!(
+        facts.iter().any(|(owner, name, _, resolved_type)| {
+            owner == "InvitationHandler"
+                && name == "service"
+                && resolved_type.ends_with("InvitationService")
+        }),
+        "InvitationHandler field fact missing: {facts:?}"
+    );
+    assert!(
+        facts.iter().any(|(_, name, _, resolved_type)| {
+            name == "h" && resolved_type == "InvitationHandler"
+        }),
+        "InvitationHandler parameter fact missing: {facts:?}"
+    );
+    drop(conn);
+
+    let report = report(&repo, "InvitationService.send", "G.java");
+    let invitation_line = line_of(&repo, "G.java", "h.service.send();");
+    let mail_line = line_of(&repo, "G.java", "mail.service.send();");
+
+    assert_eq!(
+        site_at(&report, "G.java", mail_line).label,
+        SiteLabel::Excluded
+    );
+    let invitation = site_at(&report, "G.java", invitation_line);
+    assert_eq!(invitation.label, SiteLabel::Proven, "{invitation:?}");
+    let workspace = Workspace::new(repo.root.clone());
+    let conn = open_read_only(&repo.db).unwrap();
+    let target = select_reference_target(&conn, "InvitationService.send", Some("G.java")).unwrap();
+    let callers =
+        find_references_for_symbol(&conn, &target.name, "callers", 20, &target.symbol_id).unwrap();
+    assert!(
+        callers
+            .iter()
+            .any(|site| { site.path == "G.java" && site.start_line == Some(invitation_line) })
+    );
+    assert!(
+        !callers
+            .iter()
+            .any(|site| site.path == "G.java" && site.start_line == Some(mail_line))
+    );
+    let blast = blast_radius_op(
+        &workspace,
+        &conn,
+        Some("InvitationService.send"),
+        None,
+        3,
+        20,
+    )
+    .unwrap();
+    assert!(
+        blast
+            .impacted_symbols
+            .iter()
+            .any(|symbol| { symbol.path == "G.java" && symbol.name == "handle" })
+    );
+}
+
+#[test]
+fn a_csharp_typed_field_receiver_chain_proves_its_service_and_excludes_a_decoy() {
+    let repo = scanned_repo(&[(
+        "G.cs",
+        r#"public class InvitationService { public void Send() {} }
+public class MailService { public void Send() {} }
+public class InvitationHandler
+{
+    public InvitationService service;
+    public void Handle(InvitationHandler h) { h.service.Send(); }
+}
+public class MailHandler
+{
+    public MailService service;
+    public void Handle(MailHandler mail) { mail.service.Send(); }
+}
+"#,
+    )]);
+    let conn = open_read_only(&repo.db).unwrap();
+    let facts = type_facts(&conn, "G.cs");
+    assert!(
+        facts.iter().any(|(owner, name, _, resolved_type)| {
+            owner == "InvitationHandler"
+                && name == "service"
+                && resolved_type.ends_with("InvitationService")
+        }),
+        "InvitationHandler field fact missing: {facts:?}"
+    );
+    assert!(
+        facts.iter().any(|(_, name, _, resolved_type)| {
+            name == "h" && resolved_type == "InvitationHandler"
+        }),
+        "InvitationHandler parameter fact missing: {facts:?}"
+    );
+    drop(conn);
+
+    let report = report(&repo, "InvitationService.Send", "G.cs");
+    let invitation_line = line_of(&repo, "G.cs", "h.service.Send();");
+    let mail_line = line_of(&repo, "G.cs", "mail.service.Send();");
+
+    let mail_site = site_at(&report, "G.cs", mail_line);
+    assert_eq!(mail_site.label, SiteLabel::Excluded, "{mail_site:?}");
+    let invitation = site_at(&report, "G.cs", invitation_line);
+    assert_eq!(invitation.label, SiteLabel::Proven, "{invitation:?}");
+    let workspace = Workspace::new(repo.root.clone());
+    let conn = open_read_only(&repo.db).unwrap();
+    let target = select_reference_target(&conn, "InvitationService.Send", Some("G.cs")).unwrap();
+    let callers =
+        find_references_for_symbol(&conn, &target.name, "callers", 20, &target.symbol_id).unwrap();
+    assert!(
+        callers
+            .iter()
+            .any(|site| { site.path == "G.cs" && site.start_line == Some(invitation_line) })
+    );
+    assert!(
+        !callers
+            .iter()
+            .any(|site| site.path == "G.cs" && site.start_line == Some(mail_line))
+    );
+    let blast = blast_radius_op(
+        &workspace,
+        &conn,
+        Some("InvitationService.Send"),
+        None,
+        3,
+        20,
+    )
+    .unwrap();
+    assert!(
+        blast
+            .impacted_symbols
+            .iter()
+            .any(|symbol| { symbol.path == "G.cs" && symbol.name == "Handle" })
+    );
+}
+
+#[test]
+fn a_missing_intermediate_type_fact_does_not_exclude_a_nested_call() {
+    let repo = scanned_repo(&[
+        ("go.mod", "module fx\n\ngo 1.21\n"),
+        (
+            "service/invitation.go",
+            "package service\n\ntype InvitationService struct{}\n\nfunc (*InvitationService) Send() {}\n",
+        ),
+        (
+            "handler/invitation.go",
+            "package handler\n\nimport \"fx/service\"\n\ntype InvitationHandler struct {\n\tservice *service.InvitationService\n}\n\nfunc (h *InvitationHandler) ServeHTTP() {\n\th.service.Send()\n}\n",
+        ),
+    ]);
+    let facts = type_facts(&open_read_only(&repo.db).unwrap(), "handler/invitation.go");
+    assert!(
+        facts.iter().any(|(owner, name, _, resolved_type)| {
+            owner == "InvitationHandler"
+                && name == "service"
+                && resolved_type.ends_with("InvitationService")
+        }),
+        "InvitationHandler field fact missing before simulation: {facts:?}"
+    );
+
+    let conn = Connection::open(&repo.db).unwrap();
+    let removed = conn
+        .execute(
+            "DELETE FROM type_facts
+             WHERE symbol_id = (
+                 SELECT field.symbol_id FROM symbols field
+                 JOIN symbols owner ON owner.symbol_id = field.parent_symbol_id
+                 WHERE field.path = ?1 AND owner.name = 'InvitationHandler'
+                   AND field.name = 'service' AND field.kind = 'field'
+             )",
+            params!["handler/invitation.go"],
+        )
+        .unwrap();
+    assert_eq!(removed, 1);
+    drop(conn);
+
+    let report = report(&repo, "InvitationService.Send", "service/invitation.go");
+    let line = line_of(&repo, "handler/invitation.go", "h.service.Send()");
+    let site = site_at(&report, "handler/invitation.go", line);
+    assert!(
+        matches!(site.label, SiteLabel::Likely | SiteLabel::Unresolved),
+        "a missing intermediate type fact must stay unproven: {site:?}"
+    );
+}
+
+#[test]
+fn a_go_nested_receiver_chain_reaches_its_handler_and_test_in_blast_radius() {
+    let repo = scanned_repo(&[
+        ("go.mod", "module fx\n\ngo 1.21\n"),
+        (
+            "service/invitation.go",
+            "package service\n\ntype InvitationService struct{}\n\nfunc (*InvitationService) Send() {}\n",
+        ),
+        (
+            "handler/invitation.go",
+            "package handler\n\nimport \"fx/service\"\n\ntype InvitationHandler struct {\n\tservice *service.InvitationService\n}\n\nfunc (h *InvitationHandler) ServeHTTP() {\n\th.service.Send()\n}\n",
+        ),
+        (
+            "handler/other.go",
+            "package handler\n\ntype OtherHandler struct{}\n\nfunc (*OtherHandler) ServeHTTP() {}\n",
+        ),
+        (
+            "handler/invitation_test.go",
+            "package handler\n\nimport \"testing\"\n\nfunc TestServeHTTP(t *testing.T) {\n\tvar handler *InvitationHandler\n\thandler.ServeHTTP()\n\t(&InvitationHandler{}).ServeHTTP()\n}\n",
+        ),
+    ]);
+    let workspace = Workspace::new(repo.root.clone());
+    let conn = open_read_only(&repo.db).unwrap();
+    let result = blast_radius_op(
+        &workspace,
+        &conn,
+        Some("InvitationService.Send"),
+        None,
+        3,
+        20,
+    )
+    .unwrap();
+    let serve_report = report(
+        &repo,
+        "InvitationHandler.ServeHTTP",
+        "handler/invitation.go",
+    );
+    let typed_line = line_of(&repo, "handler/invitation_test.go", "handler.ServeHTTP()");
+    let composite_line = line_of(
+        &repo,
+        "handler/invitation_test.go",
+        "(&InvitationHandler{}).ServeHTTP()",
+    );
+    assert_eq!(
+        site_at(&serve_report, "handler/invitation_test.go", typed_line).label,
+        SiteLabel::Proven
+    );
+    assert_eq!(
+        site_at(&serve_report, "handler/invitation_test.go", composite_line).label,
+        SiteLabel::Unresolved
+    );
+
+    assert!(
+        result
+            .impacted_symbols
+            .iter()
+            .any(|symbol| symbol.path == "handler/invitation.go" && symbol.name == "ServeHTTP"),
+        "nested receiver caller missing from blast radius: {result:?}"
+    );
+    assert!(
+        result
+            .likely_tests
+            .iter()
+            .any(|test| test.path == "handler/invitation_test.go" && test.name == "TestServeHTTP"),
+        "nested receiver caller test missing from blast radius: {result:?}"
+    );
+}
+
+#[test]
+fn a_shadowed_root_without_scope_facts_stays_unproven() {
+    let repo = scanned_repo(&[(
+        "service.go",
+        "package app\n\ntype InvitationService struct{}\nfunc (*InvitationService) Send() {}\ntype MailService struct{}\nfunc (*MailService) Send() {}\ntype InvitationHandler struct { service *InvitationService }\ntype MailHandler struct { service *MailService }\nfunc (h *InvitationHandler) ServeHTTP() {\n\t{\n\t\th := &MailHandler{}\n\t\th.service.Send()\n\t}\n\th.service.Send()\n}\n",
+    )]);
+    let facts = type_facts(&open_read_only(&repo.db).unwrap(), "service.go");
+    assert!(
+        facts.iter().any(|(_, name, _, resolved_type)| {
+            name == "h" && resolved_type == "InvitationHandler"
+        }),
+        "outer receiver fact missing: {facts:?}"
+    );
+    assert!(
+        facts
+            .iter()
+            .any(|(_, name, _, resolved_type)| name == "h" && resolved_type == "MailHandler"),
+        "shadowing local fact missing: {facts:?}"
+    );
+
+    let report = report(&repo, "InvitationService.Send", "service.go");
+    let inner_line = line_of(&repo, "service.go", "h.service.Send()");
+    let outer_line = line_of_after(&repo, "service.go", "h.service.Send()", inner_line);
+    let inner = site_at(&report, "service.go", inner_line);
+    assert_eq!(inner.label, SiteLabel::Unresolved, "{inner:?}");
+    let outer = site_at(&report, "service.go", outer_line);
+    assert_eq!(outer.label, SiteLabel::Unresolved, "{outer:?}");
+}
+
+#[test]
+fn a_go_nested_chain_selects_duplicate_types_by_exact_import() {
+    let repo = scanned_repo(&[
+        ("go.mod", "module fx\n\ngo 1.21\n"),
+        (
+            "first/invitation.go",
+            "package first\n\ntype InvitationService struct{}\n\nfunc (*InvitationService) Send() {}\n",
+        ),
+        (
+            "second/invitation.go",
+            "package second\n\ntype InvitationService struct{}\n\nfunc (*InvitationService) Send() {}\n",
+        ),
+        (
+            "handler/invitation.go",
+            "package handler\n\nimport service \"fx/second\"\n\ntype InvitationHandler struct {\n\tservice *service.InvitationService\n}\n\nfunc (h *InvitationHandler) ServeHTTP() {\n\th.service.Send()\n}\n",
+        ),
+    ]);
+    let facts = type_facts(&open_read_only(&repo.db).unwrap(), "handler/invitation.go");
+    assert!(
+        facts.iter().any(|(owner, name, _, resolved_type)| {
+            owner == "InvitationHandler"
+                && name == "service"
+                && resolved_type.ends_with("InvitationService")
+        }),
+        "InvitationHandler field fact missing: {facts:?}"
+    );
+
+    let line = line_of(&repo, "handler/invitation.go", "h.service.Send()");
+    let other = report(&repo, "InvitationService.Send", "first/invitation.go");
+    let site = site_at(&other, "handler/invitation.go", line);
+    assert_eq!(site.label, SiteLabel::Excluded, "{site:?}");
+
+    let selected = report(&repo, "InvitationService.Send", "second/invitation.go");
+    let site = site_at(&selected, "handler/invitation.go", line);
+    assert_eq!(site.label, SiteLabel::Proven, "{site:?}");
+}
+
+#[test]
+fn conflicting_intermediate_type_facts_stay_unproven() {
+    let repo = scanned_repo(&[
+        ("go.mod", "module fx\n\ngo 1.21\n"),
+        (
+            "service/invitation.go",
+            "package service\n\ntype InvitationService struct{}\n\nfunc (*InvitationService) Send() {}\n",
+        ),
+        (
+            "service/mail.go",
+            "package service\n\ntype MailService struct{}\n\nfunc (*MailService) Send() {}\n",
+        ),
+        (
+            "handler/invitation.go",
+            "package handler\n\nimport \"fx/service\"\n\ntype InvitationHandler struct {\n\tservice *service.InvitationService\n}\n\nfunc (h *InvitationHandler) ServeHTTP() {\n\th.service.Send()\n}\n",
+        ),
+    ]);
+    let conn = open_read_only(&repo.db).unwrap();
+    let field_id = conn
+        .query_row(
+            "SELECT field.symbol_id FROM symbols field
+             JOIN symbols owner ON owner.symbol_id = field.parent_symbol_id
+             WHERE field.path = ?1 AND owner.name = 'InvitationHandler'
+               AND field.name = 'service' AND field.kind = 'field'",
+            params!["handler/invitation.go"],
+            |row| row.get::<_, String>(0),
+        )
+        .unwrap();
+    drop(conn);
+
+    let conn = Connection::open(&repo.db).unwrap();
+    let inserted = conn
+        .execute(
+            "INSERT INTO type_facts
+             (type_fact_id, symbol_id, language, resolved_type, generic_params_json, is_inferred)
+             VALUES ('task8-conflicting-field-fact', ?1, 'go', 'service.MailService', NULL, 0)",
+            params![field_id],
+        )
+        .unwrap();
+    assert_eq!(inserted, 1);
+    drop(conn);
+
+    let facts = type_facts(&open_read_only(&repo.db).unwrap(), "handler/invitation.go");
+    assert!(
+        facts.iter().any(|(owner, name, _, resolved_type)| {
+            owner == "InvitationHandler"
+                && name == "service"
+                && resolved_type == "service.InvitationService"
+        }) && facts.iter().any(|(owner, name, _, resolved_type)| {
+            owner == "InvitationHandler"
+                && name == "service"
+                && resolved_type == "service.MailService"
+        }),
+        "fixture does not contain conflicting field type facts: {facts:?}"
+    );
+
+    let report = report(&repo, "InvitationService.Send", "service/invitation.go");
+    let line = line_of(&repo, "handler/invitation.go", "h.service.Send()");
+    let site = site_at(&report, "handler/invitation.go", line);
+    assert!(
+        matches!(site.label, SiteLabel::Likely | SiteLabel::Unresolved),
+        "conflicting intermediate type facts must stay unproven: {site:?}"
+    );
+}
+
+#[test]
+fn a_dynamic_intermediate_field_does_not_exclude_a_nested_call() {
+    let repo = scanned_repo(&[(
+        "G.cs",
+        r#"public class InvitationService { public void Send() {} }
+public class InvitationHandler
+{
+    public dynamic service;
+    public void Handle(InvitationHandler h) { h.service.Send(); }
+}
+"#,
+    )]);
+    let facts = type_facts(&open_read_only(&repo.db).unwrap(), "G.cs");
+    assert!(
+        facts.iter().any(|(owner, name, _, resolved_type)| {
+            owner == "InvitationHandler" && name == "service" && resolved_type == "dynamic"
+        }),
+        "dynamic intermediate fact missing: {facts:?}"
+    );
+
+    let report = report(&repo, "InvitationService.Send", "G.cs");
+    let line = line_of(&repo, "G.cs", "h.service.Send();");
+    let site = site_at(&report, "G.cs", line);
+    assert!(
+        matches!(site.label, SiteLabel::Likely | SiteLabel::Unresolved),
+        "a dynamic intermediate fact must stay unproven: {site:?}"
+    );
+}
+
+#[test]
+fn a_typed_chain_follows_an_explicit_js_base_import_past_a_nearer_decoy() {
+    let repo = scanned_repo(&[
+        ("src/lib/base.js", "export class Base { send() {} }\n"),
+        ("src/app/base.ts", "export class Base { send() {} }\n"),
+        (
+            "src/app/derived.ts",
+            "import { Base } from '../lib/base.js';\nclass Derived extends Base {}\nclass Handler { service: Derived; }\nfunction call(h: Handler) { h.service.send(); }\n",
+        ),
+    ]);
+    let line = line_of(&repo, "src/app/derived.ts", "h.service.send()");
+    let imported = report(&repo, "Base.send", "src/lib/base.js");
+    let imported_site = site_at(&imported, "src/app/derived.ts", line);
+    assert_eq!(imported_site.label, SiteLabel::Proven, "{imported_site:?}");
+    let decoy = report(&repo, "Base.send", "src/app/base.ts");
+    let decoy_site = site_at(&decoy, "src/app/derived.ts", line);
+    assert_eq!(decoy_site.label, SiteLabel::Excluded, "{decoy_site:?}");
+
+    let workspace = Workspace::new(repo.root.clone());
+    let conn = open_read_only(&repo.db).unwrap();
+    let imported_blast = blast_radius_op(
+        &workspace,
+        &conn,
+        Some("Base.send"),
+        Some("src/lib/base.js"),
+        3,
+        20,
+    )
+    .unwrap();
+    assert!(
+        imported_blast
+            .impacted_symbols
+            .iter()
+            .any(|symbol| symbol.path == "src/app/derived.ts" && symbol.name == "call")
+    );
+    let decoy_blast = blast_radius_op(
+        &workspace,
+        &conn,
+        Some("Base.send"),
+        Some("src/app/base.ts"),
+        3,
+        20,
+    )
+    .unwrap();
+    assert!(
+        !decoy_blast
+            .impacted_symbols
+            .iter()
+            .any(|symbol| symbol.path == "src/app/derived.ts" && symbol.name == "call")
+    );
+}
+
+#[test]
+fn equally_near_unresolved_bases_keep_both_receiver_sites_unproven() {
+    let repo = scanned_repo(&[
+        (
+            "src/app/derived.ts",
+            "class Derived extends Base {}\nclass Handler { service: Derived; }\nfunction call(h: Handler) { h.service.send(); }\n",
+        ),
+        ("src/app/left.ts", "class Base { send() {} }\n"),
+        ("src/app/right.ts", "class Base { send() {} }\n"),
+    ]);
+    let line = line_of(&repo, "src/app/derived.ts", "h.service.send()");
+    for path in ["src/app/left.ts", "src/app/right.ts"] {
+        let report = report(&repo, "Base.send", path);
+        let site = site_at(&report, "src/app/derived.ts", line);
+        assert!(
+            !matches!(site.label, SiteLabel::Proven | SiteLabel::Excluded),
+            "ambiguous base ownership must stay unproven: {site:?}"
+        );
+    }
+}
+
+#[test]
+fn unmatched_and_qualified_pending_bases_keep_receiver_sites_unproven() {
+    let repo = scanned_repo(&[
+        ("src/lib/base.js", "export class Base { send() {} }\n"),
+        (
+            "src/app/missing.ts",
+            "import { Base } from './absent.js';\nclass MissingDerived extends Base {}\nclass MissingHandler { service: MissingDerived; }\nfunction missing(h: MissingHandler) { h.service.send(); }\n",
+        ),
+        (
+            "src/app/qualified.ts",
+            "class QualifiedDerived extends ns.Base {}\nclass QualifiedHandler { service: QualifiedDerived; }\nfunction qualified(h: QualifiedHandler) { h.service.send(); }\n",
+        ),
+    ]);
+    let conn = open_read_only(&repo.db).unwrap();
+    for (path, expected_namespace) in [
+        ("src/app/missing.ts", "[]"),
+        ("src/app/qualified.ts", "[\"ns\"]"),
+    ] {
+        let (target_name, namespace_json): (String, String) = conn
+            .query_row(
+                "SELECT pending.target_terminal_name, pending.target_namespace_json
+                 FROM pending_relationships pending
+                 JOIN symbols source ON source.symbol_id = pending.from_symbol_id
+                 WHERE source.path = ?1 AND pending.kind = 'extends'",
+                params![path],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(target_name, "Base");
+        assert_eq!(namespace_json, expected_namespace);
+    }
+    let report = report(&repo, "Base.send", "src/lib/base.js");
+    for path in ["src/app/missing.ts", "src/app/qualified.ts"] {
+        let line = line_of(&repo, path, "h.service.send()");
+        let site = site_at(&report, path, line);
+        assert!(
+            !matches!(site.label, SiteLabel::Proven | SiteLabel::Excluded),
+            "unsupported pending ancestry must stay unproven: {site:?}"
+        );
+    }
+}
+
+#[test]
+fn a_nested_receiver_chain_reaches_a_service_inherited_method() {
+    let repo = scanned_repo(&[(
+        "G.cs",
+        r#"public class BaseService { public void Send() {} }
+public class InvitationService : BaseService {}
+public class InvitationHandler
+{
+    public InvitationService service;
+    public void Handle(InvitationHandler h) { h.service.Send(); }
+}
+"#,
+    )]);
+    let facts = type_facts(&open_read_only(&repo.db).unwrap(), "G.cs");
+    assert!(
+        facts.iter().any(|(owner, name, _, resolved_type)| {
+            owner == "InvitationHandler"
+                && name == "service"
+                && resolved_type == "InvitationService"
+        }),
+        "InvitationHandler field fact missing: {facts:?}"
+    );
+
+    let report = report(&repo, "BaseService.Send", "G.cs");
+    let line = line_of(&repo, "G.cs", "h.service.Send();");
+    let site = site_at(&report, "G.cs", line);
+    assert_eq!(site.label, SiteLabel::Proven, "{site:?}");
+}
+
+#[test]
+fn a_nested_receiver_chain_prefers_the_nearest_service_override() {
+    let repo = scanned_repo(&[(
+        "G.cs",
+        r#"public class BaseService { public virtual void Send() {} }
+public class InvitationService : BaseService
+{
+    public override void Send() {}
+}
+public class InvitationHandler
+{
+    public InvitationService service;
+    public void Handle(InvitationHandler h) { h.service.Send(); }
+}
+"#,
+    )]);
+    let facts = type_facts(&open_read_only(&repo.db).unwrap(), "G.cs");
+    assert!(
+        facts.iter().any(|(owner, name, _, resolved_type)| {
+            owner == "InvitationHandler"
+                && name == "service"
+                && resolved_type == "InvitationService"
+        }),
+        "InvitationHandler field fact missing: {facts:?}"
+    );
+    let line = line_of(&repo, "G.cs", "h.service.Send();");
+
+    let base = report(&repo, "BaseService.Send", "G.cs");
+    let site = site_at(&base, "G.cs", line);
+    assert_eq!(site.label, SiteLabel::Excluded, "{site:?}");
+
+    let derived = report(&repo, "InvitationService.Send", "G.cs");
+    let site = site_at(&derived, "G.cs", line);
+    assert_eq!(site.label, SiteLabel::Proven, "{site:?}");
+}
+
+#[test]
+fn an_unsubstituted_generic_field_type_stays_unproven() {
+    let repo = scanned_repo(&[
+        ("go.mod", "module fx\n\ngo 1.21\n"),
+        (
+            "service.go",
+            "package app\n\ntype InvitationService struct{}\nfunc (*InvitationService) Send() {}\ntype MailService struct{}\nfunc (*MailService) Send() {}\ntype T struct{}\nfunc (*T) Send() {}\ntype Wrapper[T any] struct { service T }\ntype Handler struct { group Wrapper[*InvitationService] }\nfunc (h *Handler) ServeHTTP() { h.group.service.Send() }\n",
+        ),
+    ]);
+    let facts = type_facts(&open_read_only(&repo.db).unwrap(), "service.go");
+    assert!(facts.iter().any(|(owner, name, _, resolved_type)| {
+        owner == "Wrapper" && name == "service" && resolved_type == "T"
+    }));
+
+    let report = report(&repo, "InvitationService.Send", "service.go");
+    let line = line_of(&repo, "service.go", "h.group.service.Send()");
+    let site = site_at(&report, "service.go", line);
+    assert!(
+        matches!(site.label, SiteLabel::Likely | SiteLabel::Unresolved),
+        "generic field types must stay unproven: {site:?}"
+    );
+}
+
+#[test]
+fn an_enclosing_generic_type_parameter_does_not_bind_a_concrete_same_name() {
+    let repo = scanned_repo(&[(
+        "G.java",
+        "public class InvitationService { public void Send() {} }\nclass T { InvitationService service; }\nclass Caller<T> { void Handle(T h) { h.service.Send(); } }\n",
+    )]);
+    let facts = type_facts(&open_read_only(&repo.db).unwrap(), "G.java");
+    assert!(facts.iter().any(|(owner, name, kind, resolved_type)| {
+        owner == "Handle" && name == "h" && kind == "variable" && resolved_type == "T"
+    }));
+    let conn = open_read_only(&repo.db).unwrap();
+    let owner_signature: String = conn
+        .query_row(
+            "SELECT owner.signature
+             FROM symbols parameter
+             JOIN type_facts fact ON fact.symbol_id = parameter.symbol_id
+             JOIN symbols owner ON owner.symbol_id = parameter.parent_symbol_id
+             WHERE parameter.path = 'G.java' AND parameter.name = 'h'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(owner_signature, "void Handle(T h)");
+
+    let report = report(&repo, "InvitationService.Send", "G.java");
+    let line = line_of(&repo, "G.java", "h.service.Send()");
+    let site = site_at(&report, "G.java", line);
+    assert!(
+        matches!(site.label, SiteLabel::Likely | SiteLabel::Unresolved),
+        "an enclosing generic type parameter must stay unproven: {site:?}"
+    );
+}
+
+#[test]
+fn concrete_java_and_csharp_parameter_types_are_not_generic_parameters() {
+    let repo = scanned_repo(&[
+        (
+            "java/Handler.java",
+            "public class InvitationService { public void Send() {} }\nclass InvitationHandler { InvitationService service; }\nclass Caller { java.util.List<InvitationHandler> Handle(int count, InvitationHandler h) { h.service.Send(); return null; } }\n",
+        ),
+        (
+            "csharp/Handler.cs",
+            "public class InvitationService { public void Send() {} }\npublic class InvitationHandler { public InvitationService service; }\npublic class Caller { public System.Collections.Generic.List<InvitationHandler> Handle(int count, InvitationHandler h) { h.service.Send(); return null; } }\n",
+        ),
+    ]);
+
+    for path in ["java/Handler.java", "csharp/Handler.cs"] {
+        let facts = type_facts(&open_read_only(&repo.db).unwrap(), path);
+        assert!(
+            facts.iter().any(|(owner, name, kind, resolved_type)| {
+                owner == "Handle"
+                    && name == "h"
+                    && kind == "variable"
+                    && resolved_type == "InvitationHandler"
+            }),
+            "{path}: {facts:?}"
+        );
+        let conn = open_read_only(&repo.db).unwrap();
+        let (owner_signature, owner_metadata, generic_params): (String, String, String) = conn
+            .query_row(
+                "SELECT owner.signature, COALESCE(owner.metadata_json, ''), COALESCE(fact.generic_params_json, '')
+                 FROM symbols parameter
+                 JOIN type_facts fact ON fact.symbol_id = parameter.symbol_id
+                 JOIN symbols owner ON owner.symbol_id = parameter.parent_symbol_id
+                 WHERE parameter.path = ?1 AND parameter.name = 'h' AND owner.name = 'Handle'",
+                params![path],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert!(owner_signature.contains("List<InvitationHandler>"));
+        assert!(owner_signature.contains(", InvitationHandler h"));
+        assert!(!owner_metadata.contains("typeParameters"));
+        assert!(generic_params.is_empty());
+
+        let report = report(&repo, "InvitationService.Send", path);
+        let line = line_of(&repo, path, "h.service.Send()");
+        let site = site_at(&report, path, line);
+        assert_eq!(site.label, SiteLabel::Proven, "{path}: {site:?}");
+    }
+}
+
+#[test]
+fn a_no_space_go_generic_parameter_does_not_bind_a_concrete_same_name() {
+    let repo = scanned_repo(&[
+        ("go.mod", "module fx\n\ngo 1.21\n"),
+        (
+            "service.go",
+            "package app\n\ntype T struct{}\nfunc (*T) Send() {}\ntype Wrapper[U any,T any] struct { service T }\ntype Handler struct { group Wrapper[string,*InvitationService] }\ntype InvitationService struct{}\nfunc (*InvitationService) Send() {}\nfunc (h *Handler) ServeHTTP() { h.group.service.Send() }\n",
+        ),
+    ]);
+    let facts = type_facts(&open_read_only(&repo.db).unwrap(), "service.go");
+    assert!(facts.iter().any(|(owner, name, kind, resolved_type)| {
+        owner == "Wrapper" && name == "service" && kind == "field" && resolved_type == "T"
+    }));
+    let conn = open_read_only(&repo.db).unwrap();
+    let (owner_signature, generic_params): (String, String) = conn
+        .query_row(
+            "SELECT owner.signature, COALESCE(fact.generic_params_json, '')
+             FROM symbols field
+             JOIN type_facts fact ON fact.symbol_id = field.symbol_id
+             JOIN symbols owner ON owner.symbol_id = field.parent_symbol_id
+             WHERE field.path = 'service.go' AND field.name = 'service'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert!(owner_signature.contains("Wrapper[U any,T any]"));
+    assert!(generic_params.is_empty());
+
+    let report = report(&repo, "T.Send", "service.go");
+    let line = line_of(&repo, "service.go", "h.group.service.Send()");
+    let site = site_at(&report, "service.go", line);
+    assert_eq!(site.label, SiteLabel::Unresolved, "{site:?}");
+}
+
+#[test]
+fn a_java_prefix_generic_parameter_does_not_bind_a_concrete_same_name() {
+    let repo = scanned_repo(&[(
+        "G.java",
+        "public class InvitationService { public void Send() {} }\nclass Handler { InvitationService service; }\nclass T { InvitationService service; }\nclass Caller { static public <T extends Handler> void Handle(T h) { h.service.Send(); } }\n",
+    )]);
+    let facts = type_facts(&open_read_only(&repo.db).unwrap(), "G.java");
+    assert!(facts.iter().any(|(owner, name, kind, resolved_type)| {
+        owner == "Handle" && name == "h" && kind == "variable" && resolved_type == "T"
+    }));
+    let conn = open_read_only(&repo.db).unwrap();
+    let owner_signature: String = conn
+        .query_row(
+            "SELECT owner.signature
+             FROM symbols parameter
+             JOIN type_facts fact ON fact.symbol_id = parameter.symbol_id
+             JOIN symbols owner ON owner.symbol_id = parameter.parent_symbol_id
+             WHERE parameter.path = 'G.java' AND parameter.name = 'h'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert!(owner_signature.contains("static public <T extends Handler>"));
+
+    let report = report(&repo, "InvitationService.Send", "G.java");
+    let line = line_of(&repo, "G.java", "h.service.Send()");
+    let site = site_at(&report, "G.java", line);
+    assert!(
+        matches!(site.label, SiteLabel::Likely | SiteLabel::Unresolved),
+        "generic prefix types must stay unproven: {site:?}"
+    );
+}
+
+#[test]
+fn a_csharp_prefix_generic_parameter_does_not_bind_a_concrete_same_name() {
+    let repo = scanned_repo(&[(
+        "G.cs",
+        "class InvitationService { public void Send() {} }\nclass MailService { public void Send() {} }\nclass Handler { public InvitationService service; }\nclass TValue { public MailService service; }\nclass T<TArg> {}\nclass Caller { static T<TValue> T<TValue>(TValue h) where TValue : Handler { h.service.Send(); return null; } }\n",
+    )]);
+    let conn = open_read_only(&repo.db).unwrap();
+    let facts = type_facts(&conn, "G.cs");
+    assert!(facts.iter().any(|(owner, name, kind, resolved_type)| {
+        owner == "T" && name == "h" && kind == "variable" && resolved_type == "TValue"
+    }));
+    let owner_signature: String = conn
+        .query_row(
+            "SELECT owner.signature
+             FROM symbols parameter
+             JOIN type_facts fact ON fact.symbol_id = parameter.symbol_id
+             JOIN symbols owner ON owner.symbol_id = parameter.parent_symbol_id
+             WHERE parameter.path = 'G.cs' AND parameter.name = 'h'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert!(owner_signature.starts_with("static <TValue> T<TValue> T("));
+
+    let report = report(&repo, "InvitationService.Send", "G.cs");
+    let line = line_of(&repo, "G.cs", "h.service.Send()");
+    let site = site_at(&report, "G.cs", line);
+    assert!(
+        matches!(site.label, SiteLabel::Likely | SiteLabel::Unresolved),
+        "C# prefix generic types must stay unproven: {site:?}"
+    );
+}
+
+#[test]
+fn a_scala_bracket_generic_parameter_does_not_bind_a_concrete_same_name() {
+    let repo = scanned_repo(&[(
+        "src/Generic.scala",
+        "class ConcreteT { def Send(): Unit = {} }\nclass Wrapper[ConcreteT] { var service: ConcreteT = _ }\nclass Caller { def Handle(h: Wrapper[ConcreteT]): Unit = { h.service.Send() } }\n",
+    )]);
+    let facts = type_facts(&open_read_only(&repo.db).unwrap(), "src/Generic.scala");
+    assert!(facts.iter().any(|(owner, name, kind, resolved_type)| {
+        owner == "Wrapper"
+            && name == "service"
+            && kind == "property"
+            && resolved_type == "ConcreteT"
+    }));
+
+    let report = report(&repo, "ConcreteT.Send", "src/Generic.scala");
+    let line = line_of(&repo, "src/Generic.scala", "h.service.Send()");
+    let site = site_at(&report, "src/Generic.scala", line);
+    assert!(
+        matches!(site.label, SiteLabel::Likely | SiteLabel::Unresolved),
+        "Scala generic parameters must stay unproven: {site:?}"
+    );
+}
+
+#[test]
+fn a_unicode_generic_parameter_does_not_bind_a_concrete_same_name() {
+    let repo = scanned_repo(&[(
+        "src/Unicode.scala",
+        "class Δ { def Send(): Unit = {} }\nclass UnicodeWrapper[Δ] { var service: Δ = _ }\nclass UnicodeCaller { def Handle(h: UnicodeWrapper[Δ]): Unit = { h.service.Send() } }\n",
+    )]);
+    let facts = type_facts(&open_read_only(&repo.db).unwrap(), "src/Unicode.scala");
+    assert!(facts.iter().any(|(owner, name, kind, resolved_type)| {
+        owner == "UnicodeWrapper" && name == "service" && kind == "property" && resolved_type == "Δ"
+    }));
+
+    let report = report(&repo, "Δ.Send", "src/Unicode.scala");
+    let line = line_of(&repo, "src/Unicode.scala", "h.service.Send()");
+    let site = site_at(&report, "src/Unicode.scala", line);
+    assert!(
+        matches!(site.label, SiteLabel::Likely | SiteLabel::Unresolved),
+        "Unicode generic parameters must stay unproven: {site:?}"
+    );
+}
+
+#[test]
+fn an_owner_name_in_a_return_type_does_not_create_generic_parameters() {
+    let repo = scanned_repo(&[(
+        "src/Handler.cs",
+        "public class Service { public void Send() {} }\npublic class TValue { public Service service; }\npublic class T<TArg> {}\npublic class Caller { public T<TValue> T(TValue h) { h.service.Send(); return null; } }\n",
+    )]);
+    let facts = type_facts(&open_read_only(&repo.db).unwrap(), "src/Handler.cs");
+    assert!(facts.iter().any(|(owner, name, kind, resolved_type)| {
+        owner == "T" && name == "h" && kind == "variable" && resolved_type == "TValue"
+    }));
+
+    let report = report(&repo, "Service.Send", "src/Handler.cs");
+    let line = line_of(&repo, "src/Handler.cs", "h.service.Send()");
+    let site = site_at(&report, "src/Handler.cs", line);
+    assert_eq!(site.label, SiteLabel::Proven, "{site:?}");
+}

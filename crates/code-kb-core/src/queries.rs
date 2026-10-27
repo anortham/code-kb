@@ -3916,7 +3916,12 @@ fn member_receiver_match(conn: &Connection) -> String {
                   WHEN {unproven_member} THEN -1 ELSE 1 END"
         );
     }
-    let matched = pending_target_predicate(conn, "candidate", "candidate_parent");
+    let matched = pending_target_predicate_with_receiver_chain_status(
+        conn,
+        "candidate",
+        "candidate_parent",
+        Some("0"),
+    );
     let builders = receiver_builder_calls(conn);
     let builder_return_type = builder_return_type_sql("builder");
     let class_scope = receiver_definition_scope("receiver_class", "builder_call.path");
@@ -4237,6 +4242,15 @@ pub(crate) fn owner_binding_in_scope_sql(owner: &str) -> String {
 /// SQL predicate that decides whether a pending call edge `p` (with caller `s_from`) points at
 /// the candidate definition `target` (whose parent symbol is joined as `parent`).
 pub(crate) fn pending_target_predicate(conn: &Connection, target: &str, parent: &str) -> String {
+    pending_target_predicate_with_receiver_chain_status(conn, target, parent, None)
+}
+
+pub(crate) fn pending_target_predicate_with_receiver_chain_status(
+    conn: &Connection,
+    target: &str,
+    parent: &str,
+    receiver_chain_status: Option<&str>,
+) -> String {
     let ns = "json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END)";
     let target_path = format!("('/' || replace({target}.path, '\\', '/'))");
     let like_value = "replace(replace(replace(value, '\\', '\\\\'), '%', '\\%'), '_', '\\_')";
@@ -4279,7 +4293,47 @@ pub(crate) fn pending_target_predicate(conn: &Connection, target: &str, parent: 
     } else {
         String::new()
     };
-    let receiver_type = receiver_type_sql(conn, parent);
+    let receiver_chain_json = "json_insert(
+        CASE WHEN json_valid(p.target_namespace_json)
+                   AND json_type(p.target_namespace_json) = 'array'
+             THEN p.target_namespace_json ELSE '[]' END,
+        '$[#]', p.target_receiver
+    )";
+    let typed_receiver_chain_supported = has_typed_receiver_chain_support(conn);
+    let typed_receiver_chain = if typed_receiver_chain_supported {
+        let matches_target = match receiver_chain_status {
+            Some(status) => format!("({status}) = 1"),
+            None => {
+                let receiver_chain_owner = typed_receiver_chain_owner_id_sql(
+                    "p.from_symbol_id",
+                    "p.path",
+                    "p.start_line",
+                    "COALESCE(s_from.language, '')",
+                    receiver_chain_json,
+                );
+                typed_receiver_chain_matches_target_sql(&receiver_chain_owner, target)
+            }
+        };
+        format!(
+            "(json_array_length({receiver_chain_json}) > 1
+              AND p.target_receiver IS NOT NULL AND p.target_receiver != ''
+              AND {matches_target})"
+        )
+    } else {
+        "0".to_string()
+    };
+    let receiver_type = if has_type_fact_support(conn) {
+        receiver_type_sql(conn, parent)
+    } else {
+        "0".to_string()
+    };
+    let receiver_type = if typed_receiver_chain_supported {
+        format!(
+            "CASE WHEN json_array_length({receiver_chain_json}) > 1 THEN 0 ELSE {receiver_type} END"
+        )
+    } else {
+        receiver_type
+    };
     let fixture_receiver = match built_receiver_sql(conn, target) {
         Some(built) => format!("OR {built}"),
         None => String::new(),
@@ -4290,7 +4344,7 @@ pub(crate) fn pending_target_predicate(conn: &Connection, target: &str, parent: 
     let enclosing = enclosing_scope_sql(target);
     let rust_path = rust_path_rule(target, ns);
     let owner_in_scope = owner_binding_in_scope_sql(parent);
-    format!(
+    let predicate = format!(
         "(
             NOT (p.kind IS 'extends' AND p.from_symbol_id = {target}.symbol_id)
             AND (
@@ -4298,34 +4352,39 @@ pub(crate) fn pending_target_predicate(conn: &Connection, target: &str, parent: 
                 {target}.parent_symbol_id IS NOT NULL
                 AND {parent}.name IS NOT NULL
                 AND (
-                    EXISTS (SELECT 1 FROM {ns} WHERE value = {parent}.name) AND {owner_in_scope}
-                    OR (EXISTS (SELECT 1 FROM {ns} WHERE value = 'Self')
-                        AND s_from.parent_symbol_id = {target}.parent_symbol_id)
-                    OR (p.target_receiver IS NOT NULL AND p.target_receiver != '' AND {parent}.name = p.target_receiver
-                        AND {owner_in_scope}
-                        {receiver_import_elsewhere})
-                    OR ((p.target_receiver IN ('self', 'this', 'cls', 'Self', 'super')
-                         OR EXISTS (SELECT 1 FROM {ns} WHERE value = 'Self'))
-                        AND {receiver_chain})
-                    OR {receiver_type}
-                    {fixture_receiver}
-                )
-                AND NOT EXISTS (
-                    SELECT 1 FROM {ns}
-                    WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super', 'self', 'Self', {parent}.name)
-                      AND NOT EXISTS (
-                          WITH RECURSIVE ancestor(symbol_id, depth) AS (
-                              SELECT {target}.parent_symbol_id, 0
-                              UNION ALL
-                              SELECT s.parent_symbol_id, ancestor.depth + 1
-                              FROM symbols s JOIN ancestor ON s.symbol_id = ancestor.symbol_id
-                              WHERE s.parent_symbol_id IS NOT NULL AND ancestor.depth < 32
-                          )
-                          SELECT 1 FROM ancestor JOIN symbols a ON a.symbol_id = ancestor.symbol_id
-                          WHERE a.name = value
-                      )
-                      AND {target_path} NOT LIKE '%/' || {like_value} || '.%' ESCAPE '\\'
-                      AND {target_path} NOT LIKE '%/' || {like_value} || '/%' ESCAPE '\\'
+                    (
+                        (
+                            EXISTS (SELECT 1 FROM {ns} WHERE value = {parent}.name) AND {owner_in_scope}
+                            OR (EXISTS (SELECT 1 FROM {ns} WHERE value = 'Self')
+                                AND s_from.parent_symbol_id = {target}.parent_symbol_id)
+                            OR (p.target_receiver IS NOT NULL AND p.target_receiver != '' AND {parent}.name = p.target_receiver
+                                AND {owner_in_scope}
+                                {receiver_import_elsewhere})
+                            OR ((p.target_receiver IN ('self', 'this', 'cls', 'Self', 'super')
+                                 OR EXISTS (SELECT 1 FROM {ns} WHERE value = 'Self'))
+                                AND {receiver_chain})
+                            OR {receiver_type}
+                            {fixture_receiver}
+                        )
+                        AND NOT EXISTS (
+                            SELECT 1 FROM {ns}
+                            WHERE value NOT IN ('std', 'core', 'alloc', 'crate', 'super', 'self', 'Self', {parent}.name)
+                              AND NOT EXISTS (
+                                  WITH RECURSIVE ancestor(symbol_id, depth) AS (
+                                      SELECT {target}.parent_symbol_id, 0
+                                      UNION ALL
+                                      SELECT s.parent_symbol_id, ancestor.depth + 1
+                                      FROM symbols s JOIN ancestor ON s.symbol_id = ancestor.symbol_id
+                                      WHERE s.parent_symbol_id IS NOT NULL AND ancestor.depth < 32
+                                  )
+                                  SELECT 1 FROM ancestor JOIN symbols a ON a.symbol_id = ancestor.symbol_id
+                                  WHERE a.name = value
+                              )
+                              AND {target_path} NOT LIKE '%/' || {like_value} || '.%' ESCAPE '\\'
+                              AND {target_path} NOT LIKE '%/' || {like_value} || '/%' ESCAPE '\\'
+                        )
+                    )
+                    OR {typed_receiver_chain}
                 )
             )
             OR (
@@ -4382,7 +4441,17 @@ pub(crate) fn pending_target_predicate(conn: &Connection, target: &str, parent: 
             )
             )
         )"
-    )
+    );
+    if typed_receiver_chain_supported && let Some(status) = receiver_chain_status {
+        format!(
+            "CASE WHEN json_array_length({receiver_chain_json}) > 1
+                       AND p.target_receiver IS NOT NULL AND p.target_receiver != ''
+                  THEN COALESCE(({status}) = 1, 0)
+                  ELSE {predicate} END"
+        )
+    } else {
+        predicate
+    }
 }
 
 /// SQL predicate for a Rust call written with a path (`crate::f()`, `super::f()`, `my_crate::f()`,
@@ -4680,7 +4749,7 @@ pub(crate) fn direct_identifier_rows(
     );
     let receiver_match = receiver_match.replace("?3", "?1");
     let language_match = identifier_language_matches("i", "selected_target");
-    let mut receiver_stmt = conn.prepare(&format!(
+    let receiver_sql = format!(
                 "SELECT {receiver_match}
                  FROM (SELECT name, kind, path, start_line, start_column,
                               containing_symbol_id AS from_symbol_id,
@@ -4691,8 +4760,9 @@ pub(crate) fn direct_identifier_rows(
                               '[]' AS target_namespace_json
                        FROM identifiers WHERE identifier_id = ?2) p
                  LEFT JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id"
-            ))?;
-    let mut ident_stmt = conn.prepare(&format!(
+            );
+    let mut receiver_stmt = conn.prepare(&receiver_sql)?;
+    let ident_sql = format!(
                 "WITH raw AS MATERIALIZED (
                      SELECT identifier_id, name, kind, path, start_line, start_column,
                             containing_symbol_id, language,
@@ -4764,7 +4834,8 @@ pub(crate) fn direct_identifier_rows(
                                         WHERE known.name = json_extract(i.metadata_json, '$.receiver')
                                           AND known.kind NOT IN ('variable', 'parameter', 'method'))), 0)
                  ORDER BY i.path, i.start_line, i.start_column, i.identifier_id"
-            ))?;
+            );
+    let mut ident_stmt = conn.prepare(&ident_sql)?;
     let mut supported = Vec::new();
     let mut candidates = Vec::new();
     let mut supported_keys = HashSet::new();
@@ -6478,6 +6549,27 @@ fn type_fact_import_owner_sql(
     )
 }
 
+fn type_fact_import_binding_sql(source_path: &str, resolved_type: &str, language: &str) -> String {
+    let import_path = java_import_path_sql("type_import");
+    format!(
+        "EXISTS (
+            SELECT 1 FROM symbols type_import
+            WHERE type_import.path = {source_path}
+              AND type_import.kind = 'import'
+              AND (type_import.name = {resolved_type}
+                   OR CASE WHEN json_valid(type_import.metadata_json)
+                           THEN NULLIF(json_extract(type_import.metadata_json, '$.importedName'), '')
+                      END = {resolved_type}
+                   OR ({language} = 'go'
+                       AND instr({resolved_type}, '.') > 1
+                       AND type_import.name = substr({resolved_type}, 1, instr({resolved_type}, '.') - 1))
+                   OR ({language} = 'java'
+                       AND substr({import_path}, -length({resolved_type}) - 1)
+                           = '.' || {resolved_type}))
+        )"
+    )
+}
+
 /// A scalar owner id for a type fact, or SQL NULL when the index cannot bind it uniquely.
 pub(crate) fn type_fact_owner_id_sql(
     source_symbol_id: &str,
@@ -6487,14 +6579,16 @@ pub(crate) fn type_fact_owner_id_sql(
     let import_owner = type_fact_import_owner_sql("d", resolved_type, "p.path", "p.language");
     let go_import_owner = go_import_owner_sql("d", resolved_type, "p.path", "p.language");
     let java_import_owner = java_import_owner_sql("d", resolved_type, "p.path", "p.language");
-    let java_import_path = java_import_path_sql("i");
+    let import_bindings = type_fact_import_binding_sql("p.path", resolved_type, "p.language");
     let language_match = identifier_language_matches("p", "d");
     let same_directory = path_proximity("p.path", "d.path");
+    let generic_scope_ctes = type_fact_generic_scope_ctes();
+    let generic_parameter = type_fact_is_generic_parameter_sql("generic_scopes", resolved_type);
     let lexical_owner_depth =
         "(SELECT MIN(lexical.depth) FROM lexical WHERE lexical.symbol_id = d.symbol_id)";
     let lexical_parent_depth =
         "(SELECT MIN(lexical.depth) FROM lexical WHERE lexical.symbol_id = d.parent_symbol_id)";
-    format!(
+    let query = format!(
         "(WITH RECURSIVE fact_source(symbol_id, path, language) AS (
              SELECT s.symbol_id, s.path, s.language FROM symbols s
              WHERE s.symbol_id = {source_symbol_id} AND s.language = {language}
@@ -6504,7 +6598,7 @@ pub(crate) fn type_fact_owner_id_sql(
              SELECT parent.parent_symbol_id, lexical.depth + 1
              FROM symbols parent JOIN lexical ON parent.symbol_id = lexical.symbol_id
              WHERE parent.parent_symbol_id IS NOT NULL AND lexical.depth < 32
-         ), local_candidates(symbol_id, depth) AS (
+         ), {generic_scope_ctes}, local_candidates(symbol_id, depth) AS (
              SELECT DISTINCT d.symbol_id,
                     CASE WHEN EXISTS (SELECT 1 FROM lexical WHERE lexical.symbol_id = d.symbol_id)
                          THEN {lexical_owner_depth}
@@ -6574,35 +6668,26 @@ pub(crate) fn type_fact_owner_id_sql(
                    END
                    AND (p.language != 'go' OR {same_directory} = 1)
              )
-         ), import_bindings(symbol_id) AS (
-             SELECT DISTINCT i.symbol_id
-             FROM fact_source p JOIN symbols i ON i.path = p.path
-             WHERE i.kind = 'import'
-               AND (i.name = {resolved_type}
-                    OR CASE WHEN json_valid(i.metadata_json)
-                            THEN NULLIF(json_extract(i.metadata_json, '$.importedName'), '')
-                       END = {resolved_type}
-                    OR (p.language = 'go'
-                        AND instr({resolved_type}, '.') > 1
-                        AND i.name = substr({resolved_type}, 1, instr({resolved_type}, '.') - 1))
-                    OR (p.language = 'java'
-                        AND substr({java_import_path}, -length({resolved_type}) - 1)
-                            = '.' || {resolved_type}))
+         )
+         , import_bindings(bound) AS (
+             SELECT {import_bindings} FROM fact_source p
          )
          SELECT CASE
+             WHEN {generic_parameter} THEN NULL
              WHEN EXISTS (SELECT 1 FROM local_candidates) THEN
                  CASE WHEN (SELECT COUNT(*) FROM local_best) = 1
                       THEN (SELECT symbol_id FROM local_best LIMIT 1) END
              WHEN EXISTS (SELECT 1 FROM imported_candidates) THEN
                  CASE WHEN (SELECT COUNT(*) FROM imported_candidates) = 1
                       THEN (SELECT symbol_id FROM imported_candidates LIMIT 1) END
-             WHEN EXISTS (SELECT 1 FROM import_bindings) THEN NULL
+             WHEN (SELECT bound FROM import_bindings) THEN NULL
              WHEN EXISTS (SELECT 1 FROM scoped_candidates) THEN
                  CASE WHEN (SELECT COUNT(*) FROM scoped_candidates) = 1
                       THEN (SELECT symbol_id FROM scoped_candidates LIMIT 1) END
              ELSE NULL
          END)"
-    )
+    );
+    query
 }
 
 /// Resolve one type fact using the same SQL owner proof used by reference queries.
@@ -6620,6 +6705,600 @@ pub(crate) fn resolve_type_fact_owner(
         .map(|symbol_id| get_symbol_by_id(conn, &symbol_id))
         .transpose()
         .map(Option::flatten)
+}
+
+const TYPE_RECEIVER_CHAIN_MAX_DEPTH: usize = 16;
+const TYPE_RECEIVER_ANCESTRY_MAX_DEPTH: usize = 8;
+
+pub(crate) fn has_type_fact_support(conn: &Connection) -> bool {
+    has_table(conn, "type_facts")
+        && has_column(conn, "type_facts", "symbol_id")
+        && has_column(conn, "type_facts", "resolved_type")
+        && has_column(conn, "type_facts", "language")
+        && has_column(conn, "symbols", "symbol_id")
+        && has_column(conn, "symbols", "name")
+        && has_column(conn, "symbols", "kind")
+        && has_column(conn, "symbols", "path")
+        && has_column(conn, "symbols", "language")
+        && has_column(conn, "symbols", "parent_symbol_id")
+}
+
+pub(crate) fn has_typed_receiver_chain_support(conn: &Connection) -> bool {
+    has_type_fact_support(conn)
+        && has_column(conn, "symbols", "start_line")
+        && has_column(conn, "symbols", "metadata_json")
+        && has_column(conn, "symbols", "signature")
+        && has_table(conn, "relationships")
+        && has_column(conn, "relationships", "from_symbol_id")
+        && has_column(conn, "relationships", "to_symbol_id")
+        && has_column(conn, "relationships", "kind")
+        && has_table(conn, "pending_relationships")
+        && has_column(conn, "pending_relationships", "from_symbol_id")
+        && has_column(conn, "pending_relationships", "target_terminal_name")
+        && has_column(conn, "pending_relationships", "kind")
+        && has_column(conn, "pending_relationships", "path")
+        && has_column(conn, "pending_relationships", "start_line")
+        && has_column(conn, "pending_relationships", "file_id")
+        && has_column(conn, "pending_relationships", "target_receiver")
+        && has_column(conn, "pending_relationships", "target_namespace_json")
+        && has_table(conn, "files")
+        && has_column(conn, "files", "file_id")
+        && has_column(conn, "files", "language")
+}
+
+fn typed_receiver_chain_scope_ctes(
+    source_symbol_id: &str,
+    source_path: &str,
+    source_line: &str,
+    source_language: &str,
+    chain_json: &str,
+) -> String {
+    let safe_chain = format!("CASE WHEN json_valid({chain_json}) THEN {chain_json} ELSE '[]' END");
+    format!(
+        "segments(position, name) AS (
+             SELECT CAST(key AS INTEGER), value
+             FROM json_each({safe_chain})
+             WHERE type = 'text' AND CAST(key AS INTEGER) < {TYPE_RECEIVER_CHAIN_MAX_DEPTH}
+         ), lexical(symbol_id, depth) AS (
+             SELECT s.symbol_id, 0 FROM symbols s WHERE s.symbol_id = {source_symbol_id}
+             UNION ALL
+             SELECT parent.parent_symbol_id, lexical.depth + 1
+             FROM symbols parent JOIN lexical ON parent.symbol_id = lexical.symbol_id
+             WHERE parent.parent_symbol_id IS NOT NULL AND lexical.depth < 32
+        ), root_candidates(symbol_id, scope_depth) AS (
+             SELECT binding.symbol_id, lexical.depth
+             FROM segments root
+             CROSS JOIN lexical
+             JOIN symbols binding ON binding.parent_symbol_id = lexical.symbol_id
+             WHERE root.position = 0
+               AND binding.name = root.name
+               AND binding.path = {source_path}
+               AND binding.language = {source_language}
+               AND binding.kind IN ('variable', 'parameter', 'field', 'property', 'attribute')
+               AND COALESCE(binding.start_line, 0) <= {source_line}
+         ), root_bindings(symbol_id) AS (
+             SELECT candidate.symbol_id
+             FROM root_candidates candidate
+             WHERE candidate.scope_depth = (SELECT MIN(scope_depth) FROM root_candidates)
+         )"
+    )
+}
+
+fn generic_parameter_list_matches_sql(parameters: &str, resolved_type: &str) -> String {
+    format!(
+        "(instr(',' || replace(trim({parameters}), ', ', ',') || ',',
+                ',' || {resolved_type} || ',') > 0
+         OR instr(',' || replace(trim({parameters}), ', ', ',') || ',',
+                  ',' || {resolved_type} || ' ') > 0
+         OR instr(',' || replace(trim({parameters}), ', ', ',') || ',',
+                  ',' || {resolved_type} || ':') > 0
+         OR instr(',' || replace(trim({parameters}), ', ', ',') || ',',
+                  ',' || {resolved_type} || '=') > 0)"
+    )
+}
+
+fn generic_prefix_modifier_guard(
+    open: &str,
+    token_cte: &str,
+    allowed_modifiers: &[&str],
+) -> String {
+    let allowed = allowed_modifiers
+        .iter()
+        .map(|modifier| format!("'{modifier}'"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!(
+        "NOT EXISTS (
+             WITH RECURSIVE {token_cte}(rest, token) AS (
+                 SELECT trim(lower(replace(replace(replace(
+                     substr(generic_owner.signature, 1, {open} - 1),
+                     char(9), ' '), char(10), ' '), char(13), ' '))), NULL
+                 UNION ALL
+                 SELECT CASE WHEN instr(rest, ' ') = 0 THEN ''
+                             ELSE ltrim(substr(rest, instr(rest, ' ') + 1)) END,
+                        CASE WHEN instr(rest, ' ') = 0 THEN rest
+                             ELSE substr(rest, 1, instr(rest, ' ') - 1) END
+                 FROM {token_cte}
+                 WHERE rest != ''
+             )
+             SELECT 1 FROM {token_cte}
+             WHERE token IS NOT NULL AND token NOT IN ({allowed})
+         )"
+    )
+}
+
+fn type_fact_generic_scope_ctes() -> String {
+    let java_open = "instr(generic_owner.signature, '<')";
+    let java_close =
+        format!("({java_open} + instr(substr(generic_owner.signature, {java_open}), '>') - 1)");
+    let java_prefix_modifiers = generic_prefix_modifier_guard(
+        java_open,
+        "java_prefix_tokens",
+        &[
+            "public",
+            "protected",
+            "private",
+            "static",
+            "final",
+            "abstract",
+            "synchronized",
+            "native",
+            "strictfp",
+            "default",
+        ],
+    );
+    let csharp_open = "instr(generic_owner.signature, '<')";
+    let csharp_close =
+        format!("({csharp_open} + instr(substr(generic_owner.signature, {csharp_open}), '>') - 1)");
+    let csharp_prefix_modifiers = generic_prefix_modifier_guard(
+        csharp_open,
+        "csharp_prefix_tokens",
+        &[
+            "public",
+            "protected",
+            "internal",
+            "private",
+            "new",
+            "static",
+            "virtual",
+            "abstract",
+            "override",
+            "sealed",
+            "extern",
+            "async",
+            "unsafe",
+            "partial",
+            "readonly",
+        ],
+    );
+    let kotlin_open = "instr(lower(generic_owner.signature), 'fun <') + 4";
+    let cpp_tail = "ltrim(substr(generic_owner.signature, instr(lower(generic_owner.signature), 'template') + 8))";
+    format!(
+        "generic_scope_headers(owner_id, name, kind, language, signature, metadata_json, after_name) AS (
+             SELECT generic_owner.symbol_id, generic_owner.name, generic_owner.kind,
+                    generic_owner.language,
+                    COALESCE(generic_owner.signature, ''), COALESCE(generic_owner.metadata_json, ''),
+                    ltrim(substr(COALESCE(generic_owner.signature, ''),
+                                 instr(COALESCE(generic_owner.signature, ''), generic_owner.name)
+                                 + length(generic_owner.name)))
+             FROM lexical
+             JOIN symbols generic_owner ON generic_owner.symbol_id = lexical.symbol_id
+             WHERE lexical.depth > 0
+               AND instr(COALESCE(generic_owner.signature, ''), generic_owner.name) > 0
+         ), generic_scopes(owner_id, language, metadata_json, parameters) AS (
+             SELECT generic_owner.owner_id, generic_owner.language, generic_owner.metadata_json,
+                    CASE
+                        WHEN generic_owner.language = 'go'
+                             AND substr(generic_owner.after_name, 1, 1) = '['
+                             AND instr(generic_owner.after_name, ']') > 1
+                             AND (generic_owner.kind NOT IN ('method', 'function', 'constructor')
+                                  OR substr(ltrim(substr(generic_owner.after_name,
+                                      instr(generic_owner.after_name, ']') + 1)), 1, 1) = '(')
+                            THEN substr(generic_owner.after_name, 2,
+                                        instr(generic_owner.after_name, ']') - 2)
+                        WHEN generic_owner.language = 'scala'
+                             AND substr(generic_owner.after_name, 1, 1) = '['
+                             AND instr(generic_owner.after_name, ']') > 1
+                             AND (generic_owner.kind NOT IN ('method', 'function', 'constructor')
+                                  OR substr(ltrim(substr(generic_owner.after_name,
+                                      instr(generic_owner.after_name, ']') + 1)), 1, 1) = '(')
+                            THEN substr(generic_owner.after_name, 2,
+                                        instr(generic_owner.after_name, ']') - 2)
+                        WHEN generic_owner.language IN ('csharp', 'dart', 'java', 'kotlin',
+                                                       'rust', 'swift', 'typescript', 'tsx',
+                                                       'cpp')
+                             AND substr(generic_owner.after_name, 1, 1) = '<'
+                             AND instr(generic_owner.after_name, '>') > 1
+                             AND (generic_owner.kind NOT IN ('method', 'function', 'constructor')
+                                  OR substr(ltrim(substr(generic_owner.after_name,
+                                      instr(generic_owner.after_name, '>') + 1)), 1, 1) = '(')
+                            THEN substr(generic_owner.after_name, 2,
+                                        instr(generic_owner.after_name, '>') - 2)
+                        WHEN generic_owner.language = 'vbnet'
+                             AND lower(substr(generic_owner.after_name, 1, 4)) = '(of '
+                             AND instr(generic_owner.after_name, ')') > 4
+                            THEN substr(generic_owner.after_name, 5,
+                                        instr(generic_owner.after_name, ')') - 5)
+                        WHEN generic_owner.language = 'java'
+                             AND generic_owner.kind IN ('method', 'constructor')
+                             AND {java_open} > 0
+                             AND instr(substr(generic_owner.signature, {java_close} + 1),
+                                       generic_owner.name) > 0
+                             AND instr(substr(generic_owner.signature, {java_close} + 1), '(') > 0
+                             AND {java_prefix_modifiers}
+                            THEN substr(generic_owner.signature, {java_open} + 1,
+                                        instr(substr(generic_owner.signature, {java_open}), '>') - 2)
+                        WHEN generic_owner.language = 'csharp'
+                             AND generic_owner.kind IN ('method', 'constructor')
+                             AND {csharp_open} > 0
+                             AND instr(substr(generic_owner.signature, {csharp_close} + 1),
+                                       generic_owner.name) > 0
+                             AND instr(substr(generic_owner.signature, {csharp_close} + 1), '(') > 0
+                             AND {csharp_prefix_modifiers}
+                            THEN substr(generic_owner.signature, {csharp_open} + 1,
+                                        instr(substr(generic_owner.signature, {csharp_open}), '>') - 2)
+                        WHEN generic_owner.language = 'kotlin'
+                             AND instr(lower(generic_owner.signature), 'fun <') > 0
+                             AND instr(generic_owner.signature, generic_owner.name)
+                                 > {kotlin_open}
+                                   + instr(substr(generic_owner.signature, {kotlin_open}), '>') - 1
+                            THEN substr(generic_owner.signature, {kotlin_open} + 1,
+                                        instr(substr(generic_owner.signature, {kotlin_open}), '>') - 2)
+                        WHEN generic_owner.language = 'cpp'
+                             AND instr(lower(generic_owner.signature), 'template') > 0
+                             AND substr({cpp_tail}, 1, 1) = '<'
+                             AND instr({cpp_tail}, '>') > 1
+                             AND instr(generic_owner.signature, generic_owner.name)
+                                 > instr(generic_owner.signature, 'template') + 7
+                                   + instr({cpp_tail}, '>')
+                            THEN replace(replace(replace(
+                                     substr({cpp_tail}, 2, instr({cpp_tail}, '>') - 2),
+                                     'typename... ', ''), 'typename ', ''), 'class ', '')
+                    END
+             FROM generic_scope_headers generic_owner
+         )"
+    )
+}
+
+fn type_fact_is_generic_parameter_sql(generic_scopes: &str, resolved_type: &str) -> String {
+    let parameters_match =
+        generic_parameter_list_matches_sql("generic_scope.parameters", resolved_type);
+    format!(
+        "EXISTS (
+             SELECT 1 FROM {generic_scopes} generic_scope
+             WHERE EXISTS (
+                 SELECT 1
+                 FROM json_each(
+                     CASE WHEN json_valid(generic_scope.metadata_json)
+                               AND json_type(generic_scope.metadata_json, '$.typeParameters') = 'array'
+                          THEN json_extract(generic_scope.metadata_json, '$.typeParameters')
+                          ELSE '[]'
+                     END
+                 ) declared_parameter
+                 WHERE CASE
+                     WHEN instr(declared_parameter.value, ' ') > 0
+                         THEN substr(declared_parameter.value, 1, instr(declared_parameter.value, ' ') - 1)
+                     WHEN instr(declared_parameter.value, ':') > 0
+                         THEN substr(declared_parameter.value, 1, instr(declared_parameter.value, ':') - 1)
+                     WHEN instr(declared_parameter.value, '=') > 0
+                         THEN substr(declared_parameter.value, 1, instr(declared_parameter.value, '=') - 1)
+                     ELSE trim(declared_parameter.value)
+                 END = {resolved_type}
+             )
+             OR (generic_scope.parameters IS NOT NULL AND {parameters_match})
+         )"
+    )
+}
+
+pub(crate) fn typed_receiver_chain_owner_id_sql(
+    source_symbol_id: &str,
+    source_path: &str,
+    source_line: &str,
+    source_language: &str,
+    chain_json: &str,
+) -> String {
+    let safe_chain = format!("CASE WHEN json_valid({chain_json}) THEN {chain_json} ELSE '[]' END");
+    let scope_ctes = typed_receiver_chain_scope_ctes(
+        source_symbol_id,
+        source_path,
+        source_line,
+        source_language,
+        chain_json,
+    );
+    let root_owner = type_fact_owner_id_sql(
+        "root_fact.symbol_id",
+        "root_fact.resolved_type",
+        "root_fact.language",
+    );
+    let member_owner = type_fact_owner_id_sql(
+        "member.symbol_id",
+        "member_fact.resolved_type",
+        "member_fact.language",
+    );
+    let member_kinds = "'field', 'property', 'variable', 'attribute'";
+    let query = format!(
+        "(WITH RECURSIVE {scope_ctes}, root_facts(symbol_id, resolved_type, language) AS (
+             SELECT binding.symbol_id, fact.resolved_type, fact.language
+             FROM root_bindings binding
+             JOIN type_facts fact ON fact.symbol_id = binding.symbol_id
+             WHERE (SELECT COUNT(*) FROM root_bindings) = 1
+               AND (SELECT COUNT(*) FROM type_facts duplicate
+                    WHERE duplicate.symbol_id = binding.symbol_id) = 1
+         ), receiver_chain(position, owner_id) AS (
+             SELECT 0, {root_owner} FROM root_facts root_fact
+             UNION ALL
+             SELECT segment.position,
+                    CASE
+                        WHEN (SELECT COUNT(*) FROM symbols candidate
+                              WHERE candidate.parent_symbol_id = receiver_chain.owner_id
+                                AND candidate.name = segment.name
+                                AND candidate.kind IN ({member_kinds})) = 1
+                         AND (SELECT COUNT(*) FROM type_facts fact
+                              JOIN symbols candidate ON candidate.symbol_id = fact.symbol_id
+                              WHERE candidate.parent_symbol_id = receiver_chain.owner_id
+                                AND candidate.name = segment.name
+                                AND candidate.kind IN ({member_kinds})) = 1
+                        THEN (SELECT {member_owner}
+                              FROM symbols member
+                              JOIN type_facts member_fact ON member_fact.symbol_id = member.symbol_id
+                              WHERE member.parent_symbol_id = receiver_chain.owner_id
+                                AND member.name = segment.name
+                                AND member.kind IN ({member_kinds})
+                              LIMIT 1)
+                        ELSE NULL
+                    END
+             FROM receiver_chain
+             JOIN segments segment ON segment.position = receiver_chain.position + 1
+             WHERE receiver_chain.owner_id IS NOT NULL
+               AND receiver_chain.position < {depth_limit}
+         )
+         SELECT receiver_chain.owner_id
+         FROM receiver_chain
+         WHERE receiver_chain.position = (SELECT MAX(position) FROM segments)
+           AND receiver_chain.owner_id IS NOT NULL
+           AND (SELECT COUNT(*) FROM segments) = json_array_length({safe_chain})
+           AND json_array_length({safe_chain}) BETWEEN 1 AND {depth_limit_plus_one}
+         LIMIT 1)",
+        depth_limit = TYPE_RECEIVER_CHAIN_MAX_DEPTH - 1,
+        depth_limit_plus_one = TYPE_RECEIVER_CHAIN_MAX_DEPTH,
+    );
+    query
+}
+
+pub(crate) fn typed_receiver_chain_owner_rows_sql() -> String {
+    let receiver_chain_json = "json_insert(
+        CASE WHEN json_valid(pending.target_namespace_json)
+                   AND json_type(pending.target_namespace_json) = 'array'
+             THEN pending.target_namespace_json ELSE '[]' END,
+        '$[#]', pending.target_receiver
+    )";
+    let owner_id = typed_receiver_chain_owner_id_sql(
+        "pending.from_symbol_id",
+        "pending.path",
+        "pending.start_line",
+        "COALESCE(source.language, source_file.language, '')",
+        receiver_chain_json,
+    );
+    format!(
+        "SELECT 'P:' || CAST(pending.rowid AS TEXT), {owner_id}
+         FROM pending_relationships pending
+         LEFT JOIN symbols source ON source.symbol_id = pending.from_symbol_id
+         LEFT JOIN files source_file ON source_file.file_id = pending.file_id
+         WHERE CAST(pending.rowid AS TEXT) IN (SELECT value FROM json_each(?1))
+           AND pending.kind != 'imports'
+           AND json_array_length({receiver_chain_json}) > 1
+           AND pending.target_receiver IS NOT NULL AND pending.target_receiver != ''"
+    )
+}
+
+pub(crate) fn typed_receiver_chain_pending_base_owner_rows_sql() -> String {
+    let pending_namespace = "CASE WHEN json_valid(pending.target_namespace_json)
+                                   AND json_type(pending.target_namespace_json) = 'array'
+                              THEN pending.target_namespace_json ELSE '[]' END";
+    let pending_import = type_fact_import_binding_sql(
+        "pending.path",
+        "pending.target_terminal_name",
+        "current_owner.language",
+    );
+    let pending_owner = type_fact_owner_id_sql(
+        "pending.from_symbol_id",
+        "pending.target_terminal_name",
+        "current_owner.language",
+    );
+    let bound_owner = format!(
+        "CASE WHEN json_array_length({pending_namespace}) > 0 AND NOT ({pending_import})
+              THEN NULL ELSE {pending_owner} END"
+    );
+    format!(
+        "SELECT CAST(pending.rowid AS TEXT), {bound_owner}
+         FROM pending_relationships pending
+         JOIN symbols current_owner ON current_owner.symbol_id = pending.from_symbol_id
+         WHERE pending.kind IN ('extends', 'implements')
+           AND pending.from_symbol_id IN (SELECT value FROM json_each(?1))
+         LIMIT ?2"
+    )
+}
+
+pub(crate) fn typed_receiver_chain_resolved_base_rows_sql() -> &'static str {
+    "SELECT to_symbol_id FROM relationships
+     WHERE kind IN ('extends', 'implements')
+       AND from_symbol_id IN (SELECT value FROM json_each(?1))
+     LIMIT ?2"
+}
+
+pub(crate) fn typed_receiver_chain_has_more_ancestors_sql() -> &'static str {
+    "SELECT EXISTS (
+        SELECT 1 FROM (
+            SELECT 1 FROM relationships
+            WHERE kind IN ('extends', 'implements')
+              AND from_symbol_id IN (SELECT value FROM json_each(?1))
+            UNION ALL
+            SELECT 1 FROM pending_relationships
+            WHERE kind IN ('extends', 'implements')
+              AND from_symbol_id IN (SELECT value FROM json_each(?1))
+        ) ancestry_edge
+        LIMIT 1
+    )"
+}
+
+pub(crate) fn typed_receiver_chain_target_status_sql(
+    receiver_owner_id: &str,
+    target: &str,
+) -> String {
+    typed_receiver_chain_target_status_sql_with_base_owner_map(receiver_owner_id, target, None)
+}
+
+pub(crate) fn typed_receiver_chain_target_status_with_base_owner_map_sql(
+    receiver_owner_id: &str,
+    target: &str,
+    pending_base_owner_map: &str,
+) -> String {
+    typed_receiver_chain_target_status_sql_with_base_owner_map(
+        receiver_owner_id,
+        target,
+        Some(pending_base_owner_map),
+    )
+}
+
+fn typed_receiver_chain_target_status_sql_with_base_owner_map(
+    receiver_owner_id: &str,
+    target: &str,
+    pending_base_owner_map: Option<&str>,
+) -> String {
+    let owner_kinds = "'class', 'interface', 'struct', 'trait', 'protocol', 'record', 'object'";
+    let candidate_language = identifier_language_matches("current_owner", "candidate");
+    let unresolved_base_language = identifier_language_matches("unresolved_base", "possible_base");
+    let pending_base = match pending_base_owner_map {
+        Some(owner_map) => format!(
+            "JOIN json_each({owner_map}) bound_base
+               ON bound_base.key = CAST(pending.rowid AS TEXT)"
+        ),
+        None => {
+            let pending_import = type_fact_import_binding_sql(
+                "pending.path",
+                "pending.target_terminal_name",
+                "current_owner.language",
+            );
+            let pending_namespace = "CASE WHEN json_valid(pending.target_namespace_json)
+                                           AND json_type(pending.target_namespace_json) = 'array'
+                                      THEN pending.target_namespace_json ELSE '[]' END";
+            let pending_owner = type_fact_owner_id_sql(
+                "pending.from_symbol_id",
+                "pending.target_terminal_name",
+                "current_owner.language",
+            );
+            let pending_owner = format!(
+                "CASE WHEN json_array_length({pending_namespace}) > 0 AND NOT ({pending_import})
+                      THEN NULL ELSE {pending_owner} END"
+            );
+            format!("CROSS JOIN json_each(json_array({pending_owner})) bound_base")
+        }
+    };
+    let callable_target = format!(
+        "{target}.kind IN ('method', 'function', 'constructor')
+         AND nearer_member.kind IN ('method', 'function', 'constructor')"
+    );
+    let value_target = format!(
+        "{target}.kind IN ('field', 'property', 'attribute', 'variable')
+         AND nearer_member.kind IN ('field', 'property', 'attribute', 'variable')"
+    );
+    format!(
+        "(WITH RECURSIVE receiver_owners(symbol_id, depth, ambiguous, language) AS (
+                SELECT {receiver_owner_id}, 0, 0, NULL
+                UNION
+                SELECT relationship.to_symbol_id, receiver_owners.depth + 1, receiver_owners.ambiguous, NULL
+                FROM relationships relationship
+                JOIN receiver_owners ON relationship.from_symbol_id = receiver_owners.symbol_id
+                WHERE relationship.kind IN ('extends', 'implements')
+                  AND receiver_owners.depth < {ancestry_depth}
+                UNION
+                SELECT bound_base.value, receiver_owners.depth + 1,
+                       CASE WHEN bound_base.value IS NULL THEN 1 ELSE receiver_owners.ambiguous END,
+                       CASE WHEN bound_base.value IS NULL THEN current_owner.language END
+                FROM pending_relationships pending
+                JOIN receiver_owners ON pending.from_symbol_id = receiver_owners.symbol_id
+                JOIN symbols current_owner ON current_owner.symbol_id = receiver_owners.symbol_id
+                {pending_base}
+                LEFT JOIN symbols candidate ON candidate.symbol_id = bound_base.value
+                WHERE pending.kind IN ('extends', 'implements')
+                  AND receiver_owners.depth < {ancestry_depth}
+                  AND (bound_base.value IS NULL
+                       OR candidate.kind IN ({owner_kinds}) AND {candidate_language})
+            ), unresolved_base_paths(depth) AS (
+                SELECT unresolved_base.depth
+                FROM receiver_owners unresolved_base
+                JOIN symbols possible_base ON possible_base.symbol_id = {target}.parent_symbol_id
+                WHERE unresolved_base.symbol_id IS NULL
+                  AND unresolved_base.ambiguous = 1
+                  AND possible_base.kind IN ({owner_kinds})
+                  AND {unresolved_base_language}
+                  AND {target}.parent_symbol_id IS NOT NULL
+                  AND {target}.kind IN ('method', 'function', 'constructor', 'field', 'property', 'attribute', 'variable')
+                  AND NOT EXISTS (
+                      SELECT 1 FROM receiver_owners known_owner
+                      JOIN symbols nearer_member ON nearer_member.parent_symbol_id = known_owner.symbol_id
+                      WHERE known_owner.symbol_id IS NOT NULL
+                        AND known_owner.ambiguous = 0
+                        AND nearer_member.name = {target}.name
+                        AND ({callable_target} OR {value_target})
+                  )
+            ), target_paths(depth, ambiguous) AS (
+                SELECT matched_owner.depth, matched_owner.ambiguous
+                FROM receiver_owners matched_owner
+                WHERE matched_owner.symbol_id = {target}.parent_symbol_id
+                  AND {target}.parent_symbol_id IS NOT NULL
+                  AND {target}.kind IN ('method', 'function', 'constructor', 'field', 'property', 'attribute', 'variable')
+                  AND ({target}.kind != 'constructor' OR matched_owner.depth = 0)
+            ), proven_path(depth) AS (
+                SELECT target_paths.depth
+                FROM target_paths
+                WHERE target_paths.ambiguous = 0
+                  AND NOT EXISTS (
+                      SELECT 1 FROM receiver_owners closer_owner
+                      JOIN symbols nearer_member ON nearer_member.parent_symbol_id = closer_owner.symbol_id
+                      WHERE closer_owner.depth < target_paths.depth
+                        AND closer_owner.ambiguous = 0
+                        AND nearer_member.name = {target}.name
+                        AND ({callable_target} OR {value_target})
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1 FROM receiver_owners closer_owner
+                      JOIN symbols nearer_member ON nearer_member.parent_symbol_id = closer_owner.symbol_id
+                      WHERE closer_owner.depth < target_paths.depth
+                        AND closer_owner.ambiguous = 1
+                        AND nearer_member.name = {target}.name
+                        AND ({callable_target} OR {value_target})
+                  )
+            ), uncertain_path AS (
+                SELECT 1 FROM target_paths WHERE target_paths.ambiguous = 1
+                UNION ALL
+                SELECT 1 FROM target_paths
+                JOIN receiver_owners closer_owner ON closer_owner.depth < target_paths.depth
+                JOIN symbols nearer_member ON nearer_member.parent_symbol_id = closer_owner.symbol_id
+                WHERE target_paths.ambiguous = 0
+                  AND closer_owner.ambiguous = 1
+                  AND nearer_member.name = {target}.name
+                  AND ({callable_target} OR {value_target})
+                UNION ALL
+                SELECT 1 FROM unresolved_base_paths
+            )
+            SELECT CASE
+                WHEN EXISTS (SELECT 1 FROM uncertain_path) THEN NULL
+                WHEN EXISTS (SELECT 1 FROM proven_path) THEN 1
+                ELSE 0
+            END)",
+        ancestry_depth = TYPE_RECEIVER_ANCESTRY_MAX_DEPTH,
+    )
+}
+
+pub(crate) fn typed_receiver_chain_matches_target_sql(
+    receiver_owner_id: &str,
+    target: &str,
+) -> String {
+    format!(
+        "({} = 1)",
+        typed_receiver_chain_target_status_sql(receiver_owner_id, target)
+    )
 }
 
 const MAX_RELATED_TYPE_FACTS: usize = 4096;
@@ -8773,6 +9452,178 @@ mod tests {
         );
         assert!(plan.iter().any(|row| row.contains("idx_symbols_path")));
         assert!(!plan.iter().any(|row| row.contains("SCAN d")), "{plan:?}");
+    }
+
+    #[test]
+    fn typed_receiver_chain_support_requires_all_proof_columns() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE symbols (
+                symbol_id TEXT,
+                path TEXT,
+                language TEXT,
+                name TEXT,
+                kind TEXT,
+                parent_symbol_id TEXT,
+                start_line INTEGER,
+                metadata_json TEXT,
+                signature TEXT
+            );
+            CREATE TABLE type_facts (symbol_id TEXT, resolved_type TEXT, language TEXT);
+            CREATE TABLE relationships (from_symbol_id TEXT, to_symbol_id TEXT, kind TEXT);
+            CREATE TABLE files (file_id TEXT, language TEXT);
+            CREATE TABLE pending_relationships (
+                from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT, path TEXT,
+                start_line INTEGER, file_id TEXT, target_receiver TEXT, target_namespace_json TEXT
+            );",
+        )
+        .unwrap();
+        assert!(has_typed_receiver_chain_support(&conn));
+
+        for (table, column) in [
+            ("symbols", "symbol_id"),
+            ("symbols", "path"),
+            ("symbols", "language"),
+            ("symbols", "name"),
+            ("symbols", "kind"),
+            ("symbols", "parent_symbol_id"),
+            ("symbols", "signature"),
+            ("symbols", "metadata_json"),
+            ("symbols", "start_line"),
+            ("type_facts", "symbol_id"),
+            ("type_facts", "resolved_type"),
+            ("type_facts", "language"),
+            ("relationships", "from_symbol_id"),
+            ("relationships", "to_symbol_id"),
+            ("relationships", "kind"),
+            ("pending_relationships", "from_symbol_id"),
+            ("pending_relationships", "target_terminal_name"),
+            ("pending_relationships", "kind"),
+            ("pending_relationships", "path"),
+            ("pending_relationships", "start_line"),
+            ("pending_relationships", "file_id"),
+            ("pending_relationships", "target_receiver"),
+            ("pending_relationships", "target_namespace_json"),
+            ("files", "file_id"),
+            ("files", "language"),
+        ] {
+            conn.execute(&format!("ALTER TABLE {table} DROP COLUMN {column}"), [])
+                .unwrap();
+            assert!(
+                !has_typed_receiver_chain_support(&conn),
+                "missing {table}.{column} must disable the typed chain SQL"
+            );
+            let data_type = if column == "start_line" {
+                "INTEGER"
+            } else {
+                "TEXT"
+            };
+            conn.execute(
+                &format!("ALTER TABLE {table} ADD COLUMN {column} {data_type}"),
+                [],
+            )
+            .unwrap();
+            assert!(has_typed_receiver_chain_support(&conn));
+        }
+
+        conn.execute_batch("DROP TABLE relationships").unwrap();
+        assert!(!has_typed_receiver_chain_support(&conn));
+        conn.execute(
+            "CREATE TABLE relationships (from_symbol_id TEXT, to_symbol_id TEXT, kind TEXT)",
+            [],
+        )
+        .unwrap();
+        conn.execute_batch("DROP TABLE pending_relationships")
+            .unwrap();
+        assert!(!has_typed_receiver_chain_support(&conn));
+    }
+
+    #[test]
+    fn member_receiver_match_keeps_its_single_segment_predicate_compact() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE symbols (
+                symbol_id TEXT, file_id TEXT, path TEXT, language TEXT, name TEXT, kind TEXT,
+                parent_symbol_id TEXT, start_line INTEGER, start_column INTEGER, end_line INTEGER,
+                metadata_json TEXT, signature TEXT, visibility TEXT
+            );
+            CREATE TABLE type_facts (symbol_id TEXT, resolved_type TEXT, language TEXT);
+            CREATE TABLE relationships (
+                from_symbol_id TEXT, to_symbol_id TEXT, kind TEXT, file_id TEXT, path TEXT,
+                start_line INTEGER, start_column INTEGER, end_line INTEGER, metadata_json TEXT
+            );
+            CREATE TABLE pending_relationships (
+                from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT, path TEXT,
+                start_line INTEGER, start_column INTEGER, end_line INTEGER, file_id TEXT,
+                target_receiver TEXT, target_namespace_json TEXT, target_display_name TEXT
+            );
+            CREATE TABLE files (file_id TEXT, language TEXT);",
+        )
+        .unwrap();
+
+        assert!(has_typed_receiver_chain_support(&conn));
+        let predicate = member_receiver_match(&conn);
+
+        assert!(
+            predicate.len() < 100_000,
+            "single-segment resolver predicate expanded to {} bytes",
+            predicate.len()
+        );
+    }
+
+    #[test]
+    fn pending_receiver_ancestry_query_accepts_a_bound_row_limit() {
+        assert!(typed_receiver_chain_pending_base_owner_rows_sql().contains("LIMIT ?2"));
+    }
+
+    #[test]
+    fn resolved_receiver_ancestry_rows_stop_at_the_supplied_limit() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE relationships (from_symbol_id TEXT, to_symbol_id TEXT, kind TEXT);",
+        )
+        .unwrap();
+        for _ in 0..20 {
+            conn.execute(
+                "INSERT INTO relationships VALUES ('root', 'base', 'extends')",
+                [],
+            )
+            .unwrap();
+        }
+        let rows = conn
+            .prepare(typed_receiver_chain_resolved_base_rows_sql())
+            .unwrap()
+            .query_map(params!["[\"root\"]", 3], |row| row.get::<_, String>(0))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+
+        assert_eq!(rows.len(), 3);
+    }
+
+    #[test]
+    fn receiver_ancestry_depth_probe_distinguishes_a_leaf() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE relationships (from_symbol_id TEXT, to_symbol_id TEXT, kind TEXT);
+            CREATE TABLE pending_relationships (from_symbol_id TEXT, kind TEXT);
+            INSERT INTO relationships VALUES ('root', 'middle', 'extends');
+            INSERT INTO relationships VALUES ('middle', 'leaf', 'implements');",
+        )
+        .unwrap();
+        let mut stmt = conn
+            .prepare(typed_receiver_chain_has_more_ancestors_sql())
+            .unwrap();
+
+        assert!(
+            stmt.query_row(params!["[\"middle\"]"], |row| row.get::<_, bool>(0))
+                .unwrap()
+        );
+        assert!(
+            !stmt
+                .query_row(params!["[\"leaf\"]"], |row| row.get::<_, bool>(0))
+                .unwrap()
+        );
     }
 
     #[test]

@@ -164,3 +164,15 @@ Task2 evidence is complete in [the baseline report](../reviews/2026-10-26-agent-
 Call-language graph/context repair passes three focused regressions and lead review after one fix round. Pending name-only type relations use the existing narrow identifier rule; explicit resolved non-call relations retain their behavior. Related-type binding and full typed receiver chains remain pending and keep Task3 open.
 
 Related-type binding now passes 12 real-extractor regressions, four private unit checks, and the existing context compatibility test. Lead review closed imported-name provenance, qualified Java imports, and nearest-Go-module findings. The shared scalar returns a unique owner or NULL; indexed name/path/import queries, lexical/module depth bounds, and a 4096-fact context cap preserve bounded work. Typed receiver chains remain the final runtime follow-up before integration gates.
+
+## Final integration gate for consumer repairs
+
+The follow-up changes shared query behavior, so the final gate includes the full locked Rust workspace suite on Linux and Windows NTFS, workspace Clippy with warnings denied, formatting, and locked release builds. Reuse the passing 218 Python and 20 plugin checks while their sources remain unchanged. Run the Windows plugin suite for platform evidence and shut the guest down afterward. Preserve prior declared platform skips.
+
+Compare fresh MCP processes for the retained measured engine and final release on the same final worktree/index using the same 20-call workload. Record RSS and anonymous memory, three warm timings per operation, binary identities, and response sizes. Review the new release CLI check plus connected check_edit. These checks verify the runtime repair; they do not replace original pilot outcomes or claim post-fix agent savings.
+
+## Required report-boundary correction
+
+Read-only Astra architecture review found repeated receiver-proof SQL expansion remained a deadline risk after measured optimizations. Accept the bounded status-map approach: compute receiver owners and nullable target status separately for each existing judge chunk and target, then bind keyed statuses into the compact judge. Keep raw pending-row chain/language/line semantics, synthetic absent-target columns, existing claim/rival ordering, and shared graph proof. No repository graph cache, global statement cache, SQLite UDF, temporary writes, new dependency, budget increase, or general parser.
+
+Architecture quality: affected modules are queries.rs and reference_report.rs; the caller-facing tools and core report interfaces remain unchanged. Complexity stays behind the private report/proof seam. Real-extractor reference/impact/edit tests verify behavior; count/size and measured prepare/step checks guard query expansion. This required correction is folded into the approved consumer repair because its deadline failures prevent correct completion. Risk is medium; the main acceptance risks are absent targets, nullable status, mixed chunks, and raw versus augmented JavaScript chains.

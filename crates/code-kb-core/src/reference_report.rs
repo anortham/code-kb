@@ -16,8 +16,7 @@ use crate::queries::{
     enclosing_scope_sql, get_symbol_by_name, grouped_member_access_rows, has_column,
     implicit_receiver_language_list, import_sites, import_sites_of_absent, inherited_writes_among,
     is_js_family, module_import_binding_sql, owner_binding_in_scope_sql, path_proximity,
-    pending_target_predicate, populate_lambda_enclosing_names, receiver_type_sql,
-    symbol_not_found_parts,
+    populate_lambda_enclosing_names, receiver_type_sql, symbol_not_found_parts,
 };
 use crate::text_scan::scan_word;
 
@@ -36,6 +35,9 @@ const OTHER_DEFINITION_CAP: usize = 12;
 const ACCOUNTING_TIME_LIMIT: Duration = Duration::from_secs(3);
 /// Rows per judge query, so the time limit is checked between queries.
 const JUDGE_CHUNK: usize = 2_000;
+const RECEIVER_CHAIN_ANCESTRY_OWNER_CAP: usize = 8_192;
+const RECEIVER_CHAIN_ANCESTRY_EDGE_CAP: usize = 8_192;
+const RECEIVER_CHAIN_ANCESTRY_DEPTH_CAP: usize = 8;
 const NOT_CHECKED: &str = "not checked within the time limit";
 const TEXT_SCAN_BUDGET: Duration = Duration::from_secs(3);
 
@@ -304,7 +306,7 @@ fn report_with(
     let reach = sections::reach_sections(&mut accounting, target, &sites)?;
     cannot_see.splice(0..0, cannot_see_for_language(&target.language));
     cannot_see.extend(reach.notes);
-    Ok(ReferenceReport {
+    let report = ReferenceReport {
         target: report_target(conn, target, definitions_with_name)?,
         counts,
         sites,
@@ -326,7 +328,8 @@ fn report_with(
         variant_uses: reach.variant_uses,
         registrations: reach.registrations,
         tests: reach.tests,
-    })
+    };
+    Ok(report)
 }
 
 fn cannot_see_for_language(language: &str) -> Vec<String> {
@@ -714,6 +717,7 @@ struct NameRow {
     /// The names written before the used name (`["z", "core"]` for `z.core.f()`), `None` when
     /// the row does not say.
     chain: Option<Vec<String>>,
+    typed_receiver_chain: Option<Vec<String>>,
     /// The arguments the call passes, `None` when julie recorded no count or the call spreads an
     /// argument, so the count is unknown.
     arg_count: Option<u32>,
@@ -1526,6 +1530,79 @@ struct SiteRow {
 
 struct Claim {
     basis: Option<String>,
+    typed_receiver: Option<TypedReceiverClaim>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TypedReceiverClaim {
+    ReachesTarget,
+    DifferentOwner,
+    Unknown,
+}
+
+impl TypedReceiverClaim {
+    fn merge(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::ReachesTarget, _) | (_, Self::ReachesTarget) => Self::ReachesTarget,
+            (Self::Unknown, _) | (_, Self::Unknown) => Self::Unknown,
+            _ => Self::DifferentOwner,
+        }
+    }
+}
+
+struct ReceiverChainOwnerEvidence {
+    owners: HashMap<String, Option<String>>,
+    pending_base_owners: HashMap<String, Option<String>>,
+    incomplete: Option<ReceiverChainLimit>,
+    edge_rows_examined: usize,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ReceiverChainLimit {
+    Owners,
+    Edges,
+    Depth,
+}
+
+#[derive(Clone, Copy)]
+struct ReceiverChainLimits {
+    owners: usize,
+    edges: usize,
+    depth: usize,
+}
+
+impl ReceiverChainLimits {
+    const DEFAULT: Self = Self {
+        owners: RECEIVER_CHAIN_ANCESTRY_OWNER_CAP,
+        edges: RECEIVER_CHAIN_ANCESTRY_EDGE_CAP,
+        depth: RECEIVER_CHAIN_ANCESTRY_DEPTH_CAP,
+    };
+}
+
+fn receiver_chain_limit_note(limit: ReceiverChainLimit) -> &'static str {
+    match limit {
+        ReceiverChainLimit::Owners => {
+            "receiver-chain ancestry exceeded the 8,192-owner limit; affected sites stayed unresolved"
+        }
+        ReceiverChainLimit::Edges => {
+            "receiver-chain ancestry exceeded the 8,192-edge limit; affected sites stayed unresolved"
+        }
+        ReceiverChainLimit::Depth => {
+            "receiver-chain ancestry exceeded the 8-level limit; affected sites stayed unresolved"
+        }
+    }
+}
+
+fn record_receiver_chain_limit_note(
+    cannot_see: &mut Vec<String>,
+    limit: Option<ReceiverChainLimit>,
+) {
+    if let Some(limit) = limit {
+        let note = receiver_chain_limit_note(limit);
+        if !cannot_see.iter().any(|existing| existing == note) {
+            cannot_see.push(note.to_string());
+        }
+    }
 }
 
 struct Judged {
@@ -1578,11 +1655,17 @@ struct Accounting<'a> {
     /// The judge stops here, so the cheaper checks of the judged rows still fit in the limit.
     judge_deadline: Instant,
     deadline: Instant,
-    judge_stmt: RefCell<Option<Statement<'a>>>,
+    judge_plain_stmt: RefCell<Option<Statement<'a>>>,
+    judge_chain_stmt: RefCell<Option<Statement<'a>>>,
+    receiver_chain_owner_stmt: RefCell<Option<Statement<'a>>>,
+    receiver_chain_pending_base_stmt: RefCell<Option<Statement<'a>>>,
+    receiver_chain_target_stmt: RefCell<Option<Statement<'a>>>,
     /// The target when the index no longer holds it, and the judge that reads its columns from
     /// the symbol instead of joining its row.
     absent: Option<Symbol>,
-    absent_judge_stmt: RefCell<Option<Statement<'a>>>,
+    absent_judge_plain_stmt: RefCell<Option<Statement<'a>>>,
+    absent_judge_chain_stmt: RefCell<Option<Statement<'a>>>,
+    absent_receiver_chain_target_stmt: RefCell<Option<Statement<'a>>>,
     /// The C# `#if` condition of the branch that julie kept the target from.
     target_condition: Option<String>,
     definitions_stmt: RefCell<Option<Statement<'a>>>,
@@ -1603,9 +1686,15 @@ impl<'a> Accounting<'a> {
             root,
             judge_deadline: Instant::now() + time_limit / 2,
             deadline: Instant::now() + time_limit,
-            judge_stmt: RefCell::new(None),
+            judge_plain_stmt: RefCell::new(None),
+            judge_chain_stmt: RefCell::new(None),
+            receiver_chain_owner_stmt: RefCell::new(None),
+            receiver_chain_pending_base_stmt: RefCell::new(None),
+            receiver_chain_target_stmt: RefCell::new(None),
             absent: None,
-            absent_judge_stmt: RefCell::new(None),
+            absent_judge_plain_stmt: RefCell::new(None),
+            absent_judge_chain_stmt: RefCell::new(None),
+            absent_receiver_chain_target_stmt: RefCell::new(None),
             target_condition: None,
             definitions_stmt: RefCell::new(None),
             import_match_stmt: None,
@@ -1644,6 +1733,205 @@ impl<'a> Accounting<'a> {
             .get_mut(sql)
             .expect("statement was just prepared");
         Ok(run(stmt)?)
+    }
+
+    fn receiver_chain_owner_evidence(
+        &self,
+        pending_ids: &[String],
+    ) -> Result<ReceiverChainOwnerEvidence, QueryError> {
+        let mut evidence = ReceiverChainOwnerEvidence {
+            owners: HashMap::new(),
+            pending_base_owners: HashMap::new(),
+            incomplete: None,
+            edge_rows_examined: 0,
+        };
+        if pending_ids.is_empty() || !crate::queries::has_typed_receiver_chain_support(self.conn) {
+            return Ok(evidence);
+        }
+        let pending_json = serde_json::to_string(pending_ids).unwrap_or_else(|_| "[]".to_string());
+        let mut owner_slot = self.receiver_chain_owner_stmt.borrow_mut();
+        if owner_slot.is_none() {
+            let sql = crate::queries::typed_receiver_chain_owner_rows_sql();
+            *owner_slot = Some(self.conn.prepare(&sql)?);
+        }
+        let owner_rows = owner_slot
+            .as_mut()
+            .expect("receiver-chain owner query was just prepared")
+            .query_map(params![pending_json], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        for (row_key, owner_id) in owner_rows {
+            evidence.owners.insert(row_key, owner_id);
+        }
+        self.extend_receiver_chain_ancestry(&mut evidence, ReceiverChainLimits::DEFAULT)?;
+        Ok(evidence)
+    }
+
+    fn extend_receiver_chain_ancestry(
+        &self,
+        evidence: &mut ReceiverChainOwnerEvidence,
+        limits: ReceiverChainLimits,
+    ) -> Result<(), QueryError> {
+        let mut frontier: HashSet<String> = evidence.owners.values().flatten().cloned().collect();
+        if frontier.len() > limits.owners {
+            evidence.incomplete = Some(ReceiverChainLimit::Owners);
+            return Ok(());
+        }
+        if frontier.is_empty() {
+            return Ok(());
+        }
+        let mut visited = HashSet::new();
+        for _ in 0..limits.depth {
+            if frontier.is_empty() {
+                break;
+            }
+            if visited.len() + frontier.len() > limits.owners {
+                evidence.incomplete = Some(ReceiverChainLimit::Owners);
+                return Ok(());
+            }
+            let frontier_ids: Vec<&str> = frontier.iter().map(String::as_str).collect();
+            let frontier_json =
+                serde_json::to_string(&frontier_ids).unwrap_or_else(|_| "[]".to_string());
+            let remaining_edges = limits.edges.saturating_sub(evidence.edge_rows_examined);
+            let resolved_limit = remaining_edges.saturating_add(1);
+            let resolved_bases = self.with_statement(
+                crate::queries::typed_receiver_chain_resolved_base_rows_sql(),
+                |stmt| {
+                    stmt.query_map(params![&frontier_json, resolved_limit as i64], |row| {
+                        row.get::<_, String>(0)
+                    })?
+                    .collect::<Result<Vec<_>, _>>()
+                },
+            )?;
+            evidence.edge_rows_examined += resolved_bases.len();
+            if resolved_bases.len() > remaining_edges {
+                evidence.incomplete = Some(ReceiverChainLimit::Edges);
+                return Ok(());
+            }
+            let mut pending_base_slot = self.receiver_chain_pending_base_stmt.borrow_mut();
+            if pending_base_slot.is_none() {
+                let sql = crate::queries::typed_receiver_chain_pending_base_owner_rows_sql();
+                *pending_base_slot = Some(self.conn.prepare(&sql)?);
+            }
+            let remaining_pending_edges = limits.edges.saturating_sub(evidence.edge_rows_examined);
+            let pending_bases = pending_base_slot
+                .as_mut()
+                .expect("pending-base owner query was just prepared")
+                .query_map(
+                    params![
+                        &frontier_json,
+                        remaining_pending_edges.saturating_add(1) as i64
+                    ],
+                    |row| Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?)),
+                )?
+                .collect::<Result<Vec<_>, _>>()?;
+            evidence.edge_rows_examined += pending_bases.len();
+            if pending_bases.len() > remaining_pending_edges {
+                evidence.incomplete = Some(ReceiverChainLimit::Edges);
+                return Ok(());
+            }
+
+            visited.extend(frontier.iter().cloned());
+            let mut next = HashSet::new();
+            for owner_id in resolved_bases {
+                if !visited.contains(&owner_id) {
+                    next.insert(owner_id);
+                    if visited.len() + next.len() > limits.owners {
+                        evidence.incomplete = Some(ReceiverChainLimit::Owners);
+                        return Ok(());
+                    }
+                }
+            }
+            for (pending_row_id, owner_id) in pending_bases {
+                if let Some(owner_id) = owner_id.as_ref() {
+                    if !visited.contains(owner_id) {
+                        next.insert(owner_id.clone());
+                        if visited.len() + next.len() > limits.owners {
+                            evidence.incomplete = Some(ReceiverChainLimit::Owners);
+                            return Ok(());
+                        }
+                    }
+                }
+                evidence
+                    .pending_base_owners
+                    .insert(pending_row_id, owner_id);
+            }
+            frontier = next;
+        }
+        if !frontier.is_empty() {
+            let frontier_ids: Vec<&str> = frontier.iter().map(String::as_str).collect();
+            let frontier_json =
+                serde_json::to_string(&frontier_ids).unwrap_or_else(|_| "[]".to_string());
+            let has_more = self.with_statement(
+                crate::queries::typed_receiver_chain_has_more_ancestors_sql(),
+                |stmt| stmt.query_row(params![frontier_json], |row| row.get::<_, bool>(0)),
+            )?;
+            if has_more {
+                evidence.incomplete = Some(ReceiverChainLimit::Depth);
+            }
+        }
+        Ok(())
+    }
+
+    fn receiver_chain_target_statuses(
+        &self,
+        target_id: &str,
+        evidence: &ReceiverChainOwnerEvidence,
+    ) -> Result<HashMap<String, Option<i64>>, QueryError> {
+        if evidence.owners.is_empty() {
+            return Ok(HashMap::new());
+        }
+        if evidence.incomplete.is_some() {
+            return Ok(evidence
+                .owners
+                .keys()
+                .map(|row_key| (row_key.clone(), None))
+                .collect());
+        }
+        let owner_json =
+            serde_json::to_string(&evidence.owners).unwrap_or_else(|_| "{}".to_string());
+        let pending_base_json = serde_json::to_string(&evidence.pending_base_owners)
+            .unwrap_or_else(|_| "{}".to_string());
+        let absent = self
+            .absent
+            .as_ref()
+            .filter(|symbol| symbol.symbol_id == target_id);
+        let mut slot = if absent.is_some() {
+            self.absent_receiver_chain_target_stmt.borrow_mut()
+        } else {
+            self.receiver_chain_target_stmt.borrow_mut()
+        };
+        if slot.is_none() {
+            let sql = receiver_chain_statuses_sql(absent.is_some());
+            *slot = Some(self.conn.prepare(&sql)?);
+        }
+        let stmt = slot
+            .as_mut()
+            .expect("receiver-chain status query was just prepared");
+        let mut statuses = HashMap::new();
+        if let Some(symbol) = absent {
+            let mut rows = stmt.query(params![
+                owner_json,
+                pending_base_json,
+                symbol.symbol_id,
+                symbol.name,
+                symbol.kind,
+                symbol.language,
+                symbol.path,
+                symbol.start_line as i64,
+                symbol.parent_symbol_id
+            ])?;
+            while let Some(row) = rows.next()? {
+                statuses.insert(row.get(0)?, row.get(1)?);
+            }
+        } else {
+            let mut rows = stmt.query(params![owner_json, pending_base_json, target_id])?;
+            while let Some(row) = rows.next()? {
+                statuses.insert(row.get(0)?, row.get(1)?);
+            }
+        }
+        Ok(statuses)
     }
 
     /// Runs `sql` with `path` as `?1` and `others` after it, once for each spelling of the path
@@ -1700,7 +1988,8 @@ impl<'a> Accounting<'a> {
     fn definitions(&self, name: &str) -> Result<Vec<Definition>, QueryError> {
         let mut slot = self.definitions_stmt.borrow_mut();
         if slot.is_none() {
-            *slot = Some(self.conn.prepare(&self.definitions_sql())?);
+            let sql = self.definitions_sql();
+            *slot = Some(self.conn.prepare(&sql)?);
         }
         let stmt = slot
             .as_mut()
@@ -2047,7 +2336,21 @@ impl<'a> Accounting<'a> {
                     continue;
                 }
                 let chunk_rows: Vec<&NameRow> = chunk.iter().map(|&index| &rows[index]).collect();
-                let judged = self.judge(&spec.name, &other.symbol_id, &chunk_rows)?;
+                let pending_ids: Vec<String> = chunk_rows
+                    .iter()
+                    .filter(|row| row.typed_receiver_chain.is_some())
+                    .filter_map(|row| row.key.strip_prefix("P:").map(str::to_string))
+                    .collect();
+                let receiver_chain_evidence = self.receiver_chain_owner_evidence(&pending_ids)?;
+                record_receiver_chain_limit_note(cannot_see, receiver_chain_evidence.incomplete);
+                let receiver_chain_statuses = self
+                    .receiver_chain_target_statuses(&other.symbol_id, &receiver_chain_evidence)?;
+                let judged = self.judge(
+                    &spec.name,
+                    &other.symbol_id,
+                    &chunk_rows,
+                    &receiver_chain_statuses,
+                )?;
                 for &index in chunk {
                     let row = &rows[index];
                     if row.hidden_receiver
@@ -2234,7 +2537,7 @@ impl<'a> Accounting<'a> {
         };
         let mut rows = Vec::new();
 
-        let mut stmt = self.conn.prepare(&format!(
+        let pending_sql = format!(
             "SELECT p.rowid, p.from_symbol_id, COALESCE(s.name, ''), p.kind, p.path,
                     COALESCE(f.language, s.language, ''), p.start_line, p.start_column,
                     p.end_line, p.target_receiver, p.target_namespace_json, s.end_line
@@ -2243,7 +2546,8 @@ impl<'a> Accounting<'a> {
              LEFT JOIN files f ON f.file_id = p.file_id
              WHERE p.target_terminal_name = ?1 AND p.kind != 'imports' {kinds}
                AND COALESCE(f.language, s.language, '') NOT IN ({docs})"
-        ))?;
+        );
+        let mut stmt = self.conn.prepare(&pending_sql)?;
         let mut query = stmt.query(params![name])?;
         while let Some(row) = query.next()? {
             let namespace: Vec<String> = row
@@ -2251,11 +2555,16 @@ impl<'a> Accounting<'a> {
                 .and_then(|json| serde_json::from_str(&json).ok())
                 .unwrap_or_default();
             let receiver: Option<String> = row.get(9)?;
-            let chain = namespace
+            let chain: Vec<String> = namespace
                 .iter()
                 .chain(receiver.as_ref().filter(|r| !r.is_empty()))
                 .cloned()
                 .collect();
+            let typed_receiver_chain = (chain.len() > 1
+                && receiver
+                    .as_deref()
+                    .is_some_and(|receiver| !receiver.is_empty()))
+            .then(|| chain.clone());
             rows.push(NameRow {
                 key: format!("P:{}", row.get::<_, i64>(0)?),
                 source: Source::Pending,
@@ -2278,13 +2587,14 @@ impl<'a> Accounting<'a> {
                 hidden_receiver: false,
                 result_receiver: false,
                 chain: Some(chain),
+                typed_receiver_chain,
                 arg_count: None,
                 links_enclosing_class: false,
             });
         }
 
         if !inheritance {
-            let mut stmt = self.conn.prepare(&format!(
+            let relationship_sql = format!(
                 "SELECT r.rowid, r.from_symbol_id, COALESCE(s.name, ''), r.kind, r.path,
                     COALESCE(f.language, s.language, ''), r.start_line, r.start_column,
                     r.end_line, r.to_symbol_id, {LINKS_ENCLOSING_CLASS_SQL}, s.end_line
@@ -2301,7 +2611,8 @@ impl<'a> Accounting<'a> {
                                 THEN json_extract(r.metadata_json, '$.referenceType') END
                            IN ('custom-property', 'composes')
                )"
-            ))?;
+            );
+            let mut stmt = self.conn.prepare(&relationship_sql)?;
             let mut query = stmt.query(params![name])?;
             while let Some(row) = query.next()? {
                 let line = row.get::<_, Option<i64>>(6)?.unwrap_or(0) as usize;
@@ -2327,6 +2638,7 @@ impl<'a> Accounting<'a> {
                     hidden_receiver: false,
                     result_receiver: false,
                     chain: None,
+                    typed_receiver_chain: None,
                     arg_count: None,
                     links_enclosing_class: row.get(10)?,
                 });
@@ -2334,7 +2646,7 @@ impl<'a> Accounting<'a> {
         }
 
         if !inheritance && crate::queries::has_table(self.conn, "identifiers") {
-            let mut stmt = self.conn.prepare(&format!(
+            let identifier_sql = format!(
                 "SELECT i.identifier_id, i.containing_symbol_id, COALESCE(s.name, ''), i.kind,
                         i.path, i.language, i.start_line, i.start_column,
                         CASE WHEN json_valid(i.metadata_json)
@@ -2350,7 +2662,8 @@ impl<'a> Accounting<'a> {
                  WHERE i.name = ?1 AND COALESCE(s.kind, '') != 'import'
                    AND (i.language NOT IN ({docs})
                         OR i.kind IN ('call', 'calls', 'instantiates'))"
-            ))?;
+            );
+            let mut stmt = self.conn.prepare(&identifier_sql)?;
             let mut query = stmt.query(params![name])?;
             while let Some(row) = query.next()? {
                 let line = row.get::<_, i64>(6)? as usize;
@@ -2394,6 +2707,7 @@ impl<'a> Accounting<'a> {
                     hidden_receiver: false,
                     result_receiver: false,
                     chain,
+                    typed_receiver_chain: None,
                     arg_count: arg_count.filter(|_| !arg_spread),
                     links_enclosing_class: false,
                 });
@@ -2520,6 +2834,7 @@ impl<'a> Accounting<'a> {
         name: &str,
         target_id: &str,
         rows: &[&NameRow],
+        receiver_chain_statuses: &HashMap<String, Option<i64>>,
     ) -> Result<HashMap<String, Judged>, QueryError> {
         let ids_of = |source: Source| -> String {
             let ids: Vec<&str> = rows
@@ -2534,17 +2849,42 @@ impl<'a> Accounting<'a> {
             .absent
             .as_ref()
             .filter(|symbol| symbol.symbol_id == target_id);
+        let receiver_chain = rows.iter().any(|row| row.typed_receiver_chain.is_some());
+        let typed_receiver_chain =
+            receiver_chain && crate::queries::has_typed_receiver_chain_support(self.conn);
+        let chain_status_json =
+            serde_json::to_string(receiver_chain_statuses).unwrap_or_else(|_| "{}".to_string());
         let mut slot = if absent.is_some() {
-            self.absent_judge_stmt.borrow_mut()
+            if receiver_chain {
+                self.absent_judge_chain_stmt.borrow_mut()
+            } else {
+                self.absent_judge_plain_stmt.borrow_mut()
+            }
+        } else if receiver_chain {
+            self.judge_chain_stmt.borrow_mut()
         } else {
-            self.judge_stmt.borrow_mut()
+            self.judge_plain_stmt.borrow_mut()
         };
         if slot.is_none() {
-            *slot = Some(self.conn.prepare(&judge_sql(self.conn, absent.is_some()))?);
+            let sql = judge_sql(self.conn, absent.is_some(), receiver_chain);
+            *slot = Some(self.conn.prepare(&sql)?);
         }
         let stmt = slot.as_mut().expect("judge statement was just prepared");
-        let mut rows = match absent {
-            Some(symbol) => stmt.query(params![
+        let mut rows = match (absent, typed_receiver_chain) {
+            (Some(symbol), true) => stmt.query(params![
+                name,
+                target_id,
+                pending,
+                identifiers,
+                symbol.name,
+                symbol.kind,
+                symbol.language,
+                symbol.path,
+                symbol.start_line as i64,
+                symbol.parent_symbol_id,
+                chain_status_json
+            ])?,
+            (Some(symbol), false) => stmt.query(params![
                 name,
                 target_id,
                 pending,
@@ -2556,7 +2896,14 @@ impl<'a> Accounting<'a> {
                 symbol.start_line as i64,
                 symbol.parent_symbol_id
             ])?,
-            None => stmt.query(params![name, target_id, pending, identifiers])?,
+            (None, true) => stmt.query(params![
+                name,
+                target_id,
+                pending,
+                identifiers,
+                chain_status_json
+            ])?,
+            (None, false) => stmt.query(params![name, target_id, pending, identifiers])?,
         };
         let mut judged = HashMap::new();
         while let Some(row) = rows.next()? {
@@ -2584,20 +2931,28 @@ impl<'a> Accounting<'a> {
     ) -> Result<(HashMap<String, Claim>, usize), QueryError> {
         let mut claims: HashMap<String, Claim> = HashMap::new();
         let mut resolvers = Vec::with_capacity(spec.group.len());
+        let needs_resolver = order.iter().any(|&index| {
+            let row = &rows[index];
+            !row.hidden_receiver
+                && row.source == Source::Identifier
+                && matches!(row.kind.as_str(), "type_usage" | "member_access")
+        });
         for member in &spec.group {
-            let resolver_ids: HashSet<String> = if spec.scope == RowScope::Inheritance {
-                HashSet::new()
-            } else {
-                direct_identifier_rows(
-                    self.conn,
-                    &spec.name,
-                    Some(&member.symbol_id),
-                    RESOLVER_ROW_CAP,
-                )?
-                .into_iter()
-                .map(|row| format!("I:{}", row.identifier_id))
-                .collect()
-            };
+            let resolver_ids: HashSet<String> =
+                if spec.scope == RowScope::Inheritance || !needs_resolver {
+                    HashSet::new()
+                } else {
+                    let resolver_rows = direct_identifier_rows(
+                        self.conn,
+                        &spec.name,
+                        Some(&member.symbol_id),
+                        RESOLVER_ROW_CAP,
+                    )?;
+                    resolver_rows
+                        .into_iter()
+                        .map(|row| format!("I:{}", row.identifier_id))
+                        .collect::<HashSet<_>>()
+                };
             if resolver_ids.len() >= RESOLVER_ROW_CAP {
                 cannot_see.push(format!(
                     "the resolver listed {RESOLVER_ROW_CAP} identifier rows and may hold more; rows past that limit have no resolver evidence"
@@ -2606,6 +2961,8 @@ impl<'a> Accounting<'a> {
             resolvers.push(resolver_ids);
         }
         let mut judged_rows = 0;
+        let typed_receiver_chain_supported =
+            crate::queries::has_typed_receiver_chain_support(self.conn);
         for chunk in order.chunks(JUDGE_CHUNK) {
             if Instant::now() >= self.judge_deadline {
                 break;
@@ -2615,10 +2972,36 @@ impl<'a> Accounting<'a> {
                 .map(|&index| &rows[index])
                 .filter(|row| !row.hidden_receiver)
                 .collect();
+            let pending_ids: Vec<String> = chunk_rows
+                .iter()
+                .filter(|row| row.typed_receiver_chain.is_some())
+                .filter_map(|row| row.key.strip_prefix("P:").map(str::to_string))
+                .collect();
+            let receiver_chain_evidence = self.receiver_chain_owner_evidence(&pending_ids)?;
+            record_receiver_chain_limit_note(cannot_see, receiver_chain_evidence.incomplete);
             for (member, resolver_ids) in spec.group.iter().zip(&resolvers) {
-                let judged = self.judge(&spec.name, &member.symbol_id, &chunk_rows)?;
+                let receiver_chain_statuses = self
+                    .receiver_chain_target_statuses(&member.symbol_id, &receiver_chain_evidence)?;
+                let judged = self.judge(
+                    &spec.name,
+                    &member.symbol_id,
+                    &chunk_rows,
+                    &receiver_chain_statuses,
+                )?;
                 for row in chunk_rows.iter().copied() {
                     let judged_row = judged.get(&row.key);
+                    let typed_receiver =
+                        if row.typed_receiver_chain.is_some() && typed_receiver_chain_supported {
+                            Some(
+                                match receiver_chain_statuses.get(&row.key).copied().flatten() {
+                                    Some(1) => TypedReceiverClaim::ReachesTarget,
+                                    Some(0) => TypedReceiverClaim::DifferentOwner,
+                                    _ => TypedReceiverClaim::Unknown,
+                                },
+                            )
+                        } else {
+                            None
+                        };
                     let claimed = match row.source {
                         Source::Relationship => row
                             .to_symbol_id
@@ -2631,7 +3014,7 @@ impl<'a> Accounting<'a> {
                         }
                         _ => judged_row.is_some_and(|j| j.claimed),
                     };
-                    if !claimed {
+                    if !claimed && typed_receiver.is_none() {
                         continue;
                     }
                     let basis = match row.source {
@@ -2654,10 +3037,18 @@ impl<'a> Accounting<'a> {
                         }
                         basis => basis,
                     };
-                    let entry = claims
-                        .entry(row.key.clone())
-                        .or_insert(Claim { basis: None });
-                    if entry.basis.is_none() {
+                    let entry = claims.entry(row.key.clone()).or_insert(Claim {
+                        basis: None,
+                        typed_receiver: None,
+                    });
+                    if let Some(typed_receiver) = typed_receiver {
+                        entry.typed_receiver = Some(
+                            entry
+                                .typed_receiver
+                                .map_or(typed_receiver, |previous| previous.merge(typed_receiver)),
+                        );
+                    }
+                    if claimed && entry.basis.is_none() {
                         entry.basis = basis;
                     }
                 }
@@ -2738,6 +3129,26 @@ impl<'a> Accounting<'a> {
                 ),
                 false,
             )));
+        }
+        if let Some(typed_receiver) = claims.get(&row.key).and_then(|claim| claim.typed_receiver) {
+            return Ok(match typed_receiver {
+                TypedReceiverClaim::ReachesTarget => {
+                    Some(Verdict::new(SiteLabel::Proven, "receiver type", false))
+                }
+                TypedReceiverClaim::DifferentOwner => Some(Verdict::new(
+                    SiteLabel::Excluded,
+                    format!(
+                        "receiver chain `{}` does not reach `{}`",
+                        row.typed_receiver_chain
+                            .as_deref()
+                            .unwrap_or_default()
+                            .join("."),
+                        spec.name
+                    ),
+                    false,
+                )),
+                TypedReceiverClaim::Unknown => None,
+            });
         }
         if let Some(shadow) = self.nearest_shadow(row, &spec.name, group_ids)? {
             let mut shorthand_candidate = false;
@@ -3102,6 +3513,25 @@ impl<'a> Accounting<'a> {
     ) -> Result<Verdict, QueryError> {
         if let Some(verdict) = self.outside_ancestors(row, group)? {
             return Ok(verdict);
+        }
+        if row.typed_receiver_chain.is_some()
+            && crate::queries::has_typed_receiver_chain_support(self.conn)
+        {
+            return Ok(if shorthand_candidate {
+                Verdict::new(
+                    SiteLabel::Unresolved,
+                    format!("{} definitions", rivals.len() + 2),
+                    false,
+                )
+            } else if rivals.is_empty() {
+                Verdict::new(SiteLabel::Likely, "name only", false)
+            } else {
+                Verdict::new(
+                    SiteLabel::Unresolved,
+                    format!("{} definitions", rivals.len() + 1),
+                    false,
+                )
+            });
         }
         if let Some(receiver) = row.qualifier().filter(|_| row.namespace.len() <= 1)
             && let Some(type_name) = self.receiver_type(row, receiver)?
@@ -4731,6 +5161,29 @@ fn languages_compatible(row: &str, target: &str) -> bool {
     call_languages_compatible(row, target)
 }
 
+fn receiver_chain_statuses_sql(absent_target: bool) -> String {
+    let target = "s_target";
+    let target_join = if absent_target {
+        format!(
+            "JOIN (SELECT ?3 AS symbol_id, ?4 AS name, ?5 AS kind, ?6 AS language, ?7 AS path,
+                          ?8 AS start_line, ?9 AS parent_symbol_id) {target}"
+        )
+    } else {
+        format!("JOIN symbols {target} ON {target}.symbol_id = ?3")
+    };
+    let status = crate::queries::typed_receiver_chain_target_status_with_base_owner_map_sql(
+        "receiver_owner.value",
+        target,
+        "?2",
+    );
+    format!(
+        "SELECT receiver_owner.key,
+                CASE WHEN receiver_owner.value IS NULL THEN NULL ELSE {status} END
+         FROM json_each(?1) receiver_owner
+         {target_join}"
+    )
+}
+
 /// The last segment of an import source, `None` for a relative path or a path inside the crate.
 fn import_segment(source: &str) -> Option<String> {
     let source = source.trim();
@@ -4753,7 +5206,7 @@ fn import_segment(source: &str) -> Option<String> {
 
 /// SQL that returns, for every pending or identifier row with the name `?1`, whether the
 /// predicate of the resolver ties it to the symbol `?2` and the positive evidence for it.
-fn judge_sql(conn: &Connection, absent_target: bool) -> String {
+fn judge_sql(conn: &Connection, absent_target: bool, include_receiver_chain: bool) -> String {
     let target = "s_target";
     let parent = "s_target_parent";
     let target_join = if absent_target {
@@ -4764,8 +5217,28 @@ fn judge_sql(conn: &Connection, absent_target: bool) -> String {
     } else {
         format!("JOIN symbols {target} ON {target}.symbol_id = ?2")
     };
-    let predicate = pending_target_predicate(conn, target, parent);
-    let evidence = evidence_sql(conn, target, parent);
+    let typed_receiver_chain_supported = crate::queries::has_typed_receiver_chain_support(conn);
+    let (receiver_chain_status, receiver_chain_status_join) =
+        if typed_receiver_chain_supported && include_receiver_chain {
+            let status_parameter = if absent_target { "?11" } else { "?5" };
+            (
+                Some("receiver_chain_status.value"),
+                format!(
+                    "LEFT JOIN json_each({status_parameter}) receiver_chain_status
+                    ON receiver_chain_status.key = p.src || ':' || p.row_id"
+                ),
+            )
+        } else {
+            (Some("0"), String::new())
+        };
+    let predicate = crate::queries::pending_target_predicate_with_receiver_chain_status(
+        conn,
+        target,
+        parent,
+        receiver_chain_status,
+    );
+    let evidence =
+        evidence_sql_with_receiver_chain_status(conn, target, parent, receiver_chain_status);
     format!(
         "SELECT p.src, p.row_id,
                 CASE WHEN p.src = 'I' AND p.kind IN ('type_usage', 'member_access')
@@ -4796,6 +5269,7 @@ fn judge_sql(conn: &Connection, absent_target: bool) -> String {
          LEFT JOIN symbols s_from ON s_from.symbol_id = p.from_symbol_id
          {target_join}
          LEFT JOIN symbols {parent} ON {parent}.symbol_id = {target}.parent_symbol_id
+         {receiver_chain_status_join}
          WHERE {predicate}
             OR (p.src = 'I' AND p.kind IN ('type_usage', 'member_access'))"
     )
@@ -4818,7 +5292,12 @@ fn import_match_sql() -> String {
 }
 
 /// SQL `CASE` that names the positive evidence tying row `p` to `target`, or yields `NULL`.
-fn evidence_sql(conn: &Connection, target: &str, parent: &str) -> String {
+fn evidence_sql_with_receiver_chain_status(
+    conn: &Connection,
+    target: &str,
+    parent: &str,
+    receiver_chain_status: Option<&str>,
+) -> String {
     let ns = "json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END)";
     let has_namespace = "COALESCE(p.target_namespace_json, '[]') NOT IN ('', '[]')";
     let has_receiver = "COALESCE(p.target_receiver, '') != ''";
@@ -4830,7 +5309,51 @@ fn evidence_sql(conn: &Connection, target: &str, parent: &str) -> String {
     let implicit_languages = implicit_receiver_language_list();
     let module_receiver = module_import_binding_sql(target, "p.target_receiver");
     let module_bare = module_import_binding_sql(target, &format!("{target}.name"));
-    let receiver_type = receiver_type_sql(conn, parent);
+    let receiver_chain_json = "json_insert(
+        CASE WHEN json_valid(p.target_namespace_json)
+                   AND json_type(p.target_namespace_json) = 'array'
+             THEN p.target_namespace_json ELSE '[]' END,
+        '$[#]', p.target_receiver
+    )";
+    let typed_receiver_chain_supported = crate::queries::has_typed_receiver_chain_support(conn);
+    let typed_receiver_chain_evidence = if typed_receiver_chain_supported {
+        let matches_target = match receiver_chain_status {
+            Some(status) => format!("({status}) = 1"),
+            None => {
+                let receiver_chain_owner = crate::queries::typed_receiver_chain_owner_id_sql(
+                    "p.from_symbol_id",
+                    "p.path",
+                    "p.start_line",
+                    "p.language",
+                    receiver_chain_json,
+                );
+                crate::queries::typed_receiver_chain_matches_target_sql(
+                    &receiver_chain_owner,
+                    target,
+                )
+            }
+        };
+        format!(
+            "WHEN (p.src = 'P' AND json_array_length({receiver_chain_json}) > 1
+              AND p.target_receiver IS NOT NULL AND p.target_receiver != ''
+              ) THEN CASE WHEN {matches_target} THEN 'receiver type' END"
+        )
+    } else {
+        String::new()
+    };
+    let receiver_type = if crate::queries::has_type_fact_support(conn) {
+        receiver_type_sql(conn, parent)
+    } else {
+        "0".to_string()
+    };
+    let receiver_type = if typed_receiver_chain_supported {
+        format!(
+            "CASE WHEN p.src = 'P' AND json_array_length({receiver_chain_json}) > 1
+                  THEN 0 ELSE {receiver_type} END"
+        )
+    } else {
+        receiver_type
+    };
     let qualifier_reaches_owner = module_import_binding_sql(parent, "p.receiver_qualifier");
     let foreign_qualifier = format!(
         "(p.receiver_qualifier IS NOT NULL
@@ -4850,6 +5373,7 @@ fn evidence_sql(conn: &Connection, target: &str, parent: &str) -> String {
         .unwrap_or_default();
     format!(
         "CASE
+            {typed_receiver_chain_evidence}
             WHEN {has_namespace} AND {parent}.name IS NOT NULL
                  AND EXISTS (SELECT 1 FROM {ns} WHERE value = {parent}.name) AND {owner_in_scope}
                  THEN 'qualified path'
@@ -4897,6 +5421,199 @@ mod tests {
     use crate::{
         Workspace, find_julie_extract_binary, open_read_only, safe_tempdir, scan_workspace,
     };
+
+    fn receiver_chain_accounting(conn: &Connection) -> Accounting<'_> {
+        conn.execute_batch(
+            "CREATE TABLE symbols (
+                symbol_id TEXT, path TEXT, language TEXT, name TEXT, kind TEXT,
+                parent_symbol_id TEXT, start_line INTEGER, metadata_json TEXT,
+                signature TEXT, file_id TEXT
+            );
+            CREATE TABLE type_facts (symbol_id TEXT, resolved_type TEXT, language TEXT);
+            CREATE TABLE relationships (from_symbol_id TEXT, to_symbol_id TEXT, kind TEXT);
+            CREATE TABLE pending_relationships (
+                from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT, path TEXT,
+                start_line INTEGER, file_id TEXT, target_receiver TEXT, target_namespace_json TEXT
+            );
+            CREATE TABLE files (file_id TEXT, language TEXT);",
+        )
+        .unwrap();
+        Accounting::new(conn, Path::new("."), Duration::from_secs(1))
+    }
+
+    fn receiver_chain_root_evidence(owner_id: &str) -> ReceiverChainOwnerEvidence {
+        ReceiverChainOwnerEvidence {
+            owners: HashMap::from([("P:1".to_string(), Some(owner_id.to_string()))]),
+            pending_base_owners: HashMap::new(),
+            incomplete: None,
+            edge_rows_examined: 0,
+        }
+    }
+
+    #[test]
+    fn receiver_chain_ancestry_stops_at_edge_limit_plus_one() {
+        let conn = Connection::open_in_memory().unwrap();
+        let accounting = receiver_chain_accounting(&conn);
+        for index in 0..20 {
+            conn.execute(
+                "INSERT INTO relationships VALUES ('root', ?1, 'extends')",
+                params![format!("base-{index}")],
+            )
+            .unwrap();
+        }
+        let mut evidence = receiver_chain_root_evidence("root");
+
+        accounting
+            .extend_receiver_chain_ancestry(
+                &mut evidence,
+                ReceiverChainLimits {
+                    owners: 100,
+                    edges: 2,
+                    depth: 8,
+                },
+            )
+            .unwrap();
+
+        assert_eq!(evidence.incomplete, Some(ReceiverChainLimit::Edges));
+        assert_eq!(evidence.edge_rows_examined, 3);
+        let statuses = accounting
+            .receiver_chain_target_statuses("target", &evidence)
+            .unwrap();
+        assert_eq!(statuses.get("P:1"), Some(&None));
+    }
+
+    #[test]
+    fn receiver_chain_ancestry_marks_unexpanded_depth_incomplete_and_keeps_leaves_complete() {
+        let conn = Connection::open_in_memory().unwrap();
+        let accounting = receiver_chain_accounting(&conn);
+        conn.execute_batch(
+            "INSERT INTO relationships VALUES ('root', 'middle', 'extends');
+            INSERT INTO relationships VALUES ('middle', 'leaf', 'implements');",
+        )
+        .unwrap();
+        let mut evidence = receiver_chain_root_evidence("root");
+
+        accounting
+            .extend_receiver_chain_ancestry(
+                &mut evidence,
+                ReceiverChainLimits {
+                    owners: 10,
+                    edges: 10,
+                    depth: 1,
+                },
+            )
+            .unwrap();
+
+        assert_eq!(evidence.incomplete, Some(ReceiverChainLimit::Depth));
+
+        let leaf_conn = Connection::open_in_memory().unwrap();
+        let leaf_accounting = receiver_chain_accounting(&leaf_conn);
+        leaf_conn
+            .execute(
+                "INSERT INTO relationships VALUES ('root', 'middle', 'extends')",
+                [],
+            )
+            .unwrap();
+        let mut leaf_evidence = receiver_chain_root_evidence("root");
+
+        leaf_accounting
+            .extend_receiver_chain_ancestry(
+                &mut leaf_evidence,
+                ReceiverChainLimits {
+                    owners: 10,
+                    edges: 10,
+                    depth: 1,
+                },
+            )
+            .unwrap();
+
+        assert_eq!(leaf_evidence.incomplete, None);
+    }
+
+    #[test]
+    fn receiver_chain_ancestry_marks_owner_limit_incomplete() {
+        let conn = Connection::open_in_memory().unwrap();
+        let accounting = receiver_chain_accounting(&conn);
+        conn.execute(
+            "INSERT INTO relationships VALUES ('root', 'middle', 'extends')",
+            [],
+        )
+        .unwrap();
+        let mut evidence = receiver_chain_root_evidence("root");
+
+        accounting
+            .extend_receiver_chain_ancestry(
+                &mut evidence,
+                ReceiverChainLimits {
+                    owners: 1,
+                    edges: 10,
+                    depth: 8,
+                },
+            )
+            .unwrap();
+
+        assert_eq!(evidence.incomplete, Some(ReceiverChainLimit::Owners));
+    }
+
+    #[test]
+    fn receiver_chain_limit_notes_surface_each_unknown_coverage_once() {
+        for (limit, expected) in [
+            (
+                ReceiverChainLimit::Owners,
+                "receiver-chain ancestry exceeded the 8,192-owner limit; affected sites stayed unresolved",
+            ),
+            (
+                ReceiverChainLimit::Edges,
+                "receiver-chain ancestry exceeded the 8,192-edge limit; affected sites stayed unresolved",
+            ),
+            (
+                ReceiverChainLimit::Depth,
+                "receiver-chain ancestry exceeded the 8-level limit; affected sites stayed unresolved",
+            ),
+        ] {
+            let mut cannot_see = Vec::new();
+            record_receiver_chain_limit_note(&mut cannot_see, Some(limit));
+            record_receiver_chain_limit_note(&mut cannot_see, Some(limit));
+
+            assert_eq!(cannot_see, [expected]);
+        }
+    }
+
+    #[test]
+    fn judge_sql_keeps_typed_receiver_status_bound_and_compact() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE symbols (
+                symbol_id TEXT, path TEXT, language TEXT, name TEXT, kind TEXT,
+                parent_symbol_id TEXT, start_line INTEGER, metadata_json TEXT, signature TEXT
+            );
+            CREATE TABLE type_facts (symbol_id TEXT, resolved_type TEXT, language TEXT);
+            CREATE TABLE relationships (from_symbol_id TEXT, to_symbol_id TEXT, kind TEXT);
+            CREATE TABLE files (file_id TEXT, language TEXT);
+            CREATE TABLE pending_relationships (
+                from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT, path TEXT,
+                start_line INTEGER, file_id TEXT, target_receiver TEXT, target_namespace_json TEXT
+            );",
+        )
+        .unwrap();
+
+        let plain = judge_sql(&conn, false, false);
+        let with_chain = judge_sql(&conn, false, true);
+
+        assert!(!plain.contains("receiver_chain_status"));
+        assert!(
+            plain.len() < 200_000,
+            "plain judge SQL grew to {} bytes",
+            plain.len()
+        );
+        assert!(with_chain.contains("LEFT JOIN json_each(?5) receiver_chain_status"));
+        assert!(
+            with_chain.len() <= plain.len() + 10_000,
+            "typed receiver-chain SQL should bind status without expanding the proof: plain={} chain={}",
+            plain.len(),
+            with_chain.len()
+        );
+    }
 
     fn report_past_the_time_limit(
         files: &[(&str, &str)],
@@ -4998,5 +5715,34 @@ mod tests {
                 ),
             ]
         );
+    }
+
+    #[test]
+    fn legacy_judge_sql_prepares_without_type_fact_support() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE symbols (
+                symbol_id TEXT, path TEXT, language TEXT, name TEXT, kind TEXT,
+                parent_symbol_id TEXT, start_line INTEGER, end_line INTEGER,
+                body_start_line INTEGER, metadata_json TEXT, signature TEXT
+            );
+            CREATE TABLE files (file_id TEXT, language TEXT);
+            CREATE TABLE relationships (from_symbol_id TEXT, to_symbol_id TEXT, kind TEXT);
+            CREATE TABLE pending_relationships (
+                from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT, path TEXT,
+                start_line INTEGER, start_column INTEGER, end_line INTEGER, file_id TEXT,
+                target_receiver TEXT, target_namespace_json TEXT
+            );
+            CREATE TABLE identifiers (
+                identifier_id TEXT, containing_symbol_id TEXT, name TEXT, kind TEXT,
+                path TEXT, language TEXT, start_line INTEGER, start_column INTEGER,
+                metadata_json TEXT
+            );",
+        )
+        .unwrap();
+
+        let sql = judge_sql(&conn, false, true);
+        assert!(!sql.contains("receiver_chain_status"));
+        conn.prepare(&sql).unwrap();
     }
 }
