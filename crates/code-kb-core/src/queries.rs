@@ -2378,18 +2378,28 @@ pub fn find_related_tests(
 
     let mut tests = Vec::new();
     let mut seen_ids = std::collections::HashSet::from([target_symbol.symbol_id.clone()]);
+    let direct_call_language = call_languages_compatible_sql("s.language", "?3");
 
     let callers_sql = format!(
         "SELECT {COLUMNS}
      FROM symbols s
      JOIN relationships r ON r.from_symbol_id = s.symbol_id
-     WHERE r.to_symbol_id = ?1 AND {is_test} AND {not_documentation}
+     WHERE r.to_symbol_id = ?1
+       AND (r.kind != 'calls' OR {direct_call_language})
+       AND {is_test} AND {not_documentation}
      ORDER BY {TEST_ORDER}
      LIMIT ?2"
     );
 
     if let Ok(mut stmt) = conn.prepare(&callers_sql)
-        && let Ok(rows) = stmt.query_map(params![target_symbol.symbol_id, limit as i64], map_symbol)
+        && let Ok(rows) = stmt.query_map(
+            params![
+                target_symbol.symbol_id,
+                limit as i64,
+                target_symbol.language.as_str()
+            ],
+            map_symbol,
+        )
     {
         for row in rows.flatten() {
             let row = enclosing_test(conn, row)?;
@@ -2405,6 +2415,7 @@ pub fn find_related_tests(
     // julie resolves call edges inside one file only; every cross-file caller is a pending edge
     let remaining = limit - tests.len();
     if remaining > 0 && has_pending_namespace_column(conn) {
+        let pending_language = pending_relationship_language_filter("p.kind", "s_from", "s_target");
         let pending_sql = format!(
             "SELECT DISTINCT {COLUMNS}
      FROM pending_relationships p
@@ -2413,6 +2424,7 @@ pub fn find_related_tests(
      JOIN symbols s_target ON s_target.symbol_id = ?1
      LEFT JOIN symbols s_target_parent ON s_target.parent_symbol_id = s_target_parent.symbol_id
      WHERE p.target_terminal_name = s_target.name
+       AND {pending_language}
        AND {is_test}
        AND {not_documentation}
        AND {pred}
@@ -2440,8 +2452,17 @@ pub fn find_related_tests(
     }
 
     // A test that reads or assigns the symbol (`app.wsgi_app = ...`) has no call edge.
+    let reported_call_language = call_languages_compatible_sql("s.language", "s_target.language");
+    let reported_name_language = identifier_language_matches("s", "s_target");
     let mut test_by_id = conn.prepare(&format!(
-        "SELECT {COLUMNS} FROM symbols s WHERE s.symbol_id = ?1 AND {is_test} AND {not_documentation}"
+        "SELECT {COLUMNS} FROM symbols s
+         JOIN symbols s_target ON s_target.symbol_id = ?4
+         WHERE s.symbol_id = ?1
+           AND {is_test}
+           AND {not_documentation}
+           AND ((?2 = 0 AND ?3 = 0)
+                OR (?2 = 1 AND {reported_call_language})
+                OR (?3 = 1 AND {reported_name_language}))"
     ))?;
     for site in find_references_for_symbol(
         conn,
@@ -2452,11 +2473,30 @@ pub fn find_related_tests(
     )
     .unwrap_or_default()
     {
-        if site.kind != "member_access (candidate)"
-            && !seen_ids.contains(&site.from_symbol_id)
-            && let Some(test) = test_by_id
-                .query_row(params![site.from_symbol_id], map_symbol)
-                .optional()?
+        if site.kind == "member_access (candidate)" || seen_ids.contains(&site.from_symbol_id) {
+            continue;
+        }
+        let explicit_noncall = site.kind != "calls"
+            && conn.query_row(
+                "SELECT EXISTS (
+                         SELECT 1 FROM relationships
+                         WHERE from_symbol_id = ?1 AND to_symbol_id = ?2 AND kind = ?3
+                     )",
+                params![site.from_symbol_id, target_symbol.symbol_id, site.kind],
+                |row| row.get::<_, bool>(0),
+            )?;
+        let is_name_only = site.kind != "calls" && !explicit_noncall;
+        if let Some(test) = test_by_id
+            .query_row(
+                params![
+                    site.from_symbol_id,
+                    site.kind == "calls",
+                    is_name_only,
+                    target_symbol.symbol_id
+                ],
+                map_symbol,
+            )
+            .optional()?
         {
             let test = enclosing_test(conn, test)?;
             if seen_ids.insert(test.symbol_id.clone()) {
@@ -3485,6 +3525,7 @@ fn has_css_call_identifier_site_schema(conn: &Connection) -> bool {
 }
 
 fn callee_page_cte(conn: &Connection, include_external: bool) -> String {
+    let pending_language = pending_relationship_language_filter("p.kind", "s_from", "s_to");
     let pending = if has_pending_namespace_column(conn) {
         if include_external {
             "SELECT s_from.name AS from_symbol_name,
@@ -3515,6 +3556,7 @@ fn callee_page_cte(conn: &Connection, include_external: bool) -> String {
                        LEFT JOIN symbols s_to_parent ON s_to.parent_symbol_id = s_to_parent.symbol_id
                        WHERE s_to.name = p.target_terminal_name
                          AND {}
+                         AND {pending_language}
                          AND {}
                    )",
                 callee_target_kind("s_to_parent"),
@@ -3534,7 +3576,8 @@ fn callee_page_cte(conn: &Connection, include_external: bool) -> String {
          WHERE s_from.name = ?1 AND (?2 IS NULL OR p.from_symbol_id = ?2)"
             .to_string()
     } else {
-        "SELECT s_from.name AS from_symbol_name,
+        format!(
+            "SELECT s_from.name AS from_symbol_name,
                 p.from_symbol_id AS from_symbol_id,
                 p.target_terminal_name AS to_symbol_name,
                 p.kind AS kind,
@@ -3544,8 +3587,9 @@ fn callee_page_cte(conn: &Connection, include_external: bool) -> String {
          FROM pending_relationships p
          JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
          WHERE s_from.name = ?1 AND (?2 IS NULL OR p.from_symbol_id = ?2)
-           AND EXISTS (SELECT 1 FROM symbols s_to WHERE s_to.name = p.target_terminal_name)"
-            .to_string()
+           AND EXISTS (SELECT 1 FROM symbols s_to WHERE s_to.name = p.target_terminal_name
+                       AND {pending_language})"
+        )
     };
     let css_candidate_sites = if has_css_call_identifier_site_schema(conn) {
         format!("css_candidate_sites AS ({CSS_CALL_IDENTIFIER_SITES_SQL}),")
@@ -3561,6 +3605,8 @@ fn callee_page_cte(conn: &Connection, include_external: bool) -> String {
     } else {
         ""
     };
+    let relationship_call_language =
+        call_languages_compatible_sql("s_from.language", "s_to.language");
     format!(
         "WITH {css_candidate_sites} raw_sites AS (
              SELECT s_from.name AS from_symbol_name,
@@ -3574,6 +3620,7 @@ fn callee_page_cte(conn: &Connection, include_external: bool) -> String {
              JOIN symbols s_from ON r.from_symbol_id = s_from.symbol_id
              JOIN symbols s_to ON r.to_symbol_id = s_to.symbol_id
              WHERE s_from.name = ?1 AND (?2 IS NULL OR r.from_symbol_id = ?2)
+               AND (r.kind != 'calls' OR {relationship_call_language})
              UNION ALL
              {pending}
              {css_call_sites}
@@ -3654,6 +3701,54 @@ pub(crate) fn is_js_family(language: &str) -> bool {
     JS_FAMILY_LANGUAGES.contains(&language)
 }
 
+const JVM_CALL_LANGUAGES: &[&str] = &["java", "kotlin", "scala", "groovy"];
+const C_CALL_LANGUAGES: &[&str] = &["c", "cpp", "objc", "objcpp", "qml"];
+const DOTNET_CALL_LANGUAGES: &[&str] = &["csharp", "razor", "vbnet", "fsharp"];
+const CALL_LANGUAGE_FAMILIES: &[(&str, &[&str])] = &[
+    ("js", &JS_FAMILY_LANGUAGES),
+    ("jvm", JVM_CALL_LANGUAGES),
+    ("c", C_CALL_LANGUAGES),
+    ("dotnet", DOTNET_CALL_LANGUAGES),
+];
+
+pub(crate) fn call_language_family(language: &str) -> &str {
+    CALL_LANGUAGE_FAMILIES
+        .iter()
+        .find(|(_, languages)| languages.contains(&language))
+        .map(|(family, _)| *family)
+        .unwrap_or(language)
+}
+
+pub(crate) fn call_languages_compatible(row: &str, target: &str) -> bool {
+    row.is_empty() || call_language_family(row) == call_language_family(target)
+}
+
+fn call_language_family_sql(language: &str) -> String {
+    let cases = CALL_LANGUAGE_FAMILIES
+        .iter()
+        .map(|(family, languages)| {
+            let values = languages
+                .iter()
+                .map(|language| format!("'{language}'"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("WHEN {language} IN ({values}) THEN '{family}'")
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    format!("CASE {cases} ELSE {language} END")
+}
+
+fn call_languages_compatible_sql(row: &str, target: &str) -> String {
+    let row = format!("COALESCE({row}, '')");
+    let target = format!("COALESCE({target}, '')");
+    format!(
+        "({row} = '' OR {} = {})",
+        call_language_family_sql(&row),
+        call_language_family_sql(&target)
+    )
+}
+
 /// SQL that holds when a name-only identifier in `identifier` may refer to `target` across
 /// languages: the same language, the JavaScript family, Razor and C#, or QML to C++.
 fn identifier_language_matches(identifier: &str, target: &str) -> String {
@@ -3664,6 +3759,18 @@ fn identifier_language_matches(identifier: &str, target: &str) -> String {
           OR ({identifier}.language IN ('razor', 'csharp')
               AND {target}.language IN ('razor', 'csharp'))
           OR ({identifier}.language = 'qml' AND {target}.language = 'cpp'))"
+    )
+}
+
+fn pending_relationship_language_filter(kind: &str, source: &str, target: &str) -> String {
+    format!(
+        "(({kind} = 'calls' AND {call_language})
+          OR ({kind} != 'calls' AND {name_language}))",
+        call_language = call_languages_compatible_sql(
+            &format!("{source}.language"),
+            &format!("{target}.language")
+        ),
+        name_language = identifier_language_matches(source, target)
     )
 }
 
@@ -5205,6 +5312,7 @@ fn describe_callee_targets(
 ) -> Result<(), QueryError> {
     let owner = "CASE WHEN par.kind IN ('class', 'struct', 'interface', 'trait', 'enum', 'record', 'object', 'protocol', 'union')
                  THEN par.name || '.' ELSE '' END";
+    let pending_language = pending_relationship_language_filter("p.kind", "s_from", "s_to");
     let pending = if has_pending_namespace_column(conn) {
         format!(
             "UNION
@@ -5216,6 +5324,7 @@ fn describe_callee_targets(
              LEFT JOIN symbols s_to_parent ON s_to.parent_symbol_id = s_to_parent.symbol_id
              WHERE p.from_symbol_id = ?1 AND p.start_line = ?2
                AND (p.target_terminal_name = ?3 OR p.target_display_name = ?3)
+               AND {pending_language}
                AND {kind}
                AND {pred}",
             kind = callee_target_kind("s_to_parent"),
@@ -5224,12 +5333,16 @@ fn describe_callee_targets(
     } else {
         String::new()
     };
+    let relationship_call_language =
+        call_languages_compatible_sql("s_from.language", "s_to.language");
     let mut stmt = conn.prepare(&format!(
         "SELECT {owner} || s_to.name, replace(s_to.path, '\\', '/'), s_to.start_line
          FROM relationships r
+         JOIN symbols s_from ON r.from_symbol_id = s_from.symbol_id
          JOIN symbols s_to ON r.to_symbol_id = s_to.symbol_id
          LEFT JOIN symbols par ON s_to.parent_symbol_id = par.symbol_id
          WHERE r.from_symbol_id = ?1 AND r.start_line = ?2 AND s_to.name = ?3
+           AND (r.kind != 'calls' OR {relationship_call_language})
          {pending}
          ORDER BY 2, 3
          LIMIT 4"
@@ -5534,14 +5647,17 @@ pub fn find_callee_signatures(
     limit: usize,
     include_external: bool,
 ) -> Result<Vec<String>, QueryError> {
-    let mut stmt = conn.prepare(
+    let relationship_call_language =
+        call_languages_compatible_sql("s_from.language", "s_to.language");
+    let mut stmt = conn.prepare(&format!(
         "SELECT DISTINCT s_to.name, s_to.signature, s_to.path, s_to.start_line, s_to.kind
          FROM relationships r
          JOIN symbols s_from ON r.from_symbol_id = s_from.symbol_id
          JOIN symbols s_to ON r.to_symbol_id = s_to.symbol_id
          WHERE s_from.name = ?1 AND r.from_symbol_id = ?2
-         LIMIT ?3",
-    )?;
+           AND (r.kind != 'calls' OR {relationship_call_language})
+         LIMIT ?3"
+    ))?;
 
     let rows = stmt.query_map(params![symbol_name, symbol_id, (limit * 2) as i64], |row| {
         Ok((
@@ -5571,6 +5687,7 @@ pub fn find_callee_signatures(
 
     if signatures.len() < limit {
         let remaining = (limit - signatures.len()) * 2;
+        let pending_language = pending_relationship_language_filter("p.kind", "s_from", "s_to");
         let p_rows: Vec<(String, Option<String>, String, usize, String)> =
             if has_pending_namespace_column(conn) {
                 let mut p_stmt = conn.prepare(
@@ -5580,9 +5697,10 @@ pub fn find_callee_signatures(
                  JOIN symbols s_to ON s_to.name = p.target_terminal_name
                  LEFT JOIN symbols s_parent ON s_to.parent_symbol_id = s_parent.symbol_id
                  WHERE s_from.name = ?1 AND p.from_symbol_id = ?2
+                   AND {pending_language}
                    AND {kind}
                     AND {pred}
-                 LIMIT ?3", kind = callee_target_kind("s_parent"), pred = pending_target_predicate(conn, "s_to", "s_parent")),
+                 LIMIT ?3", kind = callee_target_kind("s_parent"), pred = pending_target_predicate(conn, "s_to", "s_parent"), pending_language = pending_language),
             )?;
 
                 let rows =
@@ -5597,15 +5715,16 @@ pub fn find_callee_signatures(
                     })?;
                 rows.flatten().collect()
             } else {
-                let mut p_stmt = conn.prepare(
+                let mut p_stmt = conn.prepare(&format!(
                 "SELECT DISTINCT s_to.name, s_to.signature, s_to.path, s_to.start_line, s_to.kind
                  FROM pending_relationships p
                  JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
                  JOIN symbols s_to ON s_to.name = p.target_terminal_name
                  WHERE s_from.name = ?1 AND p.from_symbol_id = ?2
+                   AND {pending_language}
                    AND s_to.kind NOT IN ('import', 'variable', 'parameter', 'field', 'property', 'module', 'namespace')
-                 LIMIT ?3",
-            )?;
+                 LIMIT ?3"
+                ))?;
 
                 let rows =
                     p_stmt.query_map(params![symbol_name, symbol_id, remaining as i64], |row| {
@@ -5636,6 +5755,7 @@ pub fn find_callee_signatures(
 
     if include_external && signatures.len() < limit {
         let remaining = (limit - signatures.len()) * 2;
+        let pending_language = pending_relationship_language_filter("p.kind", "s_from", "s_to");
         let ext_rows: Vec<(String, String, usize)> = if has_pending_namespace_column(conn) {
             let mut ext_stmt = conn.prepare(
                 &format!("SELECT DISTINCT COALESCE(NULLIF(p.target_display_name, ''), p.target_terminal_name), p.path, p.start_line
@@ -5646,10 +5766,11 @@ pub fn find_callee_signatures(
                        SELECT 1 FROM symbols s_to
                        LEFT JOIN symbols s_parent ON s_to.parent_symbol_id = s_parent.symbol_id
                        WHERE s_to.name = p.target_terminal_name
+                         AND {pending_language}
                          AND {kind}
                          AND {pred}
                    )
-                 LIMIT ?3", kind = callee_target_kind("s_parent"), pred = pending_target_predicate(conn, "s_to", "s_parent")),
+                 LIMIT ?3", kind = callee_target_kind("s_parent"), pred = pending_target_predicate(conn, "s_to", "s_parent"), pending_language = pending_language),
             )?;
 
             let rows =
@@ -5662,7 +5783,7 @@ pub fn find_callee_signatures(
                 })?;
             rows.flatten().collect()
         } else {
-            let mut ext_stmt = conn.prepare(
+            let mut ext_stmt = conn.prepare(&format!(
                 "SELECT DISTINCT p.target_terminal_name, p.path, p.start_line
                  FROM pending_relationships p
                  JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
@@ -5670,10 +5791,11 @@ pub fn find_callee_signatures(
                    AND NOT EXISTS (
                        SELECT 1 FROM symbols s_to
                        WHERE s_to.name = p.target_terminal_name
+                         AND {pending_language}
                          AND s_to.kind NOT IN ('import', 'variable', 'parameter', 'field', 'property', 'module', 'namespace')
                    )
-                 LIMIT ?3",
-            )?;
+                 LIMIT ?3"
+            ))?;
 
             let rows =
                 ext_stmt.query_map(params![symbol_name, symbol_id, remaining as i64], |row| {
@@ -7484,6 +7606,8 @@ fn walk_caller_branches(
     } else {
         format!("AND s_target.kind NOT IN ({LOW_SIGNAL_KINDS_SQL})")
     };
+    let call_language_filter =
+        call_languages_compatible_sql("s_from.language", "s_target.language");
 
     if has_relationships {
         recursive_branches.push(format!(
@@ -7491,27 +7615,29 @@ fn walk_caller_branches(
              FROM relationships r
              JOIN impact_walk iw ON r.to_symbol_id = iw.symbol_id
              JOIN symbols s_from ON r.from_symbol_id = s_from.symbol_id
+             JOIN symbols s_target ON r.to_symbol_id = s_target.symbol_id
              WHERE iw.depth < {depth_bound}
+               AND (r.kind != 'calls' OR {call_language_filter})
                {from_signal_filter}"
         ));
     }
 
     if has_pending {
-        let (parent_join, ns_condition) = if conn
-            .query_row(
-                "SELECT 1 FROM pragma_table_info('pending_relationships') WHERE name='target_namespace_json'",
-                [],
-                |_| Ok(true),
-            )
-            .unwrap_or(false)
-        {
-            (
-                "LEFT JOIN symbols s_target_parent ON s_target.parent_symbol_id = s_target_parent.symbol_id
-            LEFT JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id",
-                format!("AND {pred}", pred = pending_target_predicate(conn, "s_target", "s_target_parent")),
+        let has_target_namespace = has_pending_namespace_column(conn);
+        let pending_language_filter =
+            pending_relationship_language_filter("p.kind", "s_from", "s_target");
+        let parent_join = if has_target_namespace {
+            "LEFT JOIN symbols s_target_parent ON s_target.parent_symbol_id = s_target_parent.symbol_id"
+        } else {
+            ""
+        };
+        let ns_condition = if has_target_namespace {
+            format!(
+                "AND {pred}",
+                pred = pending_target_predicate(conn, "s_target", "s_target_parent")
             )
         } else {
-            ("", String::new())
+            String::new()
         };
 
         recursive_branches.push(format!(
@@ -7519,8 +7645,10 @@ fn walk_caller_branches(
              FROM pending_relationships p
              JOIN symbols s_target ON p.target_terminal_name = s_target.name
              JOIN impact_walk iw ON s_target.symbol_id = iw.symbol_id
+             JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
              {parent_join}
              WHERE iw.depth < {depth_bound}
+               AND {pending_language_filter}
                {target_signal_filter}
                {ns_condition}"
         ));
@@ -7558,17 +7686,23 @@ fn walk_caller_branches(
     // A constructor runs wherever its class is built: `Flask()` reaches `Flask.__init__`. Rows
     // reached only this way (`via` 1) sort last: nearly every test builds the app.
     if has_relationships {
+        let constructor_call_language =
+            call_languages_compatible_sql("s_from.language", "ctor.language");
         recursive_branches.push(format!(
             "SELECT r.from_symbol_id, iw.depth + 1, 1, iw.symbol_id
              FROM impact_walk iw
              CROSS JOIN symbols ctor ON ctor.symbol_id = iw.symbol_id
              JOIN relationships r ON r.to_symbol_id = ctor.parent_symbol_id
+             JOIN symbols s_from ON r.from_symbol_id = s_from.symbol_id
              WHERE iw.depth < {depth_bound}
                AND ctor.kind = 'constructor'
-               AND +r.kind = 'calls'"
+               AND +r.kind = 'calls'
+               AND {constructor_call_language}"
         ));
     }
     if has_pending && has_pending_namespace_column(conn) {
+        let constructor_call_language =
+            call_languages_compatible_sql("s_from.language", "s_target.language");
         recursive_branches.push(format!(
             "SELECT p.from_symbol_id, iw.depth + 1, 1, iw.symbol_id
              FROM impact_walk iw
@@ -7576,11 +7710,12 @@ fn walk_caller_branches(
              CROSS JOIN symbols s_target ON s_target.symbol_id = ctor.parent_symbol_id
              JOIN pending_relationships p ON p.target_terminal_name = s_target.name
              LEFT JOIN symbols s_target_parent ON s_target.parent_symbol_id = s_target_parent.symbol_id
-             LEFT JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
+             JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
              WHERE iw.depth < {depth_bound}
                AND ctor.kind = 'constructor'
                AND s_target.kind IN ('class', 'struct', 'record')
                AND +p.kind = 'calls'
+               AND {constructor_call_language}
                AND {pred}",
             pred = pending_target_predicate(conn, "s_target", "s_target_parent")
         ));

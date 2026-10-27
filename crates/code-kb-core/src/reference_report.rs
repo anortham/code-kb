@@ -11,12 +11,13 @@ use crate::models::{
     Symbol, TextOnlyLines, TextScanSummary,
 };
 use crate::queries::{
-    QueryError, built_receiver_sql, class_chain_sql, constructed_class, direct_identifier_rows,
-    documentation_language_list, enclosing_scope_sql, get_symbol_by_name,
-    grouped_member_access_rows, has_column, implicit_receiver_language_list, import_sites,
-    import_sites_of_absent, inherited_writes_among, is_js_family, module_import_binding_sql,
-    owner_binding_in_scope_sql, path_proximity, pending_target_predicate,
-    populate_lambda_enclosing_names, receiver_type_sql, symbol_not_found_parts,
+    QueryError, built_receiver_sql, call_language_family, call_languages_compatible,
+    class_chain_sql, constructed_class, direct_identifier_rows, documentation_language_list,
+    enclosing_scope_sql, get_symbol_by_name, grouped_member_access_rows, has_column,
+    implicit_receiver_language_list, import_sites, import_sites_of_absent, inherited_writes_among,
+    is_js_family, module_import_binding_sql, owner_binding_in_scope_sql, path_proximity,
+    pending_target_predicate, populate_lambda_enclosing_names, receiver_type_sql,
+    symbol_not_found_parts,
 };
 use crate::text_scan::scan_word;
 
@@ -4723,17 +4724,11 @@ fn shared_leading_segments(a: &str, b: &str) -> usize {
 }
 
 fn language_family(language: &str) -> &str {
-    match language {
-        language if is_js_family(language) => "js",
-        "java" | "kotlin" | "scala" | "groovy" => "jvm",
-        "c" | "cpp" | "objc" | "objcpp" | "qml" => "c",
-        "csharp" | "razor" | "vbnet" | "fsharp" => "dotnet",
-        other => other,
-    }
+    call_language_family(language)
 }
 
 fn languages_compatible(row: &str, target: &str) -> bool {
-    row.is_empty() || language_family(row) == language_family(target)
+    call_languages_compatible(row, target)
 }
 
 /// The last segment of an import source, `None` for a relative path or a path inside the crate.

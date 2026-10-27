@@ -160,3 +160,5 @@ Astra reviewed these boundaries. Language compatibility permits further call mat
 The Java scored transcript also exposes unrelated Rust/TypeScript callee signatures in context. Include the demonstrated dependency query in the shared call-compatibility fix; related-type binding is a separate query and remains the type-context owner’s scope.
 
 Task2 evidence is complete in [the baseline report](../reviews/2026-10-26-agent-comparison.md). The original72outcomes and all689actions are retained; future regression-data corrections do not replace measured grades. Independent runner/scope fixes are committed in eb163ea; remaining graph/type/receiver repairs keep Task3 open.
+
+Call-language graph/context repair passes three focused regressions and lead review after one fix round. Pending name-only type relations use the existing narrow identifier rule; explicit resolved non-call relations retain their behavior. Related-type binding and full typed receiver chains remain pending and keep Task3 open.
