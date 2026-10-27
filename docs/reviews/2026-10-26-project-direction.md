@@ -283,4 +283,15 @@ skeleton, lookup, context, callers, and impact, four calls each. Retained RSS
 was 23.64 MiB before and 24.46 MiB after; anonymous memory was 13.86 and
 14.50 MiB. The measured binaries were `af37420953d7` and `fbde44e013a80`.
 These small local measurements do not establish large-repository performance
-or an agent-task outcome. Windows verification follows the clean source commit.
+or an agent-task outcome.
+
+The initial Windows run used clean commit `2104bad09903a3708dd8c620cd75eb379ad7d286`
+on NTFS with the checksum-verified Julie 3.9.1 Windows binary. All 42-language
+conformance cases passed. It exposed two fixture defects: missing local Git
+identity and direct execution of `npm` rather than Windows `npm.cmd`. Those
+fixtures are repaired; the nested runner fixture now executes on Windows too.
+The exact emitted POSIX command runs under `sh` on Linux; Windows derives the
+runner arguments and working directory from the two supported fixture forms
+and executes them with `cmd.exe`. Product output retains its declared POSIX
+shell syntax. The plugin suite passed 12 tests and skipped eight
+platform-specific fixtures. Final Windows Rust and build gates are pending.

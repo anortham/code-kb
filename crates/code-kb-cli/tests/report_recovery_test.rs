@@ -418,6 +418,67 @@ fn cli(root: &Path, args: &[&str]) -> std::process::Output {
         .unwrap()
 }
 
+fn parse_reported_npm_command(command: &str) -> (Option<&str>, Vec<&str>) {
+    let (relative_path, runner) = if command == "npm test" {
+        (None, command)
+    } else if let Some(rest) = command.strip_prefix("cd '") {
+        let (relative_path, runner) = rest
+            .split_once("' && ")
+            .unwrap_or_else(|| panic!("unsupported emitted npm command: {command}"));
+        let relative_path = Path::new(relative_path);
+        assert!(relative_path.is_relative(), "{command}");
+        assert!(
+            !relative_path.components().any(|component| {
+                matches!(
+                    component,
+                    std::path::Component::ParentDir | std::path::Component::Prefix(_)
+                )
+            }),
+            "{command}"
+        );
+        let relative_path = relative_path.to_str().unwrap();
+        assert!(!relative_path.contains('\''), "{command}");
+        assert_eq!(format!("cd '{relative_path}' && {runner}"), command);
+        (Some(relative_path), runner)
+    } else {
+        panic!("unsupported emitted npm command: {command}");
+    };
+    assert_eq!(runner, "npm test", "{command}");
+    let mut words = runner.split_whitespace();
+    assert_eq!(words.next(), Some("npm"), "{command}");
+    let arguments = words.collect::<Vec<_>>();
+    assert_eq!(arguments, ["test"], "{command}");
+    (relative_path, arguments)
+}
+
+#[cfg(windows)]
+fn run_reported_npm_command(root: &Path, command: &str) -> std::process::Output {
+    let (relative_path, arguments) = parse_reported_npm_command(command);
+    let working_dir = relative_path
+        .map(|relative_path| root.join(relative_path))
+        .unwrap_or_else(|| root.to_path_buf());
+    let native_command = std::iter::once("npm.cmd")
+        .chain(arguments)
+        .collect::<Vec<_>>()
+        .join(" ");
+    Command::new("cmd.exe")
+        .args(["/D", "/S", "/C", native_command.as_str()])
+        .current_dir(working_dir)
+        .output()
+        .unwrap()
+}
+
+#[cfg(not(windows))]
+fn run_reported_npm_command(root: &Path, command: &str) -> std::process::Output {
+    parse_reported_npm_command(command);
+    Command::new("sh")
+        .arg("-c")
+        .arg(command)
+        .current_dir(root)
+        .output()
+        .unwrap()
+}
+
 fn result_text(result: &Value) -> &str {
     result["content"][0]["text"].as_str().unwrap()
 }
@@ -1327,11 +1388,14 @@ fn blast_radius_recommends_and_runs_a_configured_broader_test_command() {
     let text = String::from_utf8(output.stdout).unwrap();
     assert!(text.contains("Broader test command: `npm test`"), "{text}");
 
-    let run = Command::new("npm")
-        .arg("test")
-        .current_dir(root)
-        .output()
+    let command = text
+        .lines()
+        .find_map(|line| {
+            line.strip_prefix("Broader test command: `")
+                .and_then(|line| line.strip_suffix('`'))
+        })
         .unwrap();
+    let run = run_reported_npm_command(root, command);
     assert!(
         run.status.success(),
         "{}",
@@ -1361,30 +1425,22 @@ fn broader_commands_quote_nested_runner_paths_and_keep_the_runner_working_direct
         "{text}"
     );
 
-    #[cfg(unix)]
-    {
-        let command = text
-            .lines()
-            .find_map(|line| {
-                line.strip_prefix("Broader test command: `")
-                    .and_then(|line| line.strip_suffix('`'))
-            })
-            .unwrap();
-        let run = Command::new("sh")
-            .arg("-c")
-            .arg(command)
-            .current_dir(root)
-            .output()
-            .unwrap();
-        assert!(
-            run.status.success(),
-            "{}",
-            String::from_utf8_lossy(&run.stderr)
-        );
-        let stdout = String::from_utf8_lossy(&run.stdout);
-        assert!(stdout.contains("a configured test runs"), "{stdout}");
-        assert!(stdout.contains("b configured test runs"), "{stdout}");
-    }
+    let command = text
+        .lines()
+        .find_map(|line| {
+            line.strip_prefix("Broader test command: `")
+                .and_then(|line| line.strip_suffix('`'))
+        })
+        .unwrap();
+    let run = run_reported_npm_command(root, command);
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    assert!(stdout.contains("a configured test runs"), "{stdout}");
+    assert!(stdout.contains("b configured test runs"), "{stdout}");
 }
 
 #[test]

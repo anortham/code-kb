@@ -44,6 +44,16 @@ fn committed_repo(files: &[(&str, &str)]) -> Repo {
     let temp = safe_tempdir();
     let root = temp.path().to_path_buf();
     git(&root, &["init", "-q", "-b", "main"]);
+    git(&root, &["config", "--local", "user.name", "Code KB Tests"]);
+    git(
+        &root,
+        &[
+            "config",
+            "--local",
+            "user.email",
+            "code-kb-tests@example.invalid",
+        ],
+    );
     for (path, content) in files {
         write(&root, path, content);
     }

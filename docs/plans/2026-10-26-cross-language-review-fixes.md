@@ -237,8 +237,8 @@ Commit mode: `parallel-lead-commit` for every task. Workers do not stage, commit
 **Approach:** Review each task against its actual diff and evidence, integrate shared interfaces, run the narrow affected scopes and one final branch gate, measure live MCP memory, and reconcile every involved worktree before committing/reporting.
 
 **Acceptance criteria:**
-- [ ] Both guidance files explicitly require all pinned languages and stay byte-identical; docs match verified behavior.
-- [ ] Every identified applicable gap is fixed or has a genuine externally blocked dependency with a concrete repro and required action.
+- [x] Both guidance files explicitly require all pinned languages and stay byte-identical; docs match verified behavior.
+- [x] Every identified applicable gap is fixed or has a genuine externally blocked dependency with a concrete repro and required action.
 - [ ] Branch gates and post-edit checks pass, and live memory/output evidence is recorded without overstating agent outcomes.
 - [ ] Intentional local commits include plan/docs/memory; all task state is reconciled and no push/release occurs.
 
