@@ -1,0 +1,233 @@
+{
+  "schema": 1,
+  "archive": "raw-before.tar.gz",
+  "archive_sha256": "b6af4a88f18ad4e5cc094f100932c0f560777708d7bcaa97045c108bec263829",
+  "artifacts": [
+    {
+      "member": "before-limit-failure/scan.stderr.log",
+      "sha256": "91e248773fa92b8894ed7cf7aa103f4824c629a8392504cc121e00fd4d8a3d04",
+      "bytes": 301
+    },
+    {
+      "member": "before-limit-failure/scan.stdout.log",
+      "sha256": "438dee371ed327c0304c60104ed7e6a404a8668ff785dc85c2a8fc154b0f9575",
+      "bytes": 139
+    },
+    {
+      "member": "before-limit-failure/serve.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "member": "before-limit-failure/telemetry/telemetry.db",
+      "sha256": "f1e797f6ac37249a266f6a38a640dbf385007c2928f2f27b41b7c66e3826aabe",
+      "bytes": 32768
+    },
+    {
+      "member": "before/result.json",
+      "sha256": "e0fe26d17f3d895fdf146b14706656368692fdbb780cc2349e0f0e67b07bebb3",
+      "bytes": 1738
+    },
+    {
+      "member": "before/scan.stderr.log",
+      "sha256": "f62ce5b95333f3f25c506366c97529c5ae5eb3ffbcaf2d2044adc485e8c6747d",
+      "bytes": 301
+    },
+    {
+      "member": "before/scan.stdout.log",
+      "sha256": "438dee371ed327c0304c60104ed7e6a404a8668ff785dc85c2a8fc154b0f9575",
+      "bytes": 139
+    },
+    {
+      "member": "before/serve.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "member": "before/telemetry/telemetry.db",
+      "sha256": "3ab7c04eb20e7298a8a74242979a4f98ba96d7ac73591fb255aaca9a4e89f36b",
+      "bytes": 32768
+    },
+    {
+      "member": "compile.txt",
+      "sha256": "3465530553335672e99a44835e28fae7bead0ad1031d35d0cd8b7cb1d1643719",
+      "bytes": 282
+    },
+    {
+      "member": "diagnostic-dynamic.txt",
+      "sha256": "d0d79187548b29e9295f9600615c70d86c0bff03d1f5e9a45f45e7baa4efaf18",
+      "bytes": 1433
+    },
+    {
+      "member": "final-registration.txt",
+      "sha256": "43aef11cb38ab8c468946cef4e49b8fb3205e06714bf09bc911b1f868dbc0831",
+      "bytes": 596
+    },
+    {
+      "member": "final-watcher-test.txt",
+      "sha256": "70f19bbfa9550ecbf6d4c9720ad446f11a7549991406dfe47fa81e94280fb68c",
+      "bytes": 691
+    },
+    {
+      "member": "green-dynamic.txt",
+      "sha256": "7c7654dfa55544507e76ac933b54bfaa05b68b249f23a015c65a76001ca3ad00",
+      "bytes": 466
+    },
+    {
+      "member": "green-ignore.txt",
+      "sha256": "e37aa2b66bf860a0c4f36edc8bc02949b0a2c852ef7c8f94b4db3e13a476a186",
+      "bytes": 449
+    },
+    {
+      "member": "green-startup-cleanup.txt",
+      "sha256": "d9c5297eb7cea35d922bb180ca6e4b6aeb215690782ff85b7cdbe15a78bb3f6b",
+      "bytes": 356
+    },
+    {
+      "member": "green-storm.txt",
+      "sha256": "5cc79ffb0a6e830bd8a2e47c26f63559a373bb3dde2130517863edbc2ee89eac",
+      "bytes": 448
+    },
+    {
+      "member": "green-watches.txt",
+      "sha256": "1ceca534c1253c129a57269551875009dfb3c6a2b125176aa71d26caea357e86",
+      "bytes": 452
+    },
+    {
+      "member": "probe.py",
+      "sha256": "6afb98e61f74628ecd790e6e02fb0fc49a0048862c55018d99d2943693359ac1",
+      "bytes": 5004
+    },
+    {
+      "member": "red-ignore.txt",
+      "sha256": "93ed2496924252c585bf3a86839d31992bb4df1949278920eb63b5bbdaec6095",
+      "bytes": 894
+    },
+    {
+      "member": "red-startup-gap.txt",
+      "sha256": "09f27469482eda80d956735b0646ae54d706d41bb7fb28b2d480755c862fd63e",
+      "bytes": 464
+    },
+    {
+      "member": "red.txt",
+      "sha256": "f442a52856af0a246764ce5d49c18064254b3edbf0c193b9da8cfab6cac27332",
+      "bytes": 906
+    },
+    {
+      "member": "round2-dynamic-watch-count.txt",
+      "sha256": "66b89b22bfd56c39d4028775927cff1e4814b706d89f217d8943cfaec4e83688",
+      "bytes": 931
+    },
+    {
+      "member": "round2-dynamic-watch-diagnostic.txt",
+      "sha256": "b2bc4fb0c2079d893b4ff0a0021d255a4d0291d6a9e13af8a438f85fab979bb8",
+      "bytes": 3211
+    },
+    {
+      "member": "round2-failure-recovery.txt",
+      "sha256": "c9f4ca81512ed2560b20b5d4d01e96ddad6a0fde54276d9ddebe5c689d20fb42",
+      "bytes": 890
+    },
+    {
+      "member": "round2-final-registration.txt",
+      "sha256": "c8bfb29767df8dd4701ecb90d1549fb0a4ee0702a57b59fe25636f7ca14238f0",
+      "bytes": 888
+    },
+    {
+      "member": "round2-final-watcher-test.txt",
+      "sha256": "bb30941bcf9fba8298a7d35d4898bae435e272363b90d92de5cdec2d918ff22a",
+      "bytes": 691
+    },
+    {
+      "member": "round2-final-watcher-unit.txt",
+      "sha256": "09fe17098ddb189df4fb41074405d45bedade3296fa82f4bb2121cb63d7ed70f",
+      "bytes": 956
+    },
+    {
+      "member": "round2-green-dynamic-lifecycle.txt",
+      "sha256": "e8991d63327b2dc51fcd52fb69228eca8e5b87336b9e5f2db1ff6eac285886ff",
+      "bytes": 466
+    },
+    {
+      "member": "round2-green-startup-gap.txt",
+      "sha256": "25da8aad95e39c6f4a9c93aa33bc3c09d023e1326b267596437e92692bd4bcfa",
+      "bytes": 464
+    },
+    {
+      "member": "round2-green-unit.txt",
+      "sha256": "8adbac2d659e262c0379a6a9950dbc60a0c1f90f6c49092004c3f6912e8a2316",
+      "bytes": 956
+    },
+    {
+      "member": "round2-red-event-classification.txt",
+      "sha256": "1ef09bf138d2656e10035cdb2e151b8fd8f8eaf065ab0ad6ed1710dae740dbfc",
+      "bytes": 943
+    },
+    {
+      "member": "round2-red-startup-gap.txt",
+      "sha256": "abc34c85485a6180f34104e10c1e2278482b4202ec1f0871652400a52588afd0",
+      "bytes": 949
+    },
+    {
+      "member": "round2-registration-suite.txt",
+      "sha256": "33557f573c2306bb1d0ff1018e326149f59002285624dcb124cef0a2c29b3cc2",
+      "bytes": 2092
+    },
+    {
+      "member": "round2-root-cache-repair.txt",
+      "sha256": "72f8778db7d30379e6513239044f090536166bbf768391732515e03c976e9639",
+      "bytes": 466
+    },
+    {
+      "member": "round2-startup-scan-cleanup.txt",
+      "sha256": "a365a01a34e587e3e0de3c6931f9f0dd557df77b7b1e14fb6a103f063281f987",
+      "bytes": 464
+    },
+    {
+      "member": "round3-final-registration-serial.txt",
+      "sha256": "50417f898dddf05c3706a10dd89011d86a4c8c380da17ead7f07a337e576a726",
+      "bytes": 986
+    },
+    {
+      "member": "round3-final-registration.txt",
+      "sha256": "ba27b058b60d54d59f43ab394e3844be34ef349579c52384f26adba99f6c61e3",
+      "bytes": 1493
+    },
+    {
+      "member": "round3-final-root-rewatch-retry.txt",
+      "sha256": "b6646f478c83190229ad5eabf0a96b52da9370734af1d3c3cc8ee8a31785c1f1",
+      "bytes": 453
+    },
+    {
+      "member": "round3-final-watcher-test.txt",
+      "sha256": "0ff57aa4b786a5e56466c0ff9a7c10c49cfd5b095a35440b973b64ef9391526a",
+      "bytes": 691
+    },
+    {
+      "member": "round3-final-watcher-unit.txt",
+      "sha256": "556f63a633f9aa477a9760ee01721e493977ec442db924ed9577dfb772f5aea3",
+      "bytes": 942
+    },
+    {
+      "member": "round3-green-root-rewatch-retry.txt",
+      "sha256": "975c7377bb82fc0530b64d8df9a881c57affa5d72c8df3be0c3d37ec176d6feb",
+      "bytes": 453
+    },
+    {
+      "member": "round3-red-root-rewatch-retry.txt",
+      "sha256": "c1bfa0c4d61aeb9ac6412e998e7ff50e5baf9a2874e7350964700ee9f60301eb",
+      "bytes": 904
+    },
+    {
+      "member": "round3-startup-failure-retry.txt",
+      "sha256": "ebe4f0fe532d5bfabe65fbeeeb25564cfb996c4bb5212598184d4d53d1f84e43",
+      "bytes": 356
+    },
+    {
+      "member": "startup-gap-diagnostic.txt",
+      "sha256": "5468dba0e2f00fbb26a21313905a7d74ffc6d3bcaa154ed2048d35c993287076",
+      "bytes": 1430
+    }
+  ],
+  "provider_calls": 0
+}

@@ -16,13 +16,14 @@ Tests come first. The worker runs focused red/green checks and the watcher test 
 
 ## Acceptance
 
-- [ ] Existing and newly created ignored trees allocate no descendant watches; allowed siblings and similarly named directories remain observable.
-- [ ] Root edits, newly created nested directories, and populated moves synchronize without requiring another edit.
-- [ ] Delete, rename and recreate remove stale registrations and indexed descendants.
-- [ ] Supported ignore-file creation, modification and deletion reconcile both registrations and indexed contents.
-- [ ] Startup races, event storms and queue overflow reconcile or fail explicitly; dynamic failures use the existing watcher failure state.
-- [ ] Ownership and shutdown avoid callback mutex cycles, deadlocks and leaked threads; traversal stores no second file inventory.
+- [x] Existing and newly created ignored trees allocate no descendant watches; allowed siblings and similarly named directories remain observable.
+- [x] Root edits, newly created nested directories, and populated moves synchronize without requiring another edit.
+- [x] Delete, rename and recreate remove stale registrations and indexed descendants.
+- [x] Supported ignore-file creation, modification and deletion reconcile both registrations and indexed contents.
+- [x] Startup races, event storms and queue overflow reconcile or fail explicitly; dynamic failures use the existing watcher failure state.
+- [x] Ownership and shutdown avoid callback mutex cycles, deadlocks and leaked threads; traversal stores no second file inventory.
 - [ ] Focused tests and Linux/Windows integration pass; before/after watch counts and retained RSS are recorded.
+
 
 ## Integration
 

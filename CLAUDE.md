@@ -131,6 +131,14 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   project. glibc keeps the pages it frees, so `release_freed_memory` in `mcp/server.rs` calls `malloc_trim(0)`
   after each tool call on Linux glibc. It is the only unsafe code; the workspace lint is `unsafe_code = "deny"`.
   Measure a live `serve` process before and after any change that could raise it.
+- File watches cover only directories accepted by the scan's ignore rules. Prune excluded
+  trees before registering nonrecursive watches. One worker owns registration and index
+  updates; its callback queue is bounded, and retained registration state contains directory
+  paths only. Reconcile after installing startup watches, directory moves, and changes to
+  `.gitignore`, `.ignore`, `.julieignore`, `.code-kb-ignore`, or `.codekbignore`.
+  Ordinary file changes and file renames stay incremental. A failed physical registration
+  stays unhealthy until registration recovers; a database scan cannot acknowledge it.
+  Use the same registration and recovery path for every supported language.
 - All symbol searches, skeleton rendering, context slices, and reference lookups
   are executed as direct, indexed SQLite queries with `open_read_only`.
 - The search index is two FTS5 tables over `symbols`: `symbols_fts` for words and `symbol_names_tri`

@@ -1,0 +1,50 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.06s
+     Running unittests src/main.rs (target/debug/deps/code_kb-b6313d00e1d5bf61)
+
+running 1 test
+test mcp::server::prepare_tests::a_panicked_prepare_returns_an_error_and_retries ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.29s
+
+     Running tests/adversarial_m2_server_test.rs (target/debug/deps/adversarial_m2_server_test-a6b45e3125567155)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s
+
+     Running tests/adversarial_m3_server_test.rs (target/debug/deps/adversarial_m3_server_test-f737ccea50f4a2d3)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests/adversarial_m3_test.rs (target/debug/deps/adversarial_m3_test-c8161484dba77b8d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests/cli_test.rs (target/debug/deps/cli_test-45cedab95d513d04)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 64 filtered out; finished in 0.00s
+
+     Running tests/edit_hook_test.rs (target/debug/deps/edit_hook_test-27b82736b6f3a8bf)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 46 filtered out; finished in 0.00s
+
+     Running tests/mcp_test.rs (target/debug/deps/mcp_test-a7a780efda85d62b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 61 filtered out; finished in 0.00s
+
+     Running tests/report_recovery_test.rs (target/debug/deps/report_recovery_test-14eda9a1dc731543)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 23 filtered out; finished in 0.00s
+
