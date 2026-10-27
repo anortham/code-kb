@@ -1567,23 +1567,37 @@ mod tests {
             CREATE TABLE pending_relationships (
                 from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT,
                 path TEXT, start_line INTEGER, start_column INTEGER
-            );
-            INSERT INTO files VALUES ('f', 'src/lib.rs', 'rust', 'hash', 0, 1, '2026-01-01');
-            INSERT INTO symbols VALUES
-                ('one', 'f', 'src/lib.rs', 'rust', 'needle', 'function', 'fn needle()', NULL, 'pub', NULL, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 'hash', NULL, 0, 0),
-                ('two', 'f', 'src/lib.rs', 'rust', 'needle', 'function', 'fn needle_alt()', NULL, 'pub', NULL, 2, 0, 2, 1, 2, 3, 2, 0, 2, 1, 2, 3, 'hash', NULL, 0, 0);",
+            );",
         )
         .unwrap();
         code_kb_core::db::ensure_fts_index(&conn).unwrap();
         drop(conn);
 
         let workspace = Workspace::new(root.to_path_buf());
+        let watcher = start_watcher(workspace.clone(), db_path.clone()).unwrap();
+        let conn = code_kb_core::open_read_write(&db_path).unwrap();
+        conn.execute_batch(
+            "INSERT INTO files (file_id, path, language, content_hash, content_bytes, line_count, indexed_at, last_revision_id, status)
+            VALUES ('f', 'src/lib.rs', 'rust', 'hash', 0, 1, '2026-01-01', 1, 'indexed');
+            INSERT INTO symbols (
+                symbol_id, file_id, path, language, name, kind, signature, doc_comment,
+                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,
+                start_byte, end_byte, body_start_line, body_start_column, body_end_line,
+                body_end_column, body_start_byte, body_end_byte, body_hash, semantic_group,
+                is_test, test_container
+            ) VALUES
+                ('one', 'f', 'src/lib.rs', 'rust', 'needle', 'function', 'fn needle()', NULL, 'pub', NULL, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 'hash', NULL, 0, 0),
+                ('two', 'f', 'src/lib.rs', 'rust', 'needle', 'function', 'fn needle_alt()', NULL, 'pub', NULL, 2, 0, 2, 1, 2, 3, 2, 0, 2, 1, 2, 3, 'hash', NULL, 0, 0);",
+        )
+        .unwrap();
+        drop(conn);
+
         let mut server = McpServer {
             launch_root: workspace.canonical_root.clone(),
             workspace,
             db_path,
             explicit_db: None,
-            _watcher: None,
+            _watcher: Some(watcher),
             telemetry_conn: Some(code_kb_core::telemetry::open_telemetry_db_at(root).unwrap()),
             reconcile: None,
             parked: Vec::new(),
