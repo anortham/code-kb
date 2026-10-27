@@ -2418,6 +2418,18 @@ impl<'a> Accounting<'a> {
             let row = &rows[index];
             let rivals = self.rivals(row, &others)?;
             let verdict = match claims.get(&row.key) {
+                Some(claim)
+                    if claim.typed_receiver == Some(TypedReceiverClaim::Unknown)
+                        && claim.basis.is_none() =>
+                {
+                    self.decide_late(
+                        row,
+                        &spec.group,
+                        &group_definitions,
+                        &rivals,
+                        shorthand_shadows.contains_key(&row.key),
+                    )?
+                }
                 Some(claim) => claimed_verdict(row, claim, rivals.len(), spec.builds_class),
                 None if self.out_of_time() => {
                     unchecked.push(index);
