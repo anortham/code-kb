@@ -238,7 +238,7 @@ fn watcher_retries_failed_directory_registration_and_watches_after_recovery() {
 
     let blocked = root.join("blocked");
     fs::create_dir(&blocked).unwrap();
-    fs::set_permissions(&blocked, fs::Permissions::from_mode(0)).unwrap();
+    fs::set_permissions(&blocked, fs::Permissions::from_mode(0o0)).unwrap();
     let (generation, failure) = wait_for_registration_failure(&watcher);
     assert!(failure.contains("workspace watches"));
     assert!(!watcher.clear_failure_if_unchanged(generation));
@@ -312,6 +312,7 @@ fn wait_for_symbol(db_path: &Path, name: &str, expected: bool) {
     panic!("symbol '{name}' did not reach indexed state {expected}");
 }
 
+#[cfg(unix)]
 fn wait_for_registration_failure(watcher: &code_kb_core::watcher::WatcherHandle) -> (u64, String) {
     for _ in 0..50 {
         if let Some((generation, failure)) = watcher.pending_failure()
@@ -324,6 +325,7 @@ fn wait_for_registration_failure(watcher: &code_kb_core::watcher::WatcherHandle)
     panic!("watcher did not report the directory registration failure");
 }
 
+#[cfg(unix)]
 fn wait_for_failure_message_to_change(
     watcher: &code_kb_core::watcher::WatcherHandle,
     previous: &str,

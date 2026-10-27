@@ -826,8 +826,19 @@ fn test_cli_lookup_prints_the_text_of_the_mcp_lookup_symbol_for_a_concept_an_exa
 
 #[test]
 fn test_cli_search_order_matches_the_mcp_lookup_symbol_fallback() {
-    let repo = setup_test_repo();
+    let repo = code_kb_core::safe_tempdir();
     let root = repo.path();
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"lookup_parity\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    std::fs::create_dir(root.join("src")).unwrap();
+    std::fs::write(
+        root.join("src/lib.rs"),
+        "pub struct Workspace;\npub fn run_task() { helper(); }\nfn helper() {}\n",
+    )
+    .unwrap();
     let query = "workspace task helper";
 
     let cli_output = Command::new(env!("CARGO_BIN_EXE_code-kb"))

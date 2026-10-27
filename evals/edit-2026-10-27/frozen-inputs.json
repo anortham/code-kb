@@ -84,6 +84,20 @@
   "persistent_cache": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0",
   "provider_calls": 0,
   "runner_sha256": "34388ab9463a2a9cf6784014d4ea2f0c4a1dcd2d9d4124d5c0d4be0faddc8d76",
+  "runtime": {
+    "binary": {
+      "host_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/tools/intelligence/code-kb",
+      "sha256": "d50d77812c0b9aad04b38b31c63b71df7768d0c44273b6d97a7e4a15a37b2127"
+    },
+    "codex": {
+      "host_path": "/home/murphy/.local/share/mise/installs/node/24.18.1/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex",
+      "sha256": "b93f6811d3f653f0fb83be4050d857fb9abbb111dfa2ce160563327daff7f306"
+    },
+    "extractor": {
+      "host_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/tools/intelligence/julie-extract",
+      "sha256": "777fe822a0eddbdfd9f357c018c7a1a881907bedc698f913736a30ffc0ce0d12"
+    }
+  },
   "schema": 1,
   "seeds": {
     "commons-lang": {

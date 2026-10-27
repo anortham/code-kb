@@ -193,9 +193,9 @@ struct RegistrationPath {
 
 impl RegistrationPath {
     fn new(path: impl AsRef<Path>) -> Self {
-        let path = normalize_path(&dunce::simplified(path.as_ref()));
+        let path = normalize_path(dunce::simplified(path.as_ref()));
         let identity_path = dunce::canonicalize(&path).unwrap_or_else(|_| path.clone());
-        let identity_path = normalize_path(&dunce::simplified(&identity_path));
+        let identity_path = normalize_path(dunce::simplified(&identity_path));
         let identity = to_forward_slash(&identity_path);
         #[cfg(windows)]
         let identity = identity.to_lowercase();
@@ -452,7 +452,7 @@ fn synchronize_registrations(
                 continue;
             }
 
-            let path = normalize_path(&dunce::simplified(entry.path()));
+            let path = normalize_path(dunce::simplified(entry.path()));
             let registration_path = RegistrationPath::new(path.clone());
             if let Some(registered_generation) = registrations.paths.get_mut(&registration_path) {
                 *registered_generation = generation;
@@ -705,7 +705,7 @@ fn event_requires_reconciliation(
     let unknown_event = matches!(event.kind, EventKind::Any | EventKind::Other);
 
     event.paths.iter().any(|path| {
-        let normalized = normalize_path(&dunce::simplified(path));
+        let normalized = normalize_path(dunce::simplified(path));
         let Some((absolute, relative)) = workspace_relative_path(&normalized, workspace) else {
             return false;
         };
@@ -731,7 +731,7 @@ fn event_requires_reconciliation(
 }
 
 fn workspace_relative_path(path: &Path, workspace: &Workspace) -> Option<(PathBuf, String)> {
-    let absolute = normalize_path(&dunce::simplified(path));
+    let absolute = normalize_path(dunce::simplified(path));
     let relative = strip_prefix_lossy(&absolute, &workspace.canonical_root)?;
     let relative = to_forward_slash(relative)
         .trim_start_matches('/')

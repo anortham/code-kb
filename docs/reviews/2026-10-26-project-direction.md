@@ -308,3 +308,51 @@ The experiment exposed concrete consumer errors: cross-language impact/dependenc
 The completed consumer repair also preserves conservative name-only test labeling and selects compact query shapes per exact caller scope or impact frontier. Linux at `5f998c4` passes 1,889 Rust tests, all 42 languages, Clippy, formatting, and release. The pilot report records the measured query/memory tradeoffs and Windows NTFS verification; the original paid results are unchanged.
 
 Windows NTFS at `f355247` passes 1,865 Rust tests across 37 suites, all 42 language IDs, Clippy, formatting, release, and 12 plugin tests with eight declared POSIX-fixture skips. This completes the approved consumer-repair verification; the next product milestone remains completed edits on untouched, larger repositories across language families.
+
+## Completed-edit preparation
+
+The next evaluation now has six pinned, larger repositories: SQLGlot (Python),
+MiniJinja (Rust), HCL (Go), date-fns (TypeScript), Commons Lang (Java), and
+Noda Time (C#). Each case requires changes in at least two production files.
+These six cases sample the product's 42 supported language IDs; they do not
+replace the full language contract.
+
+The [completed-edit study](../../evals/edit-2026-10-27/README.md) preserves a
+passing upstream baseline, an intended seeded failure, a passing reference
+repair, and a fresh replay of each reference patch. Public and hidden checks
+run in separate reconstructed trees. Source review includes requested new
+tests and callers. A passing grader result remains pending acceptance until
+source review passes. These are local evaluator controls, with zero scored
+agent attempts and zero new provider calls.
+
+Patch capture includes ignored and untracked source, deletions, modes and
+symlinks independently of Git's index. Protected tests, build configuration,
+locks and Git history cannot become part of an accepted patch. Preparation,
+agent execution and grading have separate mounts and state. Graders receive
+no provider credentials or network; real Codex permission probes verify the
+agent shell's private-profile denial without calling a model. The original
+72-run pilot and its frozen controls are unchanged.
+
+Preparation exposed an operating-system resource defect: ignored build and
+dependency folders still received recursive watches. The watcher now registers
+only scanner-eligible directories and refreshes registrations with ignore-rule
+and directory changes. Its bounded owner queue reconciles event overflow;
+physical registration failures remain unhealthy until registration succeeds.
+Startup reconciles changes made before registration. This uses the same scan
+policy for every language and retains a directory registry, not a repository
+file inventory. AGENTS.md and CLAUDE.md document the behavior together.
+
+The next product decision should follow completed agent edits on this corpus:
+compare accepted patches, missed callers, test results, time including cold
+indexing, and observed tokens. The frozen comparison proposes 24 scored calls
+and at most 28 total calls. Its separate budget gate remains pending; local
+readiness does not establish an agent-success or cost improvement and does not
+justify changing global tool routing.
+
+The final Linux executable is `d50d77812c0b9aad04b38b31c63b71df7768d0c44273b6d97a7e4a15a37b2127`.
+On the same local fixture with 1,000 ignored leaf directories, it uses three
+operating-system watches versus 1,016 before the fix. Five samples after a
+skeleton call finish at 14,760 KiB retained RSS versus 15,760 KiB before.
+On this development worktree, the fixed server uses 212 watches and finishes
+that probe at 19,852 KiB RSS. This is a small local resource check, not a
+workload-wide latency or agent-performance result.

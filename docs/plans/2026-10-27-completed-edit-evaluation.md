@@ -147,6 +147,6 @@
 **Approach:** Use fake subprocess agents for successful edits and adversarial failures; preserve exact artifacts/outcomes. Retain failed readiness instead of silently weakening selection.
 
 - [x] Real fake-agent runs cover success, partial timeout, protected tampering, untracked/deleted source, invalid output and failed grading; replay identity is enforced.
-- [ ] All six cases have reviewed source, references, protected tests and retained readiness; all manifests/hashes validate and answer leakage tests pass.
-- [ ] Proposed 24-run schedule, model/configuration, controls and budget gate are frozen; no provider is called by preparation or tests.
+- [x] All six cases have reviewed source, references, protected tests and retained readiness; all manifests/hashes validate and answer leakage tests pass.
+- [x] Proposed 24-run schedule, model/configuration, controls and budget gate are frozen; no provider is called by preparation or tests.
 - [ ] Python/plugin/JSON/security scopes pass, docs/brief reflect evidence and remaining dispatch authority, and local commits/worktrees are reconciled.

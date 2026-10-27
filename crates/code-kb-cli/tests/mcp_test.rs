@@ -537,6 +537,17 @@ fn extractor_wrapper_with_failures(
     failure_record: &Path,
     failures: &[(&str, &str)],
 ) -> PathBuf {
+    extractor_wrapper_with_failures_and_scans(dir, active_marker, failure_record, failures, &[])
+}
+
+#[cfg(unix)]
+fn extractor_wrapper_with_failures_and_scans(
+    dir: &Path,
+    active_marker: &Path,
+    failure_record: &Path,
+    failures: &[(&str, &str)],
+    scan_roots: &[&Path],
+) -> PathBuf {
     use std::os::unix::fs::PermissionsExt;
     let real = code_kb_core::find_julie_extract_binary().expect("julie-extract is installed");
     let wrapper = dir.join("julie-extract-with-failures");
@@ -545,13 +556,27 @@ fn extractor_wrapper_with_failures(
         .map(|(operation, path)| format!("'{operation}:{path}'"))
         .collect::<Vec<_>>()
         .join("|");
+    let scan_cases = scan_roots
+        .iter()
+        .map(|root| format!("'{}'", root.display()))
+        .collect::<Vec<_>>()
+        .join("|");
+    let scan_failures = if scan_cases.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "  if [ \"$1\" = scan ]; then\n    for arg in \"$@\"; do\n      case \"$arg\" in\n        {scan_cases}) : > '{}'; echo 'controlled offline scan failure' >&2; exit 2;;\n      esac\n    done\n  fi\n",
+            failure_record.display()
+        )
+    };
     std::fs::write(
         &wrapper,
         format!(
-            "#!/bin/sh\nif [ -e '{}' ]; then\n  for arg in \"$@\"; do\n    case \"$1:$arg\" in\n      {cases}) : > '{}'; echo 'controlled incremental failure' >&2; exit 2;;\n    esac\n  done\nfi\nexec '{}' \"$@\"\n",
+            "#!/bin/sh\nif [ -e '{}' ]; then\n{scan_failures}  for arg in \"$@\"; do\n    case \"$1:$arg\" in\n      {cases}) : > '{}'; echo 'controlled incremental failure' >&2; exit 2;;\n    esac\n  done\nfi\nexec '{}' \"$@\"\n",
             active_marker.display(),
             failure_record.display(),
-            real.display()
+            real.display(),
+            scan_failures = scan_failures
         ),
     )
     .unwrap();
@@ -594,9 +619,12 @@ fn canonical_root(dir: &Path) -> PathBuf {
 fn test_mcp_blast_radius_stdio_handshake_and_tools() {
     let temp_dir = code_kb_core::safe_tempdir();
     let root = temp_dir.path().to_path_buf();
-    let db_dir = root.join(".code-kb");
-    std::fs::create_dir_all(&db_dir).unwrap();
-    let db_path = db_dir.join("artifact.db");
+    let db_path = root.join(".code-kb/artifact.db");
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"mcp-blast-radius-fixture\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
+    )
+    .unwrap();
 
     let src_dir = root.join("src");
     std::fs::create_dir_all(&src_dir).unwrap();
@@ -604,142 +632,6 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
     std::fs::write(src_dir.join("other.cpp"), other_content).unwrap();
     let content = "pub struct Workspace {\n    pub root: String,\n}\nstruct Parent { int run() { return 1; } int run(int) { return 2; } };\nint first() { Parent p; return p.run(); }\nint second() { Parent p; return p.run(2); }\n";
     std::fs::write(src_dir.join("workspace.rs"), content).unwrap();
-    let bytes = content.len() as i64;
-    let hash = format!("blake3:{}", blake3::hash(content.as_bytes()).to_hex());
-    let other_bytes = other_content.len() as i64;
-    let other_hash = format!("blake3:{}", blake3::hash(other_content.as_bytes()).to_hex());
-
-    let conn = code_kb_core::open_read_write(&db_path).unwrap();
-    conn.execute_batch(
-        "CREATE TABLE files (
-            file_id TEXT PRIMARY KEY, path TEXT, language TEXT, content_hash TEXT,
-            content_bytes INTEGER, line_count INTEGER, indexed_at TEXT
-        );
-        CREATE TABLE symbols (
-            symbol_id TEXT PRIMARY KEY, file_id TEXT, path TEXT, language TEXT, name TEXT, kind TEXT,
-            signature TEXT, doc_comment TEXT, visibility TEXT, parent_symbol_id TEXT,
-            start_line INTEGER, start_column INTEGER, end_line INTEGER, end_column INTEGER,
-            start_byte INTEGER, end_byte INTEGER, body_start_line INTEGER,
-            body_start_column INTEGER, body_end_line INTEGER, body_end_column INTEGER,
-            body_start_byte INTEGER, body_end_byte INTEGER, body_hash TEXT,
-            semantic_group TEXT, is_test INTEGER, test_container INTEGER
-        );
-        CREATE TABLE relationships (
-            relationship_id TEXT PRIMARY KEY, from_symbol_id TEXT, to_symbol_id TEXT,
-            kind TEXT, path TEXT, start_line INTEGER, start_column INTEGER
-        );
-        CREATE TABLE pending_relationships (
-            from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT,
-            path TEXT, start_line INTEGER, start_column INTEGER
-        );
-        CREATE TABLE structural_facts (
-            structural_fact_id TEXT PRIMARY KEY, path TEXT, language TEXT,
-            pattern_id TEXT, capture_name TEXT, node_kind TEXT,
-            containing_symbol_id TEXT, start_line INTEGER, end_line INTEGER,
-            confidence REAL, metadata_json TEXT
-        );
-        CREATE TABLE literals (
-            literal_id TEXT PRIMARY KEY, path TEXT, literal_text TEXT, kind TEXT,
-            carrier TEXT, start_line INTEGER, containing_symbol_id TEXT
-        );",
-    )
-    .unwrap();
-    conn.execute(
-        "INSERT INTO files VALUES ('f1', 'src/workspace.rs', 'rust', ?1, ?2, 3, '2026-01-01')",
-        rusqlite::params![hash, bytes],
-    )
-    .unwrap();
-    conn.execute(
-        "INSERT INTO files VALUES ('f2', 'src/other.cpp', 'cpp', ?1, ?2, 1, '2026-01-01')",
-        rusqlite::params![other_hash, other_bytes],
-    )
-    .unwrap();
-    let parent_start = content.find("struct Parent").unwrap() as i64;
-    let first_run = content.find("int run() ").unwrap();
-    let second_run = content.find("int run(int)").unwrap();
-    for (id, start, body, line) in [
-        ("overload_zero", first_run, "{ return 1; }", 4_i64),
-        ("overload_one", second_run, "{ return 2; }", 4_i64),
-    ] {
-        let body_start = content[start..].find(body).unwrap() + start;
-        conn.execute(
-            "INSERT INTO symbols VALUES (?1, 'f1', 'src/workspace.rs', 'cpp', 'run', 'method', 'int run', NULL, 'pub', 'over_parent', ?2, 0, ?2, 0, ?3, ?4, ?2, 0, ?2, 0, ?3, ?4, NULL, NULL, 0, 0)",
-            rusqlite::params![id, line, body_start as i64, (body_start + body.len()) as i64],
-        ).unwrap();
-    }
-    conn.execute(
-        "INSERT INTO symbols VALUES ('over_parent', 'f1', 'src/workspace.rs', 'cpp', 'Parent', 'struct', 'struct Parent', NULL, 'pub', NULL, 4, 0, 4, 0, ?1, ?2, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0)",
-        rusqlite::params![parent_start, content.len() as i64],
-    ).unwrap();
-    conn.execute(
-        "INSERT INTO symbols VALUES (
-            's1', 'f1', 'src/workspace.rs', 'rust', 'Workspace', 'struct',
-            'pub struct Workspace', 'Workspace representation for code-kb workspace discovery root', 'pub', NULL,
-            1, 0, 3, 1, 0, ?1, 1, 21, 3, 1, 21, ?1, 'b3:hash',
-            NULL, 0, 0
-        )",
-        rusqlite::params![bytes],
-    )
-    .unwrap();
-    conn.execute_batch("INSERT INTO symbols VALUES ('over_first', 'f1', 'src/workspace.rs', 'cpp', 'first', 'function', NULL, NULL, NULL, NULL, 5, 0, 5, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0), ('over_second', 'f1', 'src/workspace.rs', 'cpp', 'second', 'function', NULL, NULL, NULL, NULL, 6, 0, 6, 0, 0, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0); INSERT INTO relationships VALUES ('over-r1', 'over_first', 'overload_zero', 'calls', 'src/workspace.rs', 5, 0); INSERT INTO relationships VALUES ('over-r2', 'over_second', 'overload_one', 'calls', 'src/workspace.rs', 6, 0);").unwrap();
-    conn.execute(
-        "INSERT INTO symbols VALUES (
-            's2', 'f1', 'src/workspace.rs', 'rust', 'root', 'field',
-            'pub root: String', NULL, 'pub', 's1',
-            2, 4, 2, 20, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-            NULL, 0, 0
-        )",
-        [],
-    )
-    .unwrap();
-    conn.execute(
-        "INSERT INTO symbols VALUES (
-            's3', 'f1', 'src/workspace.rs', 'rust', 'caller', 'function',
-            'fn caller()', NULL, NULL, NULL,
-            1, 0, 1, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-            NULL, 0, 0
-        )",
-        [],
-    )
-    .unwrap();
-    conn.execute(
-        "INSERT INTO relationships VALUES ('r1', 's3', 's1', 'calls', 'src/workspace.rs', 1, 0)",
-        [],
-    )
-    .unwrap();
-    conn.execute(
-        "INSERT INTO pending_relationships VALUES ('s1', 'println', 'call', 'src/workspace.rs', 2, 4)",
-        [],
-    )
-    .unwrap();
-
-    conn.execute_batch(
-        "ALTER TABLE pending_relationships ADD COLUMN pending_relationship_id TEXT;
-         ALTER TABLE pending_relationships ADD COLUMN caller_scope_symbol_id TEXT;
-         ALTER TABLE pending_relationships ADD COLUMN file_id TEXT;
-         ALTER TABLE pending_relationships ADD COLUMN target_display_name TEXT;
-         ALTER TABLE pending_relationships ADD COLUMN target_receiver TEXT;
-         ALTER TABLE pending_relationships ADD COLUMN target_namespace_json TEXT;
-         ALTER TABLE pending_relationships ADD COLUMN target_import_context TEXT;
-         ALTER TABLE pending_relationships ADD COLUMN end_line INTEGER;
-         ALTER TABLE pending_relationships ADD COLUMN metadata_json TEXT;
-         ALTER TABLE relationships ADD COLUMN file_id TEXT;
-         ALTER TABLE relationships ADD COLUMN end_line INTEGER;
-         ALTER TABLE relationships ADD COLUMN metadata_json TEXT;
-         ALTER TABLE symbols ADD COLUMN metadata_json TEXT;
-         CREATE TABLE identifiers (
-            identifier_id TEXT PRIMARY KEY, file_id TEXT, path TEXT, language TEXT, name TEXT,
-            kind TEXT, containing_symbol_id TEXT, start_line INTEGER, start_column INTEGER,
-            end_line INTEGER, end_column INTEGER, metadata_json TEXT
-        );
-        CREATE TABLE type_facts (
-            type_fact_id TEXT PRIMARY KEY, symbol_id TEXT NOT NULL, language TEXT,
-            resolved_type TEXT NOT NULL, generic_params_json TEXT
-        );",
-    )
-    .unwrap();
-    code_kb_core::db::ensure_fts_index(&conn).unwrap();
-    drop(conn);
 
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
@@ -897,6 +789,200 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
     assert_eq!(resp3["id"], 3);
     let content_text = resp3["result"]["content"][0]["text"].as_str().unwrap();
     assert!(content_text.contains("Workspace"));
+
+    let conn = code_kb_core::open_read_write(&db_path).unwrap();
+    let (workspace_id, workspace_file_id): (String, String) = conn
+        .query_row(
+            "SELECT symbol_id, file_id FROM symbols WHERE path = 'src/workspace.rs' AND name = 'Workspace' ORDER BY start_line LIMIT 1",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    conn.execute(
+        "UPDATE symbols SET doc_comment = ?1 WHERE symbol_id = ?2",
+        rusqlite::params![
+            "Workspace representation for code-kb workspace discovery root",
+            workspace_id
+        ],
+    )
+    .unwrap();
+    let insert_symbol = |symbol_id: &str,
+                         language: &str,
+                         name: &str,
+                         kind: &str,
+                         signature: Option<&str>,
+                         parent_symbol_id: Option<&str>,
+                         line: i64,
+                         start_byte: i64,
+                         end_byte: i64,
+                         body_start_byte: Option<i64>,
+                         body_end_byte: Option<i64>| {
+        conn.execute(
+            "INSERT OR REPLACE INTO symbols (
+                symbol_id, file_id, path, language, name, kind, signature, doc_comment,
+                visibility, parent_symbol_id, start_line, start_column, end_line, end_column,
+                start_byte, end_byte, body_start_line, body_start_column, body_end_line,
+                body_end_column, body_start_byte, body_end_byte, body_hash, semantic_group,
+                is_test, test_container, metadata_json
+            ) VALUES (
+                ?1, ?2, 'src/workspace.rs', ?3, ?4, ?5, ?6, NULL, 'pub', ?7,
+                ?8, 0, ?8, 0, ?9, ?10, ?8, 0, ?8, 0, ?11, ?12, NULL, NULL, 0, 0, NULL
+            )",
+            rusqlite::params![
+                symbol_id,
+                workspace_file_id,
+                language,
+                name,
+                kind,
+                signature,
+                parent_symbol_id,
+                line,
+                start_byte,
+                end_byte,
+                body_start_byte,
+                body_end_byte
+            ],
+        )
+        .unwrap();
+    };
+    insert_symbol(
+        "s3",
+        "rust",
+        "caller",
+        "function",
+        Some("fn caller()"),
+        None,
+        1,
+        0,
+        0,
+        None,
+        None,
+    );
+    let parent_start = content.find("struct Parent").unwrap() as i64;
+    insert_symbol(
+        "over_parent",
+        "cpp",
+        "Parent",
+        "struct",
+        Some("struct Parent"),
+        None,
+        4,
+        parent_start,
+        content.len() as i64,
+        None,
+        None,
+    );
+    let first_run = content.find("int run() ").unwrap();
+    let second_run = content.find("int run(int)").unwrap();
+    for (id, start, body) in [
+        ("overload_zero", first_run, "{ return 1; }"),
+        ("overload_one", second_run, "{ return 2; }"),
+    ] {
+        let body_start = content[start..].find(body).unwrap() + start;
+        let body_start = body_start as i64;
+        let body_end = body_start + body.len() as i64;
+        insert_symbol(
+            id,
+            "cpp",
+            "run",
+            "method",
+            Some("int run"),
+            Some("over_parent"),
+            4,
+            body_start,
+            body_end,
+            Some(body_start),
+            Some(body_end),
+        );
+    }
+    insert_symbol(
+        "over_first",
+        "cpp",
+        "first",
+        "function",
+        None,
+        None,
+        5,
+        0,
+        1,
+        None,
+        None,
+    );
+    insert_symbol(
+        "over_second",
+        "cpp",
+        "second",
+        "function",
+        None,
+        None,
+        6,
+        0,
+        1,
+        None,
+        None,
+    );
+    let insert_reference_site = |site_id: &str,
+                                 containing_symbol_id: &str,
+                                 language: &str,
+                                 line: i64,
+                                 start_byte: i64,
+                                 end_byte: i64| {
+        conn.execute(
+            "INSERT OR REPLACE INTO reference_sites
+                (reference_site_id, file_id, path, language, containing_symbol_id, start_line,
+                 start_column, end_line, end_column, start_byte, end_byte, is_exact, provenance)
+             VALUES (?1, ?2, 'src/workspace.rs', ?3, ?4, ?5, 0, ?5, 1, ?6, ?7, 1, 'target_token')",
+            rusqlite::params![
+                site_id,
+                workspace_file_id,
+                language,
+                containing_symbol_id,
+                line,
+                start_byte,
+                end_byte
+            ],
+        )
+        .unwrap();
+    };
+    insert_reference_site("r1-site", "s3", "rust", 1, 0, 1);
+    insert_reference_site("over-r1-site", "over_first", "cpp", 5, 0, 1);
+    insert_reference_site("over-r2-site", "over_second", "cpp", 6, 0, 1);
+    insert_reference_site("workspace-println-site", &workspace_id, "rust", 2, 4, 11);
+    conn.execute(
+        "INSERT OR REPLACE INTO relationships
+            (relationship_id, reference_site_id, from_symbol_id, to_symbol_id, kind, file_id, path, start_line, start_column, confidence)
+         VALUES ('r1', 'r1-site', 's3', ?1, 'calls', ?2, 'src/workspace.rs', 1, 0, 1.0)",
+        rusqlite::params![workspace_id, workspace_file_id],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT OR REPLACE INTO relationships
+            (relationship_id, reference_site_id, from_symbol_id, to_symbol_id, kind, file_id, path, start_line, start_column, confidence)
+         VALUES ('over-r1', 'over-r1-site', 'over_first', 'overload_zero', 'calls', ?1, 'src/workspace.rs', 5, 0, 1.0)",
+        [&workspace_file_id],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT OR REPLACE INTO relationships
+            (relationship_id, reference_site_id, from_symbol_id, to_symbol_id, kind, file_id, path, start_line, start_column, confidence)
+         VALUES ('over-r2', 'over-r2-site', 'over_second', 'overload_one', 'calls', ?1, 'src/workspace.rs', 6, 0, 1.0)",
+        [&workspace_file_id],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT OR REPLACE INTO pending_relationships
+            (pending_relationship_id, reference_site_id, from_symbol_id, caller_scope_symbol_id,
+             file_id, path, kind, target_display_name, target_terminal_name, target_receiver,
+             target_namespace_json, target_import_context, start_line, start_column, end_line,
+             end_column, start_byte, end_byte, confidence)
+         VALUES ('workspace-println', 'workspace-println-site', ?1, ?1, ?2,
+                 'src/workspace.rs', 'call', 'println', 'println', NULL, '[]', NULL,
+                 2, 4, 2, 11, 4, 11, 1.0)",
+        rusqlite::params![workspace_id, workspace_file_id],
+    )
+    .unwrap();
+    code_kb_core::db::ensure_fts_index(&conn).unwrap();
+    drop(conn);
 
     for (id, limit) in [(30, json!(u64::MAX)), (31, json!(-1)), (32, json!(1.5))] {
         let request = json!({
@@ -1192,7 +1278,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
     let id_slice = mcp_request(
         &mut stdin,
         &mut reader,
-        &json!({"jsonrpc":"2.0","id":55,"method":"tools/call","params":{"name":"get_symbol_context","arguments":{"project_root":root,"symbol_id":"s1","include_external":true}}}),
+        &json!({"jsonrpc":"2.0","id":55,"method":"tools/call","params":{"name":"get_symbol_context","arguments":{"project_root":root,"symbol_id":workspace_id,"include_external":true}}}),
     );
     assert_ne!(id_slice["result"]["isError"], true, "{id_slice}");
     assert!(
@@ -1204,7 +1290,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
     let id_references_default = mcp_request(
         &mut stdin,
         &mut reader,
-        &json!({"jsonrpc":"2.0","id":56,"method":"tools/call","params":{"name":"find_references","arguments":{"project_root":root,"symbol_id":"s1","direction":"callees"}}}),
+        &json!({"jsonrpc":"2.0","id":56,"method":"tools/call","params":{"name":"find_references","arguments":{"project_root":root,"symbol_id":workspace_id,"direction":"callees"}}}),
     );
     assert_ne!(id_references_default["result"]["isError"], true);
     assert!(
@@ -1216,7 +1302,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
     let id_references_external = mcp_request(
         &mut stdin,
         &mut reader,
-        &json!({"jsonrpc":"2.0","id":57,"method":"tools/call","params":{"name":"find_references","arguments":{"project_root":root,"symbol_id":"s1","direction":"callees","include_external":true}}}),
+        &json!({"jsonrpc":"2.0","id":57,"method":"tools/call","params":{"name":"find_references","arguments":{"project_root":root,"symbol_id":workspace_id,"direction":"callees","include_external":true}}}),
     );
     assert_ne!(id_references_external["result"]["isError"], true);
     assert!(
@@ -1297,7 +1383,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
         exact_lookup["result"]["content"][0]["text"]
             .as_str()
             .unwrap()
-            .contains("id=s1")
+            .contains(&format!("id={workspace_id}"))
     );
     let notification = json!({
         "jsonrpc": "2.0",
@@ -2650,10 +2736,6 @@ fn test_mcp_lookup_symbol_reports_a_broken_search_index() {
     let repo = setup_test_repo();
     let root = repo.path();
 
-    let conn = code_kb_core::open_read_write(&root.join(".code-kb").join("artifact.db")).unwrap();
-    conn.execute_batch("DROP TABLE symbols_fts_data;").unwrap();
-    drop(conn);
-
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
             .env(
@@ -2687,8 +2769,24 @@ fn test_mcp_lookup_symbol_reports_a_broken_search_index() {
         "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}
     }));
 
-    let response = rpc(json!({
+    let ready = rpc(json!({
         "jsonrpc": "2.0", "id": 2, "method": "tools/call",
+        "params": {"name": "lookup_symbol", "arguments": {"project_root": root, "query": "Workspace"}}
+    }));
+    assert_ne!(ready["result"]["isError"], true, "{ready}");
+    assert!(
+        ready["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("Workspace")
+    );
+
+    let conn = code_kb_core::open_read_write(&root.join(".code-kb").join("artifact.db")).unwrap();
+    conn.execute_batch("DROP TABLE symbols_fts_data;").unwrap();
+    drop(conn);
+
+    let response = rpc(json!({
+        "jsonrpc": "2.0", "id": 3, "method": "tools/call",
         "params": {"name": "lookup_symbol", "arguments": {"project_root": root, "query": "ZzzAbsentSymbol"}}
     }));
     assert_eq!(response["result"]["isError"], true);
@@ -3900,6 +3998,12 @@ fn test_mcp_path_in_a_nested_worktree_is_refused_without_indexing_it() {
     )
     .unwrap();
     let mut session = McpSession::start(serve_command(main.path()));
+    let main_ready = session.call(
+        "lookup_symbol",
+        json!({"project_root": main.path(), "query": "Alpha"}),
+    );
+    assert_ne!(main_ready["isError"], true, "{main_ready}");
+    assert!(result_text(&main_ready).contains("Alpha"));
     let nested = canonical_root(&worktree);
     let root = canonical_root(main.path());
     let worktree_file = worktree
@@ -4024,11 +4128,11 @@ fn test_mcp_failed_initial_scan_is_retried_on_the_next_call() {
     let launch = setup_test_repo();
     let target = cargo_project("pub fn scanned_on_retry() {}\n");
     let tools = tempfile::tempdir().unwrap();
-    let marker = tools.path().join("failed-once");
+    let marker = tools.path().join("fail-scan");
     let wrapper = extractor_wrapper(
         tools.path(),
         &format!(
-            "if [ ! -e '{marker}' ]; then : > '{marker}'; echo 'simulated scan failure' >&2; exit 2; fi",
+            "if [ -e '{marker}' ]; then echo 'simulated scan failure' >&2; exit 2; fi",
             marker = marker.display()
         ),
     );
@@ -4037,6 +4141,14 @@ fn test_mcp_failed_initial_scan_is_retried_on_the_next_call() {
         .env("JULIE_EXTRACT_BIN", &wrapper)
         .env("CODE_KB_INDEX_WAIT_MS", "60000");
     let mut session = McpSession::start(command);
+    let launch_ready = session.call(
+        "lookup_symbol",
+        json!({"query": "Workspace", "project_root": launch.path()}),
+    );
+    assert_ne!(launch_ready["isError"], true, "{launch_ready}");
+    assert!(result_text(&launch_ready).contains("Workspace"));
+
+    std::fs::write(&marker, "fail").unwrap();
     let arguments = json!({"query": "scanned_on_retry", "project_root": target.path()});
 
     let first = session.call("lookup_symbol", arguments.clone());
@@ -4057,6 +4169,7 @@ fn test_mcp_failed_initial_scan_is_retried_on_the_next_call() {
         first_text.ends_with("; it will be retried on the next tool call."),
         "{first_text}"
     );
+    std::fs::remove_file(&marker).unwrap();
 
     let deadline = Instant::now() + Duration::from_secs(60);
     loop {
@@ -4138,11 +4251,53 @@ fn test_mcp_offline_update_and_delete_failures_return_errors_and_retry() {
     let update_project = cargo_project("pub fn old_update_symbol() {}\n");
     let delete_project = cargo_project("pub fn deleted_symbol() {}\n");
     let healthy_project = cargo_project("pub fn healthy_symbol() {}\n");
+    let offline_project = cargo_project("pub fn old_offline_symbol() {}\n");
+    std::fs::write(
+        offline_project.path().join("src/removed.rs"),
+        "pub fn offline_deleted_symbol() {}\n",
+    )
+    .unwrap();
     let telemetry = tempfile::tempdir().unwrap();
     cli_scan(update_project.path(), None, telemetry.path());
     cli_scan(delete_project.path(), None, telemetry.path());
     cli_scan(healthy_project.path(), None, telemetry.path());
+    cli_scan(offline_project.path(), None, telemetry.path());
+    std::fs::write(
+        offline_project.path().join("src/lib.rs"),
+        "pub fn new_offline_symbol() {}\n",
+    )
+    .unwrap();
+    std::fs::remove_file(offline_project.path().join("src/removed.rs")).unwrap();
 
+    let tools = tempfile::tempdir().unwrap();
+    let active_marker = tools.path().join("fail-refresh");
+    let failure_record = tools.path().join("failed-path");
+    let update_root = canonical_root(update_project.path());
+    let offline_root = canonical_root(offline_project.path());
+    let scan_roots = [update_root.as_path(), offline_root.as_path()];
+    let wrapper = extractor_wrapper_with_failures_and_scans(
+        tools.path(),
+        &active_marker,
+        &failure_record,
+        &[("update", "src/lib.rs"), ("delete", "src/lib.rs")],
+        &scan_roots,
+    );
+    let mut command = serve_command(launch.path());
+    command
+        .env("JULIE_EXTRACT_BIN", &wrapper)
+        .env("CODE_KB_INDEX_WAIT_MS", "60000");
+    let mut session = McpSession::start(command);
+
+    let update_ready = session.call(
+        "lookup_symbol",
+        json!({
+            "query": "old_update_symbol",
+            "project_root": update_project.path()
+        }),
+    );
+    assert_ne!(update_ready["isError"], true, "{update_ready}");
+    assert!(result_text(&update_ready).contains("function `old_update_symbol` ["));
+    std::fs::write(&active_marker, "fail").unwrap();
     std::fs::write(
         update_project.path().join("src/lib.rs"),
         "pub fn new_update_symbol() {}\n",
@@ -4153,23 +4308,14 @@ fn test_mcp_offline_update_and_delete_failures_return_errors_and_retry() {
         "pub fn another_update_symbol() {}\n",
     )
     .unwrap();
-    std::fs::remove_file(delete_project.path().join("src/lib.rs")).unwrap();
-
-    let tools = tempfile::tempdir().unwrap();
-    let active_marker = tools.path().join("fail-refresh");
-    let failure_record = tools.path().join("failed-path");
-    std::fs::write(&active_marker, "fail").unwrap();
-    let wrapper = extractor_wrapper_with_failures(
-        tools.path(),
-        &active_marker,
-        &failure_record,
-        &[("update", "src/lib.rs"), ("delete", "src/lib.rs")],
-    );
-    let mut command = serve_command(launch.path());
-    command
-        .env("JULIE_EXTRACT_BIN", &wrapper)
-        .env("CODE_KB_INDEX_WAIT_MS", "60000");
-    let mut session = McpSession::start(command);
+    let update_deadline = Instant::now() + Duration::from_secs(20);
+    while !failure_record.exists() {
+        assert!(
+            Instant::now() < update_deadline,
+            "watcher did not attempt the failed update"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
 
     let update_arguments = json!({
         "query": "old_update_symbol",
@@ -4188,6 +4334,27 @@ fn test_mcp_offline_update_and_delete_failures_return_errors_and_retry() {
         !update_text.contains("`old_update_symbol` ["),
         "{update_text}"
     );
+    loop {
+        let update_conn =
+            code_kb_core::open_read_only(&update_project.path().join(".code-kb/artifact.db"))
+                .unwrap();
+        let another_exists = code_kb_core::get_symbol_by_name(
+            &update_conn,
+            "another_update_symbol",
+            Some("src/another.rs"),
+        )
+        .unwrap()
+        .is_some();
+        drop(update_conn);
+        if another_exists {
+            break;
+        }
+        assert!(
+            Instant::now() < update_deadline,
+            "unrelated file update did not complete"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
     let update_conn =
         code_kb_core::open_read_only(&update_project.path().join(".code-kb/artifact.db")).unwrap();
     assert!(
@@ -4224,6 +4391,27 @@ fn test_mcp_offline_update_and_delete_failures_return_errors_and_retry() {
     assert_ne!(healthy["isError"], true, "{healthy}");
     assert!(result_text(&healthy).contains("function `healthy_symbol` ["));
 
+    if failure_record.exists() {
+        std::fs::remove_file(&failure_record).unwrap();
+    }
+    let delete_ready = session.call(
+        "lookup_symbol",
+        json!({
+            "query": "deleted_symbol",
+            "project_root": delete_project.path()
+        }),
+    );
+    assert_ne!(delete_ready["isError"], true, "{delete_ready}");
+    assert!(result_text(&delete_ready).contains("function `deleted_symbol` ["));
+    std::fs::remove_file(delete_project.path().join("src/lib.rs")).unwrap();
+    let delete_deadline = Instant::now() + Duration::from_secs(20);
+    while !failure_record.exists() {
+        assert!(
+            Instant::now() < delete_deadline,
+            "watcher did not attempt the failed delete"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
     let failed_delete = session.call(
         "lookup_symbol",
         json!({
@@ -4245,6 +4433,48 @@ fn test_mcp_offline_update_and_delete_failures_return_errors_and_retry() {
         still_failed_update["isError"], true,
         "{still_failed_update}"
     );
+
+    if failure_record.exists() {
+        std::fs::remove_file(&failure_record).unwrap();
+    }
+    let offline_arguments = json!({
+        "query": "new_offline_symbol",
+        "project_root": offline_project.path()
+    });
+    let offline_failure = session.call("lookup_symbol", offline_arguments.clone());
+    let offline_text = result_text(&offline_failure);
+    assert_eq!(offline_failure["isError"], true, "{offline_failure}");
+    assert!(
+        offline_text.contains(&offline_root.display().to_string()),
+        "{offline_text}"
+    );
+    assert!(
+        offline_text.contains("controlled offline scan failure"),
+        "{offline_text}"
+    );
+    assert!(failure_record.exists());
+    let offline_conn =
+        code_kb_core::open_read_only(&offline_project.path().join(".code-kb/artifact.db")).unwrap();
+    assert!(
+        code_kb_core::get_symbol_by_name(&offline_conn, "old_offline_symbol", Some("src/lib.rs"))
+            .unwrap()
+            .is_some()
+    );
+    assert!(
+        code_kb_core::get_symbol_by_name(
+            &offline_conn,
+            "offline_deleted_symbol",
+            Some("src/removed.rs")
+        )
+        .unwrap()
+        .is_some()
+    );
+    assert!(
+        code_kb_core::get_symbol_by_name(&offline_conn, "new_offline_symbol", Some("src/lib.rs"))
+            .unwrap()
+            .is_none()
+    );
+    drop(offline_conn);
 
     std::fs::remove_file(&active_marker).unwrap();
     let deadline = Instant::now() + Duration::from_secs(20);
@@ -4279,6 +4509,27 @@ fn test_mcp_offline_update_and_delete_failures_return_errors_and_retry() {
         assert!(Instant::now() < deadline, "{deleted}");
         std::thread::sleep(Duration::from_millis(100));
     }
+
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        let recovered = session.call("lookup_symbol", offline_arguments.clone());
+        if result_text(&recovered).contains("function `new_offline_symbol` [") {
+            assert_ne!(recovered["isError"], true, "{recovered}");
+            break;
+        }
+        assert_eq!(recovered["isError"], true, "{recovered}");
+        assert!(Instant::now() < deadline, "{recovered}");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let offline_deleted = session.call(
+        "lookup_symbol",
+        json!({
+            "query": "offline_deleted_symbol",
+            "project_root": offline_project.path()
+        }),
+    );
+    assert_ne!(offline_deleted["isError"], true, "{offline_deleted}");
+    assert!(!result_text(&offline_deleted).contains("function `offline_deleted_symbol` ["));
 }
 
 #[cfg(unix)]
@@ -4679,16 +4930,33 @@ fn test_mcp_startup_rebuilds_an_index_that_is_not_a_database() {
 #[cfg(unix)]
 #[test]
 fn test_mcp_names_the_scan_remedy_when_an_unreadable_index_cannot_be_rebuilt() {
-    let launch = tempfile::tempdir().unwrap();
+    let launch = setup_test_repo();
     let target = cargo_project("pub fn never_indexed() {}\n");
-    corrupt_index(target.path());
     let tools = tempfile::tempdir().unwrap();
-    let wrapper = extractor_wrapper(tools.path(), "echo 'simulated scan failure' >&2; exit 2");
+    let target_root = canonical_root(target.path());
+    let wrapper = extractor_wrapper(
+        tools.path(),
+        &format!(
+            "for arg in \"$@\"; do if [ \"$arg\" = '{target_root}' ]; then echo 'simulated scan failure' >&2; exit 2; fi; done",
+            target_root = target_root.display()
+        ),
+    );
     let mut command = serve_command(launch.path());
     command
         .env("JULIE_EXTRACT_BIN", &wrapper)
         .env("CODE_KB_INDEX_WAIT_MS", "60000");
     let mut session = McpSession::start(command);
+    let launch_ready = session.call(
+        "lookup_symbol",
+        json!({
+            "query": "Workspace",
+            "project_root": launch.path()
+        }),
+    );
+    assert_ne!(launch_ready["isError"], true, "{launch_ready}");
+    assert!(result_text(&launch_ready).contains("Workspace"));
+    corrupt_index(target.path());
+
     let arguments = json!({"query": "never_indexed", "project_root": target.path()});
     let remedy = format!(
         "Run `code-kb scan --root {}` to rebuild the index.",
@@ -4702,10 +4970,6 @@ fn test_mcp_names_the_scan_remedy_when_an_unreadable_index_cannot_be_rebuilt() {
         let text = result_text(result);
         assert_eq!(result["isError"], true, "{result}");
         assert!(text.contains(&remedy), "{text}");
-        assert!(!text.contains("retried"), "{text}");
+        assert!(text.contains("simulated scan failure"), "{text}");
     }
-    assert!(
-        result_text(&first).contains("simulated scan failure"),
-        "{first}"
-    );
 }

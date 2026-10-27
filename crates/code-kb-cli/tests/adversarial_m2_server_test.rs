@@ -90,90 +90,26 @@ fn test_adversarial_worktree_fastpath_wal_flush_uncheckpointed_transactions() {
     fs::create_dir_all(main_root.join("src")).unwrap();
 
     let main_file = main_root.join("src").join("main.rs");
-    let main_code = "pub fn base_function() {}\n";
-    fs::write(&main_file, main_code).unwrap();
+    let mut main_code = String::from("pub fn base_function() {}\n");
+    for i in 1..=200 {
+        main_code.push_str(&format!("pub fn wal_committed_fn_{i}() {{}}\n"));
+    }
+    fs::write(&main_file, &main_code).unwrap();
 
     let main_db = main_root.join(".code-kb").join("artifact.db");
     let wal_path = main_root.join(".code-kb").join("artifact.db-wal");
 
-    // Initialize DB with schema in WAL mode
+    code_kb_core::sync::scan_workspace(
+        &code_kb_core::workspace::Workspace::new(main_root.clone()),
+        &main_db,
+        true,
+    )
+    .unwrap();
     let conn = code_kb_core::open_read_write(&main_db).unwrap();
-    create_full_schema(&conn);
-
-    // Disable auto-checkpointing on this connection so all new commits stay in WAL
     conn.execute_batch("PRAGMA wal_autocheckpoint = 0;")
         .unwrap();
 
-    let hash_base = format!("blake3:{}", blake3::hash(main_code.as_bytes()).to_hex());
-    conn.execute(
-        "INSERT INTO files VALUES ('f0', 'src/main.rs', 'rust', ?1, ?2, 1, '2026-01-01')",
-        rusqlite::params![hash_base, main_code.len() as i64],
-    )
-    .unwrap();
-    conn.execute(
-        "INSERT INTO symbols VALUES (
-            's0', 'f0', 'src/main.rs', 'rust', 'base_function', 'function',
-            'pub fn base_function()', NULL, 'pub', NULL,
-            1, 0, 1, 23, 0, 23, 1, 0, 1, 23, 0, 23, 'b3:hash',
-            NULL, 0, 0
-        )",
-        [],
-    )
-    .unwrap();
-
-    // Now insert 200 additional symbols in separate transactions without checkpointing
-    for i in 1..=200 {
-        let sym_name = format!("wal_committed_fn_{i}");
-        let file_path = format!("src/module_{i}.rs");
-        let fid = format!("f{i}");
-        let sid = format!("s{i}");
-        let content = format!("pub fn {sym_name}() {{}}\n");
-        let h = format!("blake3:{}", blake3::hash(content.as_bytes()).to_hex());
-        fs::write(main_root.join(&file_path), &content).unwrap();
-
-        conn.execute(
-            "INSERT INTO files VALUES (?1, ?2, 'rust', ?3, ?4, 1, '2026-01-01')",
-            rusqlite::params![fid, file_path, h, content.len() as i64],
-        )
-        .unwrap();
-        conn.execute(
-            "INSERT INTO symbols VALUES (
-                ?1, ?2, ?3, 'rust', ?4, 'function',
-                ?5, NULL, 'pub', NULL,
-                1, 0, 1, 30, 0, 30, 1, 0, 1, 30, 0, 30, 'b3:hash',
-                NULL, 0, 0
-            )",
-            rusqlite::params![
-                sid,
-                fid,
-                file_path,
-                sym_name,
-                format!("pub fn {sym_name}()")
-            ],
-        )
-        .unwrap();
-    }
-
-    // Keep conn OPEN to simulate the parent agent/server holding the DB open with uncheckpointed WAL
-    assert!(
-        wal_path.exists(),
-        "artifact.db-wal must exist with committed transactions"
-    );
-    let wal_len_before = fs::metadata(&wal_path).unwrap().len();
-    assert!(
-        wal_len_before > 0,
-        "artifact.db-wal must have non-zero length before worktree copy: got {wal_len_before}"
-    );
-
-    // Set up worktree pointing to main repo gitdir
     fs::create_dir_all(wt_root.join("src")).unwrap();
-    for i in 1..=200 {
-        fs::write(
-            wt_root.join(format!("src/module_{i}.rs")),
-            format!("pub fn wal_committed_fn_{i}() {{}}\n"),
-        )
-        .unwrap();
-    }
     let gitdir_path = main_root.join(".git").join("worktrees").join("feature-wal");
     fs::create_dir_all(&gitdir_path).unwrap();
     fs::write(
@@ -182,9 +118,8 @@ fn test_adversarial_worktree_fastpath_wal_flush_uncheckpointed_transactions() {
     )
     .unwrap();
 
-    // Copy main.rs into worktree
     let wt_file = wt_root.join("src").join("main.rs");
-    fs::write(&wt_file, main_code).unwrap();
+    fs::write(&wt_file, &main_code).unwrap();
 
     let wt_db = wt_root.join(".code-kb").join("artifact.db");
     assert!(
@@ -192,10 +127,12 @@ fn test_adversarial_worktree_fastpath_wal_flush_uncheckpointed_transactions() {
         "Worktree DB must NOT exist before fast-path"
     );
 
-    // Spawn code-kb serve pointing to main_root
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
-            .env("CODE_KB_TELEMETRY_DIR", main_root.join(".telemetry_test"))
+            .env(
+                "CODE_KB_TELEMETRY_DIR",
+                temp_dir.path().join(".telemetry_test"),
+            )
             .env("CODE_KB_INDEX_WAIT_MS", "60000")
             .arg("serve")
             .arg("--root")
@@ -210,7 +147,6 @@ fn test_adversarial_worktree_fastpath_wal_flush_uncheckpointed_transactions() {
     let stdout = child.stdout.take().expect("Failed to open stdout");
     let mut reader = BufReader::new(stdout);
 
-    // 1. Initialize handshake
     let init_req = json!({
         "jsonrpc": "2.0",
         "id": 1,
@@ -228,12 +164,57 @@ fn test_adversarial_worktree_fastpath_wal_flush_uncheckpointed_transactions() {
     let mut resp_line = String::new();
     reader.read_line(&mut resp_line).unwrap();
 
-    // 2. Query file_skeleton on worktree file -> triggers worktree auto-copy fast path
-    // In server.rs, it runs:
-    // open_read_write(&parent_db) -> checkpoint_truncate(&parent_conn) -> copy(&parent_db, &self.db_path)
-    let wt_call = json!({
+    let parent_call = json!({
         "jsonrpc": "2.0",
         "id": 2,
+        "method": "tools/call",
+        "params": {
+            "name": "file_skeleton",
+            "arguments": {
+                "project_root": main_root.to_string_lossy().to_string(),
+                "file": main_file.to_string_lossy().to_string()
+            }
+        }
+    });
+    let mut parent_line = serde_json::to_string(&parent_call).unwrap();
+    parent_line.push('\n');
+    stdin.write_all(parent_line.as_bytes()).unwrap();
+    stdin.flush().unwrap();
+    let mut parent_response = String::new();
+    reader.read_line(&mut parent_response).unwrap();
+    let parent_response: Value =
+        serde_json::from_str(&parent_response).expect("Invalid parent-root JSON response");
+    assert_eq!(parent_response["id"], 2);
+    assert!(
+        parent_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("base_function")
+    );
+    for i in 1..=200 {
+        let sym_name = format!("wal_committed_fn_{i}");
+        assert_eq!(
+            conn.execute(
+                "UPDATE symbols SET signature = 'wal-committed: ' || signature WHERE name = ?1",
+                [&sym_name],
+            )
+            .unwrap(),
+            1
+        );
+    }
+    assert!(
+        wal_path.exists(),
+        "artifact.db-wal must exist with committed transactions"
+    );
+    let wal_len_before_worktree_copy = fs::metadata(&wal_path).unwrap().len();
+    assert!(
+        wal_len_before_worktree_copy > 0,
+        "Parent WAL must still contain uncheckpointed transactions before the worktree call"
+    );
+
+    let wt_call = json!({
+        "jsonrpc": "2.0",
+        "id": 3,
         "method": "tools/call",
         "params": {
             "name": "file_skeleton",
@@ -243,36 +224,34 @@ fn test_adversarial_worktree_fastpath_wal_flush_uncheckpointed_transactions() {
             }
         }
     });
-    let mut line2 = serde_json::to_string(&wt_call).unwrap();
-    line2.push('\n');
-    stdin.write_all(line2.as_bytes()).unwrap();
+    let mut worktree_line = serde_json::to_string(&wt_call).unwrap();
+    worktree_line.push('\n');
+    stdin.write_all(worktree_line.as_bytes()).unwrap();
     stdin.flush().unwrap();
-    let mut resp_line2 = String::new();
-    reader.read_line(&mut resp_line2).unwrap();
-    let resp2: Value = serde_json::from_str(&resp_line2).expect("Invalid JSON response");
-    assert_eq!(resp2["id"], 2);
-    let body_text = resp2["result"]["content"][0]["text"].as_str().unwrap();
+    let mut worktree_response = String::new();
+    reader.read_line(&mut worktree_response).unwrap();
+    let worktree_response: Value =
+        serde_json::from_str(&worktree_response).expect("Invalid worktree JSON response");
+    assert_eq!(worktree_response["id"], 3);
+    let body_text = worktree_response["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap();
     assert!(
         body_text.contains("base_function"),
         "Fast path skeleton must contain base_function"
     );
 
-    // 3. Verify worktree DB was created
     assert!(
         wt_db.exists(),
         "Worktree DB must exist on disk after fast path"
     );
 
-    // 4. Verify parent WAL was truncated to 0 bytes by checkpoint_truncate
     let wal_len_after = fs::metadata(&wal_path).unwrap().len();
     assert_eq!(
         wal_len_after, 0,
         "Parent WAL must be truncated to 0 bytes after fast-path checkpoint"
     );
 
-    // 5. Open worktree DB directly and EMPIRICALLY VERIFY:
-    // a) Integrity check passes
-    // b) ALL 201 symbols (base + 200 WAL symbols) are present in the copied DB!
     {
         let wt_conn =
             code_kb_core::open_read_only(&wt_db).expect("Failed to open copied worktree DB");
@@ -292,7 +271,6 @@ fn test_adversarial_worktree_fastpath_wal_flush_uncheckpointed_transactions() {
             "Copied worktree DB must contain all 201 symbols flushed from parent WAL"
         );
 
-        // Verify the 200th WAL symbol specifically exists in the worktree DB
         let check_sym: String = wt_conn
             .query_row(
                 "SELECT name FROM symbols WHERE name = 'wal_committed_fn_200';",
@@ -301,6 +279,14 @@ fn test_adversarial_worktree_fastpath_wal_flush_uncheckpointed_transactions() {
             )
             .expect("wal_committed_fn_200 must exist in copied worktree DB");
         assert_eq!(check_sym, "wal_committed_fn_200");
+        let check_signature: String = wt_conn
+            .query_row(
+                "SELECT signature FROM symbols WHERE name = 'wal_committed_fn_200';",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(check_signature.starts_with("wal-committed: "));
     }
 
     drop(conn);
@@ -367,7 +353,10 @@ fn test_adversarial_worktree_fastpath_with_active_parent_reader() {
     // Spawn server
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
-            .env("CODE_KB_TELEMETRY_DIR", main_root.join(".telemetry_test"))
+            .env(
+                "CODE_KB_TELEMETRY_DIR",
+                temp_dir.path().join(".telemetry_test"),
+            )
             .env("CODE_KB_INDEX_WAIT_MS", "60000")
             .arg("serve")
             .arg("--root")
