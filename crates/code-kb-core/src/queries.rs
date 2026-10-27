@@ -2416,6 +2416,16 @@ pub fn find_related_tests(
     let remaining = limit - tests.len();
     if remaining > 0 && has_pending_namespace_column(conn) {
         let pending_language = pending_relationship_language_filter("p.kind", "s_from", "s_target");
+        let pending_receiver_chain =
+            if pending_receiver_chain_requires_full_for_target_name(conn, &target_symbol.name) {
+                pending_target_predicate(conn, "s_target", "s_target_parent")
+            } else {
+                pending_target_predicate_without_typed_receiver_chain(
+                    conn,
+                    "s_target",
+                    "s_target_parent",
+                )
+            };
         let pending_sql = format!(
             "SELECT DISTINCT {COLUMNS}
      FROM pending_relationships p
@@ -2430,7 +2440,7 @@ pub fn find_related_tests(
        AND {pred}
      ORDER BY {TEST_ORDER}
      LIMIT ?2",
-            pred = pending_target_predicate(conn, "s_target", "s_target_parent")
+            pred = pending_receiver_chain
         );
 
         if let Ok(mut stmt) = conn.prepare(&pending_sql)
@@ -3448,7 +3458,7 @@ fn find_callees_page_internal(
     offset: usize,
     include_external: bool,
 ) -> Result<(Vec<ReferenceSite>, usize), QueryError> {
-    let cte = callee_page_cte(conn, include_external);
+    let cte = callee_page_cte(conn, include_external, symbol_id);
     let total: i64 = conn.query_row(
         &format!("{cte} SELECT COUNT(*) FROM merged_sites"),
         params![symbol_name, symbol_id],
@@ -3524,8 +3534,20 @@ fn has_css_call_identifier_site_schema(conn: &Connection) -> bool {
         && has_column(conn, "identifiers", "identifier_id")
 }
 
-fn callee_page_cte(conn: &Connection, include_external: bool) -> String {
+fn callee_page_cte(conn: &Connection, include_external: bool, symbol_id: Option<&str>) -> String {
     let pending_language = pending_relationship_language_filter("p.kind", "s_from", "s_to");
+    let pending_predicate = if include_external || !has_pending_namespace_column(conn) {
+        String::new()
+    } else {
+        let pending_receiver_chain = symbol_id.is_none_or(|source_id| {
+            pending_receiver_chain_requires_full_for_source(conn, source_id)
+        });
+        if pending_receiver_chain {
+            pending_target_predicate(conn, "s_to", "s_to_parent")
+        } else {
+            pending_target_predicate_without_typed_receiver_chain(conn, "s_to", "s_to_parent")
+        }
+    };
     let pending = if has_pending_namespace_column(conn) {
         if include_external {
             "SELECT s_from.name AS from_symbol_name,
@@ -3560,7 +3582,7 @@ fn callee_page_cte(conn: &Connection, include_external: bool) -> String {
                          AND {}
                    )",
                 callee_target_kind("s_to_parent"),
-                pending_target_predicate(conn, "s_to", "s_to_parent"),
+                pending_predicate,
             )
         }
     } else if include_external {
@@ -4245,11 +4267,29 @@ pub(crate) fn pending_target_predicate(conn: &Connection, target: &str, parent: 
     pending_target_predicate_with_receiver_chain_status(conn, target, parent, None)
 }
 
+fn pending_target_predicate_without_typed_receiver_chain(
+    conn: &Connection,
+    target: &str,
+    parent: &str,
+) -> String {
+    pending_target_predicate_builder(conn, target, parent, None, false)
+}
+
 pub(crate) fn pending_target_predicate_with_receiver_chain_status(
     conn: &Connection,
     target: &str,
     parent: &str,
     receiver_chain_status: Option<&str>,
+) -> String {
+    pending_target_predicate_builder(conn, target, parent, receiver_chain_status, true)
+}
+
+fn pending_target_predicate_builder(
+    conn: &Connection,
+    target: &str,
+    parent: &str,
+    receiver_chain_status: Option<&str>,
+    include_typed_receiver_chain: bool,
 ) -> String {
     let ns = "json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END)";
     let target_path = format!("('/' || replace({target}.path, '\\', '/'))");
@@ -4300,7 +4340,7 @@ pub(crate) fn pending_target_predicate_with_receiver_chain_status(
         '$[#]', p.target_receiver
     )";
     let typed_receiver_chain_supported = has_typed_receiver_chain_support(conn);
-    let typed_receiver_chain = if typed_receiver_chain_supported {
+    let typed_receiver_chain = if typed_receiver_chain_supported && include_typed_receiver_chain {
         let matches_target = match receiver_chain_status {
             Some(status) => format!("({status}) = 1"),
             None => {
@@ -4327,7 +4367,7 @@ pub(crate) fn pending_target_predicate_with_receiver_chain_status(
     } else {
         "0".to_string()
     };
-    let receiver_type = if typed_receiver_chain_supported {
+    let receiver_type = if typed_receiver_chain_supported && include_typed_receiver_chain {
         format!(
             "CASE WHEN json_array_length({receiver_chain_json}) > 1 THEN 0 ELSE {receiver_type} END"
         )
@@ -4442,7 +4482,10 @@ pub(crate) fn pending_target_predicate_with_receiver_chain_status(
             )
         )"
     );
-    if typed_receiver_chain_supported && let Some(status) = receiver_chain_status {
+    if typed_receiver_chain_supported
+        && include_typed_receiver_chain
+        && let Some(status) = receiver_chain_status
+    {
         format!(
             "CASE WHEN json_array_length({receiver_chain_json}) > 1
                        AND p.target_receiver IS NOT NULL AND p.target_receiver != ''
@@ -4452,6 +4495,111 @@ pub(crate) fn pending_target_predicate_with_receiver_chain_status(
     } else {
         predicate
     }
+}
+
+fn pending_receiver_chain_scope_requires_full(
+    conn: &Connection,
+    scope: &str,
+    values: &[String],
+) -> bool {
+    if values.is_empty()
+        || !has_typed_receiver_chain_support(conn)
+        || !has_pending_namespace_column(conn)
+    {
+        return false;
+    }
+    let Ok(values_json) = serde_json::to_string(values) else {
+        return true;
+    };
+    let sql = format!(
+        "SELECT 1 FROM pending_relationships p
+         WHERE {scope}
+           AND (
+                (p.target_namespace_json IS NOT NULL
+                 AND (NOT json_valid(p.target_namespace_json)
+                      OR json_type(CASE WHEN json_valid(p.target_namespace_json)
+                                        THEN p.target_namespace_json ELSE '[]' END) != 'array'))
+                OR (p.target_receiver IS NOT NULL AND p.target_receiver != ''
+                    AND json_valid(p.target_namespace_json)
+                    AND json_type(CASE WHEN json_valid(p.target_namespace_json)
+                                       THEN p.target_namespace_json ELSE '[]' END) = 'array'
+                    AND json_array_length(CASE WHEN json_valid(p.target_namespace_json)
+                                               THEN p.target_namespace_json ELSE '[]' END) > 0)
+           )
+         LIMIT 1"
+    );
+    conn.query_row(&sql, [&values_json], |_| Ok(()))
+        .optional()
+        .map(|row| row.is_some())
+        .unwrap_or(true)
+}
+
+fn pending_receiver_chain_requires_full_for_source(conn: &Connection, source_id: &str) -> bool {
+    pending_receiver_chain_scope_requires_full(
+        conn,
+        "p.from_symbol_id IN (SELECT value FROM json_each(?1))",
+        &[source_id.to_string()],
+    )
+}
+
+fn pending_receiver_chain_requires_full_for_target_name(
+    conn: &Connection,
+    target_name: &str,
+) -> bool {
+    pending_receiver_chain_scope_requires_full(
+        conn,
+        "p.target_terminal_name IN (SELECT value FROM json_each(?1))",
+        &[target_name.to_string()],
+    )
+}
+
+fn pending_receiver_chain_requires_full_for_frontier(
+    conn: &Connection,
+    frontier: &[(String, usize, i64)],
+) -> bool {
+    if frontier.is_empty()
+        || !has_typed_receiver_chain_support(conn)
+        || !has_pending_namespace_column(conn)
+    {
+        return false;
+    }
+    let frontier_ids: Vec<&str> = frontier
+        .iter()
+        .map(|(symbol_id, _, _)| symbol_id.as_str())
+        .collect();
+    let Ok(frontier_json) = serde_json::to_string(&frontier_ids) else {
+        return true;
+    };
+    let sql = "WITH frontier_ids(symbol_id) AS (
+                   SELECT value FROM json_each(?1)
+               ), target_names(name) AS (
+                   SELECT s.name
+                   FROM frontier_ids f JOIN symbols s ON s.symbol_id = f.symbol_id
+                   UNION
+                   SELECT parent.name
+                   FROM frontier_ids f
+                   JOIN symbols ctor ON ctor.symbol_id = f.symbol_id AND ctor.kind = 'constructor'
+                   JOIN symbols parent ON parent.symbol_id = ctor.parent_symbol_id
+                   WHERE parent.kind IN ('class', 'struct', 'record')
+               )
+               SELECT 1
+               FROM pending_relationships p
+               JOIN target_names target ON target.name = p.target_terminal_name
+               WHERE (p.target_namespace_json IS NOT NULL
+                      AND (NOT json_valid(p.target_namespace_json)
+                           OR json_type(CASE WHEN json_valid(p.target_namespace_json)
+                                             THEN p.target_namespace_json ELSE '[]' END) != 'array'))
+                  OR (p.target_receiver IS NOT NULL AND p.target_receiver != ''
+                      AND json_valid(p.target_namespace_json)
+                      AND json_type(CASE WHEN json_valid(p.target_namespace_json)
+                                         THEN p.target_namespace_json ELSE '[]' END) = 'array'
+                      AND json_array_length(CASE WHEN json_valid(p.target_namespace_json)
+                                                 THEN p.target_namespace_json ELSE '[]' END) > 0)
+               LIMIT 1";
+    conn.query_row(sql, [&frontier_json], |_| Ok(()))
+        .optional()
+        .map(|row| row.is_some())
+        .unwrap_or(true)
 }
 
 /// SQL predicate for a Rust call written with a path (`crate::f()`, `super::f()`, `my_crate::f()`,
@@ -5052,6 +5200,18 @@ fn find_direct_references(
             let remaining = limit - results.len();
             if has_pending_namespace_column(conn) {
                 if let Some(sid) = symbol_id {
+                    let pred = if pending_receiver_chain_requires_full_for_target_name(
+                        conn,
+                        symbol_name,
+                    ) {
+                        pending_target_predicate(conn, "s_target", "s_target_parent")
+                    } else {
+                        pending_target_predicate_without_typed_receiver_chain(
+                            conn,
+                            "s_target",
+                            "s_target_parent",
+                        )
+                    };
                     let mut pending_stmt = conn.prepare(
                         &format!("SELECT s_from.name AS from_name,
                                 p.from_symbol_id,
@@ -5066,7 +5226,7 @@ fn find_direct_references(
                          LEFT JOIN symbols s_target_parent ON s_target.parent_symbol_id = s_target_parent.symbol_id
                           WHERE p.target_terminal_name = ?1
                             AND {pred}
-                          LIMIT ?2", pred = pending_target_predicate(conn, "s_target", "s_target_parent")),
+                          LIMIT ?2"),
                     )?;
 
                     let p_rows = pending_stmt.query_map(
@@ -5230,6 +5390,10 @@ fn find_direct_references(
         // Also query pending_relationships for callees
         if results.len() < limit {
             let remaining = limit - results.len();
+            let pending_receiver_chain = !include_external
+                && symbol_id.is_none_or(|source_id| {
+                    pending_receiver_chain_requires_full_for_source(conn, source_id)
+                });
             let p_rows: Vec<ReferenceSite> = if has_pending_namespace_column(conn) {
                 let sql = if include_external {
                     String::from("SELECT DISTINCT s_from.name AS from_name,
@@ -5244,6 +5408,15 @@ fn find_direct_references(
                      WHERE s_from.name = ?1 AND (?3 IS NULL OR p.from_symbol_id = ?3)
                      LIMIT ?2")
                 } else {
+                    let predicate = if pending_receiver_chain {
+                        pending_target_predicate(conn, "s_to", "s_to_parent")
+                    } else {
+                        pending_target_predicate_without_typed_receiver_chain(
+                            conn,
+                            "s_to",
+                            "s_to_parent",
+                        )
+                    };
                     format!("SELECT DISTINCT s_from.name AS from_name,
                             p.from_symbol_id,
                             p.target_terminal_name AS to_name,
@@ -5261,7 +5434,7 @@ fn find_direct_references(
                              AND {kind}
                              AND {pred}
                        )
-                     LIMIT ?2", kind = callee_target_kind("s_to_parent"), pred = pending_target_predicate(conn, "s_to", "s_to_parent"))
+                     LIMIT ?2", kind = callee_target_kind("s_to_parent"), pred = predicate)
                 };
                 let mut pending_stmt = conn.prepare(&sql)?;
                 let rows = pending_stmt.query_map(
@@ -5384,7 +5557,25 @@ fn describe_callee_targets(
     let owner = "CASE WHEN par.kind IN ('class', 'struct', 'interface', 'trait', 'enum', 'record', 'object', 'protocol', 'union')
                  THEN par.name || '.' ELSE '' END";
     let pending_language = pending_relationship_language_filter("p.kind", "s_from", "s_to");
-    let pending = if has_pending_namespace_column(conn) {
+    let has_pending_namespaces = has_pending_namespace_column(conn);
+    let pending_predicate = if has_pending_namespaces {
+        let mut probed_names = HashSet::new();
+        let pending_receiver_chain = sites.iter().any(|site| {
+            if site.to_symbol_name.contains(['.', ':']) {
+                return true;
+            }
+            probed_names.insert(site.to_symbol_name.as_str())
+                && pending_receiver_chain_requires_full_for_target_name(conn, &site.to_symbol_name)
+        });
+        if pending_receiver_chain {
+            pending_target_predicate(conn, "s_to", "s_to_parent")
+        } else {
+            pending_target_predicate_without_typed_receiver_chain(conn, "s_to", "s_to_parent")
+        }
+    } else {
+        String::new()
+    };
+    let pending = if has_pending_namespaces {
         format!(
             "UNION
              SELECT {owner} || s_to.name, replace(s_to.path, '\\', '/'), s_to.start_line
@@ -5399,7 +5590,7 @@ fn describe_callee_targets(
                AND {kind}
                AND {pred}",
             kind = callee_target_kind("s_to_parent"),
-            pred = pending_target_predicate(conn, "s_to", "s_to_parent")
+            pred = pending_predicate
         )
     } else {
         String::new()
@@ -5756,13 +5947,23 @@ pub fn find_callee_signatures(
         }
     }
 
+    let pending_predicate = if has_pending_namespace_column(conn) {
+        let pending_receiver_chain = signatures.len() < limit
+            && pending_receiver_chain_requires_full_for_source(conn, symbol_id);
+        if pending_receiver_chain {
+            pending_target_predicate(conn, "s_to", "s_parent")
+        } else {
+            pending_target_predicate_without_typed_receiver_chain(conn, "s_to", "s_parent")
+        }
+    } else {
+        String::new()
+    };
     if signatures.len() < limit {
         let remaining = (limit - signatures.len()) * 2;
         let pending_language = pending_relationship_language_filter("p.kind", "s_from", "s_to");
         let p_rows: Vec<(String, Option<String>, String, usize, String)> =
             if has_pending_namespace_column(conn) {
-                let mut p_stmt = conn.prepare(
-                &format!("SELECT DISTINCT s_to.name, s_to.signature, s_to.path, s_to.start_line, s_to.kind
+                let pending_sql = format!("SELECT DISTINCT s_to.name, s_to.signature, s_to.path, s_to.start_line, s_to.kind
                  FROM pending_relationships p
                  JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
                  JOIN symbols s_to ON s_to.name = p.target_terminal_name
@@ -5771,8 +5972,8 @@ pub fn find_callee_signatures(
                    AND {pending_language}
                    AND {kind}
                     AND {pred}
-                 LIMIT ?3", kind = callee_target_kind("s_parent"), pred = pending_target_predicate(conn, "s_to", "s_parent"), pending_language = pending_language),
-            )?;
+                 LIMIT ?3", kind = callee_target_kind("s_parent"), pred = pending_predicate, pending_language = pending_language);
+                let mut p_stmt = conn.prepare(&pending_sql)?;
 
                 let rows =
                     p_stmt.query_map(params![symbol_name, symbol_id, remaining as i64], |row| {
@@ -5841,7 +6042,7 @@ pub fn find_callee_signatures(
                          AND {kind}
                          AND {pred}
                    )
-                 LIMIT ?3", kind = callee_target_kind("s_parent"), pred = pending_target_predicate(conn, "s_to", "s_parent"), pending_language = pending_language),
+                 LIMIT ?3", kind = callee_target_kind("s_parent"), pred = pending_predicate, pending_language = pending_language),
             )?;
 
             let rows =
@@ -7915,6 +8116,7 @@ struct CollectedWalk {
 /// that only a constructor step reached.
 struct CallerWalk {
     level_sql: Option<String>,
+    legacy_level_sql: Option<String>,
     rows: Vec<(String, usize, i64)>,
     seen: HashSet<(String, i64, bool)>,
     frontier: Vec<(String, usize, i64)>,
@@ -7931,22 +8133,28 @@ impl CallerWalk {
         seeds: &WalkSeeds,
         include_low_signal: bool,
     ) -> Result<Self, QueryError> {
-        let branches = walk_caller_branches(
-            conn,
-            has_relationships,
-            has_pending,
-            "?1",
-            include_low_signal,
-        );
-        let level_sql = (!branches.is_empty()).then(|| {
-            format!(
-                "WITH impact_walk(symbol_id, depth, via) AS ({WALK_ROWS_SQL})
-                 {}",
-                branches.join("\n UNION \n")
-            )
-        });
+        let build_level_sql = |include_typed_receiver_chain| {
+            let branches = walk_caller_branches(
+                conn,
+                has_relationships,
+                has_pending,
+                "?1",
+                include_low_signal,
+                include_typed_receiver_chain,
+            );
+            (!branches.is_empty()).then(|| {
+                format!(
+                    "WITH impact_walk(symbol_id, depth, via) AS ({WALK_ROWS_SQL})
+                     {}",
+                    branches.join("\n UNION \n")
+                )
+            })
+        };
+        let level_sql = build_level_sql(true);
+        let legacy_level_sql = build_level_sql(false);
         let mut walk = CallerWalk {
             level_sql,
+            legacy_level_sql,
             rows: Vec::new(),
             seen: HashSet::new(),
             frontier: Vec::new(),
@@ -7970,16 +8178,37 @@ impl CallerWalk {
 
     /// Walks on until `bound` levels are done or no level adds a row.
     fn extend(&mut self, conn: &Connection, bound: usize) -> Result<(), QueryError> {
-        let Some(sql) = &self.level_sql else {
+        let (Some(full_sql), Some(legacy_sql)) = (&self.level_sql, &self.legacy_level_sql) else {
             return Ok(());
         };
         if self.depth >= bound || self.frontier.is_empty() {
             return Ok(());
         }
-        let mut stmt = conn.prepare(sql)?;
+        let mut full_stmt = None;
+        let mut legacy_stmt = None;
         while self.depth < bound && !self.frontier.is_empty() {
             let frontier = std::mem::take(&mut self.frontier);
-            for step in level_callers(&mut stmt, bound, &frontier)? {
+            let needs_full = pending_receiver_chain_requires_full_for_frontier(conn, &frontier);
+            let steps = if needs_full {
+                if full_stmt.is_none() {
+                    full_stmt = Some(conn.prepare(full_sql)?);
+                }
+                level_callers(
+                    full_stmt.as_mut().expect("prepared full walk"),
+                    bound,
+                    &frontier,
+                )?
+            } else {
+                if legacy_stmt.is_none() {
+                    legacy_stmt = Some(conn.prepare(legacy_sql)?);
+                }
+                level_callers(
+                    legacy_stmt.as_mut().expect("prepared legacy walk"),
+                    bound,
+                    &frontier,
+                )?
+            };
+            for step in steps {
                 let Some(caller) = step.caller else {
                     continue;
                 };
@@ -8005,7 +8234,7 @@ impl CallerWalk {
         conn: &Connection,
         reached: Vec<ReachedSymbol>,
     ) -> Result<Vec<OpenEnd>, QueryError> {
-        let Some(sql) = &self.level_sql else {
+        let (Some(full_sql), Some(legacy_sql)) = (&self.level_sql, &self.legacy_level_sql) else {
             return Ok(Vec::new());
         };
         let unexpanded: Vec<(String, usize, i64)> = reached
@@ -8014,6 +8243,11 @@ impl CallerWalk {
             .map(|symbol| (symbol.symbol_id.clone(), symbol.depth, 0))
             .collect();
         if !unexpanded.is_empty() {
+            let sql = if pending_receiver_chain_requires_full_for_frontier(conn, &unexpanded) {
+                full_sql
+            } else {
+                legacy_sql
+            };
             let mut stmt = conn.prepare(sql)?;
             for step in level_callers(&mut stmt, MAX_BLAST_DEPTH + 1, &unexpanded)? {
                 if step.caller.is_some_and(|caller| caller != step.origin) {
@@ -8584,6 +8818,7 @@ fn walk_caller_branches(
     has_pending: bool,
     depth_bound: &str,
     include_low_signal: bool,
+    include_typed_receiver_chain: bool,
 ) -> Vec<String> {
     let mut recursive_branches = Vec::new();
     let from_signal_filter = if include_low_signal {
@@ -8622,10 +8857,16 @@ fn walk_caller_branches(
             ""
         };
         let ns_condition = if has_target_namespace {
-            format!(
-                "AND {pred}",
-                pred = pending_target_predicate(conn, "s_target", "s_target_parent")
-            )
+            let predicate = if include_typed_receiver_chain {
+                pending_target_predicate(conn, "s_target", "s_target_parent")
+            } else {
+                pending_target_predicate_without_typed_receiver_chain(
+                    conn,
+                    "s_target",
+                    "s_target_parent",
+                )
+            };
+            format!("AND {pred}", pred = predicate)
         } else {
             String::new()
         };
@@ -8693,6 +8934,15 @@ fn walk_caller_branches(
     if has_pending && has_pending_namespace_column(conn) {
         let constructor_call_language =
             call_languages_compatible_sql("s_from.language", "s_target.language");
+        let predicate = if include_typed_receiver_chain {
+            pending_target_predicate(conn, "s_target", "s_target_parent")
+        } else {
+            pending_target_predicate_without_typed_receiver_chain(
+                conn,
+                "s_target",
+                "s_target_parent",
+            )
+        };
         recursive_branches.push(format!(
             "SELECT p.from_symbol_id, iw.depth + 1, 1, iw.symbol_id
              FROM impact_walk iw
@@ -8707,7 +8957,7 @@ fn walk_caller_branches(
                AND +p.kind = 'calls'
                AND {constructor_call_language}
                AND {pred}",
-            pred = pending_target_predicate(conn, "s_target", "s_target_parent")
+            pred = predicate
         ));
     }
     recursive_branches
@@ -9293,7 +9543,7 @@ mod tests {
         assert!(plan.contains("idx_identifiers_containing"), "{plan}");
         assert!(plan.contains("idx_symbols_id"), "{plan}");
 
-        let cte = callee_page_cte(&conn, false);
+        let cte = callee_page_cte(&conn, false, None);
         let mut stmt = conn
             .prepare(&format!(
                 "EXPLAIN QUERY PLAN {cte}
@@ -9357,7 +9607,7 @@ mod tests {
         )
         .unwrap();
 
-        let cte = callee_page_cte(&conn, true);
+        let cte = callee_page_cte(&conn, true, None);
         let mut stmt = conn
             .prepare(&format!(
                 "EXPLAIN QUERY PLAN {cte}
@@ -9543,6 +9793,68 @@ mod tests {
         conn.execute_batch("DROP TABLE pending_relationships")
             .unwrap();
         assert!(!has_typed_receiver_chain_support(&conn));
+    }
+
+    #[test]
+    fn receiver_chain_probe_tracks_current_targets_constructor_parents_and_malformed_rows() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE symbols (
+                symbol_id TEXT, path TEXT, language TEXT, name TEXT, kind TEXT,
+                parent_symbol_id TEXT, start_line INTEGER, metadata_json TEXT, signature TEXT
+            );
+            CREATE TABLE type_facts (symbol_id TEXT, resolved_type TEXT, language TEXT);
+            CREATE TABLE relationships (from_symbol_id TEXT, to_symbol_id TEXT, kind TEXT);
+            CREATE TABLE files (file_id TEXT, language TEXT);
+            CREATE TABLE pending_relationships (
+                from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT, path TEXT,
+                start_line INTEGER, file_id TEXT, target_receiver TEXT, target_namespace_json TEXT,
+                target_display_name TEXT
+            );
+            INSERT INTO symbols VALUES
+                ('send', 'service.go', 'go', 'Send', 'method', NULL, 1, NULL, NULL),
+                ('ping', 'service.go', 'go', 'Ping', 'method', NULL, 2, NULL, NULL),
+                ('ctor', 'widget.py', 'python', '__init__', 'constructor', 'owner', 1, NULL, NULL),
+                ('owner', 'widget.py', 'python', 'Widget', 'class', NULL, 1, NULL, NULL);
+            INSERT INTO pending_relationships VALUES
+                ('caller', 'Send', 'calls', 'caller.go', 1, NULL, 'service', '[\"group\"]', 'group.service.Send'),
+                ('caller', 'Widget', 'calls', 'caller.py', 2, NULL, 'service', '[\"group\"]', 'service.Widget'),
+                ('caller', 'Ping', 'calls', 'caller.go', 3, NULL, 'value', '[]', 'value.Ping');",
+        )
+        .unwrap();
+        assert!(has_typed_receiver_chain_support(&conn));
+
+        let send_frontier = vec![("send".to_string(), 0, 0)];
+        let ping_frontier = vec![("ping".to_string(), 0, 0)];
+        let constructor_frontier = vec![("ctor".to_string(), 0, 0)];
+
+        assert!(pending_receiver_chain_requires_full_for_frontier(
+            &conn,
+            &send_frontier
+        ));
+        assert!(!pending_receiver_chain_requires_full_for_frontier(
+            &conn,
+            &ping_frontier
+        ));
+        assert!(pending_receiver_chain_requires_full_for_frontier(
+            &conn,
+            &constructor_frontier
+        ));
+
+        conn.execute(
+            "UPDATE pending_relationships SET target_namespace_json = 'broken' WHERE target_terminal_name = 'Ping'",
+            [],
+        )
+        .unwrap();
+        assert!(pending_receiver_chain_requires_full_for_frontier(
+            &conn,
+            &ping_frontier
+        ));
+
+        let full = pending_target_predicate(&conn, "s_target", "s_parent");
+        let legacy =
+            pending_target_predicate_without_typed_receiver_chain(&conn, "s_target", "s_parent");
+        assert!(full.len() > legacy.len() * 2);
     }
 
     #[test]

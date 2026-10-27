@@ -16,6 +16,12 @@ The judge can reuse computed evidence without repeatedly compiling nested owner 
 
 Do not replace the report's claim/rival ordering, hydrate repository graphs, register SQL functions, write temporary tables, cache repository data globally, or increase deadlines to hide query expansion.
 
+## Graph and callee preparation
+
+Choose query shape before preparation. A complete negative probe in the exact caller/name scope can omit typed-chain expansion; an impact walk probes each current frontier before its next step, including constructor-parent names. Open-end detection probes its own unexpanded frontier. A seed-only probe cannot establish absence at later hops. Probe errors, malformed facts, or incomplete evidence retain the full proof. Keep this decision local to the invocation. A positive probe must still use the shared typed proof.
+
+The no-typed mode must preserve legacy qualified-module, import, and path matching. Supplying status `0` is not equivalent: it rejects multi-segment chains, so it is safe only where the caller has established a single segment. Avoid multiplying the same owner/status proof inside positive graph branches. Preserve indexed branch joins: a trial OR-based merge reduced preparation but made stepping take seconds, so it was rejected.
+
 ## Applies to
 
 `queries.rs` receiver proof factories and `reference_report.rs` chunk judging.

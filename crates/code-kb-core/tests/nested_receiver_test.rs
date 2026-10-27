@@ -414,7 +414,7 @@ fn a_go_nested_receiver_chain_reaches_its_handler_and_test_in_blast_radius() {
         ("go.mod", "module fx\n\ngo 1.21\n"),
         (
             "service/invitation.go",
-            "package service\n\ntype InvitationService struct{}\n\nfunc (*InvitationService) Send() {}\n",
+            "package service\n\nfunc PrepareInvitation() {}\n\ntype InvitationService struct{}\n\nfunc (*InvitationService) Send() {\n\tPrepareInvitation()\n}\n",
         ),
         (
             "handler/invitation.go",
@@ -440,6 +440,8 @@ fn a_go_nested_receiver_chain_reaches_its_handler_and_test_in_blast_radius() {
         20,
     )
     .unwrap();
+    let plain_seed_result =
+        blast_radius_op(&workspace, &conn, Some("PrepareInvitation"), None, 3, 20).unwrap();
     let serve_report = report(
         &repo,
         "InvitationHandler.ServeHTTP",
@@ -473,6 +475,27 @@ fn a_go_nested_receiver_chain_reaches_its_handler_and_test_in_blast_radius() {
             .iter()
             .any(|test| test.path == "handler/invitation_test.go" && test.name == "TestServeHTTP"),
         "nested receiver caller test missing from blast radius: {result:?}"
+    );
+    assert!(
+        plain_seed_result
+            .impacted_symbols
+            .iter()
+            .any(|symbol| symbol.path == "service/invitation.go" && symbol.name == "Send"),
+        "plain first hop missing from blast radius: {plain_seed_result:?}"
+    );
+    assert!(
+        plain_seed_result
+            .impacted_symbols
+            .iter()
+            .any(|symbol| symbol.path == "handler/invitation.go" && symbol.name == "ServeHTTP"),
+        "typed second hop missing from blast radius: {plain_seed_result:?}"
+    );
+    assert!(
+        plain_seed_result
+            .likely_tests
+            .iter()
+            .any(|test| test.path == "handler/invitation_test.go" && test.name == "TestServeHTTP"),
+        "plain third hop missing from blast radius: {plain_seed_result:?}"
     );
 }
 
