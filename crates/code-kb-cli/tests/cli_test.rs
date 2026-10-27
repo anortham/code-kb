@@ -675,8 +675,9 @@ fn test_cli_symbol_and_search() {
 
 fn mcp_lookup_texts(root: &std::path::Path, queries: &[&str]) -> Vec<String> {
     use std::io::{BufRead, Write};
+    let telemetry = code_kb_core::safe_tempdir();
     let mut child = Command::new(env!("CARGO_BIN_EXE_code-kb"))
-        .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+        .env("CODE_KB_TELEMETRY_DIR", telemetry.path())
         .arg("serve")
         .arg("--root")
         .arg(root)

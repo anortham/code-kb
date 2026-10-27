@@ -1844,13 +1844,13 @@ impl<'a> Accounting<'a> {
                 }
             }
             for (pending_row_id, owner_id) in pending_bases {
-                if let Some(owner_id) = owner_id.as_ref() {
-                    if !visited.contains(owner_id) {
-                        next.insert(owner_id.clone());
-                        if visited.len() + next.len() > limits.owners {
-                            evidence.incomplete = Some(ReceiverChainLimit::Owners);
-                            return Ok(());
-                        }
+                if let Some(owner_id) = owner_id.as_ref()
+                    && !visited.contains(owner_id)
+                {
+                    next.insert(owner_id.clone());
+                    if visited.len() + next.len() > limits.owners {
+                        evidence.incomplete = Some(ReceiverChainLimit::Owners);
+                        return Ok(());
                     }
                 }
                 evidence
