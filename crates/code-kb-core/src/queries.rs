@@ -6322,52 +6322,363 @@ pub fn find_type_facts(conn: &Connection, symbol_id: &str) -> Result<Vec<TypeFac
     Ok(results)
 }
 
-/// The workspace type definitions named by the type facts of `target` and of its parameters and
-/// locals, one per name, as `signature (path:line)`. A name with no type definition in the
-/// index, such as `Result` or `String`, is left out. Same-file definitions win, then shorter paths.
+const RELATED_TYPE_KINDS: &str = "'struct', 'enum', 'trait', 'class', 'interface', 'type', 'union'";
+
+fn java_import_path_sql(alias: &str) -> String {
+    format!(
+        "CASE WHEN {alias}.signature LIKE 'import %' THEN trim(substr({alias}.signature, 8))
+              ELSE {alias}.name END"
+    )
+}
+
+fn go_import_path_sql(alias: &str) -> String {
+    let import = format!("trim(substr({alias}.signature, 8))");
+    format!(
+        "CASE
+            WHEN {alias}.signature LIKE 'import %' AND {import} LIKE '\"%\"'
+                THEN substr({import}, 2, length({import}) - 2)
+            WHEN {alias}.signature LIKE 'import %' AND instr({import}, ' ') > 0
+                THEN substr({import}, instr({import}, ' ') + 2,
+                            length({import}) - instr({import}, ' ') - 2)
+         END"
+    )
+}
+
+fn go_path_directory_sql(path: &str) -> String {
+    format!("rtrim({path}, replace({path}, '/', ''))")
+}
+
+fn go_import_owner_sql(
+    target: &str,
+    qualified_type: &str,
+    source_path: &str,
+    source_language: &str,
+) -> String {
+    let qualifier = format!("substr({qualified_type}, 1, instr({qualified_type}, '.') - 1)");
+    let type_name = format!("substr({qualified_type}, instr({qualified_type}, '.') + 1)");
+    let import_path = go_import_path_sql("type_import");
+    let target_dir = go_path_directory_sql(&format!("{target}.path"));
+    let parent_dir = "rtrim(substr(go_folder.dir, 1, length(go_folder.dir) - 1), replace(substr(go_folder.dir, 1, length(go_folder.dir) - 1), '/', ''))";
+    let relative_dir = format!("rtrim(substr({target_dir}, length(go_module.dir) + 1), '/')");
+    format!(
+        "EXISTS (
+            SELECT 1 FROM symbols type_import
+            WHERE type_import.kind = 'import'
+              AND type_import.path = {source_path}
+              AND {source_language} = 'go'
+              AND {target}.language = 'go'
+              AND type_import.name = {qualifier}
+              AND instr({qualified_type}, '.') > 1
+              AND {target}.name = {type_name}
+              AND EXISTS (
+                  WITH RECURSIVE go_folder(dir, depth) AS (
+                          SELECT {target_dir}, 0
+                          UNION ALL
+                          SELECT {parent_dir}, go_folder.depth + 1
+                          FROM go_folder
+                          WHERE go_folder.dir != '' AND go_folder.depth < 64
+                      ), go_modules(dir, depth, name) AS (
+                          SELECT go_folder.dir, go_folder.depth, go_module.name
+                          FROM go_folder
+                          JOIN symbols go_module
+                            ON go_module.path = go_folder.dir || 'go.mod'
+                           AND go_module.kind = 'module'
+                          WHERE CASE WHEN json_valid(go_module.metadata_json)
+                                     THEN json_extract(go_module.metadata_json, '$.directive')
+                                END = 'module'
+                      ), nearest_module(dir, name) AS (
+                          SELECT go_modules.dir, go_modules.name
+                          FROM go_modules
+                          WHERE go_modules.depth = (SELECT MIN(depth) FROM go_modules)
+                  )
+                  SELECT 1 FROM nearest_module go_module
+                  JOIN symbols go_package
+                    ON go_package.path = {target}.path
+                   AND go_package.language = 'go'
+                   AND go_package.kind = 'module'
+                  WHERE (SELECT COUNT(*) FROM nearest_module) = 1
+                    AND {import_path} = go_module.name ||
+                        CASE WHEN {relative_dir} = '' THEN '' ELSE '/' || {relative_dir} END
+              )
+        )"
+    )
+}
+
+fn java_import_owner_sql(
+    target: &str,
+    binding_name: &str,
+    source_path: &str,
+    source_language: &str,
+) -> String {
+    let import_path = java_import_path_sql("type_import");
+    format!(
+        "EXISTS (
+            SELECT 1 FROM symbols type_import
+            WHERE type_import.kind = 'import'
+              AND type_import.path = {source_path}
+              AND {source_language} = 'java'
+              AND {target}.language = 'java'
+              AND {target}.name = {binding_name}
+              AND substr({import_path}, -length({target}.name) - 1) = '.' || {target}.name
+              AND EXISTS (
+                  SELECT 1 FROM symbols target_scope
+                  WHERE target_scope.path = {target}.path
+                    AND target_scope.language = {target}.language
+                    AND target_scope.kind = 'namespace'
+                    AND target_scope.name = substr(
+                        {import_path},
+                        1,
+                        length({import_path}) - length({target}.name) - 1
+                    )
+              )
+        )"
+    )
+}
+
+fn type_fact_import_owner_sql(
+    target: &str,
+    binding_name: &str,
+    source_path: &str,
+    source_language: &str,
+) -> String {
+    let relative = is_relative_import_path("import_source.value");
+    let relative_match = relative_import_matches("import_source.value", target);
+    let imported_name = "NULLIF(json_extract(type_import.metadata_json, '$.importedName'), '')";
+    let package_kind = format!(
+        "CASE {target}.language WHEN 'go' THEN 'module'
+             WHEN 'java' THEN 'namespace' WHEN 'csharp' THEN 'namespace' END"
+    );
+    let indexed_package = format!(
+        "EXISTS (
+            SELECT 1 FROM symbols target_scope
+            WHERE target_scope.path = {target}.path
+              AND target_scope.language = {target}.language
+              AND target_scope.kind = {package_kind}
+              AND target_scope.name = replace(import_source.value, '/', '.')
+        )"
+    );
+    let java_import_owner =
+        java_import_owner_sql(target, binding_name, source_path, source_language);
+    format!(
+        "({java_import_owner} OR EXISTS (
+            SELECT 1 FROM symbols type_import
+            CROSS JOIN json_each(json_array(
+                json_extract(type_import.metadata_json, '$.source')
+            )) import_source
+            WHERE type_import.kind = 'import'
+              AND type_import.path = {source_path}
+              AND type_import.name = {binding_name}
+              AND json_valid(type_import.metadata_json)
+              AND ({imported_name} = {target}.name
+                   OR ({imported_name} IS NULL AND {target}.name = {binding_name}))
+              AND CASE WHEN {relative} THEN {relative_match}
+                  ELSE {indexed_package}
+                  END
+        ))"
+    )
+}
+
+/// A scalar owner id for a type fact, or SQL NULL when the index cannot bind it uniquely.
+pub(crate) fn type_fact_owner_id_sql(
+    source_symbol_id: &str,
+    resolved_type: &str,
+    language: &str,
+) -> String {
+    let import_owner = type_fact_import_owner_sql("d", resolved_type, "p.path", "p.language");
+    let go_import_owner = go_import_owner_sql("d", resolved_type, "p.path", "p.language");
+    let java_import_owner = java_import_owner_sql("d", resolved_type, "p.path", "p.language");
+    let java_import_path = java_import_path_sql("i");
+    let language_match = identifier_language_matches("p", "d");
+    let same_directory = path_proximity("p.path", "d.path");
+    let lexical_owner_depth =
+        "(SELECT MIN(lexical.depth) FROM lexical WHERE lexical.symbol_id = d.symbol_id)";
+    let lexical_parent_depth =
+        "(SELECT MIN(lexical.depth) FROM lexical WHERE lexical.symbol_id = d.parent_symbol_id)";
+    format!(
+        "(WITH RECURSIVE fact_source(symbol_id, path, language) AS (
+             SELECT s.symbol_id, s.path, s.language FROM symbols s
+             WHERE s.symbol_id = {source_symbol_id} AND s.language = {language}
+         ), lexical(symbol_id, depth) AS (
+             SELECT fact_source.symbol_id, 0 FROM fact_source
+             UNION ALL
+             SELECT parent.parent_symbol_id, lexical.depth + 1
+             FROM symbols parent JOIN lexical ON parent.symbol_id = lexical.symbol_id
+             WHERE parent.parent_symbol_id IS NOT NULL AND lexical.depth < 32
+         ), local_candidates(symbol_id, depth) AS (
+             SELECT DISTINCT d.symbol_id,
+                    CASE WHEN EXISTS (SELECT 1 FROM lexical WHERE lexical.symbol_id = d.symbol_id)
+                         THEN {lexical_owner_depth}
+                         WHEN d.parent_symbol_id IS NULL THEN 100
+                         ELSE {lexical_parent_depth}
+                    END
+             FROM fact_source p JOIN symbols d ON d.name = {resolved_type}
+             WHERE {language_match}
+               AND d.kind IN ({RELATED_TYPE_KINDS})
+               AND (EXISTS (SELECT 1 FROM lexical WHERE lexical.symbol_id = d.symbol_id)
+                    OR (d.path = p.path
+                        AND (d.parent_symbol_id IS NULL
+                             OR EXISTS (SELECT 1 FROM lexical
+                                        WHERE lexical.symbol_id = d.parent_symbol_id))))
+         ), local_best(symbol_id) AS (
+             SELECT symbol_id FROM local_candidates
+             WHERE depth = (SELECT MIN(depth) FROM local_candidates)
+         ), imported_candidates(symbol_id) AS (
+             SELECT DISTINCT d.symbol_id
+             FROM fact_source p
+             JOIN symbols type_import
+               ON type_import.path = p.path
+              AND type_import.kind = 'import'
+              AND type_import.name = {resolved_type}
+             JOIN symbols d
+               ON d.name = COALESCE(
+                   NULLIF(json_extract(type_import.metadata_json, '$.importedName'), ''),
+                   type_import.name
+               )
+              AND d.kind IN ({RELATED_TYPE_KINDS})
+             WHERE json_valid(type_import.metadata_json)
+               AND {language_match}
+               AND {import_owner}
+             UNION
+             SELECT DISTINCT d.symbol_id
+             FROM fact_source p JOIN symbols d
+               ON d.name = {resolved_type}
+              AND d.kind IN ({RELATED_TYPE_KINDS})
+             WHERE {language_match}
+               AND {java_import_owner}
+             UNION
+             SELECT DISTINCT d.symbol_id
+             FROM fact_source p JOIN symbols d
+               ON d.name = substr({resolved_type}, instr({resolved_type}, '.') + 1)
+              AND d.kind IN ({RELATED_TYPE_KINDS})
+             WHERE {language_match}
+               AND {go_import_owner}
+         ), scoped_candidates(symbol_id) AS (
+             SELECT DISTINCT d.symbol_id
+             FROM fact_source p JOIN symbols d
+               ON d.name = {resolved_type}
+              AND d.kind IN ({RELATED_TYPE_KINDS})
+              AND {language_match}
+             WHERE EXISTS (
+                 SELECT 1 FROM symbols source_scope
+                 JOIN symbols target_scope
+                   ON target_scope.name = source_scope.name
+                  AND target_scope.kind = source_scope.kind
+                  AND target_scope.path = d.path
+                  AND target_scope.language = d.language
+                 WHERE source_scope.path = p.path
+                   AND source_scope.language = p.language
+                   AND source_scope.kind = CASE p.language
+                       WHEN 'go' THEN 'module'
+                       WHEN 'java' THEN 'namespace'
+                       WHEN 'csharp' THEN 'namespace'
+                   END
+                   AND (p.language != 'go' OR {same_directory} = 1)
+             )
+         ), import_bindings(symbol_id) AS (
+             SELECT DISTINCT i.symbol_id
+             FROM fact_source p JOIN symbols i ON i.path = p.path
+             WHERE i.kind = 'import'
+               AND (i.name = {resolved_type}
+                    OR CASE WHEN json_valid(i.metadata_json)
+                            THEN NULLIF(json_extract(i.metadata_json, '$.importedName'), '')
+                       END = {resolved_type}
+                    OR (p.language = 'go'
+                        AND instr({resolved_type}, '.') > 1
+                        AND i.name = substr({resolved_type}, 1, instr({resolved_type}, '.') - 1))
+                    OR (p.language = 'java'
+                        AND substr({java_import_path}, -length({resolved_type}) - 1)
+                            = '.' || {resolved_type}))
+         )
+         SELECT CASE
+             WHEN EXISTS (SELECT 1 FROM local_candidates) THEN
+                 CASE WHEN (SELECT COUNT(*) FROM local_best) = 1
+                      THEN (SELECT symbol_id FROM local_best LIMIT 1) END
+             WHEN EXISTS (SELECT 1 FROM imported_candidates) THEN
+                 CASE WHEN (SELECT COUNT(*) FROM imported_candidates) = 1
+                      THEN (SELECT symbol_id FROM imported_candidates LIMIT 1) END
+             WHEN EXISTS (SELECT 1 FROM import_bindings) THEN NULL
+             WHEN EXISTS (SELECT 1 FROM scoped_candidates) THEN
+                 CASE WHEN (SELECT COUNT(*) FROM scoped_candidates) = 1
+                      THEN (SELECT symbol_id FROM scoped_candidates LIMIT 1) END
+             ELSE NULL
+         END)"
+    )
+}
+
+/// Resolve one type fact using the same SQL owner proof used by reference queries.
+pub(crate) fn resolve_type_fact_owner(
+    conn: &Connection,
+    fact: &TypeFact,
+) -> Result<Option<Symbol>, QueryError> {
+    let owner_query = format!("SELECT {}", type_fact_owner_id_sql("?1", "?2", "?3"));
+    let owner_id = conn.query_row(
+        &owner_query,
+        params![fact.symbol_id, fact.resolved_type, fact.language],
+        |row| row.get::<_, Option<String>>(0),
+    )?;
+    owner_id
+        .map(|symbol_id| get_symbol_by_id(conn, &symbol_id))
+        .transpose()
+        .map(Option::flatten)
+}
+
+const MAX_RELATED_TYPE_FACTS: usize = 4096;
+
+/// The workspace type definitions bound by the type facts of `target` and its direct members.
+/// Unbound or ambiguous names are omitted; each owner appears once as `signature (path:line)`.
 pub fn find_related_types(
     conn: &Connection,
     target: &Symbol,
     limit: usize,
 ) -> Result<Vec<String>, QueryError> {
+    find_related_types_with_fact_limit(conn, target, limit, MAX_RELATED_TYPE_FACTS)
+}
+
+fn find_related_types_with_fact_limit(
+    conn: &Connection,
+    target: &Symbol,
+    limit: usize,
+    fact_limit: usize,
+) -> Result<Vec<String>, QueryError> {
     if !has_table(conn, "type_facts") {
         return Ok(Vec::new());
     }
     let mut stmt = conn.prepare(
-        "SELECT d.name, d.kind, d.signature, d.path, d.start_line
-         FROM symbols d
-         WHERE d.kind IN ('struct', 'enum', 'trait', 'class', 'interface', 'type', 'union')
-           AND d.name IN (
-               SELECT t.resolved_type FROM type_facts t
-               JOIN symbols s ON s.symbol_id = t.symbol_id
-               WHERE s.symbol_id = ?1 OR s.parent_symbol_id = ?1
-           )
-         ORDER BY d.path = ?2 DESC, length(d.path), d.path, d.start_line",
+        "SELECT t.type_fact_id, t.symbol_id, t.language, t.resolved_type,
+                t.generic_params_json
+         FROM type_facts t JOIN symbols s ON s.symbol_id = t.symbol_id
+         WHERE s.symbol_id = ?1 OR s.parent_symbol_id = ?1
+         ORDER BY s.path, s.start_line, s.start_column, t.type_fact_id
+         LIMIT ?2",
     )?;
-    let rows = stmt.query_map(params![target.symbol_id, target.path], |row| {
-        Ok((
-            row.get::<_, String>(0)?,
-            row.get::<_, String>(1)?,
-            row.get::<_, Option<String>>(2)?,
-            row.get::<_, String>(3)?,
-            row.get::<_, i64>(4)?,
-        ))
-    })?;
-
-    let mut seen = std::collections::HashSet::new();
+    let mut rows = stmt.query(params![target.symbol_id, fact_limit as i64])?;
+    let mut seen = HashSet::new();
     let mut types = Vec::new();
-    for row in rows {
-        let (name, kind, signature, path, line) = row?;
+    while let Some(row) = rows.next()? {
         if types.len() >= limit {
             break;
         }
-        if !seen.insert(name.clone()) {
+        let fact = TypeFact {
+            type_fact_id: row.get(0)?,
+            symbol_id: row.get(1)?,
+            language: row.get(2)?,
+            resolved_type: row.get(3)?,
+            generic_params: row.get(4)?,
+        };
+        let Some(owner) = resolve_type_fact_owner(conn, &fact)? else {
+            continue;
+        };
+        if !seen.insert(owner.symbol_id) {
             continue;
         }
-        let signature = signature.unwrap_or_else(|| format!("{kind} {name}"));
+        let signature = owner
+            .signature
+            .unwrap_or_else(|| format!("{} {}", owner.kind, owner.name));
         types.push(format!(
-            "{} ({path}:{line})",
-            type_declaration_line(&signature)
+            "{} ({}:{})",
+            type_declaration_line(&signature),
+            owner.path,
+            owner.start_line
         ));
     }
     Ok(types)
@@ -8409,6 +8720,201 @@ mod tests {
         assert_eq!(count_parse_diagnostics(&conn, "src/lib.rs"), 2);
         assert_eq!(count_parse_diagnostics(&conn, "src\\lib.rs"), 2);
         assert_eq!(count_parse_diagnostics(&conn, "src/clean.rs"), 0);
+    }
+
+    fn selected_type_owner_id(
+        conn: &Connection,
+        source_id: &str,
+        resolved_type: &str,
+        language: &str,
+    ) -> Option<String> {
+        conn.query_row(
+            &format!("SELECT {}", type_fact_owner_id_sql("?1", "?2", "?3")),
+            params![source_id, resolved_type, language],
+            |row| row.get(0),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn related_type_owner_sql_uses_import_and_name_indexes() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE symbols (
+                symbol_id TEXT PRIMARY KEY,
+                path TEXT NOT NULL,
+                language TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                name TEXT NOT NULL,
+                parent_symbol_id TEXT,
+                metadata_json TEXT NOT NULL,
+                signature TEXT
+            );
+            CREATE INDEX idx_symbols_import_path_name ON symbols(path, name) WHERE kind = 'import';
+            CREATE INDEX idx_symbols_name_kind ON symbols(name, kind);
+            CREATE INDEX idx_symbols_path ON symbols(path);
+            CREATE INDEX idx_symbols_parent ON symbols(parent_symbol_id);",
+        )
+        .unwrap();
+        let plan_sql = format!(
+            "EXPLAIN QUERY PLAN SELECT {}",
+            type_fact_owner_id_sql("?1", "?2", "?3")
+        );
+        let mut statement = conn.prepare(&plan_sql).unwrap();
+        let plan: Vec<String> = statement
+            .query_map(params!["source", "Service", "typescript"], |row| row.get(3))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        assert!(plan.iter().any(|row| row.contains("idx_symbols_name_kind")));
+        assert!(
+            plan.iter()
+                .any(|row| row.contains("idx_symbols_import_path_name"))
+        );
+        assert!(plan.iter().any(|row| row.contains("idx_symbols_path")));
+        assert!(!plan.iter().any(|row| row.contains("SCAN d")), "{plan:?}");
+    }
+
+    #[test]
+    fn related_type_fact_scan_limit_bounds_unresolved_facts() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE symbols (
+                symbol_id TEXT PRIMARY KEY,
+                file_id TEXT NOT NULL,
+                path TEXT NOT NULL,
+                language TEXT NOT NULL,
+                name TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                signature TEXT,
+                doc_comment TEXT,
+                visibility TEXT,
+                parent_symbol_id TEXT,
+                start_line INTEGER NOT NULL,
+                start_column INTEGER NOT NULL,
+                end_line INTEGER NOT NULL,
+                end_column INTEGER NOT NULL,
+                start_byte INTEGER NOT NULL,
+                end_byte INTEGER NOT NULL,
+                body_start_line INTEGER,
+                body_start_column INTEGER,
+                body_end_line INTEGER,
+                body_end_column INTEGER,
+                body_start_byte INTEGER,
+                body_end_byte INTEGER,
+                body_hash TEXT,
+                semantic_group TEXT,
+                is_test INTEGER NOT NULL,
+                test_container INTEGER NOT NULL,
+                metadata_json TEXT NOT NULL
+            );
+            CREATE TABLE type_facts (
+                type_fact_id TEXT NOT NULL,
+                symbol_id TEXT NOT NULL,
+                language TEXT NOT NULL,
+                resolved_type TEXT NOT NULL,
+                generic_params_json TEXT
+            );
+            INSERT INTO symbols
+                (symbol_id, file_id, path, language, name, kind, parent_symbol_id,
+                 start_line, start_column, end_line, end_column, start_byte, end_byte,
+                 is_test, test_container, metadata_json)
+            VALUES
+                ('target', 'file', 'src/handler.ts', 'typescript', 'submit', 'function', NULL, 1, 0, 1, 0, 0, 0, 0, 0, '{}'),
+                ('first', 'file', 'src/handler.ts', 'typescript', 'first', 'variable', 'target', 2, 0, 2, 0, 0, 0, 0, 0, '{}'),
+                ('second', 'file', 'src/handler.ts', 'typescript', 'second', 'variable', 'target', 3, 0, 3, 0, 0, 0, 0, 0, '{}'),
+                ('late', 'file', 'src/handler.ts', 'typescript', 'late', 'variable', 'target', 4, 0, 4, 0, 0, 0, 0, 0, '{}'),
+                ('late_type', 'file', 'src/handler.ts', 'typescript', 'LateType', 'class', NULL, 5, 0, 5, 0, 0, 0, 0, 0, '{}');
+            INSERT INTO type_facts VALUES
+                ('fact1', 'first', 'typescript', 'UnknownOne', '[]'),
+                ('fact2', 'second', 'typescript', 'UnknownTwo', '[]'),
+                ('fact3', 'late', 'typescript', 'LateType', '[]');",
+        )
+        .unwrap();
+        let target = get_symbol_by_id(&conn, "target").unwrap().unwrap();
+
+        assert!(
+            find_related_types_with_fact_limit(&conn, &target, 10, 2)
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(
+            find_related_types_with_fact_limit(&conn, &target, 10, 3).unwrap(),
+            ["class LateType (src/handler.ts:5)"]
+        );
+    }
+
+    #[test]
+    fn a_full_java_import_name_blocks_current_namespace_fallback() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE symbols (
+                symbol_id TEXT PRIMARY KEY,
+                path TEXT NOT NULL,
+                language TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                name TEXT NOT NULL,
+                parent_symbol_id TEXT,
+                metadata_json TEXT NOT NULL,
+                signature TEXT
+            );
+            INSERT INTO symbols VALUES
+                ('java_source', 'java/current/Handler.java', 'java', 'field', 'service', NULL, '{}', NULL),
+                ('source_namespace', 'java/current/Handler.java', 'java', 'namespace', 'current', NULL, '{}', 'package current'),
+                ('target_namespace', 'java/current/Service.java', 'java', 'namespace', 'current', NULL, '{}', 'package current'),
+                ('service', 'java/current/Service.java', 'java', 'class', 'Service', NULL, '{}', 'class Service'),
+                ('external_import', 'java/current/Handler.java', 'java', 'import', 'external.Service', NULL, '{}', 'import external.Service');",
+        )
+        .unwrap();
+
+        assert_eq!(
+            selected_type_owner_id(&conn, "java_source", "Service", "java"),
+            None
+        );
+    }
+
+    #[test]
+    fn related_type_owner_uses_identifier_language_eligibility() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE symbols (
+                symbol_id TEXT PRIMARY KEY,
+                path TEXT NOT NULL,
+                language TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                name TEXT NOT NULL,
+                parent_symbol_id TEXT,
+                metadata_json TEXT NOT NULL,
+                signature TEXT
+            );
+            INSERT INTO symbols VALUES
+                ('qml_source', 'qml/use.qml', 'qml', 'function', 'useWidget', NULL, '{}', NULL),
+                ('cpp_target', 'qml/use.qml', 'cpp', 'class', 'Widget', NULL, '{}', NULL),
+                ('cpp_source', 'cpp/use.cpp', 'cpp', 'function', 'useWidget', NULL, '{}', NULL),
+                ('qml_target', 'cpp/use.cpp', 'qml', 'class', 'Widget', NULL, '{}', NULL),
+                ('razor_source', 'razor/use.razor', 'razor', 'function', 'useWidget', NULL, '{}', NULL),
+                ('csharp_target', 'razor/use.razor', 'csharp', 'class', 'Widget', NULL, '{}', NULL),
+                ('csharp_source', 'csharp/use.cs', 'csharp', 'function', 'useWidget', NULL, '{}', NULL),
+                ('razor_target', 'csharp/use.cs', 'razor', 'class', 'Widget', NULL, '{}', NULL);",
+        )
+        .unwrap();
+
+        assert_eq!(
+            selected_type_owner_id(&conn, "qml_source", "Widget", "qml").as_deref(),
+            Some("cpp_target")
+        );
+        assert_eq!(
+            selected_type_owner_id(&conn, "cpp_source", "Widget", "cpp"),
+            None
+        );
+        assert_eq!(
+            selected_type_owner_id(&conn, "razor_source", "Widget", "razor").as_deref(),
+            Some("csharp_target")
+        );
+        assert_eq!(
+            selected_type_owner_id(&conn, "csharp_source", "Widget", "csharp").as_deref(),
+            Some("razor_target")
+        );
     }
 
     #[test]
