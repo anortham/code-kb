@@ -1,0 +1,236 @@
+{
+  "rev": "8e07b09",
+  "source": "given",
+  "files_changed": 41,
+  "changes": [
+    {
+      "kind": "function",
+      "display": "callee_page_cte",
+      "path": "crates/code-kb-core/src/queries.rs",
+      "line": 3537,
+      "change": "parameters 2 \u2192 3",
+      "in_diff": [
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 3461,
+          "caller": "find_callees_page_internal"
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 9545,
+          "caller": "css_context_candidates_keep_only_a_bounded_signature_prefix"
+        },
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 9609,
+          "caller": "callee_page_query_uses_source_indexes_before_offset"
+        }
+      ],
+      "proven": [],
+      "likely": [],
+      "unresolved": 0
+    },
+    {
+      "kind": "struct",
+      "display": "CallerWalk",
+      "path": "crates/code-kb-core/src/queries.rs",
+      "line": 8116,
+      "change": "fields +1 (legacy_level_sql), -0",
+      "in_diff": [
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8154,
+          "caller": "start"
+        }
+      ],
+      "proven": [],
+      "likely": [],
+      "unresolved": 0
+    },
+    {
+      "kind": "function",
+      "display": "walk_caller_branches",
+      "path": "crates/code-kb-core/src/queries.rs",
+      "line": 8814,
+      "change": "parameters 5 \u2192 6",
+      "in_diff": [
+        {
+          "path": "crates/code-kb-core/src/queries.rs",
+          "line": 8136,
+          "caller": "start"
+        }
+      ],
+      "proven": [],
+      "likely": [],
+      "unresolved": 0
+    },
+    {
+      "kind": "struct",
+      "display": "NameRow",
+      "path": "crates/code-kb-core/src/reference_report.rs",
+      "line": 691,
+      "change": "fields +1 (typed_receiver_chain), -0",
+      "in_diff": [
+        {
+          "path": "crates/code-kb-core/src/reference_report.rs",
+          "line": 2580,
+          "caller": "load_rows"
+        },
+        {
+          "path": "crates/code-kb-core/src/reference_report.rs",
+          "line": 2631,
+          "caller": "load_rows"
+        },
+        {
+          "path": "crates/code-kb-core/src/reference_report.rs",
+          "line": 2700,
+          "caller": "load_rows"
+        }
+      ],
+      "proven": [],
+      "likely": [],
+      "unresolved": 0
+    },
+    {
+      "kind": "struct",
+      "display": "Claim",
+      "path": "crates/code-kb-core/src/reference_report.rs",
+      "line": 1531,
+      "change": "fields +1 (typed_receiver), -0",
+      "in_diff": [
+        {
+          "path": "crates/code-kb-core/src/reference_report.rs",
+          "line": 3052,
+          "caller": "claims"
+        }
+      ],
+      "proven": [],
+      "likely": [],
+      "unresolved": 0
+    },
+    {
+      "kind": "struct",
+      "display": "Accounting",
+      "path": "crates/code-kb-core/src/reference_report.rs",
+      "line": 1652,
+      "change": "fields +8 (absent_judge_chain_stmt, absent_judge_plain_stmt, absent_receiver_chain_target_stmt, judge_chain_stmt, judge_plain_stmt, receiver_chain_owner_stmt, receiver_chain_pending_base_stmt, receiver_chain_target_stmt), -2 (absent_judge_stmt, judge_stmt)",
+      "in_diff": [
+        {
+          "path": "crates/code-kb-core/src/reference_report.rs",
+          "line": 1684,
+          "caller": "new"
+        }
+      ],
+      "proven": [],
+      "likely": [],
+      "unresolved": 0
+    },
+    {
+      "kind": "method",
+      "display": "Accounting.judge",
+      "path": "crates/code-kb-core/src/reference_report.rs",
+      "line": 2844,
+      "change": "parameters 3 \u2192 4",
+      "in_diff": [
+        {
+          "path": "crates/code-kb-core/src/reference_report.rs",
+          "line": 2348,
+          "caller": "account_spec"
+        },
+        {
+          "path": "crates/code-kb-core/src/reference_report.rs",
+          "line": 2997,
+          "caller": "claims"
+        }
+      ],
+      "proven": [],
+      "likely": [],
+      "unresolved": 0
+    },
+    {
+      "kind": "function",
+      "display": "evidence_sql",
+      "path": "crates/code-kb-core/src/reference_report.rs",
+      "line": 4826,
+      "change": "removed",
+      "in_diff": [],
+      "proven": [],
+      "likely": [],
+      "unresolved": 0
+    },
+    {
+      "kind": "function",
+      "display": "judge_sql",
+      "path": "crates/code-kb-core/src/reference_report.rs",
+      "line": 5221,
+      "change": "parameters 2 \u2192 3",
+      "in_diff": [
+        {
+          "path": "crates/code-kb-core/src/reference_report.rs",
+          "line": 2881,
+          "caller": "judge"
+        },
+        {
+          "path": "crates/code-kb-core/src/reference_report.rs",
+          "line": 5612,
+          "caller": "judge_sql_keeps_typed_receiver_status_bound_and_compact"
+        },
+        {
+          "path": "crates/code-kb-core/src/reference_report.rs",
+          "line": 5613,
+          "caller": "judge_sql_keeps_typed_receiver_status_bound_and_compact"
+        },
+        {
+          "path": "crates/code-kb-core/src/reference_report.rs",
+          "line": 5756,
+          "caller": "legacy_judge_sql_prepares_without_type_fact_support"
+        }
+      ],
+      "proven": [],
+      "likely": [],
+      "unresolved": 0
+    },
+    {
+      "kind": "struct",
+      "display": "Folder",
+      "path": "crates/code-kb-core/src/test_commands.rs",
+      "line": 172,
+      "change": "fields +3 (dotnet_project_marker, jvm_build_ambiguous, python_project_marker), -0",
+      "in_diff": [
+        {
+          "path": "crates/code-kb-core/src/test_commands.rs",
+          "line": 240,
+          "caller": "read"
+        }
+      ],
+      "proven": [],
+      "likely": [],
+      "unresolved": 0
+    },
+    {
+      "kind": "function",
+      "display": "_command_matches",
+      "path": "scripts/comparison_metrics.py",
+      "line": 325,
+      "change": "parameters 2 \u2192 2-3",
+      "in_diff": [
+        {
+          "path": "scripts/comparison_metrics.py",
+          "line": 522,
+          "caller": "grade_answer"
+        }
+      ],
+      "proven": [],
+      "likely": [],
+      "unresolved": 0
+    }
+  ],
+  "tests": [
+    "cargo test -p code-kb-core css_context_candidates_keep_only_a_bounded_signature_prefix",
+    "cargo test -p code-kb-core callee_page_query_uses_source_indexes_before_offset",
+    "cargo test -p code-kb-core judge_sql_keeps_typed_receiver_status_bound_and_compact",
+    "cargo test -p code-kb-core legacy_judge_sql_prepares_without_type_fact_support"
+  ],
+  "cuts": [],
+  "diff_hash": "839a73094891ccfe167217749b7add81f8b4c07d494487c6fe0ad0efc9cd7f61"
+}

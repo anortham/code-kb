@@ -22,6 +22,10 @@ Choose query shape before preparation. A complete negative probe in the exact ca
 
 The no-typed mode must preserve legacy qualified-module, import, and path matching. Supplying status `0` is not equivalent: it rejects multi-segment chains, so it is safe only where the caller has established a single segment. Avoid multiplying the same owner/status proof inside positive graph branches. Preserve indexed branch joins: a trial OR-based merge reduced preparation but made stepping take seconds, so it was rejected.
 
+## Related-type statement lifetime
+
+Context prepares the shared type-owner query lazily on its first fact and reuses that statement for the remaining bounded fact stream. The statement is dropped when the context operation ends. A separate connection or global statement cache is unnecessary.
+
 ## Applies to
 
 `queries.rs` receiver proof factories and `reference_report.rs` chunk judging.

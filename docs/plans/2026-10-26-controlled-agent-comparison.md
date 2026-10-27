@@ -111,7 +111,7 @@ Commit mode: `parallel-lead-commit`. Workers do not stage, commit, checkpoint, o
 **What to build:** Verified fixes for actionable confirmed defects and a source-backed next-project decision.
 **Approach:** Reproduce before fixing, preserve unfavorable experiment results, and label used cases as regression evidence.
 
-- [ ] Confirmed in-scope defects are fixed and narrowly verified; genuine upstream dependencies remain explicit.
+- [x] Confirmed in-scope defects are fixed and narrowly verified; genuine upstream dependencies remain explicit.
 - [ ] Report and active brief reflect the measured direction and current authorization.
 - [ ] Local commits include docs/memory; task state is reconciled and no publication/global configuration changes occur.
 
@@ -159,11 +159,11 @@ Astra reviewed these boundaries. Language compatibility permits further call mat
 
 The Java scored transcript also exposes unrelated Rust/TypeScript callee signatures in context. Include the demonstrated dependency query in the shared call-compatibility fix; related-type binding is a separate query and remains the type-context owner’s scope.
 
-Task2 evidence is complete in [the baseline report](../reviews/2026-10-26-agent-comparison.md). The original72outcomes and all689actions are retained; future regression-data corrections do not replace measured grades. Independent runner/scope fixes are committed in eb163ea; remaining graph/type/receiver repairs keep Task3 open.
+Task2 evidence is complete in [the baseline report](../reviews/2026-10-26-agent-comparison.md). The original72outcomes and all689actions are retained; future regression-data corrections do not replace measured grades. Runner/scope fixes are committed in `eb163ea`, graph/context guards in `a55711c`, type binding in `2033f69`, and receiver chains in `e99aa82`. Integration evidence below closes Task3.
 
-Call-language graph/context repair passes three focused regressions and lead review after one fix round. Pending name-only type relations use the existing narrow identifier rule; explicit resolved non-call relations retain their behavior. Related-type binding and full typed receiver chains remain pending and keep Task3 open.
+Call-language graph/context repair passes three focused regressions and lead review after one fix round. Pending name-only type relations use the existing narrow identifier rule; explicit resolved non-call relations retain their behavior. The related-type and receiver-chain repairs are recorded below.
 
-Related-type binding now passes 12 real-extractor regressions, four private unit checks, and the existing context compatibility test. Lead review closed imported-name provenance, qualified Java imports, and nearest-Go-module findings. The shared scalar returns a unique owner or NULL; indexed name/path/import queries, lexical/module depth bounds, and a 4096-fact context cap preserve bounded work. Typed receiver chains remain the final runtime follow-up before integration gates.
+Related-type binding now passes 12 real-extractor regressions, four private unit checks, and the existing context compatibility test. Lead review closed imported-name provenance, qualified Java imports, and nearest-Go-module findings. The shared scalar returns a unique owner or NULL; indexed name/path/import queries, lexical/module depth bounds, and a 4096-fact context cap preserve bounded work. The subsequent receiver-chain repair uses this shared owner resolver.
 
 ## Final integration gate for consumer repairs
 
@@ -176,3 +176,19 @@ Compare fresh MCP processes for the retained measured engine and final release o
 Read-only Astra architecture review found repeated receiver-proof SQL expansion remained a deadline risk after measured optimizations. Accept the bounded status-map approach: compute receiver owners and nullable target status separately for each existing judge chunk and target, then bind keyed statuses into the compact judge. Keep raw pending-row chain/language/line semantics, synthetic absent-target columns, existing claim/rival ordering, and shared graph proof. No repository graph cache, global statement cache, SQLite UDF, temporary writes, new dependency, budget increase, or general parser.
 
 Architecture quality: affected modules are queries.rs and reference_report.rs; the caller-facing tools and core report interfaces remain unchanged. Complexity stays behind the private report/proof seam. Real-extractor reference/impact/edit tests verify behavior; count/size and measured prepare/step checks guard query expansion. This required correction is folded into the approved consumer repair because its deadline failures prevent correct completion. Risk is medium; the main acceptance risks are absent targets, nullable status, mixed chunks, and raw versus augmented JavaScript chains.
+
+## Runtime repair closure
+
+Receiver chains are committed in `e99aa82`. The final focused normal-parallel run passed 25 real-extractor cases in 8.73 seconds. Private quota, legacy-schema, and compact-statement checks passed. The report adapter uses separate bounded owner/base/status queries; its compact chain judge prepared in about 18 ms in the diagnostic fixture, compared with 0.7–1.06 seconds for the initial expanded statement. These are local query diagnostics, not post-fix agent outcomes.
+
+The first final Linux gate exposed a telemetry-fixture race and a Clippy conditional warning. Commit `e85512e` moves parity-test telemetry outside the scanned root and combines the existing conditions. The failing parity test and three ancestry quota checks passed before the workspace gate was repeated. Freshness errors remain enforced.
+
+Commit `ddebbec` corrects three stale query-test assumptions exposed by the workspace gate: language metadata is present in the minimal callee schema, same-language pending test reach has a coherent Rust fixture alongside a QML negative control, and the EXPLAIN assertion matches the complete symbols alias rather than a prefix of a bounded JSON virtual-table name. All three failing IDs passed individually before the final workspace rerun. No production rule was loosened.
+
+The next complete gate exposed two further defects: unknown typed-chain claims bypassed the existing name-only late decision, and unconditional graph/callee proof expansion exceeded the existing receiver-query budget. Commit `16e124b` restores late labeling without losing positive import evidence. Commit `38add43` chooses query shape for complete caller/name scopes and every current/open-end impact frontier, including constructor-parent names. The original budget regression and affected graph/context checks pass. The real Go fixture now proves plain→typed→plain discovery across three hops. A trial merged OR join was rejected for seconds of execution time; indexed branches remain.
+
+The retained pre-optimization probe pair records the discovered slowdown. Final paired results record the corrected release separately in the pilot report. Actual typed-positive graph proof remains more expensive to prepare; compact ordinary paths do not establish uniform latency for every chain.
+
+The Linux gate at `38add43` passed 1,889 Rust tests and all 42 languages in12.52s. Its quiet paired probe recovered impact latency and stable retained/peak memory, but context still reparsed the owner query per fact (87.64ms versus20.06ms retained baseline). Commit `5f998c4` reuses one lazy statement within the bounded context operation;12type regressions and the fact-limit guard pass. The pre-owner-reuse pair is retained separately. Final verification follows that runtime commit.
+
+The final Linux gate at `5f998c4` passes 1,889 Rust tests across 37 suites, all 42 language IDs, Clippy, formatting, and the locked release build. The current regression manifest validates engine `dab4bbdb3957`; the original frozen manifest remains unchanged. The final quiet probe pair and Linux log archive are retained under results. Windows NTFS verification remains the last integration gate.

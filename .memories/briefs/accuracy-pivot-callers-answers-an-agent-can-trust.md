@@ -3,7 +3,7 @@ id: accuracy-pivot-callers-answers-an-agent-can-trust
 title: "Accuracy pivot: callers answers an agent can trust"
 status: active
 created: 2026-10-17T17:10:13.294Z
-updated: 2026-10-27T02:31:48.435Z
+updated: 2026-10-27T07:38:39.891Z
 tags:
   - project-direction
   - accuracy
@@ -11,28 +11,28 @@ tags:
   - ground-truth-gate
 ---
 
-## Direction
+# Direction
 
-Code-kb gives coding agents source-backed answers with explicit uncertainty and missing coverage. Compact output alone does not prove lower task cost. Keep seven MCP tools with CLI counterparts, absolute per-call project_root, indexed SQLite queries, bounded memory, and Windows support. All42 pinned Julie3.9.1 language IDs are in scope; extractor/consumer gaps are never language N/A. AGENTS.md and CLAUDE.md stay identical.
+Code-kb provides source-backed navigation and edit evidence across all 42 IDs in pinned Julie 3.9.1. Keep AGENTS.md/CLAUDE.md identical, seven MCP tools with CLI equivalents, explicit project_root, indexed SQLite, bounded memory and Windows support. Uncertainty stays explicit.
 
-## Completed foundation
+# Authority
 
-The approved project review is docs/reviews/2026-10-26-project-direction.md. Main aeebe72 contains initial index/tool/benchmark repairs. Cross-language runtime2104bad and portabilityde67a39 are locally complete in /home/murphy/.codex/worktrees/1e6f/code-kb, branch fix/cross-language-review. Evidence708ed6c records Linux1818 Rust/172 Python/20 Node plus Clippy/fmt/release, and WindowsNTFS1794 Rust/12 Node+8declaredskips plusClippy/fmt/release. All42-language real-extractor conformance passes. Memory stayed23.64→24.46MiB in the earlier20call check. VM shut off after those gates.
+Use /home/murphy/.codex/worktrees/1e6f/code-kb on fix/cross-language-review. Local commits approved; no more paid runs, push, release, publication or global configuration changes.
 
-## Active authorized work
+# Retained pilot and repairs
 
-The owner approved whatever is needed next, including the bounded paid navigation/test-selection comparison. Protocol docs/plans/2026-10-26-controlled-agent-comparison.md. Frozen commit8e07b09, manifest8e73c99ed06bf6e2efeacb322e452dabad7d83cd3638da274afb608802d22a8d.72runs=8tasks×3arms×3repeats; native/current/revised guidance, gpt-6.1-sol high, codex0.164.0. Seven programming languages+JSON; not completed edits or all-language agent-performance proof. No global routing change from tiny fixtures. All45harness checks pass; calibration3initial+1retainedinfraretry, leaving7of8retrybudget. Source/fixtures only, oracle hidden, host instructions masked, private auth read-only, actual sandbox checks; policy/redaction every dispatch. No external-model policy declared — synthetic fixture sent to openai.
+All 72 answers and 689 reviewed actions retained. Strict acceptance 63/72,21/24 per arm. Original manifest8e73c99ed06bf6e2efeacb322e452dabad7d83cd3638da274afb608802d22a8d and raw outcomes are immutable; used cases are regression data. Native costs less on several tiny tasks; revised guidance makes44%fewer MCP calls without a success advantage. Keep production routing unchanged. Report docs/reviews/2026-10-26-agent-comparison.md.
 
-Campaign completed72/72 answer_received, no scored retries. Original manifest8e73c99... validated at finish. Full retained evidence is evals/review-2026-10-26/results (raw archive,72 observations, all689 actions reviewed, original controls). Raw mechanical36/72; source-reviewed strict63/72; semantic source identification72/72. Go9strictrejections are excluded MailService.Send listed as explicitly rejected alternatives in symbols[], exposing an underspecified output role. JS/TSoracle labels and valid Rust command forms caused27raw false negatives. Raw outcomes remain unchanged; current used-case data is corrected and marked regression/tuning. Two current literal runs violated literal-first ordering. Billing unavailable; tokens/cache/wall/query telemetry complete. Baseline binary archived under target/.../baseline-tools.
+Runtime repairs are committed through5f998c4: compatible runner scope, call-language edges, exact type/field owners, full receiver chains, conservative test labeling, per-frontier query shape and local owner-statement reuse. ADR003 records bounds and rejected seed-only/global-cache/deadline/OR-join shortcuts.
 
-Native/current/revised totals: input1,196,663/2,340,030/2,197,102; output17,589/27,838/24,929; captured taskwall650.17/951.06/879.87seconds. Revised154MCPcalls versus current273, with identical acceptance. Tiny fixtures do not establish global routing or all-language edit performance. Production routing stays unchanged. Current/revised p95query25ms; tasktime isseconds.
+# Verified and remaining
 
-## Confirmed follow-up defects
+Linux at5f998c4 passes1,889Rust tests across37suites, all42languages (13.11s), Clippy/fmt/release. Python218/plugin20 remain green on unchanged sources. Final release SHA dab4bbdb3957ea81f2bd9d0a150c3a32411bd347ede7da1736943b44c1c3a07b; current regression manifest validates, original frozen manifest unchanged. Fresh CLIcheck shows11intended shapes and no proven/likely uncovered uses; limitations remain.
 
-Actual Python advice picks Rust cargo --workspace: formatter loses scope with0tests/impacts despitePythonopen_end, and broader runner selection ignorespathlanguage. Actual Go/TS impact graphs leak same-named C#/Java/Rust callers; recursiveSQLwalk lacks caller language gates. Actual Go h.service.Send is wronglyexcluded although typedroot/ownerfieldfacts exist: consumer loses terminalfieldtype and namespacepredicate rejectschain. Agents sometimesrecover fromsource; that doesnotvalidate toolresults.
+Quiet same-corpus20-call pair: retained RSS25.75/25.59MiB, peak133.02/132.69; context20.09/59.14ms, impact27.30/32.02, callers38.40/33.12. Intermediate regressions808mscontext/1372impact and88mscontext are retained separately. Context carries additional cost; positive typed graph SQL remains expensive. These are local diagnostics, not new agent outcomes.
 
-Runtime repairs are underway with fresh implementers and lead review: fix_call_languages owns shared CALL gates/context consumers first; related-type binding then typed-chain proof follow serially. fix_broader_commands has68selector checks passing; lead added6green report-scope regressions. fix_command_grading has16checks passing and all46harness checks pass. A fourth consumer defect is confirmed separately: find_related_types chooses unrelated Rust InvitationService by global name/pathlength instead of imported TypeScript owner. It needs exact language/import/lexical binding and ambiguity refusal. ReadonlyAstra review documented compatibility versus identifier rules, exact-owner chain proofs, boundedqueries, package/mixed-scope/unknown fallback. Existingfocused selector conventions needactualevidence before contract changes. User authorization includes these fixes; no publication/globalconfig changes.
+Windows NTFS gate remains required. Guest is running after completed quiet probes. Commit current docs/memory/evidence to a clean tree, sync exact commit, run Rust/Clippy/fmt/release/plugin checks and always shut guest down. Finish Windows evidence and clean local commits; main checkout stays clean.
 
-## Remaining limits and boundaries
+# Limits and next milestone
 
-Docs/language-support.md distinguishes42fixture coverage fromadvancedgrammar facts. Knownupstreamlimits includeCSSUnicodeidentifier/spelling facts,CSSformalcontracts,SQLdialect-safe arguments; F#currying anddynamic/frameworkinvocationremainconservative. Used taskcases become regression/tuning; never replace paidoutcomes withreruns tohidefailures. Reviewall72answers/actions independently, retain metric availability, fixconfirmeddefects, run appropriateLinux/Windowsverification, archivebaseline evidence, updatebrief/report andlocalcommits. Push/release/deployment/externalmessaging remain outside this slice. Commit .memories artifacts.
+Missing CSS facts/spelling, SQL dialect contracts, F# currying, dynamic binding, generic substitution, Go block binding and composite-result receivers remain explicit. Next usefulness evidence should use untouched larger repositories and completed edits with tests across language families; the tiny pilot cannot establish that outcome.

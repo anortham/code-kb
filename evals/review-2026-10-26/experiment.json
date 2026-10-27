@@ -1,7 +1,8 @@
 {
   "archive_sha256": "9d16843496ef9bcbebc0821f50b96de744fbf869a26fd0311e7a4da9ec2fa75c",
+  "baseline_manifest_sha256": "8e73c99ed06bf6e2efeacb322e452dabad7d83cd3638da274afb608802d22a8d",
   "effort": "high",
-  "engine_sha256": "fbde44e013a80197f3c0a2e14a2599abbd2871618826863629bb35960ad0f03f",
+  "engine_sha256": "dab4bbdb3957ea81f2bd9d0a150c3a32411bd347ede7da1736943b44c1c3a07b",
   "extractor_sha256": "777fe822a0eddbdfd9f357c018c7a1a881907bedc698f913736a30ffc0ce0d12",
   "files": {
     "evals/review-2026-10-26/answer-schema.json": "d363cbccabc621f902a040235912b714ac71fde441dd436873bad2fdd7de264e",
@@ -43,6 +44,5 @@
   "julie_version": "3.9.1",
   "model": "gpt-6.1-sol",
   "schema": 1,
-  "status": "regression configuration after completed pilot; original measured manifest is results/frozen-experiment.json",
-  "baseline_manifest_sha256": "8e73c99ed06bf6e2efeacb322e452dabad7d83cd3638da274afb608802d22a8d"
+  "status": "regression configuration after completed pilot; original measured manifest is results/frozen-experiment.json"
 }

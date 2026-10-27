@@ -1,6 +1,6 @@
 # Controlled agent comparison, 2026-10-26
 
-The next useful work is correctness: prevent unrelated languages from appearing as callers, tests, dependencies, or types; follow typed receiver fields; and recommend only a supported test scope. The pilot found concrete failures in these rules. Adding tools would not address them.
+The confirmed consumer defects are repaired: unrelated languages are filtered from call edges, types bind through exact scope/import evidence, typed receiver fields are followed, and broader test advice respects runner scope. The next milestone should measure completed edits on untouched, larger repositories across language families.
 
 The same agents solved these small cases with native tools at lower observed cost on several tasks. This does not establish a default for large repositories or completed code edits. Keep the seven tools and all 42 supported language IDs in scope. Production routing is unchanged.
 
@@ -63,10 +63,32 @@ These observations are independent of the final answers, which often recovered t
 | Unrelated related type | Separate reviewer-only TypeScript context probes choose Rust `InvitationService` by global name and shortest path despite the TS import. Bind types through language, lexical owner, and indexed import evidence. These probes are not trial metrics. |
 | Unsupported broader test scope | An empty Python walk recommends the root Rust workspace; a multi-package report recommends only its first package. Retain open-end/file scope and require a compatible command for every reported scope, otherwise show the manual fallback. |
 
-The runner/formatter fix has 68 selector checks and six new scope regressions passing at this report revision. Graph, type-binding, and typed-chain repairs are still undergoing implementation and integration verification; the final verification record must be added before marking the work complete. All measured cost numbers remain the original pre-fix observations.
+The runner/formatter fix has 68 selector checks and six new scope regressions passing. Graph/context language guards pass three focused regressions. Related-type binding passes 12 real-extractor regressions, four private unit checks, and the existing context compatibility check. The typed-chain repair is committed as `e99aa82`, with 25 real-extractor regressions passing. It preserves absent targets and uncertainty, shares proof with impact queries, and bounds per-chunk evidence. Final integration verification is recorded below. All measured cost numbers remain the original pre-fix observations.
 
 ## Direction after this pilot
 
 Keep source-backed accuracy ahead of adding features. The next evidence set should use untouched, larger repositories and completed edits with tests, where indexed navigation can plausibly repay its context and interaction cost. Include several language families, same-name decoys, and runtime entry points. The current sample cannot establish all-language agent performance or post-fix task savings. The existing real-extractor conformance suite remains the 42-language coverage gate.
 
 The [raw archive](../../evals/review-2026-10-26/results/raw-trials.tar.gz), [artifact hashes](../../evals/review-2026-10-26/results/artifacts.json), and per-run reviews preserve the evidence. No publication, push, release, or global configuration change is part of this slice.
+
+## Runtime verification after the pilot
+
+Runtime commit `5f998c4` passes the full locked Linux workspace: **1,889 Rust tests across 37 suites**, including all 42 real-extractor language fixtures. The conformance suite took 13.11 seconds. Workspace Clippy with warnings denied, formatting, and the locked release build pass. The unchanged Python and plugin sources retain their passing 218 and 20 checks. The [verification record](../../evals/review-2026-10-26/results/post-fix-verification.json) and [Linux logs](../../evals/review-2026-10-26/results/post-fix-linux-verification.tar.gz) retain evidence. Windows NTFS verification is pending at this revision.
+
+The freshly built CLI check and connected edit check were reviewed. The final CLI report has 11 intended shape changes, no proven or likely unchanged use outside the diff, and no cut sections. Its macro/value limitations remain; compilation and regressions provide the stronger verification.
+
+A normal-parallel gate exposed a telemetry-fixture journal race and stale query-fixture assumptions; both were corrected without weakening freshness, language, or indexed-query requirements. It also exposed unknown-chain test labeling and repeated SQL compilation. The final repair probes each complete caller/name scope and each current/open-end impact frontier, including constructor-parent names. A real Go fixture preserves plain→typed→plain discovery across three hops. Unknown evidence retains the full proof. Indexed graph branches remain after an OR-based merge made execution take seconds. Related-type owner SQL is prepared once within each bounded context call.
+
+Fresh MCP processes then ran the same 20 calls against the same final worktree/index, with the Windows guest off. Each row below shows the median of three warm observations after one initial call; this is a local diagnostic, not another agent campaign. The pair records identical source commit, diff hash, and status.
+
+| Operation | Retained measured engine (ms) | Final engine (ms) |
+| --- | ---: | ---: |
+| Skeleton | 8.51 | 8.32 |
+| Lookup | 64.25 | 64.42 |
+| Context | 20.09 | 59.14 |
+| Callers | 38.40 | 33.12 |
+| Impact | 27.30 | 32.02 |
+
+Retained RSS was 25.75/25.59 MiB, anonymous memory 15.76/15.49 MiB, and peak RSS 133.02/132.69 MiB. The [before](../../evals/review-2026-10-26/results/post-fix-rss-before.json) and [after](../../evals/review-2026-10-26/results/post-fix-rss-after.json) files retain all timings, response sizes, source identities, and binary hashes. The measured engine is `fbde44e013a80`; the final engine is `dab4bbdb3957`.
+
+Context retains about 39 ms additional cost in this sample. The intermediate regression was much larger: about 808 ms context and 1,372 ms impact; the pre-optimization pair is retained separately. A second pair preserves the 88 ms context result before local owner-statement reuse. Actual typed-positive graph proof still prepares roughly 321 KB of SQL (about 642 ms in the debug diagnostic fixture). Compact ordinary paths do not establish uniform latency, large-repository behavior, or post-fix agent savings. Original pilot outcomes and costs remain unchanged.

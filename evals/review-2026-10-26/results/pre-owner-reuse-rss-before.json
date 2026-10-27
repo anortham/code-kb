@@ -1,0 +1,117 @@
+{
+  "source_commit": "38add43f07b4bd5982e91f7383c47377a795c1b2",
+  "source_diff_sha256": "57307ea51f9e23b22838a385bf5ec2625927e272fdebc7d2f3899ad12320f326",
+  "source_status": "M .memories/briefs/accuracy-pivot-callers-answers-an-agent-can-trust.md\n M AGENTS.md\n M CLAUDE.md\n M docs/language-support.md\n M docs/plans/2026-10-26-controlled-agent-comparison.md\n M docs/reviews/2026-10-26-agent-comparison.md\n M docs/reviews/2026-10-26-project-direction.md\n M evals/review-2026-10-26/experiment.json\n?? evals/review-2026-10-26/results/post-fix-memory-probe.py\n?? evals/review-2026-10-26/results/pre-optimization-rss-after.json\n?? evals/review-2026-10-26/results/pre-optimization-rss-before.json",
+  "probe_sha256": "d6402566659c44f8428e6334df08794bb6db4702a193d73a85e74252c831375b",
+  "binary": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/review-comparison/2026-10-26/baseline-tools/code-kb",
+  "binary_sha256": "fbde44e013a80197f3c0a2e14a2599abbd2871618826863629bb35960ad0f03f",
+  "root": "/home/murphy/.codex/worktrees/1e6f/code-kb",
+  "initial": {
+    "Rss_mb": 12.5,
+    "Pss_mb": 10.36,
+    "Anonymous_mb": 5.33,
+    "Peak_Rss_mb": 17.84
+  },
+  "calls": [
+    {
+      "tool": "file_skeleton",
+      "args": {
+        "file_path": "crates/code-kb-core/src/edit_check.rs"
+      },
+      "warm_ms": [
+        8.36,
+        8.04,
+        8.06
+      ],
+      "response_bytes": 30599,
+      "memory": {
+        "Rss_mb": 16.67,
+        "Pss_mb": 14.35,
+        "Anonymous_mb": 7.91,
+        "Peak_Rss_mb": 48.08
+      }
+    },
+    {
+      "tool": "lookup_symbol",
+      "args": {
+        "query": "parameter named argument"
+      },
+      "warm_ms": [
+        65.37,
+        65.7,
+        65.43
+      ],
+      "response_bytes": 6048,
+      "memory": {
+        "Rss_mb": 16.59,
+        "Pss_mb": 14.15,
+        "Anonymous_mb": 7.23,
+        "Peak_Rss_mb": 132.6
+      }
+    },
+    {
+      "tool": "get_symbol_context",
+      "args": {
+        "symbol_name": "search_symbols_scoped",
+        "file_path": "crates/code-kb-core/src/queries.rs"
+      },
+      "warm_ms": [
+        19.91,
+        20.07,
+        20.06
+      ],
+      "response_bytes": 5502,
+      "memory": {
+        "Rss_mb": 17.31,
+        "Pss_mb": 14.87,
+        "Anonymous_mb": 7.89,
+        "Peak_Rss_mb": 132.6
+      }
+    },
+    {
+      "tool": "find_references",
+      "args": {
+        "symbol_name": "search_symbols_scoped",
+        "file_path": "crates/code-kb-core/src/queries.rs",
+        "limit": 200
+      },
+      "warm_ms": [
+        36.43,
+        36.13,
+        35.75
+      ],
+      "response_bytes": 9171,
+      "memory": {
+        "Rss_mb": 26.62,
+        "Pss_mb": 24.18,
+        "Anonymous_mb": 16.7,
+        "Peak_Rss_mb": 132.6
+      }
+    },
+    {
+      "tool": "blast_radius",
+      "args": {
+        "symbol": "find_callee_signatures",
+        "limit": 20
+      },
+      "warm_ms": [
+        28.52,
+        27.71,
+        27.33
+      ],
+      "response_bytes": 2355,
+      "memory": {
+        "Rss_mb": 26.56,
+        "Pss_mb": 24.12,
+        "Anonymous_mb": 16.6,
+        "Peak_Rss_mb": 132.6
+      }
+    }
+  ],
+  "final": {
+    "Rss_mb": 26.56,
+    "Pss_mb": 24.12,
+    "Anonymous_mb": 16.6,
+    "Peak_Rss_mb": 132.6
+  }
+}

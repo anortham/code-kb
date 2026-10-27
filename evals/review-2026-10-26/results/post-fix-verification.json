@@ -1,0 +1,27 @@
+{
+  "runtime_commit": "5f998c40e844271a1ee7640afdae7b07c606f126",
+  "linux": {
+    "rust_passed": 1889,
+    "rust_failed": 0,
+    "rust_suites": 37,
+    "python_passed": 218,
+    "plugin_passed": 20,
+    "clippy": "pass",
+    "format": "pass",
+    "release": "pass",
+    "conformance_language_ids": 42,
+    "conformance_suite_seconds": 13.11
+  },
+  "windows": {
+    "status": "pending"
+  },
+  "engine_sha256": "dab4bbdb3957ea81f2bd9d0a150c3a32411bd347ede7da1736943b44c1c3a07b",
+  "logs": {
+    "file": "post-fix-linux-verification.tar.gz",
+    "sha256": "fed1f96f516800632562fc936897d6c28b7b6d04be7ad7c168de993de9ae7829"
+  },
+  "original_pilot_manifest_sha256": "8e73c99ed06bf6e2efeacb322e452dabad7d83cd3638da274afb608802d22a8d",
+  "note": "Runtime gates and local query diagnostics; original pilot outcomes are unchanged.",
+  "crates_tree": "a5ac0001336c29e0913f16317931cb01bda8170f",
+  "scripts_tree": "28eb71c8265c45ec81edfc6100f743189d557a31"
+}

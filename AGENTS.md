@@ -34,6 +34,17 @@ symbol search, and surgical context slicing with minimal token consumption.
   changing a capability or the extractor pin.
 - Report missing coverage explicitly. A partial or unsupported check must not
   claim that an edit is safe or that there are no callers or tests.
+- Shared names do not establish cross-language edges. Apply the shared call
+  compatibility rules and the narrower rules for name-only type/member facts.
+  Compatibility permits further matching; it does not prove a reference.
+- Bind related types and receiver fields through lexical scope, indexed imports,
+  and exact owners. A shorter path or matching field name cannot choose a type.
+  Missing or ambiguous evidence must remain unproven.
+- Keep report evidence bounded by its existing chunks. Share receiver proof with
+  graph queries without repeatedly expanding it inside the judge SQL; preserve
+  unknown status and removed targets. See [the evidence boundary](docs/decisions/003-bounded-receiver-evidence.md).
+- Broader test commands need compatible runner configuration for the reported
+  scope. Respect nested package boundaries; never borrow an unrelated root runner.
 
 ## Build and Test
 
