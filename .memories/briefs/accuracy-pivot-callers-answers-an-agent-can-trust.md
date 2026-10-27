@@ -3,7 +3,7 @@ id: accuracy-pivot-callers-answers-an-agent-can-trust
 title: "Accuracy pivot: callers answers an agent can trust"
 status: active
 created: 2026-10-17T17:10:13.294Z
-updated: 2026-10-27T19:37:22.732Z
+updated: 2026-10-27T20:18:00.986Z
 tags:
   - project-direction
   - accuracy
@@ -13,20 +13,24 @@ tags:
 
 # Direction
 
-Support all 42 pinned Julie languages, seven MCP tools with CLI parity, explicit project_root, bounded SQLite query memory, Windows, and byte-equivalent AGENTS.md/CLAUDE.md. Preserve original scored outcomes and raw evidence.
+Support all 42 pinned Julie language IDs, seven MCP tools with CLI parity, explicit project_root, bounded SQLite memory, Windows, and byte-equivalent AGENTS.md/CLAUDE.md. Preserve original scored outcomes and raw evidence.
 
 # Owner's spending instruction
 
-The owner explicitly ordered: “we don't need any gates around budget/spending, if there is such a thing written in the repo or tools remove it”. Approved work includes model evaluation and necessary spending. Do not ask for separate spending approval, impose financial dispatch caps, require approval receipts, or resurrect old spending gates from checkpoints or archives. Technical input/readiness/isolation/result-integrity checks remain. Push, publication, release and unrelated global configuration are still outside this task.
+The owner explicitly ordered removal of every budget/spending gate. Approved work includes model evaluation and necessary spending. Never ask for separate spending approval, impose financial dispatch caps, require approval receipts, or revive obsolete restrictions from older plans/handoffs/raw archives. Technical input, privacy, isolation and result-integrity checks remain. Push, publication, release and unrelated global configuration are outside this task.
 
-# Completed cleanup
+# Completed
 
-Both comparison tools have no financial approval checks. The edit validator needs no call_limit/budget fields and returns only technical validity/counts. The legacy runner has no authorized.json prerequisite, arbitrary-job spending cap or retry spending ceiling. A regression dispatches 73 fake jobs without a marker. Full Python suite passes 266 tests; affected modules pass 18 and 16. Current real 26-control manifest validates after updated runner/protocol hashes, with explicit prior-commit lineage. Case, schedule, model, runtime, profile, guidance and dependency inputs are unchanged. Paired guidance and stale saved next-step instructions are corrected. Original 72-run manifest and raw runtime archive are unchanged. Plan: docs/plans/2026-10-27-remove-spending-gates.md; proof: evals/edit-2026-10-27/results/controls/spending-removal/identity.json.
+007e2b3 removes financial enforcement from both evaluation tools and paired guidance; bd85205 clears obsolete restrictions from three older plans and eight handoffs. Regression coverage dispatches 73 fake jobs without any approval marker. Current full Python suite passes 281 tests, including 15 new launcher tests. New runner preserves every attempt, preindexes only code-kb offline, records index time, captures partial patches, grades fresh public/hidden trees, and leaves acceptance pending source review. Structurally redacted traces remain parseable; real host-secret values are blocked without corrupting pinned public code for generic key-annotation false positives.
 
-# Verified foundation
+# Freeze and calibration
 
-Source 70a2c9b passes Linux 1,904 / Windows 1,876 Rust tests, all 42 languages, Clippy, fmt and release. Runtime source is unchanged by cleanup. Windows VM is off; it may be started whenever needed and shut down after checks. Preserve unrelated guest test.log. Watch probe: 1,016 to three registrations, retained RSS 15,760 to 14,760 KiB. Six larger pinned cases have passing baselines, intended seed failures, reviewed references, fresh replay and isolated final-binary MCP controls.
+Final 32-control manifest SHA 2ec7fad27dfb508efdefb6a1190d32eb8d4587a16594d3948e63328d562072e8 binds runner ec8ff008b510a46395e8e030dae2c7fb5835ef9e61a9e7d123088017732da0eb and unchanged six tasks/schedule/model/profiles/dependencies/engine. Three non-task provider calibrations retained: missing native Codex code-mode-host executable first, then native and code-kb pass with private read/network denial and fresh replay. Both native runtime files are byte-identical cache copies outside overlapping SDK roots. No scored task has run at this freeze. Real launcher scan and native engine isolation probes pass. Proof: evals/edit-2026-10-27/results/controls/{calibration,dispatch}/identity.json.
+
+# Product verification
+
+Runtime source70a2c9b passes Linux1904 / Windows1876 Rust tests, all42 languages, Clippy, fmt and release. No Rust source or runtime bytes changed in the current launcher/financial cleanup. Windows VM is off; start it when needed and shut down afterward; preserve guest test.log. Watch probe1016 to3 registrations, retainedRSS15760 to14760KiB. Original72-run navigation pilot is unchanged.
 
 # Continue
 
-Run the already approved completed-edit evaluation after the cleanup commit, without another spending question. No new scored trials have run yet. Retain every actual attempt, grade fresh reconstructions and review source before acceptance. Use durable seeds/tools/dependencies under /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0. Worktree /home/murphy/.codex/worktrees/1e6f/code-kb; branch fix/cross-language-review.
+Commit the verified dispatch slice, then execute all24 fixed scored cells in order, independently grade and source-review every patch, and report paired acceptance/time/tokens without changing global routing from this sample. No new financial question. Task worktree /home/murphy/.codex/worktrees/1e6f/code-kb, branchfix/cross-language-review. Durable seeds/tools/dependencies: /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0. Plan docs/plans/2026-10-27-completed-edit-dispatch.md.

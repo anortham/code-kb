@@ -184,7 +184,7 @@
     "effort": "high",
     "timeout_seconds": 900,
     "codex_sha256": "b93f6811d3f653f0fb83be4050d857fb9abbb111dfa2ce160563327daff7f306",
-    "protocol_sha256": "5806f1783fdddb59255fe065bfba96c2c4536c67ef185a3e9749b62392b23c68",
+    "protocol_sha256": "2276518f5622e43b1bf538e3c0d91e5caedb7be2acdd1a90594b3b3681b59b3f",
     "corpus_sha256": "cdcee6242543d8aab5041f17f5a9f86277dc66c2a28243c02e144dc4a38cfe8c",
     "snapshot_sha256": "7920526e21f47852d73e33d6ef6bbcb73e7ae1373b0fedc5d31aac65804e3839",
     "sandbox_sha256": "be41b956ee91def3be885440f10248340d0d618286c64d03d0b64989b340770d",
@@ -193,7 +193,7 @@
     "binary_sha256": "d50d77812c0b9aad04b38b31c63b71df7768d0c44273b6d97a7e4a15a37b2127",
     "guidance_sha256": "d4a54239016d1ce579ecda5b949a4e3fa86764741b1527c5b2deb499336a486a",
     "profiles_sha256": "bf93097d031c69093a6646da317b8bbf190a8ad792c859f4878160a9ae8552a7",
-    "frozen_inputs_sha256": "77db1b0b658d838c8fa11674922d5fd40f363bec4c0771aee764ad95590d72f0",
+    "frozen_inputs_sha256": "6da8d9902ca39c31d312406f130a4c6f7184f5fa41df4bdc46c7a3e1fc1248a0",
     "readiness_archive_sha256": "1b725721ad6636ecea7aaaad10bd3f4c4e0dea35aed5b6915641f6f7f250fedf",
     "base_bubblewrap_binary_sha256": "6da06f152b0865172d73348c34cb88487c326ce2f21cd980fc25ff10c4dbcdfb",
     "base_go_toolchain_sha256": "7d4a3654d14009f7cdf70507c6badf16fc40f2ffccf2be04d8c792edffdaebcd",
@@ -208,7 +208,13 @@
     "tools_commons-lang_maven_sha256": "5ba787b31abbbe574c3bc55d8fabd2588174f9360f9aab7bc359c24e719d7d44",
     "tools_date-fns_node_sha256": "ad67e7c81e8c0c123b6616e5d17ef5f4efa9390a25d724b15292e4f13579c156",
     "tools_minijinja_rust_sha256": "9bb3ada2e04cf6c70356f9fddee8f03d47a485cdece85ca8d06c920aaf913779",
-    "tools_nodatime_dotnet_sha256": "2be7a815b5bd470fc51789d9c6e510be8df7bf322c81656c24d497ee9fc4bdf4"
+    "tools_nodatime_dotnet_sha256": "2be7a815b5bd470fc51789d9c6e510be8df7bf322c81656c24d497ee9fc4bdf4",
+    "calibration_driver_sha256": "56301f9f3daaf3f95fedad305559ed16934bc2299734ae2fb170f5a07ceea341",
+    "legacy_helpers_sha256": "718d753a5ded564e35708e777390e35ca3ea2c95d8b479a550768c91ba761bbc",
+    "outbound_redactor_sha256": "09c521c0f39bf83c1f877edf7fd1799b9eb7df3780e9c99c52707d6d3620c36f",
+    "codex_code_mode_host_sha256": "8ee4f472e92ac226a189e98998633b2d07f989f208515750764db660369f2926",
+    "campaign_runner_sha256": "ec8ff008b510a46395e8e030dae2c7fb5835ef9e61a9e7d123088017732da0eb",
+    "trace_metrics_sha256": "ef25b4126dbe60b7188881c341b80d8624089e768d1a0f6051f9cbb74e8d7470"
   },
   "artifacts": {
     "codex": "inputs/codex",
@@ -236,12 +242,18 @@
     "tools_commons-lang_maven": "inputs/tools_commons-lang_maven",
     "tools_date-fns_node": "inputs/tools_date-fns_node",
     "tools_minijinja_rust": "inputs/tools_minijinja_rust",
-    "tools_nodatime_dotnet": "inputs/tools_nodatime_dotnet"
+    "tools_nodatime_dotnet": "inputs/tools_nodatime_dotnet",
+    "calibration_driver": "inputs/calibration_driver",
+    "legacy_helpers": "inputs/legacy_helpers",
+    "outbound_redactor": "inputs/outbound_redactor",
+    "codex_code_mode_host": "inputs/codex_code_mode_host",
+    "campaign_runner": "inputs/campaign_runner",
+    "trace_metrics": "inputs/trace_metrics"
   },
   "provider_calls": 0,
   "lineage": {
-    "previous_manifest_commit": "ab7a73c6835357bdd1fbf279bc862aa20c4c9f04",
-    "previous_manifest_sha256": "4e85c2fb742141f458d0465a83a602f4a818e27eb0f98b2c4f2be3754213f463",
-    "change": "Removed spending approval policy; case, schedule, model, runtime, guidance and dependency inputs are unchanged."
+    "previous_manifest_sha256": "48d3f2d7d41871a412751f549b7c25b9b196b37c8fb839e4ea5bea3c3d27640a",
+    "previous_committed_manifest": "007e2b353c236ff31190ddc7829a7c21dc179fb2:evals/edit-2026-10-27/manifest.json",
+    "change": "Bind reviewed dispatch/trace-metrics sources and isolated byte-identical Codex runtime metadata after non-task calibration. Cases, schedule, model, profiles, guidance, dependencies and runtime binaries are unchanged. No scored task exposure preceded this freeze."
   }
 }

@@ -2,7 +2,7 @@
 
 Six pinned public repositories have source-reviewed reference repairs, passing upstream regression checks, an intended seed failure, and passing fresh patch replay. The cases cover Python, Rust, Go, TypeScript, Java and C#. Code-kb's product contract remains all 42 pinned Julie language IDs.
 
-These artifacts are local readiness controls. No new provider call or scored coding-agent trial has run. The original 72-run navigation pilot is preserved separately.
+Three non-task calibration calls are retained: the first found a missing Codex companion executable, and both arms passed after that runtime fix. No scored coding-agent trial has run yet. The original 72-run navigation pilot is preserved separately.
 
 - [Protocol and case schema](protocol.md) define isolation, patch capture, behavioral checks, source review and reproducibility controls.
 - [Corpus](corpus.json) records exact source pins and prior-corpus exclusions.
@@ -12,6 +12,8 @@ These artifacts are local readiness controls. No new provider call or scored cod
 - [Curation evidence](results/curation/artifact-map.json) preserves earlier setup failures and repairs. The raw archive remains unchanged when later source review adds evidence.
 - [Runtime verification](results/controls/runtime/identity.json) records the final Linux/Windows gates, six isolated MCP controls and live watch/RSS probes; its [archive map](results/controls/runtime/artifact-map.json) verifies retained logs and diagnostic drivers.
 - [Current evaluator verification](results/controls/spending-removal/identity.json) records removal of financial approval/cap logic and validates the updated technical manifest; historical verification records describe their original revisions.
+- [Calibration evidence](results/controls/calibration/identity.json) preserves all three calls, successful private-profile/network denial probes, fresh patch replay, and the public-source outbound audit.
+- [Dispatch verification](results/controls/dispatch/identity.json) binds the reviewed launcher, 281 Python tests, real offline preindex, native engine isolation, and the final 32-control manifest.
 - [Runner verification](results/controls/evaluation/identity.json) binds the implementation and test results. Preparation and grading expose no provider credentials and disable networking during execution.
 
 Run the local CLI from the repository root:

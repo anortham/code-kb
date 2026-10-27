@@ -1,0 +1,106 @@
+{
+  "schema": 1,
+  "source_base_commit": "bd85205",
+  "manifest_sha256": "2ec7fad27dfb508efdefb6a1190d32eb8d4587a16594d3948e63328d562072e8",
+  "campaign_runner_sha256": "ec8ff008b510a46395e8e030dae2c7fb5835ef9e61a9e7d123088017732da0eb",
+  "test_source_sha256": "3aa9c2fb753e74ff38c78adb010644545429654c47b8b5693e08f10fcc974f2b",
+  "python_tests": 281,
+  "focused_tests": 15,
+  "hashed_controls": 32,
+  "validation": {
+    "valid": true,
+    "case_count": 6,
+    "scored_calls": 24
+  },
+  "real_preindex": "completed; source unchanged; no auth or network",
+  "native_engine_visibility": "unavailable in execution sandbox",
+  "calibration_identity_sha256": "22c0ecf905defe6cdc878a5433487ef334527acd399161ff9b1c876b9dfc2a6d",
+  "scored_calls_before_freeze": 0,
+  "archive_sha256": "bd4a5cc4199c9cb3ef4421b36047e8ac2d5c0f3bfabc586a3a8f81897c36950e",
+  "members": [
+    {
+      "path": "python-suite.log",
+      "original_sha256": "6bb4539e3d27695e101d3d63c0cf3b87c8706965a17ba188e89c0475c00103be",
+      "retained_sha256": "6bb4539e3d27695e101d3d63c0cf3b87c8706965a17ba188e89c0475c00103be",
+      "redacted": false
+    },
+    {
+      "path": "module.log",
+      "original_sha256": "31688bf77fca7ce88ac41ae7169070c4e91462453076f6e1bde5c3dd9b86bcef",
+      "retained_sha256": "31688bf77fca7ce88ac41ae7169070c4e91462453076f6e1bde5c3dd9b86bcef",
+      "redacted": false
+    },
+    {
+      "path": "initial-module.log",
+      "original_sha256": "304e977da47ef33d2778354730cc1e3b0f5b98362798845908a853b38a608bc1",
+      "retained_sha256": "304e977da47ef33d2778354730cc1e3b0f5b98362798845908a853b38a608bc1",
+      "redacted": false
+    },
+    {
+      "path": "initial-red.log",
+      "original_sha256": "c06b83ca51affdbc23225dcaa4241c6f148f2241893a892db998f7932f8f6d07",
+      "retained_sha256": "c06b83ca51affdbc23225dcaa4241c6f148f2241893a892db998f7932f8f6d07",
+      "redacted": false
+    },
+    {
+      "path": "check-impact.json",
+      "original_sha256": "41157d8dfcc81be39714acbcb156cf57abaaf8d42d40c3e328b6c7ae3ae5e15b",
+      "retained_sha256": "41157d8dfcc81be39714acbcb156cf57abaaf8d42d40c3e328b6c7ae3ae5e15b",
+      "redacted": false
+    },
+    {
+      "path": "manifest-validation.json",
+      "original_sha256": "1211e84227b5a63b22c9163d631ad592a77c5a61466a40c5d38e4c486bed6696",
+      "retained_sha256": "1211e84227b5a63b22c9163d631ad592a77c5a61466a40c5d38e4c486bed6696",
+      "redacted": false
+    },
+    {
+      "path": "artifact-paths.json",
+      "original_sha256": "ae7b0fd4bad9d3bf618978310c478449fa30cc9fa7374b8b4b561c8d6cf49db2",
+      "retained_sha256": "ae7b0fd4bad9d3bf618978310c478449fa30cc9fa7374b8b4b561c8d6cf49db2",
+      "redacted": false
+    },
+    {
+      "path": "runtime-bindings.json",
+      "original_sha256": "7fbf8bd3b8024c70076bf281aca80bca255b9f6537e8249c9dd537e0d00fb103",
+      "retained_sha256": "7fbf8bd3b8024c70076bf281aca80bca255b9f6537e8249c9dd537e0d00fb103",
+      "redacted": false
+    },
+    {
+      "path": "native-engine-visibility/result.json",
+      "original_sha256": "06e107f8b4bf5ee49342ee1f16a93d2c0fa361775a14e122fddf669f817366ec",
+      "retained_sha256": "06e107f8b4bf5ee49342ee1f16a93d2c0fa361775a14e122fddf669f817366ec",
+      "redacted": false
+    },
+    {
+      "path": "native-engine-visibility/stdout.log",
+      "original_sha256": "55f24aa721ab8c56cae162bfdfff4c2534870634a154f8cab967ca7636f8f3d1",
+      "retained_sha256": "55f24aa721ab8c56cae162bfdfff4c2534870634a154f8cab967ca7636f8f3d1",
+      "redacted": false
+    },
+    {
+      "path": "native-engine-visibility/stderr.log",
+      "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "retained_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "redacted": false
+    },
+    {
+      "path": "launcher-real-preindex/result.json",
+      "original_sha256": "f32c17678edc36a486c549153df626a4eaf1d6878d4b85795234a59773d64119",
+      "retained_sha256": "f32c17678edc36a486c549153df626a4eaf1d6878d4b85795234a59773d64119",
+      "redacted": false
+    },
+    {
+      "path": "launcher-real-preindex/stdout.log",
+      "original_sha256": "c1affe1ab1aaeea538e389e7a7907d0c0b097af125e47fc1671eb54f8f49ca04",
+      "retained_sha256": "c1affe1ab1aaeea538e389e7a7907d0c0b097af125e47fc1671eb54f8f49ca04",
+      "redacted": false
+    },
+    {
+      "path": "launcher-real-preindex/stderr.log",
+      "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "retained_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "redacted": false
+    }
+  ]
+}

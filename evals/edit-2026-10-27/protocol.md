@@ -56,7 +56,7 @@ Freeze controls and successful isolation/readiness before calibration or scored 
 
 Record actual input/output/cached tokens, task time, indexing, tool adoption, native fallback, patch size, missed edits, repair rounds, and acceptance. Missing metrics stay unavailable. Billing remains unavailable unless the provider actually supplies it; never infer dollars from token counts. Two repeats per cell are a bounded pilot. Report all observations and paired medians, use a 10% practical tolerance, and call mixed outcomes inconclusive. Do not change global routing from this sample.
 
-Read the project/provider policy and redact the complete outgoing task/source bundle immediately before any dispatch. No dependency is added to code-kb. Review public-repository setup commands before running them in the preparation sandbox.
+Read the project/provider policy and audit the complete outgoing task/source bundle immediately before dispatch. Run the existing redactor over source text for audit, preserving the frozen public seed bytes: its broad assignment patterns also mask ordinary code such as `key: str`, which is not credential evidence. Verify pinned public-source provenance and reject exposure of actual host secret environment values. Task, public command and profile payloads must pass redaction unchanged; resolve genuine privacy/input issues before dispatch. Redact retained text artifacts without rewriting the benchmark source. No dependency is added to code-kb. Review public-repository setup commands before running them in the preparation sandbox.
 
 ## Implementation contracts
 
