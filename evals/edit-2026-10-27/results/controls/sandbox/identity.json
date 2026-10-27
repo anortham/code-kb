@@ -1,0 +1,13 @@
+{
+  "artifacts": {
+    "evals/edit-2026-10-27/profiles/code-kb/config.toml": "8e9117646776643a01c52738b1dc5e0619afcff8f8dce0d08ca8082bbe13a2a6",
+    "evals/edit-2026-10-27/profiles/native/config.toml": "89cd4007ce4cb9ade7f234e0971adcb2b2c172a07ef04e2e0d0f2514a8d5124d",
+    "scripts/edit_sandbox.py": "be41b956ee91def3be885440f10248340d0d618286c64d03d0b64989b340770d",
+    "scripts/test_edit_sandbox.py": "9d171f6209ce2cfa00d3f943ed24d4dcb9e8f19619f8c7813ac5a9880908d176"
+  },
+  "base_commit": "20805286b54d1bfecefeb69343f5fee270f3147a",
+  "created_utc": "2026-10-27T14:39:34Z",
+  "provider_calls": 0,
+  "schema": 1,
+  "tests": 15
+}

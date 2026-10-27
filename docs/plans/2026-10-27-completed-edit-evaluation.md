@@ -51,7 +51,7 @@
 | 3. Python/Rust cases | A then B | `evals/edit-2026-10-27/cases/sqlglot/`, `cases/minijinja/` | Yes for execution | Source inspection and checks first; Task2 required before upstream execution. |
 | 4. Go/TypeScript cases | A then B | `evals/edit-2026-10-27/cases/hcl/`, `cases/date-fns/` | Yes for execution | Source inspection and checks first; Task2 required before upstream execution. |
 | 5. Java/C# cases | A then B | `evals/edit-2026-10-27/cases/commons-lang/`, `cases/nodatime/` | Yes for execution | Source inspection and checks first; Task2 required before upstream execution. |
-| 6. Local orchestration | Lead after A | `scripts/edit_evaluation.py`, `scripts/test_edit_evaluation.py`, protocol/corpus/manifest/readiness/report/memory files | Yes | Integrates reviewed Tasks1/2 and completed cases. |
+| 6. Local orchestration | After A | Fresh Luna owns `scripts/edit_evaluation.py` and `scripts/test_edit_evaluation.py`; lead owns protocol/corpus/manifest/readiness/report/memory files | Yes | Integrates reviewed Tasks1/2 and completed cases. |
 
 ### Task 1: Capture and replay exact patches
 
@@ -81,10 +81,10 @@
 **What to build:** Real bubblewrap execution with explicit environment/mounts, protected inputs, resource deadlines, and process cleanup. Supply the preparation/grade path first so corpus workers can validate safely.
 **Approach:** Start from an empty filesystem, expose system/tool/dependency inputs, and use disposable state. Verify agent-specific Codex profile denial using the installed sandbox command, without calling a model.
 
-- [ ] Real child commands can edit permitted source and use prepared dependencies while host canaries, grader inputs, logs and protected writes are inaccessible.
-- [ ] Graders have no provider credentials/network; preparation networking is explicit; agent shell access respects the verified writable profile and private-profile denial.
-- [ ] Timeout and descendant cleanup retain outputs/partial edits; malformed paths/configuration and unsupported modes fail closed.
-- [ ] New module and actual isolation probes pass; hand exact API/CLI and verified diff to lead.
+- [x] Real child commands can edit permitted source and use prepared dependencies while host canaries, grader inputs, logs and protected writes are inaccessible.
+- [x] Graders have no provider credentials/network; preparation networking is explicit; agent shell access respects the verified writable profile and private-profile denial.
+- [x] Timeout and descendant cleanup retain outputs/partial edits; malformed paths/configuration and unsupported modes fail closed.
+- [x] New module and actual isolation probes pass; hand exact API/CLI and verified diff to lead.
 
 ### Task 3: Curate Python and Rust cases
 
@@ -139,7 +139,7 @@
 **Files:** Create `scripts/edit_evaluation.py`, `scripts/test_edit_evaluation.py`, campaign manifest/schema/readiness/report files under `evals/edit-2026-10-27/`; update this plan, project direction and memory.
 **Interfaces:** Reviewed snapshot/sandbox APIs, case contract and existing trace metrics.
 **Contract inputs:** All source/control/dependency identities, protected tests, immutable prior pilot and explicit budget gate.
-**File ownership:** Lead-owned orchestration, manifests, reports, docs and memory; no sibling-owned code changes without handoff.
+**File ownership:** Fresh Luna owns the two orchestration scripts; lead owns manifests, reports, docs and memory. Lead reviews and integrates the worker's implementation; no sibling-owned code changes without handoff.
 **Serialization required:** Yes.
 **Dependency reason:** Requires reviewed Tasks1/2 and verified cases from Tasks3–5.
 

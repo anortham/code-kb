@@ -1,0 +1,1 @@
+Use native terminal tools to inspect and edit the project: rg, targeted file reads, Git, and directory listings. Code-kb MCP and CLI are unavailable in this arm. Read the source evidence needed to make and verify the requested change.

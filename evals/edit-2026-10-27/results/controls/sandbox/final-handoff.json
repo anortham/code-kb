@@ -1,0 +1,94 @@
+{
+  "grade": {
+    "canonical_content": "canonical",
+    "child": {
+      "host_network": false,
+      "host_secret_visible": false,
+      "protected_write": false,
+      "provider_key_visible": false
+    },
+    "command": [
+      "/usr/bin/python3",
+      "/home/murphy/.codex/worktrees/1e6f/code-kb/scripts/edit_sandbox.py",
+      "run",
+      "--project",
+      "/tmp/edit-sandbox-task2-8y9vwoaj/final-handoff/grade/project",
+      "--state",
+      "/tmp/edit-sandbox-task2-8y9vwoaj/final-handoff/grade/state",
+      "--output",
+      "/tmp/edit-sandbox-task2-8y9vwoaj/final-handoff/grade/logs",
+      "--timeout",
+      "30",
+      "--mode",
+      "grade",
+      "--protect",
+      "tests/canonical.py",
+      "--",
+      "python3",
+      "-c",
+      "import json, os, pathlib, socket\nproject = pathlib.Path('/workspace/project')\ncanonical = project / 'tests/canonical.py'\ntry:\n    canonical.write_text('weakened')\n    protected_write = True\nexcept OSError:\n    protected_write = False\ntry:\n    connection = socket.create_connection(('127.0.0.1', 54087), timeout=0.25)\n    connection.close()\n    host_network = True\nexcept OSError:\n    host_network = False\n(project / 'graded.txt').write_text('grade ran')\npathlib.Path('/state/cache').mkdir(parents=True, exist_ok=True)\npathlib.Path('/state/cache/grade-lock').write_text('disposable')\nprint(json.dumps({'provider_key_visible': 'OPENAI_API_KEY' in os.environ, 'host_secret_visible': 'EVAL_HOST_SECRET' in os.environ, 'host_network': host_network, 'protected_write': protected_write}))"
+    ],
+    "listener_accepted": false,
+    "project_file": "/tmp/edit-sandbox-task2-8y9vwoaj/final-handoff/grade/project/graded.txt",
+    "report": {
+      "elapsed_seconds": 0.032345,
+      "exit_status": 0,
+      "mode": "grade",
+      "network_scope": "disabled",
+      "process_cleanup": {
+        "attempted": false,
+        "complete": true,
+        "signal": null
+      },
+      "stderr_log": "/tmp/edit-sandbox-task2-8y9vwoaj/final-handoff/grade/logs/stderr.log",
+      "stdout_log": "/tmp/edit-sandbox-task2-8y9vwoaj/final-handoff/grade/logs/stdout.log",
+      "timed_out": false
+    },
+    "returncode": 0,
+    "state_file": "/tmp/edit-sandbox-task2-8y9vwoaj/final-handoff/grade/state/cache/grade-lock",
+    "stderr": ""
+  },
+  "prepare": {
+    "command": [
+      "/usr/bin/python3",
+      "/home/murphy/.codex/worktrees/1e6f/code-kb/scripts/edit_sandbox.py",
+      "run",
+      "--project",
+      "/tmp/edit-sandbox-task2-8y9vwoaj/final-handoff/prepare/project",
+      "--state",
+      "/tmp/edit-sandbox-task2-8y9vwoaj/final-handoff/prepare/state",
+      "--output",
+      "/tmp/edit-sandbox-task2-8y9vwoaj/final-handoff/prepare/logs",
+      "--timeout",
+      "30",
+      "--mode",
+      "prepare",
+      "--dependency",
+      "reviewed=/tmp/edit-sandbox-task2-8y9vwoaj/final-handoff/prepare/dependency",
+      "--",
+      "python3",
+      "-c",
+      "from pathlib import Path; Path('/workspace/project/source.txt').write_text(Path('/deps/reviewed/pin.txt').read_text()); Path('/state/cache').mkdir(); Path('/state/cache/package-lock').write_text('disposable-lock')"
+    ],
+    "project_content": "reviewed-pin",
+    "report": {
+      "elapsed_seconds": 0.032278,
+      "exit_status": 0,
+      "mode": "prepare",
+      "network_scope": "disabled",
+      "process_cleanup": {
+        "attempted": false,
+        "complete": true,
+        "signal": null
+      },
+      "stderr_log": "/tmp/edit-sandbox-task2-8y9vwoaj/final-handoff/prepare/logs/stderr.log",
+      "stdout_log": "/tmp/edit-sandbox-task2-8y9vwoaj/final-handoff/prepare/logs/stdout.log",
+      "timed_out": false
+    },
+    "returncode": 0,
+    "state_content": "disposable-lock",
+    "state_file": "/tmp/edit-sandbox-task2-8y9vwoaj/final-handoff/prepare/state/cache/package-lock",
+    "stderr": ""
+  },
+  "provider_calls": 0
+}

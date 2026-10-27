@@ -1,0 +1,66 @@
+{
+  "native_codex": "/home/murphy/.local/share/mise/installs/node/24.18.1/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex",
+  "profiles": {
+    "code-kb": {
+      "child": {
+        "command_network": false,
+        "private_read": false
+      },
+      "exit_code": 0,
+      "listener_accepted": false,
+      "mcp_servers": [
+        "code_kb"
+      ],
+      "model": "gpt-6.1-sol",
+      "model_reasoning_effort": "high",
+      "private_profile_source": "/tmp/edit-sandbox-task2-8y9vwoaj/verified-profile-probes/code-kb-private-profile",
+      "report": {
+        "elapsed_seconds": 0.11447,
+        "exit_status": 0,
+        "mode": "agent",
+        "network_scope": "codex_provider_only",
+        "process_cleanup": {
+          "attempted": false,
+          "complete": true,
+          "signal": null
+        },
+        "stderr_log": "/tmp/edit-sandbox-task2-8y9vwoaj/verified-profile-probes/code-kb/logs/stderr.log",
+        "stdout_log": "/tmp/edit-sandbox-task2-8y9vwoaj/verified-profile-probes/code-kb/logs/stdout.log",
+        "timed_out": false
+      },
+      "state_file": "/tmp/edit-sandbox-task2-8y9vwoaj/verified-profile-probes/code-kb/state/tool-cache/probe.txt",
+      "stderr": "",
+      "workspace_file": "/tmp/edit-sandbox-task2-8y9vwoaj/verified-profile-probes/code-kb/project/probe.txt"
+    },
+    "native": {
+      "child": {
+        "command_network": false,
+        "private_read": false
+      },
+      "exit_code": 0,
+      "listener_accepted": false,
+      "mcp_servers": [],
+      "model": "gpt-6.1-sol",
+      "model_reasoning_effort": "high",
+      "private_profile_source": "/tmp/edit-sandbox-task2-8y9vwoaj/verified-profile-probes/native-private-profile",
+      "report": {
+        "elapsed_seconds": 0.114586,
+        "exit_status": 0,
+        "mode": "agent",
+        "network_scope": "codex_provider_only",
+        "process_cleanup": {
+          "attempted": false,
+          "complete": true,
+          "signal": null
+        },
+        "stderr_log": "/tmp/edit-sandbox-task2-8y9vwoaj/verified-profile-probes/native/logs/stderr.log",
+        "stdout_log": "/tmp/edit-sandbox-task2-8y9vwoaj/verified-profile-probes/native/logs/stdout.log",
+        "timed_out": false
+      },
+      "state_file": "/tmp/edit-sandbox-task2-8y9vwoaj/verified-profile-probes/native/state/tool-cache/probe.txt",
+      "stderr": "",
+      "workspace_file": "/tmp/edit-sandbox-task2-8y9vwoaj/verified-profile-probes/native/project/probe.txt"
+    }
+  },
+  "provider_calls": 0
+}
