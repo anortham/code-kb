@@ -149,4 +149,4 @@
 - [x] Real fake-agent runs cover success, partial timeout, protected tampering, untracked/deleted source, invalid output and failed grading; replay identity is enforced.
 - [x] All six cases have reviewed source, references, protected tests and retained readiness; all manifests/hashes validate and answer leakage tests pass.
 - [x] Proposed 24-run schedule, model/configuration, controls and budget gate are frozen; no provider is called by preparation or tests.
-- [ ] Python/plugin/JSON/security scopes pass, docs/brief reflect evidence and remaining dispatch authority, and local commits/worktrees are reconciled.
+- [x] Python/plugin/JSON/security scopes pass, docs/brief reflect evidence and remaining dispatch authority, and local commits/worktrees are reconciled.

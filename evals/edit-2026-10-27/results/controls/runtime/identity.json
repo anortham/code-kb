@@ -1,0 +1,152 @@
+{
+  "schema": 1,
+  "created_utc": "2026-10-27T17:18:55.597573+00:00",
+  "runtime_source_commit": "70a2c9b3769ceeb7c4f442a19cb410375168b6c0",
+  "linux": {
+    "rust": {
+      "passed": 1904,
+      "failed": 0,
+      "ignored": 0,
+      "result_blocks_including_doc_tests": 38
+    },
+    "binary_sha256": "d50d77812c0b9aad04b38b31c63b71df7768d0c44273b6d97a7e4a15a37b2127",
+    "extractor_sha256": "777fe822a0eddbdfd9f357c018c7a1a881907bedc698f913736a30ffc0ce0d12",
+    "clippy": "passed",
+    "format": "passed",
+    "release_build": "passed"
+  },
+  "windows": {
+    "rust": {
+      "passed": 1876,
+      "failed": 0,
+      "ignored": 0,
+      "result_blocks_including_doc_tests": 38
+    },
+    "binary_sha256": "65c098edaed2aa4b96a91d3da7ae46c712b6905e33e3956478e1f3e6eb657bcb",
+    "extractor_sha256": "e9eb3fc6e08feaa20d8758a81fd0746683fe08ad79daada36ad71b0dca8e1e79",
+    "clippy": "passed",
+    "format": "passed",
+    "release_build": "passed",
+    "plugin": {
+      "passed": 12,
+      "skipped": 8,
+      "failed": 0
+    },
+    "guest_source_commit": "70a2c9b3769ceeb7c4f442a19cb410375168b6c0",
+    "preserved_unrelated_guest_path": "test.log",
+    "shutdown_requested": true,
+    "vm_final_state": "shut off",
+    "shutdown_confirmed": true,
+    "shutdown_confirmation": "lead/windows-vm-final-status.log",
+    "shutdown_connection_reset": "The optional guest shutdown confirmation command lost SSH while shutdown was in progress; the final host state confirms the VM is off."
+  },
+  "language_ids_tested_on_both_platforms": 42,
+  "unchanged_scopes": {
+    "python_tests_passed": 269,
+    "linux_plugin_tests_passed": 20,
+    "evidence": "../evaluation/identity.json"
+  },
+  "final_binary_isolated_controls": {
+    "cases": 6,
+    "status": "passed",
+    "report_member": "final-mcp-controls/report.json",
+    "individual_jsonrpc_lines_retained": false
+  },
+  "manifest_validation": {
+    "valid": true,
+    "case_count": 6,
+    "scored_calls": 24,
+    "call_limit": 28,
+    "dispatch_authorized": false
+  },
+  "manifest_sha256": "4e85c2fb742141f458d0465a83a602f4a818e27eb0f98b2c4f2be3754213f463",
+  "archive_sha256": "ac3145c50b8fed29412c0f2770f7109da110deb7073b866d4bb34d01ca942b77",
+  "archive_members": 186,
+  "provider_calls": 0,
+  "scored_agent_trials": 0,
+  "prior_pilot_manifest_sha256": "8e73c99ed06bf6e2efeacb322e452dabad7d83cd3638da274afb608802d22a8d",
+  "watcher_source_sha256": "85f04abb9669ce6ed9a147fc2ca6569f5c201b35d584b4282fb229582dabdf2e",
+  "watcher_probe": {
+    "before": [
+      {
+        "watches": 1016,
+        "rss_kib": 15320,
+        "peak_rss_kib": 15320
+      },
+      {
+        "watches": 1016,
+        "rss_kib": 15760,
+        "peak_rss_kib": 15760
+      },
+      {
+        "watches": 1016,
+        "rss_kib": 15760,
+        "peak_rss_kib": 15760
+      },
+      {
+        "watches": 1016,
+        "rss_kib": 15760,
+        "peak_rss_kib": 15760
+      },
+      {
+        "watches": 1016,
+        "rss_kib": 15760,
+        "peak_rss_kib": 15760
+      }
+    ],
+    "after": [
+      {
+        "watches": 3,
+        "rss_kib": 14744,
+        "peak_rss_kib": 14744
+      },
+      {
+        "watches": 3,
+        "rss_kib": 14760,
+        "peak_rss_kib": 14760
+      },
+      {
+        "watches": 3,
+        "rss_kib": 14760,
+        "peak_rss_kib": 14760
+      },
+      {
+        "watches": 3,
+        "rss_kib": 14760,
+        "peak_rss_kib": 14760
+      },
+      {
+        "watches": 3,
+        "rss_kib": 14760,
+        "peak_rss_kib": 14760
+      }
+    ],
+    "real_repository": [
+      {
+        "watches": 212,
+        "rss_kib": 17132,
+        "peak_rss_kib": 31188
+      },
+      {
+        "watches": 212,
+        "rss_kib": 17420,
+        "peak_rss_kib": 31188
+      },
+      {
+        "watches": 212,
+        "rss_kib": 19704,
+        "peak_rss_kib": 31188
+      },
+      {
+        "watches": 212,
+        "rss_kib": 19704,
+        "peak_rss_kib": 31188
+      },
+      {
+        "watches": 212,
+        "rss_kib": 19852,
+        "peak_rss_kib": 31188
+      }
+    ]
+  }
+}

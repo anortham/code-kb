@@ -10,6 +10,7 @@ These artifacts are local readiness controls. No new provider call or scored cod
 - [Frozen inputs](frozen-inputs.json) records tool/dependency hashes and durable seed snapshots. Task-owned prepared inputs live under `/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0`; installed toolchain roots are recorded individually. The finalized engine and extractor are retained in that cache under `tools/intelligence/`.
 - [Readiness evidence](results/readiness/artifact-map.json) maps 899 verified raw archive members. Each case directory under `results/readiness/` contains its reviewed readiness summary and source-review receipt.
 - [Curation evidence](results/curation/artifact-map.json) preserves earlier setup failures and repairs. The raw archive remains unchanged when later source review adds evidence.
+- [Runtime verification](results/controls/runtime/identity.json) records the final Linux/Windows gates, six isolated MCP controls and live watch/RSS probes; its [archive map](results/controls/runtime/artifact-map.json) verifies retained logs and diagnostic drivers.
 - [Runner verification](results/controls/evaluation/identity.json) binds the implementation and test results. Preparation and grading expose no provider credentials and disable networking during execution.
 
 Run the local CLI from the repository root:

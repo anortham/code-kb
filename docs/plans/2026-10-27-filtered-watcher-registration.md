@@ -22,7 +22,7 @@ Tests come first. The worker runs focused red/green checks and the watcher test 
 - [x] Supported ignore-file creation, modification and deletion reconcile both registrations and indexed contents.
 - [x] Startup races, event storms and queue overflow reconcile or fail explicitly; dynamic failures use the existing watcher failure state.
 - [x] Ownership and shutdown avoid callback mutex cycles, deadlocks and leaked threads; traversal stores no second file inventory.
-- [ ] Focused tests and Linux/Windows integration pass; before/after watch counts and retained RSS are recorded.
+- [x] Focused tests and Linux/Windows integration pass; before/after watch counts and retained RSS are recorded.
 
 
 ## Integration

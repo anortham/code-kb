@@ -356,3 +356,23 @@ skeleton call finish at 14,760 KiB retained RSS versus 15,760 KiB before.
 On this development worktree, the fixed server uses 212 watches and finishes
 that probe at 19,852 KiB RSS. This is a small local resource check, not a
 workload-wide latency or agent-performance result.
+
+**Final runtime verification at `70a2c9b`:** Linux passes 1,904 Rust tests;
+Windows NTFS passes 1,876. Both pass all 42 language IDs, Clippy with warnings
+denied, formatting, and locked release builds. Windows plugins pass 12 tests
+with eight declared platform skips. The unchanged Python and Linux plugin
+scopes retain their passing 269- and 20-test results. The
+[runtime evidence](../../evals/edit-2026-10-27/results/controls/runtime/identity.json)
+binds source, executables, logs, and the before/after probes. Its archive maps
+186 verified members, including failed attempts and their final corrections.
+
+Startup-sensitive fixtures now use real scanned indexes or inject faults after
+a healthy response. Cold initial-scan failure/retry, offline edits and deletion,
+live partial updates, failures surviving project switches, and corrupt search
+indexes retain explicit coverage. The WAL-copy fixture keeps 201 real source
+symbols and checks a signature marker written only through pending WAL updates,
+so a fresh extraction cannot make a broken copy look correct. Six isolated
+final-binary controls also pass scan, MCP initialization, all seven tool schemas,
+and a real source lookup without exposing hidden checks or credentials.
+
+The Windows VM is confirmed shut off; its pre-existing untracked `test.log` was preserved. All task commits remain local.
