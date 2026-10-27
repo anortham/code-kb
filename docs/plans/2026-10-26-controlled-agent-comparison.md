@@ -112,8 +112,8 @@ Commit mode: `parallel-lead-commit`. Workers do not stage, commit, checkpoint, o
 **Approach:** Reproduce before fixing, preserve unfavorable experiment results, and label used cases as regression evidence.
 
 - [x] Confirmed in-scope defects are fixed and narrowly verified; genuine upstream dependencies remain explicit.
-- [ ] Report and active brief reflect the measured direction and current authorization.
-- [ ] Local commits include docs/memory; task state is reconciled and no publication/global configuration changes occur.
+- [x] Report and active brief reflect the measured direction and current authorization.
+- [x] Local commits include docs/memory; task state is reconciled and no publication/global configuration changes occur.
 
 ## Verified external surface
 
@@ -191,4 +191,6 @@ The retained pre-optimization probe pair records the discovered slowdown. Final 
 
 The Linux gate at `38add43` passed 1,889 Rust tests and all 42 languages in12.52s. Its quiet paired probe recovered impact latency and stable retained/peak memory, but context still reparsed the owner query per fact (87.64ms versus20.06ms retained baseline). Commit `5f998c4` reuses one lazy statement within the bounded context operation;12type regressions and the fact-limit guard pass. The pre-owner-reuse pair is retained separately. Final verification follows that runtime commit.
 
-The final Linux gate at `5f998c4` passes 1,889 Rust tests across 37 suites, all 42 language IDs, Clippy, formatting, and the locked release build. The current regression manifest validates engine `dab4bbdb3957`; the original frozen manifest remains unchanged. The final quiet probe pair and Linux log archive are retained under results. Windows NTFS verification remains the last integration gate.
+The final Linux gate at `5f998c4` passes 1,889 Rust tests across 37 suites, all 42 language IDs, Clippy, formatting, and the locked release build. The current regression manifest validates engine `dab4bbdb3957`; the original frozen manifest remains unchanged. The final quiet probe pair and Linux log archive are retained under results. Windows NTFS verification at `f355247` passes 1,865 Rust tests across 37 suites, all 42 language IDs, Clippy, formatting, release, and 12 plugin tests with eight declared POSIX-fixture skips. Runtime source is unchanged from the Linux-verified slice.
+
+Final Windows checks pass at the synced clean commit `f355247`; the binary starts and its hash is retained. The guest is confirmed shut off. A pre-existing September log in the guest clone was left untouched; tracked source is unchanged. The task worktree and original checkout are reconciled, and final closure contains documentation, memory, and verification artifacts only.

@@ -13,7 +13,36 @@
     "conformance_suite_seconds": 13.11
   },
   "windows": {
-    "status": "pending"
+    "status": "pass",
+    "source_commit": "f355247f919a7acdd25920b01a96c7cb63ed9496",
+    "root": "C:/work/code-kb",
+    "filesystem": "NTFS",
+    "rust_passed": 1865,
+    "rust_failed": 0,
+    "rust_suites": 37,
+    "rust_ignored": 0,
+    "conformance_language_ids": 42,
+    "conformance_suite_seconds": 17.89,
+    "plugin_passed": 12,
+    "plugin_skipped": 8,
+    "plugin_skip_reason": "Declared POSIX fixtures",
+    "clippy": "pass",
+    "format": "pass",
+    "release": "pass",
+    "extractor_version": "3.9.1",
+    "binary_version": "2.9.1",
+    "binary_sha256": "c36221f6f5686d069c85f5a148ff13e22f806c7efe21a67f95ef2da73c912a41",
+    "tracked_source_clean": true,
+    "preexisting_untracked_artifact": {
+      "path": "test.log",
+      "modified": "2026-09-29 17:07",
+      "action": "left untouched"
+    },
+    "logs": {
+      "file": "post-fix-windows-verification.tar.gz",
+      "sha256": "085727b4c25676f06990ca975fee557eab184d0556a3e9f9f6ca7e3a0267e9ba"
+    },
+    "guest_shutdown": "shut off, confirmed by win-test status"
   },
   "engine_sha256": "dab4bbdb3957ea81f2bd9d0a150c3a32411bd347ede7da1736943b44c1c3a07b",
   "logs": {
