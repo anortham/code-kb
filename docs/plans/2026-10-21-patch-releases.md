@@ -2,7 +2,7 @@
 
 ## Authority and workspaces
 
-The owner requested: "ok let's go through the release process for both". This authorizes the documented release sequence, including branch pushes, PRs, merges, tags, publication, and evidence closeout. No history rewriting or paid API runs are authorized. The required harness sessions use existing Claude Max and ChatGPT subscriptions.
+The owner requested: "ok let's go through the release process for both". This authorizes the documented release sequence, including branch pushes, PRs, merges, tags, publication, and evidence closeout. No history rewriting is authorized. The owner's October 27 instruction removes separate spending approval. The required harness sessions use existing Claude Max and ChatGPT subscriptions.
 
 - code-kb: /home/murphy/source/code-kb, review/v2.8.0-followups, source fixes f6a4833. PR52 integrates these before the version bump.
 - Julie: /home/murphy/source/julie-extractors, review/v3.9.0-followups, source fixes f9a4fa1f.

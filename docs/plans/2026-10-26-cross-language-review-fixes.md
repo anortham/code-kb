@@ -19,7 +19,7 @@ The owner said: "ok let's proceed with the fixes then docs/reviews/2026-10-26-pr
 - local_commit_authority: authorized by that implementation request.
 - push_authority: missing; do not push.
 - pr_authority: missing; do not publish a PR.
-- Paid agent comparisons and extractor releases require separate approval. Prepare reproducible local evidence and runnable comparisons here; do not substitute them for measured paid agent outcomes.
+- The owner's October 27 instruction authorizes model evaluation without separate spending approval. Extractor releases still require approval. Prepare reproducible local evidence and runnable comparisons here; do not substitute them for measured agent outcomes.
 - Reviewer choice: none for external model CLIs. The lead reviews each implementation inline.
 
 ## Global Constraints

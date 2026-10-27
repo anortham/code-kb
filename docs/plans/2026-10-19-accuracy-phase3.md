@@ -13,7 +13,7 @@
 
 **Tech Stack:** Rust 2024 (rusqlite, serde_json), SQLite schema v7, julie-extract 3.8.1 (pinned at the start of phase 3; a newer version only if slice 4 needs it), git CLI, Python 3 standard library (harness and gate scripts).
 
-**Spec:** No approved design covers phase 3. `docs/plans/2026-10-17-accuracy-base-design.md` defines phases 1 and 2 only. The active goldfish brief names phase 3 as "a missed-site replay over session logs" and phase 4 as "an agent A/B test (needs a budget approval)". The pass marks come from the research in `~/.code-kb/reports/2026-10-17-direction-research/designs.txt` ("Missed-site replay, offline" and "Gate 2, the completeness replay"). Every ruling in this plan is provisional until the owner approves the plan.
+**Spec:** No approved design covers phase 3. `docs/plans/2026-10-17-accuracy-base-design.md` defines phases 1 and 2 only. The active goldfish brief names phase 3 as "a missed-site replay over session logs" and phase 4 as "an agent A/B test". The pass marks come from the research in `~/.code-kb/reports/2026-10-17-direction-research/designs.txt` ("Missed-site replay, offline" and "Gate 2, the completeness replay"). Every ruling in this plan is provisional until the owner approves the plan.
 
 **Architecture Quality:**
 - New script `scripts/edit_replay.py` with the subcommands `select`, `run`, and `score`, and its unit tests in `scripts/test_edit_replay.py`. It calls only the `code-kb` CLI (`code-kb --root <tree> check --base <rev> --json`) and git. It may import helpers from `scripts/reach_gate.py`.
@@ -27,7 +27,7 @@
 - `pr_authority: missing` (same ask).
 - code-kb release (2.7.1 or 2.8.0): missing. A further change to the block rule (task 2.1) needs a release before users get it.
 - julie-extractors release: missing for phase 3. The 2026-10-18 grant covered phase 2. Ask if slice 2 or 4 needs a julie change.
-- Paid model runs: none in this plan. The phase 4 agent A/B test needs its own budget approval.
+- Model runs are outside this phase 3 plan. The owner's October 27 instruction authorizes evaluation without a separate spending gate.
 - Reviewer choice: none (Sonnet review agents inside the workflows, lead validation).
 
 **Lead decisions (provisional, recorded):**
@@ -332,7 +332,7 @@ Result (2026-10-19, `git archive` exports of HEAD, julie 3.8.1, index MB / peak 
 
 ## Out of scope
 
-- Phase 4, the agent A/B test (arms: no code-kb, 2.6.0, and the phase 3 build with hooks; first-pass completeness, fix rounds, turns, tokens). It needs a budget approval.
+- Phase 4, the agent A/B test (arms: no code-kb, 2.6.0, and the phase 3 build with hooks; first-pass completeness, fix rounds, turns, tokens). The owner's October 27 instruction removes separate spending approval.
 - Blast radius changes (Lead decisions).
 - Go and Java receiver typing, and C# `base.F()`, unless the replay ranks them as a miss cause in 2.2.
 
