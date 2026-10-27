@@ -1,0 +1,44 @@
+diff --git a/gohcl/schema.go b/gohcl/schema.go
+--- a/gohcl/schema.go
++++ b/gohcl/schema.go
+@@ -51,11 +51,6 @@
+ 		var required bool
+ 
+ 		switch {
+-		case field.Type.AssignableTo(exprType):
+-			// If we're decoding to hcl.Expression then absense can be
+-			// indicated via a null value, so we don't specify that
+-			// the field is required during decoding.
+-			required = false
+ 		case field.Type.Kind() != reflect.Ptr && !optional:
+ 			required = true
+ 		default:
+diff --git a/gohcl/decode.go b/gohcl/decode.go
+--- a/gohcl/decode.go
++++ b/gohcl/decode.go
+@@ -6,8 +6,6 @@ import (
+ 	"fmt"
+ 	"reflect"
+ 
+-	"github.com/zclconf/go-cty/cty"
+-
+ 	"github.com/zclconf/go-cty/cty/convert"
+ 	"github.com/zclconf/go-cty/cty/gocty"
+ 
+@@ -106,16 +106,6 @@
+ 		fieldV := val.Field(fieldIdx)
+ 
+ 		if attr == nil {
+-			if !exprType.AssignableTo(field.Type) {
+-				continue
+-			}
+-
+-			// As a special case, if the target is of type hcl.Expression then
+-			// we'll assign an actual expression that evaluates to a cty null,
+-			// so the caller can deal with it within the cty realm rather
+-			// than within the Go realm.
+-			synthExpr := hcl.StaticExpr(cty.NullVal(cty.DynamicPseudoType), body.MissingItemRange())
+-			fieldV.Set(reflect.ValueOf(synthExpr))
+ 			continue
+ 		}
+ 

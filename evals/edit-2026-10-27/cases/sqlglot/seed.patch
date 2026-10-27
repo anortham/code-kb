@@ -1,0 +1,15 @@
+diff --git a/sqlglot/parsers/bigquery.py b/sqlglot/parsers/bigquery.py
+--- a/sqlglot/parsers/bigquery.py
++++ b/sqlglot/parsers/bigquery.py
+@@ -302,6 +302,11 @@
+         "TIMESTAMP": _build_timestamp,
+         "TIMESTAMP_ADD": build_date_delta_with_interval(exp.TimestampAdd),
+         "TIMESTAMP_SUB": build_date_delta_with_interval(exp.TimestampSub),
++        "TIMESTAMP_BUCKET": lambda args: exp.DateBin(
++            this=seq_get(args, 0),
++            expression=seq_get(args, 1),
++            origin=seq_get(args, 2),
++        ),
+         "TIMESTAMP_MICROS": lambda args: exp.UnixToTime(
+             this=seq_get(args, 0), scale=exp.UnixToTime.MICROS
+         ),

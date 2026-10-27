@@ -98,9 +98,9 @@
 **What to build:** One meaningful multi-file edit task per repository with real tests and a known repair. Report actual source files/lines, dependency setup, protected/generated paths and commands.
 **Approach:** Inspect pinned source first, write checks, produce a purposeful seeded failure, then the minimal reference repair. Run no upstream setup/build script on the host.
 
-- [ ] Both repositories satisfy size/exposure rules and have concrete requests requiring at least two production files.
-- [ ] Canonical baseline passes; seeded input fails for the intended reason; reference repair passes hidden and selected public checks in the sandbox.
-- [ ] Case data has exact executable commands, safe paths, retained evidence and no placeholders; hand results to lead without model calls/commits.
+- [x] Both repositories satisfy size/exposure rules and have concrete requests requiring at least two production files.
+- [x] Canonical baseline passes; seeded input fails for the intended reason; reference repair passes hidden and selected public checks in the sandbox.
+- [x] Case data has exact executable commands, safe paths, retained evidence and no placeholders; hand results to lead without model calls/commits.
 
 ### Task 4: Curate Go and TypeScript cases
 
@@ -114,9 +114,9 @@
 **What to build:** Multi-file edits that exercise callers and preserve unrelated valid behavior. Freeze source-backed checks and reference patches without exposing them to trials.
 **Approach:** Use actual package/lock/test commands; keep build output separate from immutable dependency inputs.
 
-- [ ] Both candidates meet size/exposure rules and have source-backed tasks requiring two production files.
-- [ ] Baseline green, purposeful seed red, reference green and relevant public regressions are retained from sandbox runs.
-- [ ] Exact case contract, dependency setup, paths and evidence pass worker scope and are handed to lead.
+- [x] Both candidates meet size/exposure rules and have source-backed tasks requiring two production files.
+- [x] Baseline green, purposeful seed red, reference green and relevant public regressions are retained from sandbox runs.
+- [x] Exact case contract, dependency setup, paths and evidence pass worker scope and are handed to lead.
 
 ### Task 5: Curate Java and C# cases
 
@@ -130,9 +130,9 @@
 **What to build:** Two runnable multi-file edit cases with explicit Java/.NET coverage. Keep task validity separate from toolchain/dependency failures.
 **Approach:** Obtain tools/dependencies only in disposable preparation state, then prove offline grading. Choose supported installed SDK targets from actual project configuration.
 
-- [ ] Both source pins meet size/exposure rules and have concrete multi-file requests.
-- [ ] Baseline, seeded failure and repaired acceptance/public checks run with reviewed tools and retained logs.
-- [ ] No global installs/configuration changes; complete source-backed cases and readiness evidence go to lead.
+- [x] Both source pins meet size/exposure rules and have concrete multi-file requests.
+- [x] Baseline, seeded failure and repaired acceptance/public checks run with reviewed tools and retained logs.
+- [x] No global installs/configuration changes; complete source-backed cases and readiness evidence go to lead.
 
 ### Task 6: Integrate local trials and freeze readiness
 

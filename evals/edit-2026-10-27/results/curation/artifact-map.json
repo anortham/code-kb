@@ -1,0 +1,1808 @@
+{
+  "schema": 1,
+  "provider_calls": 0,
+  "archive": "raw.tar.gz",
+  "archive_sha256": "f7f32ae2597b6519a452150e027a88874203391d6444a118890ec032f2537dea",
+  "artifacts": [
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/.razorback/sdd/2026-10-27-completed-edit-evaluation-58b58e30d768/task-3-report.md",
+      "sha256": "7cb28320b45d2cc1400943e818011f2d677f0abc6ae496d4f09751aa0f020d73",
+      "member": "task-3/report.md"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/.razorback/sdd/2026-10-27-completed-edit-evaluation-58b58e30d768/task-4-report.md",
+      "sha256": "e6f47568db899950e75b4af67e6850f74f6caeb0a654394b674c226062e6ec08",
+      "member": "task-4/report.md"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/.razorback/sdd/2026-10-27-completed-edit-evaluation-58b58e30d768/task-5-report.md",
+      "sha256": "55eebe959b08c7bdf797989ea3e617e45edb9727df1abdeba8cd30594238593b",
+      "member": "task-5/report.md"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/runtime-bindings.json",
+      "sha256": "7a2aeea4e1567a441cad932a5b57584f6e211b35187be2275e368a933592afb4",
+      "member": "task-3/runtime-bindings.json"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/runtime-bindings.json",
+      "sha256": "8e075a70a728c1222d6698c8702232770013f5d3f4ae880b0bbd3ecdb825d1dd",
+      "member": "task-4/runtime-bindings.json"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task5/runtime-bindings.json",
+      "sha256": "6a04647317072b2f12e1a8488160de0c05f292e41a5f06a695546f9be5887136",
+      "member": "task-5/runtime-bindings.json"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/pytz-resolution/stdout.log",
+      "sha256": "7e524f262356bcc0dd2f3cbfb5a4e8a790ca89adc8878494cbd815acaf998590",
+      "member": "task-3/logs/pytz-resolution/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/pytz-resolution/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/pytz-resolution/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-cargo-fetch/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/minijinja-cargo-fetch/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-cargo-fetch/stderr.log",
+      "sha256": "25754737e5a590a402601a470ef702e779ac1d9bc3f720e86e910d8a876a4b7c",
+      "member": "task-3/logs/minijinja-cargo-fetch/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/pytz-pinned-preparation/stdout.log",
+      "sha256": "8a2a7c1401518012f41fa25e591aa8d9dc66971f44418daf398887d77507a1a3",
+      "member": "task-3/logs/pytz-pinned-preparation/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/pytz-pinned-preparation/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/pytz-pinned-preparation/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/cargo-version/stdout.log",
+      "sha256": "1aedaa9cce116919d39b1eb303a58865771582bc24fc259aa8e26cb212e0f59e",
+      "member": "task-3/logs/cargo-version/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/cargo-version/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/cargo-version/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/rustc-version/stdout.log",
+      "sha256": "4ad84f16acc2f3bdcfbc7b0788f1e74a4e649b962154a585b8f8d0b28eb0dd06",
+      "member": "task-3/logs/rustc-version/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/rustc-version/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/rustc-version/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-baseline-public-runtime-setup/stdout.log",
+      "sha256": "ae6522ba2a9da33ea03442b6ea7e48f1b9e54234266e7b542bf70b6028b83981",
+      "member": "task-3/logs/sqlglot-baseline-public-runtime-setup/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-baseline-public-runtime-setup/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/sqlglot-baseline-public-runtime-setup/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-source-import/stdout.log",
+      "sha256": "57553c26b55f9c3ea13e319f56bb26b59b6ebf93aa4a00234f21c33fb2e36c28",
+      "member": "task-3/logs/sqlglot-source-import/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-source-import/stderr.log",
+      "sha256": "7826fd787999cdb90379227892baa4a506eb389960ec4bf0318f01bfbe2410d2",
+      "member": "task-3/logs/sqlglot-source-import/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-baseline-public-bigquery_regressions/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/sqlglot-baseline-public-bigquery_regressions/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-baseline-public-bigquery_regressions/stderr.log",
+      "sha256": "08cce26589a41804ffefd63eccb7570d296be4a696583d8cdc5e5428c3d91e83",
+      "member": "task-3/logs/sqlglot-baseline-public-bigquery_regressions/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-seed-hidden-runtime-setup/stdout.log",
+      "sha256": "ae6522ba2a9da33ea03442b6ea7e48f1b9e54234266e7b542bf70b6028b83981",
+      "member": "task-3/logs/sqlglot-seed-hidden-runtime-setup/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-seed-hidden-runtime-setup/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/sqlglot-seed-hidden-runtime-setup/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-seed-hidden-timestamp_bucket_acceptance/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/sqlglot-seed-hidden-timestamp_bucket_acceptance/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-seed-hidden-timestamp_bucket_acceptance/stderr.log",
+      "sha256": "e66f82c2f356c0ebf4d6b8b20b8d71e8177e2dc4b37053041faa0be50c778410",
+      "member": "task-3/logs/sqlglot-seed-hidden-timestamp_bucket_acceptance/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-reference-public-runtime-setup/stdout.log",
+      "sha256": "ae6522ba2a9da33ea03442b6ea7e48f1b9e54234266e7b542bf70b6028b83981",
+      "member": "task-3/logs/sqlglot-reference-public-runtime-setup/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-reference-public-runtime-setup/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/sqlglot-reference-public-runtime-setup/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-reference-public-bigquery_regressions/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/sqlglot-reference-public-bigquery_regressions/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-reference-public-bigquery_regressions/stderr.log",
+      "sha256": "d30a599978a84246945b638030f5a6101fda61847cbd1698a60e2af592065913",
+      "member": "task-3/logs/sqlglot-reference-public-bigquery_regressions/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-reference-hidden-runtime-setup/stdout.log",
+      "sha256": "ae6522ba2a9da33ea03442b6ea7e48f1b9e54234266e7b542bf70b6028b83981",
+      "member": "task-3/logs/sqlglot-reference-hidden-runtime-setup/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-reference-hidden-runtime-setup/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/sqlglot-reference-hidden-runtime-setup/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-reference-hidden-timestamp_bucket_acceptance/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/sqlglot-reference-hidden-timestamp_bucket_acceptance/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-reference-hidden-timestamp_bucket_acceptance/stderr.log",
+      "sha256": "e66f82c2f356c0ebf4d6b8b20b8d71e8177e2dc4b37053041faa0be50c778410",
+      "member": "task-3/logs/sqlglot-reference-hidden-timestamp_bucket_acceptance/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-v2-baseline-public-runtime-setup/stdout.log",
+      "sha256": "ae6522ba2a9da33ea03442b6ea7e48f1b9e54234266e7b542bf70b6028b83981",
+      "member": "task-3/logs/sqlglot-v2-baseline-public-runtime-setup/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-v2-baseline-public-runtime-setup/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/sqlglot-v2-baseline-public-runtime-setup/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-v2-baseline-public-bigquery_regressions/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/sqlglot-v2-baseline-public-bigquery_regressions/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-v2-baseline-public-bigquery_regressions/stderr.log",
+      "sha256": "337423e68625f4edce6522e32b89c806a7d4be39486d55307eaf16c57e438789",
+      "member": "task-3/logs/sqlglot-v2-baseline-public-bigquery_regressions/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-v2-seed-hidden-runtime-setup/stdout.log",
+      "sha256": "ae6522ba2a9da33ea03442b6ea7e48f1b9e54234266e7b542bf70b6028b83981",
+      "member": "task-3/logs/sqlglot-v2-seed-hidden-runtime-setup/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-v2-seed-hidden-runtime-setup/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/sqlglot-v2-seed-hidden-runtime-setup/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-v2-seed-hidden-timestamp_bucket_acceptance/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/sqlglot-v2-seed-hidden-timestamp_bucket_acceptance/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-v2-seed-hidden-timestamp_bucket_acceptance/stderr.log",
+      "sha256": "23eb30c7312ed1ce7494f433857858511068c8183305abe72c1f014fcb0d72ce",
+      "member": "task-3/logs/sqlglot-v2-seed-hidden-timestamp_bucket_acceptance/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-v2-reference-public-runtime-setup/stdout.log",
+      "sha256": "ae6522ba2a9da33ea03442b6ea7e48f1b9e54234266e7b542bf70b6028b83981",
+      "member": "task-3/logs/sqlglot-v2-reference-public-runtime-setup/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-v2-reference-public-runtime-setup/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/sqlglot-v2-reference-public-runtime-setup/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-v2-reference-public-bigquery_regressions/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/sqlglot-v2-reference-public-bigquery_regressions/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-v2-reference-public-bigquery_regressions/stderr.log",
+      "sha256": "401978443843a0eddfac24b45cfc4a14f038ce55950f7f0b25ead9b4d2273bad",
+      "member": "task-3/logs/sqlglot-v2-reference-public-bigquery_regressions/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-v2-reference-hidden-runtime-setup/stdout.log",
+      "sha256": "ae6522ba2a9da33ea03442b6ea7e48f1b9e54234266e7b542bf70b6028b83981",
+      "member": "task-3/logs/sqlglot-v2-reference-hidden-runtime-setup/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-v2-reference-hidden-runtime-setup/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/sqlglot-v2-reference-hidden-runtime-setup/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-v2-reference-hidden-timestamp_bucket_acceptance/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/sqlglot-v2-reference-hidden-timestamp_bucket_acceptance/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-v2-reference-hidden-timestamp_bucket_acceptance/stderr.log",
+      "sha256": "3223ecee92bbaba438ca9f9d5c15900d316d40ed9320f19fda8162f0f565df7b",
+      "member": "task-3/logs/sqlglot-v2-reference-hidden-timestamp_bucket_acceptance/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-v3-seed-hidden-runtime-setup/stdout.log",
+      "sha256": "ae6522ba2a9da33ea03442b6ea7e48f1b9e54234266e7b542bf70b6028b83981",
+      "member": "task-3/logs/sqlglot-v3-seed-hidden-runtime-setup/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-v3-seed-hidden-runtime-setup/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/sqlglot-v3-seed-hidden-runtime-setup/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-v3-seed-hidden-timestamp_bucket_acceptance/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/sqlglot-v3-seed-hidden-timestamp_bucket_acceptance/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-v3-seed-hidden-timestamp_bucket_acceptance/stderr.log",
+      "sha256": "05996f5697c419d8afef6379cde79a9816cf33e9fe5f2876f28893df61e69898",
+      "member": "task-3/logs/sqlglot-v3-seed-hidden-timestamp_bucket_acceptance/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-v3-reference-hidden-runtime-setup/stdout.log",
+      "sha256": "ae6522ba2a9da33ea03442b6ea7e48f1b9e54234266e7b542bf70b6028b83981",
+      "member": "task-3/logs/sqlglot-v3-reference-hidden-runtime-setup/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-v3-reference-hidden-runtime-setup/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/sqlglot-v3-reference-hidden-runtime-setup/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-v3-reference-hidden-timestamp_bucket_acceptance/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/sqlglot-v3-reference-hidden-timestamp_bucket_acceptance/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/sqlglot-v3-reference-hidden-timestamp_bucket_acceptance/stderr.log",
+      "sha256": "b235f205046660a09bd3690d045a80192cfca8916cb856f3a059612dba67b094",
+      "member": "task-3/logs/sqlglot-v3-reference-hidden-timestamp_bucket_acceptance/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v2-baseline-public-runtime-setup/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/minijinja-v2-baseline-public-runtime-setup/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v2-baseline-public-runtime-setup/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/minijinja-v2-baseline-public-runtime-setup/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v2-baseline-public-minijinja_cli_regressions/stdout.log",
+      "sha256": "17a701957b3a7491422df665228b1e9dca7e8802cafc4f6141c3edfa2ec90f07",
+      "member": "task-3/logs/minijinja-v2-baseline-public-minijinja_cli_regressions/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v2-baseline-public-minijinja_cli_regressions/stderr.log",
+      "sha256": "c74f42432a8d9d6956193380fda1106de4d89e3bb8d1a76aada3d63c8e94fbf4",
+      "member": "task-3/logs/minijinja-v2-baseline-public-minijinja_cli_regressions/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v2-seed-hidden-runtime-setup/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/minijinja-v2-seed-hidden-runtime-setup/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v2-seed-hidden-runtime-setup/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/minijinja-v2-seed-hidden-runtime-setup/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v2-seed-hidden-autoescape_suffix_acceptance/stdout.log",
+      "sha256": "e0440f1ed0e973c10b998abeee78c7c0ed829ed91a4ded76986e3cecdb04c5e8",
+      "member": "task-3/logs/minijinja-v2-seed-hidden-autoescape_suffix_acceptance/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v2-seed-hidden-autoescape_suffix_acceptance/stderr.log",
+      "sha256": "20594c78a8c17e0a97bb26067b864f273349131b0e91a3bc36e08af3bd9333b2",
+      "member": "task-3/logs/minijinja-v2-seed-hidden-autoescape_suffix_acceptance/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v2-reference-public-runtime-setup/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/minijinja-v2-reference-public-runtime-setup/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v2-reference-public-runtime-setup/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/minijinja-v2-reference-public-runtime-setup/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v2-reference-public-minijinja_cli_regressions/stdout.log",
+      "sha256": "e745349f3bc4693937d8c7aae729e7938b5faec0fedf39fa2921420ee0900faf",
+      "member": "task-3/logs/minijinja-v2-reference-public-minijinja_cli_regressions/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v2-reference-public-minijinja_cli_regressions/stderr.log",
+      "sha256": "b0e19666f5506d247dce800d13f7cbbc621787bfc08e55807f32d357edbae05a",
+      "member": "task-3/logs/minijinja-v2-reference-public-minijinja_cli_regressions/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v2-reference-hidden-runtime-setup/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/minijinja-v2-reference-hidden-runtime-setup/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v2-reference-hidden-runtime-setup/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/minijinja-v2-reference-hidden-runtime-setup/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v2-reference-hidden-autoescape_suffix_acceptance/stdout.log",
+      "sha256": "6bc7bd8affcce480cfe1608a360a06209e9d186a865e04290684082364a687e6",
+      "member": "task-3/logs/minijinja-v2-reference-hidden-autoescape_suffix_acceptance/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v2-reference-hidden-autoescape_suffix_acceptance/stderr.log",
+      "sha256": "a5d10673c241f2d1a41866b365558d51bea14d51413023494332f7978e9240c3",
+      "member": "task-3/logs/minijinja-v2-reference-hidden-autoescape_suffix_acceptance/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v3-baseline-public-runtime-setup/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/minijinja-v3-baseline-public-runtime-setup/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v3-baseline-public-runtime-setup/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/minijinja-v3-baseline-public-runtime-setup/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v3-baseline-public-minijinja_cli_regressions/stdout.log",
+      "sha256": "574dbc86aace6f8eaf9a9a10205e8fddceedd14c1f4f04919058e42a6b1b5d5f",
+      "member": "task-3/logs/minijinja-v3-baseline-public-minijinja_cli_regressions/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v3-baseline-public-minijinja_cli_regressions/stderr.log",
+      "sha256": "381957885f412681d28b77b8d877da14d2bd66f8bf3e324eff2b18e083b53c18",
+      "member": "task-3/logs/minijinja-v3-baseline-public-minijinja_cli_regressions/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v3-seed-hidden-runtime-setup/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/minijinja-v3-seed-hidden-runtime-setup/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v3-seed-hidden-runtime-setup/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/minijinja-v3-seed-hidden-runtime-setup/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v3-seed-hidden-autoescape_suffix_acceptance/stdout.log",
+      "sha256": "9ecd13df2fc4e14600987deef68a5a9d1ff42954ec305cbb301f2c1ce9f48338",
+      "member": "task-3/logs/minijinja-v3-seed-hidden-autoescape_suffix_acceptance/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v3-seed-hidden-autoescape_suffix_acceptance/stderr.log",
+      "sha256": "244734d5a2eb39c5b6a238a940665c172a6b6dff1a5c5ece5ead1b51235579e2",
+      "member": "task-3/logs/minijinja-v3-seed-hidden-autoescape_suffix_acceptance/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v3-reference-public-runtime-setup/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/minijinja-v3-reference-public-runtime-setup/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v3-reference-public-runtime-setup/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/minijinja-v3-reference-public-runtime-setup/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v3-reference-public-minijinja_cli_regressions/stdout.log",
+      "sha256": "8afd6ff71e7ff4dd68e2e91f6fab8f842b3244241be0239ebf3c6a9c482b3364",
+      "member": "task-3/logs/minijinja-v3-reference-public-minijinja_cli_regressions/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v3-reference-public-minijinja_cli_regressions/stderr.log",
+      "sha256": "e7d4e86f924fad097855fbe8f42e0396992e42a9392e5108acfcb3810ce92071",
+      "member": "task-3/logs/minijinja-v3-reference-public-minijinja_cli_regressions/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v3-reference-hidden-runtime-setup/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/minijinja-v3-reference-hidden-runtime-setup/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v3-reference-hidden-runtime-setup/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/minijinja-v3-reference-hidden-runtime-setup/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v3-reference-hidden-autoescape_suffix_acceptance/stdout.log",
+      "sha256": "04d2b6cb76bb233dfcd6b277b1fb78a85c13530544bc00aa08e723e0fd718895",
+      "member": "task-3/logs/minijinja-v3-reference-hidden-autoescape_suffix_acceptance/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v3-reference-hidden-autoescape_suffix_acceptance/stderr.log",
+      "sha256": "7cf887e6643d552dccfcbe56c3498a24e992154499d2f2ccf578d8e73b093540",
+      "member": "task-3/logs/minijinja-v3-reference-hidden-autoescape_suffix_acceptance/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v4-baseline-public-runtime-setup/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/minijinja-v4-baseline-public-runtime-setup/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v4-baseline-public-runtime-setup/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/minijinja-v4-baseline-public-runtime-setup/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v4-baseline-public-minijinja_cli_regressions/stdout.log",
+      "sha256": "3a48af0e1e7365c4f59713d9f2caeae9b6d3d19cc7329ec5e243721229c2b969",
+      "member": "task-3/logs/minijinja-v4-baseline-public-minijinja_cli_regressions/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v4-baseline-public-minijinja_cli_regressions/stderr.log",
+      "sha256": "85f64be29bb85f82450693ca1be51dd855bce9162db772f173504e2b01971842",
+      "member": "task-3/logs/minijinja-v4-baseline-public-minijinja_cli_regressions/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v4-reference-public-runtime-setup/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/minijinja-v4-reference-public-runtime-setup/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v4-reference-public-runtime-setup/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/minijinja-v4-reference-public-runtime-setup/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v4-reference-public-minijinja_cli_regressions/stdout.log",
+      "sha256": "79f897095e098ef76b85716cba8386a9ea90df0ec7ab57de90bb6f85e2cdd71e",
+      "member": "task-3/logs/minijinja-v4-reference-public-minijinja_cli_regressions/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v4-reference-public-minijinja_cli_regressions/stderr.log",
+      "sha256": "5f0d806446d055480619aaaea9033834ad34ceda911a386ed87a8e53577ebf12",
+      "member": "task-3/logs/minijinja-v4-reference-public-minijinja_cli_regressions/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v5-reference-hidden-runtime-setup/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/minijinja-v5-reference-hidden-runtime-setup/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v5-reference-hidden-runtime-setup/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/logs/minijinja-v5-reference-hidden-runtime-setup/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v5-reference-hidden-autoescape_suffix_acceptance/stdout.log",
+      "sha256": "04d2b6cb76bb233dfcd6b277b1fb78a85c13530544bc00aa08e723e0fd718895",
+      "member": "task-3/logs/minijinja-v5-reference-hidden-autoescape_suffix_acceptance/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/logs/minijinja-v5-reference-hidden-autoescape_suffix_acceptance/stderr.log",
+      "sha256": "5caff28062f6992b98b8ec1c337858ba6511f575baab2c08d8cf7341201f4e43",
+      "member": "task-3/logs/minijinja-v5-reference-hidden-autoescape_suffix_acceptance/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-dependency-setup/stdout.log",
+      "sha256": "ed0d0b0b7d6511615ff147e54753869b2f2f89da87c47e8bb00edb7a5385ec00",
+      "member": "task-5/logs/commons-dependency-setup/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-dependency-setup/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-dependency-setup/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-dependency-setup-retry/stdout.log",
+      "sha256": "dd843f904b72cba680940e8224f028c4e7993758cebded57d86186397a406a8e",
+      "member": "task-5/logs/commons-dependency-setup-retry/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-dependency-setup-retry/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-dependency-setup-retry/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-dependency-setup-policy-contained/stdout.log",
+      "sha256": "a312f4907c8f08357407a26e5d8766ddcc2347008f24566c614af4a1784c14cc",
+      "member": "task-5/logs/commons-dependency-setup-policy-contained/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-dependency-setup-policy-contained/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-dependency-setup-policy-contained/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-dependency-setup-confirm/stdout.log",
+      "sha256": "9ba681290cd4fc29d673587dd8462cd1db472a353944cf590f235bc5c2e23bb7",
+      "member": "task-5/logs/commons-dependency-setup-confirm/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-dependency-setup-confirm/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-dependency-setup-confirm/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-dependency-setup/stdout.log",
+      "sha256": "cc9cccd0db45693a0296495afd5e30738f4b351bae3a3457c9b2254e004153ef",
+      "member": "task-5/logs/nodatime-dependency-setup/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-dependency-setup/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-dependency-setup/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-runtime-baseline-1/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-runtime-baseline-1/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-runtime-baseline-1/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-runtime-baseline-1/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-runtime-baseline-2/stdout.log",
+      "sha256": "8bb63e4dac8121f682bb70e64c852801a1d8b314918bda6fa21b60c0207955f0",
+      "member": "task-5/logs/nodatime-runtime-baseline-2/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-runtime-baseline-2/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-runtime-baseline-2/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-runtime-baseline-1/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-runtime-baseline-1/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-runtime-baseline-1/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-runtime-baseline-1/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-runtime-baseline-2/stdout.log",
+      "sha256": "42871b6d9129a8178f226e36e3d78a49f95a9022cd2b792dee0d267fba779208",
+      "member": "task-5/logs/commons-runtime-baseline-2/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-runtime-baseline-2/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-runtime-baseline-2/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-baseline-public-setup-1/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-baseline-public-setup-1/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-baseline-public-setup-1/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-baseline-public-setup-1/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-baseline-public-setup-2/stdout.log",
+      "sha256": "c2136873cff2362619cd61c178ddca507ffb149c99f50d886c7db7e1584d05cb",
+      "member": "task-5/logs/commons-baseline-public-setup-2/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-baseline-public-setup-2/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-baseline-public-setup-2/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-baseline-public-test/stdout.log",
+      "sha256": "c122ff38d10db0fab88ddf9827b4800bbb3f2a727e3682ac8584047b4b8f8e12",
+      "member": "task-5/logs/commons-baseline-public-test/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-baseline-public-test/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-baseline-public-test/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/java21-download/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/java21-download/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/java21-download/stderr.log",
+      "sha256": "610fdeed1238934e2c3b2327ea6fee4cbfe6d046e2fba21b79912dcc9bc398d5",
+      "member": "task-5/logs/java21-download/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/java21-sidecar/stdout.log",
+      "sha256": "ff8d72afba57ba25995d76f8edd7ac521604959143c129acf966e538be856a89",
+      "member": "task-5/logs/java21-sidecar/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/java21-sidecar/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/java21-sidecar/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/java21-download-direct/stdout.log",
+      "sha256": "f664d91dc55659cef2df9d31ab27fcbe0513d0171f3b8e714768df432eecd896",
+      "member": "task-5/logs/java21-download-direct/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/java21-download-direct/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/java21-download-direct/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-baseline-public-jdk21-setup-1/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-baseline-public-jdk21-setup-1/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-baseline-public-jdk21-setup-1/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-baseline-public-jdk21-setup-1/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-baseline-public-jdk21-setup-2/stdout.log",
+      "sha256": "6e90c1c29349ccc3531874539ef89e39a0a79555894ec8b9b883c00a37f25f73",
+      "member": "task-5/logs/commons-baseline-public-jdk21-setup-2/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-baseline-public-jdk21-setup-2/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-baseline-public-jdk21-setup-2/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-baseline-public-jdk21-test/stdout.log",
+      "sha256": "4a10b815fd1235284c463f8846d7c6adfc16c7255e1fba423cad6807efc281ec",
+      "member": "task-5/logs/commons-baseline-public-jdk21-test/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-baseline-public-jdk21-test/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-baseline-public-jdk21-test/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-provider-prep-copy/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-provider-prep-copy/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-provider-prep-copy/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-provider-prep-copy/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-provider-dependency-get/stdout.log",
+      "sha256": "e77394f851d3864b62b2308c4265c7083ebf31e1f7b00fff22a446a11d54948c",
+      "member": "task-5/logs/commons-provider-dependency-get/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-provider-dependency-get/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-provider-dependency-get/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-baseline-v2-setup-1/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-baseline-v2-setup-1/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-baseline-v2-setup-1/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-baseline-v2-setup-1/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-baseline-v2-setup-2/stdout.log",
+      "sha256": "b9776a4d0fe4d4e4e30d27fccb396ed93fe397d6c61bcbb2455b757eb5d29e7f",
+      "member": "task-5/logs/commons-baseline-v2-setup-2/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-baseline-v2-setup-2/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-baseline-v2-setup-2/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-baseline-v2-setup-3/stdout.log",
+      "sha256": "908a80f1b4bf295fd63f8089fb6deb23784141edc2ae6eb9177244d8e384f771",
+      "member": "task-5/logs/commons-baseline-v2-setup-3/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-baseline-v2-setup-3/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-baseline-v2-setup-3/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-baseline-v2-public-test/stdout.log",
+      "sha256": "aae29058180b43ce04d2473956b1d01a51f44992596fc421efb66c6a7bdd10cf",
+      "member": "task-5/logs/commons-baseline-v2-public-test/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-baseline-v2-public-test/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-baseline-v2-public-test/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-baseline-v2-setup-1/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-baseline-v2-setup-1/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-baseline-v2-setup-1/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-baseline-v2-setup-1/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-baseline-v2-setup-2/stdout.log",
+      "sha256": "bbef954cd554d2536b0e1b41d098d1bd0112e4dbacc7ca7ee00ec1fadbdd1ec6",
+      "member": "task-5/logs/nodatime-baseline-v2-setup-2/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-baseline-v2-setup-2/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-baseline-v2-setup-2/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-baseline-v2-public-test/stdout.log",
+      "sha256": "1bc840746348fac0920586ab7dde180bbf4d43dafb6fa752ea5c34aa5630560c",
+      "member": "task-5/logs/nodatime-baseline-v2-public-test/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-baseline-v2-public-test/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-baseline-v2-public-test/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-baseline-v3-setup-1/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-baseline-v3-setup-1/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-baseline-v3-setup-1/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-baseline-v3-setup-1/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-baseline-v3-setup-2/stdout.log",
+      "sha256": "327405c7ab99eefdf45a88e72632235eb161ba15869604f44b3f5e03c563d0a7",
+      "member": "task-5/logs/nodatime-baseline-v3-setup-2/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-baseline-v3-setup-2/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-baseline-v3-setup-2/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-baseline-v3-public-test/stdout.log",
+      "sha256": "599f9be18bd25669f4d7e1ac7484850b87dbb8b42a7dbd3967abbcb8bcd6a3ed",
+      "member": "task-5/logs/nodatime-baseline-v3-public-test/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-baseline-v3-public-test/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-baseline-v3-public-test/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-baseline-v4-setup-1/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-baseline-v4-setup-1/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-baseline-v4-setup-1/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-baseline-v4-setup-1/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-baseline-v4-setup-2/stdout.log",
+      "sha256": "a51faad25ef450cd26c45a1117394f8fd9fb3144fa13794fbcb1d765d504c151",
+      "member": "task-5/logs/nodatime-baseline-v4-setup-2/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-baseline-v4-setup-2/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-baseline-v4-setup-2/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-baseline-v4-public-test/stdout.log",
+      "sha256": "f8419fe616da4a931887707136028e2ec32958c0d8a2b47077a541bdd6c33228",
+      "member": "task-5/logs/nodatime-baseline-v4-public-test/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-baseline-v4-public-test/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-baseline-v4-public-test/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-baseline-v5-setup-1/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-baseline-v5-setup-1/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-baseline-v5-setup-1/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-baseline-v5-setup-1/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-baseline-v5-setup-2/stdout.log",
+      "sha256": "faf46a66e35a3c94cfb9a889455e718ff71c6102ba6cfb73466514d20f281d0b",
+      "member": "task-5/logs/nodatime-baseline-v5-setup-2/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-baseline-v5-setup-2/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-baseline-v5-setup-2/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-baseline-v5-public-test/stdout.log",
+      "sha256": "7b12d379848608547d154197286efb3e1a1d22e1fa443dc02c0b027464b3367e",
+      "member": "task-5/logs/nodatime-baseline-v5-public-test/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-baseline-v5-public-test/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-baseline-v5-public-test/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-seed-hidden-setup-1/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-seed-hidden-setup-1/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-seed-hidden-setup-1/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-seed-hidden-setup-1/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-seed-hidden-setup-2/stdout.log",
+      "sha256": "f43ee77d88d659c647b766caff327b89dbd8fc02c0fa1bdf8fff69257a69ed84",
+      "member": "task-5/logs/commons-seed-hidden-setup-2/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-seed-hidden-setup-2/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-seed-hidden-setup-2/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-seed-hidden-setup-3/stdout.log",
+      "sha256": "3ba9d2745b3126eec20673721b64a3b37feeaebe1ad59e44f6554e008e6ee135",
+      "member": "task-5/logs/commons-seed-hidden-setup-3/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-seed-hidden-setup-3/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-seed-hidden-setup-3/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-seed-hidden-test/stdout.log",
+      "sha256": "a58ad8ff0752689f8205ba3e6c046bf7f8eb9d078b40d9cec9e9c01b2bc775e1",
+      "member": "task-5/logs/commons-seed-hidden-test/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-seed-hidden-test/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-seed-hidden-test/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-seed-v2-setup-1/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-seed-v2-setup-1/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-seed-v2-setup-1/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-seed-v2-setup-1/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-seed-v2-setup-2/stdout.log",
+      "sha256": "6a91fb2b04b3f667966b2732ae431dbdd21e9f52b4e6ba90c0db6a719a9a37e6",
+      "member": "task-5/logs/commons-seed-v2-setup-2/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-seed-v2-setup-2/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-seed-v2-setup-2/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-seed-v2-setup-3/stdout.log",
+      "sha256": "3bb3090d7814ded0395252ab7efefd5fbbeb629d2b1dfa59ae29382793bef656",
+      "member": "task-5/logs/commons-seed-v2-setup-3/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-seed-v2-setup-3/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-seed-v2-setup-3/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-seed-v2-hidden-test/stdout.log",
+      "sha256": "375e58bd398942affaeb38474887f0c8f6c7c33083b7d11b49afa718a4e1d5bd",
+      "member": "task-5/logs/commons-seed-v2-hidden-test/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-seed-v2-hidden-test/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-seed-v2-hidden-test/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-reference-public-setup-1/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-reference-public-setup-1/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-reference-public-setup-1/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-reference-public-setup-1/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-reference-public-setup-2/stdout.log",
+      "sha256": "6605b8693c035e4e7195742cd7bd41843a43f32234bf529e957f5204b2d8a1bc",
+      "member": "task-5/logs/commons-reference-public-setup-2/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-reference-public-setup-2/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-reference-public-setup-2/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-reference-public-setup-3/stdout.log",
+      "sha256": "f96586e94bd0c650af62e694b3561e12b0a2b2acd62bc68db9e9b3573eccad20",
+      "member": "task-5/logs/commons-reference-public-setup-3/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-reference-public-setup-3/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-reference-public-setup-3/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-reference-public-test/stdout.log",
+      "sha256": "57d5fba02f4cf085ded58cf7b5703f2042ab9f3831341190ddf080c8aa36443a",
+      "member": "task-5/logs/commons-reference-public-test/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-reference-public-test/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-reference-public-test/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-reference-public-setup-1/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-reference-public-setup-1/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-reference-public-setup-1/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-reference-public-setup-1/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-reference-public-setup-2/stdout.log",
+      "sha256": "7b27ea1f4df394d5ed8327b23b7818dfe64afa3627ddaef493fe767e48512bf1",
+      "member": "task-5/logs/nodatime-reference-public-setup-2/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-reference-public-setup-2/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-reference-public-setup-2/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-reference-public-test/stdout.log",
+      "sha256": "6e1c98c51aaf57cf668f5b36e7ad11ef214149d5a73c0d801fca61d3f8da7e20",
+      "member": "task-5/logs/nodatime-reference-public-test/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-reference-public-test/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-reference-public-test/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-seed-hidden-setup-1/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-seed-hidden-setup-1/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-seed-hidden-setup-1/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-seed-hidden-setup-1/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-seed-hidden-setup-2/stdout.log",
+      "sha256": "92a6e195f1a25c581f9685d73698ed91e9026130c3b030ee7dff3d6a6fce26fb",
+      "member": "task-5/logs/nodatime-seed-hidden-setup-2/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-seed-hidden-setup-2/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-seed-hidden-setup-2/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-seed-hidden-test/stdout.log",
+      "sha256": "9f991e19840cd12b3f4206869cd5eae77675ffe86fff4f38871e6ecbc5197c05",
+      "member": "task-5/logs/nodatime-seed-hidden-test/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-seed-hidden-test/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-seed-hidden-test/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-reference-hidden-setup-1/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-reference-hidden-setup-1/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-reference-hidden-setup-1/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-reference-hidden-setup-1/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-reference-hidden-setup-2/stdout.log",
+      "sha256": "a348c75e6fcc42f96a4a0c10f3d622ef490c1e05819f4000f268ecd18e80f542",
+      "member": "task-5/logs/commons-reference-hidden-setup-2/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-reference-hidden-setup-2/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-reference-hidden-setup-2/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-reference-hidden-setup-3/stdout.log",
+      "sha256": "115414087947bb41cb43cf08f3f6c341d22b1ceda8a8d48d9dac68b272a01e81",
+      "member": "task-5/logs/commons-reference-hidden-setup-3/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-reference-hidden-setup-3/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-reference-hidden-setup-3/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-reference-hidden-test/stdout.log",
+      "sha256": "00f871e71caf4557f00cce8c7e37274b274acc57e045d61dc13178b68e2ba16c",
+      "member": "task-5/logs/commons-reference-hidden-test/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-reference-hidden-test/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-reference-hidden-test/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-seed-v3-setup-1/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-seed-v3-setup-1/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-seed-v3-setup-1/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-seed-v3-setup-1/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-seed-v3-setup-2/stdout.log",
+      "sha256": "2c101cd2a71eab579cfa023514134a36499e827e2b62ba3f3931996d0321d287",
+      "member": "task-5/logs/commons-seed-v3-setup-2/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-seed-v3-setup-2/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-seed-v3-setup-2/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-seed-v3-setup-3/stdout.log",
+      "sha256": "43e7f35d0feff79402daa9da2c8c7a50fe0a05cf9c6ab125a77f1c0a99074b96",
+      "member": "task-5/logs/commons-seed-v3-setup-3/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-seed-v3-setup-3/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-seed-v3-setup-3/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-seed-v3-hidden-test/stdout.log",
+      "sha256": "0f2a134dd665760e48456af2bcb5f6ef33d17eaa9907344353b54ffee4572db4",
+      "member": "task-5/logs/commons-seed-v3-hidden-test/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-seed-v3-hidden-test/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-seed-v3-hidden-test/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-reference-hidden-v2-setup-1/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-reference-hidden-v2-setup-1/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-reference-hidden-v2-setup-1/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-reference-hidden-v2-setup-1/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-reference-hidden-v2-setup-2/stdout.log",
+      "sha256": "58263457ae2d2a69ac18ae979293cebd7dafb2bf4e6ff9ee0d61c5d5ab0692b2",
+      "member": "task-5/logs/commons-reference-hidden-v2-setup-2/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-reference-hidden-v2-setup-2/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-reference-hidden-v2-setup-2/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-reference-hidden-v2-setup-3/stdout.log",
+      "sha256": "b77fc1ff348c7a05bb4c0b9aee39370d8ddbf51b55d9926f2dad38bd67c882e8",
+      "member": "task-5/logs/commons-reference-hidden-v2-setup-3/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-reference-hidden-v2-setup-3/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-reference-hidden-v2-setup-3/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-reference-hidden-v2-test/stdout.log",
+      "sha256": "2cb83b3c5f2d8eb1ac01c373249f6ee2ecd085d4cd668df152701afee218e1dc",
+      "member": "task-5/logs/commons-reference-hidden-v2-test/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-reference-hidden-v2-test/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-reference-hidden-v2-test/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-reference-hidden-setup-1/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-reference-hidden-setup-1/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-reference-hidden-setup-1/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-reference-hidden-setup-1/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-reference-hidden-setup-2/stdout.log",
+      "sha256": "92a6e195f1a25c581f9685d73698ed91e9026130c3b030ee7dff3d6a6fce26fb",
+      "member": "task-5/logs/nodatime-reference-hidden-setup-2/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-reference-hidden-setup-2/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-reference-hidden-setup-2/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-reference-hidden-test/stdout.log",
+      "sha256": "979c792cf56266bbd6ffe2e70212acaaf49b32c7d8a0ab3e93d8839dddfc1db3",
+      "member": "task-5/logs/nodatime-reference-hidden-test/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-reference-hidden-test/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-reference-hidden-test/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-final-preparation-1/stdout.log",
+      "sha256": "64efa9f7c02704efc692c4701bf7da1283d5debacd87008c390e43ad10644605",
+      "member": "task-5/logs/commons-final-preparation-1/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-final-preparation-1/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-final-preparation-1/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-final-preparation-2/stdout.log",
+      "sha256": "37726fd41f9314882e018010fbc516b54fc5d500a1259cb612cec1157330693f",
+      "member": "task-5/logs/commons-final-preparation-2/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/commons-final-preparation-2/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/commons-final-preparation-2/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-final-preparation/stdout.log",
+      "sha256": "6b18b2af06073a40a8379bf20a857455e709abe3ea9b57f4da2a4c6d9e190508",
+      "member": "task-5/logs/nodatime-final-preparation/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/nodatime-final-preparation/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/nodatime-final-preparation/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/tool-version-java/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/tool-version-java/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/tool-version-java/stderr.log",
+      "sha256": "477d64a6b08c9a9dd143deae108edf7929a93b40434d87285d41addc8fba509f",
+      "member": "task-5/logs/tool-version-java/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/tool-version-maven/stdout.log",
+      "sha256": "7cd2782474d437034a91d9b0e449316e8a40cc6d38c2a90bc43e6887e92261ed",
+      "member": "task-5/logs/tool-version-maven/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/tool-version-maven/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/tool-version-maven/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/tool-version-dotnet/stdout.log",
+      "sha256": "9b5c6a80e87963c2cf9794a708323372add8c2c163da6b275909e085bc79ce65",
+      "member": "task-5/logs/tool-version-dotnet/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.cache/code-kb-task5-20261027/logs/tool-version-dotnet/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-5/logs/tool-version-dotnet/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T142031Z/logs/hcl/prepare/go_modules/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T142031Z/logs/hcl/prepare/go_modules/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T142031Z/logs/hcl/prepare/go_modules/stderr.log",
+      "sha256": "b1042aa8b282321f5b05a032da0f207cd8ed52f004c6e08846b438abdc9e85e5",
+      "member": "task-4/task4-readiness-20261027T142031Z/logs/hcl/prepare/go_modules/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T142031Z/readiness-results.json",
+      "sha256": "cfe7afd168b5ecb57a836bbfcf76e111406163e5af4e304ee48b1e3f8d8c6ff6",
+      "member": "task-4/task4-readiness-20261027T142031Z/readiness-results.json"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T142111Z/logs/hcl/prepare/go_modules/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T142111Z/logs/hcl/prepare/go_modules/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T142111Z/logs/hcl/prepare/go_modules/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T142111Z/logs/hcl/prepare/go_modules/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T142111Z/readiness-results.json",
+      "sha256": "f4a8987640b899f340fa800fd595cb494d98bbeb227ea55df85dbf6a1d8093fe",
+      "member": "task-4/task4-readiness-20261027T142111Z/readiness-results.json"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T142308Z/logs/hcl/seed/expression_field_acceptance/stdout.log",
+      "sha256": "b92d219bfb98606625b099c151d09789c552e69229284302cd4e5f3153d7f2bf",
+      "member": "task-4/task4-readiness-20261027T142308Z/logs/hcl/seed/expression_field_acceptance/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T142308Z/logs/hcl/seed/expression_field_acceptance/stderr.log",
+      "sha256": "c1540ebcc2b9ca0da221c77b7ae9c581fa4d5e102f764ea7056f30599569c081",
+      "member": "task-4/task4-readiness-20261027T142308Z/logs/hcl/seed/expression_field_acceptance/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T142308Z/logs/hcl/baseline/gohcl_regressions/stdout.log",
+      "sha256": "64e27415b63314b4e225bce9ab6324564e64d2adce68df2205e085fb2df54cd3",
+      "member": "task-4/task4-readiness-20261027T142308Z/logs/hcl/baseline/gohcl_regressions/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T142308Z/logs/hcl/baseline/gohcl_regressions/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T142308Z/logs/hcl/baseline/gohcl_regressions/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T142308Z/logs/hcl/prepare/go_modules/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T142308Z/logs/hcl/prepare/go_modules/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T142308Z/logs/hcl/prepare/go_modules/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T142308Z/logs/hcl/prepare/go_modules/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T142308Z/readiness-results.json",
+      "sha256": "c2c409c7f70a8995c1017767f88d335a96dea618a6424a7c2da23db53e7d0213",
+      "member": "task-4/task4-readiness-20261027T142308Z/readiness-results.json"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T143138Z/logs/date-fns/baseline/materialize_pnpm_store/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T143138Z/logs/date-fns/baseline/materialize_pnpm_store/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T143138Z/logs/date-fns/baseline/materialize_pnpm_store/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T143138Z/logs/date-fns/baseline/materialize_pnpm_store/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T143138Z/logs/date-fns/baseline/materialize_workspace_dependencies/stdout.log",
+      "sha256": "fd4e3a7b4192a7b408190fb0bbd58733f6d95fe2ddcaa84cfdb74f57f0fdee30",
+      "member": "task-4/task4-readiness-20261027T143138Z/logs/date-fns/baseline/materialize_workspace_dependencies/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T143138Z/logs/date-fns/baseline/materialize_workspace_dependencies/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T143138Z/logs/date-fns/baseline/materialize_workspace_dependencies/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T143138Z/logs/date-fns/prepare/install_dependencies/stdout.log",
+      "sha256": "6d7947afe6961fcf0bf36cc3aef744a546fe77be4dda9f1d030458db02e9870d",
+      "member": "task-4/task4-readiness-20261027T143138Z/logs/date-fns/prepare/install_dependencies/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T143138Z/logs/date-fns/prepare/install_dependencies/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T143138Z/logs/date-fns/prepare/install_dependencies/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T143138Z/logs/hcl/reference/materialize_go_module_cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T143138Z/logs/hcl/reference/materialize_go_module_cache/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T143138Z/logs/hcl/reference/materialize_go_module_cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T143138Z/logs/hcl/reference/materialize_go_module_cache/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T143138Z/logs/hcl/reference/create_go_build_cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T143138Z/logs/hcl/reference/create_go_build_cache/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T143138Z/logs/hcl/reference/create_go_build_cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T143138Z/logs/hcl/reference/create_go_build_cache/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T143138Z/logs/hcl/reference/gohcl_regressions/stdout.log",
+      "sha256": "d082eef77ac36524c275b29f3fb138d288b61019df7ba9a868e91f309eb01db7",
+      "member": "task-4/task4-readiness-20261027T143138Z/logs/hcl/reference/gohcl_regressions/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T143138Z/logs/hcl/reference/gohcl_regressions/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T143138Z/logs/hcl/reference/gohcl_regressions/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T143138Z/logs/hcl/reference/expression_field_acceptance/stdout.log",
+      "sha256": "d506478cc7892c4deceea31a9f33da668a6d4eb9277788437bc0463bfdf212e1",
+      "member": "task-4/task4-readiness-20261027T143138Z/logs/hcl/reference/expression_field_acceptance/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T143138Z/logs/hcl/reference/expression_field_acceptance/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T143138Z/logs/hcl/reference/expression_field_acceptance/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T143138Z/logs/hcl/seed/materialize_go_module_cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T143138Z/logs/hcl/seed/materialize_go_module_cache/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T143138Z/logs/hcl/seed/materialize_go_module_cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T143138Z/logs/hcl/seed/materialize_go_module_cache/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T143138Z/logs/hcl/seed/create_go_build_cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T143138Z/logs/hcl/seed/create_go_build_cache/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T143138Z/logs/hcl/seed/create_go_build_cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T143138Z/logs/hcl/seed/create_go_build_cache/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T143138Z/logs/hcl/seed/expression_field_acceptance/stdout.log",
+      "sha256": "2ba15e119ffe694ff0dd08337606a25cfb152ffb15fdec0d26f76936eab3b85c",
+      "member": "task-4/task4-readiness-20261027T143138Z/logs/hcl/seed/expression_field_acceptance/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T143138Z/logs/hcl/seed/expression_field_acceptance/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T143138Z/logs/hcl/seed/expression_field_acceptance/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T143138Z/logs/hcl/baseline/materialize_go_module_cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T143138Z/logs/hcl/baseline/materialize_go_module_cache/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T143138Z/logs/hcl/baseline/materialize_go_module_cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T143138Z/logs/hcl/baseline/materialize_go_module_cache/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T143138Z/logs/hcl/baseline/create_go_build_cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T143138Z/logs/hcl/baseline/create_go_build_cache/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T143138Z/logs/hcl/baseline/create_go_build_cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T143138Z/logs/hcl/baseline/create_go_build_cache/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T143138Z/logs/hcl/baseline/gohcl_regressions/stdout.log",
+      "sha256": "12be93f2815c8ab1b0d83f1d36db26776da1e2dd7e22fac3042b79249ddbb9dc",
+      "member": "task-4/task4-readiness-20261027T143138Z/logs/hcl/baseline/gohcl_regressions/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T143138Z/logs/hcl/baseline/gohcl_regressions/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T143138Z/logs/hcl/baseline/gohcl_regressions/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T143138Z/readiness-results.json",
+      "sha256": "f5d81e9186627774946d07d8b136c6bf0b89b2919583654ec329ee2ecb64734c",
+      "member": "task-4/task4-readiness-20261027T143138Z/readiness-results.json"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144211Z/logs/date-fns/reference/materialize_pnpm_store/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T144211Z/logs/date-fns/reference/materialize_pnpm_store/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144211Z/logs/date-fns/reference/materialize_pnpm_store/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T144211Z/logs/date-fns/reference/materialize_pnpm_store/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144211Z/logs/date-fns/reference/materialize_workspace_dependencies/stdout.log",
+      "sha256": "c7001b8fac9a623e08f85b971b3d73dad80dfc461281dc0aa27e78f71c70a3c2",
+      "member": "task-4/task4-readiness-20261027T144211Z/logs/date-fns/reference/materialize_workspace_dependencies/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144211Z/logs/date-fns/reference/materialize_workspace_dependencies/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T144211Z/logs/date-fns/reference/materialize_workspace_dependencies/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144211Z/logs/date-fns/reference/business_day_regressions/stdout.log",
+      "sha256": "e54d9c8f9573a0a6e133aa1ea533ec3c1d60c0f11ae23810b98b622c7998ffdd",
+      "member": "task-4/task4-readiness-20261027T144211Z/logs/date-fns/reference/business_day_regressions/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144211Z/logs/date-fns/reference/business_day_regressions/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T144211Z/logs/date-fns/reference/business_day_regressions/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144211Z/logs/date-fns/reference/business_day_context_acceptance/stdout.log",
+      "sha256": "0c80792cd7c8bb8fb94da6098559a6e809c52d776866f748f7f2beb4a4e37fad",
+      "member": "task-4/task4-readiness-20261027T144211Z/logs/date-fns/reference/business_day_context_acceptance/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144211Z/logs/date-fns/reference/business_day_context_acceptance/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T144211Z/logs/date-fns/reference/business_day_context_acceptance/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144211Z/logs/date-fns/seed/materialize_pnpm_store/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T144211Z/logs/date-fns/seed/materialize_pnpm_store/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144211Z/logs/date-fns/seed/materialize_pnpm_store/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T144211Z/logs/date-fns/seed/materialize_pnpm_store/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144211Z/logs/date-fns/seed/materialize_workspace_dependencies/stdout.log",
+      "sha256": "63d11c2f19e821529988b5b20b1bf453eb3713fd5debe8a79bd5cdb0df20f258",
+      "member": "task-4/task4-readiness-20261027T144211Z/logs/date-fns/seed/materialize_workspace_dependencies/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144211Z/logs/date-fns/seed/materialize_workspace_dependencies/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T144211Z/logs/date-fns/seed/materialize_workspace_dependencies/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144211Z/logs/date-fns/seed/business_day_context_acceptance/stdout.log",
+      "sha256": "9c9bc17d1a0b2c6f92e62fc65e4b395cf08fe1e1f5499c34acf804dfa6f1130b",
+      "member": "task-4/task4-readiness-20261027T144211Z/logs/date-fns/seed/business_day_context_acceptance/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144211Z/logs/date-fns/seed/business_day_context_acceptance/stderr.log",
+      "sha256": "4b2006089136ae375a736e89aa058cf0907180a9b1b47bda389db131f9426914",
+      "member": "task-4/task4-readiness-20261027T144211Z/logs/date-fns/seed/business_day_context_acceptance/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144211Z/logs/date-fns/baseline/materialize_pnpm_store/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T144211Z/logs/date-fns/baseline/materialize_pnpm_store/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144211Z/logs/date-fns/baseline/materialize_pnpm_store/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T144211Z/logs/date-fns/baseline/materialize_pnpm_store/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144211Z/logs/date-fns/baseline/materialize_workspace_dependencies/stdout.log",
+      "sha256": "63d11c2f19e821529988b5b20b1bf453eb3713fd5debe8a79bd5cdb0df20f258",
+      "member": "task-4/task4-readiness-20261027T144211Z/logs/date-fns/baseline/materialize_workspace_dependencies/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144211Z/logs/date-fns/baseline/materialize_workspace_dependencies/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T144211Z/logs/date-fns/baseline/materialize_workspace_dependencies/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144211Z/logs/date-fns/baseline/business_day_regressions/stdout.log",
+      "sha256": "0a49d0712a780c9bde03e9c41759f1b33d5ceeac2ecbf07497c3260bda22330f",
+      "member": "task-4/task4-readiness-20261027T144211Z/logs/date-fns/baseline/business_day_regressions/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144211Z/logs/date-fns/baseline/business_day_regressions/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T144211Z/logs/date-fns/baseline/business_day_regressions/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144211Z/readiness-results.json",
+      "sha256": "53bf2c80333246a7fe07439dbd6a3a1b29807230c3b9986d79c5825553182dd4",
+      "member": "task-4/task4-readiness-20261027T144211Z/readiness-results.json"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144211Z/readiness-summary.json",
+      "sha256": "ac0b6be7aa2ffcdaccb2717a4973748d0e22208cd64c6d5185cfb5c1e9687b93",
+      "member": "task-4/task4-readiness-20261027T144211Z/readiness-summary.json"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144704Z/logs/date-fns/reference/materialize_pnpm_store/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T144704Z/logs/date-fns/reference/materialize_pnpm_store/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144704Z/logs/date-fns/reference/materialize_pnpm_store/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T144704Z/logs/date-fns/reference/materialize_pnpm_store/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144704Z/logs/date-fns/reference/materialize_workspace_dependencies/stdout.log",
+      "sha256": "63d11c2f19e821529988b5b20b1bf453eb3713fd5debe8a79bd5cdb0df20f258",
+      "member": "task-4/task4-readiness-20261027T144704Z/logs/date-fns/reference/materialize_workspace_dependencies/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144704Z/logs/date-fns/reference/materialize_workspace_dependencies/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T144704Z/logs/date-fns/reference/materialize_workspace_dependencies/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144704Z/logs/date-fns/reference/business_day_regressions/stdout.log",
+      "sha256": "2c9f1b3bad8c773b97ee9ea2ee6b57897ef2ebdab9a3c34c0020bafb7ebe78ac",
+      "member": "task-4/task4-readiness-20261027T144704Z/logs/date-fns/reference/business_day_regressions/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144704Z/logs/date-fns/reference/business_day_regressions/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T144704Z/logs/date-fns/reference/business_day_regressions/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144704Z/logs/date-fns/reference/business_day_context_acceptance/stdout.log",
+      "sha256": "19c61849a80c58a475aef7d036e792c10fd9e571202453e2f477f1ad65c6aee1",
+      "member": "task-4/task4-readiness-20261027T144704Z/logs/date-fns/reference/business_day_context_acceptance/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144704Z/logs/date-fns/reference/business_day_context_acceptance/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T144704Z/logs/date-fns/reference/business_day_context_acceptance/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144704Z/logs/date-fns/seed/materialize_pnpm_store/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T144704Z/logs/date-fns/seed/materialize_pnpm_store/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144704Z/logs/date-fns/seed/materialize_pnpm_store/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T144704Z/logs/date-fns/seed/materialize_pnpm_store/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144704Z/logs/date-fns/seed/materialize_workspace_dependencies/stdout.log",
+      "sha256": "63d11c2f19e821529988b5b20b1bf453eb3713fd5debe8a79bd5cdb0df20f258",
+      "member": "task-4/task4-readiness-20261027T144704Z/logs/date-fns/seed/materialize_workspace_dependencies/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144704Z/logs/date-fns/seed/materialize_workspace_dependencies/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-4/task4-readiness-20261027T144704Z/logs/date-fns/seed/materialize_workspace_dependencies/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144704Z/logs/date-fns/seed/business_day_context_acceptance/stdout.log",
+      "sha256": "b5e4c880ec813e06b24d319d0d5a6c229f84cc19fd51dc355fcb463670234254",
+      "member": "task-4/task4-readiness-20261027T144704Z/logs/date-fns/seed/business_day_context_acceptance/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144704Z/logs/date-fns/seed/business_day_context_acceptance/stderr.log",
+      "sha256": "afa3ceed491458aa57dc44446e6ffe8809094f9b999d0a42aa3ed73ea14977cc",
+      "member": "task-4/task4-readiness-20261027T144704Z/logs/date-fns/seed/business_day_context_acceptance/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144704Z/readiness-results.json",
+      "sha256": "7414288c4909283346355bcba1379461e8009e3e33ffbf86c9e99fc73f30c643",
+      "member": "task-4/task4-readiness-20261027T144704Z/readiness-results.json"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/readiness/task4-readiness-20261027T144704Z/readiness-summary.json",
+      "sha256": "8c611e5d47f5cc832a8d9fb81053cdea6739b832a5d572225ee8c6ad406285ec",
+      "member": "task-4/task4-readiness-20261027T144704Z/readiness-summary.json"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/official-readiness/sqlglot/readiness.json",
+      "sha256": "ab06dd4ce6ed46b6f3912368dca3ee38b2455f100efe485604a961f2a83ecb06",
+      "member": "task-3/earlier-integrated/sqlglot/readiness.json"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/official-readiness/sqlglot/evidence/prepare-00-download_pytz/stdout.log",
+      "sha256": "8a2a7c1401518012f41fa25e591aa8d9dc66971f44418daf398887d77507a1a3",
+      "member": "task-3/earlier-integrated/sqlglot/evidence/prepare-00-download_pytz/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/official-readiness/sqlglot/evidence/prepare-00-download_pytz/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/earlier-integrated/sqlglot/evidence/prepare-00-download_pytz/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/official-readiness/sqlglot/evidence/runtime-baseline-00-install_pytz_offline/stdout.log",
+      "sha256": "ae6522ba2a9da33ea03442b6ea7e48f1b9e54234266e7b542bf70b6028b83981",
+      "member": "task-3/earlier-integrated/sqlglot/evidence/runtime-baseline-00-install_pytz_offline/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/official-readiness/sqlglot/evidence/runtime-baseline-00-install_pytz_offline/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/earlier-integrated/sqlglot/evidence/runtime-baseline-00-install_pytz_offline/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/official-readiness/sqlglot/evidence/baseline-public-00-bigquery_regressions/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/earlier-integrated/sqlglot/evidence/baseline-public-00-bigquery_regressions/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/official-readiness/sqlglot/evidence/baseline-public-00-bigquery_regressions/stderr.log",
+      "sha256": "1da1953927ef72b1c0b0ac6584c0458f887f5c244138dc07c16249cba2e8fa2d",
+      "member": "task-3/earlier-integrated/sqlglot/evidence/baseline-public-00-bigquery_regressions/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/official-readiness/sqlglot/evidence/runtime-seed-00-install_pytz_offline/stdout.log",
+      "sha256": "ae6522ba2a9da33ea03442b6ea7e48f1b9e54234266e7b542bf70b6028b83981",
+      "member": "task-3/earlier-integrated/sqlglot/evidence/runtime-seed-00-install_pytz_offline/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/official-readiness/sqlglot/evidence/runtime-seed-00-install_pytz_offline/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/earlier-integrated/sqlglot/evidence/runtime-seed-00-install_pytz_offline/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/official-readiness/sqlglot/evidence/seed-public-00-bigquery_regressions/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/earlier-integrated/sqlglot/evidence/seed-public-00-bigquery_regressions/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/official-readiness/sqlglot/evidence/seed-public-00-bigquery_regressions/stderr.log",
+      "sha256": "e0d9fd99e52f7ae679957aa66ab170f04f50047d27c9dd7f8973ed3cbfdc5675",
+      "member": "task-3/earlier-integrated/sqlglot/evidence/seed-public-00-bigquery_regressions/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/official-readiness/sqlglot/evidence/seed-hidden-00-timestamp_bucket_acceptance/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/earlier-integrated/sqlglot/evidence/seed-hidden-00-timestamp_bucket_acceptance/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/official-readiness/sqlglot/evidence/seed-hidden-00-timestamp_bucket_acceptance/stderr.log",
+      "sha256": "3fbe6eb8246d5af74a43a4caf7949dadf0559db752c8444c6e53ba9965845bb4",
+      "member": "task-3/earlier-integrated/sqlglot/evidence/seed-hidden-00-timestamp_bucket_acceptance/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/official-readiness/sqlglot/evidence/runtime-reference-00-install_pytz_offline/stdout.log",
+      "sha256": "ae6522ba2a9da33ea03442b6ea7e48f1b9e54234266e7b542bf70b6028b83981",
+      "member": "task-3/earlier-integrated/sqlglot/evidence/runtime-reference-00-install_pytz_offline/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/official-readiness/sqlglot/evidence/runtime-reference-00-install_pytz_offline/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/earlier-integrated/sqlglot/evidence/runtime-reference-00-install_pytz_offline/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/official-readiness/sqlglot/evidence/reference-public-00-bigquery_regressions/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/earlier-integrated/sqlglot/evidence/reference-public-00-bigquery_regressions/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/official-readiness/sqlglot/evidence/reference-public-00-bigquery_regressions/stderr.log",
+      "sha256": "716349b2203b1a9dfb71f86aee274dd1a8b4eb58ea40e514d074bc09163070c8",
+      "member": "task-3/earlier-integrated/sqlglot/evidence/reference-public-00-bigquery_regressions/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/official-readiness/sqlglot/evidence/reference-hidden-00-timestamp_bucket_acceptance/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/earlier-integrated/sqlglot/evidence/reference-hidden-00-timestamp_bucket_acceptance/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/official-readiness/sqlglot/evidence/reference-hidden-00-timestamp_bucket_acceptance/stderr.log",
+      "sha256": "b235f205046660a09bd3690d045a80192cfca8916cb856f3a059612dba67b094",
+      "member": "task-3/earlier-integrated/sqlglot/evidence/reference-hidden-00-timestamp_bucket_acceptance/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/official-readiness/minijinja/readiness.json",
+      "sha256": "dc3639520f8318338be518a34c32f1616b7b528bcc276fc5e4fda56f833cad3d",
+      "member": "task-3/earlier-integrated/minijinja/readiness.json"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/official-readiness/minijinja/evidence/prepare-00-fetch_locked_cargo_dependencies/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/earlier-integrated/minijinja/evidence/prepare-00-fetch_locked_cargo_dependencies/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/official-readiness/minijinja/evidence/prepare-00-fetch_locked_cargo_dependencies/stderr.log",
+      "sha256": "fb17783d2d499129a8dcd43f628ca752858082af67b5982475195b7861cb4836",
+      "member": "task-3/earlier-integrated/minijinja/evidence/prepare-00-fetch_locked_cargo_dependencies/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/official-readiness/minijinja/evidence/runtime-baseline-00-restore_cargo_cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/earlier-integrated/minijinja/evidence/runtime-baseline-00-restore_cargo_cache/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/official-readiness/minijinja/evidence/runtime-baseline-00-restore_cargo_cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/earlier-integrated/minijinja/evidence/runtime-baseline-00-restore_cargo_cache/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/official-readiness/minijinja/evidence/baseline-public-00-minijinja_cli_regressions/stdout.log",
+      "sha256": "1c359510be4ce55a88d8ada02d3e7d6dc534cd1d27062fec3eaf55b11fd4cf0e",
+      "member": "task-3/earlier-integrated/minijinja/evidence/baseline-public-00-minijinja_cli_regressions/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/official-readiness/minijinja/evidence/baseline-public-00-minijinja_cli_regressions/stderr.log",
+      "sha256": "9ec489ca2709075aacb4d98f64b2f88e4826261cc9644d9850a9677784b62cc9",
+      "member": "task-3/earlier-integrated/minijinja/evidence/baseline-public-00-minijinja_cli_regressions/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/official-readiness/minijinja/evidence/runtime-seed-00-restore_cargo_cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/earlier-integrated/minijinja/evidence/runtime-seed-00-restore_cargo_cache/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/official-readiness/minijinja/evidence/runtime-seed-00-restore_cargo_cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "member": "task-3/earlier-integrated/minijinja/evidence/runtime-seed-00-restore_cargo_cache/stderr.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/official-readiness/minijinja/evidence/seed-public-00-minijinja_cli_regressions/stdout.log",
+      "sha256": "165be0df2b4b40fc39ca8f571a5a09fb85071f471e568d5556d898c75000ab7a",
+      "member": "task-3/earlier-integrated/minijinja/evidence/seed-public-00-minijinja_cli_regressions/stdout.log"
+    },
+    {
+      "source": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/task3_python_rust/official-readiness/minijinja/evidence/seed-public-00-minijinja_cli_regressions/stderr.log",
+      "sha256": "9f64f9830271f53e3b05ebc17f5f2c06adf421237759d5af6f6eafdd61693f0c",
+      "member": "task-3/earlier-integrated/minijinja/evidence/seed-public-00-minijinja_cli_regressions/stderr.log"
+    }
+  ]
+}

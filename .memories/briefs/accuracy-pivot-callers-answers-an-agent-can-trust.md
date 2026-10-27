@@ -3,7 +3,7 @@ id: accuracy-pivot-callers-answers-an-agent-can-trust
 title: "Accuracy pivot: callers answers an agent can trust"
 status: active
 created: 2026-10-17T17:10:13.294Z
-updated: 2026-10-27T14:02:50.605Z
+updated: 2026-10-27T15:14:08.063Z
 tags:
   - project-direction
   - accuracy
@@ -13,22 +13,20 @@ tags:
 
 # Direction
 
-Preserve source-backed navigation and edit evidence across all 42 pinned Julie language IDs. AGENTS.md and CLAUDE.md stay identical; keep seven MCP tools, explicit project_root, indexed SQLite, bounded memory, and Windows support.
+Make code-kb reliable and useful for completed edits across all 42 pinned Julie language IDs. Keep seven MCP tools, explicit project_root, indexed SQLite, bounded memory, Windows support and identical AGENTS.md/CLAUDE.md.
 
-# Completed foundation
+# Preserved foundation
 
-Cross-language consumer repairs are locally committed through edd897d. Linux runtime 5f998c4 passed 1,889 Rust tests and Windows NTFS f355247 passed 1,865, with all 42 languages, Clippy/fmt/release, Python 218 and plugin checks. Guest is off. Original 72-run navigation pilot and raw manifest 8e73c99ed06bf6e2efeacb322e452dabad7d83cd3638da274afb608802d22a8d remain unchanged. Current routing stays unchanged. Context costs and extractor gaps remain explicit in the October26 review.
+Cross-language repairs through edd897d passed Linux1889/Windows1865 Rust tests, all42 languages, Clippy/fmt/release and Python/plugin checks. Original72-run pilot and raw manifest8e73c99ed06bf6e2efeacb322e452dabad7d83cd3638da274afb608802d22a8d unchanged. No routing change or new provider calls.
 
-# Active owner-directed phase
+# Active work
 
-The owner said 'ok keep working it, no need to wait on me' after the completed-edit milestone recommendation. Continue local implementation/preparation in /home/murphy/.codex/worktrees/1e6f/code-kb on fix/cross-language-review, starting edd897d. Plan docs/plans/2026-10-27-completed-edit-evaluation.md; spec evals/edit-2026-10-27/protocol.md. Local commits are approved. No push/release/global configuration changes. No new provider call before manifest-bound explicit budget and verified controls; local readiness needs no model calls.
+Task worktree /home/murphy/.codex/worktrees/1e6f/code-kb, fix/cross-language-review. Snapshot2080528, sandbox50a1bcd, platform guard7d7073a committed. Six larger unused source pins/cases are curated: SQLGlot, MiniJinja, HCL, date-fns, Commons Lang, NodaTime. Allsix pass fresh local readiness and reference patch replay, with public/hidden trees and state separated. Task6 runner has15 passing tests after real Vitest ANSI output exposed a parser false negative. No model performance result follows from readiness. Curation failures/raw evidence retained; fixture help changes, Java21, offline pnpm, hidden-only RAT skip and PublicSign settings are explicit.
 
-# Current work
+# New product defect
 
-Pinned SQLGlot, MiniJinja, HCL, date-fns, Commons Lang and Noda Time have no recorded prior corpus exposure and all meet 50 production files/10k lines. Inventory excludes prior retrieval/reach/replay/release-scan repositories. Workers own snapshot capture/replay, allowlisted execution sandbox, and three pairs of cases. StageA source/check preparation is parallel; upstream commands wait for reviewed sandbox handoff. Lead owns orchestration, review, shared schemas, freeze/readiness/report and commits.
+Edit preparation reproduced watch-limit exhaustion. start_watcher registers the root recursively, filtering ignored events only afterward; target/dependency trees still allocate watches. Existing .gitignore changes can leave stale symbols indexed. Plan docs/plans/2026-10-27-filtered-watcher-registration.md; fresh Luna filtered_watcher owns watcher.rs/owned tests, with selective read-only Astra plan advice. Nonrecursive allowed-directory registration, bounded owner queue, immediate subtree and ignore reconciliation. No kernel settings or unrelated processes changed; completed sessions switched their own MCP root to tiny diagnostic projects. Root uses CLI navigation while MCP session remains tiny to avoid raw-watch pressure.
 
-Read-only Astra requires three environments, protected inputs, filesystem-based patch evidence, fresh grader reconstruction, and retained partial/failure outcomes. Sandbox local probe confirmed :workspace alone permits private-profile reads; require a named explicit deny rule plus no-network command policy. Graders never mount auth. Dependency templates contain no project outputs/hidden answers; fresh writable state is disposable.
+# Next and limits
 
-# Next
-
-Finish snapshot/sandbox workers, review safe preparation CLI, hand it to corpus workers, complete six baseline/task-red/reference-green cases, and integrate a no-model end-to-end rehearsal. Proposed future study is six tasks × two arms × two repeats (24 scored, at most28 total with controls/retries); freeze final controls and funding record before any paid dispatch. The preparation phase does not inherit an unlimited replay budget.
+Commit reviewed six cases/curation and watcher plan; finish/review watcher repair, full Rust Linux/Windows gates, live watches/RSS before-after, final Python/plugin gate, frozen inputs/controls/24-run schedule and docs/brief. Keep all case readiness evidence; only failed date-fns was rerun after ANSI normalization, five other logs contain no ANSI and retain their successful executions. Source review remains separate from behavioral_pass. Future paid study proposed24 scored/28 total requires manifest-bound explicit budget receipt before dispatch. Local commits approved; no push/release/global config changes.

@@ -1,0 +1,27 @@
+diff --git a/sqlglot/parsers/bigquery.py b/sqlglot/parsers/bigquery.py
+--- a/sqlglot/parsers/bigquery.py
++++ b/sqlglot/parsers/bigquery.py
+@@ -303,8 +303,8 @@
+         "TIMESTAMP_ADD": build_date_delta_with_interval(exp.TimestampAdd),
+         "TIMESTAMP_SUB": build_date_delta_with_interval(exp.TimestampSub),
+         "TIMESTAMP_BUCKET": lambda args: exp.DateBin(
+-            this=seq_get(args, 0),
+-            expression=seq_get(args, 1),
++            this=seq_get(args, 1),
++            expression=seq_get(args, 0),
+             origin=seq_get(args, 2),
+         ),
+         "TIMESTAMP_MICROS": lambda args: exp.UnixToTime(
+diff --git a/sqlglot/generators/bigquery.py b/sqlglot/generators/bigquery.py
+--- a/sqlglot/generators/bigquery.py
++++ b/sqlglot/generators/bigquery.py
+@@ -515,6 +515,9 @@
+         exp.TimestampFromParts: rename_func("DATETIME"),
+         exp.TimeSub: date_add_interval_sql("TIME", "SUB"),
+         exp.TimestampAdd: date_add_interval_sql("TIMESTAMP", "ADD"),
++        exp.DateBin: lambda self, e: self.func(
++            "TIMESTAMP_BUCKET", e.expression, e.this, e.args.get("origin")
++        ),
+         exp.TimestampDiff: rename_func("TIMESTAMP_DIFF"),
+         exp.TimestampSub: date_add_interval_sql("TIMESTAMP", "SUB"),
+         exp.TimeStrToTime: timestrtotime_sql,

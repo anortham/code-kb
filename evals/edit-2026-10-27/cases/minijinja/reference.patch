@@ -1,0 +1,48 @@
+diff --git a/minijinja-cli/src/config.rs b/minijinja-cli/src/config.rs
+--- a/minijinja-cli/src/config.rs
++++ b/minijinja-cli/src/config.rs
+@@ -240,11 +240,27 @@
+             "none" => AutoEscape::None,
+             "html" => AutoEscape::Html,
+             "json" => AutoEscape::Json,
+-            "auto" => match name.rsplit('.').next() {
+-                Some("htm" | "html" | "xml" | "xhtml") => AutoEscape::Html,
+-                Some("json" | "json5" | "yml" | "yaml") => AutoEscape::Json,
+-                _ => AutoEscape::None,
+-            },
++            "auto" => {
++                let name = name
++                    .rsplit_once('.')
++                    .and_then(|(stem, suffix)| {
++                        ["j2", "jinja", "jinja2"]
++                            .iter()
++                            .any(|candidate| suffix.eq_ignore_ascii_case(candidate))
++                            .then_some(stem)
++                    })
++                    .unwrap_or(name);
++                let extension = name
++                    .rsplit('.')
++                    .next()
++                    .unwrap_or(name)
++                    .to_ascii_lowercase();
++                match extension.as_str() {
++                    "htm" | "html" | "xml" | "xhtml" => AutoEscape::Html,
++                    "json" | "json5" | "yml" | "yaml" => AutoEscape::Json,
++                    _ => AutoEscape::None,
++                }
++            }
+             _ => unreachable!(),
+         });
+         env.set_undefined_behavior(if self.strict {
+diff --git a/minijinja-cli/src/command.rs b/minijinja-cli/src/command.rs
+--- a/minijinja-cli/src/command.rs
++++ b/minijinja-cli/src/command.rs
+@@ -243,7 +243,7 @@
+             .help("Reconfigures autoescape behavior")
+             .long_help("\
+                 Reconfigures autoescape behavior.  The default is 'auto' which means that \
+-                the file extension sets the auto escaping mode.\n\n\
++                the filename extension before one of the .j2, .jinja, or .jinja2 template suffixes sets the mode, ignoring case.\n\n\
+                 \
+                 html means that variables are escaped to HTML5 and XML rules.  json means \
+                 that output is safe for both JSON and YAML rules (eg: strings are formatted \
