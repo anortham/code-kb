@@ -1,0 +1,73 @@
+.sss..F.FFFF.FF
+======================================================================
+FAIL: test_grade_drops_host_environment_and_network_access (scripts.test_edit_sandbox.EditSandboxTest.test_grade_drops_host_environment_and_network_access)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/murphy/.codex/worktrees/1e6f/code-kb/scripts/test_edit_sandbox.py", line 227, in test_grade_drops_host_environment_and_network_access
+    self.assertEqual(result.returncode, 0, result.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 2 != 0 : {"error": "bubblewrap (bwrap) is required"}
+
+
+======================================================================
+FAIL: test_preparation_network_is_available_only_when_explicit (scripts.test_edit_sandbox.EditSandboxTest.test_preparation_network_is_available_only_when_explicit)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/murphy/.codex/worktrees/1e6f/code-kb/scripts/test_edit_sandbox.py", line 263, in test_preparation_network_is_available_only_when_explicit
+    self.assertEqual(result.returncode, 0, result.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 2 != 0 : {"error": "bubblewrap (bwrap) is required"}
+
+
+======================================================================
+FAIL: test_project_and_state_are_allowed_inside_codex_worktrees (scripts.test_edit_sandbox.EditSandboxTest.test_project_and_state_are_allowed_inside_codex_worktrees)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/murphy/.codex/worktrees/1e6f/code-kb/scripts/test_edit_sandbox.py", line 471, in test_project_and_state_are_allowed_inside_codex_worktrees
+    self.assertEqual(result.returncode, 0, result.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 2 != 0 : {"error": "bubblewrap (bwrap) is required"}
+
+
+======================================================================
+FAIL: test_protected_paths_host_files_and_logs_are_outside_child_mounts (scripts.test_edit_sandbox.EditSandboxTest.test_protected_paths_host_files_and_logs_are_outside_child_mounts)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/murphy/.codex/worktrees/1e6f/code-kb/scripts/test_edit_sandbox.py", line 179, in test_protected_paths_host_files_and_logs_are_outside_child_mounts
+    self.assertEqual(result.returncode, 0, result.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 2 != 0 : {"error": "bubblewrap (bwrap) is required"}
+
+
+======================================================================
+FAIL: test_run_cli_edits_project_and_reads_read_only_dependency (scripts.test_edit_sandbox.EditSandboxTest.test_run_cli_edits_project_and_reads_read_only_dependency)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/murphy/.codex/worktrees/1e6f/code-kb/scripts/test_edit_sandbox.py", line 113, in test_run_cli_edits_project_and_reads_read_only_dependency
+    self.assertEqual(result.returncode, 0, result.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 2 != 0 : {"error": "bubblewrap (bwrap) is required"}
+
+
+======================================================================
+FAIL: test_timeout_kills_descendants_and_keeps_partial_project_edits (scripts.test_edit_sandbox.EditSandboxTest.test_timeout_kills_descendants_and_keeps_partial_project_edits)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/murphy/.codex/worktrees/1e6f/code-kb/scripts/test_edit_sandbox.py", line 292, in test_timeout_kills_descendants_and_keeps_partial_project_edits
+    self.assertEqual(result.returncode, 124)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 2 != 124
+
+======================================================================
+FAIL: test_timeout_kills_descendants_that_ignore_termination (scripts.test_edit_sandbox.EditSandboxTest.test_timeout_kills_descendants_that_ignore_termination)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/murphy/.codex/worktrees/1e6f/code-kb/scripts/test_edit_sandbox.py", line 323, in test_timeout_kills_descendants_that_ignore_termination
+    self.assertEqual(result.returncode, 124)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 2 != 124
+
+----------------------------------------------------------------------
+Ran 15 tests in 0.616s
+
+FAILED (failures=7, skipped=3)

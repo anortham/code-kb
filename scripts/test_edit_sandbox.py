@@ -17,6 +17,7 @@ CODEX_SHIM = Path(shutil.which("codex") or "/nonexistent").resolve()
 CODEX_NATIVE = CODEX_SHIM.parent.parent / "node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex"
 
 
+@unittest.skipUnless(sys.platform.startswith("linux") and shutil.which("bwrap"), "Linux with bubblewrap is required")
 class EditSandboxTest(unittest.TestCase):
     def invoke(self, project, state, output, mode, argv, *, options=(), timeout="10", env=None):
         command = [

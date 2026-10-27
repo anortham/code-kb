@@ -1,0 +1,8 @@
+{
+  "base_commit": "50a1bcdafc199c7d7f3c42c21e4d94a681ad902a",
+  "normal_linux_tests_passed": 15,
+  "provider_calls": 0,
+  "schema": 1,
+  "test_sha256": "97bbdde143be8e72542ead0b40549e609699d2353a80411032ac768e1a515c91",
+  "without_bwrap_tests_skipped": 15
+}
