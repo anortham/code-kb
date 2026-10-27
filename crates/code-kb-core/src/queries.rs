@@ -9335,7 +9335,7 @@ mod tests {
     fn callee_page_query_uses_source_indexes_before_offset() {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(
-            "CREATE TABLE symbols (symbol_id TEXT, name TEXT, kind TEXT, parent_symbol_id TEXT);
+            "CREATE TABLE symbols (symbol_id TEXT, name TEXT, kind TEXT, parent_symbol_id TEXT, language TEXT);
              CREATE INDEX idx_symbols_name_kind ON symbols(name, kind);
              CREATE INDEX idx_symbols_id ON symbols(symbol_id);
              CREATE TABLE relationships (from_symbol_id TEXT, to_symbol_id TEXT, kind TEXT, path TEXT, start_line INTEGER, start_column INTEGER);
@@ -9343,8 +9343,10 @@ mod tests {
              CREATE TABLE pending_relationships (from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT, path TEXT, start_line INTEGER, start_column INTEGER, target_receiver TEXT, target_namespace_json TEXT, target_display_name TEXT);
              CREATE INDEX idx_pending_from ON pending_relationships(from_symbol_id);
              WITH RECURSIVE n(value) AS (VALUES(1) UNION ALL SELECT value + 1 FROM n WHERE value < 1000)
-             INSERT INTO symbols SELECT 'noise-' || value, 'noise_' || value, 'function', NULL FROM n;
-             INSERT INTO symbols VALUES ('caller', 'caller', 'function', NULL), ('callee', 'callee', 'function', NULL);
+             INSERT INTO symbols (symbol_id, name, kind, parent_symbol_id, language)
+             SELECT 'noise-' || value, 'noise_' || value, 'function', NULL, 'rust' FROM n;
+             INSERT INTO symbols (symbol_id, name, kind, parent_symbol_id, language)
+             VALUES ('caller', 'caller', 'function', NULL, 'rust'), ('callee', 'callee', 'function', NULL, 'rust');
              WITH RECURSIVE n(value) AS (VALUES(1) UNION ALL SELECT value + 1 FROM n WHERE value < 1000)
              INSERT INTO relationships SELECT 'noise-' || value, 'noise-' || value, 'calls', 'noise.py', value, 0 FROM n;
              INSERT INTO relationships VALUES ('caller', 'callee', 'calls', 'app.py', 2, 4);
@@ -9451,7 +9453,12 @@ mod tests {
                 .any(|row| row.contains("idx_symbols_import_path_name"))
         );
         assert!(plan.iter().any(|row| row.contains("idx_symbols_path")));
-        assert!(!plan.iter().any(|row| row.contains("SCAN d")), "{plan:?}");
+        assert!(
+            !plan
+                .iter()
+                .any(|row| row == "SCAN d" || row.starts_with("SCAN d ")),
+            "{plan:?}"
+        );
     }
 
     #[test]
@@ -10552,7 +10559,8 @@ mod tests {
         let conn = search_fixture(
             "('target', 'f_target', 'src/core.rs', 'rust', 'calculate', 'function', 'fn calculate()', NULL, NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_target', NULL, 0, 0, 'code'),
               ('direct', 'f_direct', 'tests/direct.rs', 'rust', 'test_direct', 'function', 'fn test_direct()', NULL, NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_direct', NULL, 0, 0, 'code'),
-              ('pending', 'f_pending', 'autotests/tst_pending.qml', 'qml', 'test_pending', 'function', 'function test_pending() {}', NULL, NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_pending', NULL, 0, 0, 'code'),
+              ('pending', 'f_pending', 'autotests/tst_pending.rs', 'rust', 'test_pending', 'function', 'fn test_pending()', NULL, NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_pending', NULL, 0, 0, 'code'),
+              ('qml_pending', 'f_qml_pending', 'autotests/tst_qml_pending.qml', 'qml', 'test_qml_pending', 'function', 'function test_qml_pending() {}', NULL, NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_qml_pending', NULL, 0, 0, 'code'),
               ('name', 'f_name', 'tests/name.rs', 'rust', 'test_calculate_named', 'function', 'fn test_calculate_named()', NULL, NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_name', NULL, 0, 0, 'code'),
               ('fts', 'f_fts', 'tests/fts.rs', 'rust', 'test_fts', 'function', 'fn test_fts()', 'calculate behavior', NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_fts', NULL, 0, 0, 'code'),
               ('local', 'f_local', 'tests/name.rs', 'rust', 'calculate_local', 'variable', 'let calculate_local = 1;', NULL, NULL, NULL, 1, 0, 5, 1, 0, 50, NULL, NULL, NULL, NULL, NULL, NULL, 'h_local', NULL, 0, 0, 'code'),
@@ -10565,7 +10573,8 @@ mod tests {
              CREATE TABLE pending_relationships (from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT, path TEXT, start_line INTEGER, start_column INTEGER, target_receiver TEXT, target_namespace_json TEXT, target_display_name TEXT);
              CREATE TABLE type_facts (type_fact_id TEXT, symbol_id TEXT, language TEXT, resolved_type TEXT, generic_params_json TEXT);
              INSERT INTO relationships VALUES ('direct', 'target', 'calls', 'tests/direct.rs', 1, 0);
-             INSERT INTO pending_relationships VALUES ('pending', 'calculate', 'calls', 'autotests/tst_pending.qml', 1, 0, NULL, '[]', 'calculate');",
+             INSERT INTO pending_relationships VALUES ('pending', 'calculate', 'calls', 'autotests/tst_pending.rs', 1, 0, NULL, '[]', 'calculate');
+             INSERT INTO pending_relationships VALUES ('qml_pending', 'calculate', 'calls', 'autotests/tst_qml_pending.qml', 1, 0, NULL, '[]', 'calculate');",
         )
         .unwrap();
         let target = get_symbol_by_name(&conn, "calculate", None)
@@ -10587,6 +10596,7 @@ mod tests {
                 "test_fts"
             ]
         );
+        assert!(!names.iter().any(|name| name == "test_qml_pending"));
     }
 
     #[test]
