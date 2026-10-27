@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "python_tests_passed": 269,
+  "plugin_tests_passed": 20,
+  "runner_sha256": "34388ab9463a2a9cf6784014d4ea2f0c4a1dcd2d9d4124d5c0d4be0faddc8d76",
+  "runner_test_sha256": "f8ad241ca897b5b234655042c16732128906ba39f0ffeb0fdac60b68ac439b2e",
+  "provider_calls": 0
+}

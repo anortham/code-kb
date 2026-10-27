@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "case_id": "minijinja",
+  "source_pin": "81787c4eab656f3a4f4e92dea53f303a36f1685c",
+  "case_sha256": "7bac8a6a11372f4cbc5ce7332ec19fef64db0ee2f419e01284209535a18a52eb",
+  "readiness_status": "ready",
+  "behavioral_pass": true,
+  "source_review": "passed",
+  "reviewed_reference_paths": [
+    "minijinja-cli/src/command.rs",
+    "minijinja-cli/src/config.rs",
+    "minijinja-cli/tests/edit_eval_autoescape_public.rs"
+  ],
+  "reference_test_files": [
+    "minijinja-cli/tests/edit_eval_autoescape_public.rs"
+  ],
+  "source_review_basis": "Reference patch implements the request, preserves canonical inputs, and changes every declared production path. Required new public tests are present and have separate retained passing sandbox runs. Hidden checks and public regressions pass on fresh replay.",
+  "raw_readiness_sha256": "7218586e59aacc67197d10118d1f10fa6e45af7ccc063aff74bfeb1e32ee11d2",
+  "raw_grade_sha256": "07ff15bf486b8202aad9c62619b2e802c942bb64776a8362638b983805851056",
+  "raw_readiness": "target/edit-evaluation/lead/integration-v4/minijinja/readiness/readiness.json",
+  "raw_grade": "target/edit-evaluation/lead/integration-v4/minijinja/reference-grade/grade.json",
+  "created_utc": "2026-10-27T15:51:26Z",
+  "provider_calls": 0
+}

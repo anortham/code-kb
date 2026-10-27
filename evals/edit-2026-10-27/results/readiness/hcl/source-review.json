@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "case_id": "hcl",
+  "source_pin": "4a347c448ee961e556dde0fad522a996e04c00c0",
+  "case_sha256": "befde64d594b382d56bdb627966c19b18f0081ec6b678dacd073c5148e94271b",
+  "readiness_status": "ready",
+  "behavioral_pass": true,
+  "source_review": "passed",
+  "reviewed_reference_paths": [
+    "gohcl/decode.go",
+    "gohcl/schema.go"
+  ],
+  "reference_test_files": [],
+  "source_review_basis": "Reference patch implements the request, preserves canonical inputs, and changes every declared production path. Required new public tests are present and have separate retained passing sandbox runs. Hidden checks and public regressions pass on fresh replay.",
+  "raw_readiness_sha256": "f499b4ab28135780f721add70f6ea9f8675960f06a417d32f794d89861f7c7e1",
+  "raw_grade_sha256": "15a8e3d0ab11654c627415488a2a44f1bb05d976aac8ac20b624815fcee57253",
+  "raw_readiness": "target/edit-evaluation/lead/integration-v1/hcl/readiness/readiness.json",
+  "raw_grade": "target/edit-evaluation/lead/integration-v1/hcl/reference-grade/grade.json",
+  "created_utc": "2026-10-27T15:51:26Z",
+  "provider_calls": 0
+}

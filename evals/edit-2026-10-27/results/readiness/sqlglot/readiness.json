@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "case_id": "sqlglot",
+  "repo_id": "sqlglot",
+  "source_pin": "feb0e08aba28a29590596bb3f5761fbaeb0e98b9",
+  "case_sha256": "1a5a93f77ceb315e8fe41e941c96201d21054fa37895c3464c1919262eead81a",
+  "status": "ready",
+  "behavioral_pass": true,
+  "source_review": "passed",
+  "reference_control_only": true,
+  "seed_digest": "c66febe807c91e499499624501f74b89fa2af89fff6024899eb90655a5a0ff5d",
+  "reference_digest": "3e927bf3f0705dfc3d9839e04c292d187fce51aa5f988b1d7b13ac44ec3b16d5",
+  "reference_production_files_changed": [
+    "sqlglot/generators/bigquery.py",
+    "sqlglot/parsers/bigquery.py"
+  ],
+  "raw_archive": "../raw.tar.gz",
+  "raw_archive_sha256": "1b725721ad6636ecea7aaaad10bd3f4c4e0dea35aed5b6915641f6f7f250fedf",
+  "raw_readiness_member": "integration-v4/sqlglot/readiness/readiness.json",
+  "raw_readiness_sha256": "0df01b5d079d2b2322c06d427dbf08c894400458a9eb471a742969d5fccf2cb6",
+  "raw_grade_member": "integration-v4/sqlglot/reference-grade/grade.json",
+  "raw_grade_sha256": "d9d287aade414b70cb208cf0cc9975e1e30f5b031db1c4094db07e6136a99b78",
+  "source_review_receipt": "source-review.json",
+  "provider_calls": 0
+}

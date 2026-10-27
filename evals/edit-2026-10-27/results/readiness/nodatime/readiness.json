@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "case_id": "nodatime",
+  "repo_id": "nodatime",
+  "source_pin": "649ce5a1c8ddf439eaed7b3bf9157882363cb937",
+  "case_sha256": "615e70088a3c006fdf6cbfa5c0151e4eb339f7e36db2f129f6298945f5c238de",
+  "status": "ready",
+  "behavioral_pass": true,
+  "source_review": "passed",
+  "reference_control_only": true,
+  "seed_digest": "21cc469ed0702c23063650f6e73547fa34f9aedebddb81b7cdffefafc7384a3d",
+  "reference_digest": "a66deec7b1ec7b827fcf573a1a86916d4df892432f7e25afe0d77adcdcbcba9f",
+  "reference_production_files_changed": [
+    "src/NodaTime/LocalDate.cs",
+    "src/NodaTime/LocalDateTime.cs"
+  ],
+  "raw_archive": "../raw.tar.gz",
+  "raw_archive_sha256": "1b725721ad6636ecea7aaaad10bd3f4c4e0dea35aed5b6915641f6f7f250fedf",
+  "raw_readiness_member": "integration-v1/nodatime/readiness/readiness.json",
+  "raw_readiness_sha256": "d5c0826d2538ca86461ba9c72d7bf4f25cf3828a088e09ccfc424735c06c3fde",
+  "raw_grade_member": "integration-v1/nodatime/reference-grade/grade.json",
+  "raw_grade_sha256": "803854acb8636cfecf94562ffb4bd2a17696f77481ec3f32ce968671481ab15b",
+  "source_review_receipt": "source-review.json",
+  "provider_calls": 0
+}

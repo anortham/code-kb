@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "case_id": "date-fns",
+  "source_pin": "a9739fb3e5384a810e90d7376446f6d84ecc5029",
+  "case_sha256": "04e0a0a7493c2b60131aa2dc138114ff190ee47728cca7b9990fc9e816769f5c",
+  "readiness_status": "ready",
+  "behavioral_pass": true,
+  "source_review": "passed",
+  "reviewed_reference_paths": [
+    "pkgs/core/src/addBusinessDays/index.ts",
+    "pkgs/core/src/differenceInBusinessDays/index.ts"
+  ],
+  "reference_test_files": [],
+  "source_review_basis": "Reference patch implements the request, preserves canonical inputs, and changes every declared production path. Required new public tests are present and have separate retained passing sandbox runs. Hidden checks and public regressions pass on fresh replay.",
+  "raw_readiness_sha256": "49abeb9e79e80809b87de1ff4ac1d389b3df475856c03d9ed1c7e58c829d4732",
+  "raw_grade_sha256": "693715db215f7509dd64ae7d79d24dbc674e24c5f01cd410a0a2d4f5b339c685",
+  "raw_readiness": "target/edit-evaluation/lead/integration-v2/date-fns/readiness/readiness.json",
+  "raw_grade": "target/edit-evaluation/lead/integration-v2/date-fns/reference-grade/grade.json",
+  "created_utc": "2026-10-27T15:51:26Z",
+  "provider_calls": 0
+}

@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "case_id": "hcl",
+  "repo_id": "hcl",
+  "source_pin": "4a347c448ee961e556dde0fad522a996e04c00c0",
+  "case_sha256": "befde64d594b382d56bdb627966c19b18f0081ec6b678dacd073c5148e94271b",
+  "status": "ready",
+  "behavioral_pass": true,
+  "source_review": "passed",
+  "reference_control_only": true,
+  "seed_digest": "90338a1f9172ddd2667530b8beb1ed75e5b43b23b73607b8cb1f6c997c1d9846",
+  "reference_digest": "100e75b5a8e16e0b9e9d121226614272a40dba8663c6a22fce95aa24dd6f8317",
+  "reference_production_files_changed": [
+    "gohcl/decode.go",
+    "gohcl/schema.go"
+  ],
+  "raw_archive": "../raw.tar.gz",
+  "raw_archive_sha256": "1b725721ad6636ecea7aaaad10bd3f4c4e0dea35aed5b6915641f6f7f250fedf",
+  "raw_readiness_member": "integration-v1/hcl/readiness/readiness.json",
+  "raw_readiness_sha256": "f499b4ab28135780f721add70f6ea9f8675960f06a417d32f794d89861f7c7e1",
+  "raw_grade_member": "integration-v1/hcl/reference-grade/grade.json",
+  "raw_grade_sha256": "15a8e3d0ab11654c627415488a2a44f1bb05d976aac8ac20b624815fcee57253",
+  "source_review_receipt": "source-review.json",
+  "provider_calls": 0
+}

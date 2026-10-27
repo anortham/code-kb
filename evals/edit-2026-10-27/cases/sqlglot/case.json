@@ -266,5 +266,8 @@
   ],
   "dependency_inputs": [
     "python-packages"
+  ],
+  "reference_test_files": [
+    "tests/dialects/test_timestamp_bucket_public.py"
   ]
 }

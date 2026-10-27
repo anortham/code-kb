@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "case_id": "minijinja",
+  "repo_id": "minijinja",
+  "source_pin": "81787c4eab656f3a4f4e92dea53f303a36f1685c",
+  "case_sha256": "7bac8a6a11372f4cbc5ce7332ec19fef64db0ee2f419e01284209535a18a52eb",
+  "status": "ready",
+  "behavioral_pass": true,
+  "source_review": "passed",
+  "reference_control_only": true,
+  "seed_digest": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+  "reference_digest": "9de9e6e16f0a02919b2d692bd46a87610b9852bb015b379d990953c77c6abd86",
+  "reference_production_files_changed": [
+    "minijinja-cli/src/command.rs",
+    "minijinja-cli/src/config.rs"
+  ],
+  "raw_archive": "../raw.tar.gz",
+  "raw_archive_sha256": "1b725721ad6636ecea7aaaad10bd3f4c4e0dea35aed5b6915641f6f7f250fedf",
+  "raw_readiness_member": "integration-v4/minijinja/readiness/readiness.json",
+  "raw_readiness_sha256": "7218586e59aacc67197d10118d1f10fa6e45af7ccc063aff74bfeb1e32ee11d2",
+  "raw_grade_member": "integration-v4/minijinja/reference-grade/grade.json",
+  "raw_grade_sha256": "07ff15bf486b8202aad9c62619b2e802c942bb64776a8362638b983805851056",
+  "source_review_receipt": "source-review.json",
+  "provider_calls": 0
+}

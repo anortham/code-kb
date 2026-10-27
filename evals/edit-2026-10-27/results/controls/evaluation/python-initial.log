@@ -1,0 +1,22 @@
+...................................[1/1] python-registration-concept-native-r1: dispatching
+[1/1] python-registration-concept-native-r1: answer_received
+[1/1] python-registration-concept-native-r1: saved answer_received
+.[1/1] python-registration-concept-native-r1: dispatching
+[1/1] python-registration-concept-native-r1: timed_out
+...[1/1] python-registration-concept-native-r1: interrupted_unknown
+.[1/1] python-registration-concept-current-r1: dispatching
+[1/1] python-registration-concept-current-r1: answer_received
+...[1/1] python-registration-concept-native-r1: dispatching
+[1/1] python-registration-concept-native-r1: policy_denied
+.[1/1] python-registration-concept-native-r1: dispatching
+[1/1] python-registration-concept-native-r1: redaction_failed
+...[1/1] python-registration-concept-native-r1: dispatching
+[1/1] python-registration-concept-native-r1: infrastructure_error
+[1/1] python-registration-concept-native-r1: saved infrastructure_error
+.[1/1] python-registration-concept-native-r1: dispatching
+[1/1] python-registration-concept-native-r1: retention_redaction_failed
+..........................................................................................................................................................................................................................
+----------------------------------------------------------------------
+Ran 266 tests in 17.759s
+
+OK

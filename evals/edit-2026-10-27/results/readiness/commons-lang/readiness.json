@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "case_id": "commons-lang",
+  "repo_id": "commons-lang",
+  "source_pin": "a5d6c5ed8847b2b14dacf062b646f94d6cc61a10",
+  "case_sha256": "a09f9cfab6fb450c742102aaaf5028c58bb9c8a61cf2aca4b4cbeed55f890a14",
+  "status": "ready",
+  "behavioral_pass": true,
+  "source_review": "passed",
+  "reference_control_only": true,
+  "seed_digest": "f91496b15eedeac23569017d43dba3d1c2fd708c3afc29453eb11efc8b854ef4",
+  "reference_digest": "f2789b7b70da961f891561090049688ef556275cab513684a1623f4038c89948",
+  "reference_production_files_changed": [
+    "src/main/java/org/apache/commons/lang3/ObjectUtils.java",
+    "src/main/java/org/apache/commons/lang3/compare/ComparableUtils.java"
+  ],
+  "raw_archive": "../raw.tar.gz",
+  "raw_archive_sha256": "1b725721ad6636ecea7aaaad10bd3f4c4e0dea35aed5b6915641f6f7f250fedf",
+  "raw_readiness_member": "integration-v1/commons-lang/readiness/readiness.json",
+  "raw_readiness_sha256": "a3ce64656eb0c9d96c744801cf0a4a57613a7989e146a1998352e479b0f37dda",
+  "raw_grade_member": "integration-v1/commons-lang/reference-grade/grade.json",
+  "raw_grade_sha256": "8902bc58848f117403818c2a1f88463354618ad448463ae4d18f83fa786bfe73",
+  "source_review_receipt": "source-review.json",
+  "provider_calls": 0
+}

@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "case_id": "sqlglot",
+  "source_pin": "feb0e08aba28a29590596bb3f5761fbaeb0e98b9",
+  "case_sha256": "1a5a93f77ceb315e8fe41e941c96201d21054fa37895c3464c1919262eead81a",
+  "readiness_status": "ready",
+  "behavioral_pass": true,
+  "source_review": "passed",
+  "reviewed_reference_paths": [
+    "sqlglot/generators/bigquery.py",
+    "sqlglot/parsers/bigquery.py",
+    "tests/dialects/test_timestamp_bucket_public.py"
+  ],
+  "reference_test_files": [
+    "tests/dialects/test_timestamp_bucket_public.py"
+  ],
+  "source_review_basis": "Reference patch implements the request, preserves canonical inputs, and changes every declared production path. Required new public tests are present and have separate retained passing sandbox runs. Hidden checks and public regressions pass on fresh replay.",
+  "raw_readiness_sha256": "0df01b5d079d2b2322c06d427dbf08c894400458a9eb471a742969d5fccf2cb6",
+  "raw_grade_sha256": "d9d287aade414b70cb208cf0cc9975e1e30f5b031db1c4094db07e6136a99b78",
+  "raw_readiness": "target/edit-evaluation/lead/integration-v4/sqlglot/readiness/readiness.json",
+  "raw_grade": "target/edit-evaluation/lead/integration-v4/sqlglot/reference-grade/grade.json",
+  "created_utc": "2026-10-27T15:51:26Z",
+  "provider_calls": 0
+}

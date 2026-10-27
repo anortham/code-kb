@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "case_id": "commons-lang",
+  "source_pin": "a5d6c5ed8847b2b14dacf062b646f94d6cc61a10",
+  "case_sha256": "a09f9cfab6fb450c742102aaaf5028c58bb9c8a61cf2aca4b4cbeed55f890a14",
+  "readiness_status": "ready",
+  "behavioral_pass": true,
+  "source_review": "passed",
+  "reviewed_reference_paths": [
+    "src/main/java/org/apache/commons/lang3/ObjectUtils.java",
+    "src/main/java/org/apache/commons/lang3/compare/ComparableUtils.java"
+  ],
+  "reference_test_files": [],
+  "source_review_basis": "Reference patch implements the request, preserves canonical inputs, and changes every declared production path. Required new public tests are present and have separate retained passing sandbox runs. Hidden checks and public regressions pass on fresh replay.",
+  "raw_readiness_sha256": "a3ce64656eb0c9d96c744801cf0a4a57613a7989e146a1998352e479b0f37dda",
+  "raw_grade_sha256": "8902bc58848f117403818c2a1f88463354618ad448463ae4d18f83fa786bfe73",
+  "raw_readiness": "target/edit-evaluation/lead/integration-v1/commons-lang/readiness/readiness.json",
+  "raw_grade": "target/edit-evaluation/lead/integration-v1/commons-lang/reference-grade/grade.json",
+  "created_utc": "2026-10-27T15:51:26Z",
+  "provider_calls": 0
+}

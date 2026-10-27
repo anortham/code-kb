@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "case_id": "date-fns",
+  "repo_id": "date-fns",
+  "source_pin": "a9739fb3e5384a810e90d7376446f6d84ecc5029",
+  "case_sha256": "04e0a0a7493c2b60131aa2dc138114ff190ee47728cca7b9990fc9e816769f5c",
+  "status": "ready",
+  "behavioral_pass": true,
+  "source_review": "passed",
+  "reference_control_only": true,
+  "seed_digest": "009b8dc473dd26f64c04af75230e490fe4736b68ed0dd3dc9559d1e16f5cde61",
+  "reference_digest": "5262e930708be25dac1ee4ffb97f44c58175f9a341a163974bc63601e07c05a1",
+  "reference_production_files_changed": [
+    "pkgs/core/src/addBusinessDays/index.ts",
+    "pkgs/core/src/differenceInBusinessDays/index.ts"
+  ],
+  "raw_archive": "../raw.tar.gz",
+  "raw_archive_sha256": "1b725721ad6636ecea7aaaad10bd3f4c4e0dea35aed5b6915641f6f7f250fedf",
+  "raw_readiness_member": "integration-v2/date-fns/readiness/readiness.json",
+  "raw_readiness_sha256": "49abeb9e79e80809b87de1ff4ac1d389b3df475856c03d9ed1c7e58c829d4732",
+  "raw_grade_member": "integration-v2/date-fns/reference-grade/grade.json",
+  "raw_grade_sha256": "693715db215f7509dd64ae7d79d24dbc674e24c5f01cd410a0a2d4f5b339c685",
+  "source_review_receipt": "source-review.json",
+  "provider_calls": 0
+}

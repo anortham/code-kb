@@ -1,0 +1,126 @@
+{
+  "created_utc": "2026-10-27T15:48:33Z",
+  "hash_algorithm": "edit_evaluation.hash_tree for directories; SHA-256 bytes for files",
+  "inputs": {
+    "base_bubblewrap_binary": {
+      "host_path": "/usr/bin/bwrap",
+      "kind": "file",
+      "sha256": "6da06f152b0865172d73348c34cb88487c326ce2f21cd980fc25ff10c4dbcdfb"
+    },
+    "base_go_toolchain": {
+      "host_path": "/usr/lib/golang",
+      "kind": "directory",
+      "sha256": "7d4a3654d14009f7cdf70507c6badf16fc40f2ffccf2be04d8c792edffdaebcd"
+    },
+    "base_python_binary": {
+      "host_path": "/usr/bin/python3.14",
+      "kind": "file",
+      "sha256": "df5a95e6119c051c43ab78993af48f8a53c54a25a475dacd1428c322251eb8b0"
+    },
+    "dependencies_commons-lang_commons-m2": {
+      "host_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_commons-lang_commons-m2",
+      "kind": "directory",
+      "original_host_path": "/tmp/code-kb-task5-20261027/dependencies/commons-m2",
+      "sha256": "cd2d5dbf77c5e1e38296de7e5393ae46743b745775eb15c898ddec17c5504f65"
+    },
+    "dependencies_date-fns_pnpm-store": {
+      "host_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_date-fns_pnpm-store",
+      "kind": "directory",
+      "original_host_path": "/tmp/task4-sandbox-task4-readiness-20261027T143138Z/dependencies/pnpm-store",
+      "sha256": "4a003414047840a0b33c95de11e151be9ab0bc694b9a739eb44a2464e629c21f"
+    },
+    "dependencies_hcl_go-mod-cache": {
+      "host_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_hcl_go-mod-cache",
+      "kind": "directory",
+      "original_host_path": "/tmp/task4-dependencies-task4-readiness-20261027T142308Z/go-mod-cache",
+      "sha256": "d5786c23facd1162171bb5462cb4b01fbd4003ab8cddedbecc6beb2aa70bd3c6"
+    },
+    "dependencies_minijinja_cargo-cache": {
+      "host_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_minijinja_cargo-cache",
+      "kind": "directory",
+      "original_host_path": "/tmp/code-kb-edit-python-rust-20261027/inputs/cargo-cache",
+      "sha256": "eac88f77d5490563112b892dcb38a804d9fdb32e52de2624bd5c0738faef538a"
+    },
+    "dependencies_nodatime_nodatime-nuget": {
+      "host_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_nodatime_nodatime-nuget",
+      "kind": "directory",
+      "original_host_path": "/tmp/code-kb-task5-20261027/dependencies/nodatime-nuget",
+      "sha256": "b33c5d38a4b9541a64ea5105150e5bbcd49ba2b5a7cd583b7cdee8faf9cb11dd"
+    },
+    "dependencies_sqlglot_python-packages": {
+      "host_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_sqlglot_python-packages",
+      "kind": "directory",
+      "original_host_path": "/tmp/code-kb-edit-python-rust-20261027/inputs/python-packages",
+      "sha256": "47cb32636d3296545e7e40015bf2a8189c6ce4cc9d647c62ae12714c4d2e92f3"
+    },
+    "tools_commons-lang_java": {
+      "host_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/tools_commons-lang_java",
+      "kind": "directory",
+      "original_host_path": "/tmp/code-kb-task5-20261027/tools/java",
+      "sha256": "08ebc2d440a5cad30907e51ce2fb7ee250ed5e322a7a63c002b3cfabf7dae9ec"
+    },
+    "tools_commons-lang_maven": {
+      "host_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/tools_commons-lang_maven",
+      "kind": "directory",
+      "original_host_path": "/tmp/code-kb-task5-20261027/tools/maven",
+      "sha256": "5ba787b31abbbe574c3bc55d8fabd2588174f9360f9aab7bc359c24e719d7d44"
+    },
+    "tools_date-fns_node": {
+      "host_path": "/home/murphy/.local/share/mise/installs/node/24.18.1",
+      "kind": "directory",
+      "sha256": "ad67e7c81e8c0c123b6616e5d17ef5f4efa9390a25d724b15292e4f13579c156"
+    },
+    "tools_minijinja_rust": {
+      "host_path": "/home/murphy/.rustup/toolchains/stable-x86_64-unknown-linux-gnu",
+      "kind": "directory",
+      "sha256": "9bb3ada2e04cf6c70356f9fddee8f03d47a485cdece85ca8d06c920aaf913779"
+    },
+    "tools_nodatime_dotnet": {
+      "host_path": "/usr/lib64/dotnet",
+      "kind": "directory",
+      "sha256": "2be7a815b5bd470fc51789d9c6e510be8df7bf322c81656c24d497ee9fc4bdf4"
+    }
+  },
+  "persistent_cache": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0",
+  "provider_calls": 0,
+  "runner_sha256": "34388ab9463a2a9cf6784014d4ea2f0c4a1dcd2d9d4124d5c0d4be0faddc8d76",
+  "schema": 1,
+  "seeds": {
+    "commons-lang": {
+      "seed_digest": "f91496b15eedeac23569017d43dba3d1c2fd708c3afc29453eb11efc8b854ef4",
+      "seed_project": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds/commons-lang",
+      "source_pin": "a5d6c5ed8847b2b14dacf062b646f94d6cc61a10"
+    },
+    "date-fns": {
+      "seed_digest": "009b8dc473dd26f64c04af75230e490fe4736b68ed0dd3dc9559d1e16f5cde61",
+      "seed_project": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds/date-fns",
+      "source_pin": "a9739fb3e5384a810e90d7376446f6d84ecc5029"
+    },
+    "hcl": {
+      "seed_digest": "90338a1f9172ddd2667530b8beb1ed75e5b43b23b73607b8cb1f6c997c1d9846",
+      "seed_project": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds/hcl",
+      "source_pin": "4a347c448ee961e556dde0fad522a996e04c00c0"
+    },
+    "minijinja": {
+      "seed_digest": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+      "seed_project": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds/minijinja",
+      "source_pin": "81787c4eab656f3a4f4e92dea53f303a36f1685c"
+    },
+    "nodatime": {
+      "seed_digest": "21cc469ed0702c23063650f6e73547fa34f9aedebddb81b7cdffefafc7384a3d",
+      "seed_project": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds/nodatime",
+      "source_pin": "649ce5a1c8ddf439eaed7b3bf9157882363cb937"
+    },
+    "sqlglot": {
+      "seed_digest": "c66febe807c91e499499624501f74b89fa2af89fff6024899eb90655a5a0ff5d",
+      "seed_project": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds/sqlglot",
+      "source_pin": "feb0e08aba28a29590596bb3f5761fbaeb0e98b9"
+    }
+  },
+  "system": {
+    "bubblewrap": "bubblewrap 0.12.0",
+    "platform": "Linux-7.2.11-200.fc44.x86_64-x86_64-with-glibc2.43",
+    "python": "3.14.8 (main, Oct  1 2026, 00:00:00) [GCC 16.2.1 20260819 (Red Hat 16.2.1-2)]",
+    "python_sqlite": "3.51.2"
+  }
+}

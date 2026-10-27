@@ -878,5 +878,8 @@
   ],
   "dependency_output_paths": {
     "cargo-cache": "cargo"
-  }
+  },
+  "reference_test_files": [
+    "minijinja-cli/tests/edit_eval_autoescape_public.rs"
+  ]
 }

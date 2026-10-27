@@ -3,7 +3,7 @@ id: accuracy-pivot-callers-answers-an-agent-can-trust
 title: "Accuracy pivot: callers answers an agent can trust"
 status: active
 created: 2026-10-17T17:10:13.294Z
-updated: 2026-10-27T15:14:08.063Z
+updated: 2026-10-27T16:20:37.600Z
 tags:
   - project-direction
   - accuracy
@@ -13,20 +13,16 @@ tags:
 
 # Direction
 
-Make code-kb reliable and useful for completed edits across all 42 pinned Julie language IDs. Keep seven MCP tools, explicit project_root, indexed SQLite, bounded memory, Windows support and identical AGENTS.md/CLAUDE.md.
+Support all 42 pinned Julie language IDs with source-backed navigation and edit feedback. Keep seven MCP tools, explicit project_root, SQLite queries/bounded memory, Windows support, and byte-equivalent AGENTS.md/CLAUDE.md. Preserve original72-run pilot and its outcomes; no routing change from local readiness.
 
-# Preserved foundation
+# Completed local preparation
 
-Cross-language repairs through edd897d passed Linux1889/Windows1865 Rust tests, all42 languages, Clippy/fmt/release and Python/plugin checks. Original72-run pilot and raw manifest8e73c99ed06bf6e2efeacb322e452dabad7d83cd3638da274afb608802d22a8d unchanged. No routing change or new provider calls.
+Worktree /home/murphy/.codex/worktrees/1e6f/code-kb, branchfix/cross-language-review. Snapshot2080528, sandbox50a1bcd, platformguard7d7073a, curatedcasesfe7ede0 committed. Task6 runner now18tests; fullPython269pass andplugin20pass. Allsix pinned larger cases have passing baseline/intentional-red/reference checks, fresh reference replay and source review. SQLGlot/MiniJinja references now include requested public tests, each2pass; their final readiness/replay is integration-v4. Other cases use v1 exceptdate-fns v2. Raw readiness archive899members is1b725721ad6636ecea7aaaad10bd3f4c4e0dea35aed5b6915641f6f7f250fedf. Originalcuration360memberarchive f7f32ae2597b6519a452150e027a88874203391d6444a118890ec032f2537dea unchanged.
 
-# Active work
+# Watcher repair ready for branch gates
 
-Task worktree /home/murphy/.codex/worktrees/1e6f/code-kb, fix/cross-language-review. Snapshot2080528, sandbox50a1bcd, platform guard7d7073a committed. Six larger unused source pins/cases are curated: SQLGlot, MiniJinja, HCL, date-fns, Commons Lang, NodaTime. Allsix pass fresh local readiness and reference patch replay, with public/hidden trees and state separated. Task6 runner has15 passing tests after real Vitest ANSI output exposed a parser false negative. No model performance result follows from readiness. Curation failures/raw evidence retained; fixture help changes, Java21, offline pnpm, hidden-only RAT skip and PublicSign settings are explicit.
+Separateplan docs/plans/2026-10-27-filtered-watcher-registration.md. Luna filtered_watcher finished, lead reviewed bounded registration owner, dynamicignore/subtree/rename handling, startup reconciliation, stable Windows Hash/Eq, queueoverflow and physical-registration health/retry. Last fix invalidates removedrootwatch beforefalliblerewatch; rootfaultregression passes. Worker:9registration+6existing+8unit tests, fmt/diff. RecommendedCLIpanic-retrytest also passes once; firstshort --exact filter matched0 and isretained separately. Runtimewatcher SHA4711212bf71c287a5b5f5b881bce2a3069f87f2de4e137a3a5717131f6c108f7. AGENTS/CLAUDE updatedtogether. No kernelsettings/processkills. RootMCPsession remainsontiny diagnosticproject; use baselineCLIfornavigation toavoidoldglobalrawwatcher. BaselineCLIcopy target/edit-evaluation/lead/watcher-baseline/code-kb, hash dab4bbdb3957ea81f2bd9d0a150c3a32411bd347ede7da1736943b44c1c3a07b.
 
-# New product defect
+# Durable inputs and next
 
-Edit preparation reproduced watch-limit exhaustion. start_watcher registers the root recursively, filtering ignored events only afterward; target/dependency trees still allocate watches. Existing .gitignore changes can leave stale symbols indexed. Plan docs/plans/2026-10-27-filtered-watcher-registration.md; fresh Luna filtered_watcher owns watcher.rs/owned tests, with selective read-only Astra plan advice. Nonrecursive allowed-directory registration, bounded owner queue, immediate subtree and ignore reconciliation. No kernel settings or unrelated processes changed; completed sessions switched their own MCP root to tiny diagnostic projects. Root uses CLI navigation while MCP session remains tiny to avoid raw-watch pressure.
-
-# Next and limits
-
-Commit reviewed six cases/curation and watcher plan; finish/review watcher repair, full Rust Linux/Windows gates, live watches/RSS before-after, final Python/plugin gate, frozen inputs/controls/24-run schedule and docs/brief. Keep all case readiness evidence; only failed date-fns was rerun after ANSI normalization, five other logs contain no ANSI and retain their successful executions. Source review remains separate from behavioral_pass. Future paid study proposed24 scored/28 total requires manifest-bound explicit budget receipt before dispatch. Local commits approved; no push/release/global config changes.
+8 task-owned inputs and6 seed snapshots copied/verified to /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0. Bindings target/edit-evaluation/lead/runtime-bindings.json; frozen-inputs.json committed next. Baseline probe .razorback/watcher-registration/probe.py:1000ignoredleafdirs→1016watches/RSS15760KiB. Need updatedreleasebinary afterRustgates, sameprobeafter+realrepository RSS, fullLinux/Windowsruntime gates, freezebinary/control hashes and24-run manifest, finaldocs andcleangitstate. WindowsVM is NOW RUNNING (win-test up); alwaysdownwhenfinished. Guestclone previouslyhad unrelateduntrackedtest.log; preserveit. No providercalls/newscoredagenttrials; paid24scored/28total needsmanifest-bound explicitbudgetreceipt. No push/release/globalconfig changes.

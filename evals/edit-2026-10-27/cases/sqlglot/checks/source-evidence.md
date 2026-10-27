@@ -24,3 +24,9 @@
 - Reference BigQuery regressions: 64 tests passed in 0.87 s. Reference hidden check: 2 tests passed in 0.31 s, covering canonical argument order, both arities, and parse-to-generate round trips.
 - Reference patch changed exactly `sqlglot/parsers/bigquery.py` and `sqlglot/generators/bigquery.py`.
 - Retained command logs are under `target/edit-evaluation/task3_python_rust/official-readiness/sqlglot/evidence/`.
+
+## Reference completeness follow-up
+
+- Source review found that the request calls for added regression coverage, while the original reference patch contained production changes only. The reference patch now also adds `tests/dialects/test_timestamp_bucket_public.py`; the two production paths above remain its only production changes. The hidden acceptance fixture and canonical public test remain unchanged.
+- The public regression file checks the parsed `DateBin` width/timestamp/origin fields and parse-to-generate round trips with and without an origin. It passed in the network-disabled Task2 sandbox with `/usr/bin/env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/state/python-site:/workspace/project /usr/bin/python3 -m unittest tests.dialects.test_timestamp_bucket_public` (`Ran 2 tests`, `OK`). Logs: `target/edit-evaluation/task3_python_rust/reference-public-followup/logs/sqlglot/public-test/`.
+- `patch --dry-run --batch --forward -p1` accepted the full reference patch on a fresh copy of the seeded source. The new destination is not hidden or protected. Test SHA-256: `2568bc0b539b3e7f8905a6adea96f09c26a9c402b7202f17f060e9f4de6d3c52`; reference patch SHA-256: `559cf70bb80fa458e9ea7f5580a8775c69aff1c8988951b2a1248ea5c806fdb8`.
