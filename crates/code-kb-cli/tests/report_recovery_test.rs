@@ -1463,6 +1463,102 @@ fn blast_radius_names_missing_runner_evidence_when_no_broader_command_is_known()
     );
 }
 
+fn broader_scope_repo(files: &[(&str, &str)]) -> tempfile::TempDir {
+    let repo = code_kb_core::safe_tempdir();
+    for (path, source) in files {
+        let path = repo.path().join(path);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, source).unwrap();
+    }
+    repo
+}
+
+#[test]
+fn broader_scope_uses_the_open_end_language_and_folder() {
+    let repo = broader_scope_repo(&[
+        ("Cargo.toml", "[workspace]\nmembers = [\"rust\"]\n"),
+        (
+            "rust/Cargo.toml",
+            "[package]\nname = \"foreign-runner\"\nversion = \"0.1.0\"\n",
+        ),
+        ("rust/src/lib.rs", "pub fn unrelated() {}\n"),
+        ("python/pytest.ini", "[pytest]\n"),
+        (
+            "python/app.py",
+            "def handle_registration(email):\n    return email.strip()\n",
+        ),
+    ]);
+    let output = cli(repo.path(), &["blast-radius", "handle_registration"]);
+    assert!(output.status.success(), "{:?}", output);
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(text.contains("python/app.py"), "{text}");
+    assert!(
+        text.contains("Broader test command: `cd python && pytest`"),
+        "{text}"
+    );
+    assert!(!text.contains("cargo test"), "{text}");
+    let mut mcp = McpSession::start(repo.path());
+    let result = mcp.call(
+        repo.path(),
+        "blast_radius",
+        json!({"symbol": "handle_registration"}),
+    );
+    assert_ne!(result["isError"], true, "{result}");
+    assert_eq!(result_text(&result), text);
+}
+
+#[test]
+fn broader_scope_does_not_borrow_a_foreign_root_runner() {
+    let repo = broader_scope_repo(&[
+        ("Cargo.toml", "[workspace]\nmembers = [\"rust\"]\n"),
+        (
+            "rust/Cargo.toml",
+            "[package]\nname = \"foreign-runner\"\nversion = \"0.1.0\"\n",
+        ),
+        ("rust/src/lib.rs", "pub fn unrelated() {}\n"),
+        (
+            "python/app.py",
+            "def handle_registration(email):\n    return email.strip()\n",
+        ),
+    ]);
+    let output = cli(repo.path(), &["blast-radius", "handle_registration"]);
+    assert!(output.status.success(), "{:?}", output);
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(!text.contains("Broader test command:"), "{text}");
+    assert!(text.contains("run the full suite manually"), "{text}");
+}
+
+#[test]
+fn broader_scope_does_not_claim_one_package_covers_another() {
+    let repo = broader_scope_repo(&[
+        ("package.json", "{\"name\":\"mixed-scopes\"}\n"),
+        ("shared.js", "export function shared() { return 1; }\n"),
+        (
+            "packages/a/package.json",
+            "{\"scripts\":{\"test\":\"node --test\"}}\n",
+        ),
+        (
+            "packages/a/route.js",
+            "import { shared } from '../../shared.js';\nexport function routeA() { return shared(); }\n",
+        ),
+        (
+            "packages/b/package.json",
+            "{\"scripts\":{\"test\":\"node --test\"}}\n",
+        ),
+        (
+            "packages/b/route.js",
+            "import { shared } from '../../shared.js';\nexport function routeB() { return shared(); }\n",
+        ),
+    ]);
+    let output = cli(repo.path(), &["blast-radius", "shared"]);
+    assert!(output.status.success(), "{:?}", output);
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(text.contains("routeA"), "{text}");
+    assert!(text.contains("routeB"), "{text}");
+    assert!(!text.contains("Broader test command:"), "{text}");
+    assert!(text.contains("run the full suite manually"), "{text}");
+}
+
 #[test]
 fn report_tools_describe_bounded_pages_and_keep_project_root_required() {
     let repo = three_caller_repo();

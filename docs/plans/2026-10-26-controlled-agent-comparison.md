@@ -133,3 +133,28 @@ Frozen-control commit9762900 precedes all model calls. Native, current, and revi
 The run-scoped tool-approval configuration follows the official [MCP configuration examples](https://learn.chatgpt.com/docs/extend/mcp). Successful model completion alone is insufficient for calibration: the current control required completed MCP results, and the revised control required the first source read to be native.
 
 The final pre-scoring source audit corrected the C# `Invite` oracle from line4 (a brace) to line5 (the declaration). All other symbol/literal coordinates matched source. This correction precedes the final manifest freeze and all scored dispatch.
+
+## Confirmed follow-up scope during the frozen run
+
+Implementation waits until all 72 scored runs finish; the candidate binary and frozen inputs remain unchanged.
+
+| Finding | Owner and files | Acceptance |
+| --- | --- | --- |
+| Broader suite advice loses target scope and selects a foreign runner | Lead: `formatters.rs`, CLI recovery regression; language-arguments worker: `test_commands.rs` only | Recover open-end/file-seed paths; choose compatible runner families; preserve package boundaries; refuse unknown or conflicting scopes; keep manual fallback. Cover every existing runner family, including script/JVM/.NET variants, and Windows wrapper behavior. |
+| JavaScript oracle uses a synthetic test identifier | Lead: used-case metadata and result evidence | Preserve the frozen raw mechanical results; source review accepts the actual declared test label. Correct future regression data after the set, retain the original manifest and freeze commit, and do not rerun paid tasks to replace results. |
+
+Read-only Astra review confirmed the runtime boundary above. A workspace marker alone does not establish that arbitrary Rust paths belong to a member. An explicit root-only query may still discover one unambiguous configured suite; a pathless symbol report must not silently become such a query. A command near one path must not imply coverage of mixed impact scopes.
+
+Two further Go/TypeScript transcripts demonstrate graph-walk language leakage and loss of typed field-receiver chains. Source facts already contain the Go root and field types; this is consumer behavior, not an extractor dependency. The TypeScript oracle also uses a generated name instead of the declared literal test label; handle it identically to JavaScript.
+
+Runtime follow-up order after the frozen set:
+
+1. Language-members worker owns `queries.rs` and the call-compatibility functions in `reference_report.rs`, plus a new core `cross_language_graph_test.rs`. Share the existing call families (JS/JVM/.NET/C), preserve narrower identifier semantics, and gate every relationship/pending/constructor branch and depth. No competing shared-file edits.
+2. After that worker hands off, language-conformance worker owns `find_related_types` and minimal binding helpers in `queries.rs`, plus a new `related_type_context_test.rs`. A separate reviewer-only context probe selected the unrelated Rust `InvitationService` for imported TypeScript parameters because global name/path-length ordering suppressed the correct class. Resolve using language and exact import/lexical owner evidence, preserve supported interoperation, and omit ambiguity. Keep these unscored probes out of campaign metrics.
+3. After type-context ownership hands off, language-constructions worker owns those shared files for bounded, exact-owner typed receiver-chain proof and a new core `nested_receiver_test.rs`. Use one proof for positive and negative decisions; ambiguous or incomplete chains stay unproven. Cover Go/Java/C#, shadowing, same-field decoys, duplicate types, inheritance, callers, and impact.
+4. Language-arguments worker can independently update `test_commands.rs`; lead independently updates formatter scope and CLI regression coverage. Workers do not format files owned by another worker.
+5. Lead reviews each slice, integrates, runs affected scopes and the final branch gate, records the original frozen results, and updates the used-case oracle/metadata without replacing paid outcomes.
+
+Astra reviewed these boundaries. Language compatibility permits further call matching; it never proves an edge. Indexed, bounded type/owner queries must preserve the memory invariant. No general type-inference engine is in scope.
+
+The Java scored transcript also exposes unrelated Rust/TypeScript callee signatures in context. Include the demonstrated dependency query in the shared call-compatibility fix; related-type binding is a separate query and remains the type-context owner’s scope.

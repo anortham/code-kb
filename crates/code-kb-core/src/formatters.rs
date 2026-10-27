@@ -2942,17 +2942,35 @@ pub fn format_blast_radius_report(
         return out;
     }
 
-    let path = result
+    let mut paths: Vec<&str> = result
         .likely_tests
-        .first()
+        .iter()
         .map(|test| test.path.as_str())
-        .or_else(|| {
+        .chain(
             result
                 .impacted_symbols
-                .first()
-                .map(|symbol| symbol.path.as_str())
+                .iter()
+                .map(|symbol| symbol.path.as_str()),
+        )
+        .chain(result.open_ends.iter().map(|end| end.path.as_str()))
+        .collect();
+    if result.seed_type == "file" {
+        paths.extend(result.seeds.iter().map(String::as_str));
+    } else if result.seed_type == "mixed" {
+        paths.clear();
+    }
+    paths.sort_unstable();
+    paths.dedup();
+    let mut finder = crate::test_commands::CommandFinder::new(root);
+    let command = paths
+        .first()
+        .and_then(|path| finder.broader_test_command(Some(path)))
+        .filter(|command| {
+            paths
+                .iter()
+                .skip(1)
+                .all(|path| finder.broader_test_command(Some(path)).as_ref() == Some(command))
         });
-    let command = crate::test_commands::CommandFinder::new(root).broader_test_command(path);
     out.push_str("\n### Broader Test Scope\n");
     if let Some(command) = command {
         out.push_str(&format!("Broader test command: `{command}`\n"));
@@ -2961,7 +2979,7 @@ pub fn format_blast_radius_report(
         }
     } else {
         out.push_str(
-            "Broader scope: full project test suite.\nNo supported runner configuration was found; run the full suite manually.\n",
+            "Broader scope: full project test suite.\nNo supported runner configuration was found for every reported path; run the full suite manually.\n",
         );
     }
     out
@@ -4030,6 +4048,68 @@ mod tests {
             formatted.contains("tests/work_test.rs:\n  - `test_do_work` [line 15] (direct caller)")
         );
         assert!(formatted.contains("src/caller.rs:\n  - [depth 1] function `caller_fn` [line 42]"));
+    }
+
+    fn empty_scope_result(seed_type: &str, seeds: &[&str]) -> BlastRadiusResult {
+        BlastRadiusResult {
+            seed_type: seed_type.into(),
+            seeds: seeds.iter().map(|seed| (*seed).to_string()).collect(),
+            likely_tests: Vec::new(),
+            impacted_symbols: Vec::new(),
+            traversal_ceiling_reached: false,
+            likely_tests_truncated: false,
+            impacted_symbols_truncated: false,
+            limit_at_maximum: false,
+            likely_tests_found: 0,
+            impacted_symbols_found: 0,
+            stopped_at_depth: None,
+            callers_report: None,
+            open_ends: Vec::new(),
+            tests_past_depth: None,
+            tests_past_depth_cut: false,
+            past_depth_tests: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn broader_scope_without_target_paths_does_not_discover_a_root_runner() {
+        let root = crate::safe_tempdir();
+        std::fs::write(
+            root.path().join("package.json"),
+            r#"{"scripts":{"test":"node --test"}}"#,
+        )
+        .unwrap();
+        let result = empty_scope_result("symbol", &["opaque-current-index-id"]);
+        let text = format_blast_radius_report(root.path(), &result, 0, 20, false);
+        assert!(!text.contains("Broader test command:"), "{text}");
+        assert!(text.contains("run the full suite manually"), "{text}");
+    }
+
+    #[test]
+    fn broader_scope_seed_file_preserves_the_requested_path() {
+        let root = crate::safe_tempdir();
+        std::fs::write(root.path().join("pytest.ini"), "[pytest]\n").unwrap();
+        let result = empty_scope_result("file", &["python/app.py"]);
+        let text = format_blast_radius_report(root.path(), &result, 0, 20, false);
+        assert!(text.contains("Broader test command: `pytest`"), "{text}");
+    }
+
+    #[test]
+    fn broader_scope_seed_mixed_does_not_hide_an_unresolved_symbol() {
+        let root = crate::safe_tempdir();
+        std::fs::write(root.path().join("pytest.ini"), "[pytest]\n").unwrap();
+        let mut result = empty_scope_result("mixed", &["opaque-current-index-id", "python/app.py"]);
+        result.open_ends.push(OpenEnd {
+            name: "endpoint".into(),
+            kind: "function".into(),
+            path: "python/app.py".into(),
+            line: 1,
+            depth: 0,
+            owner: None,
+        });
+        let text = format_blast_radius_report(root.path(), &result, 0, 20, false);
+        assert!(!text.contains("Broader test command:"), "{text}");
+        assert!(text.contains("run the full suite manually"), "{text}");
     }
 
     #[test]
