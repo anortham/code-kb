@@ -65,9 +65,9 @@
 **What to build:** Independent manifest comparison and replayable content bundles. Capture changes that Git would miss and preserve evidence for invalid attempts.
 **Approach:** Stream hashes, use content-addressed blobs, validate every input before replay, and never follow escaping links.
 
-- [ ] Additions, deletions, ignored/untracked files, modes, directories and links round-trip exactly.
-- [ ] Tampered blobs, traversal, escaping links, special files, limits, protected changes and wrong seeds fail safely with retained evidence.
-- [ ] New test module passes; report API evidence and hand verified diff to lead.
+- [x] Additions, deletions, ignored/untracked files, modes, directories and links round-trip exactly.
+- [x] Tampered blobs, traversal, escaping links, special files, limits, protected changes and wrong seeds fail safely with retained evidence.
+- [x] New test module passes; report API evidence and hand verified diff to lead.
 
 ### Task 2: Isolate preparation, agents and graders
 
