@@ -1,7 +1,9 @@
 # Retrieval value and default routing
 
-**Status:** Proposed backlog, saved at the owner's request after the September 23
-tooling discussion. No implementation or benchmark execution has started.
+**Status:** Execution authorized on October 26. The active protocol is
+[Controlled agent retrieval comparison](2026-10-26-controlled-agent-comparison.md).
+The original backlog below records the goals; its operational controls are frozen
+in that protocol before the first scored run.
 
 **Goal:** Keep the existing Tree-sitter/SQLite retrieval foundation. Keep code-kb
 the default route for code-structure questions, and remove the blanket bans on
@@ -49,7 +51,7 @@ needed for correct changes.
 
 **Files:** `hooks/code-kb-routing-block.md`,
 `crates/code-kb-cli/src/routing-block.md`, `skills/code-kb/SKILL.md`,
-`.claude-plugin/skills/code-kb/SKILL.md`, `CLAUDE.md`, `AGENTS.md`, `README.md`,
+`CLAUDE.md`, `AGENTS.md`, `README.md`,
 and the affected routing/asset checks under `tests/plugin/`.
 
 - [ ] Remove the prohibitions: "DO NOT run `grep`, `rg`, `find`, `cat`, or
@@ -78,7 +80,7 @@ and the affected routing/asset checks under `tests/plugin/`.
   an agent that reads the guidance as permission to skip code-kb.
 - [ ] Retain guidance about exact symbols, explicit project roots, freshness,
   missing coverage, and heuristic reference results.
-- [ ] Keep both routing copies, both skill copies, and the two project instruction
+- [ ] Keep both routing copies, the shared skill, and the two project instruction
   files synchronized. Coordinate with Razorback's routing-policy TODO so its
   bootstrap does not override the revised guidance in either direction.
 - [ ] Acceptance, guidance text: a plugin test checks that each code-kb case and
@@ -96,7 +98,7 @@ and the affected routing/asset checks under `tests/plugin/`.
 
 **Inspect:** `crates/code-kb-core/src/telemetry.rs`,
 `crates/code-kb-core/src/formatters.rs`, `scripts/benchmark_quality.py`,
-`scripts/test_benchmark_quality.py`, `README.md`, and both code-kb skill copies.
+`scripts/test_benchmark_quality.py`, `README.md`, and the shared code-kb skill.
 
 - [ ] Review rendered telemetry and benchmark descriptions. Label existing
   full-file comparisons as estimates, retain baseline-coverage reporting, and
@@ -151,8 +153,8 @@ task owns the retrieval-specific evidence.
   the 2026-09-24 latency check, a fixed order alone showed a false 5-15% slowdown.
   Use these orders so every arm appears in each position:
   - Repeat 1: native, current guidance, revised guidance.
-  - Repeat 2: revised guidance, current guidance, native.
-  - Repeat 3: current guidance, native, revised guidance.
+  - Repeat 2: revised guidance, native, current guidance.
+  - Repeat 3: current guidance, revised guidance, native.
   Keep each task, fixture commit, model, effort, harness, and isolated memory/configuration the
   same across its nine runs. Record the spread, not only the mean.
 - [ ] For each run, record per step whether the step matches a code-kb case from
@@ -216,8 +218,9 @@ run controlled comparisons, then decide scope. One implementer is sufficient;
 no parallel worker/report machinery is required by this backlog.
 
 - Guidance/asset changes: `node --test tests/plugin/*.test.cjs` and `git diff --check`.
-- Verify each mirrored pair with `cmp`: the two routing files, two skill files,
-  and `CLAUDE.md`/`AGENTS.md`.
+- Verify each mirrored pair with `cmp`: the two routing files and `CLAUDE.md`/`AGENTS.md`. The single
+  `skills/code-kb/SKILL.md` is shared by both plugin layouts; no duplicate skill
+  file exists in `.claude-plugin/`.
 - If existing benchmark Python changes:
   `python3 -m unittest discover -s scripts -p 'test_benchmark_quality.py'`.
 - If Rust behavior changes, first add a focused public-behavior regression and

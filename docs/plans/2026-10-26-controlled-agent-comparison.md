@@ -1,0 +1,126 @@
+# Controlled agent retrieval comparison
+
+**Goal:** Run the eight reserved navigation/test-selection tasks with competent native tools, current code-kb guidance, and revised code-kb guidance, then fix confirmed defects and report measured outcomes.
+
+**Spec:** [Retrieval value plan](2026-09-23-retrieval-value-and-optional-routing.md), [project review](../reviews/2026-10-26-project-direction.md), and the owner's approval: "ok what's next? you're approved for whatever you need".
+
+**Architecture:** Reuse the verified engine and synthetic fixture, Codex JSONL output, existing event-parser/telemetry conventions, and the existing CSV schema. Add a small runner/summarizer, not an evaluation service. This pilot measures navigation and test selection, not completed patches or all-language grammar parity. All 42 languages remain in scope; this task sample covers seven programming languages and JSON.
+
+**Architecture Quality:** Read-only Astra review completed; its six required corrections are incorporated below before implementation and paid runs. Main risks: answer leakage, inherited host guidance/MCP configuration, grading answer-shaped guesses, and confusing token counts with billing or task success.
+
+## Authority and bounds
+
+- Worktree: `/home/murphy/.codex/worktrees/1e6f/code-kb`, branch `fix/cross-language-review`, starting commit `708ed6c1a2812f58fc24cbd217b5b02c9c0b784f`.
+- Local implementation, commits, and paid evaluation are authorized by the owner's approval above. No further approval round is needed for this protocol.
+- Publication, push, release, and global configuration changes are outside this slice.
+- At most 72 scored runs, three non-task calibration calls, and eight infrastructure retries. At most 360 seconds per call. A retry never replaces a task failure; retain every attempt. Stop a repeated infrastructure failure and repair it before further dispatch.
+- Use the user's configured model/effort, frozen as `gpt-6.1-sol` / `high`, with installed `codex-cli 0.164.0`. Keep them constant across arms. Do not switch providers/models to rescue outcomes.
+- OpenAI is the selected provider. No external-model policy is declared in the project instructions; report `no external-model policy declared — synthetic fixture sent to openai`. Read the policy before every dispatch. Run the security-review outbound redactor on the constructed payload and fixture bundle; a redaction failure stops dispatch.
+- Send only reviewed synthetic fixture files and the task prompt. Never copy the repository, oracle, reviews, memories, user instructions, or other task answers into a trial root.
+
+## Frozen comparison
+
+Tasks and oracle start at `evals/review-2026-10-26/{tasks,oracles}.json`. Commit the task-set fingerprint, scoring, arm guidance, and decision rule before the first scored run. Calibration uses separate synthetic inputs and no reserved task.
+
+- Native: terminal tools only; no code-kb server or command.
+- Current: the routing/skill policy at `708ed6c`, with native tools and the candidate code-kb MCP server.
+- Revised: code-kb first for symbol/structure/caller/impact questions and non-small file interfaces; native tools first for literals and small files, and for checking incomplete/heuristic answers after code-kb. Tool inventory, engine binary, and exact captured MCP descriptions match the current arm. Both arms receive an explicit higher-priority instruction that the arm routing policy overrides generic read-order advice in tool descriptions. Calibration must demonstrate revised native-first reading of a small file.
+- Repeat 1: native, current, revised. Repeat 2: revised, native, current. Repeat 3: current, revised, native. Every arm occupies every position once. This corrects the older plan's unbalanced order.
+- Use one model session per task/arm/repeat. No shared conversations, generated memories, plugins, hooks, skills, web tools, or subagents. Ignore user configuration/rules while retaining existing authentication. Set project-document loading to zero and supply the frozen guidance explicitly.
+- Each trial gets a fresh fixture-only Git checkout at the same seed commit, without a remote. Keep prompts, outputs, telemetry, and oracle outside it. Use a required Linux bubblewrap namespace to hide owner repositories/oracles, prior transcripts, and host guidance. Mount a fresh Codex profile at its normal filesystem path without changing HOME/CODEX_HOME; bind existing authentication read-only, never copy or log its contents. Use a read-only tool permission profile that denies the private Codex profile. Fail preflight/calibration if the oracle, host guidance, private canary, or unintended tools are accessible/injected. Record the actual isolation rather than assuming CLI flags prove it.
+- Before any paid call, verify the extractor hash against scripts/julie-pins.json and retain successful verify-extraction.sh output. Pre-index the two MCP arms and record initial index latency separately. Report both warm task wall time and cold-index-inclusive time. Native gets no index. Record binary/extractor hashes and fixture fingerprints.
+- Capture raw JSONL, final structured answer, stderr, wall time, exit status, and code-kb telemetry per trial. Extract actual input/output/cached tokens when emitted. Missing metrics stay unavailable, never zero. Money is unavailable unless the harness actually supplies billed cost.
+- Do not tune the candidate, prompts, oracle, or scoring during the 72-run set. Infrastructure repairs are recorded separately. Keep successful and unsuccessful attempts. Retry only a documented provider/transport/startup infrastructure failure that yielded no completed answer. Model timeouts, bad answers, routing violations, and ordinary tool errors are outcomes, not retryable infrastructure. The first completed/non-infrastructure attempt supplies acceptance; add every attempt's available tokens/time to total cost and retain unavailable-attempt costs explicitly. No retry erases an outcome.
+
+## Scoring and decision rule
+
+Every arm gets the same structured output contract asking for requested definitions/tests/literals, file/line evidence, a source-chain explanation, and a focused command when evidenced or an explicit unavailable status with reason. Each answer must identify the requested source definitions, the correct focused tests, and relevant literal values/locations. Grade against the hidden source oracle, not output length or tool usage. Reject the Go decoy, nonexistent tests, invented runnable commands, and unsupported caller certainty. Allow equivalent fixture-relative Rust commands after relocation. Python's first decorator or definition line is accepted as the declaration location. Review the source-chain explanation and C# optional-argument requirement separately from mechanical field matching.
+
+Record per-run fact checks and a reviewed acceptance result. Verify every accepted answer and every borderline rejection against source; automatic name matching alone cannot establish success. Incorrect extra tests/owners fail, as do missed requested facts. A mechanical grader produces provisional checks, never final acceptance. Record tool adoption on structural steps, retries, follow-up reads, unsupported claims, and metric availability. Treat each task's three repeats as a small pilot, not independent evidence for broad statistical claims.
+
+- Consistent success means 3/3 accepted repeats. Compare per-task medians for wall time (warm and cold-inclusive), total input/output tokens, uncached input, and cached tokens separately. Use a 10% practical tolerance, show all three observations, and do not treat the pilot as a significance test. Token and latency evidence remain usable when billing is unavailable; never convert tokens to dollars. Keep code-kb-first under review when an adopted arm gets 3/3 with no measured dimension worse beyond tolerance. Conflicting dimensions or missing token/latency evidence are inconclusive.
+- A structural step is a command/tool action to locate a named definition, understand a non-small file interface, locate callers, or select affected tests; literal searches and revised-policy small-file reads are separate categories. Review each completed action in the transcript. Adoption is matching structural actions that call code-kb first divided by matching structural actions; retain numerator/denominator and unavailable/ambiguous classifications. Compare revised versus current adoption on their common structural categories. A lower revised share is a guidance defect, not a negative tool verdict. Consider native-first only for this sampled task type when both code-kb arms adopt the tools, both have fewer accepted repeats than native, or both are worse beyond tolerance on every usable cost dimension without a success advantage. Do not change global routing from tiny synthetic fixtures. Low adoption is a guidance/isolation defect, not a tool-value verdict.
+- Mixed repeats, unavailable token/latency evidence, or routing violations are inconclusive. Never delete a tool, exclude a language, or claim billed savings from this pilot.
+- After the frozen set, reproduce confirmed product defects with focused real-extractor tests and repair them. Used tasks become regression/tuning evidence. Do not rerun a paid campaign merely to replace a disappointing result.
+
+## Verification strategy
+
+**Security scope:** outbound policy check/redaction and fixture-only staging. No dependencies added; no dependency-audit scope declared for this local runner slice.
+
+**Worker:** parser/grader tests with replayed JSONL and negative answers; staging/config/scheduling tests with controlled local subprocesses. Test first for new behavior.
+
+**Affected change:** Python tests for the new runner/summarizer, routing contract tests, mirrored-file comparisons, and a separate calibration proving native has no MCP and MCP arms have the seven expected tools.
+
+**Branch:** applicable Python/plugin tests, guidance asset checks, `git diff --check`, `check_edit`, and release build when embedded routing assets change. Reuse the previously passing runtime suites unless runtime changes warrant affected regressions. Check source/worktree state before commits and completion.
+
+## Parallel execution contract
+
+Commit mode: `parallel-lead-commit`. Workers do not stage, commit, checkpoint, or launch model sessions.
+
+| Task | Parallel batch | File ownership | Serialization required | Dependency reason |
+| --- | --- | --- | --- | --- |
+| Metrics/grading | A | `scripts/comparison_metrics.py`, `scripts/test_comparison_metrics.py` | No | None - safe parallel batch once the record contract is reviewed. |
+| Runner/guidance/results | Lead | `scripts/agent_comparison.py`, `scripts/test_agent_comparison.py`, routing/skill mirrors, guidance docs, protocol, review fixture metadata, results/memory | Yes | Consume the reviewed metric interface; freeze inputs before scored dispatch. |
+
+## Tasks
+
+### 1. Freeze controls and prove isolation
+
+**Files:** Protocol, `evals/review-2026-10-26/`, routing/skill mirrors, instruction/docs mirrors, narrow contract tests.
+**Interfaces:** Same seven MCP tools and existing CLI; explicit arm instructions.
+**Contract inputs:** Verified engine, eight reserved prompts/oracle, installed CLI help and current official documentation.
+**File ownership:** Lead-owned protocol/guidance/assets/tests.
+**Serialization required:** Yes.
+**Dependency reason:** Controls precede calibration and scored calls.
+
+**What to build:** Reviewed/frozen scoring and guidance, a fixture-only seed, and a verified isolated invocation. Preserve the original guidance as an experimental control.
+**Approach:** Apply the existing routing plan without changing engine behavior. Keep all mirrored files synchronized. Use local CLI `--ignore-user-config`, `--ignore-rules`, `--ephemeral`, and JSON output; verify effective isolation with calibration.
+
+- [x] Astra's concrete concerns are resolved and recorded.
+- [ ] Task/oracle/guidance fingerprints and decision rule are committed before scored calls.
+- [ ] Calibration demonstrates isolated instructions, native-only availability, and correct MCP tool availability without exposing the oracle.
+- [ ] Guidance/asset checks and mirrored-file checks pass.
+
+### 2. Record and grade real sessions
+
+**Files:** New runner/summarizer modules and tests, existing CSV schema and experiment assets.
+**Interfaces:** Codex JSONL and the existing task/oracle formats; no new agent product tool.
+**Contract inputs:** Frozen session/scoring protocol above.
+**File ownership:** Metrics worker owns only its two files; lead owns runner and assets.
+**Serialization required:** Yes for scored execution.
+**Dependency reason:** Scored dispatch follows calibration and input freeze.
+
+**What to build:** Bounded 72-run execution, complete durable evidence, factual grading and human/source review, and an outcome table.
+**Approach:** Reuse existing parser/telemetry patterns, extend only for actual observed events, and test missing usage, invalid output, answer leakage, wrong owners/tests, and native-arm tool contamination.
+
+- [ ] Tests demonstrate correct counts, missing-metric behavior, negative grading, isolated staging, and balanced scheduling.
+- [ ] Every scheduled trial has a recorded outcome or an explicit infrastructure failure; no silent drop/replacement.
+- [ ] Every accepted answer is reviewed against source; instructions/adoption are assessed independently from answer correctness.
+- [ ] Outcome table distinguishes task success, tokens, latency, startup, unavailable billing, and inference limits.
+
+### 3. Close confirmed defects and evidence
+
+**Files:** Narrow affected product/regression files if failures prove defects; review, plans, guidance, memory.
+**Interfaces:** Existing product contracts.
+**Contract inputs:** Completed frozen outcomes; no speculative feature expansion.
+**File ownership:** Lead assigns any confirmed independent implementation scope explicitly.
+**Serialization required:** Yes.
+**Dependency reason:** Findings must come from completed/retained evidence.
+
+**What to build:** Verified fixes for actionable confirmed defects and a source-backed next-project decision.
+**Approach:** Reproduce before fixing, preserve unfavorable experiment results, and label used cases as regression evidence.
+
+- [ ] Confirmed in-scope defects are fixed and narrowly verified; genuine upstream dependencies remain explicit.
+- [ ] Report and active brief reflect the measured direction and current authorization.
+- [ ] Local commits include docs/memory; task state is reconciled and no publication/global configuration changes occur.
+
+## Verified external surface
+
+Installed CLI help confirms `--ignore-user-config`, `--ignore-rules`, `--ephemeral`, `--json`, `--output-schema`, and per-invocation `-c` overrides. The selected model/effort match the existing user configuration; no global setting is changed. Official documentation supports JSONL events and structured answers ([non-interactive mode](https://learn.chatgpt.com/docs/non-interactive-mode)), and developer instructions, disabled memories, named read-only permission profiles with deny paths, and project-document limits ([configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference)). Registered CLI features include disabling plugins/apps/hooks/memories/multi-agent/host skill discovery; calibration verifies the effective result rather than treating flags as proof.
+
+## Execution rulings before dispatch
+
+- The revised policy is an isolated experimental asset first; production guidance stays at the verified control until its adoption/behavior checks pass. Two routing copies and AGENTS/CLAUDE are mirrored; skills/code-kb/SKILL.md is a single shared plugin skill, so the older plan's second skill path was stale.
+- A real bubblewrap test proves oracle/host-instruction masking and a fixture working directory. An actual `codex sandbox` invocation proves the generated read-only permission profile denies a private-profile canary. No model was called by those checks. The CLI splits dotted override paths naively; a quoted filesystem path must therefore be passed in an inline TOML table, which the integration test verifies.
+- The extraction preflight passed:9 expected symbols,7 static calls,5 test calls, plus the CommonJS value binding; known framework gaps remain explicit. The downloaded Julie3.9.1 archive matched the pinned SHA and its binary matched `.tools/julie-extract` byte-for-byte. Raw hashes and extraction output are retained in target/review-comparison/2026-10-26/preflight.
+- The immutable task/oracle/schema/guidance/tool-description manifest is evals/review-2026-10-26/experiment.json. No scored or calibration model calls have run yet.

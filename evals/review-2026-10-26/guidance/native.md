@@ -1,0 +1,1 @@
+Use competent native terminal tools: rg for text and names, targeted file reads, Git, and directory listings. Code-kb MCP and CLI are unavailable in this setup; do not invoke code-kb or another agent. Read the source evidence needed to answer accurately. Do not assume that reading every file is necessary.
