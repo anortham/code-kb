@@ -184,16 +184,16 @@
     "effort": "high",
     "timeout_seconds": 900,
     "codex_sha256": "b93f6811d3f653f0fb83be4050d857fb9abbb111dfa2ce160563327daff7f306",
-    "protocol_sha256": "b4f4fe55d83814807ce660115f480332677b6d12aa98c66c062926d6ed64d55a",
+    "protocol_sha256": "5806f1783fdddb59255fe065bfba96c2c4536c67ef185a3e9749b62392b23c68",
     "corpus_sha256": "cdcee6242543d8aab5041f17f5a9f86277dc66c2a28243c02e144dc4a38cfe8c",
     "snapshot_sha256": "7920526e21f47852d73e33d6ef6bbcb73e7ae1373b0fedc5d31aac65804e3839",
     "sandbox_sha256": "be41b956ee91def3be885440f10248340d0d618286c64d03d0b64989b340770d",
-    "runner_sha256": "34388ab9463a2a9cf6784014d4ea2f0c4a1dcd2d9d4124d5c0d4be0faddc8d76",
+    "runner_sha256": "bbba559f39e54204fc5812b0c9f04686ea54c8f3ae378948931f5422fc5ec3ce",
     "extractor_sha256": "777fe822a0eddbdfd9f357c018c7a1a881907bedc698f913736a30ffc0ce0d12",
     "binary_sha256": "d50d77812c0b9aad04b38b31c63b71df7768d0c44273b6d97a7e4a15a37b2127",
     "guidance_sha256": "d4a54239016d1ce579ecda5b949a4e3fa86764741b1527c5b2deb499336a486a",
     "profiles_sha256": "bf93097d031c69093a6646da317b8bbf190a8ad792c859f4878160a9ae8552a7",
-    "frozen_inputs_sha256": "5ccb0537f1f71c9c966baf3b2d0d0032e0752c65cdb5e2cd95013231cf23b01a",
+    "frozen_inputs_sha256": "77db1b0b658d838c8fa11674922d5fd40f363bec4c0771aee764ad95590d72f0",
     "readiness_archive_sha256": "1b725721ad6636ecea7aaaad10bd3f4c4e0dea35aed5b6915641f6f7f250fedf",
     "base_bubblewrap_binary_sha256": "6da06f152b0865172d73348c34cb88487c326ce2f21cd980fc25ff10c4dbcdfb",
     "base_go_toolchain_sha256": "7d4a3654d14009f7cdf70507c6badf16fc40f2ffccf2be04d8c792edffdaebcd",
@@ -238,7 +238,10 @@
     "tools_minijinja_rust": "inputs/tools_minijinja_rust",
     "tools_nodatime_dotnet": "inputs/tools_nodatime_dotnet"
   },
-  "call_limit": 28,
-  "budget_gate": "pending",
-  "provider_calls": 0
+  "provider_calls": 0,
+  "lineage": {
+    "previous_manifest_commit": "ab7a73c6835357bdd1fbf279bc862aa20c4c9f04",
+    "previous_manifest_sha256": "4e85c2fb742141f458d0465a83a602f4a818e27eb0f98b2c4f2be3754213f463",
+    "change": "Removed spending approval policy; case, schedule, model, runtime, guidance and dependency inputs are unchanged."
+  }
 }

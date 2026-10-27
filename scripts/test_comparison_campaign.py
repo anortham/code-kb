@@ -43,43 +43,51 @@ class CampaignCommandTests(unittest.TestCase):
         manifest_path.write_text(json.dumps(manifest))
         output = Path(directory) / "output"
         output.mkdir()
-        authorization = {
-            "scored_runs": 72,
-            "calibration_passed": True,
-            "manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
-        }
-        (output / "authorized.json").write_text(json.dumps(authorization))
         return project, output, binary, julie
 
     def campaign_args(self, project, output, binary, julie):
         return SimpleNamespace(run=True, root=project, output=output, binary=binary, julie=julie, codex=Path("/bin/false"))
 
-    def test_scored_dispatch_requires_the_calibration_authorization_file(self):
+    def test_campaign_dispatches_73_jobs_without_authorization_marker(self):
         with tempfile.TemporaryDirectory() as temporary:
-            output = Path(temporary) / "results"
-            completed = subprocess.run(
-                [
-                    sys.executable,
-                    str(RUNNER),
-                    "--root",
-                    str(ROOT),
-                    "--output",
-                    str(output),
-                    "--binary",
-                    str(ROOT / "target" / "release" / "code-kb"),
-                    "--julie",
-                    str(ROOT / ".tools" / "julie-extract"),
-                    "--codex",
-                    "/bin/false",
-                    "--run",
-                ],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
+            project, output, binary, julie = self.make_manifest_project(temporary)
+            auth_file = Path(temporary) / "auth.json"
+            auth_file.write_text("{}")
+            jobs = [
+                {"task_id": "python-registration-concept", "repeat": index + 1, "order": index + 1, "arm": "native"}
+                for index in range(73)
+            ]
+            authorization_marker_exists = (output / "authorized.json").exists()
+            calls = []
 
-        self.assertNotEqual(completed.returncode, 0)
-        self.assertIn("authorized.json", completed.stderr)
+            def completed_call(argv, prompt, capture_dir, timeout=360):
+                calls.append(argv)
+                capture_dir = Path(capture_dir)
+                capture_dir.mkdir(parents=True, exist_ok=True)
+                (capture_dir / "events.jsonl").write_text('{"type":"turn.completed"}\n')
+                (capture_dir / "stderr.log").write_text("")
+                answer = Path(argv[argv.index("-o") + 1])
+                answer.write_text(json.dumps({"symbols": [], "tests": [], "literals": [], "explanation": "No facts supplied."}))
+                return {"exit_code": 0, "timed_out": False, "wall_seconds": 0.25}
+
+            try:
+                result = campaign.run_campaign(
+                    self.campaign_args(project, output, binary, julie),
+                    jobs=jobs,
+                    auth_file=auth_file,
+                    hidden_roots=[],
+                    capture_fn=completed_call,
+                    redactor=lambda payload: payload,
+                )
+            except campaign.CampaignError as error:
+                self.fail(f"a valid campaign was blocked before fake dispatch: {error}")
+            outcomes = [json.loads(path.read_text()) for path in (output / "runs").glob("*/outcome.json")]
+
+        self.assertFalse(authorization_marker_exists)
+        self.assertEqual(result["status"], "complete")
+        self.assertEqual(len(calls), 73)
+        self.assertEqual(len(outcomes), 73)
+        self.assertEqual({outcome["infrastructure_retries_used"] for outcome in outcomes}, {0})
 
     def test_fixture_drift_fails_before_campaign_dispatch(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -200,13 +208,6 @@ class CampaignCommandTests(unittest.TestCase):
         self.assertNotIn(str(binary), native_argv)
         self.assertNotIn(str(julie), native_argv)
         self.assertNotIn("mcp_servers.code_kb", native_argv)
-
-    def test_authorization_marker_must_match_the_frozen_manifest(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            _, output, _, _ = self.make_manifest_project(temporary)
-
-            with self.assertRaisesRegex(ValueError, "authorized.json"):
-                campaign.validate_authorization(output, "different-manifest-hash")
 
     def test_redacted_fixture_change_is_recorded_without_dispatch(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -460,38 +461,6 @@ class CampaignCommandTests(unittest.TestCase):
         self.assertEqual(csv_row["query_p50_ms"], 30)
         self.assertEqual(csv_row["query_p95_ms"], 50)
         self.assertIn("query_latency=available", csv_row["metric_availability"])
-
-    def test_authorization_limits_infrastructure_retry_accounting(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            _, output, _, _ = self.make_manifest_project(temporary)
-            marker = output / "authorized.json"
-            authorization = json.loads(marker.read_text())
-            authorization["infrastructure_retries_used"] = 1
-            marker.write_text(json.dumps(authorization))
-            manifest_hash = authorization["manifest_sha256"]
-            campaign.validate_authorization(output, manifest_hash)
-            authorization["infrastructure_retries_used"] = 9
-            marker.write_text(json.dumps(authorization))
-
-            with self.assertRaisesRegex(ValueError, "retry accounting"):
-                campaign.validate_authorization(output, manifest_hash)
-
-    def test_campaign_rejects_more_than_72_jobs(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            project, output, binary, julie = self.make_manifest_project(temporary)
-            auth_file = Path(temporary) / "auth.json"
-            auth_file.write_text("{}")
-            jobs = [
-                {"task_id": "python-registration-concept", "repeat": index + 1, "order": index + 1, "arm": "native"}
-                for index in range(73)
-            ]
-
-            with self.assertRaisesRegex(campaign.CampaignError, "72-run cap"):
-                campaign.run_campaign(
-                    self.campaign_args(project, output, binary, julie), jobs=jobs, auth_file=auth_file,
-                    hidden_roots=[], capture_fn=lambda *args, **kwargs: self.fail("oversized campaign cannot dispatch"),
-                    redactor=lambda payload: payload,
-                )
 
     def test_deadline_outcome_and_raw_error_evidence_are_preserved(self):
         with tempfile.TemporaryDirectory() as temporary:

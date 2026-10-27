@@ -121,7 +121,8 @@ not a controlled comparison against competent native retrieval.
    test path. Reserve new tasks before tuning and repeat runs. Measure accepted
    changes, missed required edits, repair rounds, wall time including cold
    indexing, and observed tokens. Record tool adoption separately: enforced
-   calls are not proof of value. Paid runs require a separate budget approval.
+   calls are not proof of value. Run the approved comparison after its technical
+   readiness checks pass.
 
 2. **Close applicable edit-check gaps across languages.** Removed members and
    functions passed as values are candidate capabilities to investigate using
@@ -344,8 +345,8 @@ file inventory. AGENTS.md and CLAUDE.md document the behavior together.
 
 The next product decision should follow completed agent edits on this corpus:
 compare accepted patches, missed callers, test results, time including cold
-indexing, and observed tokens. The frozen comparison proposes 24 scored calls
-and at most 28 total calls. Its separate budget gate remains pending; local
+indexing, and observed tokens. The frozen comparison uses 24 scored runs. The
+owner has authorized evaluation without separate spending approval. Local
 readiness does not establish an agent-success or cost improvement and does not
 justify changing global tool routing.
 
@@ -376,3 +377,14 @@ final-binary controls also pass scan, MCP initialization, all seven tool schemas
 and a real source lookup without exposing hidden checks or credentials.
 
 The Windows VM is confirmed shut off; its pre-existing untracked `test.log` was preserved. All task commits remain local.
+
+**Spending-policy correction:** The owner directed removal of budget/spending
+gates. Both evaluation tools now execute without approval files, receipts or
+financial call caps. Fixed experimental schedules and input/isolation checks
+remain. AGENTS.md, CLAUDE.md and saved project guidance state that approved work
+includes model evaluation. Historical approval metadata is provenance only.
+The [removal evidence](../../evals/edit-2026-10-27/results/controls/spending-removal/identity.json)
+records 266 passing Python tests, a real validator run without spending fields,
+and 73 fake-provider dispatches without an approval file. The 24-cell manifest
+has updated evaluator/protocol hashes and explicit lineage; original scored
+results and raw runtime evidence are unchanged.

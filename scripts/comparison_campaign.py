@@ -147,24 +147,6 @@ def validate_manifest(root, binary, julie):
     return experiment, hashlib.sha256(raw).hexdigest(), tasks, oracles
 
 
-def validate_authorization(output, manifest_hash):
-    path = Path(output) / "authorized.json"
-    try:
-        authorization = json.loads(path.read_text())
-    except (OSError, json.JSONDecodeError) as error:
-        raise ValueError(f"cannot read scored-run authorization: {error}") from error
-    if not isinstance(authorization, dict) or (
-        authorization.get("scored_runs") != 72
-        or authorization.get("calibration_passed") is not True
-        or authorization.get("manifest_sha256") != manifest_hash
-    ):
-        raise ValueError("authorized.json does not approve these 72 frozen runs and manifest")
-    retries = authorization.get("infrastructure_retries_used", 0)
-    if type(retries) is not int or not 0 <= retries <= 8:
-        raise ValueError("authorized.json has invalid infrastructure retry accounting")
-    return authorization
-
-
 class CampaignError(RuntimeError):
     pass
 
@@ -441,7 +423,6 @@ def _trial_in_root(args, job, task, experiment, manifest_hash, seed, commit, aut
     )
     isolated = isolate(command, run_root, private_profile, profile_target, auth_file, hidden_roots)
     _, current_manifest, _, _ = validate_manifest(args.root, args.binary, args.julie)
-    validate_authorization(args.output, current_manifest)
     if current_manifest != manifest_hash or (binary and (sha256(binary) != experiment["engine_sha256"] or sha256(julie) != experiment["extractor_sha256"])):
         raise CampaignError("manifest or copied tool changed before dispatch")
     allowed, policy_note = provider_policy(args.root)
@@ -591,17 +572,14 @@ def run_campaign(args, *, jobs=None, auth_file=AUTH_FILE, hidden_roots=None, cap
     root, output = Path(args.root).resolve(), Path(args.output).resolve()
     if not args.run:
         return {"status": "not_run"}
-    if not (output / "authorized.json").is_file():
-        raise CampaignError(f"scored dispatch requires {output / 'authorized.json'}")
     if not Path(auth_file).is_file():
         raise CampaignError("saved Codex authentication is unavailable")
     experiment, manifest_hash, task_data, _ = validate_manifest(root, args.binary, args.julie)
-    authorization = validate_authorization(output, manifest_hash)
     task_map = {task["id"]: task for task in task_data["tasks"]}
     generated_schedule = jobs is None
     jobs = schedule(list(task_map)) if generated_schedule else jobs
-    if len(jobs) > 72 or (generated_schedule and len(jobs) != 72):
-        raise CampaignError("campaign exceeds the 72-run cap or does not match the frozen schedule")
+    if generated_schedule and len(jobs) != 72:
+        raise CampaignError("generated schedule does not match the frozen 72-trial design")
     seed, commit = prepare_seed(root, output)
     capture_fn = capture if capture_fn is None else capture_fn
     hidden_roots = [str(path) for path in HIDDEN_ROOTS if path.exists()] if hidden_roots is None else hidden_roots
@@ -657,14 +635,13 @@ def run_campaign(args, *, jobs=None, auth_file=AUTH_FILE, hidden_roots=None, cap
             "harness": experiment["harness"], "engine_sha256": experiment["engine_sha256"],
             "extractor_sha256": experiment["extractor_sha256"],
             "julie_version": experiment.get("julie_version"),
-            "infrastructure_retries_used": authorization.get("infrastructure_retries_used", 0),
+            "infrastructure_retries_used": 0,
             "dispatch_may_occur": True,
         }, redactor)
         attempt_dir = run_dir / "attempt-001"
         print(f"[{position}/{len(jobs)}] {run_id}: dispatching", file=sys.stderr, flush=True)
         try:
             experiment, manifest_hash, task_data, _ = validate_manifest(root, args.binary, args.julie)
-            validate_authorization(output, manifest_hash)
             outcome, artifacts = _trial(args, job, task_map[job["task_id"]], experiment, manifest_hash, seed, commit, auth_file, hidden_roots, capture_fn, redactor)
             outcome["status"] = outcome.get("status", "preflight_failed")
         except ValueError as error:
@@ -689,7 +666,7 @@ def run_campaign(args, *, jobs=None, auth_file=AUTH_FILE, hidden_roots=None, cap
         outcome.setdefault("engine_sha256", experiment["engine_sha256"])
         outcome.setdefault("extractor_sha256", experiment["extractor_sha256"])
         outcome.setdefault("julie_version", experiment.get("julie_version"))
-        outcome.setdefault("infrastructure_retries_used", authorization.get("infrastructure_retries_used", 0))
+        outcome.setdefault("infrastructure_retries_used", 0)
         outcome.setdefault("human_review_required", True)
         recorded = _record_outcome(run_dir, attempt_dir, outcome, artifacts, redactor)
         _write_csv(output)
@@ -706,7 +683,7 @@ def run_campaign(args, *, jobs=None, auth_file=AUTH_FILE, hidden_roots=None, cap
 def main(argv=None):
     args = parse_args(argv)
     if not args.run:
-        print("No dispatch. Pass --run after calibration authorization.")
+        print("No dispatch. Pass --run to start the campaign.")
         return 0
     try:
         result = run_campaign(args)

@@ -83,7 +83,7 @@
   },
   "persistent_cache": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0",
   "provider_calls": 0,
-  "runner_sha256": "34388ab9463a2a9cf6784014d4ea2f0c4a1dcd2d9d4124d5c0d4be0faddc8d76",
+  "runner_sha256": "bbba559f39e54204fc5812b0c9f04686ea54c8f3ae378948931f5422fc5ec3ce",
   "runtime": {
     "binary": {
       "host_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/tools/intelligence/code-kb",
@@ -136,5 +136,7 @@
     "platform": "Linux-7.2.11-200.fc44.x86_64-x86_64-with-glibc2.43",
     "python": "3.14.8 (main, Oct  1 2026, 00:00:00) [GCC 16.2.1 20260819 (Red Hat 16.2.1-2)]",
     "python_sqlite": "3.51.2"
-  }
+  },
+  "update_reason": "Evaluator validates reproducibility without spending approval metadata.",
+  "updated_utc": "2026-10-27T19:31:06.224243+00:00"
 }

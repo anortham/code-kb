@@ -4,7 +4,7 @@
 
 Measure whether code-kb helps an agent finish correct changes in larger codebases. The owner directed continued work on October 27 after approving the project-direction repairs. This protocol authorizes local preparation, implementation, tests, and commits. It preserves the original 72-run navigation pilot and its outcomes.
 
-Paid dispatch is a separate gate. The proposed study has six tasks, native and code-kb arms, and two repeats: at most 24 scored calls. Allow two non-task calibration calls and two infrastructure retries, at most 28 provider calls total. Freeze the final task set, executable hashes, model, limits, and an explicit budget receipt before dispatch. The prior pilot's paid authorization is not an unlimited replay budget. No model CLI call is needed for readiness or runner verification.
+The study has six tasks, native and code-kb arms, and two repeats: 24 scored runs. The owner's approval covers preparation, calibration and model evaluation. No separate spending approval, budget file, approval receipt or financial call cap is required. Freeze the task set, executable hashes, model and technical controls before scored dispatch. Keep calibration and infrastructure retries distinct from scored outcomes.
 
 No push, publication, release, global configuration change, or change to production routing is included. All 42 pinned Julie languages remain in scope; this sample covers six programming languages and cannot establish all-language agent performance.
 
@@ -74,6 +74,6 @@ The Python entry point is `run(project, state, output, timeout, mode, argv, *, d
 
 Only agent mode accepts `--private-profile` and `--auth-file`. It launches the trusted installed Codex CLI, not an arbitrary shell with provider access. The private profile is bound at the host-native Codex profile path; the trusted CLI's custom profile must explicitly deny command reads there and disable command networking. The built-in `:workspace` profile alone is insufficient. Empty private profiles support actual `codex sandbox` probes without authentication or model calls.
 
-`scripts/edit_evaluation.py` consumes those contracts and the case/corpus files. Its local commands prepare snapshots, check readiness, run a fake-agent end-to-end attempt, reconstruct and grade bundles, validate a frozen campaign manifest, and summarize outcomes. No code path may invoke a provider before a manifest-bound budget/authorization record and successful controls exist. Reuse `comparison_metrics.summarize_trace` for emitted metrics; do not change the old read-only runner or grader.
+`scripts/edit_evaluation.py` consumes those contracts and the case/corpus files. Its local commands prepare snapshots, check readiness, run a fake-agent end-to-end attempt, reconstruct and grade bundles, validate a frozen campaign manifest, and summarize outcomes. Provider execution requires matching inputs and successful readiness/isolation controls; it does not require financial authorization artifacts. Reuse `comparison_metrics.summarize_trace` for emitted metrics; do not change the old read-only runner or grader.
 
 Official permission-profile behavior is documented in [OpenAI Docs](https://learn.chatgpt.com/docs/permissions). Confirm the installed CLI's writable profile and deny rules with actual `codex sandbox` tests. Profiles and outer filesystem isolation are separate controls.

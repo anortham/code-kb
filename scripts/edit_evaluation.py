@@ -1113,18 +1113,6 @@ def validate_manifest(
     normalized = [{"case_id": item.get("case_id"), "arm": item.get("arm"), "repeat": item.get("repeat")} for item in schedule if isinstance(item, dict)]
     if normalized != expected_schedule:
         raise EvaluationError("manifest schedule must include each case in the frozen native/code-kb, code-kb/native pair order")
-    if manifest.get("call_limit") != 28:
-        raise EvaluationError("manifest call_limit must be 28")
-    if manifest.get("budget_gate") not in {"pending", "approved"}:
-        raise EvaluationError("manifest budget_gate must be pending or approved")
-    receipt = manifest.get("budget_receipt")
-    if manifest["budget_gate"] == "approved":
-        if not isinstance(receipt, dict) or not isinstance(receipt.get("path"), str) or not isinstance(receipt.get("sha256"), str):
-            raise EvaluationError("approved budget gate requires a budget receipt path and SHA-256")
-        receipt_path = _manifest_artifact(path.parent, receipt["path"], "budget receipt path")
-        if _hash_file(receipt_path) != receipt["sha256"]:
-            raise EvaluationError("budget receipt hash does not match")
-
     controls = manifest.get("controls")
     required_controls = {"model", "effort", "timeout_seconds", "codex_sha256", "protocol_sha256", "corpus_sha256", "snapshot_sha256", "sandbox_sha256", "runner_sha256", "extractor_sha256", "binary_sha256", "guidance_sha256"}
     if not isinstance(controls, dict):
@@ -1175,7 +1163,7 @@ def validate_manifest(
             raise EvaluationError(f"manifest control artifact digest is stale: {artifact_name}")
         if artifact_name == "corpus" and _hash_file(Path(corpus_path).resolve(strict=True)) != expected_hash:
             raise EvaluationError("manifest corpus digest does not match the evaluated corpus")
-    return {"valid": True, "case_count": 6, "scored_calls": 24, "call_limit": 28, "dispatch_authorized": manifest["budget_gate"] == "approved"}
+    return {"valid": True, "case_count": 6, "scored_calls": 24}
 
 
 def _hash_file(path: Path) -> str:

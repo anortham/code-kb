@@ -1,0 +1,28 @@
+test_campaign_dispatches_73_jobs_without_authorization_marker (scripts.test_comparison_campaign.CampaignCommandTests.test_campaign_dispatches_73_jobs_without_authorization_marker) ... FAIL
+
+======================================================================
+FAIL: test_campaign_dispatches_73_jobs_without_authorization_marker (scripts.test_comparison_campaign.CampaignCommandTests.test_campaign_dispatches_73_jobs_without_authorization_marker)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/murphy/.codex/worktrees/1e6f/code-kb/scripts/test_comparison_campaign.py", line 74, in test_campaign_dispatches_73_jobs_without_authorization_marker
+    result = campaign.run_campaign(
+        self.campaign_args(project, output, binary, julie),
+    ...<4 lines>...
+        redactor=lambda payload: payload,
+    )
+  File "/home/murphy/.codex/worktrees/1e6f/code-kb/scripts/comparison_campaign.py", line 595, in run_campaign
+    raise CampaignError(f"scored dispatch requires {output / 'authorized.json'}")
+scripts.comparison_campaign.CampaignError: scored dispatch requires /tmp/tmpkdoieyco/output/authorized.json
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/murphy/.codex/worktrees/1e6f/code-kb/scripts/test_comparison_campaign.py", line 83, in test_campaign_dispatches_73_jobs_without_authorization_marker
+    self.fail(f"a valid campaign was blocked before fake dispatch: {error}")
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: a valid campaign was blocked before fake dispatch: scored dispatch requires /tmp/tmpkdoieyco/output/authorized.json
+
+----------------------------------------------------------------------
+Ran 1 test in 0.003s
+
+FAILED (failures=1)

@@ -23,7 +23,7 @@ Complete the four retrieval and quality improvements before the complete-task to
 
 ## Constraints
 
-Keep the AST/SQLite foundation, bounded retained memory, and CLI/MCP parity. Focused correctness and performance checks belong with each improvement. Paid model replays require an explicit budget. Local commits are authorized; push, PR, and release authority remain absent.
+Keep the AST/SQLite foundation, bounded retained memory, and CLI/MCP parity. Focused correctness and performance checks belong with each improvement. Model evaluation needed for approved work is authorized without separate spending approval. Local commits are authorized; push, PR, and release authority remain absent.
 
 ## Status and evidence
 

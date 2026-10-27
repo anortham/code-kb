@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "base_commit": "ab7a73c6835357bdd1fbf279bc862aa20c4c9f04",
+  "python_tests_passed": 266,
+  "edit_validator_tests_passed": 18,
+  "legacy_campaign_tests_passed": 16,
+  "fake_dispatches_without_approval_file": 73,
+  "provider_calls_in_verification": 0,
+  "validation": {
+    "valid": true,
+    "case_count": 6,
+    "scored_calls": 24
+  },
+  "files": {
+    "scripts/edit_evaluation.py": "bbba559f39e54204fc5812b0c9f04686ea54c8f3ae378948931f5422fc5ec3ce",
+    "scripts/test_edit_evaluation.py": "d5668cb927513479fa238488b06fbd12da4adebc1f65e6352f75ba9dfdffcea1",
+    "scripts/comparison_campaign.py": "718d753a5ded564e35708e777390e35ca3ea2c95d8b479a550768c91ba761bbc",
+    "scripts/test_comparison_campaign.py": "cd6a69f2bf2236b234c1ef52cb3b80e2cd1824e75295afeb250a9cf08ed3a698",
+    "evals/edit-2026-10-27/manifest.json": "bae35a4a978042792e8b22309f90364ecad72031979372bd17f4e4ebd78888f0",
+    "evals/edit-2026-10-27/protocol.md": "5806f1783fdddb59255fe065bfba96c2c4536c67ef185a3e9749b62392b23c68"
+  },
+  "evidence": {
+    "edit-validator-red.log": "0e977bdab887c23348c1f84d04cd4c8d8b89f8b26c9d7972221c32882d1ef28a",
+    "edit-validator-green.log": "850dd2ad664733a87edc5f1ec0ae6cb32b2612ae19d19544869205df20429acb",
+    "edit-validator-module.log": "a30df382ad775c76fcfa6a72990f4d7e9883aa06b271bf37bdaa463d9f847f92",
+    "legacy-red.log": "926454f7d73e07bfb81f80d108e41cf327863d99c9ec1282bf16a29dc902a92e",
+    "legacy-green.log": "5b7602d61fb8809f12b09706bdec85fe82e39b21a0d38c8dedafb180a67da74c",
+    "legacy-module.log": "0cc79bb8910d4460ab0454a80fcf207eee80e190e936227db4c0f7fe08adfe90",
+    "python-suite.log": "52825855073d8663bcca3874d882fa147cbe64d9d1de1b8c37c97047c6811e89",
+    "manifest-validation.log": "c704afcccc3740f73094f56cc7b23fe6e49a8263bb7495e91db532dcb98a2280",
+    "manifest-validation.json": "1211e84227b5a63b22c9163d631ad592a77c5a61466a40c5d38e4c486bed6696"
+  },
+  "historical_raw_results": "unchanged"
+}

@@ -13,7 +13,7 @@
 - Worktree: `/home/murphy/.codex/worktrees/1e6f/code-kb`, branch `fix/cross-language-review`, starting commit `708ed6c1a2812f58fc24cbd217b5b02c9c0b784f`.
 - Local implementation, commits, and paid evaluation are authorized by the owner's approval above. No further approval round is needed for this protocol.
 - Publication, push, release, and global configuration changes are outside this slice.
-- At most 72 scored runs, three non-task calibration calls, and eight infrastructure retries. At most 360 seconds per call. A retry never replaces a task failure; retain every attempt. Stop a repeated infrastructure failure and repair it before further dispatch.
+- The original experimental design has 72 scored runs and three non-task calibration calls, with a 360-second per-call timeout. Track infrastructure retries separately; no financial retry ceiling is imposed. A retry never replaces a task failure; retain every attempt. Diagnose repeated infrastructure failures before further dispatch.
 - Use the user's configured model/effort, frozen as `gpt-6.1-sol` / `high`, with installed `codex-cli 0.164.0`. Keep them constant across arms. Do not switch providers/models to rescue outcomes.
 - OpenAI is the selected provider. No external-model policy is declared in the project instructions; report `no external-model policy declared — synthetic fixture sent to openai`. Read the policy before every dispatch. Run the security-review outbound redactor on the constructed payload and fixture bundle; a redaction failure stops dispatch.
 - Send only reviewed synthetic fixture files and the task prompt. Never copy the repository, oracle, reviews, memories, user instructions, or other task answers into a trial root.

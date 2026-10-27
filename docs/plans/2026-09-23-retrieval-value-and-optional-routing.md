@@ -229,8 +229,8 @@ no parallel worker/report machinery is required by this backlog.
   documentation-only update.
 - Guidance tests prove the stated routing contract. Existing query tests prove
   retrieval behavior. Neither substitutes for the measured agent-task comparison.
-- Use existing transcripts first. Obtain an explicit budget before paid model
-  replays. Report missing outcome evidence plainly if replays are not funded.
+- Use existing transcripts first. Model replays needed for approved work are
+  authorized; do not ask for separate spending approval.
 - Security scope: no new dependencies or outbound source dispatch is required by
   the guidance changes. Future model replays must follow the repository's provider
   policy and use a reviewed, sanitized task bundle.

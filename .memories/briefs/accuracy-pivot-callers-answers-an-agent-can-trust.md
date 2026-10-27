@@ -3,7 +3,7 @@ id: accuracy-pivot-callers-answers-an-agent-can-trust
 title: "Accuracy pivot: callers answers an agent can trust"
 status: active
 created: 2026-10-17T17:10:13.294Z
-updated: 2026-10-27T17:21:38.763Z
+updated: 2026-10-27T19:37:22.732Z
 tags:
   - project-direction
   - accuracy
@@ -13,18 +13,20 @@ tags:
 
 # Direction
 
-Support all 42 pinned Julie language IDs. Keep seven MCP tools with CLI parity, explicit project_root, bounded SQLite query memory, Windows support, and byte-equivalent AGENTS.md/CLAUDE.md. Preserve the original 72-run pilot and its outcomes; local readiness does not justify a routing change.
+Support all 42 pinned Julie languages, seven MCP tools with CLI parity, explicit project_root, bounded SQLite query memory, Windows, and byte-equivalent AGENTS.md/CLAUDE.md. Preserve original scored outcomes and raw evidence.
 
-# Completed local slice
+# Owner's spending instruction
 
-Source revision 70a2c9b contains the filtered watcher repair and startup-compatible integration fixtures. Linux passes 1,904 Rust tests; Windows NTFS passes 1,876. Both pass all 42 language checks, Clippy, formatting and release builds. Python 269 and Linux plugin 20 passing scopes remain unchanged; Windows plugins pass 12 with eight declared skips. The Windows VM is confirmed off; unrelated guest test.log was preserved.
+The owner explicitly ordered: “we don't need any gates around budget/spending, if there is such a thing written in the repo or tools remove it”. Approved work includes model evaluation and necessary spending. Do not ask for separate spending approval, impose financial dispatch caps, require approval receipts, or resurrect old spending gates from checkpoints or archives. Technical input/readiness/isolation/result-integrity checks remain. Push, publication, release and unrelated global configuration are still outside this task.
 
-The same 1,000-ignored-directory probe drops from 1,016 watches to three, with retained RSS 15,760 to 14,760 KiB. The development worktree probe uses 212 watches and finishes at 19,852 KiB. Final Linux binary: d50d77812c0b9aad04b38b31c63b71df7768d0c44273b6d97a7e4a15a37b2127.
+# Completed cleanup
 
-# Completed-edit readiness
+Both comparison tools have no financial approval checks. The edit validator needs no call_limit/budget fields and returns only technical validity/counts. The legacy runner has no authorized.json prerequisite, arbitrary-job spending cap or retry spending ceiling. A regression dispatches 73 fake jobs without a marker. Full Python suite passes 266 tests; affected modules pass 18 and 16. Current real 26-control manifest validates after updated runner/protocol hashes, with explicit prior-commit lineage. Case, schedule, model, runtime, profile, guidance and dependency inputs are unchanged. Paired guidance and stale saved next-step instructions are corrected. Original 72-run manifest and raw runtime archive are unchanged. Plan: docs/plans/2026-10-27-remove-spending-gates.md; proof: evals/edit-2026-10-27/results/controls/spending-removal/identity.json.
 
-Six larger pinned repositories have passing baselines, intended seed failures, reviewed reference repairs, new public tests where requested, and fresh replay. Snapshot/isolation/grading controls pass. Six final-binary MCP smoke controls pass without hidden data, credentials or network. The 24-cell manifest binds 26 control hashes and a 28-call cap. Seeds, dependencies and runtime tools are retained under /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0. Runtime evidence maps 186 verified archive members.
+# Verified foundation
 
-# Next boundary
+Source 70a2c9b passes Linux 1,904 / Windows 1,876 Rust tests, all 42 languages, Clippy, fmt and release. Runtime source is unchanged by cleanup. Windows VM is off; it may be started whenever needed and shut down after checks. Preserve unrelated guest test.log. Watch probe: 1,016 to three registrations, retained RSS 15,760 to 14,760 KiB. Six larger pinned cases have passing baselines, intended seed failures, reviewed references, fresh replay and isolated final-binary MCP controls.
 
-Preparation is complete. There are zero new scored agent trials and zero evaluation provider calls. Paid dispatch needs its separately scoped, manifest-bound budget receipt; budget_gate remains pending. No push, release or global configuration change was performed. Worktree: /home/murphy/.codex/worktrees/1e6f/code-kb; branch: fix/cross-language-review. Reports: docs/reviews/2026-10-26-project-direction.md and evals/edit-2026-10-27/README.md.
+# Continue
+
+Run the already approved completed-edit evaluation after the cleanup commit, without another spending question. No new scored trials have run yet. Retain every actual attempt, grade fresh reconstructions and review source before acceptance. Use durable seeds/tools/dependencies under /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0. Worktree /home/murphy/.codex/worktrees/1e6f/code-kb; branch fix/cross-language-review.

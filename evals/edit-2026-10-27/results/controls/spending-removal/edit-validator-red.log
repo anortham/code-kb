@@ -1,0 +1,18 @@
+F
+======================================================================
+FAIL: test_frozen_manifest_binds_six_ready_cases_controls_and_ordered_cells (test_edit_evaluation.EditEvaluationRunnerTests.test_frozen_manifest_binds_six_ready_cases_controls_and_ordered_cells)
+----------------------------------------------------------------------
+scripts.edit_evaluation.EvaluationError: manifest call_limit must be 28
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/murphy/.codex/worktrees/1e6f/code-kb/scripts/test_edit_evaluation.py", line 689, in test_frozen_manifest_binds_six_ready_cases_controls_and_ordered_cells
+    with self.assertRaisesRegex(EvaluationError, "missing control artifact paths"):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: "missing control artifact paths" does not match "manifest call_limit must be 28"
+
+----------------------------------------------------------------------
+Ran 1 test in 0.017s
+
+FAILED (failures=1)

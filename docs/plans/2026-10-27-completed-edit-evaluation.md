@@ -16,7 +16,7 @@
 
 - Work in `/home/murphy/.codex/worktrees/1e6f/code-kb`, branch `fix/cross-language-review`, starting at `edd897d`.
 - The owner's approval to continue authorizes local work and commits; do not ask again for reversible implementation choices.
-- No paid call until the protocol's budget, manifest, readiness, and isolation gates are satisfied. This preparation plan does not create an unlimited replay budget.
+- Model evaluation is covered by the owner's approval. No separate spending approval, financial cap or receipt is required; manifest, readiness and isolation checks remain required.
 - No push, publication, release, global configuration change, new product tool, or speculative engine feature.
 - Preserve all original pilot artifacts and production routing. All 42 languages remain in scope; selected languages are a sample.
 - Tests first. No comments in tests. Workers do not stage/commit, launch models, or modify files owned by another task.
@@ -138,7 +138,7 @@
 
 **Files:** Create `scripts/edit_evaluation.py`, `scripts/test_edit_evaluation.py`, campaign manifest/schema/readiness/report files under `evals/edit-2026-10-27/`; update this plan, project direction and memory.
 **Interfaces:** Reviewed snapshot/sandbox APIs, case contract and existing trace metrics.
-**Contract inputs:** All source/control/dependency identities, protected tests, immutable prior pilot and explicit budget gate.
+**Contract inputs:** All source/control/dependency identities, protected tests, immutable prior pilot and reproducible execution controls.
 **File ownership:** Fresh Luna owns the two orchestration scripts; lead owns manifests, reports, docs and memory. Lead reviews and integrates the worker's implementation; no sibling-owned code changes without handoff.
 **Serialization required:** Yes.
 **Dependency reason:** Requires reviewed Tasks1/2 and verified cases from Tasks3–5.
@@ -148,5 +148,5 @@
 
 - [x] Real fake-agent runs cover success, partial timeout, protected tampering, untracked/deleted source, invalid output and failed grading; replay identity is enforced.
 - [x] All six cases have reviewed source, references, protected tests and retained readiness; all manifests/hashes validate and answer leakage tests pass.
-- [x] Proposed 24-run schedule, model/configuration, controls and budget gate are frozen; no provider is called by preparation or tests.
+- [x] Proposed 24-run schedule, model/configuration and technical controls are frozen; no provider is called by preparation or tests.
 - [x] Python/plugin/JSON/security scopes pass, docs/brief reflect evidence and remaining dispatch authority, and local commits/worktrees are reconciled.

@@ -683,8 +683,6 @@ class EditEvaluationRunnerTests(unittest.TestCase):
             "schedule": schedule,
             "controls": controls,
             "artifacts": artifacts,
-            "call_limit": 28,
-            "budget_gate": "pending",
         }
         manifest_path = manifest_root / "manifest.json"
         manifest_path.write_text(json.dumps(manifest))
@@ -692,8 +690,7 @@ class EditEvaluationRunnerTests(unittest.TestCase):
             validate_manifest(manifest_path, corpus_path=corpus, artifact_paths={"binary": external_binary})
 
         valid = validate_manifest(manifest_path, corpus_path=corpus, artifact_paths=external_artifacts)
-        self.assertTrue(valid["valid"])
-        self.assertFalse(valid["dispatch_authorized"])
+        self.assertEqual(valid, {"valid": True, "case_count": 6, "scored_calls": 24})
 
         cli = subprocess.run(
             [sys.executable, "scripts/edit_evaluation.py", "validate-manifest", "--manifest", str(manifest_path), "--corpus", str(corpus), *[arg for name, value in external_artifacts.items() for arg in ("--artifact", f"{name}={value}")]],
