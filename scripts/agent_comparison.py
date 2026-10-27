@@ -26,6 +26,8 @@ def codex_command(codex, project, schema, answer, profile, guidance, binary=None
         values[f"features.{feature}"] = False
     values["features.skip_host_skill_discovery"] = True
     if binary is not None:
+        for tool in ("file_skeleton", "lookup_symbol", "get_symbol_body", "get_symbol_context", "find_references", "blast_radius", "check_edit"):
+            values[f"mcp_servers.code_kb.tools.{tool}.approval_mode"] = "approve"
         values.update({
             "mcp_servers.code_kb.command": str(binary),
             "mcp_servers.code_kb.args": ["serve", "--root", str(project)],

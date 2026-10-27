@@ -60,6 +60,7 @@ Commit mode: `parallel-lead-commit`. Workers do not stage, commit, checkpoint, o
 | Task | Parallel batch | File ownership | Serialization required | Dependency reason |
 | --- | --- | --- | --- | --- |
 | Metrics/grading | A | `scripts/comparison_metrics.py`, `scripts/test_comparison_metrics.py` | No | None - safe parallel batch once the record contract is reviewed. |
+| Campaign execution | A | `scripts/comparison_campaign.py`, `scripts/test_comparison_campaign.py` | Yes | Reviewed metrics and lead isolation helper; no provider calls by worker. |
 | Runner/guidance/results | Lead | `scripts/agent_comparison.py`, `scripts/test_agent_comparison.py`, routing/skill mirrors, guidance docs, protocol, review fixture metadata, results/memory | Yes | Consume the reviewed metric interface; freeze inputs before scored dispatch. |
 
 ## Tasks
@@ -77,23 +78,23 @@ Commit mode: `parallel-lead-commit`. Workers do not stage, commit, checkpoint, o
 **Approach:** Apply the existing routing plan without changing engine behavior. Keep all mirrored files synchronized. Use local CLI `--ignore-user-config`, `--ignore-rules`, `--ephemeral`, and JSON output; verify effective isolation with calibration.
 
 - [x] Astra's concrete concerns are resolved and recorded.
-- [ ] Task/oracle/guidance fingerprints and decision rule are committed before scored calls.
-- [ ] Calibration demonstrates isolated instructions, native-only availability, and correct MCP tool availability without exposing the oracle.
-- [ ] Guidance/asset checks and mirrored-file checks pass.
+- [x] Task/oracle/guidance fingerprints and decision rule are committed before scored calls.
+- [x] Calibration demonstrates isolated instructions, native-only availability, and correct MCP tool availability without exposing the oracle.
+- [x] Guidance/asset checks and mirrored-file checks pass.
 
 ### 2. Record and grade real sessions
 
 **Files:** New runner/summarizer modules and tests, existing CSV schema and experiment assets.
 **Interfaces:** Codex JSONL and the existing task/oracle formats; no new agent product tool.
 **Contract inputs:** Frozen session/scoring protocol above.
-**File ownership:** Metrics worker owns only its two files; lead owns runner and assets.
+**File ownership:** Metrics worker owns only its two files; campaign worker owns its runner and tests; lead owns isolation helpers and assets.
 **Serialization required:** Yes for scored execution.
 **Dependency reason:** Scored dispatch follows calibration and input freeze.
 
 **What to build:** Bounded 72-run execution, complete durable evidence, factual grading and human/source review, and an outcome table.
 **Approach:** Reuse existing parser/telemetry patterns, extend only for actual observed events, and test missing usage, invalid output, answer leakage, wrong owners/tests, and native-arm tool contamination.
 
-- [ ] Tests demonstrate correct counts, missing-metric behavior, negative grading, isolated staging, and balanced scheduling.
+- [x] Tests demonstrate correct counts, missing-metric behavior, negative grading, isolated staging, and balanced scheduling.
 - [ ] Every scheduled trial has a recorded outcome or an explicit infrastructure failure; no silent drop/replacement.
 - [ ] Every accepted answer is reviewed against source; instructions/adoption are assessed independently from answer correctness.
 - [ ] Outcome table distinguishes task success, tokens, latency, startup, unavailable billing, and inference limits.
@@ -123,4 +124,12 @@ Installed CLI help confirms `--ignore-user-config`, `--ignore-rules`, `--ephemer
 - The revised policy is an isolated experimental asset first; production guidance stays at the verified control until its adoption/behavior checks pass. Two routing copies and AGENTS/CLAUDE are mirrored; skills/code-kb/SKILL.md is a single shared plugin skill, so the older plan's second skill path was stale.
 - A real bubblewrap test proves oracle/host-instruction masking and a fixture working directory. An actual `codex sandbox` invocation proves the generated read-only permission profile denies a private-profile canary. No model was called by those checks. The CLI splits dotted override paths naively; a quoted filesystem path must therefore be passed in an inline TOML table, which the integration test verifies.
 - The extraction preflight passed:9 expected symbols,7 static calls,5 test calls, plus the CommonJS value binding; known framework gaps remain explicit. The downloaded Julie3.9.1 archive matched the pinned SHA and its binary matched `.tools/julie-extract` byte-for-byte. Raw hashes and extraction output are retained in target/review-comparison/2026-10-26/preflight.
-- The immutable task/oracle/schema/guidance/tool-description manifest is evals/review-2026-10-26/experiment.json. No scored or calibration model calls have run yet.
+- The immutable task/oracle/schema/guidance/tool-description manifest is evals/review-2026-10-26/experiment.json. Calibration is complete; no scored model calls have run yet.
+
+## Calibration result
+
+Frozen-control commit9762900 precedes all model calls. Native, current, and revised non-task calibrations completed. Native used2terminal actions/0MCP; revised read the2-line source directly and used0MCP. The first current run encountered the CLI's default MCP approval requirement. A tested per-invocation allowlist now approves only the seven code-kb tools inside the fixture namespace, without changing global settings or sandboxing. One shared infrastructure retry completed file_skeleton and get_symbol_body successfully. All valid controls reported the private canary unreadable; an independent real Codex sandbox test proves denied reads. The original blocked attempt is retained, not overwritten or scored. This is3initial calibrations plus1 of8allowed infrastructure retries;72scored trials remain. Calibration artifacts/validation.json are under target/review-comparison/2026-10-26/calibration.
+
+The run-scoped tool-approval configuration follows the official [MCP configuration examples](https://learn.chatgpt.com/docs/extend/mcp). Successful model completion alone is insufficient for calibration: the current control required completed MCP results, and the revised control required the first source read to be native.
+
+The final pre-scoring source audit corrected the C# `Invite` oracle from line4 (a brace) to line5 (the declaration). All other symbol/literal coordinates matched source. This correction precedes the final manifest freeze and all scored dispatch.

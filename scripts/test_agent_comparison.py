@@ -110,6 +110,16 @@ class ConfigurationTests(unittest.TestCase):
         self.assertIn('mcp_servers.code_kb.command="/tmp/bin/code-kb"', values)
         self.assertIn('mcp_servers.code_kb.args=["serve", "--root", "/tmp/project"]', values)
         self.assertIn('mcp_servers.code_kb.env.JULIE_EXTRACT_BIN="/tmp/bin/julie-extract"', values)
+        approvals = {value for value in values if ".approval_mode=" in value}
+        self.assertEqual(approvals, {
+            'mcp_servers.code_kb.tools.file_skeleton.approval_mode="approve"',
+            'mcp_servers.code_kb.tools.lookup_symbol.approval_mode="approve"',
+            'mcp_servers.code_kb.tools.get_symbol_body.approval_mode="approve"',
+            'mcp_servers.code_kb.tools.get_symbol_context.approval_mode="approve"',
+            'mcp_servers.code_kb.tools.find_references.approval_mode="approve"',
+            'mcp_servers.code_kb.tools.blast_radius.approval_mode="approve"',
+            'mcp_servers.code_kb.tools.check_edit.approval_mode="approve"',
+        })
         self.assertFalse(any("goldfish" in value for value in values))
 
 

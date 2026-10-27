@@ -49,7 +49,7 @@
     "csharp-default-argument-caller": {
       "symbols": [
         {"name": "Send", "file": "csharp/InvitationService.cs", "line": 5},
-        {"name": "Invite", "file": "csharp/InvitationController.cs", "line": 4}
+        {"name": "Invite", "file": "csharp/InvitationController.cs", "line": 5}
       ],
       "tests": ["csharp/InvitationControllerTests.cs::Invite_sends_invitation"],
       "acceptance": ["InvitationController.Invite calls InvitationService.Send.", "The call omits the optional note and must remain valid.", "The focused test uses xUnit, but no C# project file is present, so no runnable test command is evidenced."]
