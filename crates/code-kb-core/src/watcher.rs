@@ -1,7 +1,7 @@
 use ignore::{DirEntry, WalkBuilder};
-use notify::RecursiveMode;
 use notify::event::{CreateKind, EventKind, RemoveKind};
-use notify_debouncer_full::{DebouncedEvent, Debouncer, RecommendedCache, new_debouncer};
+use notify::{RecursiveMode, Watcher};
+use notify_debouncer_full::{DebouncedEvent, Debouncer, RecommendedCache, new_debouncer_opt};
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 #[cfg(test)]
@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 use thiserror::Error;
-use tracing::{debug, info, warn};
+use tracing::{debug, info, trace, warn};
 
 use crate::sync::{delete_file, ensure_fresh_file, scan_workspace, update_file};
 use crate::workspace::{
@@ -38,7 +38,55 @@ const IGNORE_FILES: &[&str] = &[
     ".codekbignore",
 ];
 
-type WorkspaceDebouncer = Debouncer<notify::RecommendedWatcher, RecommendedCache>;
+type WorkspaceDebouncer = Debouncer<TracingWatcher, RecommendedCache>;
+
+struct TracingWatcher(notify::RecommendedWatcher);
+
+impl Watcher for TracingWatcher {
+    fn new<F: notify::EventHandler>(
+        mut event_handler: F,
+        config: notify::Config,
+    ) -> notify::Result<Self> {
+        notify::RecommendedWatcher::new(
+            move |event: notify::Result<notify::Event>| {
+                trace!(?event, "Received native filesystem event");
+                event_handler.handle_event(event);
+            },
+            config,
+        )
+        .map(Self)
+    }
+
+    fn watch(&mut self, path: &Path, recursive_mode: RecursiveMode) -> notify::Result<()> {
+        self.0.watch(path, recursive_mode)
+    }
+
+    fn unwatch(&mut self, path: &Path) -> notify::Result<()> {
+        self.0.unwatch(path)
+    }
+
+    fn configure(&mut self, config: notify::Config) -> notify::Result<bool> {
+        self.0.configure(config)
+    }
+
+    fn kind() -> notify::WatcherKind {
+        notify::RecommendedWatcher::kind()
+    }
+}
+
+fn new_debouncer<F: notify_debouncer_full::DebounceEventHandler>(
+    timeout: Duration,
+    tick_rate: Option<Duration>,
+    event_handler: F,
+) -> notify::Result<WorkspaceDebouncer> {
+    new_debouncer_opt::<F, TracingWatcher, RecommendedCache>(
+        timeout,
+        tick_rate,
+        event_handler,
+        RecommendedCache::new(),
+        notify::Config::default(),
+    )
+}
 
 #[derive(Debug, Error)]
 pub enum WatcherError {
@@ -241,7 +289,10 @@ fn watcher_worker(
             {
                 callback_overflow.store(true, Ordering::Release);
             }
-            Ok(events) => enqueue_events(&event_sender, &callback_overflow, events),
+            Ok(events) => {
+                trace!(?events, "Received debounced filesystem events");
+                enqueue_events(&event_sender, &callback_overflow, events);
+            }
             Err(errors) => {
                 for error in errors {
                     warn!("File watcher error: {error:?}");
@@ -372,6 +423,7 @@ fn enqueue_events(
     if events.is_empty() {
         return;
     }
+    trace!(?events, "Processing filesystem events");
     if events.len() > MAX_QUEUED_EVENTS_PER_BATCH || events.iter().any(|event| event.need_rescan())
     {
         overflow.store(true, Ordering::Release);
@@ -617,6 +669,7 @@ fn process_events(
         .iter()
         .any(|event| event_requires_reconciliation(event, workspace, registrations))
     {
+        trace!("Reconciling directory events");
         reconcile_workspace(debouncer, workspace, db_path, registrations, failures);
         return;
     }
@@ -642,8 +695,10 @@ fn process_events(
         }
         for path in &event.paths {
             let Some((absolute, relative)) = workspace_relative_path(path, workspace) else {
+                trace!(?path, "Skipping filesystem event outside workspace");
                 continue;
             };
+            trace!(%relative, exists = absolute.exists(), "Processing file event path");
             if relative.is_empty() || is_hard_excluded(&relative) {
                 continue;
             }

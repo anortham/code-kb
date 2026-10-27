@@ -114,6 +114,12 @@ fn watcher_reconciles_new_moved_deleted_and_recreated_subtrees() {
     let _guard = WATCHER_TEST_LOCK
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if std::env::var_os("CODE_KB_WATCH_TEST_TRACE").is_some() {
+        let _ = tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::TRACE)
+            .with_test_writer()
+            .try_init();
+    }
     find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
     let temp_dir = safe_tempdir();

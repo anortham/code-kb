@@ -32,4 +32,5 @@ rust-stemmers = { workspace = true }
 
 [dev-dependencies]
 rusqlite = { workspace = true, features = ["hooks"] }
+tracing-subscriber = { workspace = true }
 
