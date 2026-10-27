@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "changes": [
+    {
+      "path": "/home/murphy/.codex/AGENTS.md",
+      "removed_financial_clauses": [
+        "spend money,",
+        "or spend money without explicit user approval."
+      ],
+      "before_sha256": null,
+      "after_sha256": "930d27dbec1bf4199f49b84b9f5e77474f1ca127d615fb9037b47f7a78368834",
+      "missing_pre_edit_digest": true
+    },
+    {
+      "path": "/home/murphy/.claude/CLAUDE.md",
+      "removed_financial_clauses": [
+        "spend money,",
+        "or spend money without explicit user approval."
+      ],
+      "before_sha256": null,
+      "after_sha256": "1c730f56042822b02203751412a2c0f1ac45b6d7bff42c4e37eca1f7568522d5",
+      "missing_pre_edit_digest": true
+    }
+  ],
+  "verification_description": "The two financial approval phrases were removed from both global files before the user supplied the replacement policy. After the policy update, both files already lacked those phrases and were left unchanged on recheck. No SHA-256 digest was captured before the earlier edits, so before_sha256 is null. Current after hashes were verified. No budget, spending, financial, billing, paid, receipt, or cap terms remain in either file or the inspected installed code-kb skills. Nonfinancial push, deploy, and release approval boundaries remain.",
+  "additional_tool_policy_audit": {
+    "path": "/home/murphy/.codex/skills/razorback",
+    "resolved_path": "/home/murphy/source/razorback/skills",
+    "scope": "Skill docs, prompts, templates and references",
+    "active_financial_gates_found": 0,
+    "edits_required": false,
+    "preserved": "Reviewer-call schedules, timeouts, credential/security checks and cost reporting"
+  }
+}

@@ -1,0 +1,2012 @@
+{
+  "archive": "runtime-backport-89991f0-be079b57fb527ad0.tar.gz",
+  "archive_bytes": 257942,
+  "archive_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/runtime-backport-89991f0-be079b57fb527ad0.tar.gz",
+  "archive_sha256": "be079b57fb527ad092ddbd419b9bbea815bf625839bd9a579ee17a6db6038625",
+  "baseline_commit": "84066d3dd21465fe2e89224d2d9ec21e2bbea993",
+  "member_count": 200,
+  "members": [
+    {
+      "bytes": 1758,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/memory-after.json/result.json",
+      "original_bytes": 1758,
+      "original_sha256": "e4e0393305d69da647527ad5f832a50e5b9c0f6f2689a39e8919006535ae7725",
+      "path": "evidence/.razorback/completed-edit-dispatch/memory-after.json/result.json",
+      "redactor_changed": false,
+      "sha256": "e4e0393305d69da647527ad5f832a50e5b9c0f6f2689a39e8919006535ae7725"
+    },
+    {
+      "bytes": 401,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/memory-after.json/scan.stderr.log",
+      "original_bytes": 401,
+      "original_sha256": "ab6e23ff27d1d7637eca48b278226e7ee6975c4babc9da1d8b43cf9a592eb885",
+      "path": "evidence/.razorback/completed-edit-dispatch/memory-after.json/scan.stderr.log",
+      "redactor_changed": false,
+      "sha256": "ab6e23ff27d1d7637eca48b278226e7ee6975c4babc9da1d8b43cf9a592eb885"
+    },
+    {
+      "bytes": 269,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/memory-after.json/scan.stdout.log",
+      "original_bytes": 269,
+      "original_sha256": "95dec1dc6ebc23e7867a27b3b31274b6f16675318f1ae5be81ffd79c6bf97382",
+      "path": "evidence/.razorback/completed-edit-dispatch/memory-after.json/scan.stdout.log",
+      "redactor_changed": false,
+      "sha256": "95dec1dc6ebc23e7867a27b3b31274b6f16675318f1ae5be81ffd79c6bf97382"
+    },
+    {
+      "bytes": 0,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/memory-after.json/serve.stderr.log",
+      "original_bytes": 0,
+      "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "path": "evidence/.razorback/completed-edit-dispatch/memory-after.json/serve.stderr.log",
+      "redactor_changed": false,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 1805,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/memory-before.json/result.json",
+      "original_bytes": 1805,
+      "original_sha256": "0d6161a2a0df4062d4fd1d2c367246b89f8c6f5f22b71eb7c4f9506212c695f0",
+      "path": "evidence/.razorback/completed-edit-dispatch/memory-before.json/result.json",
+      "redactor_changed": false,
+      "sha256": "0d6161a2a0df4062d4fd1d2c367246b89f8c6f5f22b71eb7c4f9506212c695f0"
+    },
+    {
+      "bytes": 449,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/memory-before.json/scan.stderr.log",
+      "original_bytes": 449,
+      "original_sha256": "995e9498445747a6887bef6813d4c760ac541958c75b880b2af4aa71a2076ac2",
+      "path": "evidence/.razorback/completed-edit-dispatch/memory-before.json/scan.stderr.log",
+      "redactor_changed": false,
+      "sha256": "995e9498445747a6887bef6813d4c760ac541958c75b880b2af4aa71a2076ac2"
+    },
+    {
+      "bytes": 271,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/memory-before.json/scan.stdout.log",
+      "original_bytes": 271,
+      "original_sha256": "c65c2e0b81351177083a2e7b63836e6845f04c82be6141d1f4396aa91da5aece",
+      "path": "evidence/.razorback/completed-edit-dispatch/memory-before.json/scan.stdout.log",
+      "redactor_changed": false,
+      "sha256": "c65c2e0b81351177083a2e7b63836e6845f04c82be6141d1f4396aa91da5aece"
+    },
+    {
+      "bytes": 0,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/memory-before.json/serve.stderr.log",
+      "original_bytes": 0,
+      "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "path": "evidence/.razorback/completed-edit-dispatch/memory-before.json/serve.stderr.log",
+      "redactor_changed": false,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 143436,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/task4-code-kb-core.log",
+      "original_bytes": 143436,
+      "original_sha256": "ab6e6a1cbb3f895d6410cbc4345f99a7de69dece8576947933f6ff294877e67b",
+      "path": "evidence/.razorback/completed-edit-dispatch/task4-code-kb-core.log",
+      "redactor_changed": false,
+      "sha256": "ab6e6a1cbb3f895d6410cbc4345f99a7de69dece8576947933f6ff294877e67b"
+    },
+    {
+      "bytes": 740,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/task4-debouncer-removal-green.log",
+      "original_bytes": 740,
+      "original_sha256": "b669e71328e8f6299c48d158bd998e689d538442124fa7aeee206afd9bbfbe6a",
+      "path": "evidence/.razorback/completed-edit-dispatch/task4-debouncer-removal-green.log",
+      "redactor_changed": false,
+      "sha256": "b669e71328e8f6299c48d158bd998e689d538442124fa7aeee206afd9bbfbe6a"
+    },
+    {
+      "bytes": 907,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/task4-debouncer-removal-red.log",
+      "original_bytes": 907,
+      "original_sha256": "354e615f39464653afa512e4bea5e56d9a1b94d3c60d99d579feca52cf7c3cc1",
+      "path": "evidence/.razorback/completed-edit-dispatch/task4-debouncer-removal-red.log",
+      "redactor_changed": false,
+      "sha256": "354e615f39464653afa512e4bea5e56d9a1b94d3c60d99d579feca52cf7c3cc1"
+    },
+    {
+      "bytes": 17401,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/task4-lead-cli.log",
+      "original_bytes": 17401,
+      "original_sha256": "0edd6ebe6d346e20ddba8000c8e4fa61d558ef3aed8ae349ab72f36f3925fa99",
+      "path": "evidence/.razorback/completed-edit-dispatch/task4-lead-cli.log",
+      "redactor_changed": false,
+      "sha256": "0edd6ebe6d346e20ddba8000c8e4fa61d558ef3aed8ae349ab72f36f3925fa99"
+    },
+    {
+      "bytes": 382,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/task4-lead-clippy.log",
+      "original_bytes": 382,
+      "original_sha256": "4ccb8e856109e08fc15a7cbe8857e97207a6abb7f8e248e7fcada19d907e23d8",
+      "path": "evidence/.razorback/completed-edit-dispatch/task4-lead-clippy.log",
+      "redactor_changed": false,
+      "sha256": "4ccb8e856109e08fc15a7cbe8857e97207a6abb7f8e248e7fcada19d907e23d8"
+    },
+    {
+      "bytes": 0,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/task4-lead-fmt.log",
+      "original_bytes": 0,
+      "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "path": "evidence/.razorback/completed-edit-dispatch/task4-lead-fmt.log",
+      "redactor_changed": false,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 373,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/task4-lead-release.log",
+      "original_bytes": 373,
+      "original_sha256": "33bcfd0567afac6f6f8d40364540be830701d40305de8d34448dbf954fd0f4aa",
+      "path": "evidence/.razorback/completed-edit-dispatch/task4-lead-release.log",
+      "redactor_changed": false,
+      "sha256": "33bcfd0567afac6f6f8d40364540be830701d40305de8d34448dbf954fd0f4aa"
+    },
+    {
+      "bytes": 1039,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/task4-lead-verification.json",
+      "original_bytes": 1039,
+      "original_sha256": "40db0ee96d125f10960448921640e1083f65192bd902b5473ccee82eef813019",
+      "path": "evidence/.razorback/completed-edit-dispatch/task4-lead-verification.json",
+      "redactor_changed": false,
+      "sha256": "40db0ee96d125f10960448921640e1083f65192bd902b5473ccee82eef813019"
+    },
+    {
+      "bytes": 986,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/watcher-portable-error-registration-linux.log",
+      "original_bytes": 986,
+      "original_sha256": "f932299928454139175e60c231c0747fa3c301e067b593c5a38ebe20aa4ca1a8",
+      "path": "evidence/.razorback/completed-edit-dispatch/watcher-portable-error-registration-linux.log",
+      "redactor_changed": false,
+      "sha256": "f932299928454139175e60c231c0747fa3c301e067b593c5a38ebe20aa4ca1a8"
+    },
+    {
+      "bytes": 123,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-final-attempt1/windows-backport-final-guest-ready-0.log",
+      "original_bytes": 123,
+      "original_sha256": "747bbd8ec0aa9ead7929ec519eb2fc4830d7872bcdbbab68a08339ae2b438deb",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-attempt1/windows-backport-final-guest-ready-0.log",
+      "redactor_changed": false,
+      "sha256": "747bbd8ec0aa9ead7929ec519eb2fc4830d7872bcdbbab68a08339ae2b438deb"
+    },
+    {
+      "bytes": 10,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-final-attempt1/windows-backport-final-off.log",
+      "original_bytes": 10,
+      "original_sha256": "fcd0e285e488cb37a042511417db2ac1209ef9656fbfef67d97cad27ae72ab90",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-attempt1/windows-backport-final-off.log",
+      "redactor_changed": false,
+      "sha256": "fcd0e285e488cb37a042511417db2ac1209ef9656fbfef67d97cad27ae72ab90"
+    },
+    {
+      "bytes": 477,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-final-attempt1/windows-backport-final-preserve-before.log",
+      "original_bytes": 477,
+      "original_sha256": "f25caa7ddbcdedf0b45566c4ad72dcc5a1b5a6e0159d50ec527530894999f864",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-attempt1/windows-backport-final-preserve-before.log",
+      "redactor_changed": false,
+      "sha256": "f25caa7ddbcdedf0b45566c4ad72dcc5a1b5a6e0159d50ec527530894999f864"
+    },
+    {
+      "bytes": 31202,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-final-attempt1/windows-backport-final-rust.log",
+      "original_bytes": 31202,
+      "original_sha256": "8ea2ad5b151aa67ad8168dddc5db72951453e48b751fd5000167c78f5def6db4",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-attempt1/windows-backport-final-rust.log",
+      "redactor_changed": false,
+      "sha256": "8ea2ad5b151aa67ad8168dddc5db72951453e48b751fd5000167c78f5def6db4"
+    },
+    {
+      "bytes": 37,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-final-attempt1/windows-backport-final-shutdown.log",
+      "original_bytes": 37,
+      "original_sha256": "1d2bce6626125a69290567f2ac07d73a993c9bc03bf6d5693848cee74e386d28",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-attempt1/windows-backport-final-shutdown.log",
+      "redactor_changed": false,
+      "sha256": "1d2bce6626125a69290567f2ac07d73a993c9bc03bf6d5693848cee74e386d28"
+    },
+    {
+      "bytes": 27,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-final-attempt1/windows-backport-final-startup.log",
+      "original_bytes": 27,
+      "original_sha256": "258d562dc010f0deaac57251722d4ca12edc8b93f3fef07e83c80f4bfa5279ec",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-attempt1/windows-backport-final-startup.log",
+      "redactor_changed": false,
+      "sha256": "258d562dc010f0deaac57251722d4ca12edc8b93f3fef07e83c80f4bfa5279ec"
+    },
+    {
+      "bytes": 123,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-final-attempt1/windows-backport-final-state.log",
+      "original_bytes": 123,
+      "original_sha256": "961a8aa54266a2982bf0cef5a32aedaa06714836599d95a84fffbab4369b8264",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-attempt1/windows-backport-final-state.log",
+      "redactor_changed": false,
+      "sha256": "961a8aa54266a2982bf0cef5a32aedaa06714836599d95a84fffbab4369b8264"
+    },
+    {
+      "bytes": 230,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-final-attempt1/windows-backport-final-sync.log",
+      "original_bytes": 230,
+      "original_sha256": "655f53bd31e8602f0bb23aeaeaea93018ba1353b0d1e4c8b535fd60e57ec3313",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-attempt1/windows-backport-final-sync.log",
+      "redactor_changed": false,
+      "sha256": "655f53bd31e8602f0bb23aeaeaea93018ba1353b0d1e4c8b535fd60e57ec3313"
+    },
+    {
+      "bytes": 2429,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-final-attempt1/windows-backport-final.json",
+      "original_bytes": 2429,
+      "original_sha256": "f0dd9c0c2f3c2259a4d6cf549029e0ebb725390708eb65fa7e67b3106f27ce54",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-attempt1/windows-backport-final.json",
+      "redactor_changed": false,
+      "sha256": "f0dd9c0c2f3c2259a4d6cf549029e0ebb725390708eb65fa7e67b3106f27ce54"
+    },
+    {
+      "bytes": 3140,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-final-attempt1/windows-backport-final.py",
+      "original_bytes": 3140,
+      "original_sha256": "03cd1397200045a74d848e6c9b83f2cb11d1899c80cc981917383179a5b6b440",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-attempt1/windows-backport-final.py",
+      "redactor_changed": false,
+      "sha256": "03cd1397200045a74d848e6c9b83f2cb11d1899c80cc981917383179a5b6b440"
+    },
+    {
+      "bytes": 122,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-final-clean-owned-builds.log",
+      "original_bytes": 122,
+      "original_sha256": "d1727d72bbb4d0f4bc3c6a45a7cb6f02674e92229eb31798605f65a6bd081cf2",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-clean-owned-builds.log",
+      "redactor_changed": false,
+      "sha256": "d1727d72bbb4d0f4bc3c6a45a7cb6f02674e92229eb31798605f65a6bd081cf2"
+    },
+    {
+      "bytes": 383,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-final-clippy.log",
+      "original_bytes": 383,
+      "original_sha256": "e38803bc0b9d4706e7a92b92365cdc76c45fba8aad37fe5b03657ed10393df1f",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-clippy.log",
+      "redactor_changed": false,
+      "sha256": "e38803bc0b9d4706e7a92b92365cdc76c45fba8aad37fe5b03657ed10393df1f"
+    },
+    {
+      "bytes": 175,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-final-disk-after.log",
+      "original_bytes": 175,
+      "original_sha256": "25765a42d5f5e4e50f52d81b54015eb3b111b3c40ebfdf63b91c4a33373e9ef9",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-disk-after.log",
+      "redactor_changed": false,
+      "sha256": "25765a42d5f5e4e50f52d81b54015eb3b111b3c40ebfdf63b91c4a33373e9ef9"
+    },
+    {
+      "bytes": 172,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-final-disk-before.log",
+      "original_bytes": 172,
+      "original_sha256": "3084736864a99316cceba481961adc137abdacfe11ba372068ea8869d78c8592",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-disk-before.log",
+      "redactor_changed": false,
+      "sha256": "3084736864a99316cceba481961adc137abdacfe11ba372068ea8869d78c8592"
+    },
+    {
+      "bytes": 82,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-final-fmt.log",
+      "original_bytes": 82,
+      "original_sha256": "225e148008060799674126bd85c826328e9949668d6573abcd616e109312e2ad",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-fmt.log",
+      "redactor_changed": false,
+      "sha256": "225e148008060799674126bd85c826328e9949668d6573abcd616e109312e2ad"
+    },
+    {
+      "bytes": 123,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-final-guest-ready-0.log",
+      "original_bytes": 123,
+      "original_sha256": "e51e5895cd66e0ea5976f1c4a18f4053bd0c81c382ba169564d3d5d809cee317",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-guest-ready-0.log",
+      "redactor_changed": false,
+      "sha256": "e51e5895cd66e0ea5976f1c4a18f4053bd0c81c382ba169564d3d5d809cee317"
+    },
+    {
+      "bytes": 1015,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-final-handles.log",
+      "original_bytes": 1015,
+      "original_sha256": "9e67328b4bf59d5359ff6d2757f3880ec600bb5a7a4459074c47819092a3cad3",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-handles.log",
+      "redactor_changed": false,
+      "sha256": "9e67328b4bf59d5359ff6d2757f3880ec600bb5a7a4459074c47819092a3cad3"
+    },
+    {
+      "bytes": 717,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-final-hashes.log",
+      "original_bytes": 717,
+      "original_sha256": "7539c8502e3ff646055b90aacb70d62fb937724ff20dc9e4e192d7cc2cb2a41a",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-hashes.log",
+      "redactor_changed": false,
+      "sha256": "7539c8502e3ff646055b90aacb70d62fb937724ff20dc9e4e192d7cc2cb2a41a"
+    },
+    {
+      "bytes": 9,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-final-off-followup.log",
+      "original_bytes": 9,
+      "original_sha256": "2675c309ff87f8658358da1b8451c80f7e43fd2a97db648acc10513f5f21ac72",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-off-followup.log",
+      "redactor_changed": false,
+      "sha256": "2675c309ff87f8658358da1b8451c80f7e43fd2a97db648acc10513f5f21ac72"
+    },
+    {
+      "bytes": 10,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-final-off.log",
+      "original_bytes": 10,
+      "original_sha256": "fcd0e285e488cb37a042511417db2ac1209ef9656fbfef67d97cad27ae72ab90",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-off.log",
+      "redactor_changed": false,
+      "sha256": "fcd0e285e488cb37a042511417db2ac1209ef9656fbfef67d97cad27ae72ab90"
+    },
+    {
+      "bytes": 477,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-final-preserve-before.log",
+      "original_bytes": 477,
+      "original_sha256": "66d7336b25d89e9f3aa4cc02c83d3fdf8cb67aca17bc9a818af3e7b839da240a",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-preserve-before.log",
+      "redactor_changed": false,
+      "sha256": "66d7336b25d89e9f3aa4cc02c83d3fdf8cb67aca17bc9a818af3e7b839da240a"
+    },
+    {
+      "bytes": 374,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-final-release.log",
+      "original_bytes": 374,
+      "original_sha256": "c6719bffc08e1f471d1e84c3f4779c33d2791481ffd64d2f04557e1d89e40e74",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-release.log",
+      "redactor_changed": false,
+      "sha256": "c6719bffc08e1f471d1e84c3f4779c33d2791481ffd64d2f04557e1d89e40e74"
+    },
+    {
+      "bytes": 158604,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-final-rust.log",
+      "original_bytes": 158604,
+      "original_sha256": "f4f08959eacbf9235ccab7646d4d85fe4b00c129595a79c66560c4d4b4862275",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-rust.log",
+      "redactor_changed": false,
+      "sha256": "f4f08959eacbf9235ccab7646d4d85fe4b00c129595a79c66560c4d4b4862275"
+    },
+    {
+      "bytes": 248,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-final-shutdown-followup.json",
+      "original_bytes": 248,
+      "original_sha256": "f66350c700d2818743131c434ded0a0c08e1bb25c736f04eccad96581e5d3e41",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-shutdown-followup.json",
+      "redactor_changed": false,
+      "sha256": "f66350c700d2818743131c434ded0a0c08e1bb25c736f04eccad96581e5d3e41"
+    },
+    {
+      "bytes": 281,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-final-shutdown-retry.json",
+      "original_bytes": 281,
+      "original_sha256": "74b7bf26da844285c8ac9f14cb367c36fef8721a1b3d5a58708caaec6b7a11ca",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-shutdown-retry.json",
+      "redactor_changed": false,
+      "sha256": "74b7bf26da844285c8ac9f14cb367c36fef8721a1b3d5a58708caaec6b7a11ca"
+    },
+    {
+      "bytes": 37,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-final-shutdown.log",
+      "original_bytes": 37,
+      "original_sha256": "1d2bce6626125a69290567f2ac07d73a993c9bc03bf6d5693848cee74e386d28",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-shutdown.log",
+      "redactor_changed": false,
+      "sha256": "1d2bce6626125a69290567f2ac07d73a993c9bc03bf6d5693848cee74e386d28"
+    },
+    {
+      "bytes": 8,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-final-startup.log",
+      "original_bytes": 8,
+      "original_sha256": "a4ecc5c87d811bbff7a118c17ef8cf83318cb623a103c15b8549089aa2a7f0ac",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-startup.log",
+      "redactor_changed": false,
+      "sha256": "a4ecc5c87d811bbff7a118c17ef8cf83318cb623a103c15b8549089aa2a7f0ac"
+    },
+    {
+      "bytes": 123,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-final-state.log",
+      "original_bytes": 123,
+      "original_sha256": "ef3337e7c7d2ab10e2f8d0fa768464742b6decdf36ab4d6a2c72ad4fb90eb35e",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-state.log",
+      "redactor_changed": false,
+      "sha256": "ef3337e7c7d2ab10e2f8d0fa768464742b6decdf36ab4d6a2c72ad4fb90eb35e"
+    },
+    {
+      "bytes": 230,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-final-sync.log",
+      "original_bytes": 230,
+      "original_sha256": "3969aebcaf3c36f894d46973879f787c24dac551ae659cd66365344d5c605a37",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-sync.log",
+      "redactor_changed": false,
+      "sha256": "3969aebcaf3c36f894d46973879f787c24dac551ae659cd66365344d5c605a37"
+    },
+    {
+      "bytes": 6236,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-final.json",
+      "original_bytes": 6236,
+      "original_sha256": "59c1a885b250c760ba1e28825b3ff9f8b29e3a43b8d04bdb723de09fe67c2ae1",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-final.json",
+      "redactor_changed": false,
+      "sha256": "59c1a885b250c760ba1e28825b3ff9f8b29e3a43b8d04bdb723de09fe67c2ae1"
+    },
+    {
+      "bytes": 3531,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-final.py",
+      "original_bytes": 3531,
+      "original_sha256": "f1d2b033b1d67b840052d43b5430c15b377bb870f2eb3d0446be3744faca426b",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-final.py",
+      "redactor_changed": false,
+      "sha256": "f1d2b033b1d67b840052d43b5430c15b377bb870f2eb3d0446be3744faca426b"
+    },
+    {
+      "bytes": 123,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-focus-guest-ready-0.log",
+      "original_bytes": 123,
+      "original_sha256": "7a6e007a69d936f943f59c4071b96c72c8bb38717b12b52ea639a20e7b761e3c",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-focus-guest-ready-0.log",
+      "redactor_changed": false,
+      "sha256": "7a6e007a69d936f943f59c4071b96c72c8bb38717b12b52ea639a20e7b761e3c"
+    },
+    {
+      "bytes": 525,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-focus-move-1.log",
+      "original_bytes": 525,
+      "original_sha256": "96980a9cffdbe751be1399a2a756f693b8d94fcde390d91d13097c3e93abd926",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-focus-move-1.log",
+      "redactor_changed": false,
+      "sha256": "96980a9cffdbe751be1399a2a756f693b8d94fcde390d91d13097c3e93abd926"
+    },
+    {
+      "bytes": 454,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-focus-move-10.log",
+      "original_bytes": 454,
+      "original_sha256": "acd2ed172771e7b5998d58b6d0400660b56d25a768e62cc1c88ea491b86216e3",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-focus-move-10.log",
+      "redactor_changed": false,
+      "sha256": "acd2ed172771e7b5998d58b6d0400660b56d25a768e62cc1c88ea491b86216e3"
+    },
+    {
+      "bytes": 454,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-focus-move-2.log",
+      "original_bytes": 454,
+      "original_sha256": "2208b26c5ff1991cc4673637374bba6f3382a94d55bcf58905a11675ece8401d",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-focus-move-2.log",
+      "redactor_changed": false,
+      "sha256": "2208b26c5ff1991cc4673637374bba6f3382a94d55bcf58905a11675ece8401d"
+    },
+    {
+      "bytes": 454,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-focus-move-3.log",
+      "original_bytes": 454,
+      "original_sha256": "1944c6ab27fda68400fda30f2e7dd1023d6cc143ab711e5d16dc97ae985f94f8",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-focus-move-3.log",
+      "redactor_changed": false,
+      "sha256": "1944c6ab27fda68400fda30f2e7dd1023d6cc143ab711e5d16dc97ae985f94f8"
+    },
+    {
+      "bytes": 454,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-focus-move-4.log",
+      "original_bytes": 454,
+      "original_sha256": "1649c2c329254402ae649fea435f3ceeaaada54f430d900b44c9e2a8e7d8ae0b",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-focus-move-4.log",
+      "redactor_changed": false,
+      "sha256": "1649c2c329254402ae649fea435f3ceeaaada54f430d900b44c9e2a8e7d8ae0b"
+    },
+    {
+      "bytes": 454,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-focus-move-5.log",
+      "original_bytes": 454,
+      "original_sha256": "38e73a23a32a1ea8996e23056ea1b63a07a48a40a1d9e67cf793cff8f0eedbf3",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-focus-move-5.log",
+      "redactor_changed": false,
+      "sha256": "38e73a23a32a1ea8996e23056ea1b63a07a48a40a1d9e67cf793cff8f0eedbf3"
+    },
+    {
+      "bytes": 454,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-focus-move-6.log",
+      "original_bytes": 454,
+      "original_sha256": "ceccccf12228fbad56250143ed7ff0ad1960efb16929cd5a52dedd4f1ef867cd",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-focus-move-6.log",
+      "redactor_changed": false,
+      "sha256": "ceccccf12228fbad56250143ed7ff0ad1960efb16929cd5a52dedd4f1ef867cd"
+    },
+    {
+      "bytes": 454,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-focus-move-7.log",
+      "original_bytes": 454,
+      "original_sha256": "4aa2aa9449b67828fac57c72c79dbc6cec29a4435cc3247545b7584ea9a1ff98",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-focus-move-7.log",
+      "redactor_changed": false,
+      "sha256": "4aa2aa9449b67828fac57c72c79dbc6cec29a4435cc3247545b7584ea9a1ff98"
+    },
+    {
+      "bytes": 454,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-focus-move-8.log",
+      "original_bytes": 454,
+      "original_sha256": "1e8a8ee121c239b8404cc2a740512d18cd0f7abf5d445680320aafc1e13d305b",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-focus-move-8.log",
+      "redactor_changed": false,
+      "sha256": "1e8a8ee121c239b8404cc2a740512d18cd0f7abf5d445680320aafc1e13d305b"
+    },
+    {
+      "bytes": 454,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-focus-move-9.log",
+      "original_bytes": 454,
+      "original_sha256": "2ff9d81bc1a3913a61961b92590e27d918f8044482d32c0b963e87439287d791",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-focus-move-9.log",
+      "redactor_changed": false,
+      "sha256": "2ff9d81bc1a3913a61961b92590e27d918f8044482d32c0b963e87439287d791"
+    },
+    {
+      "bytes": 10,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-focus-off.log",
+      "original_bytes": 10,
+      "original_sha256": "fcd0e285e488cb37a042511417db2ac1209ef9656fbfef67d97cad27ae72ab90",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-focus-off.log",
+      "redactor_changed": false,
+      "sha256": "fcd0e285e488cb37a042511417db2ac1209ef9656fbfef67d97cad27ae72ab90"
+    },
+    {
+      "bytes": 477,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-focus-preserve-before.log",
+      "original_bytes": 477,
+      "original_sha256": "57c5a12904c52a2cbf70ce7db5d3700c0dd03c2442196b267491a583f4e3f656",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-focus-preserve-before.log",
+      "redactor_changed": false,
+      "sha256": "57c5a12904c52a2cbf70ce7db5d3700c0dd03c2442196b267491a583f4e3f656"
+    },
+    {
+      "bytes": 516,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-focus-regression.log",
+      "original_bytes": 516,
+      "original_sha256": "13a3438cba6cbe6b929841067a405693dade947ed45640726644495435131831",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-focus-regression.log",
+      "redactor_changed": false,
+      "sha256": "13a3438cba6cbe6b929841067a405693dade947ed45640726644495435131831"
+    },
+    {
+      "bytes": 37,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-focus-shutdown.log",
+      "original_bytes": 37,
+      "original_sha256": "1d2bce6626125a69290567f2ac07d73a993c9bc03bf6d5693848cee74e386d28",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-focus-shutdown.log",
+      "redactor_changed": false,
+      "sha256": "1d2bce6626125a69290567f2ac07d73a993c9bc03bf6d5693848cee74e386d28"
+    },
+    {
+      "bytes": 27,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-focus-startup.log",
+      "original_bytes": 27,
+      "original_sha256": "258d562dc010f0deaac57251722d4ca12edc8b93f3fef07e83c80f4bfa5279ec",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-focus-startup.log",
+      "redactor_changed": false,
+      "sha256": "258d562dc010f0deaac57251722d4ca12edc8b93f3fef07e83c80f4bfa5279ec"
+    },
+    {
+      "bytes": 123,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-focus-state.log",
+      "original_bytes": 123,
+      "original_sha256": "a23520cf63b6a26ffafbd5e0cb72bc9d1125c956142ba897d1001a8dae3bc3d5",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-focus-state.log",
+      "redactor_changed": false,
+      "sha256": "a23520cf63b6a26ffafbd5e0cb72bc9d1125c956142ba897d1001a8dae3bc3d5"
+    },
+    {
+      "bytes": 331,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-focus-sync.log",
+      "original_bytes": 331,
+      "original_sha256": "15e18609b1743db2f806e0e72748747b0adb6fbd5a6701bc732a306e547b593a",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-focus-sync.log",
+      "redactor_changed": false,
+      "sha256": "15e18609b1743db2f806e0e72748747b0adb6fbd5a6701bc732a306e547b593a"
+    },
+    {
+      "bytes": 606,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-focus-unit.log",
+      "original_bytes": 606,
+      "original_sha256": "5ce9d5aee475037c98a58431796a5247a61bf0452fe2dacd2610a0c7b7f9421d",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-focus-unit.log",
+      "redactor_changed": false,
+      "sha256": "5ce9d5aee475037c98a58431796a5247a61bf0452fe2dacd2610a0c7b7f9421d"
+    },
+    {
+      "bytes": 8665,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-focus.json",
+      "original_bytes": 8665,
+      "original_sha256": "db5f1ce5910b40de2c301e561b14c53e72a9a92f8a181c30cd21c054e56046d0",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-focus.json",
+      "redactor_changed": false,
+      "sha256": "db5f1ce5910b40de2c301e561b14c53e72a9a92f8a181c30cd21c054e56046d0"
+    },
+    {
+      "bytes": 4607,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-backport-focus.py",
+      "original_bytes": 4607,
+      "original_sha256": "6fa6c6f2c38203cd3304dfa8a8611157960cd2802c9735b0ba3585f4b410032e",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-backport-focus.py",
+      "redactor_changed": false,
+      "sha256": "6fa6c6f2c38203cd3304dfa8a8611157960cd2802c9735b0ba3585f4b410032e"
+    },
+    {
+      "bytes": 289,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-handle-probe-binding.json",
+      "original_bytes": 289,
+      "original_sha256": "345536abc047c576d559e47c927007d63a5c2e3fa9364ac002479797d2f121af",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-handle-probe-binding.json",
+      "redactor_changed": false,
+      "sha256": "345536abc047c576d559e47c927007d63a5c2e3fa9364ac002479797d2f121af"
+    },
+    {
+      "bytes": 5122,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-handle-probe-full.ps1",
+      "original_bytes": 5122,
+      "original_sha256": "9a2fc02818d6b3f2422a19df32f0b1dbae20197ab772b589664e1394b40a2107",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-handle-probe-full.ps1",
+      "redactor_changed": false,
+      "sha256": "9a2fc02818d6b3f2422a19df32f0b1dbae20197ab772b589664e1394b40a2107"
+    },
+    {
+      "bytes": 126,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-handle-probe-parse-verified.log",
+      "original_bytes": 126,
+      "original_sha256": "6ee55e7cbb4ef18a2c4009e09ed99d2a399e9b2810e26aed0aef5a32d46e7d90",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-handle-probe-parse-verified.log",
+      "redactor_changed": false,
+      "sha256": "6ee55e7cbb4ef18a2c4009e09ed99d2a399e9b2810e26aed0aef5a32d46e7d90"
+    },
+    {
+      "bytes": 115,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-handle-probe-parse.log",
+      "original_bytes": 115,
+      "original_sha256": "d0d79725fb09471ad83adb0244e8e89839df280dea1ca27bdee87b4b7040186a",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-handle-probe-parse.log",
+      "redactor_changed": false,
+      "sha256": "d0d79725fb09471ad83adb0244e8e89839df280dea1ca27bdee87b4b7040186a"
+    },
+    {
+      "bytes": 1266,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-handle-probe-transfer.log",
+      "original_bytes": 1266,
+      "original_sha256": "5d8a6f89564fce850852f36ca078d22ffe7c558cbc6d90f42585e25448a8f1ed",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-handle-probe-transfer.log",
+      "redactor_changed": false,
+      "sha256": "5d8a6f89564fce850852f36ca078d22ffe7c558cbc6d90f42585e25448a8f1ed"
+    },
+    {
+      "bytes": 164,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-handle-probe.ps1",
+      "original_bytes": 164,
+      "original_sha256": "fe1e19658daec331d2bbdb6905417d34e86cce7be0b6ffaa771844fab8355b69",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-handle-probe.ps1",
+      "redactor_changed": false,
+      "sha256": "fe1e19658daec331d2bbdb6905417d34e86cce7be0b6ffaa771844fab8355b69"
+    },
+    {
+      "bytes": 477,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-v2-attempt1/windows-v2-preserve-before.log",
+      "original_bytes": 477,
+      "original_sha256": "a7a2662fed64e2196a5a299877e7008b1c6a5874cc12304d09e2f935272eaedf",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-v2-attempt1/windows-v2-preserve-before.log",
+      "redactor_changed": false,
+      "sha256": "a7a2662fed64e2196a5a299877e7008b1c6a5874cc12304d09e2f935272eaedf"
+    },
+    {
+      "bytes": 623,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-v2-attempt1/windows-v2-rust.log",
+      "original_bytes": 623,
+      "original_sha256": "0d84c13476c165f0055eab74475f207d630b659aeb1c18f7d7ae5168be3c68fc",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-v2-attempt1/windows-v2-rust.log",
+      "redactor_changed": false,
+      "sha256": "0d84c13476c165f0055eab74475f207d630b659aeb1c18f7d7ae5168be3c68fc"
+    },
+    {
+      "bytes": 37,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-v2-attempt1/windows-v2-shutdown.log",
+      "original_bytes": 37,
+      "original_sha256": "1d2bce6626125a69290567f2ac07d73a993c9bc03bf6d5693848cee74e386d28",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-v2-attempt1/windows-v2-shutdown.log",
+      "redactor_changed": false,
+      "sha256": "1d2bce6626125a69290567f2ac07d73a993c9bc03bf6d5693848cee74e386d28"
+    },
+    {
+      "bytes": 123,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-v2-attempt1/windows-v2-state.log",
+      "original_bytes": 123,
+      "original_sha256": "87a9cc6bc808ee9a4edd5dbba26d833d2c15e366ed8f0136b6bd2d8e5656929f",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-v2-attempt1/windows-v2-state.log",
+      "redactor_changed": false,
+      "sha256": "87a9cc6bc808ee9a4edd5dbba26d833d2c15e366ed8f0136b6bd2d8e5656929f"
+    },
+    {
+      "bytes": 337,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-v2-attempt1/windows-v2-sync.log",
+      "original_bytes": 337,
+      "original_sha256": "7e7a2c9139045d7f73c1963dde61c62131cd4feaa5a841a64005ae71b7858e5b",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-v2-attempt1/windows-v2-sync.log",
+      "redactor_changed": false,
+      "sha256": "7e7a2c9139045d7f73c1963dde61c62131cd4feaa5a841a64005ae71b7858e5b"
+    },
+    {
+      "bytes": 1792,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-v2-attempt1/windows-v2.json",
+      "original_bytes": 1792,
+      "original_sha256": "02e74608d7ce591297831d47d64f42df739740908b4cb149b95c2e06955ea1a7",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-v2-attempt1/windows-v2.json",
+      "redactor_changed": false,
+      "sha256": "02e74608d7ce591297831d47d64f42df739740908b4cb149b95c2e06955ea1a7"
+    },
+    {
+      "bytes": 2511,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-v2-attempt1/windows-v2.py",
+      "original_bytes": 2511,
+      "original_sha256": "c851d6d1ac14f7f62f7a75b1c4061264cad2ac50085b4d15ab019e9e8c515922",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-v2-attempt1/windows-v2.py",
+      "redactor_changed": false,
+      "sha256": "c851d6d1ac14f7f62f7a75b1c4061264cad2ac50085b4d15ab019e9e8c515922"
+    },
+    {
+      "bytes": 10,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-v2-attempt2/windows-v2-off.log",
+      "original_bytes": 10,
+      "original_sha256": "fcd0e285e488cb37a042511417db2ac1209ef9656fbfef67d97cad27ae72ab90",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-v2-attempt2/windows-v2-off.log",
+      "redactor_changed": false,
+      "sha256": "fcd0e285e488cb37a042511417db2ac1209ef9656fbfef67d97cad27ae72ab90"
+    },
+    {
+      "bytes": 37,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-v2-attempt2/windows-v2-preserve-before.log",
+      "original_bytes": 37,
+      "original_sha256": "1503f1b9a209e75712b728b74ee9d0799daf3004479befbef53b54284a922f89",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-v2-attempt2/windows-v2-preserve-before.log",
+      "redactor_changed": false,
+      "sha256": "1503f1b9a209e75712b728b74ee9d0799daf3004479befbef53b54284a922f89"
+    },
+    {
+      "bytes": 623,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-v2-attempt2/windows-v2-rust.log",
+      "original_bytes": 623,
+      "original_sha256": "0d84c13476c165f0055eab74475f207d630b659aeb1c18f7d7ae5168be3c68fc",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-v2-attempt2/windows-v2-rust.log",
+      "redactor_changed": false,
+      "sha256": "0d84c13476c165f0055eab74475f207d630b659aeb1c18f7d7ae5168be3c68fc"
+    },
+    {
+      "bytes": 37,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-v2-attempt2/windows-v2-shutdown.log",
+      "original_bytes": 37,
+      "original_sha256": "1d2bce6626125a69290567f2ac07d73a993c9bc03bf6d5693848cee74e386d28",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-v2-attempt2/windows-v2-shutdown.log",
+      "redactor_changed": false,
+      "sha256": "1d2bce6626125a69290567f2ac07d73a993c9bc03bf6d5693848cee74e386d28"
+    },
+    {
+      "bytes": 27,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-v2-attempt2/windows-v2-startup.log",
+      "original_bytes": 27,
+      "original_sha256": "258d562dc010f0deaac57251722d4ca12edc8b93f3fef07e83c80f4bfa5279ec",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-v2-attempt2/windows-v2-startup.log",
+      "redactor_changed": false,
+      "sha256": "258d562dc010f0deaac57251722d4ca12edc8b93f3fef07e83c80f4bfa5279ec"
+    },
+    {
+      "bytes": 123,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-v2-attempt2/windows-v2-state.log",
+      "original_bytes": 123,
+      "original_sha256": "87a9cc6bc808ee9a4edd5dbba26d833d2c15e366ed8f0136b6bd2d8e5656929f",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-v2-attempt2/windows-v2-state.log",
+      "redactor_changed": false,
+      "sha256": "87a9cc6bc808ee9a4edd5dbba26d833d2c15e366ed8f0136b6bd2d8e5656929f"
+    },
+    {
+      "bytes": 337,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-v2-attempt2/windows-v2-sync.log",
+      "original_bytes": 337,
+      "original_sha256": "7e7a2c9139045d7f73c1963dde61c62131cd4feaa5a841a64005ae71b7858e5b",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-v2-attempt2/windows-v2-sync.log",
+      "redactor_changed": false,
+      "sha256": "7e7a2c9139045d7f73c1963dde61c62131cd4feaa5a841a64005ae71b7858e5b"
+    },
+    {
+      "bytes": 990,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-v2-attempt2/windows-v2.json",
+      "original_bytes": 990,
+      "original_sha256": "288536001e52c137c98e2ff956c51046e5cf37169e3cac295c4d3ce4b6fea91f",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-v2-attempt2/windows-v2.json",
+      "redactor_changed": false,
+      "sha256": "288536001e52c137c98e2ff956c51046e5cf37169e3cac295c4d3ce4b6fea91f"
+    },
+    {
+      "bytes": 2541,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-v2-attempt2/windows-v2.py",
+      "original_bytes": 2541,
+      "original_sha256": "2455fa4b5fb197bb2f5ff6721f3f5fa85cc71ad0ea7cb1f70392091013be6cc8",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-v2-attempt2/windows-v2.py",
+      "redactor_changed": false,
+      "sha256": "2455fa4b5fb197bb2f5ff6721f3f5fa85cc71ad0ea7cb1f70392091013be6cc8"
+    },
+    {
+      "bytes": 123,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-v2-attempt3/windows-v2-guest-ready-0.log",
+      "original_bytes": 123,
+      "original_sha256": "3d7ad2ce263197adbfc04bae6bacfdff5c9f1ccea9164b3a30ffa57fc25cc768",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-v2-attempt3/windows-v2-guest-ready-0.log",
+      "redactor_changed": false,
+      "sha256": "3d7ad2ce263197adbfc04bae6bacfdff5c9f1ccea9164b3a30ffa57fc25cc768"
+    },
+    {
+      "bytes": 10,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-v2-attempt3/windows-v2-off.log",
+      "original_bytes": 10,
+      "original_sha256": "fcd0e285e488cb37a042511417db2ac1209ef9656fbfef67d97cad27ae72ab90",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-v2-attempt3/windows-v2-off.log",
+      "redactor_changed": false,
+      "sha256": "fcd0e285e488cb37a042511417db2ac1209ef9656fbfef67d97cad27ae72ab90"
+    },
+    {
+      "bytes": 477,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-v2-attempt3/windows-v2-preserve-before.log",
+      "original_bytes": 477,
+      "original_sha256": "199fd8a75a4fce83c31446e8d6a8c1b8d6f677752c16022b9c532c14ab6e1e45",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-v2-attempt3/windows-v2-preserve-before.log",
+      "redactor_changed": false,
+      "sha256": "199fd8a75a4fce83c31446e8d6a8c1b8d6f677752c16022b9c532c14ab6e1e45"
+    },
+    {
+      "bytes": 159643,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-v2-attempt3/windows-v2-rust.log",
+      "original_bytes": 159643,
+      "original_sha256": "b6026f35126748203c174ee8a50c513f703638db0db4465334b9ffa41fc48a49",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-v2-attempt3/windows-v2-rust.log",
+      "redactor_changed": false,
+      "sha256": "b6026f35126748203c174ee8a50c513f703638db0db4465334b9ffa41fc48a49"
+    },
+    {
+      "bytes": 37,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-v2-attempt3/windows-v2-shutdown.log",
+      "original_bytes": 37,
+      "original_sha256": "1d2bce6626125a69290567f2ac07d73a993c9bc03bf6d5693848cee74e386d28",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-v2-attempt3/windows-v2-shutdown.log",
+      "redactor_changed": false,
+      "sha256": "1d2bce6626125a69290567f2ac07d73a993c9bc03bf6d5693848cee74e386d28"
+    },
+    {
+      "bytes": 27,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-v2-attempt3/windows-v2-startup.log",
+      "original_bytes": 27,
+      "original_sha256": "258d562dc010f0deaac57251722d4ca12edc8b93f3fef07e83c80f4bfa5279ec",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-v2-attempt3/windows-v2-startup.log",
+      "redactor_changed": false,
+      "sha256": "258d562dc010f0deaac57251722d4ca12edc8b93f3fef07e83c80f4bfa5279ec"
+    },
+    {
+      "bytes": 123,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-v2-attempt3/windows-v2-state.log",
+      "original_bytes": 123,
+      "original_sha256": "26d62709dbec3628e3fd66a0b405fd4f3e96ca73efb0a3e225b195bad55ba776",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-v2-attempt3/windows-v2-state.log",
+      "redactor_changed": false,
+      "sha256": "26d62709dbec3628e3fd66a0b405fd4f3e96ca73efb0a3e225b195bad55ba776"
+    },
+    {
+      "bytes": 317,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-v2-attempt3/windows-v2-sync.log",
+      "original_bytes": 317,
+      "original_sha256": "e7fc9ae5c8129777a6d17b58d5f71ce7de5ab4c973992662c1096e72d67f4e6c",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-v2-attempt3/windows-v2-sync.log",
+      "redactor_changed": false,
+      "sha256": "e7fc9ae5c8129777a6d17b58d5f71ce7de5ab4c973992662c1096e72d67f4e6c"
+    },
+    {
+      "bytes": 2345,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-v2-attempt3/windows-v2.json",
+      "original_bytes": 2345,
+      "original_sha256": "3736df4c6786fc893c25363a11e5ef5e8ec67448120ebf6088fec59b945cdb81",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-v2-attempt3/windows-v2.json",
+      "redactor_changed": false,
+      "sha256": "3736df4c6786fc893c25363a11e5ef5e8ec67448120ebf6088fec59b945cdb81"
+    },
+    {
+      "bytes": 2841,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-v2-attempt3/windows-v2.py",
+      "original_bytes": 2841,
+      "original_sha256": "208b924fd4bffd157c021e08ae9f815816b4dbb88c828bd2a3f315b0c30cd0fe",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-v2-attempt3/windows-v2.py",
+      "redactor_changed": false,
+      "sha256": "208b924fd4bffd157c021e08ae9f815816b4dbb88c828bd2a3f315b0c30cd0fe"
+    },
+    {
+      "bytes": 123,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-watcher-focus-guest-ready-0.log",
+      "original_bytes": 123,
+      "original_sha256": "aae98b5b776d6e5076ea4759a99d85e3a2b9a869c9ac4ea6d1f88698978e6704",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-watcher-focus-guest-ready-0.log",
+      "redactor_changed": false,
+      "sha256": "aae98b5b776d6e5076ea4759a99d85e3a2b9a869c9ac4ea6d1f88698978e6704"
+    },
+    {
+      "bytes": 525,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-watcher-focus-move-1.log",
+      "original_bytes": 525,
+      "original_sha256": "70c9df570d46a8eb6c4079c0843e8bc22584a553e43563dac22aa1cc716d9efc",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-watcher-focus-move-1.log",
+      "redactor_changed": false,
+      "sha256": "70c9df570d46a8eb6c4079c0843e8bc22584a553e43563dac22aa1cc716d9efc"
+    },
+    {
+      "bytes": 1121,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-watcher-focus-move-2.log",
+      "original_bytes": 1121,
+      "original_sha256": "470c11d2f0a13cfefb409a9dff5206f34b2f2a4681b0b3cdbfe91a4e089d10de",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-watcher-focus-move-2.log",
+      "redactor_changed": false,
+      "sha256": "470c11d2f0a13cfefb409a9dff5206f34b2f2a4681b0b3cdbfe91a4e089d10de"
+    },
+    {
+      "bytes": 10,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-watcher-focus-off.log",
+      "original_bytes": 10,
+      "original_sha256": "fcd0e285e488cb37a042511417db2ac1209ef9656fbfef67d97cad27ae72ab90",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-watcher-focus-off.log",
+      "redactor_changed": false,
+      "sha256": "fcd0e285e488cb37a042511417db2ac1209ef9656fbfef67d97cad27ae72ab90"
+    },
+    {
+      "bytes": 477,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-watcher-focus-preserve-before.log",
+      "original_bytes": 477,
+      "original_sha256": "a841f5bd1ec02e2667062a7d364d86c7e2715915e89f2ddccb4d8d9615b18c23",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-watcher-focus-preserve-before.log",
+      "redactor_changed": false,
+      "sha256": "a841f5bd1ec02e2667062a7d364d86c7e2715915e89f2ddccb4d8d9615b18c23"
+    },
+    {
+      "bytes": 37,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-watcher-focus-shutdown.log",
+      "original_bytes": 37,
+      "original_sha256": "1d2bce6626125a69290567f2ac07d73a993c9bc03bf6d5693848cee74e386d28",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-watcher-focus-shutdown.log",
+      "redactor_changed": false,
+      "sha256": "1d2bce6626125a69290567f2ac07d73a993c9bc03bf6d5693848cee74e386d28"
+    },
+    {
+      "bytes": 27,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-watcher-focus-startup.log",
+      "original_bytes": 27,
+      "original_sha256": "258d562dc010f0deaac57251722d4ca12edc8b93f3fef07e83c80f4bfa5279ec",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-watcher-focus-startup.log",
+      "redactor_changed": false,
+      "sha256": "258d562dc010f0deaac57251722d4ca12edc8b93f3fef07e83c80f4bfa5279ec"
+    },
+    {
+      "bytes": 123,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-watcher-focus-state.log",
+      "original_bytes": 123,
+      "original_sha256": "83eca883c31c6e61e98fd0531f162ebc6eb8472a65c4d6ea428f76118447b66f",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-watcher-focus-state.log",
+      "redactor_changed": false,
+      "sha256": "83eca883c31c6e61e98fd0531f162ebc6eb8472a65c4d6ea428f76118447b66f"
+    },
+    {
+      "bytes": 317,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-watcher-focus-sync.log",
+      "original_bytes": 317,
+      "original_sha256": "2cfe76466ada4456f53a7bd70c71565fa0e9fe53c62aec2acf024359aedafd36",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-watcher-focus-sync.log",
+      "redactor_changed": false,
+      "sha256": "2cfe76466ada4456f53a7bd70c71565fa0e9fe53c62aec2acf024359aedafd36"
+    },
+    {
+      "bytes": 517,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-watcher-focus-unit.log",
+      "original_bytes": 517,
+      "original_sha256": "59a10902026bc24e998ee0e6cbc8ac521acd054d49400a7f3b36c20aec6b8312",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-watcher-focus-unit.log",
+      "redactor_changed": false,
+      "sha256": "59a10902026bc24e998ee0e6cbc8ac521acd054d49400a7f3b36c20aec6b8312"
+    },
+    {
+      "bytes": 3693,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-watcher-focus.json",
+      "original_bytes": 3693,
+      "original_sha256": "b78236af201ec11d18cd110e8400ee78865080487e1f1b3c315f4b49d403696a",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-watcher-focus.json",
+      "redactor_changed": false,
+      "sha256": "b78236af201ec11d18cd110e8400ee78865080487e1f1b3c315f4b49d403696a"
+    },
+    {
+      "bytes": 3482,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-watcher-focus.py",
+      "original_bytes": 3482,
+      "original_sha256": "f240e14d511489376528366b465ea0fec228d7b81ebff15ecd7723f25e50fc1e",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-watcher-focus.py",
+      "redactor_changed": false,
+      "sha256": "f240e14d511489376528366b465ea0fec228d7b81ebff15ecd7723f25e50fc1e"
+    },
+    {
+      "bytes": 123,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-watcher-trace-guest-ready-0.log",
+      "original_bytes": 123,
+      "original_sha256": "e26ac608ed33a2ba65324709a23482515539e4a50024bc5a2380685e0b7d9062",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-watcher-trace-guest-ready-0.log",
+      "redactor_changed": false,
+      "sha256": "e26ac608ed33a2ba65324709a23482515539e4a50024bc5a2380685e0b7d9062"
+    },
+    {
+      "bytes": 24678,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-watcher-trace-move-1.log",
+      "original_bytes": 24678,
+      "original_sha256": "fe02c1a9f024631c167db87d18d2cf2e93cda0a0116aa7e1965cd8365a9cfe7c",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-watcher-trace-move-1.log",
+      "redactor_changed": false,
+      "sha256": "fe02c1a9f024631c167db87d18d2cf2e93cda0a0116aa7e1965cd8365a9cfe7c"
+    },
+    {
+      "bytes": 27646,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-watcher-trace-move-2.log",
+      "original_bytes": 27646,
+      "original_sha256": "ebd23e4c1c986f2331f31262913eba4cc01c6e0835b68dce79c70c7e9f324275",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-watcher-trace-move-2.log",
+      "redactor_changed": false,
+      "sha256": "ebd23e4c1c986f2331f31262913eba4cc01c6e0835b68dce79c70c7e9f324275"
+    },
+    {
+      "bytes": 13004,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-watcher-trace-move-3.log",
+      "original_bytes": 13004,
+      "original_sha256": "bc1f49a6305330392da64d4f6f973463db12564fb30a20522afc2dcf2a3966d1",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-watcher-trace-move-3.log",
+      "redactor_changed": false,
+      "sha256": "bc1f49a6305330392da64d4f6f973463db12564fb30a20522afc2dcf2a3966d1"
+    },
+    {
+      "bytes": 10,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-watcher-trace-off.log",
+      "original_bytes": 10,
+      "original_sha256": "fcd0e285e488cb37a042511417db2ac1209ef9656fbfef67d97cad27ae72ab90",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-watcher-trace-off.log",
+      "redactor_changed": false,
+      "sha256": "fcd0e285e488cb37a042511417db2ac1209ef9656fbfef67d97cad27ae72ab90"
+    },
+    {
+      "bytes": 477,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-watcher-trace-preserve-before.log",
+      "original_bytes": 477,
+      "original_sha256": "b7c40b90145a64428ccc1c4ce522d34a7e173cdf8bcdbc9e9fd0b97482a7a3fc",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-watcher-trace-preserve-before.log",
+      "redactor_changed": false,
+      "sha256": "b7c40b90145a64428ccc1c4ce522d34a7e173cdf8bcdbc9e9fd0b97482a7a3fc"
+    },
+    {
+      "bytes": 37,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-watcher-trace-shutdown.log",
+      "original_bytes": 37,
+      "original_sha256": "1d2bce6626125a69290567f2ac07d73a993c9bc03bf6d5693848cee74e386d28",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-watcher-trace-shutdown.log",
+      "redactor_changed": false,
+      "sha256": "1d2bce6626125a69290567f2ac07d73a993c9bc03bf6d5693848cee74e386d28"
+    },
+    {
+      "bytes": 27,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-watcher-trace-startup.log",
+      "original_bytes": 27,
+      "original_sha256": "258d562dc010f0deaac57251722d4ca12edc8b93f3fef07e83c80f4bfa5279ec",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-watcher-trace-startup.log",
+      "redactor_changed": false,
+      "sha256": "258d562dc010f0deaac57251722d4ca12edc8b93f3fef07e83c80f4bfa5279ec"
+    },
+    {
+      "bytes": 123,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-watcher-trace-state.log",
+      "original_bytes": 123,
+      "original_sha256": "d4fd564e503d6c9f2b74bfaddfa3cb157fd45606083392fd12e21edf516573bd",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-watcher-trace-state.log",
+      "redactor_changed": false,
+      "sha256": "d4fd564e503d6c9f2b74bfaddfa3cb157fd45606083392fd12e21edf516573bd"
+    },
+    {
+      "bytes": 334,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-watcher-trace-sync.log",
+      "original_bytes": 334,
+      "original_sha256": "948e08932cdb9c9a3399ffb650ddd7e06fff6d3d7221384290148d913f6584bc",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-watcher-trace-sync.log",
+      "redactor_changed": false,
+      "sha256": "948e08932cdb9c9a3399ffb650ddd7e06fff6d3d7221384290148d913f6584bc"
+    },
+    {
+      "bytes": 517,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-watcher-trace-unit.log",
+      "original_bytes": 517,
+      "original_sha256": "b497233a5424fad145dcde25474a35b886a204423e03a1fcdf97fd5f2bfcc52f",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-watcher-trace-unit.log",
+      "redactor_changed": false,
+      "sha256": "b497233a5424fad145dcde25474a35b886a204423e03a1fcdf97fd5f2bfcc52f"
+    },
+    {
+      "bytes": 4279,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-watcher-trace.json",
+      "original_bytes": 4279,
+      "original_sha256": "7507d583ef54e1a213bc0d153b88c027ddf0c7f8973abadca220c4287e448691",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-watcher-trace.json",
+      "redactor_changed": false,
+      "sha256": "7507d583ef54e1a213bc0d153b88c027ddf0c7f8973abadca220c4287e448691"
+    },
+    {
+      "bytes": 5128,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": ".razorback/completed-edit-dispatch/windows-watcher-trace.py",
+      "original_bytes": 5128,
+      "original_sha256": "dfdab294d3526ab03e3e76a95127f4b34c7a335855b7ab30d43490367c71f51c",
+      "path": "evidence/.razorback/completed-edit-dispatch/windows-watcher-trace.py",
+      "redactor_changed": false,
+      "sha256": "dfdab294d3526ab03e3e76a95127f4b34c7a335855b7ab30d43490367c71f51c"
+    },
+    {
+      "bytes": 1648,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": "evals/edit-2026-10-27/results/controls/watcher-removal/before-backport.json",
+      "original_bytes": 1648,
+      "original_sha256": "68d20bf4071ee6eedff1a17afa51c964bf19f5cc6274f6a8fbd5947685400f99",
+      "path": "evidence/evals/edit-2026-10-27/results/controls/watcher-removal/before-backport.json",
+      "redactor_changed": false,
+      "sha256": "68d20bf4071ee6eedff1a17afa51c964bf19f5cc6274f6a8fbd5947685400f99"
+    },
+    {
+      "bytes": 6360,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": "evals/edit-2026-10-27/results/controls/watcher-removal/linux-backport-verification.json",
+      "original_bytes": 6360,
+      "original_sha256": "b2f8b287145ac1aa4d529477681efd0f1411ee8a81ef8f5cd6608d3430b53516",
+      "path": "evidence/evals/edit-2026-10-27/results/controls/watcher-removal/linux-backport-verification.json",
+      "redactor_changed": false,
+      "sha256": "b2f8b287145ac1aa4d529477681efd0f1411ee8a81ef8f5cd6608d3430b53516"
+    },
+    {
+      "bytes": 13004,
+      "classification": "pinned_redactor_checked_evidence",
+      "origin": "evals/edit-2026-10-27/results/controls/watcher-removal/windows-before-backport.log",
+      "original_bytes": 13004,
+      "original_sha256": "bc1f49a6305330392da64d4f6f973463db12564fb30a20522afc2dcf2a3966d1",
+      "path": "evidence/evals/edit-2026-10-27/results/controls/watcher-removal/windows-before-backport.log",
+      "redactor_changed": false,
+      "sha256": "bc1f49a6305330392da64d4f6f973463db12564fb30a20522afc2dcf2a3966d1"
+    },
+    {
+      "bytes": 2703,
+      "classification": "generated_summary",
+      "origin": "generated runtime verification summary",
+      "original_bytes": 2703,
+      "original_sha256": "9916f68510340290d9a1ac4e943b083bb9d7035903d9d3e4fcdf004fc067f669",
+      "path": "evidence/runtime-summary.json",
+      "redactor_changed": false,
+      "sha256": "9916f68510340290d9a1ac4e943b083bb9d7035903d9d3e4fcdf004fc067f669"
+    },
+    {
+      "bytes": 36417,
+      "classification": "exact_public_source",
+      "origin": "git:ccef6df91a59e0743830ff0271715c807c84b885:Cargo.lock",
+      "original_bytes": 36417,
+      "original_sha256": "d12fde31cd84c3867b07092f008f2da1038434d96b8a921f64ca79c92e52ad0b",
+      "path": "source/attempt1-ccef6df/Cargo.lock",
+      "redactor_changed": false,
+      "sha256": "d12fde31cd84c3867b07092f008f2da1038434d96b8a921f64ca79c92e52ad0b"
+    },
+    {
+      "bytes": 1000,
+      "classification": "exact_public_source",
+      "origin": "git:ccef6df91a59e0743830ff0271715c807c84b885:Cargo.toml",
+      "original_bytes": 1000,
+      "original_sha256": "d0e814c310f2fe9250a10b0ffb89cd8d7b27f9ed1b8b71e11355e537f928eb6f",
+      "path": "source/attempt1-ccef6df/Cargo.toml",
+      "redactor_changed": false,
+      "sha256": "d0e814c310f2fe9250a10b0ffb89cd8d7b27f9ed1b8b71e11355e537f928eb6f"
+    },
+    {
+      "bytes": 41826,
+      "classification": "exact_public_source",
+      "origin": "git:ccef6df91a59e0743830ff0271715c807c84b885:crates/code-kb-core/src/watcher.rs",
+      "original_bytes": 41826,
+      "original_sha256": "c662203493ff4c1b172079284c98443ded3b8880c81ff825dbb1d8a7624969ce",
+      "path": "source/attempt1-ccef6df/crates/code-kb-core/src/watcher.rs",
+      "redactor_changed": false,
+      "sha256": "c662203493ff4c1b172079284c98443ded3b8880c81ff825dbb1d8a7624969ce"
+    },
+    {
+      "bytes": 17409,
+      "classification": "exact_public_source",
+      "origin": "git:ccef6df91a59e0743830ff0271715c807c84b885:crates/code-kb-core/tests/watcher_registration_test.rs",
+      "original_bytes": 17409,
+      "original_sha256": "afae8f9e5de91744d0a0454eacf596b0a58a77976c099bda5380894ff2570238",
+      "path": "source/attempt1-ccef6df/crates/code-kb-core/tests/watcher_registration_test.rs",
+      "redactor_changed": false,
+      "sha256": "afae8f9e5de91744d0a0454eacf596b0a58a77976c099bda5380894ff2570238"
+    },
+    {
+      "bytes": 36417,
+      "classification": "exact_public_source",
+      "origin": "git:f2f05158cc8c3575527791891b1d053457e3f75d:Cargo.lock",
+      "original_bytes": 36417,
+      "original_sha256": "d12fde31cd84c3867b07092f008f2da1038434d96b8a921f64ca79c92e52ad0b",
+      "path": "source/attempt3-f2f0515/Cargo.lock",
+      "redactor_changed": false,
+      "sha256": "d12fde31cd84c3867b07092f008f2da1038434d96b8a921f64ca79c92e52ad0b"
+    },
+    {
+      "bytes": 1000,
+      "classification": "exact_public_source",
+      "origin": "git:f2f05158cc8c3575527791891b1d053457e3f75d:Cargo.toml",
+      "original_bytes": 1000,
+      "original_sha256": "d0e814c310f2fe9250a10b0ffb89cd8d7b27f9ed1b8b71e11355e537f928eb6f",
+      "path": "source/attempt3-f2f0515/Cargo.toml",
+      "redactor_changed": false,
+      "sha256": "d0e814c310f2fe9250a10b0ffb89cd8d7b27f9ed1b8b71e11355e537f928eb6f"
+    },
+    {
+      "bytes": 41794,
+      "classification": "exact_public_source",
+      "origin": "git:f2f05158cc8c3575527791891b1d053457e3f75d:crates/code-kb-core/src/watcher.rs",
+      "original_bytes": 41794,
+      "original_sha256": "a8a8ca9698517e82d42c4b567fbd90fbad15210d05185719825f88c7cab7b3ea",
+      "path": "source/attempt3-f2f0515/crates/code-kb-core/src/watcher.rs",
+      "redactor_changed": false,
+      "sha256": "a8a8ca9698517e82d42c4b567fbd90fbad15210d05185719825f88c7cab7b3ea"
+    },
+    {
+      "bytes": 17409,
+      "classification": "exact_public_source",
+      "origin": "git:f2f05158cc8c3575527791891b1d053457e3f75d:crates/code-kb-core/tests/watcher_registration_test.rs",
+      "original_bytes": 17409,
+      "original_sha256": "afae8f9e5de91744d0a0454eacf596b0a58a77976c099bda5380894ff2570238",
+      "path": "source/attempt3-f2f0515/crates/code-kb-core/tests/watcher_registration_test.rs",
+      "redactor_changed": false,
+      "sha256": "afae8f9e5de91744d0a0454eacf596b0a58a77976c099bda5380894ff2570238"
+    },
+    {
+      "bytes": 36297,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:Cargo.lock",
+      "original_bytes": 36297,
+      "original_sha256": "32c77deee2c90a8470c20e26646ff45565021149b59d312d21a491baa6513608",
+      "path": "source/backport-89991f0/Cargo.lock",
+      "redactor_changed": false,
+      "sha256": "32c77deee2c90a8470c20e26646ff45565021149b59d312d21a491baa6513608"
+    },
+    {
+      "bytes": 1128,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:Cargo.toml",
+      "original_bytes": 1128,
+      "original_sha256": "949394eadc11ca6a4e15077461d5dc7eef985c4f7e16c00f66196fdfe11c43e9",
+      "path": "source/backport-89991f0/Cargo.toml",
+      "redactor_changed": false,
+      "sha256": "949394eadc11ca6a4e15077461d5dc7eef985c4f7e16c00f66196fdfe11c43e9"
+    },
+    {
+      "bytes": 43432,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:crates/code-kb-core/src/watcher.rs",
+      "original_bytes": 43432,
+      "original_sha256": "7bbb3b736e966096dfa7d2793d8e7dfad9496b04d3b2194408845cf7c7acdaaa",
+      "path": "source/backport-89991f0/crates/code-kb-core/src/watcher.rs",
+      "redactor_changed": false,
+      "sha256": "7bbb3b736e966096dfa7d2793d8e7dfad9496b04d3b2194408845cf7c7acdaaa"
+    },
+    {
+      "bytes": 3830,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:crates/code-kb-core/tests/debouncer_removal_test.rs",
+      "original_bytes": 3830,
+      "original_sha256": "0617fbf4f24219084c4f08d26005e3b669220092583dd75356b8f161d7e374f5",
+      "path": "source/backport-89991f0/crates/code-kb-core/tests/debouncer_removal_test.rs",
+      "redactor_changed": false,
+      "sha256": "0617fbf4f24219084c4f08d26005e3b669220092583dd75356b8f161d7e374f5"
+    },
+    {
+      "bytes": 17828,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:crates/code-kb-core/tests/watcher_registration_test.rs",
+      "original_bytes": 17828,
+      "original_sha256": "07d177cfbc59694d4bf5ee8648f6ae41545aac14e0fdf17b54358a15504cdcbe",
+      "path": "source/backport-89991f0/crates/code-kb-core/tests/watcher_registration_test.rs",
+      "redactor_changed": false,
+      "sha256": "07d177cfbc59694d4bf5ee8648f6ae41545aac14e0fdf17b54358a15504cdcbe"
+    },
+    {
+      "bytes": 3374,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/CHANGELOG.md",
+      "original_bytes": 3374,
+      "original_sha256": "498561691d96d2bea6189029fb8c0656ff5449e4920d23a92a993479e11517ee",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/CHANGELOG.md",
+      "redactor_changed": false,
+      "sha256": "498561691d96d2bea6189029fb8c0656ff5449e4920d23a92a993479e11517ee"
+    },
+    {
+      "bytes": 2156,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/Cargo.toml",
+      "original_bytes": 2156,
+      "original_sha256": "28749c3a8781ada86698ad317a7f9f5f69a4259ea751b7b16871f772f590e264",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/Cargo.toml",
+      "redactor_changed": false,
+      "sha256": "28749c3a8781ada86698ad317a7f9f5f69a4259ea751b7b16871f772f590e264"
+    },
+    {
+      "bytes": 1228,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/Cargo.toml.orig",
+      "original_bytes": 1228,
+      "original_sha256": "5535f3507f20de099a18089bc2ba6b941d7a22bdc612590d6cb1187eff9d6597",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/Cargo.toml.orig",
+      "redactor_changed": false,
+      "sha256": "5535f3507f20de099a18089bc2ba6b941d7a22bdc612590d6cb1187eff9d6597"
+    },
+    {
+      "bytes": 10839,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/LICENSE-APACHE",
+      "original_bytes": 10839,
+      "original_sha256": "b5b413d7421d728c14f33d78198d6e255a0018beef717d78c4c3f6188be3dfb4",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/LICENSE-APACHE",
+      "redactor_changed": false,
+      "sha256": "b5b413d7421d728c14f33d78198d6e255a0018beef717d78c4c3f6188be3dfb4"
+    },
+    {
+      "bytes": 1063,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/LICENSE-MIT",
+      "original_bytes": 1063,
+      "original_sha256": "b63e167d61ced1d872a588c5ac764b0dda477d62209dc4f6b6bfea5517d0a24c",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/LICENSE-MIT",
+      "redactor_changed": false,
+      "sha256": "b63e167d61ced1d872a588c5ac764b0dda477d62209dc4f6b6bfea5517d0a24c"
+    },
+    {
+      "bytes": 676,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/PATCH.md",
+      "original_bytes": 676,
+      "original_sha256": "c958334b80a355aabd5e62c6c2a093283cc77726e3cfaa37e3a92135c5de0d59",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/PATCH.md",
+      "redactor_changed": false,
+      "sha256": "c958334b80a355aabd5e62c6c2a093283cc77726e3cfaa37e3a92135c5de0d59"
+    },
+    {
+      "bytes": 1725,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/README.md",
+      "original_bytes": 1725,
+      "original_sha256": "7f3c3013ef64d6dd844c560dcbacd07f260444d71921173a981c052177f9d84d",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/README.md",
+      "redactor_changed": false,
+      "sha256": "7f3c3013ef64d6dd844c560dcbacd07f260444d71921173a981c052177f9d84d"
+    },
+    {
+      "bytes": 2394,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/src/cache.rs",
+      "original_bytes": 2394,
+      "original_sha256": "5a727cdd0d193a1dc443a5a9390df1b579993cdc70defcce39f9fb217cd0ff33",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/src/cache.rs",
+      "redactor_changed": false,
+      "sha256": "5a727cdd0d193a1dc443a5a9390df1b579993cdc70defcce39f9fb217cd0ff33"
+    },
+    {
+      "bytes": 1617,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/src/file_id_map.rs",
+      "original_bytes": 1617,
+      "original_sha256": "53480a0157bb5cd15e31cee0368c83d23c38d9b3c43d51596838c24d06610854",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/src/file_id_map.rs",
+      "redactor_changed": false,
+      "sha256": "53480a0157bb5cd15e31cee0368c83d23c38d9b3c43d51596838c24d06610854"
+    },
+    {
+      "bytes": 31519,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/src/lib.rs",
+      "original_bytes": 31519,
+      "original_sha256": "9234804eb9672e46eeec52781f25a40049675ddca08f42f3575988c3188fdfbf",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/src/lib.rs",
+      "redactor_changed": false,
+      "sha256": "9234804eb9672e46eeec52781f25a40049675ddca08f42f3575988c3188fdfbf"
+    },
+    {
+      "bytes": 10777,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/src/testing.rs",
+      "original_bytes": 10777,
+      "original_sha256": "fa0eaca65772b2c16409a41c870b9be360575472feb81225f320b28302fe0bd1",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/src/testing.rs",
+      "redactor_changed": false,
+      "sha256": "fa0eaca65772b2c16409a41c870b9be360575472feb81225f320b28302fe0bd1"
+    },
+    {
+      "bytes": 906,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/src/time.rs",
+      "original_bytes": 906,
+      "original_sha256": "3eba243c188091998f8245c014277f9c69e07e6b0497c95872c6e9ee953668de",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/src/time.rs",
+      "redactor_changed": false,
+      "sha256": "3eba243c188091998f8245c014277f9c69e07e6b0497c95872c6e9ee953668de"
+    },
+    {
+      "bytes": 635,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/add_create_dir_event_twice.hjson",
+      "original_bytes": 635,
+      "original_sha256": "494e22aba814781afcad522d5cabf04e4dd212cd4ff05ed2a638379400f7ddfc",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/add_create_dir_event_twice.hjson",
+      "redactor_changed": false,
+      "sha256": "494e22aba814781afcad522d5cabf04e4dd212cd4ff05ed2a638379400f7ddfc"
+    },
+    {
+      "bytes": 572,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/add_create_event.hjson",
+      "original_bytes": 572,
+      "original_sha256": "ecbe4d068e16900b142a5958b8c867acc2602e0e13f12f345889cb4f7e58d5e0",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/add_create_event.hjson",
+      "redactor_changed": false,
+      "sha256": "ecbe4d068e16900b142a5958b8c867acc2602e0e13f12f345889cb4f7e58d5e0"
+    },
+    {
+      "bytes": 517,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/add_create_event_after_remove_event.hjson",
+      "original_bytes": 517,
+      "original_sha256": "e3e1d030a0013c71301210bc9bda2057fa18ae568969beaec630fe6de2f1987b",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/add_create_event_after_remove_event.hjson",
+      "redactor_changed": false,
+      "sha256": "e3e1d030a0013c71301210bc9bda2057fa18ae568969beaec630fe6de2f1987b"
+    },
+    {
+      "bytes": 286,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/add_errors.hjson",
+      "original_bytes": 286,
+      "original_sha256": "69bdac06ee3c3a9977872c470a19a172c52db2f1ff91f8d7f1dd7bf24f3fbfe5",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/add_errors.hjson",
+      "redactor_changed": false,
+      "sha256": "69bdac06ee3c3a9977872c470a19a172c52db2f1ff91f8d7f1dd7bf24f3fbfe5"
+    },
+    {
+      "bytes": 305,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/add_event_with_no_paths_is_ok.hjson",
+      "original_bytes": 305,
+      "original_sha256": "8c9df43c3b7bd1de0b0cfe6bd4258beb1a38351f2e6c267dc13d921d20fa82fb",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/add_event_with_no_paths_is_ok.hjson",
+      "redactor_changed": false,
+      "sha256": "8c9df43c3b7bd1de0b0cfe6bd4258beb1a38351f2e6c267dc13d921d20fa82fb"
+    },
+    {
+      "bytes": 595,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/add_modify_any_event_after_create_event.hjson",
+      "original_bytes": 595,
+      "original_sha256": "53ac83711403aa0dadf9e062b5f228b28a11197f434b2c1902b9b4bf3032cbd4",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/add_modify_any_event_after_create_event.hjson",
+      "redactor_changed": false,
+      "sha256": "53ac83711403aa0dadf9e062b5f228b28a11197f434b2c1902b9b4bf3032cbd4"
+    },
+    {
+      "bytes": 694,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/add_modify_content_event_after_create_event.hjson",
+      "original_bytes": 694,
+      "original_sha256": "179d5a267503380a59ea705526aee977c47458be6edd6fc9438547235cad0e45",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/add_modify_content_event_after_create_event.hjson",
+      "redactor_changed": false,
+      "sha256": "179d5a267503380a59ea705526aee977c47458be6edd6fc9438547235cad0e45"
+    },
+    {
+      "bytes": 285,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/add_remove_event.hjson",
+      "original_bytes": 285,
+      "original_sha256": "4febee9fc16edb9a47062ab93dfd4949c79c7a728a747dfc4335a10af0e684f3",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/add_remove_event.hjson",
+      "redactor_changed": false,
+      "sha256": "4febee9fc16edb9a47062ab93dfd4949c79c7a728a747dfc4335a10af0e684f3"
+    },
+    {
+      "bytes": 522,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/add_remove_event_after_create_and_modify_event.hjson",
+      "original_bytes": 522,
+      "original_sha256": "12afa9dfa7b14069b63fd39863fb576fa52e1d9636d2ce98f8b55634ff82fa6b",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/add_remove_event_after_create_and_modify_event.hjson",
+      "redactor_changed": false,
+      "sha256": "12afa9dfa7b14069b63fd39863fb576fa52e1d9636d2ce98f8b55634ff82fa6b"
+    },
+    {
+      "bytes": 460,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/add_remove_event_after_create_event.hjson",
+      "original_bytes": 460,
+      "original_sha256": "787bf7d44c9b22f0dc75307de68aec45a5ad31a7fd9ac134e71b14670300f597",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/add_remove_event_after_create_event.hjson",
+      "redactor_changed": false,
+      "sha256": "787bf7d44c9b22f0dc75307de68aec45a5ad31a7fd9ac134e71b14670300f597"
+    },
+    {
+      "bytes": 465,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/add_remove_event_after_modify_event.hjson",
+      "original_bytes": 465,
+      "original_sha256": "43a43819f1ba95e23dddd78e2e6b9e0905cd3360a1ac2ae253dc52316e4985e7",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/add_remove_event_after_modify_event.hjson",
+      "redactor_changed": false,
+      "sha256": "43a43819f1ba95e23dddd78e2e6b9e0905cd3360a1ac2ae253dc52316e4985e7"
+    },
+    {
+      "bytes": 519,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/add_remove_parent_event_after_remove_child_event.hjson",
+      "original_bytes": 519,
+      "original_sha256": "006d025253477f80a5b10b9f09478d2a5ba9af1d4e8b045b14652b321cde4525",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/add_remove_parent_event_after_remove_child_event.hjson",
+      "redactor_changed": false,
+      "sha256": "006d025253477f80a5b10b9f09478d2a5ba9af1d4e8b045b14652b321cde4525"
+    },
+    {
+      "bytes": 130,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/add_rename_both_event.hjson",
+      "original_bytes": 130,
+      "original_sha256": "8996759b0d0c8fd19a7233417e203848fe3cfb633a0383ad4a7581f2d171d63f",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/add_rename_both_event.hjson",
+      "redactor_changed": false,
+      "sha256": "8996759b0d0c8fd19a7233417e203848fe3cfb633a0383ad4a7581f2d171d63f"
+    },
+    {
+      "bytes": 412,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/add_rename_from_and_to_event.hjson",
+      "original_bytes": 412,
+      "original_sha256": "6bb89e35f216766cbbeaf793e55e36a3e0959fceafc3a97c86a634e2ff49c5e7",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/add_rename_from_and_to_event.hjson",
+      "redactor_changed": false,
+      "sha256": "6bb89e35f216766cbbeaf793e55e36a3e0959fceafc3a97c86a634e2ff49c5e7"
+    },
+    {
+      "bytes": 547,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/add_rename_from_and_to_event_after_create.hjson",
+      "original_bytes": 547,
+      "original_sha256": "c1b7931fab31ba6a248ea59c18583a01f165554654ae922924fc2831835ed7a9",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/add_rename_from_and_to_event_after_create.hjson",
+      "redactor_changed": false,
+      "sha256": "c1b7931fab31ba6a248ea59c18583a01f165554654ae922924fc2831835ed7a9"
+    },
+    {
+      "bytes": 664,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/add_rename_from_and_to_event_after_modify_content.hjson",
+      "original_bytes": 664,
+      "original_sha256": "3e5f3e752176b1e8981cd04674bbc91d98814d9399b6745c574803b335db5f70",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/add_rename_from_and_to_event_after_modify_content.hjson",
+      "redactor_changed": false,
+      "sha256": "3e5f3e752176b1e8981cd04674bbc91d98814d9399b6745c574803b335db5f70"
+    },
+    {
+      "bytes": 661,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/add_rename_from_and_to_event_after_rename.hjson",
+      "original_bytes": 661,
+      "original_sha256": "197aadab79cc322c6e36e4d6094a2e869f9d54a1292eb44d940cf04590d3b006",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/add_rename_from_and_to_event_after_rename.hjson",
+      "redactor_changed": false,
+      "sha256": "197aadab79cc322c6e36e4d6094a2e869f9d54a1292eb44d940cf04590d3b006"
+    },
+    {
+      "bytes": 589,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/add_rename_from_and_to_event_override_created.hjson",
+      "original_bytes": 589,
+      "original_sha256": "5f221f572203a9d0cf53eaf39f0921e6de9adac70429cbc991efef4bbecf4231",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/add_rename_from_and_to_event_override_created.hjson",
+      "redactor_changed": false,
+      "sha256": "5f221f572203a9d0cf53eaf39f0921e6de9adac70429cbc991efef4bbecf4231"
+    },
+    {
+      "bytes": 872,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/add_rename_from_and_to_event_override_modified.hjson",
+      "original_bytes": 872,
+      "original_sha256": "577e05ff9da026682ab30bcbd445162a6341a857ebadb0d564b2e33b4c57d88b",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/add_rename_from_and_to_event_override_modified.hjson",
+      "redactor_changed": false,
+      "sha256": "577e05ff9da026682ab30bcbd445162a6341a857ebadb0d564b2e33b4c57d88b"
+    },
+    {
+      "bytes": 646,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/add_rename_from_and_to_event_override_removed.hjson",
+      "original_bytes": 646,
+      "original_sha256": "15712d4a2cc5599a2af64b891e8a1b156adb9c76bacd8ddd4c27e531b0573878",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/add_rename_from_and_to_event_override_removed.hjson",
+      "redactor_changed": false,
+      "sha256": "15712d4a2cc5599a2af64b891e8a1b156adb9c76bacd8ddd4c27e531b0573878"
+    },
+    {
+      "bytes": 669,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/add_rename_from_and_to_event_with_different_file_ids.hjson",
+      "original_bytes": 669,
+      "original_sha256": "91a40987d58e5823757e80fabfd4c8005728abdc4b4260ec26a3708b9d78e731",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/add_rename_from_and_to_event_with_different_file_ids.hjson",
+      "redactor_changed": false,
+      "sha256": "91a40987d58e5823757e80fabfd4c8005728abdc4b4260ec26a3708b9d78e731"
+    },
+    {
+      "bytes": 538,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/add_rename_from_and_to_event_with_different_tracker.hjson",
+      "original_bytes": 538,
+      "original_sha256": "d5bcc91f9b8402ab9a84eaa54af9c053d994f094e29af3575c8aa6d38bcd4ca0",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/add_rename_from_and_to_event_with_different_tracker.hjson",
+      "redactor_changed": false,
+      "sha256": "d5bcc91f9b8402ab9a84eaa54af9c053d994f094e29af3575c8aa6d38bcd4ca0"
+    },
+    {
+      "bytes": 555,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/add_rename_from_and_to_event_with_file_ids.hjson",
+      "original_bytes": 555,
+      "original_sha256": "1ceb6c09b24d54cd1aa3d5075cbc60d395759a9f22746b30d6e173177604b530",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/add_rename_from_and_to_event_with_file_ids.hjson",
+      "redactor_changed": false,
+      "sha256": "1ceb6c09b24d54cd1aa3d5075cbc60d395759a9f22746b30d6e173177604b530"
+    },
+    {
+      "bytes": 363,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/add_rename_from_event.hjson",
+      "original_bytes": 363,
+      "original_sha256": "73754552849d9a6eb84c93b4c1eeab5ced29aa28e2cee35f59413fc4b77cd0a5",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/add_rename_from_event.hjson",
+      "redactor_changed": false,
+      "sha256": "73754552849d9a6eb84c93b4c1eeab5ced29aa28e2cee35f59413fc4b77cd0a5"
+    },
+    {
+      "bytes": 713,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/add_rename_from_event_after_create_and_modify_event.hjson",
+      "original_bytes": 713,
+      "original_sha256": "19f9e6ec7f78ac2f76ed6a1c340a66534bdb46d906ff371079243f9f66d413c2",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/add_rename_from_event_after_create_and_modify_event.hjson",
+      "redactor_changed": false,
+      "sha256": "19f9e6ec7f78ac2f76ed6a1c340a66534bdb46d906ff371079243f9f66d413c2"
+    },
+    {
+      "bytes": 589,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/add_rename_from_event_after_create_event.hjson",
+      "original_bytes": 589,
+      "original_sha256": "f9d1e05c5482bb5a469a458d4a1060603957ff4646e054383d6ca92eeed570ed",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/add_rename_from_event_after_create_event.hjson",
+      "redactor_changed": false,
+      "sha256": "f9d1e05c5482bb5a469a458d4a1060603957ff4646e054383d6ca92eeed570ed"
+    },
+    {
+      "bytes": 599,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/add_rename_from_event_after_modify_event.hjson",
+      "original_bytes": 599,
+      "original_sha256": "51f85ab2ab4091d2b9f2e94c618caadd5c73c5499472a97f04505473347787ea",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/add_rename_from_event_after_modify_event.hjson",
+      "redactor_changed": false,
+      "sha256": "51f85ab2ab4091d2b9f2e94c618caadd5c73c5499472a97f04505473347787ea"
+    },
+    {
+      "bytes": 758,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/add_rename_from_event_after_rename_from_event.hjson",
+      "original_bytes": 758,
+      "original_sha256": "f9555a38330728e4cb7350283da4ebda96725e9478b56f8febf3f8cc6f415130",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/add_rename_from_event_after_rename_from_event.hjson",
+      "redactor_changed": false,
+      "sha256": "f9555a38330728e4cb7350283da4ebda96725e9478b56f8febf3f8cc6f415130"
+    },
+    {
+      "bytes": 480,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/add_rename_to_dir_event.hjson",
+      "original_bytes": 480,
+      "original_sha256": "f8602ba765bdf8496ec2df52dc0f7278c3a81052d36345cf28622f72f863b5d6",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/add_rename_to_dir_event.hjson",
+      "redactor_changed": false,
+      "sha256": "f8602ba765bdf8496ec2df52dc0f7278c3a81052d36345cf28622f72f863b5d6"
+    },
+    {
+      "bytes": 287,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/add_rename_to_event.hjson",
+      "original_bytes": 287,
+      "original_sha256": "ba0fdd17142fc98ae00c96f73445af72c0b6349c8743f7c63d770975e1ad5f0c",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/add_rename_to_event.hjson",
+      "redactor_changed": false,
+      "sha256": "ba0fdd17142fc98ae00c96f73445af72c0b6349c8743f7c63d770975e1ad5f0c"
+    },
+    {
+      "bytes": 1217,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/debounce_modify_events.hjson",
+      "original_bytes": 1217,
+      "original_sha256": "12d9afc531321f09940fd8f37a7645d2ccf64a12f6cc620597a69991b74871b5",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/debounce_modify_events.hjson",
+      "redactor_changed": false,
+      "sha256": "12d9afc531321f09940fd8f37a7645d2ccf64a12f6cc620597a69991b74871b5"
+    },
+    {
+      "bytes": 986,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/emit_close_events_only_once.hjson",
+      "original_bytes": 986,
+      "original_sha256": "0f059b76a97065408298bb28091c19d34131c0a081b8a39f106b044476c40083",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/emit_close_events_only_once.hjson",
+      "redactor_changed": false,
+      "sha256": "0f059b76a97065408298bb28091c19d34131c0a081b8a39f106b044476c40083"
+    },
+    {
+      "bytes": 1361,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/emit_continuous_modify_content_events.hjson",
+      "original_bytes": 1361,
+      "original_sha256": "82ae1303e850814e544aab9ac80948a98385dd906669e0087844b910ff8775cc",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/emit_continuous_modify_content_events.hjson",
+      "redactor_changed": false,
+      "sha256": "82ae1303e850814e544aab9ac80948a98385dd906669e0087844b910ff8775cc"
+    },
+    {
+      "bytes": 1896,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/emit_events_in_chronological_order.hjson",
+      "original_bytes": 1896,
+      "original_sha256": "430b0199de53945468b65dab0931f86134521f48c53b45da4b17b2204b93161b",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/emit_events_in_chronological_order.hjson",
+      "redactor_changed": false,
+      "sha256": "430b0199de53945468b65dab0931f86134521f48c53b45da4b17b2204b93161b"
+    },
+    {
+      "bytes": 1502,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/emit_events_with_a_prepended_rename_event.hjson",
+      "original_bytes": 1502,
+      "original_sha256": "5390eb14d9f6a8c3377e12f10d4d773f3576471fdacc5941dd56b2b3415c9ca0",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/emit_events_with_a_prepended_rename_event.hjson",
+      "redactor_changed": false,
+      "sha256": "5390eb14d9f6a8c3377e12f10d4d773f3576471fdacc5941dd56b2b3415c9ca0"
+    },
+    {
+      "bytes": 1126,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/emit_modify_event_after_close_event.hjson",
+      "original_bytes": 1126,
+      "original_sha256": "b8693ef501fc3fdef1a98c2f5d5d6f7ce067e0612877379590f87738ae8ae1fb",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/emit_modify_event_after_close_event.hjson",
+      "redactor_changed": false,
+      "sha256": "b8693ef501fc3fdef1a98c2f5d5d6f7ce067e0612877379590f87738ae8ae1fb"
+    },
+    {
+      "bytes": 1468,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/emit_needs_rescan_event.hjson",
+      "original_bytes": 1468,
+      "original_sha256": "b1059774d11f38af15bfb660074d2127e9a878bd22a5a34e62dc1013f3995570",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/emit_needs_rescan_event.hjson",
+      "redactor_changed": false,
+      "sha256": "b1059774d11f38af15bfb660074d2127e9a878bd22a5a34e62dc1013f3995570"
+    },
+    {
+      "bytes": 414,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/read_file_id_without_create_event.hjson",
+      "original_bytes": 414,
+      "original_sha256": "df02c0f80ca3c25d41744bb856fba78a11118dea33e39714e5a361d193c5c882",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/read_file_id_without_create_event.hjson",
+      "redactor_changed": false,
+      "sha256": "df02c0f80ca3c25d41744bb856fba78a11118dea33e39714e5a361d193c5c882"
+    },
+    {
+      "bytes": 1335,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/sort_events_chronologically.hjson",
+      "original_bytes": 1335,
+      "original_sha256": "ee3a7d4a570bae21c825760030ce09adf649560f6899e2706160dc11d28999a0",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/sort_events_chronologically.hjson",
+      "redactor_changed": false,
+      "sha256": "ee3a7d4a570bae21c825760030ce09adf649560f6899e2706160dc11d28999a0"
+    },
+    {
+      "bytes": 1332,
+      "classification": "exact_public_source",
+      "origin": "git:89991f034ac2635d43eca2ccd41fd51247661c80:vendor/notify-debouncer-full/test_cases/sort_events_with_reordering.hjson",
+      "original_bytes": 1332,
+      "original_sha256": "8b2aa67747e235ebc29edc37dd90ad52ee4586049cb843bfc9b52bcf01a44940",
+      "path": "source/backport-89991f0/vendor/notify-debouncer-full/test_cases/sort_events_with_reordering.hjson",
+      "redactor_changed": false,
+      "sha256": "8b2aa67747e235ebc29edc37dd90ad52ee4586049cb843bfc9b52bcf01a44940"
+    },
+    {
+      "bytes": 36440,
+      "classification": "exact_public_source",
+      "origin": "git:84066d3dd21465fe2e89224d2d9ec21e2bbea993:Cargo.lock",
+      "original_bytes": 36440,
+      "original_sha256": "e24bfa24f25c12e599db833d6b11ff7da17fc6cf39a4ca36656971f8a131ea56",
+      "path": "source/before_backport-84066d3/Cargo.lock",
+      "redactor_changed": false,
+      "sha256": "e24bfa24f25c12e599db833d6b11ff7da17fc6cf39a4ca36656971f8a131ea56"
+    },
+    {
+      "bytes": 1000,
+      "classification": "exact_public_source",
+      "origin": "git:84066d3dd21465fe2e89224d2d9ec21e2bbea993:Cargo.toml",
+      "original_bytes": 1000,
+      "original_sha256": "d0e814c310f2fe9250a10b0ffb89cd8d7b27f9ed1b8b71e11355e537f928eb6f",
+      "path": "source/before_backport-84066d3/Cargo.toml",
+      "redactor_changed": false,
+      "sha256": "d0e814c310f2fe9250a10b0ffb89cd8d7b27f9ed1b8b71e11355e537f928eb6f"
+    },
+    {
+      "bytes": 43432,
+      "classification": "exact_public_source",
+      "origin": "git:84066d3dd21465fe2e89224d2d9ec21e2bbea993:crates/code-kb-core/src/watcher.rs",
+      "original_bytes": 43432,
+      "original_sha256": "7bbb3b736e966096dfa7d2793d8e7dfad9496b04d3b2194408845cf7c7acdaaa",
+      "path": "source/before_backport-84066d3/crates/code-kb-core/src/watcher.rs",
+      "redactor_changed": false,
+      "sha256": "7bbb3b736e966096dfa7d2793d8e7dfad9496b04d3b2194408845cf7c7acdaaa"
+    },
+    {
+      "bytes": 17828,
+      "classification": "exact_public_source",
+      "origin": "git:84066d3dd21465fe2e89224d2d9ec21e2bbea993:crates/code-kb-core/tests/watcher_registration_test.rs",
+      "original_bytes": 17828,
+      "original_sha256": "07d177cfbc59694d4bf5ee8648f6ae41545aac14e0fdf17b54358a15504cdcbe",
+      "path": "source/before_backport-84066d3/crates/code-kb-core/tests/watcher_registration_test.rs",
+      "redactor_changed": false,
+      "sha256": "07d177cfbc59694d4bf5ee8648f6ae41545aac14e0fdf17b54358a15504cdcbe"
+    },
+    {
+      "bytes": 24064,
+      "classification": "generated_identity",
+      "origin": "generated source identity manifest",
+      "original_bytes": 24064,
+      "original_sha256": "9b9f5eb1fc4853ce97536004467ebcf24c46c602fe120e2b087f11e3cba47d5a",
+      "path": "source/identity.json",
+      "redactor_changed": false,
+      "sha256": "9b9f5eb1fc4853ce97536004467ebcf24c46c602fe120e2b087f11e3cba47d5a"
+    }
+  ],
+  "schema": 1,
+  "source_commit": "89991f034ac2635d43eca2ccd41fd51247661c80"
+}

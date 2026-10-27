@@ -2,7 +2,7 @@
 
 **Goal:** Execute and source-review the frozen 24-cell native/code-kb study, retaining every attempt and independent patch grades.
 **Spec:** [Completed-edit protocol](../../evals/edit-2026-10-27/protocol.md).
-**Authority:** The owner approved continued work and explicitly removed separate budget/spending gates. Do not request spending approval or add financial caps/receipts. Local commits are authorized; push/release/global configuration changes are not.
+**Authority:** The owner approved continued work and explicitly removed separate budget/spending gates. Do not request spending approval or add financial caps/receipts. Local commits are authorized; push/release/global routing changes are not. The owner also authorized removing financial approval rules from installed agent guidance.
 **Architecture:** Thin orchestration over the reviewed snapshot, sandbox, grading and trace-metrics APIs. Preserve existing modules and the 42-language engine contract.
 **Architecture quality:** Existing reviewed isolation boundary is authoritative. The launcher must not expose host/control data or mistake passing tests for source acceptance.
 **Commit mode:** parallel-lead-commit; lead reviews and executes provider calls. No external reviewer chosen.
@@ -84,8 +84,8 @@ Compiler/test work below waits until the original timed schedule finishes. Finis
 - [x] Versioned Mini matcher accepts accurate ASCII-letter-case wording, including both `without regard to ASCII letter case` and `ignores ASCII letter case`; all three suffixes have distinct boundaries. Missing suffix/case explanation and text outside the autoescape section still fail.
 - [x] Versioned generated-root lists cover the exact canonical pnpm directory and Go suite binaries, without hiding source changes.
 - [x] Recovery metadata survives a grader interruption; failed sanitization does not delete the only retained logs. Redactor selection uses the validated artifact rather than a private versioned plugin path.
-- [ ] A deterministic watcher regression covers disappearance between discovery and registration. Confirm `NotFound`, retry the walk once, and preserve root/permission/repeated-churn failures. Verify the affected Rust scope and final Linux/Windows checks; keep the frozen trial engine unchanged.
-- [ ] All-six fresh readiness, affected tests and full Python suite pass before a v2 freeze. Regrade all four MiniJinja and four C# patches uniformly, with no model calls.
+- [x] A deterministic watcher regression covers disappearance between discovery and registration. Confirm `NotFound`, retry the walk once, and preserve root/permission/repeated-churn failures. Verify the affected Rust scope and final Linux/Windows checks; keep the frozen trial engine unchanged.
+- [x] All-six fresh readiness, affected tests and full Python suite pass before a v2 freeze. Regrade all four MiniJinja and four C# patches uniformly, with no model calls.
 - [ ] Execute only four previously unexposed TypeScript cells with v2 inputs; retain original setup failures and disclose amended order. Complete all source/new-test reviews, original/corrected reporting and local commits.
 
 ## Task 4: Preserve removals during concurrent scans
@@ -106,3 +106,20 @@ no new dependency version or repository polling is needed.
 - First prove the regression fails against unmodified 0.7, then preserve removal events even when a creation is queued. Retain licenses, upstream provenance and the replacement condition.
 - Lead reviews the narrow backport and owns watcher integration, Windows repetition/full verification, Linux verification, memory/handle checks, evidence and the remaining four model trials.
 - Keep all frozen study inputs and completed model outputs unchanged. Run no model trials until verification and VM shutdown finish.
+
+## Final runtime verification of the watcher corrections
+
+Source `89991f034ac2635d43eca2ccd41fd51247661c80` passes 1,906 Linux and
+1,878 Windows Rust tests, including all 42 language fixtures, plus Clippy,
+formatting and locked release builds. The unchanged Python suite passes 301.
+Ten consecutive Windows move/delete/recreate regressions pass. A live Windows
+server retains 112 handles before, throughout and after 20 subtree churn cycles.
+The Linux probe retains three watches on 1,000 ignored leaf directories; final
+RSS is 14,424 KiB before and 14,500 KiB after the narrow backport. These small
+resource probes do not establish broad performance claims.
+
+The study engine remains frozen at `d50d778`, separate from this runtime fix.
+The [runtime archive](../../evals/edit-2026-10-27/results/controls/runtime-backport/identity.json)
+retains failed attempts, source and binary hashes, cleanup evidence, all passing
+checks and confirmed VM shutdown. The wrapper exceeded its 120-second shutdown
+wait after every check passed; the separate follow-up confirms the VM is off.

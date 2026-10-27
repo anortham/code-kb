@@ -3,7 +3,7 @@ id: accuracy-pivot-callers-answers-an-agent-can-trust
 title: "Accuracy pivot: callers answers an agent can trust"
 status: active
 created: 2026-10-17T17:10:13.294Z
-updated: 2026-10-27T23:17:45.849Z
+updated: 2026-10-27T23:47:12.767Z
 tags:
   - project-direction
   - accuracy
@@ -11,20 +11,18 @@ tags:
   - ground-truth-gate
 ---
 
-# Direction and authority
+# Goal and authority
 
-Support all 42 Julie languages, seven MCP tools and CLI parity, explicit project_root, bounded SQLite memory, Windows, and identical AGENTS/CLAUDE. The owner removed financial approvals, caps and receipts. Necessary model evaluation and spending are approved. Local commits are approved; no push, release or global routing changes. Commit memories.
+Deliver reliable code intelligence for all42 pinned Julie language IDs, seven MCP tools with CLI parity, explicit project_root, bounded SQLite memory and first-class Windows. AGENTS/CLAUDE stay identical. Owner removed all financial approvals/caps/receipts in repo and installed tool guidance; necessary evaluation is authorized. Local commits authorized; no push, release or global routing changes. Commit memories.
 
-# Current correction slice
+# Status
 
-Worktree /home/murphy/.codex/worktrees/1e6f/code-kb, branch fix/cross-language-review. Windows full verification found two watcher failures while all 42 language fixtures passed. Metadata-confirmed missing-directory retries fixed the backend error-kind difference; the focused Windows unit passes. The other failure is proven: native create/remove events107ms apart are canceled by debouncer0.7 within its150ms window, although a concurrent scan already exposed the symbol.
+Cross-language and consumer corrections are implemented. The watcher backport at89991f0 preserves removals that debouncer0.7 canceled during concurrent scans, matching upstream PR902 without changing backend versions. Linux1906 and Windows1878 Rust tests pass, all42 conformance IDs, Clippy/fmt/release; Python301 reusable. Windows10 move/delete repeats pass. Live handles stay112 across20 churn cycles; Linux3watches on1000ignored leaves. Final Windows wrapper exceeded its shutdown wait, but follow-up confirms off; passing scopes and shutdown limitation are retained separately. The verified runtime-backport archive is be079b57, with 200 safe members; original archives are unchanged.
 
-Vendor backport preserves removals by deleting one three-line branch, matching upstream PR902. Backend and dependency versions stay pinned. Licenses, exact provenance and two changed upstream fixture expectations are retained. The new deterministic real-index regression is red before and green after. Full core1691 and CLI215 pass (1906 total), plus Clippy, fmt and release. Live serve retains3 watches on1000 ignored leaves; RSS14424KiB before and14500KiB after. Windows repeats/full verification of this backport remain pending. VM is off. Diagnostic raw/debounced/processing TRACE and a gated test subscriber remain available.
+# Outcome evidence
 
-# Study evidence
+Original24 schedule produced20 model trials plus4TS setup stops before exposure. Corrected source/behavior acceptance18/20 vs strict13/20; two native C# patches omit Pure. Original time/token totals favor native; no task-wide token saving is established. Slot15 timing is unknown. Preserve originals and recoveredv3, corrected regrades and all source reviews.
 
-Original24 slots ended:20 actual model trials and four TS setup stops before exposure. Source/corrected acceptance18/20; original strict behavior13/20. All four Mini regrades pass; two native C# patches fail Pure. Keep all original attempts and grades. Slot15 recoveredv3 has unknown agent/index timing. Replayable archive97883246 retains all63 capture blobs. Manifest-v2 542016a1 validates33 controls and selects only TS7/8/19/20 later. Study engine d50d778 and model/profile/dependency inputs are immutable. No supplemental call has occurred. Original metrics show more tokens and +78.14s mean code-kb time across nine pairs; no task-wide savings claim.
+# Next decision
 
-# Next
-
-Commit the reviewed backport and evidence, run focused Windows (unit, deterministic regression, repeated move/delete/recreate), then full Windows checks and handle-growth proof; always shut down the VM. Reuse fresh Linux1906 and Python301 evidence. Archive runtime verification, then run only four TS cells serially, review new source/tests/traces, finish combined24-trial metrics/report/docs and clean local commits. Report draft currently covers the original20 only. Keep global routing unchanged.
+Finish the amended four TS cells7/8/19/20 under manifest542016a1 and unchanged study engine d50d778, then complete independent source/added-test/trace reviews and the combined24-trial report. The report draft currently covers original20. Use measured completed-edit results to set the next product priority, retaining full-workflow attribution and no routing change. Execution details are in docs/plans/2026-10-27-completed-edit-dispatch.md.

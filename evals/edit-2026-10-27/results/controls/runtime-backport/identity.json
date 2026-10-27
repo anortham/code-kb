@@ -1,0 +1,111 @@
+{
+  "archive_bytes": 257942,
+  "archive_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/runtime-backport-89991f0-be079b57fb527ad0.tar.gz",
+  "archive_sha256": "be079b57fb527ad092ddbd419b9bbea815bf625839bd9a579ee17a6db6038625",
+  "baseline_commit": "84066d3dd21465fe2e89224d2d9ec21e2bbea993",
+  "capture_and_replay": {
+    "binding_member": "evidence/.razorback/completed-edit-dispatch/windows-handle-probe-binding.json",
+    "final_off_members": [
+      "evidence/.razorback/completed-edit-dispatch/windows-backport-final-off.log",
+      "evidence/.razorback/completed-edit-dispatch/windows-backport-final-off-followup.log",
+      "evidence/.razorback/completed-edit-dispatch/windows-backport-final-shutdown-followup.json",
+      "evidence/.razorback/completed-edit-dispatch/windows-backport-final-shutdown-retry.json"
+    ],
+    "full_handle_helper_member": "evidence/.razorback/completed-edit-dispatch/windows-handle-probe-full.ps1",
+    "helper_bytes": 5122,
+    "helper_sha256": "9a2fc02818d6b3f2422a19df32f0b1dbae20197ab772b589664e1394b40a2107",
+    "parse_validation_members": [
+      "evidence/.razorback/completed-edit-dispatch/windows-handle-probe-parse.log",
+      "evidence/.razorback/completed-edit-dispatch/windows-handle-probe-parse-verified.log"
+    ],
+    "tiny_launcher_member": "evidence/.razorback/completed-edit-dispatch/windows-handle-probe.ps1"
+  },
+  "classification": "curated local runtime-backport evidence; no provider calls",
+  "created_utc": "2026-10-27T23:50:20+00:00",
+  "disk_failure_and_recovery": {
+    "attempt_exit_status": 101,
+    "cleanup_log": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-clean-owned-builds.log",
+    "disk_after_log": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-disk-after.log",
+    "disk_before_log": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-disk-before.log",
+    "failed_attempt": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-attempt1/windows-backport-final-rust.log",
+    "guest_test_log_contents_included": false,
+    "preserve_before_log": "evidence/.razorback/completed-edit-dispatch/windows-backport-final-preserve-before.log",
+    "preserved_guest_test_log_sha256": "cb3e25fe7580ad53a368380ae0295ecbc41f294604990df16929b27eed40a4d8"
+  },
+  "index_path": "evals/edit-2026-10-27/results/controls/runtime-backport/index.json",
+  "index_sha256": "faa96923dd2a7c1d2903cb9380880b626b4f070974bd4bcf924134aea11a3568",
+  "linux": {
+    "cli_passed": 215,
+    "clippy_exit_status": 0,
+    "core_passed": 1691,
+    "fmt_exit_status": 0,
+    "memory_fixture_excluded_leaf_directories": 1000,
+    "memory_provider_calls": 0,
+    "memory_samples_per_binary": 5,
+    "memory_watches_per_sample": 3,
+    "release_exit_status": 0,
+    "reported_core_cli_total": 1906,
+    "rss_kib_after": [
+      14488,
+      14500,
+      14500,
+      14500,
+      14500
+    ],
+    "rss_kib_before": [
+      14420,
+      14424,
+      14424,
+      14424,
+      14424
+    ]
+  },
+  "member_count": 200,
+  "omissions": [
+    "Unrelated guest C:\\work\\code-kb\\test.log contents; only unchanged SHA256 is archived.",
+    "Windows guest images, build outputs/caches, generated memory fixture trees and telemetry databases.",
+    "Credentials, private keys, profiles, agent projects, dependency caches, and environment dumps.",
+    "Changing or unreviewed repository files outside the listed source snapshots and runtime evidence."
+  ],
+  "preserved_existing_archives": [
+    {
+      "path": "evals/edit-2026-10-27/results/controls/runtime/raw.tar.gz",
+      "sha256": "ac3145c50b8fed29412c0f2770f7109da110deb7073b866d4bb34d01ca942b77"
+    },
+    {
+      "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/original-attempts-2ec7fad2-v2.tar.gz",
+      "sha256": "97883246a802432d015f5a2adffbbf89727cc97630746baa47fad1b47a6437d6"
+    }
+  ],
+  "redactor_changed_input_count": 0,
+  "redactor_changed_inputs": [],
+  "redactor_input_count": 200,
+  "redactor_sha256": "09c521c0f39bf83c1f877edf7fd1799b9eb7df3780e9c99c52707d6d3620c36f",
+  "runtime_summary_member": "evidence/runtime-summary.json",
+  "schema": 1,
+  "source_commit": "89991f034ac2635d43eca2ccd41fd51247661c80",
+  "source_identity_member": "source/identity.json",
+  "windows": {
+    "binary_sha256": "d22fb2457bcc3c65315dbd73c626716956ddf66723760239582960eb2f4e2f48",
+    "clippy_exit_status": 0,
+    "driver_session": 34081,
+    "final_working_set_bytes": 12816384,
+    "fmt_exit_status": 0,
+    "guest_test_log_contents_included": false,
+    "guest_test_log_sha256_unchanged": "cb3e25fe7580ad53a368380ae0295ecbc41f294604990df16929b27eed40a4d8",
+    "handle_probe_after": 112,
+    "handle_probe_before": 112,
+    "handle_probe_cycles": 20,
+    "julie_extract_sha256": "e9eb3fc6e08feaa20d8758a81fd0746683fe08ad79daada36ad71b0dca8e1e79",
+    "release_exit_status": 0,
+    "rust_failed": 0,
+    "rust_ignored": 0,
+    "rust_passed": 1878,
+    "rust_result_blocks": 39,
+    "shutdown_confirmed_off": true,
+    "shutdown_followup_initial_state": "running",
+    "shutdown_retry_exit_status": 0,
+    "wrapper_exit_reason": "120-second shutdown deadline exceeded after all Windows test/build scopes passed",
+    "wrapper_exit_status": 1
+  }
+}
