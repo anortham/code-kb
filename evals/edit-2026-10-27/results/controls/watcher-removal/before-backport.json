@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "source_commit": "84066d3dd21465fe2e89224d2d9ec21e2bbea993",
+  "backend_version": "notify 8.2.0",
+  "debouncer_version": "notify-debouncer-full 0.7.0",
+  "failed_test": "watcher_reconciles_new_moved_deleted_and_recreated_subtrees",
+  "raw_log_sha256": "bc1f49a6305330392da64d4f6f973463db12564fb30a20522afc2dcf2a3966d1",
+  "retained_log_sha256": "bc1f49a6305330392da64d4f6f973463db12564fb30a20522afc2dcf2a3966d1",
+  "redaction": {
+    "status": "complete",
+    "original_sha256": "bc1f49a6305330392da64d4f6f973463db12564fb30a20522afc2dcf2a3966d1",
+    "redacted_sha256": "bc1f49a6305330392da64d4f6f973463db12564fb30a20522afc2dcf2a3966d1",
+    "changed": false,
+    "original_bytes": 13004,
+    "redacted_bytes": 13004
+  },
+  "retained_log": "windows-before-backport.log",
+  "native_create_utc": "2026-10-27T22:55:47.251192Z",
+  "native_remove_utc": "2026-10-27T22:55:47.358344Z",
+  "create_to_remove_ms": 107.152,
+  "debounce_window_ms": 150,
+  "native_moved_events": 5,
+  "debounced_moved_events": 0,
+  "pending_failure": null,
+  "observed_contract": "The test observed populated_move_symbol in SQLite before deleting its subtree; native removal events arrived but no debounced removal reached the owner.",
+  "cause": "A full scan can expose a path before its queued creation is emitted. Version0.7 removes its pending create queue when removal arrives within the window.",
+  "upstream_fix": "https://github.com/notify-rs/notify/pull/902",
+  "planned_fix": "Preserve removal events even when a creation is queued; retain existing backend and API versions.",
+  "upstream_issue": "https://github.com/notify-rs/notify/issues/900"
+}

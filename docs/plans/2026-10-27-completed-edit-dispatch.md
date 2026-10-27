@@ -87,3 +87,22 @@ Compiler/test work below waits until the original timed schedule finishes. Finis
 - [ ] A deterministic watcher regression covers disappearance between discovery and registration. Confirm `NotFound`, retry the walk once, and preserve root/permission/repeated-churn failures. Verify the affected Rust scope and final Linux/Windows checks; keep the frozen trial engine unchanged.
 - [ ] All-six fresh readiness, affected tests and full Python suite pass before a v2 freeze. Regrade all four MiniJinja and four C# patches uniformly, with no model calls.
 - [ ] Execute only four previously unexposed TypeScript cells with v2 inputs; retain original setup failures and disclose amended order. Complete all source/new-test reviews, original/corrected reporting and local commits.
+
+## Task 4: Preserve removals during concurrent scans
+
+Windows tracing proved native create and remove events arrive 107 ms apart, but
+`notify-debouncer-full` 0.7 cancels both before its 150 ms window expires. A
+concurrent scan can already have indexed the file. The missing removal leaves
+that row stale without any watcher failure. The raw proof is
+`.razorback/completed-edit-dispatch/windows-watcher-trace-move-3.log`.
+
+Backport only the upstream removal-preservation change from
+[notify-rs/notify#902](https://github.com/notify-rs/notify/pull/902), which ships in
+debouncer-full 0.8.0-rc.2. Keep the pinned backend and public APIs. This extends
+the earlier dependency constraint with a local patch of an existing version;
+no new dependency version or repository polling is needed.
+
+- Worker owns `vendor/notify-debouncer-full/`, root Cargo patch configuration and lockfile, and a deterministic regression in `crates/code-kb-core/tests/debouncer_removal_test.rs`.
+- First prove the regression fails against unmodified 0.7, then preserve removal events even when a creation is queued. Retain licenses, upstream provenance and the replacement condition.
+- Lead reviews the narrow backport and owns watcher integration, Windows repetition/full verification, Linux verification, memory/handle checks, evidence and the remaining four model trials.
+- Keep all frozen study inputs and completed model outputs unchanged. Run no model trials until verification and VM shutdown finish.

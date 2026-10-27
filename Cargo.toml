@@ -3,6 +3,7 @@ members = [
     "crates/code-kb-core",
     "crates/code-kb-cli",
 ]
+exclude = ["vendor/notify-debouncer-full"]
 resolver = "2"
 
 [workspace.package]
@@ -40,6 +41,9 @@ which = "7.0"
 blake3 = "1.5"
 tempfile = "3.17"
 rust-stemmers = "1.2"
+
+[patch.crates-io]
+notify-debouncer-full = { path = "vendor/notify-debouncer-full" }
 
 [profile.release]
 lto = true

@@ -1,0 +1,207 @@
+{
+  "schema": 1,
+  "source_base_commit": "84066d3dd21465fe2e89224d2d9ec21e2bbea993",
+  "linux_core_passed": 1691,
+  "linux_cli_passed": 215,
+  "linux_workspace_total_passed": 1906,
+  "python_suite_reused": 301,
+  "dependency_versions_unchanged": true,
+  "vendor_lib_sha256": "9234804eb9672e46eeec52781f25a40049675ddca08f42f3575988c3188fdfbf",
+  "regression_sha256": "0617fbf4f24219084c4f08d26005e3b669220092583dd75356b8f161d7e374f5",
+  "release_sha256": "92dbe6d17cb6a0cefb4bb16d1beaff139d2485fa9b47e53b7afca2fe4a71cee3",
+  "before_release_sha256": "8b4d7e1ce98cfc39772f65a2beb3137a6bab88f6709973ec2a5abb58d6805b10",
+  "lead_checks": [
+    {
+      "scope": "cli",
+      "argv": [
+        "cargo",
+        "test",
+        "-p",
+        "code-kb-cli",
+        "--locked"
+      ],
+      "exit_status": 0,
+      "elapsed_seconds": 41.690753,
+      "log": ".razorback/completed-edit-dispatch/task4-lead-cli.log"
+    },
+    {
+      "scope": "clippy",
+      "argv": [
+        "cargo",
+        "clippy",
+        "--workspace",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_status": 0,
+      "elapsed_seconds": 5.763868,
+      "log": ".razorback/completed-edit-dispatch/task4-lead-clippy.log"
+    },
+    {
+      "scope": "fmt",
+      "argv": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit_status": 0,
+      "elapsed_seconds": 0.718145,
+      "log": ".razorback/completed-edit-dispatch/task4-lead-fmt.log"
+    },
+    {
+      "scope": "release",
+      "argv": [
+        "cargo",
+        "build",
+        "--release",
+        "--locked"
+      ],
+      "exit_status": 0,
+      "elapsed_seconds": 64.254036,
+      "log": ".razorback/completed-edit-dispatch/task4-lead-release.log"
+    }
+  ],
+  "memory_before": {
+    "schema": 1,
+    "created_utc": "2026-10-27T23:14:59Z",
+    "binary": "/home/murphy/.codex/worktrees/1e6f/code-kb/.razorback/completed-edit-dispatch/engine-before-removal-fix/code-kb",
+    "binary_sha256": "8b4d7e1ce98cfc39772f65a2beb3137a6bab88f6709973ec2a5abb58d6805b10",
+    "fixture": "/home/murphy/.codex/worktrees/1e6f/code-kb/.razorback/completed-edit-dispatch/memory-before-project",
+    "excluded_leaf_directories": 1000,
+    "samples": [
+      {
+        "watches": 3,
+        "rss_kib": 14420,
+        "peak_rss_kib": 14420
+      },
+      {
+        "watches": 3,
+        "rss_kib": 14424,
+        "peak_rss_kib": 14424
+      },
+      {
+        "watches": 3,
+        "rss_kib": 14424,
+        "peak_rss_kib": 14424
+      },
+      {
+        "watches": 3,
+        "rss_kib": 14424,
+        "peak_rss_kib": 14424
+      },
+      {
+        "watches": 3,
+        "rss_kib": 14424,
+        "peak_rss_kib": 14424
+      }
+    ],
+    "initialize": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "capabilities": {
+          "tools": {
+            "listChanged": false
+          }
+        },
+        "instructions": "Pass project_root, the absolute path of the project or git worktree you work in, on every call. Call file_skeleton before you read a source file, then get_symbol_body or get_symbol_context for the symbols you need. Use lookup_symbol for a name or a concept and find_references instead of grep on a name, and blast_radius to pick the tests to run.",
+        "protocolVersion": "2024-11-05",
+        "serverInfo": {
+          "name": "code-kb",
+          "version": "2.9.1"
+        }
+      }
+    },
+    "outline": {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "result": {
+        "content": [
+          {
+            "text": "// File: src/lib.rs (Lines 1-1)\n\npub fn watch_probe() -> u32; // L1-1\n",
+            "type": "text"
+          }
+        ]
+      }
+    },
+    "provider_calls": 0
+  },
+  "memory_after": {
+    "schema": 1,
+    "created_utc": "2026-10-27T23:15:37Z",
+    "binary": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/release/code-kb",
+    "binary_sha256": "92dbe6d17cb6a0cefb4bb16d1beaff139d2485fa9b47e53b7afca2fe4a71cee3",
+    "fixture": "/home/murphy/.codex/worktrees/1e6f/code-kb/.razorback/completed-edit-dispatch/memory-after-project",
+    "excluded_leaf_directories": 1000,
+    "samples": [
+      {
+        "watches": 3,
+        "rss_kib": 14488,
+        "peak_rss_kib": 14488
+      },
+      {
+        "watches": 3,
+        "rss_kib": 14500,
+        "peak_rss_kib": 14500
+      },
+      {
+        "watches": 3,
+        "rss_kib": 14500,
+        "peak_rss_kib": 14500
+      },
+      {
+        "watches": 3,
+        "rss_kib": 14500,
+        "peak_rss_kib": 14500
+      },
+      {
+        "watches": 3,
+        "rss_kib": 14500,
+        "peak_rss_kib": 14500
+      }
+    ],
+    "initialize": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "capabilities": {
+          "tools": {
+            "listChanged": false
+          }
+        },
+        "instructions": "Pass project_root, the absolute path of the project or git worktree you work in, on every call. Call file_skeleton before you read a source file, then get_symbol_body or get_symbol_context for the symbols you need. Use lookup_symbol for a name or a concept and find_references instead of grep on a name, and blast_radius to pick the tests to run.",
+        "protocolVersion": "2024-11-05",
+        "serverInfo": {
+          "name": "code-kb",
+          "version": "2.9.1"
+        }
+      }
+    },
+    "outline": {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "result": {
+        "content": [
+          {
+            "text": "// File: src/lib.rs (Lines 1-1)\n\npub fn watch_probe() -> u32; // L1-1\n",
+            "type": "text"
+          }
+        ]
+      }
+    },
+    "provider_calls": 0
+  },
+  "log_sha256": {
+    "task4-code-kb-core.log": "ab6e6a1cbb3f895d6410cbc4345f99a7de69dece8576947933f6ff294877e67b",
+    "task4-lead-cli.log": "0edd6ebe6d346e20ddba8000c8e4fa61d558ef3aed8ae349ab72f36f3925fa99",
+    "task4-lead-clippy.log": "4ccb8e856109e08fc15a7cbe8857e97207a6abb7f8e248e7fcada19d907e23d8",
+    "task4-lead-fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "task4-lead-release.log": "33bcfd0567afac6f6f8d40364540be830701d40305de8d34448dbf954fd0f4aa",
+    "task4-debouncer-removal-red.log": "354e615f39464653afa512e4bea5e56d9a1b94d3c60d99d579feca52cf7c3cc1",
+    "task4-debouncer-removal-green.log": "b669e71328e8f6299c48d158bd998e689d538442124fa7aeee206afd9bbfbe6a"
+  }
+}

@@ -3,7 +3,7 @@ id: accuracy-pivot-callers-answers-an-agent-can-trust
 title: "Accuracy pivot: callers answers an agent can trust"
 status: active
 created: 2026-10-17T17:10:13.294Z
-updated: 2026-10-27T22:54:12.979Z
+updated: 2026-10-27T23:17:45.849Z
 tags:
   - project-direction
   - accuracy
@@ -13,18 +13,18 @@ tags:
 
 # Direction and authority
 
-Support all 42 Julie languages, seven MCP tools and CLI parity, explicit project_root, bounded SQLite memory, Windows, and identical AGENTS/CLAUDE. The owner removed every financial approval, cap and receipt. Necessary model evaluation and spending are approved. Local commits are approved; no push, release or global routing changes. Commit memories.
+Support all 42 Julie languages, seven MCP tools and CLI parity, explicit project_root, bounded SQLite memory, Windows, and identical AGENTS/CLAUDE. The owner removed financial approvals, caps and receipts. Necessary model evaluation and spending are approved. Local commits are approved; no push, release or global routing changes. Commit memories.
 
-# Completed evaluation work
+# Current correction slice
 
-Task worktree: /home/murphy/.codex/worktrees/1e6f/code-kb, branch fix/cross-language-review. Original 24 slots ended: 20 model trials, four TypeScript setup stops before provider exposure. Source acceptance is 18/20; original strict behavior is 13/20. Uniform Mini/C# regrades pass six and fail two native C# patches missing Pure. All Mini patches pass. Original evidence and every patch remain preserved; slot15 recovery v3 has unavailable agent/index timing. Original archive v2 hash97883246 contains all63 referenced blobs. V2 manifest542016a1 validates33 controls and selects only TS indices7/8/19/20 for later calls. Study engine d50d778 and all model/profile/dependency controls stay unchanged.
+Worktree /home/murphy/.codex/worktrees/1e6f/code-kb, branch fix/cross-language-review. Windows full verification found two watcher failures while all 42 language fixtures passed. Metadata-confirmed missing-directory retries fixed the backend error-kind difference; the focused Windows unit passes. The other failure is proven: native create/remove events107ms apart are canceled by debouncer0.7 within its150ms window, although a concurrent scan already exposed the symbol.
 
-# Current Windows investigation
+Vendor backport preserves removals by deleting one three-line branch, matching upstream PR902. Backend and dependency versions stay pinned. Licenses, exact provenance and two changed upstream fixture expectations are retained. The new deterministic real-index regression is red before and green after. Full core1691 and CLI215 pass (1906 total), plus Clippy, fmt and release. Live serve retains3 watches on1000 ignored leaves; RSS14424KiB before and14500KiB after. Windows repeats/full verification of this backport remain pending. VM is off. Diagnostic raw/debounced/processing TRACE and a gated test subscriber remain available.
 
-Committed source: ccef6df evaluation/recovery fixes and evidence; f2f0515 portable test lock; 3088a148 metadata-confirmed missing-directory retry. Linux full1905 and Python301 passed before the later Windows adjustments. Windows full1875 passed and two watcher tests failed; all42 conformance passed. The vanished-directory unit now passes focused Windows. Directory move/delete still fails intermittently with pending_failure=None. Do not call Windows verified or silently accept the flake.
+# Study evidence
 
-Diagnostic changes add raw/debounced/processing TRACE plus a gated test subscriber using an existing workspace crate. No new crate versions. Linux move and nine watcher units, Clippy and fmt pass. Read-only audit/Astra review reject an unwatch-kind explanation and blanket polling. Next run must locate backend loss versus debouncer cancellation. Windows VM is off. Preserve all failed runs under .razorback/completed-edit-dispatch.
+Original24 slots ended:20 actual model trials and four TS setup stops before exposure. Source/corrected acceptance18/20; original strict behavior13/20. All four Mini regrades pass; two native C# patches fail Pure. Keep all original attempts and grades. Slot15 recoveredv3 has unknown agent/index timing. Replayable archive97883246 retains all63 capture blobs. Manifest-v2 542016a1 validates33 controls and selects only TS7/8/19/20 later. Study engine d50d778 and model/profile/dependency inputs are immutable. No supplemental call has occurred. Original metrics show more tokens and +78.14s mean code-kb time across nine pairs; no task-wide savings claim.
 
-# Completion path
+# Next
 
-Commit diagnostic source and memories so win-test can sync cleanly. Run focused Windows with CODE_KB_WATCH_TEST_TRACE=1; prove and fix the actual removal failure. If an upstream dependency fix is needed, prefer a small provenance-backed backport; use a pinned compatible prerelease pair only if lifecycle changes cannot be isolated. Verify full Linux/Windows and memory/handles as appropriate, then shut the VM down. Only then run four unexposed TS cells, review their source/tests/traces, finish 24-trial metrics/report/docs and clean local commits. Original paired metrics show more tokens and +78.14s mean code-kb time across nine pairs, so do not claim task-token savings or change global routing from this pilot.
+Commit the reviewed backport and evidence, run focused Windows (unit, deterministic regression, repeated move/delete/recreate), then full Windows checks and handle-growth proof; always shut down the VM. Reuse fresh Linux1906 and Python301 evidence. Archive runtime verification, then run only four TS cells serially, review new source/tests/traces, finish combined24-trial metrics/report/docs and clean local commits. Report draft currently covers the original20 only. Keep global routing unchanged.

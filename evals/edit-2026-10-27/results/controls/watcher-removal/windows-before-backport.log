@@ -1,0 +1,73 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running tests\watcher_registration_test.rs (target\debug\deps\watcher_registration_test-8e509f21bda009cc.exe)
+
+thread 'watcher_reconciles_new_moved_deleted_and_recreated_subtrees' (1636) panicked at crates\code-kb-core\tests\watcher_registration_test.rs:325:5:
+symbol 'populated_move_symbol' did not reach indexed state false
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'watcher_reconciles_new_moved_deleted_and_recreated_subtrees' (1636) panicked at crates\code-kb-core\tests\watcher_registration_test.rs:162:5:
+directory removal stalled; watcher failure: None
+error: test failed, to rerun pass `-p code-kb-core --test watcher_registration_test`
+log: /home/murphy/.local/share/win-test/logs/20261027T225546Z-code-kb-2573873.log
+
+running 1 test
+[2m2026-10-27T22:55:46.878576Z[0m [35mTRACE[0m [2mignore::walk[0m[2m:[0m automatically discovered CWD: C:\work\code-kb\crates\code-kb-core
+[2m2026-10-27T22:55:46.879006Z[0m [34mDEBUG[0m [2mignore::gitignore[0m[2m:[0m opened gitignore file: \\?\C:\work\code-kb\.gitignore
+[2m2026-10-27T22:55:46.879257Z[0m [34mDEBUG[0m [2mglobset[0m[2m:[0m built glob set; 2 literals, 14 basenames, 6 extensions, 0 prefixes, 0 suffixes, 1 required extensions, 0 regexes
+[2m2026-10-27T22:55:46.880418Z[0m [34mDEBUG[0m [2mignore::gitignore[0m[2m:[0m opened gitignore file: \\?\C:\work\code-kb\.git\info\exclude
+[2m2026-10-27T22:55:46.916248Z[0m [32m INFO[0m [2mcode_kb_core::watcher[0m[2m:[0m Tier 3 file watcher active on 'C:\work\code-kb\crates\code-kb-core\target\tmp\.tmpENE6V8\project' (150ms debounce)
+[2m2026-10-27T22:55:46.916556Z[0m [35mTRACE[0m [2mnotify::windows[0m[2m:[0m Event: path = `C:\work\code-kb\crates\code-kb-core\target\tmp\.tmpENE6V8\project\new`, action = 1
+[2m2026-10-27T22:55:46.916602Z[0m [35mTRACE[0m [2mcode_kb_core::watcher[0m[2m:[0m Received native filesystem event [3mevent[0m[2m=[0mOk(Event { kind: Create(Any), paths: ["C:\\work\\code-kb\\crates\\code-kb-core\\target\\tmp\\.tmpENE6V8\\project\\new"], attr:tracker: None, attr:flag: None, attr:info: None, attr:source: None })
+[2m2026-10-27T22:55:46.916639Z[0m [35mTRACE[0m [2mnotify_debouncer_full[0m[2m:[0m raw event: Event { kind: Create(Any), paths: ["C:\\work\\code-kb\\crates\\code-kb-core\\target\\tmp\\.tmpENE6V8\\project\\new"], attr:tracker: None, attr:flag: None, attr:info: None, attr:source: None }
+[2m2026-10-27T22:55:46.916883Z[0m [35mTRACE[0m [2mnotify::windows[0m[2m:[0m Event: path = `C:\work\code-kb\crates\code-kb-core\target\tmp\.tmpENE6V8\project\new`, action = 3
+[2m2026-10-27T22:55:46.916901Z[0m [35mTRACE[0m [2mcode_kb_core::watcher[0m[2m:[0m Received native filesystem event [3mevent[0m[2m=[0mOk(Event { kind: Modify(Any), paths: ["C:\\work\\code-kb\\crates\\code-kb-core\\target\\tmp\\.tmpENE6V8\\project\\new"], attr:tracker: None, attr:flag: None, attr:info: None, attr:source: None })
+[2m2026-10-27T22:55:46.916940Z[0m [35mTRACE[0m [2mnotify_debouncer_full[0m[2m:[0m raw event: Event { kind: Modify(Any), paths: ["C:\\work\\code-kb\\crates\\code-kb-core\\target\\tmp\\.tmpENE6V8\\project\\new"], attr:tracker: None, attr:flag: None, attr:info: None, attr:source: None }
+[2m2026-10-27T22:55:47.067344Z[0m [35mTRACE[0m [2mcode_kb_core::watcher[0m[2m:[0m Received debounced filesystem events [3mevents[0m[2m=[0m[DebouncedEvent { event: Event { kind: Create(Any), paths: ["C:\\work\\code-kb\\crates\\code-kb-core\\target\\tmp\\.tmpENE6V8\\project\\new"], attr:tracker: None, attr:flag: None, attr:info: None, attr:source: None }, time: Instant { t: 4611686072.972517403s } }]
+[2m2026-10-27T22:55:47.067410Z[0m [35mTRACE[0m [2mcode_kb_core::watcher[0m[2m:[0m Processing filesystem events [3mevents[0m[2m=[0m[DebouncedEvent { event: Event { kind: Create(Any), paths: ["C:\\work\\code-kb\\crates\\code-kb-core\\target\\tmp\\.tmpENE6V8\\project\\new"], attr:tracker: None, attr:flag: None, attr:info: None, attr:source: None }, time: Instant { t: 4611686072.972517403s } }]
+[2m2026-10-27T22:55:47.067472Z[0m [35mTRACE[0m [2mignore::walk[0m[2m:[0m automatically discovered CWD: C:\work\code-kb\crates\code-kb-core
+[2m2026-10-27T22:55:47.068016Z[0m [34mDEBUG[0m [2mignore::gitignore[0m[2m:[0m opened gitignore file: \\?\C:\work\code-kb\.gitignore
+[2m2026-10-27T22:55:47.068261Z[0m [34mDEBUG[0m [2mglobset[0m[2m:[0m built glob set; 2 literals, 14 basenames, 6 extensions, 0 prefixes, 0 suffixes, 1 required extensions, 0 regexes
+[2m2026-10-27T22:55:47.069106Z[0m [34mDEBUG[0m [2mignore::gitignore[0m[2m:[0m opened gitignore file: \\?\C:\work\code-kb\.git\info\exclude
+[2m2026-10-27T22:55:47.069776Z[0m [35mTRACE[0m [2mcode_kb_core::watcher[0m[2m:[0m Reconciling directory events
+[2m2026-10-27T22:55:47.069877Z[0m [35mTRACE[0m [2mignore::walk[0m[2m:[0m automatically discovered CWD: C:\work\code-kb\crates\code-kb-core
+[2m2026-10-27T22:55:47.070186Z[0m [34mDEBUG[0m [2mignore::gitignore[0m[2m:[0m opened gitignore file: \\?\C:\work\code-kb\.gitignore
+[2m2026-10-27T22:55:47.070359Z[0m [34mDEBUG[0m [2mglobset[0m[2m:[0m built glob set; 2 literals, 14 basenames, 6 extensions, 0 prefixes, 0 suffixes, 1 required extensions, 0 regexes
+[2m2026-10-27T22:55:47.071152Z[0m [34mDEBUG[0m [2mignore::gitignore[0m[2m:[0m opened gitignore file: \\?\C:\work\code-kb\.git\info\exclude
+[2m2026-10-27T22:55:47.072435Z[0m [35mTRACE[0m [2mnotify::windows[0m[2m:[0m Event: path = `C:\work\code-kb\crates\code-kb-core\target\tmp\.tmpENE6V8\project\new\deep\tree`, action = 3
+[2m2026-10-27T22:55:47.072454Z[0m [35mTRACE[0m [2mcode_kb_core::watcher[0m[2m:[0m Received native filesystem event [3mevent[0m[2m=[0mOk(Event { kind: Modify(Any), paths: ["C:\\work\\code-kb\\crates\\code-kb-core\\target\\tmp\\.tmpENE6V8\\project\\new\\deep\\tree"], attr:tracker: None, attr:flag: None, attr:info: None, attr:source: None })
+[2m2026-10-27T22:55:47.072471Z[0m [35mTRACE[0m [2mnotify_debouncer_full[0m[2m:[0m raw event: Event { kind: Modify(Any), paths: ["C:\\work\\code-kb\\crates\\code-kb-core\\target\\tmp\\.tmpENE6V8\\project\\new\\deep\\tree"], attr:tracker: None, attr:flag: None, attr:info: None, attr:source: None }
+[2m2026-10-27T22:55:47.251152Z[0m [35mTRACE[0m [2mnotify::windows[0m[2m:[0m Event: path = `C:\work\code-kb\crates\code-kb-core\target\tmp\.tmpENE6V8\project\moved`, action = 1
+[2m2026-10-27T22:55:47.251192Z[0m [35mTRACE[0m [2mcode_kb_core::watcher[0m[2m:[0m Received native filesystem event [3mevent[0m[2m=[0mOk(Event { kind: Create(Any), paths: ["C:\\work\\code-kb\\crates\\code-kb-core\\target\\tmp\\.tmpENE6V8\\project\\moved"], attr:tracker: None, attr:flag: None, attr:info: None, attr:source: None })
+[2m2026-10-27T22:55:47.251211Z[0m [35mTRACE[0m [2mnotify_debouncer_full[0m[2m:[0m raw event: Event { kind: Create(Any), paths: ["C:\\work\\code-kb\\crates\\code-kb-core\\target\\tmp\\.tmpENE6V8\\project\\moved"], attr:tracker: None, attr:flag: None, attr:info: None, attr:source: None }
+[2m2026-10-27T22:55:47.251503Z[0m [35mTRACE[0m [2mnotify::windows[0m[2m:[0m Event: path = `C:\work\code-kb\crates\code-kb-core\target\tmp\.tmpENE6V8\project\moved`, action = 3
+[2m2026-10-27T22:55:47.251583Z[0m [35mTRACE[0m [2mcode_kb_core::watcher[0m[2m:[0m Received native filesystem event [3mevent[0m[2m=[0mOk(Event { kind: Modify(Any), paths: ["C:\\work\\code-kb\\crates\\code-kb-core\\target\\tmp\\.tmpENE6V8\\project\\moved"], attr:tracker: None, attr:flag: None, attr:info: None, attr:source: None })
+[2m2026-10-27T22:55:47.251607Z[0m [35mTRACE[0m [2mnotify_debouncer_full[0m[2m:[0m raw event: Event { kind: Modify(Any), paths: ["C:\\work\\code-kb\\crates\\code-kb-core\\target\\tmp\\.tmpENE6V8\\project\\moved"], attr:tracker: None, attr:flag: None, attr:info: None, attr:source: None }
+[2m2026-10-27T22:55:47.257094Z[0m [35mTRACE[0m [2mcode_kb_core::watcher[0m[2m:[0m Received debounced filesystem events [3mevents[0m[2m=[0m[DebouncedEvent { event: Event { kind: Modify(Any), paths: ["C:\\work\\code-kb\\crates\\code-kb-core\\target\\tmp\\.tmpENE6V8\\project\\new\\deep\\tree"], attr:tracker: None, attr:flag: None, attr:info: None, attr:source: None }, time: Instant { t: 4611686073.128151403s } }]
+[2m2026-10-27T22:55:47.257119Z[0m [35mTRACE[0m [2mcode_kb_core::watcher[0m[2m:[0m Processing filesystem events [3mevents[0m[2m=[0m[DebouncedEvent { event: Event { kind: Modify(Any), paths: ["C:\\work\\code-kb\\crates\\code-kb-core\\target\\tmp\\.tmpENE6V8\\project\\new\\deep\\tree"], attr:tracker: None, attr:flag: None, attr:info: None, attr:source: None }, time: Instant { t: 4611686073.128151403s } }]
+[2m2026-10-27T22:55:47.257281Z[0m [35mTRACE[0m [2mignore::walk[0m[2m:[0m automatically discovered CWD: C:\work\code-kb\crates\code-kb-core
+[2m2026-10-27T22:55:47.257794Z[0m [34mDEBUG[0m [2mignore::gitignore[0m[2m:[0m opened gitignore file: \\?\C:\work\code-kb\.gitignore
+[2m2026-10-27T22:55:47.257995Z[0m [34mDEBUG[0m [2mglobset[0m[2m:[0m built glob set; 2 literals, 14 basenames, 6 extensions, 0 prefixes, 0 suffixes, 1 required extensions, 0 regexes
+[2m2026-10-27T22:55:47.258819Z[0m [34mDEBUG[0m [2mignore::gitignore[0m[2m:[0m opened gitignore file: \\?\C:\work\code-kb\.git\info\exclude
+[2m2026-10-27T22:55:47.259567Z[0m [35mTRACE[0m [2mcode_kb_core::watcher[0m[2m:[0m Reconciling directory events
+[2m2026-10-27T22:55:47.259648Z[0m [35mTRACE[0m [2mignore::walk[0m[2m:[0m automatically discovered CWD: C:\work\code-kb\crates\code-kb-core
+[2m2026-10-27T22:55:47.259950Z[0m [34mDEBUG[0m [2mignore::gitignore[0m[2m:[0m opened gitignore file: \\?\C:\work\code-kb\.gitignore
+[2m2026-10-27T22:55:47.260116Z[0m [34mDEBUG[0m [2mglobset[0m[2m:[0m built glob set; 2 literals, 14 basenames, 6 extensions, 0 prefixes, 0 suffixes, 1 required extensions, 0 regexes
+[2m2026-10-27T22:55:47.260902Z[0m [34mDEBUG[0m [2mignore::gitignore[0m[2m:[0m opened gitignore file: \\?\C:\work\code-kb\.git\info\exclude
+[2m2026-10-27T22:55:47.358055Z[0m [35mTRACE[0m [2mnotify::windows[0m[2m:[0m Event: path = `C:\work\code-kb\crates\code-kb-core\target\tmp\.tmpENE6V8\project\moved\deep\moved.rs`, action = 2
+[2m2026-10-27T22:55:47.358087Z[0m [35mTRACE[0m [2mcode_kb_core::watcher[0m[2m:[0m Received native filesystem event [3mevent[0m[2m=[0mOk(Event { kind: Remove(Any), paths: ["C:\\work\\code-kb\\crates\\code-kb-core\\target\\tmp\\.tmpENE6V8\\project\\moved\\deep\\moved.rs"], attr:tracker: None, attr:flag: None, attr:info: None, attr:source: None })
+[2m2026-10-27T22:55:47.358103Z[0m [35mTRACE[0m [2mnotify_debouncer_full[0m[2m:[0m raw event: Event { kind: Remove(Any), paths: ["C:\\work\\code-kb\\crates\\code-kb-core\\target\\tmp\\.tmpENE6V8\\project\\moved\\deep\\moved.rs"], attr:tracker: None, attr:flag: None, attr:info: None, attr:source: None }
+[2m2026-10-27T22:55:47.358218Z[0m [35mTRACE[0m [2mnotify::windows[0m[2m:[0m Event: path = `C:\work\code-kb\crates\code-kb-core\target\tmp\.tmpENE6V8\project\moved\deep`, action = 2
+[2m2026-10-27T22:55:47.358241Z[0m [35mTRACE[0m [2mcode_kb_core::watcher[0m[2m:[0m Received native filesystem event [3mevent[0m[2m=[0mOk(Event { kind: Remove(Any), paths: ["C:\\work\\code-kb\\crates\\code-kb-core\\target\\tmp\\.tmpENE6V8\\project\\moved\\deep"], attr:tracker: None, attr:flag: None, attr:info: None, attr:source: None })
+[2m2026-10-27T22:55:47.358256Z[0m [35mTRACE[0m [2mnotify_debouncer_full[0m[2m:[0m raw event: Event { kind: Remove(Any), paths: ["C:\\work\\code-kb\\crates\\code-kb-core\\target\\tmp\\.tmpENE6V8\\project\\moved\\deep"], attr:tracker: None, attr:flag: None, attr:info: None, attr:source: None }
+[2m2026-10-27T22:55:47.358332Z[0m [35mTRACE[0m [2mnotify::windows[0m[2m:[0m Event: path = `C:\work\code-kb\crates\code-kb-core\target\tmp\.tmpENE6V8\project\moved`, action = 2
+[2m2026-10-27T22:55:47.358344Z[0m [35mTRACE[0m [2mcode_kb_core::watcher[0m[2m:[0m Received native filesystem event [3mevent[0m[2m=[0mOk(Event { kind: Remove(Any), paths: ["C:\\work\\code-kb\\crates\\code-kb-core\\target\\tmp\\.tmpENE6V8\\project\\moved"], attr:tracker: None, attr:flag: None, attr:info: None, attr:source: None })
+[2m2026-10-27T22:55:47.358355Z[0m [35mTRACE[0m [2mnotify_debouncer_full[0m[2m:[0m raw event: Event { kind: Remove(Any), paths: ["C:\\work\\code-kb\\crates\\code-kb-core\\target\\tmp\\.tmpENE6V8\\project\\moved"], attr:tracker: None, attr:flag: None, attr:info: None, attr:source: None }
+test watcher_reconciles_new_moved_deleted_and_recreated_subtrees ... FAILED
+
+failures:
+
+failures:
+    watcher_reconciles_new_moved_deleted_and_recreated_subtrees
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 4 filtered out; finished in 5.94s
+
