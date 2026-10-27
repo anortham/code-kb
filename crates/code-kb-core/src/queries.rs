@@ -6891,23 +6891,6 @@ pub(crate) fn type_fact_owner_id_sql(
     query
 }
 
-/// Resolve one type fact using the same SQL owner proof used by reference queries.
-pub(crate) fn resolve_type_fact_owner(
-    conn: &Connection,
-    fact: &TypeFact,
-) -> Result<Option<Symbol>, QueryError> {
-    let owner_query = format!("SELECT {}", type_fact_owner_id_sql("?1", "?2", "?3"));
-    let owner_id = conn.query_row(
-        &owner_query,
-        params![fact.symbol_id, fact.resolved_type, fact.language],
-        |row| row.get::<_, Option<String>>(0),
-    )?;
-    owner_id
-        .map(|symbol_id| get_symbol_by_id(conn, &symbol_id))
-        .transpose()
-        .map(Option::flatten)
-}
-
 const TYPE_RECEIVER_CHAIN_MAX_DEPTH: usize = 16;
 const TYPE_RECEIVER_ANCESTRY_MAX_DEPTH: usize = 8;
 
@@ -7532,6 +7515,7 @@ fn find_related_types_with_fact_limit(
          LIMIT ?2",
     )?;
     let mut rows = stmt.query(params![target.symbol_id, fact_limit as i64])?;
+    let mut owner_statement = None;
     let mut seen = HashSet::new();
     let mut types = Vec::new();
     while let Some(row) = rows.next()? {
@@ -7545,7 +7529,22 @@ fn find_related_types_with_fact_limit(
             resolved_type: row.get(3)?,
             generic_params: row.get(4)?,
         };
-        let Some(owner) = resolve_type_fact_owner(conn, &fact)? else {
+        if owner_statement.is_none() {
+            let owner_query = format!("SELECT {}", type_fact_owner_id_sql("?1", "?2", "?3"));
+            owner_statement = Some(conn.prepare(&owner_query)?);
+        }
+        let owner_id = owner_statement
+            .as_mut()
+            .expect("owner query was just prepared")
+            .query_row(
+                params![fact.symbol_id, fact.resolved_type, fact.language],
+                |row| row.get::<_, Option<String>>(0),
+            )?;
+        let Some(owner) = owner_id
+            .map(|symbol_id| get_symbol_by_id(conn, &symbol_id))
+            .transpose()?
+            .flatten()
+        else {
             continue;
         };
         if !seen.insert(owner.symbol_id) {
