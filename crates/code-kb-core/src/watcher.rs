@@ -477,7 +477,6 @@ fn synchronize_registrations(
                     Ok(()) => {}
                     Err(error)
                         if registration_path != root_registration
-                            && matches!(error.kind, notify::ErrorKind::PathNotFound)
                             && matches!(
                                 std::fs::metadata(&path),
                                 Err(metadata_error)

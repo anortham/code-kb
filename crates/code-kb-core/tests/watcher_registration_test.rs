@@ -150,7 +150,14 @@ fn watcher_reconciles_new_moved_deleted_and_recreated_subtrees() {
     wait_for_symbol(&db_path, "populated_move_symbol", true);
 
     fs::remove_dir_all(&moved).unwrap();
-    wait_for_symbol(&db_path, "populated_move_symbol", false);
+    let removal = std::panic::catch_unwind(|| {
+        wait_for_symbol(&db_path, "populated_move_symbol", false);
+    });
+    assert!(
+        removal.is_ok(),
+        "directory removal stalled; watcher failure: {:?}",
+        watcher.pending_failure()
+    );
     #[cfg(target_os = "linux")]
     wait_for_watch_count(initial_watch_count + 3);
 
