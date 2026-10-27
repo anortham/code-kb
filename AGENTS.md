@@ -144,6 +144,15 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   clears a link when it rewrites the type's file, and the next run links it again. A skeleton
   shows a method whose parent is in another file as a top-level row.
 
+- `normalize_extractor_facts` also corrects explicit CSS custom-function names and callable
+  kinds from the pinned extractor. Malformed call names are repaired only when an indexed
+  caller span and an exact same-file declaration token establish the written name. IDs,
+  source spans, and written signatures stay intact; no relationship is fabricated. Queries,
+  signature heads, and source reads are bounded, and the CSS-owner and identifier-containing
+  indexes avoid a repository-wide identifier scan. Missing or ambiguous facts remain gaps.
+  The pass runs for existing indexes, fresh scans, worktree copies, updates, and deletions.
+  Regression cases and remaining extractor limits are in `docs/language-support.md`.
+
 ### 3. Token-Dense Progressive Disclosure
 - Always return the most compact representation that answers the query.
 - Strip implementation bodies in `file_skeleton`.
@@ -465,13 +474,21 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   with the code.
   Argument counts: julie 3.8.0 writes `arg_count` on call identifiers (and `arg_spread` for a
   spread or splat). A site shows `; N args` after its basis, and `--json` adds `arg_count`.
-  `reference_report/arity.rs` excludes a `likely` or `unresolved` Python, Java, C#, Go, Rust,
-  Kotlin, or TypeScript call in the target's language (never JavaScript, never a spread) when its
-  count fits no definition of the target: ``3 args; `render` takes 1-2``. A `proven` site never
+  `reference_report/arity.rs` excludes a `likely` or `unresolved` call only when the language
+  has a supported strict argument rule and its count fits no definition of the target
+  (never JavaScript, never a spread): ``3 args; `render` takes 1-2``. A `proven` site never
   changes. The range comes from the parameter rows checked against the signature, counts a
   method's receiver where a call can pass it, and joins the ranges of the same-named methods of
   every base type, so a call through a base reaches an override. Every rule and every shape with
   no range are in `docs/argument-counts.md`; change that file with the code.
+- Report recovery: `find_references`, `blast_radius`, and `check_edit` accept `offset` and
+  `limit`, with equivalent CLI `--offset` and `--limit` flags. Each displayed section uses its
+  own page window; counts describe the complete report subject to stated discovery/check cuts.
+  Page sizes are at most 200. Restart at offset 0 after editing or rebuilding the index.
+  `blast_radius` can show discovered low-signal rows with `include_low_signal` /
+  `--include-low-signal`; its graph discovery ceiling remains 200. Incomplete test coverage
+  names a broader command only when repository configuration identifies a runner, otherwise
+  it names the broader scope to verify. Candidate-only references still add no impact edge.
 - Related tests (`get_symbol_context`): callers from relationships, pending calls, and references
   that are tests, test classes, or functions and methods in test files that are members of a test
   class or have a name that reads like a test (`names_a_test`), so a module-level app factory such
@@ -520,9 +537,12 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   that overload and is no site of a parameter or signature change. Custom type namespaces stay
   distinct; only explicit framework aliases such as `System.String` normalize to keywords. With
   typed overload evidence, an accepted argument count alone never drops an unbound call.
-  A Python parameter change that adds required keyword-only names checks the call's explicit
-  keywords before accepting its count; missing names keep the site outside the diff, while
-  ambiguous source or `**kwargs` that could supply them stays unresolved.
+  Required named parameters are checked before accepting an argument count where the language
+  reader can establish binding. Missing names keep the site outside the diff; ambiguous source
+  or a spread that could supply them stays unresolved. Removed indexed members include reads
+  tied to their owner. A callback value is an advisory dependency when the callable contract
+  changes, since its invocation is unknown; a removed callable value can be a proven dangling
+  reference. Competing overloads and receivers retain their uncertainty.
   The base symbols come from a `julie-extract scan` of the base content of the changed files into
   `<root>/.code-kb/check/<pid>/`, removed after the call; the main index changes only by the refresh
   of the changed files. A check covers at most 200 files and 30 symbols and starts no step after 20 s, and the

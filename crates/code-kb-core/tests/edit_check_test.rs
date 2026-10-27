@@ -136,7 +136,7 @@ fn the_check_header_names_the_base_and_how_many_files_changed() {
         "{text}"
     );
     assert!(
-        text.ends_with("Not checked: calls inside macro arguments, functions passed as values.\n")
+        text.ends_with("Not checked: calls inside macro arguments, callback invocation contracts. Indexed callable values are advisory dependencies.\n")
     );
 }
 
@@ -197,7 +197,7 @@ fn a_touched_python_call_that_still_omits_a_new_required_keyword_is_not_in_the_d
     let text = text_of(&repo);
     assert_lacks(&text, "In your diff");
     assert_has(&text, "Not in your diff");
-    assert_has(&text, "missing required keyword: strict");
+    assert_has(&text, "missing required argument: strict");
 }
 
 #[test]
@@ -1187,7 +1187,7 @@ fn a_python_dataclass_that_gains_a_field_lists_the_construction_the_diff_did_not
 }
 
 #[test]
-fn a_plain_python_class_attribute_is_not_a_field() {
+fn a_plain_python_class_attribute_is_tracked_without_changing_construction() {
     let repo = committed_repo(&[
         ("shapes.py", "class Point:\n    x = 1\n"),
         (
@@ -1200,7 +1200,9 @@ fn a_plain_python_class_attribute_is_not_a_field() {
         "shapes.py",
         "class Point:\n    x = 1\n    y = 2\n",
     );
-    assert_has(&text_of(&repo), "no symbol changed shape");
+    let text = text_of(&repo);
+    assert_has(&text, "fields +1 (y), -0");
+    assert_lacks(&text, "Not in your diff");
 }
 
 #[test]
@@ -3498,7 +3500,7 @@ fn a_rust_struct_that_loses_a_field_lists_the_self_literals_and_the_patterns_tha
 }
 
 #[test]
-fn a_python_dataclass_that_gains_a_class_variable_has_no_shape_change() {
+fn a_python_dataclass_class_variable_is_tracked_without_changing_construction() {
     for declaration in [
         "c: ClassVar[int]",
         "c: typing.ClassVar[int] = 0",
@@ -3512,10 +3514,8 @@ fn a_python_dataclass_that_gains_a_class_variable_has_no_shape_change() {
             &format!("{PY_REC}    {declaration}\n"),
         );
         let text = text_of(&repo);
-        assert!(
-            text.contains("no symbol changed shape."),
-            "{declaration}:\n{text}"
-        );
+        assert!(text.contains("fields +1 (c), -0"), "{declaration}:\n{text}");
+        assert_lacks(&text, "Not in your diff");
     }
 }
 

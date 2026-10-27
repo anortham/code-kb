@@ -70,9 +70,9 @@ Commit mode: `parallel-lead-commit` for every task. Workers do not stage, commit
 | 3: Construction semantics | A | `crates/code-kb-core/src/edit_check/fields.rs`, `crates/code-kb-core/src/reference_report/sections.rs`, `crates/code-kb-core/tests/edit_check_fields_test.rs` | No | None - safe parallel batch; preserve FieldChange's existing interface. |
 | 4: Removed members and callable values | A | `crates/code-kb-core/src/edit_check.rs`, `crates/code-kb-core/src/reference_report.rs`, `crates/code-kb-core/tests/edit_check_members_test.rs`, optional new `crates/code-kb-core/src/edit_check/members.rs` | No | None - safe parallel batch; this task is the single orchestration owner for explicit interface handoffs from tasks 2 and 3. |
 | 5: Actionable output recovery | A | `crates/code-kb-core/src/formatters.rs`, `crates/code-kb-core/src/test_commands.rs`, `crates/code-kb-core/src/queries.rs`, `crates/code-kb-core/src/ops.rs`, `crates/code-kb-cli/src/main.rs`, `crates/code-kb-cli/src/mcp/server.rs`, `crates/code-kb-cli/src/mcp/protocol.rs`, `crates/code-kb-cli/tests/report_recovery_test.rs`, optional new `crates/code-kb-core/src/report_pages.rs` | No | None - safe parallel batch; new core exports are integrated by the lead. |
-| 6: Evaluation and release evidence | A | `scripts/release-preflight.sh`, `scripts/release-dogfood.sh`, `scripts/reach_gate.py`, `scripts/test_reach_gate.py`, `scripts/test_release_evidence.py`, optional new `scripts/release_evidence.py`, `docs/RELEASING.md`, `docs/plans/2026-09-23-retrieval-value-and-optional-routing.md`, dedicated fresh local evaluation fixtures under `evals/review-2026-10-26/**` | No | None - safe parallel batch. |
+| 6: Evaluation and release evidence | A | `scripts/release-preflight.sh`, `scripts/release-dogfood.sh`, `scripts/reach_gate.py`, `scripts/test_reach_gate.py`, `scripts/test_release_evidence.py`, `scripts/release-evidence-inputs.json`, optional new `scripts/release_evidence.py`, `docs/RELEASING.md`, `docs/plans/2026-09-23-retrieval-value-and-optional-routing.md`, dedicated fresh local evaluation fixtures under `evals/review-2026-10-26/**` | No | None - safe parallel batch. |
 | 8: Extractor fact compatibility | A | `crates/code-kb-core/src/db.rs`, `crates/code-kb-core/src/sync.rs`, `crates/code-kb-core/tests/extractor_compat_test.rs` | No | None - safe parallel batch; preserve existing public lifecycle APIs. |
-| 7: Integration and documentation | C | `AGENTS.md`, `CLAUDE.md`, `README.md`, `docs/edit-check.md`, `docs/argument-counts.md`, `docs/reach-sections.md`, review/plan files, `.memories/**`, `crates/code-kb-core/src/lib.rs`, `.github/workflows/ci.yml` | Yes | Finalize the evidence and inventory after all implementation tasks. |
+| 7: Integration and documentation | C | `AGENTS.md`, `CLAUDE.md`, `README.md`, `docs/edit-check.md`, `docs/argument-counts.md`, `docs/reach-sections.md`, review/plan files, `.memories/**`, `crates/code-kb-core/src/lib.rs`, `crates/code-kb-core/tests/edit_check_test.rs`, `crates/code-kb-cli/tests/mcp_test.rs`, `.github/workflows/ci.yml` | Yes | Finalize the evidence and inventory after all implementation tasks. |
 
 ### Task 1: Pinned-language conformance
 
@@ -93,10 +93,10 @@ Commit mode: `parallel-lead-commit` for every task. Workers do not stage, commit
 **Approach:** Scan controlled fixtures, assert independently chosen symbols/locations or format-specific facts, edit content, and verify refreshed results. Derive the language-set assertion from the installed pinned extractor, not a duplicate unchecked constant. Send production defects to the lead with a real repro for ownership assignment.
 
 **Acceptance criteria:**
-- [ ] Every current language has a meaningful real-extraction fixture and refresh assertion; a new pinned language without a fixture fails coverage.
-- [ ] Capability output distinguishes observed coverage, limited coverage, consumer gaps, missing facts, and semantic N/A, with reasons and test pointers.
-- [ ] Shared-operation behavior is verified through applicable executable and structured-format cases, including no-symbol behavior.
-- [ ] Dedicated tests pass; verified diff and evidence are handed to the lead.
+- [x] Every current language has a meaningful real-extraction fixture and refresh assertion; a new pinned language without a fixture fails coverage.
+- [x] Capability output distinguishes observed coverage, limited coverage, consumer gaps, missing facts, and semantic N/A, with reasons and test pointers.
+- [x] Shared-operation behavior is verified through applicable executable and structured-format cases, including no-symbol behavior.
+- [x] Dedicated tests pass; verified diff and evidence are handed to the lead.
 
 ### Task 2: Argument semantics across applicable languages
 
@@ -117,10 +117,10 @@ Commit mode: `parallel-lead-commit` for every task. Workers do not stage, commit
 **Approach:** Verify syntax from primary language documentation or local compiler behavior when uncertain. Add failing public edit-check/reference cases before each fix. Share lexical/fact readers where semantics agree and retain explicit differences where they do not.
 
 **Acceptance criteria:**
-- [ ] Named-argument renames identify stale named uses in all applicable fixture languages and accept positional-only/local-name changes when valid.
-- [ ] Accepted ranges cover applicable extracted formal parameters without excluding valid optional/variadic/named calls or permissive-language calls.
-- [ ] Missing extraction evidence is reproduced and reported distinctly; no guessed proof or fabricated argument count.
-- [ ] Dedicated tests and relevant module unit tests pass; verified diff and evidence are handed to the lead.
+- [x] Named-argument renames identify stale named uses in all applicable fixture languages and accept positional-only/local-name changes when valid.
+- [x] Accepted ranges cover applicable extracted formal parameters without excluding valid optional/variadic/named calls or permissive-language calls.
+- [x] Missing extraction evidence is reproduced and reported distinctly; no guessed proof or fabricated argument count.
+- [x] Dedicated tests and relevant module unit tests pass; verified diff and evidence are handed to the lead.
 
 ### Task 3: Construction semantics across applicable types
 
@@ -141,10 +141,10 @@ Commit mode: `parallel-lead-commit` for every task. Workers do not stage, commit
 **Approach:** Compare real scanned before/after programs and verify construction sites and accepted unchanged cases. Resolve required/default/explicit-constructor differences from actual source facts and language semantics. Coordinate orchestration needs rather than editing shared files.
 
 **Acceptance criteria:**
-- [ ] Applicable construction gaps have positive and negative real-extractor regressions across type/language families.
-- [ ] Valid defaults, custom constructors, unrelated same-name types, and non-breaking added members do not become proven failures.
-- [ ] Existing four owner families keep their tested behavior; unproven cases remain explicitly limited.
-- [ ] Dedicated tests and relevant module unit tests pass; verified diff and evidence are handed to the lead.
+- [x] Applicable construction gaps have positive and negative real-extractor regressions across type/language families.
+- [x] Valid defaults, custom constructors, unrelated same-name types, and non-breaking added members do not become proven failures.
+- [x] Existing four owner families keep their tested behavior; unproven cases remain explicitly limited.
+- [x] Dedicated tests and relevant module unit tests pass; verified diff and evidence are handed to the lead.
 
 ### Task 4: Removed member reads and callable value dependencies
 
@@ -165,10 +165,10 @@ Commit mode: `parallel-lead-commit` for every task. Workers do not stage, commit
 **Approach:** Use existing member_access/variable_ref/type facts and shared receiver/scope evidence. Do not infer a callback invocation's argument count or claim that retaining a callback reference is necessarily invalid after a signature change.
 
 **Acceptance criteria:**
-- [ ] Removed member reads and callable removals are found in real fixtures across applicable languages, with same-name/shadow/inheritance negatives.
-- [ ] Changed callable value dependencies are visible without becoming unsupported proven call failures or Stop blocks.
-- [ ] Dynamic attributes use actual extracted owners/evidence; missing fact contracts are concrete outstanding dependencies.
-- [ ] Dedicated tests and relevant existing edit/reference tests pass; verified diff and evidence are handed to the lead.
+- [x] Removed member reads and callable removals are found in real fixtures across applicable languages, with same-name/shadow/inheritance negatives.
+- [x] Changed callable value dependencies are visible without becoming unsupported proven call failures or Stop blocks.
+- [x] Dynamic attributes use actual extracted owners/evidence; missing fact contracts are concrete outstanding dependencies.
+- [x] Dedicated tests and relevant existing edit/reference tests pass; verified diff and evidence are handed to the lead.
 
 ### Task 5: Actionable output recovery and test fallback
 
@@ -189,10 +189,10 @@ Commit mode: `parallel-lead-commit` for every task. Workers do not stage, commit
 **Approach:** Reuse shared report operations and formatters. Keep additive schemas, stable result ordering, explicit bounds/zero/invalid/past-end behavior, and current-index paging semantics. Detect commands from repository configuration, not source-language guesses; quote paths for the intended shell and preserve working-directory context.
 
 **Acceptance criteria:**
-- [ ] An agent can retrieve previously folded report rows without switching to CLI JSON; bounds, count completeness, filters, ordering, and CLI/MCP equivalence are tested.
-- [ ] Default output remains compact and compatible; removed tool names and root invariants remain unchanged.
-- [ ] Broader commands execute relevant tests in controlled real runner/config fixtures; unsupported runners produce honest scope advice.
-- [ ] Dedicated tests pass; verified diff and evidence are handed to the lead.
+- [x] An agent can retrieve previously folded report rows without switching to CLI JSON; bounds, count completeness, filters, ordering, and CLI/MCP equivalence are tested.
+- [x] Default output remains compact and compatible; removed tool names and root invariants remain unchanged.
+- [x] Broader commands execute relevant tests in controlled real runner/config fixtures; unsupported runners produce honest scope advice.
+- [x] Dedicated tests pass; verified diff and evidence are handed to the lead.
 
 ### Task 6: Trustworthy evaluation and release evidence
 
@@ -202,7 +202,7 @@ Commit mode: `parallel-lead-commit` for every task. Workers do not stage, commit
 
 **Contract inputs:** An ancestor PASS alone cannot validate semantic changes. Fingerprints cover relevant source, extractor identity/level, fixtures, grading logic, and test-command configuration, while allowing explicitly defined docs/version-only changes. Preserve the documented one-full-dogfood-round policy: later source fixes require explicit fix/reproduction evidence; an arbitrary later semantic commit is not covered merely because the original round is an ancestor.
 
-**File ownership:** `scripts/release-preflight.sh`, `scripts/release-dogfood.sh`, `scripts/reach_gate.py`, `scripts/test_reach_gate.py`, `scripts/test_release_evidence.py`, optional new `scripts/release_evidence.py`, `docs/RELEASING.md`, `docs/plans/2026-09-23-retrieval-value-and-optional-routing.md`, dedicated fresh local evaluation fixtures under `evals/review-2026-10-26/**`.
+**File ownership:** `scripts/release-preflight.sh`, `scripts/release-dogfood.sh`, `scripts/reach_gate.py`, `scripts/test_reach_gate.py`, `scripts/test_release_evidence.py`, `scripts/release-evidence-inputs.json`, optional new `scripts/release_evidence.py`, `docs/RELEASING.md`, `docs/plans/2026-09-23-retrieval-value-and-optional-routing.md`, dedicated fresh local evaluation fixtures under `evals/review-2026-10-26/**`.
 
 **Serialization required:** No.
 
@@ -213,10 +213,10 @@ Commit mode: `parallel-lead-commit` for every task. Workers do not stage, commit
 **Approach:** Share one fingerprint implementation rather than duplicating hashing in shell and Python. Exercise actual report production/validation with controlled Git histories and changed files. Reuse existing benchmark/replay interfaces only after confirming their current shapes.
 
 **Acceptance criteria:**
-- [ ] Relevant semantic/fixture/grader/extractor changes invalidate old PASS evidence; permitted docs/version-only changes do not.
-- [ ] Missing/malformed/future/mismatched evidence fails with an actionable reason; current valid evidence passes.
-- [ ] Fresh local cross-language task cases and an executable updated comparison procedure are recorded without claiming a paid agent comparison ran.
-- [ ] Dedicated Python tests pass; verified diff and evidence are handed to the lead.
+- [x] Relevant semantic/fixture/grader/extractor changes invalidate old PASS evidence; permitted docs/version-only changes do not.
+- [x] Missing/malformed/future/mismatched evidence fails with an actionable reason; current valid evidence passes.
+- [x] Fresh local cross-language task cases and an executable updated comparison procedure are recorded without claiming a paid agent comparison ran.
+- [x] Dedicated Python tests pass; verified diff and evidence are handed to the lead.
 
 ### Task 7: Integration, guidance, and final verification
 
@@ -226,7 +226,7 @@ Commit mode: `parallel-lead-commit` for every task. Workers do not stage, commit
 
 **Contract inputs:** The implementation request, all previous task evidence, and the complete supported-language inventory.
 
-**File ownership:** `AGENTS.md`, `CLAUDE.md`, `README.md`, `docs/edit-check.md`, `docs/argument-counts.md`, `docs/reach-sections.md`, review/plan files, `.memories/**`, `crates/code-kb-core/src/lib.rs`, `.github/workflows/ci.yml`.
+**File ownership:** `AGENTS.md`, `CLAUDE.md`, `README.md`, `docs/edit-check.md`, `docs/argument-counts.md`, `docs/reach-sections.md`, review/plan files, `.memories/**`, `crates/code-kb-core/src/lib.rs`, `crates/code-kb-core/tests/edit_check_test.rs`, `crates/code-kb-cli/tests/mcp_test.rs`, `.github/workflows/ci.yml`.
 
 **Serialization required:** Yes.
 
@@ -262,7 +262,7 @@ Commit mode: `parallel-lead-commit` for every task. Workers do not stage, commit
 **Approach:** Add a failing real-extractor public lookup/reference/body case first. Reuse the existing lifecycle post-processing shape used for implementation owner linking, giving any broader shared helper an accurate name. Normalize only explicit matching CSS declarations, preserve IDs/spans/signatures, make the operation idempotent and bounded, and avoid a separate retained repository collection. Coordinate reference classifier changes with task 4 and skeleton rendering with task 5.
 
 **Acceptance criteria:**
-- [ ] Explicit custom functions are looked up by their callable name, and extracted call identifiers can reach their matching declarations.
-- [ ] Source body spans and ordinary selectors/properties/at-rules remain correct; ambiguous/unsupported forms are not guessed.
-- [ ] Existing-index and incremental update tests prove correction is repeatable and survives rewrites without stale names.
-- [ ] Dedicated tests pass; verified diff and evidence are handed to the lead.
+- [x] Explicit custom functions are looked up by their callable name, and extracted call identifiers can reach their matching declarations.
+- [x] Source body spans and ordinary selectors/properties/at-rules remain correct; ambiguous/unsupported forms are not guessed.
+- [x] Existing-index and incremental update tests prove correction is repeatable and survives rewrites without stale names.
+- [x] Dedicated tests pass; verified diff and evidence are handed to the lead.

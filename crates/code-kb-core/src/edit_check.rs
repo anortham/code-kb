@@ -29,12 +29,13 @@ use crate::models::{
     is_generated_lambda_name,
 };
 use crate::queries::{
-    DOCUMENTATION_LANGUAGES, QueryError, declared_fixture_name, escape_like, load_file_symbols,
+    DOCUMENTATION_LANGUAGES, QueryError, declared_fixture_name, escape_like, has_column,
+    load_file_symbols,
 };
 use crate::reference_report::arity::{self, Arity};
 use crate::reference_report::{
     destructurings, enum_variant_names, inherited_group_arity, preprocessor_condition,
-    reference_report_for_edit, uses_of_variants,
+    reference_report_for_edit, reference_report_for_removed_member, uses_of_variants,
 };
 use crate::sync::{self, SyncError, ensure_fresh_file};
 use crate::workspace::{Workspace, is_hard_excluded};
@@ -428,7 +429,7 @@ impl PendingCheck {
             candidates.truncate(limits.symbols);
         }
 
-        let mut lister = SiteLister::new(conn, root, &hunks);
+        let mut lister = SiteLister::new(conn, root, &base_index.conn, &base_index.tree, &hunks);
         let total = candidates.len();
         for (checked, candidate) in candidates.into_iter().enumerate() {
             if budget.spent() {
@@ -714,6 +715,7 @@ fn is_plain_relative(path: &str) -> bool {
 struct Row {
     symbol: Symbol,
     parents: Vec<String>,
+    css_named_definition: bool,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -742,7 +744,10 @@ impl Row {
             && self.parents.is_empty()
             && symbol.visibility.as_deref() == Some("public")
             && !DOCUMENTATION_LANGUAGES.contains(&symbol.language.as_str());
-        (CALLABLE_KINDS.contains(&kind) || TYPE_KINDS.contains(&kind) || exported_binding)
+        (self.css_named_definition
+            || CALLABLE_KINDS.contains(&kind)
+            || TYPE_KINDS.contains(&kind)
+            || exported_binding)
             && !is_generated_lambda_name(
                 &symbol.name,
                 &symbol.language,
@@ -783,6 +788,21 @@ const IMPL_OWNERS_SQL: &str = "SELECT symbol_id,
 /// named in its metadata, linked to a parent row or not.
 fn rows_of(conn: &Connection, path: &str) -> Result<Vec<Row>, QueryError> {
     let symbols = load_file_symbols(conn, path)?;
+    let css_named_definitions = if has_column(conn, "symbols", "metadata_json") {
+        let mut stmt = conn.prepare(
+            "SELECT symbol_id FROM symbols
+             WHERE (path = ?1 OR path = ?2) AND language = 'css' AND kind = 'property'
+               AND CASE WHEN json_valid(metadata_json)
+                        THEN json_extract(metadata_json, '$.type') END
+                   IN ('css-rule', 'custom-property')",
+        )?;
+        stmt.query_map(params![path, path.replace('/', "\\")], |row| {
+            row.get::<_, String>(0)
+        })?
+        .collect::<Result<HashSet<_>, _>>()?
+    } else {
+        HashSet::new()
+    };
     let mut stmt = conn.prepare(IMPL_OWNERS_SQL)?;
     let owners: HashMap<String, String> = stmt
         .query_map(params![path, path.replace('/', "\\")], |row| {
@@ -821,6 +841,7 @@ fn rows_of(conn: &Connection, path: &str) -> Result<Vec<Row>, QueryError> {
         }
         parents.reverse();
         rows.push(Row {
+            css_named_definition: css_named_definitions.contains(&symbol.symbol_id),
             symbol: symbol.clone(),
             parents,
         });
@@ -997,11 +1018,14 @@ struct Candidate {
 
 enum What {
     Parameters {
+        required_parameters: Option<Vec<signatures::RequiredParameter>>,
         required_keyword_parameters: Vec<String>,
     },
     Signature,
     Renamed {
         renames: Vec<(String, String)>,
+        old_labels: Vec<String>,
+        new_labels: Vec<String>,
     },
     Removed {
         overloads: Option<Overloads>,
@@ -1009,6 +1033,7 @@ enum What {
         fixture: Option<String>,
         /// The C# `#if` condition of the branch that julie kept the symbol from.
         condition: Option<String>,
+        base_symbol: Box<Symbol>,
     },
     Fields(FieldChange),
     Variants {
@@ -1209,6 +1234,7 @@ impl Detector<'_> {
                 overloads: self.remaining_overloads(row, after)?,
                 fixture: pytest_fixture_name(&row.symbol),
                 condition: preprocessor_condition(&self.base.conn, &row.symbol.symbol_id)?,
+                base_symbol: Box::new(row.symbol.clone()),
             },
         })
     }
@@ -1266,6 +1292,27 @@ impl Detector<'_> {
                 None => return Ok(None),
             }
         } else if FIELD_OWNER_KINDS.contains(&kind) {
+            let before_primary_constructor = signatures::is_primary_constructor_class(
+                &self.base.conn,
+                &was.symbol,
+                &self.base.tree,
+            )?;
+            let after_primary_constructor =
+                signatures::is_primary_constructor_class(self.conn, &is.symbol, self.root)?;
+            let constructor_parameters = primary_constructor_parameter_rows(
+                &self.base.conn,
+                &was.symbol,
+                &self.base.tree,
+                before_primary_constructor,
+            )?
+            .into_iter()
+            .chain(primary_constructor_parameter_rows(
+                self.conn,
+                &is.symbol,
+                self.root,
+                after_primary_constructor,
+            )?)
+            .collect::<HashSet<_>>();
             let dataclass = is
                 .symbol
                 .signature
@@ -1277,15 +1324,69 @@ impl Detector<'_> {
                 .as_deref()
                 .filter(|_| is.symbol.language == "java")
                 .and_then(|sig| fields::record_components(sig, &was.symbol.name));
+            let before_inherited_writes = crate::queries::inherited_writes_among(
+                &self.base.conn,
+                before
+                    .iter()
+                    .filter(|row| is_attribute_write(row))
+                    .map(|row| row.symbol.symbol_id.as_str()),
+            )?;
+            let after_inherited_writes = crate::queries::inherited_writes_among(
+                self.conn,
+                after
+                    .iter()
+                    .filter(|row| is_attribute_write(row))
+                    .map(|row| row.symbol.symbol_id.as_str()),
+            )?;
+            let inherited_writes: HashSet<String> = before_inherited_writes
+                .into_iter()
+                .chain(after_inherited_writes)
+                .collect();
+            let prior_class_members: HashSet<String> = before
+                .iter()
+                .filter(|row| {
+                    row.symbol.parent_symbol_id.as_deref() == Some(&was.symbol.symbol_id)
+                        && (FIELD_KINDS.contains(&row.symbol.kind.as_str())
+                            || row.symbol.kind == "constant"
+                            || row.symbol.kind == "variable")
+                        && !is_attribute_write(row)
+                })
+                .map(|row| row.symbol.name.clone())
+                .collect();
             let is_field = |row: &Row| {
+                let direct_class_variable = row.symbol.kind == "variable"
+                    && [was.symbol.symbol_id.as_str(), is.symbol.symbol_id.as_str()]
+                        .contains(&row.symbol.parent_symbol_id.as_deref().unwrap_or_default());
+                let dynamic_replacement = row.symbol.parent_symbol_id.as_deref()
+                    == Some(is.symbol.symbol_id.as_str())
+                    && is_attribute_write(row)
+                    && prior_class_members.contains(&row.symbol.name);
                 (FIELD_KINDS.contains(&row.symbol.kind.as_str())
+                    || row.symbol.kind == "constant"
+                    || direct_class_variable
                     || dataclass && is_annotated_variable(&row.symbol))
-                    && !row.symbol.signature.as_deref().is_some_and(|sig| {
-                        ATTRIBUTE_WRITE_PREFIXES.iter().any(|p| sig.starts_with(p))
-                    })
+                    && !constructor_parameters.contains(&row.symbol.symbol_id)
+                    && !dynamic_replacement
+                    && (!is_attribute_write(row)
+                        || !inherited_writes.contains(&row.symbol.symbol_id))
             };
             let (added, removed) = member_changes(before, &was.symbol, after, &is.symbol, is_field);
             if added.is_empty() && removed.is_empty() {
+                if (before_primary_constructor || after_primary_constructor)
+                    && let Some((change, what)) = self.callable_change(&was.symbol, &is.symbol)?
+                {
+                    return Ok(Some(Candidate {
+                        kind: is.symbol.kind.clone(),
+                        display: is.display(),
+                        path: is.symbol.path.clone(),
+                        line: is.symbol.start_line,
+                        change,
+                        rank_name: is.symbol.name.clone(),
+                        uses: 0,
+                        subject: is.symbol.clone(),
+                        what,
+                    }));
+                }
                 return Ok(None);
             }
             let required = after.iter().any(|row| {
@@ -1294,12 +1395,26 @@ impl Detector<'_> {
                     && added.contains(&row.symbol.name)
                     && fields::needs_argument(row.symbol.signature.as_deref())
             });
+            let dataclass_constructor = dataclass.then(|| {
+                let (added, removed) =
+                    member_changes(before, &was.symbol, after, &is.symbol, |row| {
+                        is_annotated_variable(&row.symbol)
+                    });
+                let required = after.iter().any(|row| {
+                    row.symbol.parent_symbol_id.as_deref() == Some(&is.symbol.symbol_id)
+                        && is_annotated_variable(&row.symbol)
+                        && added.contains(&row.symbol.name)
+                        && fields::needs_argument(row.symbol.signature.as_deref())
+                });
+                fields::DataclassConstructorChange { removed, required }
+            });
             (
                 format!("fields {}", member_text(&added, &removed)),
                 What::Fields(FieldChange {
                     added,
                     removed,
                     required,
+                    dataclass_constructor,
                     old_components,
                 }),
             )
@@ -1336,23 +1451,61 @@ impl Detector<'_> {
         was: &Symbol,
         is: &Symbol,
     ) -> Result<Option<(String, What)>, EditCheckError> {
-        let (before, after) = (
-            self.parameter_shape(&self.base.conn, &self.base.tree, was)?,
-            self.parameter_shape(self.conn, self.root, is)?,
-        );
-        if before.differs(&after) {
-            return Ok(Some((
-                before.change_text(&after),
-                What::Parameters {
-                    required_keyword_parameters:
-                        signatures::added_required_python_keyword_parameters(was, is),
-                },
-            )));
-        }
         let shapes = (
             Shape::of(&self.base.conn, was, &self.base.tree)?,
             Shape::of(self.conn, is, self.root)?,
         );
+        let (before, after) = (
+            self.parameter_shape(&self.base.conn, &self.base.tree, was)?,
+            self.parameter_shape(self.conn, self.root, is)?,
+        );
+        let required_parameters =
+            signatures::added_required_parameters(&shapes.0, &shapes.1, &is.language);
+        let mut required_keyword_parameters = if required_parameters.is_none() {
+            let mut required = signatures::added_required_python_keyword_parameters(was, is);
+            required.extend(signatures::added_required_dart_named_parameters(was, is));
+            required.extend(signatures::added_required_ruby_keyword_parameters(was, is));
+            required
+        } else {
+            Vec::new()
+        };
+        required_keyword_parameters.sort();
+        required_keyword_parameters.dedup();
+        let has_new_required = required_parameters
+            .as_ref()
+            .is_some_and(|required| !required.is_empty())
+            || !required_keyword_parameters.is_empty();
+        if before.differs(&after) || has_new_required {
+            let change = if before.differs(&after) {
+                before.change_text(&after)
+            } else {
+                format!(
+                    "required parameters added: {}",
+                    required_parameters
+                        .as_ref()
+                        .into_iter()
+                        .flatten()
+                        .map(|parameter| {
+                            parameter.label.clone().unwrap_or_else(|| {
+                                parameter.position.map_or_else(
+                                    || "unknown parameter".to_string(),
+                                    |position| format!("argument {}", position + 1),
+                                )
+                            })
+                        })
+                        .chain(required_keyword_parameters.iter().cloned())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            };
+            return Ok(Some((
+                change,
+                What::Parameters {
+                    required_parameters,
+                    required_keyword_parameters,
+                },
+            )));
+        }
         Ok(match shapes.0.compare(&shapes.1, &is.language) {
             Difference::None => None,
             Difference::Signature => Some(("signature changed".to_string(), What::Signature)),
@@ -1365,9 +1518,15 @@ impl Detector<'_> {
                     .iter()
                     .map(|(old, new)| format!("{old} → {new}"))
                     .collect();
+                let old_labels = shapes.0.call_names().iter().flatten().cloned().collect();
+                let new_labels = shapes.1.call_names().iter().flatten().cloned().collect();
                 Some((
                     format!("parameter renamed: {}", pairs.join(", ")),
-                    What::Renamed { renames },
+                    What::Renamed {
+                        renames,
+                        old_labels,
+                        new_labels,
+                    },
                 ))
             }
         })
@@ -1439,6 +1598,101 @@ fn is_annotated_variable(symbol: &Symbol) -> bool {
             .is_some_and(fields::is_dataclass_field)
 }
 
+fn has_explicit_receiver_parameter(symbol: &Symbol) -> bool {
+    if symbol.kind != "method" || !matches!(symbol.language.as_str(), "python" | "rust" | "csharp")
+    {
+        return false;
+    }
+    let Some(signature) = symbol.signature.as_deref() else {
+        return false;
+    };
+    let Some((_, segments)) = arity::parameter_segments(signature, &symbol.name, &symbol.language)
+    else {
+        return false;
+    };
+    let Some(first) = segments.first() else {
+        return false;
+    };
+    match symbol.language.as_str() {
+        "python" => ["self", "cls"].iter().any(|receiver| {
+            first
+                .trim_start()
+                .strip_prefix(receiver)
+                .is_some_and(|rest| {
+                    rest.chars()
+                        .next()
+                        .is_none_or(|character| matches!(character, ':' | '=' | ',' | ' ' | '\t'))
+                })
+        }),
+        "rust" => arity::is_rust_self(first),
+        "csharp" => arity::after_csharp_this(first).is_some(),
+        _ => false,
+    }
+}
+
+fn primary_constructor_parameter_rows(
+    conn: &Connection,
+    symbol: &Symbol,
+    root: &Path,
+    is_primary_constructor: bool,
+) -> Result<HashSet<String>, QueryError> {
+    if !is_primary_constructor
+        || !matches!(
+            symbol.language.as_str(),
+            "kotlin" | "scala" | "fsharp" | "csharp"
+        )
+        || !has_column(conn, "symbols", "metadata_json")
+    {
+        return Ok(HashSet::new());
+    }
+    let names: HashSet<String> = Shape::of(conn, symbol, root)?
+        .call_names()
+        .iter()
+        .flatten()
+        .cloned()
+        .collect();
+    if names.is_empty() {
+        return Ok(HashSet::new());
+    }
+    let mut stmt = conn.prepare(
+        "SELECT symbol_id, name, kind,
+                CASE WHEN json_valid(metadata_json)
+                     THEN json_extract(metadata_json, '$.binding') END,
+                CASE WHEN json_valid(metadata_json)
+                     THEN json_extract(metadata_json, '$.role') END
+         FROM symbols
+         WHERE parent_symbol_id = ?1 AND language = ?2
+           AND name = ?3 AND kind IN ('property', 'variable')
+         LIMIT 2",
+    )?;
+    let mut properties = Vec::new();
+    for name in &names {
+        properties.extend(
+            stmt.query_map(params![symbol.symbol_id, symbol.language, name], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, Option<String>>(4)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?,
+        );
+    }
+    Ok(properties
+        .into_iter()
+        .filter_map(|(id, name, kind, binding, role)| {
+            let parameter = match symbol.language.as_str() {
+                "kotlin" | "scala" => kind == "property" && binding.as_deref() == Some("none"),
+                "fsharp" | "csharp" => kind == "variable" && role.as_deref() == Some("parameter"),
+                _ => false,
+            };
+            (parameter && names.contains(&name)).then_some(id)
+        })
+        .collect())
+}
+
 /// The names of the members of `was` that `is` lacks and the names it gains, among the children
 /// of each that `member` accepts.
 fn member_changes(
@@ -1449,9 +1703,27 @@ fn member_changes(
     member: impl Fn(&Row) -> bool,
 ) -> (Vec<String>, Vec<String>) {
     let names = |rows: &[Row], owner: &Symbol| -> BTreeSet<String> {
+        let symbols: HashMap<&str, &Symbol> = rows
+            .iter()
+            .map(|row| (row.symbol.symbol_id.as_str(), &row.symbol))
+            .collect();
         rows.iter()
-            .filter(|row| row.symbol.parent_symbol_id.as_deref() == Some(&owner.symbol_id))
             .filter(|row| member(row))
+            .filter(|row| {
+                if row.symbol.parent_symbol_id.as_deref() == Some(owner.symbol_id.as_str()) {
+                    return true;
+                }
+                if !is_attribute_write(row) {
+                    return false;
+                }
+                let Some(parent_id) = row.symbol.parent_symbol_id.as_deref() else {
+                    return false;
+                };
+                symbols.get(parent_id).is_some_and(|parent| {
+                    CALLABLE_KINDS.contains(&parent.kind.as_str())
+                        && parent.parent_symbol_id.as_deref() == Some(owner.symbol_id.as_str())
+                })
+            })
             .map(|row| row.symbol.name.clone())
             .collect()
     };
@@ -1460,6 +1732,15 @@ fn member_changes(
         new.difference(&old).cloned().collect(),
         old.difference(&new).cloned().collect(),
     )
+}
+
+fn is_attribute_write(row: &Row) -> bool {
+    FIELD_KINDS.contains(&row.symbol.kind.as_str())
+        && row.symbol.signature.as_deref().is_some_and(|signature| {
+            ATTRIBUTE_WRITE_PREFIXES
+                .iter()
+                .any(|prefix| signature.starts_with(prefix))
+        })
 }
 
 /// `+1 (z), -0`: how many members a type gained and lost, and the names of each.
@@ -1507,6 +1788,16 @@ impl Placed {
             SiteLabel::Excluded => {}
         }
     }
+
+    fn deduplicate(&mut self) {
+        let mut seen = HashSet::new();
+        self.in_diff
+            .retain(|site| seen.insert((site.path.clone(), site.line, site.caller.clone())));
+        self.proven
+            .retain(|site| seen.insert((site.path.clone(), site.line, site.caller.clone())));
+        self.likely
+            .retain(|site| seen.insert((site.path.clone(), site.line, site.caller.clone())));
+    }
 }
 
 struct Listed {
@@ -1514,9 +1805,20 @@ struct Listed {
     tests: Vec<String>,
 }
 
+struct CallContract<'a> {
+    range: Option<&'a Arity>,
+    typed: Option<&'a TypedOverloads>,
+    target: &'a Symbol,
+    required_parameters: Option<&'a [signatures::RequiredParameter]>,
+    required_keyword_parameters: &'a [String],
+    unknown_contract_advisory: bool,
+}
+
 struct SiteLister<'a> {
     conn: &'a Connection,
+    base_conn: &'a Connection,
     root: &'a Path,
+    base_root: &'a Path,
     hunks: &'a Hunks,
     sources: HashMap<String, Option<Vec<String>>>,
     languages: HashMap<String, String>,
@@ -1548,10 +1850,18 @@ fn edit_site(labeled: &LabeledSite, line: usize, note: Option<String>) -> EditSi
 }
 
 impl<'a> SiteLister<'a> {
-    fn new(conn: &'a Connection, root: &'a Path, hunks: &'a Hunks) -> Self {
+    fn new(
+        conn: &'a Connection,
+        root: &'a Path,
+        base_conn: &'a Connection,
+        base_root: &'a Path,
+        hunks: &'a Hunks,
+    ) -> Self {
         Self {
             conn,
+            base_conn,
             root,
+            base_root,
             hunks,
             sources: HashMap::new(),
             languages: HashMap::new(),
@@ -1567,26 +1877,55 @@ impl<'a> SiteLister<'a> {
             reference_report_for_edit(self.conn, self.root, &candidate.subject, condition)?;
         let placed = match &candidate.what {
             What::Parameters {
+                required_parameters,
                 required_keyword_parameters,
             } => {
                 let range = inherited_group_arity(self.conn, self.root, &candidate.subject)?;
                 let typed = TypedOverloads::of(self.conn, &candidate.subject)?;
+                let unknown_contract_advisory = ![".js", ".jsx", ".mjs", ".cjs"]
+                    .iter()
+                    .any(|extension| candidate.path.ends_with(extension));
                 let mut placed = self.calls(
                     &report,
-                    range.as_ref(),
-                    typed.as_ref(),
-                    required_keyword_parameters,
+                    CallContract {
+                        range: range.as_ref(),
+                        typed: typed.as_ref(),
+                        target: &candidate.subject,
+                        required_parameters: required_parameters.as_deref(),
+                        required_keyword_parameters,
+                        unknown_contract_advisory,
+                    },
                 );
+                self.value_dependencies(&report, &mut placed);
                 self.overrides(&report, &mut placed)?;
                 placed
             }
             What::Signature => {
                 let typed = TypedOverloads::of(self.conn, &candidate.subject)?;
-                let mut placed = self.calls(&report, None, typed.as_ref(), &[]);
+                let mut placed = self.calls(
+                    &report,
+                    CallContract {
+                        range: None,
+                        typed: typed.as_ref(),
+                        target: &candidate.subject,
+                        required_parameters: None,
+                        required_keyword_parameters: &[],
+                        unknown_contract_advisory: false,
+                    },
+                );
+                self.value_dependencies(&report, &mut placed);
                 self.overrides(&report, &mut placed)?;
                 placed
             }
-            What::Renamed { renames } => self.named_calls(&report, renames),
+            What::Renamed {
+                renames,
+                old_labels,
+                new_labels,
+            } => {
+                let mut placed = self.named_calls(&report, renames, old_labels, new_labels);
+                self.value_dependencies(&report, &mut placed);
+                placed
+            }
             What::Removed {
                 overloads: Some(overloads),
                 ..
@@ -1594,12 +1933,21 @@ impl<'a> SiteLister<'a> {
             What::Removed {
                 overloads: None,
                 fixture,
+                base_symbol,
                 ..
             } => {
-                let mut placed = self.every_site(&report);
+                let mut placed = self.every_site(&report, base_symbol);
                 self.imports(&report, &mut placed);
                 if let Some(name) = fixture {
                     self.fixture_users(name, &candidate.subject.path, &mut placed)?;
+                }
+                if base_symbol.language == "css" && base_symbol.kind == "property" {
+                    let current_definition = self.css_named_definition_exists(&base_symbol.name)?;
+                    if current_definition {
+                        placed.likely.append(&mut placed.proven);
+                    }
+                    self.css_reference_sites(base_symbol, current_definition, &mut placed)?;
+                    placed.deduplicate();
                 }
                 placed
             }
@@ -1616,13 +1964,15 @@ impl<'a> SiteLister<'a> {
         Ok(Listed { placed, tests })
     }
 
-    fn calls(
-        &mut self,
-        report: &ReferenceReport,
-        range: Option<&Arity>,
-        typed: Option<&TypedOverloads>,
-        required_keyword_parameters: &[String],
-    ) -> Placed {
+    fn calls(&mut self, report: &ReferenceReport, contract: CallContract<'_>) -> Placed {
+        let CallContract {
+            range,
+            typed,
+            target,
+            required_parameters,
+            required_keyword_parameters,
+            unknown_contract_advisory,
+        } = contract;
         let mut placed = Placed::default();
         for labeled in report
             .sites
@@ -1638,7 +1988,10 @@ impl<'a> SiteLister<'a> {
                 continue;
             }
             let language = self.language_of(path);
-            let arguments = if range.is_some() || !required_keyword_parameters.is_empty() {
+            let arguments = if range.is_some()
+                || required_parameters.is_some_and(|required| !required.is_empty())
+                || !required_keyword_parameters.is_empty()
+            {
                 self.arguments(labeled)
             } else {
                 CallArguments::default()
@@ -1649,36 +2002,57 @@ impl<'a> SiteLister<'a> {
             let verdict = range
                 .zip(count)
                 .and_then(|(range, count)| Some((range, count, range.accepts(&language, count)?)));
-            let missing_keywords = if required_keyword_parameters.is_empty() {
-                Vec::new()
-            } else {
-                let Some(check) = self.required_keyword_arguments(
-                    labeled,
-                    first,
-                    last,
-                    required_keyword_parameters,
-                ) else {
-                    placed.unresolved += 1;
-                    continue;
+            let missing_parameters =
+                match required_parameters.filter(|required| !required.is_empty()) {
+                    Some(required) => {
+                        let Some(missing) =
+                            self.required_arguments_on_line(target, labeled, required, &language)
+                        else {
+                            placed.unresolved += 1;
+                            continue;
+                        };
+                        missing
+                    }
+                    None if !required_keyword_parameters.is_empty() => {
+                        let Some(check) = self.required_keyword_arguments(
+                            labeled,
+                            first,
+                            last,
+                            required_keyword_parameters,
+                        ) else {
+                            placed.unresolved += 1;
+                            continue;
+                        };
+                        if !check.missing.is_empty() && check.has_unknown_spread {
+                            placed.unresolved += 1;
+                            continue;
+                        }
+                        check.missing
+                    }
+                    _ => Vec::new(),
                 };
-                if !check.missing.is_empty() && check.has_unknown_spread {
-                    placed.unresolved += 1;
-                    continue;
-                }
-                check.missing
-            };
             if !touched
-                && missing_keywords.is_empty()
+                && missing_parameters.is_empty()
                 && verdict.is_some_and(|(_, _, fits)| fits)
                 && binding.is_none_or(|binding| binding == OverloadBinding::Changed)
             {
                 continue;
             }
-            if !touched && missing_keywords.is_empty() && verdict.is_none() && arguments.spread {
+            if !touched && missing_parameters.is_empty() && verdict.is_none() && arguments.spread {
                 placed.unresolved += 1;
                 continue;
             }
             let rejected = verdict.filter(|(_, _, fits)| !fits);
+            let label = if unknown_contract_advisory
+                && rejected.is_none()
+                && missing_parameters.is_empty()
+                && verdict.is_none()
+                && labeled.label == SiteLabel::Proven
+            {
+                SiteLabel::Likely
+            } else {
+                labeled.label
+            };
             let note = rejected
                 .map(|(range, count, _)| {
                     format!(
@@ -1688,17 +2062,21 @@ impl<'a> SiteLister<'a> {
                     )
                 })
                 .or_else(|| {
-                    (!missing_keywords.is_empty()).then(|| {
+                    (!missing_parameters.is_empty()).then(|| {
                         format!(
-                            "missing required keyword{}: {}",
-                            if missing_keywords.len() == 1 { "" } else { "s" },
-                            missing_keywords.join(", ")
+                            "missing required argument{}: {}",
+                            if missing_parameters.len() == 1 {
+                                ""
+                            } else {
+                                "s"
+                            },
+                            missing_parameters.join(", ")
                         )
                     })
                 });
             placed.add(
-                labeled.label,
-                touched && rejected.is_none() && missing_keywords.is_empty(),
+                label,
+                touched && rejected.is_none() && missing_parameters.is_empty(),
                 edit_site(labeled, first, note),
             );
         }
@@ -1712,14 +2090,46 @@ impl<'a> SiteLister<'a> {
         last: usize,
         required: &[String],
     ) -> Option<signatures::RequiredKeywordArguments> {
+        let language = self.language_of(&labeled.site.path);
         let source = self.source(&labeled.site.path)?;
+        let last = last.max(construction_end(
+            source,
+            first,
+            &labeled.site.to_symbol_name,
+        ));
         let lines = source.get(first.checked_sub(1)?..last)?;
         let lines: Vec<&str> = lines.iter().map(String::as_str).collect();
-        signatures::required_python_keyword_arguments(
-            &lines,
-            &labeled.site.to_symbol_name,
-            required,
-        )
+        match language.as_str() {
+            "dart" => {
+                let missing = required
+                    .iter()
+                    .filter(|parameter| {
+                        !signatures::names_parameter_with_formals(
+                            &lines,
+                            &labeled.site.to_symbol_name,
+                            parameter,
+                            &language,
+                            required,
+                        )
+                    })
+                    .cloned()
+                    .collect();
+                Some(signatures::RequiredKeywordArguments {
+                    missing,
+                    has_unknown_spread: false,
+                })
+            }
+            "ruby" => signatures::required_ruby_keyword_arguments(
+                &lines,
+                &labeled.site.to_symbol_name,
+                required,
+            ),
+            _ => signatures::required_python_keyword_arguments(
+                &lines,
+                &labeled.site.to_symbol_name,
+                required,
+            ),
+        }
     }
 
     /// The argument counts of the call at the site: the count the report gives, else the counts of
@@ -1737,25 +2147,474 @@ impl<'a> SiteLister<'a> {
         }
         let mut arguments = self.line_arguments(labeled).unwrap_or_default();
         if arguments.counts.is_empty() && !arguments.spread {
-            arguments.counts = self.written_counts(labeled);
+            arguments = self.written_arguments(labeled);
         }
         arguments
     }
 
+    fn required_arguments_on_line(
+        &mut self,
+        target: &Symbol,
+        labeled: &LabeledSite,
+        required: &[signatures::RequiredParameter],
+        language: &str,
+    ) -> Option<Vec<String>> {
+        let line = labeled.site.start_line?;
+        let (calls, unknown) = fields::written_arguments_on_line(
+            self.source(&labeled.site.path)?,
+            line,
+            &labeled.site.to_symbol_name,
+            language,
+        );
+        if calls.is_empty() {
+            return None;
+        }
+        let mut unknown_call = unknown;
+        let mut target_calls = 0;
+        for (column, actual) in calls {
+            if target.parent_symbol_id.is_some() {
+                match self.call_reaches_target_owner(target, labeled, column) {
+                    Some(true) => {}
+                    Some(false) => continue,
+                    None => {
+                        unknown_call = true;
+                        continue;
+                    }
+                }
+            }
+            target_calls += 1;
+            let receiver_offset = if required
+                .iter()
+                .any(|parameter| parameter.position.is_some())
+            {
+                self.required_receiver_offset(target, labeled, column)
+            } else {
+                Some(0)
+            };
+            let check = signatures::missing_required_parameters_with_receiver(
+                &actual,
+                required,
+                language,
+                receiver_offset,
+            );
+            if check.missing.is_empty() {
+                continue;
+            }
+            if check.has_unknown_spread {
+                unknown_call = true;
+                continue;
+            }
+            return Some(check.missing);
+        }
+        if target_calls == 0 {
+            return None;
+        }
+        (!unknown_call).then(Vec::new)
+    }
+
+    fn call_reaches_target_owner(
+        &mut self,
+        target: &Symbol,
+        labeled: &LabeledSite,
+        column: usize,
+    ) -> Option<bool> {
+        let owner_id = target.parent_symbol_id.as_deref()?;
+        let owner = crate::queries::get_symbol_by_id(self.conn, owner_id).ok()??;
+        if !TYPE_KINDS.contains(&owner.kind.as_str())
+            && !matches!(owner.kind.as_str(), "object" | "protocol" | "union")
+        {
+            return None;
+        }
+        let language = self.language_of(&labeled.site.path);
+        let receiver = self
+            .conn
+            .query_row(
+                "SELECT CASE WHEN json_valid(metadata_json)
+                            THEN json_extract(metadata_json, '$.receiver') END
+                 FROM identifiers
+                 WHERE name = ?1 AND language = ?2 AND start_line = ?3
+                   AND start_column = ?4 AND (path = ?5 OR path = ?6)
+                   AND kind IN ('call', 'calls', 'instantiates')
+                 LIMIT 1",
+                params![
+                    labeled.site.to_symbol_name,
+                    language,
+                    labeled.site.start_line.unwrap_or(0) as i64,
+                    column as i64,
+                    labeled.site.path,
+                    labeled.site.path.replace('/', "\\")
+                ],
+                |row| row.get::<_, Option<String>>(0),
+            )
+            .optional()
+            .ok()
+            .flatten()
+            .flatten();
+        let receiver = match receiver {
+            Some(receiver) => receiver,
+            None => {
+                let line = labeled.site.start_line?;
+                let source = self.source(&labeled.site.path)?.get(line.checked_sub(1)?)?;
+                let before = source.get(..column)?.trim_end();
+                let Some(qualifier) = before
+                    .strip_suffix("::")
+                    .or_else(|| before.strip_suffix("?."))
+                    .or_else(|| before.strip_suffix('.'))
+                else {
+                    return Some(true);
+                };
+                let receiver = qualifier
+                    .rsplit(|character: char| {
+                        !character.is_alphanumeric() && character != '_' && character != '$'
+                    })
+                    .next()
+                    .filter(|receiver| !receiver.is_empty())?;
+                receiver.to_string()
+            }
+        };
+        let terminal = receiver.rsplit(['.', ':']).next().unwrap_or(&receiver);
+        let type_ids = if matches!(
+            terminal,
+            "self" | "this" | "cls" | "Me" | "Self" | "super" | "base"
+        ) {
+            let caller_id = labeled.site.from_symbol_id.as_str();
+            let mut stmt = self
+                .conn
+                .prepare(
+                    "WITH RECURSIVE chain(symbol_id, depth) AS (
+                         SELECT ?1, 0
+                         UNION ALL
+                         SELECT s.parent_symbol_id, chain.depth + 1
+                         FROM symbols s JOIN chain ON s.symbol_id = chain.symbol_id
+                         WHERE s.parent_symbol_id IS NOT NULL AND chain.depth < 32
+                     )
+                     SELECT s.symbol_id FROM chain JOIN symbols s ON s.symbol_id = chain.symbol_id
+                     WHERE s.kind IN ('class', 'struct', 'interface', 'trait', 'enum', 'record', 'object', 'protocol', 'union')
+                     ORDER BY chain.depth LIMIT 1",
+                )
+                .ok()?;
+            let id = stmt
+                .query_row([caller_id], |row| row.get::<_, String>(0))
+                .optional()
+                .ok()??;
+            vec![id]
+        } else {
+            let caller_id = labeled.site.from_symbol_id.as_str();
+            let mut stmt = self
+                .conn
+                .prepare(
+                    "WITH RECURSIVE chain(symbol_id, depth) AS (
+                     SELECT ?1, 0
+                     UNION ALL
+                     SELECT s.parent_symbol_id, chain.depth + 1
+                     FROM symbols s JOIN chain ON s.symbol_id = chain.symbol_id
+                     WHERE s.parent_symbol_id IS NOT NULL AND chain.depth < 32
+                 ), typed(depth, resolved_type) AS (
+                     SELECT chain.depth, type_fact.resolved_type
+                     FROM chain
+                     JOIN symbols receiver ON receiver.parent_symbol_id = chain.symbol_id
+                     JOIN type_facts type_fact ON type_fact.symbol_id = receiver.symbol_id
+                     WHERE receiver.name = ?2 AND receiver.path = ?3
+                       AND receiver.kind IN ('variable', 'parameter', 'field', 'property')
+                 )
+                 SELECT DISTINCT resolved_type FROM typed
+                 WHERE depth = (SELECT MIN(depth) FROM typed)
+                 LIMIT 2",
+                )
+                .ok()?;
+            let names = stmt
+                .query_map(params![caller_id, terminal, labeled.site.path], |row| {
+                    row.get::<_, String>(0)
+                })
+                .ok()?
+                .collect::<Result<Vec<_>, _>>()
+                .ok()?;
+            match names.as_slice() {
+                [name] => {
+                    let mut stmt = self
+                        .conn
+                        .prepare(
+                            "SELECT symbol_id FROM symbols
+                             WHERE name = ?1 AND language = ?2
+                               AND kind IN ('class', 'struct', 'interface', 'trait', 'enum', 'record', 'object', 'protocol', 'union')
+                             LIMIT 2",
+                        )
+                        .ok()?;
+                    stmt.query_map(params![name, language], |row| row.get::<_, String>(0))
+                        .ok()?
+                        .collect::<Result<Vec<_>, _>>()
+                        .ok()?
+                }
+                _ => {
+                    let mut stmt = self
+                        .conn
+                        .prepare(
+                            "SELECT symbol_id FROM symbols
+                             WHERE name = ?1 AND language = ?2
+                               AND kind IN ('class', 'struct', 'interface', 'trait', 'enum', 'record', 'object', 'protocol', 'union')
+                             LIMIT 2",
+                        )
+                        .ok()?;
+                    stmt.query_map(params![terminal, language], |row| row.get::<_, String>(0))
+                        .ok()?
+                        .collect::<Result<Vec<_>, _>>()
+                        .ok()?
+                }
+            }
+        };
+        let [receiver_type_id] = type_ids.as_slice() else {
+            return None;
+        };
+        if receiver_type_id == owner_id {
+            return Some(true);
+        }
+        let mut stmt = self
+            .conn
+            .prepare(
+                "WITH RECURSIVE ancestors(symbol_id, depth) AS (
+                     SELECT ?1, 0
+                     UNION
+                     SELECT edge.symbol_id, ancestors.depth + 1
+                     FROM ancestors
+                     JOIN (
+                         SELECT from_symbol_id, to_symbol_id AS symbol_id
+                         FROM relationships WHERE kind IN ('extends', 'implements')
+                         UNION ALL
+                         SELECT pending.from_symbol_id, base.symbol_id
+                         FROM pending_relationships pending
+                         JOIN symbols child ON child.symbol_id = pending.from_symbol_id
+                         JOIN symbols base ON base.name = pending.target_terminal_name
+                                            AND base.language = child.language
+                                            AND base.kind IN ('class', 'struct', 'interface', 'trait', 'enum', 'record', 'object', 'protocol', 'union')
+                         WHERE pending.kind IN ('extends', 'implements')
+                     ) edge ON edge.from_symbol_id = ancestors.symbol_id
+                     WHERE ancestors.depth < 16
+                 )
+                 SELECT EXISTS(SELECT 1 FROM ancestors WHERE symbol_id = ?2)",
+            )
+            .ok()?;
+        stmt.query_row(params![receiver_type_id, owner_id], |row| {
+            row.get::<_, i64>(0)
+        })
+        .ok()
+        .map(|matches| matches != 0)
+    }
+
+    fn required_receiver_offset(
+        &mut self,
+        target: &Symbol,
+        labeled: &LabeledSite,
+        column: usize,
+    ) -> Option<usize> {
+        if !has_explicit_receiver_parameter(target) {
+            return Some(0);
+        }
+        let language = self.language_of(&labeled.site.path);
+        let owner_name = target
+            .parent_symbol_id
+            .as_ref()
+            .and_then(|id| {
+                crate::queries::get_symbol_by_id(self.conn, id)
+                    .ok()
+                    .flatten()
+            })
+            .map(|owner| owner.name);
+        let indexed_receiver = self
+            .conn
+            .query_row(
+                "SELECT CASE WHEN json_valid(metadata_json)
+                            THEN json_extract(metadata_json, '$.receiver') END
+                 FROM identifiers
+                 WHERE name = ?1 AND language = ?2 AND start_line = ?3
+                   AND start_column = ?4 AND (path = ?5 OR path = ?6)
+                   AND kind IN ('call', 'calls', 'instantiates')
+                 LIMIT 1",
+                params![
+                    labeled.site.to_symbol_name,
+                    language,
+                    labeled.site.start_line.unwrap_or(0) as i64,
+                    column as i64,
+                    labeled.site.path,
+                    labeled.site.path.replace('/', "\\")
+                ],
+                |row| row.get::<_, Option<String>>(0),
+            )
+            .optional()
+            .ok()
+            .flatten()
+            .flatten();
+        let receiver = indexed_receiver.or_else(|| {
+            let line = labeled.site.start_line?;
+            let source = self.source(&labeled.site.path)?.get(line.checked_sub(1)?)?;
+            let before = source.get(..column)?.trim_end();
+            let qualifier = before
+                .strip_suffix("::")
+                .or_else(|| before.strip_suffix("?."))
+                .or_else(|| before.strip_suffix('.'))?;
+            qualifier
+                .rsplit(|character: char| {
+                    !character.is_alphanumeric() && character != '_' && character != '$'
+                })
+                .next()
+                .filter(|receiver| !receiver.is_empty())
+                .map(str::to_string)
+        });
+        let receiver = match receiver {
+            Some(receiver) => receiver,
+            None => return Some(0),
+        };
+        let terminal = receiver.rsplit(['.', ':']).next().unwrap_or(&receiver);
+        let classmethod = target.language == "python"
+            && target
+                .signature
+                .as_deref()
+                .and_then(|signature| {
+                    arity::parameter_segments(signature, &target.name, &target.language)
+                })
+                .and_then(|(_, segments)| segments.first().copied())
+                .is_some_and(|first| first.trim_start().starts_with("cls"));
+        if owner_name.as_deref() == Some(terminal) {
+            return (!classmethod).then_some(1);
+        }
+        match terminal {
+            "self" | "this" | "cls" | "Me" | "super" | "base" => Some(0),
+            "Self" => Some(1),
+            _ if terminal.chars().next().is_some_and(char::is_uppercase) => None,
+            _ => Some(0),
+        }
+    }
+
     /// The argument counts of the Java calls of the name on the line of the site, read from the
     /// source, because julie writes no count for `new Foo(a)`.
-    fn written_counts(&mut self, labeled: &LabeledSite) -> Vec<u32> {
+    fn written_arguments(&mut self, labeled: &LabeledSite) -> CallArguments {
         let path = labeled.site.path.as_str();
-        if self.language_of(path) != "java" {
-            return Vec::new();
-        }
+        let language = self.language_of(path);
         let line = labeled.site.start_line.unwrap_or(0);
-        self.source(path)
-            .map(|lines| fields::call_counts(lines, line, &labeled.site.to_symbol_name))
-            .unwrap_or_default()
-            .into_iter()
-            .filter_map(|count| u32::try_from(count).ok())
-            .collect()
+        let Some(lines) = self.source(path) else {
+            return CallArguments::default();
+        };
+        if language == "java" {
+            return CallArguments {
+                counts: fields::call_counts(lines, line, &labeled.site.to_symbol_name)
+                    .into_iter()
+                    .filter_map(|count| u32::try_from(count).ok())
+                    .collect(),
+                spread: false,
+            };
+        }
+        let (counts, unknown) =
+            fields::written_call_counts(lines, line, &labeled.site.to_symbol_name, &language);
+        CallArguments {
+            counts: if unknown {
+                Vec::new()
+            } else {
+                counts
+                    .into_iter()
+                    .filter_map(|count| u32::try_from(count).ok())
+                    .collect()
+            },
+            spread: unknown,
+        }
+    }
+
+    fn value_dependencies(&mut self, report: &ReferenceReport, placed: &mut Placed) {
+        for labeled in &report.sites {
+            if labeled.label == SiteLabel::Excluded
+                || !(labeled.site.kind == "variable_ref"
+                    || labeled.site.kind == "member_access" && self.member_access_is_value(labeled))
+            {
+                continue;
+            }
+            let (first, last) = site_span(labeled);
+            let reached = self.touches(&labeled.site.path, first, last);
+            let label = if labeled.label == SiteLabel::Proven {
+                SiteLabel::Likely
+            } else {
+                labeled.label
+            };
+            placed.add(
+                label,
+                reached,
+                edit_site(
+                    labeled,
+                    first,
+                    Some("callable value dependency".to_string()),
+                ),
+            );
+        }
+    }
+
+    fn member_access_is_value(&mut self, labeled: &LabeledSite) -> bool {
+        let path = labeled.site.path.as_str();
+        let line = labeled.site.start_line.unwrap_or(0);
+        let name = labeled.site.to_symbol_name.as_str();
+        let Some(source) = self
+            .source(path)
+            .and_then(|lines| lines.get(line.saturating_sub(1)))
+        else {
+            return false;
+        };
+        let Some(tail) = labeled
+            .site
+            .start_column
+            .and_then(|column| source.get(column..))
+            .and_then(|source| source.strip_prefix(name))
+        else {
+            return false;
+        };
+        let tail = tail.trim_start();
+        !(tail.starts_with('(')
+            || tail.starts_with("?.(")
+            || tail.starts_with("?(")
+            || tail.starts_with("!("))
+            && !tail
+                .strip_prefix('=')
+                .is_some_and(|right| !right.starts_with('=') && !right.starts_with('>'))
+    }
+
+    fn css_reference_sites(
+        &mut self,
+        target: &Symbol,
+        current_definition: bool,
+        placed: &mut Placed,
+    ) -> Result<(), EditCheckError> {
+        let report = reference_report_for_edit(self.base_conn, self.base_root, target, None)?;
+        for labeled in report
+            .sites
+            .iter()
+            .filter(|site| site.label != SiteLabel::Excluded && site.site.kind == "references")
+        {
+            let (first, last) = site_span(labeled);
+            let reached = self.touches(&labeled.site.path, first, last);
+            placed.add(
+                if current_definition {
+                    SiteLabel::Likely
+                } else {
+                    labeled.label
+                },
+                reached,
+                edit_site(labeled, first, None),
+            );
+        }
+        Ok(())
+    }
+
+    fn css_named_definition_exists(&self, name: &str) -> Result<bool, EditCheckError> {
+        let present = self
+            .conn
+            .query_row(
+                "SELECT 1 FROM symbols
+                 WHERE language = 'css' AND kind = 'property' AND name = ?1
+                   AND CASE WHEN json_valid(metadata_json)
+                            THEN json_extract(metadata_json, '$.type') END
+                       IN ('css-rule', 'custom-property')
+                 LIMIT 1",
+                [name],
+                |_| Ok(()),
+            )
+            .optional()
+            .map_err(QueryError::from)?;
+        Ok(present.is_some())
     }
 
     fn line_arguments(&self, labeled: &LabeledSite) -> Option<CallArguments> {
@@ -1865,7 +2724,13 @@ impl<'a> SiteLister<'a> {
 
     /// The calls that pass an old parameter name as a named argument. A call that still does so
     /// is stale even when the diff touched its line.
-    fn named_calls(&mut self, report: &ReferenceReport, renames: &[(String, String)]) -> Placed {
+    fn named_calls(
+        &mut self,
+        report: &ReferenceReport,
+        renames: &[(String, String)],
+        old_labels: &[String],
+        new_labels: &[String],
+    ) -> Placed {
         let mut placed = Placed::default();
         for labeled in report
             .sites
@@ -1886,9 +2751,11 @@ impl<'a> SiteLister<'a> {
                 .iter()
                 .map(String::as_str)
                 .collect();
-            let named = renames
-                .iter()
-                .find(|(old, _)| signatures::names_parameter(&span, callee, old, &language));
+            let named = renames.iter().find(|(old, new)| {
+                signatures::renamed_parameter_call(
+                    &span, callee, old, new, &language, old_labels, new_labels,
+                )
+            });
             if let Some((old, _)) = named {
                 let note = Some(format!("names parameter `{old}`"));
                 placed.add(labeled.label, false, edit_site(labeled, first, note));
@@ -1970,18 +2837,202 @@ impl<'a> SiteLister<'a> {
         Ok(())
     }
 
-    fn every_site(&mut self, report: &ReferenceReport) -> Placed {
+    fn every_site(&mut self, report: &ReferenceReport, removed: &Symbol) -> Placed {
         let mut placed = Placed::default();
         for labeled in report
             .sites
             .iter()
             .filter(|site| site.label != SiteLabel::Excluded)
         {
+            if CALLABLE_KINDS.contains(&removed.kind.as_str())
+                && labeled.site.kind == "member_access"
+                && self.dynamic_member_write(&removed.language, labeled, &removed.name)
+            {
+                continue;
+            }
             let (first, last) = site_span(labeled);
             let reached = self.touches(&labeled.site.path, first, last);
             placed.add(labeled.label, reached, edit_site(labeled, first, None));
         }
         placed
+    }
+
+    fn removed_member_reads(
+        &mut self,
+        subject: &Symbol,
+        change: &FieldChange,
+    ) -> Result<Placed, EditCheckError> {
+        let mut placed = Placed::default();
+        for name in &change.removed {
+            let report = reference_report_for_removed_member(self.conn, self.root, subject, name)?;
+            for labeled in report.sites.iter().filter(|site| {
+                site.label != SiteLabel::Excluded
+                    && (site.site.kind == "member_access" || is_call(&site.site.kind))
+            }) {
+                let (first, last) = site_span(labeled);
+                if first == 0 || self.dynamic_member_write(&subject.language, labeled, name) {
+                    continue;
+                }
+                let reached = self.touches(&labeled.site.path, first, last);
+                placed.add(labeled.label, reached, edit_site(labeled, first, None));
+            }
+        }
+        Ok(placed)
+    }
+
+    fn dynamic_member_write(&mut self, language: &str, labeled: &LabeledSite, name: &str) -> bool {
+        if !matches!(language, "python" | "javascript" | "jsx" | "vue") {
+            return false;
+        }
+        let line = labeled.site.start_line.unwrap_or(0);
+        let Some(source) = self
+            .source(&labeled.site.path)
+            .and_then(|lines| lines.get(line.saturating_sub(1)))
+        else {
+            return false;
+        };
+        let Some(tail) = labeled
+            .site
+            .start_column
+            .and_then(|column| source.get(column..))
+            .and_then(|source| source.strip_prefix(name))
+        else {
+            return false;
+        };
+        let tail = tail.trim_start();
+        tail.strip_prefix('=')
+            .is_some_and(|right| !right.starts_with('=') && !right.starts_with('>'))
+    }
+
+    fn csharp_record_construction_line(
+        &self,
+        subject: &Symbol,
+        path: &str,
+        line: usize,
+        source: &[String],
+        site: Option<&LabeledSite>,
+    ) -> Result<Option<(Vec<String>, bool)>, EditCheckError> {
+        if subject.language != "csharp"
+            || !matches!(subject.kind.as_str(), "class" | "record")
+            || !subject.signature.as_deref().is_some_and(|signature| {
+                signature
+                    .find("record")
+                    .zip(signature.find(&subject.name))
+                    .is_some_and(|(record, name)| record < name)
+            })
+        {
+            return Ok(None);
+        }
+        let Some(source_line) = line.checked_sub(1).and_then(|index| source.get(index)) else {
+            return Ok(None);
+        };
+        let (calls, _) = fields::written_arguments_on_line(source, line, &subject.name, "csharp");
+        if calls.is_empty() {
+            return Ok(None);
+        }
+        let end = construction_end(source, line, &subject.name).max(line);
+        let Some(mut filtered) = source
+            .get(line - 1..end.min(source.len()))
+            .map(<[String]>::to_vec)
+        else {
+            return Ok(None);
+        };
+        let target_path = crate::reference_report::csharp_type_qualification_for_symbol(
+            self.conn,
+            &subject.symbol_id,
+        )?
+        .join(".");
+        let (candidate_paths, _) =
+            crate::reference_report::csharp_type_qualifications_for_name(self.conn, &subject.name)?;
+        let caller_id = site
+            .map(|site| site.site.from_symbol_id.as_str())
+            .filter(|id| !id.is_empty());
+        let caller_namespace = caller_id
+            .map(|caller| crate::reference_report::csharp_namespace_for_symbol(self.conn, caller))
+            .transpose()?;
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT COALESCE(signature, '') FROM symbols
+                 WHERE kind = 'import' AND language = 'csharp'
+                   AND (path = ?1 OR signature LIKE 'global using %')",
+            )
+            .map_err(QueryError::from)?;
+        let usings = stmt
+            .query_map([path], |row| row.get::<_, String>(0))
+            .map_err(QueryError::from)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(QueryError::from)?;
+        let mut changed = false;
+        let mut uncertain_binding = false;
+        for (column, _) in calls {
+            let qualified_metadata = self
+                .conn
+                .query_row(
+                    "SELECT CASE WHEN json_valid(i.metadata_json)
+                                THEN (COALESCE(json_extract(i.metadata_json, '$.receiver'), '') != ''
+                                      OR COALESCE(json_extract(i.metadata_json, '$.receiver_qualifier'), '') != '')
+                                ELSE 0 END
+                     FROM identifiers i
+                     WHERE i.name = ?1 AND i.language = 'csharp'
+                       AND i.start_line = ?2 AND i.start_column = ?3
+                       AND (i.path = ?4 OR i.path = ?5)
+                       AND i.kind IN ('call', 'calls', 'instantiates')
+                     LIMIT 1",
+                    params![
+                        subject.name,
+                        line as i64,
+                        column as i64,
+                        path,
+                        path.replace('/', "\\")
+                    ],
+                    |row| row.get::<_, bool>(0),
+                )
+                .optional()
+                .map_err(QueryError::from)?
+                .unwrap_or(false);
+            if qualified_metadata {
+                uncertain_binding = true;
+                mask_csharp_call(&mut filtered, column, &subject.name);
+                changed = true;
+                continue;
+            }
+            let Some(qualifier) =
+                crate::reference_report::csharp_constructor_qualifier(source_line, column)
+            else {
+                continue;
+            };
+            let alias = qualifier.path.split('.').next().unwrap_or_default();
+            let using_alias = !qualifier.global
+                && usings
+                    .iter()
+                    .filter_map(|using| crate::reference_report::csharp_using_alias(using))
+                    .any(|(name, _)| name == alias);
+            let relative_scope = !qualifier.global
+                && caller_namespace
+                    .as_deref()
+                    .is_none_or(|namespace| !namespace.is_empty());
+            let nested_type_scope = if qualifier.global {
+                false
+            } else if let Some(caller) = caller_id {
+                crate::reference_report::csharp_type_prefix_in_scope(self.conn, caller, alias)?
+            } else {
+                true
+            };
+            let other_type = candidate_paths.iter().any(|(id, candidate)| {
+                id != &subject.symbol_id && candidate.join(".") == qualifier.path
+            });
+            if using_alias || relative_scope || nested_type_scope {
+                uncertain_binding = true;
+            } else if qualifier.path == target_path {
+                continue;
+            } else if !other_type {
+                uncertain_binding = true;
+            }
+            mask_csharp_call(&mut filtered, column, &subject.name);
+            changed = true;
+        }
+        Ok(changed.then_some((filtered, uncertain_binding)))
     }
 
     fn constructions(
@@ -2002,7 +3053,8 @@ impl<'a> SiteLister<'a> {
                 }
             }
         }
-        let mut placed = Placed::default();
+        let mut placed = self.removed_member_reads(subject, change)?;
+        let _ = self.source(&subject.path);
         for construction in &rows {
             let site = report
                 .sites
@@ -2013,15 +3065,55 @@ impl<'a> SiteLister<'a> {
                         && site.site.start_line == Some(construction.line)
                 })
                 .min_by_key(|site| site.label.rank());
-            let lines = self.source(&construction.path).map(Vec::as_slice);
-            if !change.breaks(subject, lines, construction.line) {
+            let _ = self.source(&construction.path);
+            let owner_lines = self
+                .sources
+                .get(&subject.path)
+                .and_then(|source| source.as_deref());
+            let lines = self
+                .sources
+                .get(&construction.path)
+                .and_then(|source| source.as_deref());
+            let filtered_construction = lines
+                .map(|lines| {
+                    self.csharp_record_construction_line(
+                        subject,
+                        &construction.path,
+                        construction.line,
+                        lines,
+                        site,
+                    )
+                })
+                .transpose()?;
+            let (filtered_line, uncertain_alias) = match filtered_construction {
+                Some(Some((lines, uncertain_alias))) => (Some(lines), uncertain_alias),
+                _ => (None, false),
+            };
+            let construction_lines = filtered_line.as_deref().or(lines);
+            let construction_line = if filtered_line.is_some() {
+                1
+            } else {
+                construction.line
+            };
+            if !change.breaks_with_context(
+                self.conn,
+                subject,
+                owner_lines,
+                construction_lines,
+                construction_line,
+            )? {
+                if uncertain_alias {
+                    placed.unresolved += usize::from(!self.touches(
+                        &construction.path,
+                        construction.line,
+                        construction.line,
+                    ));
+                }
                 continue;
             }
-            let last = self
-                .source(&construction.path)
-                .map_or(construction.line, |lines| {
-                    construction_end(lines, construction.line, &report.target.name)
-                });
+            let last = lines.map_or(construction.line, |lines| {
+                construction_end(lines, construction.line, &report.target.name)
+            });
             let reached = self.touches(&construction.path, construction.line, last);
             let caller = site
                 .map(|site| {
@@ -2045,6 +3137,7 @@ impl<'a> SiteLister<'a> {
         if rust_struct {
             self.self_literals(subject, change, &rows, &mut placed)?;
         }
+        placed.deduplicate();
         Ok(placed)
     }
 
@@ -2301,6 +3394,18 @@ fn imports_variants(line: &str, enum_name: &str) -> bool {
     item.starts_with("use ") && item.contains(&format!("{enum_name}::"))
 }
 
+fn mask_csharp_call(lines: &mut [String], column: usize, name: &str) {
+    let Some(line) = lines.first_mut() else {
+        return;
+    };
+    let Some(end) = column.checked_add(name.len()) else {
+        return;
+    };
+    if line.get(column..end) == Some(name) {
+        line.replace_range(column..end, &" ".repeat(name.len()));
+    }
+}
+
 /// The last line of the literal or call that starts at `line` and names `name`: the line of the
 /// bracket that closes the first one opened after the name. `line` when the line opens none.
 fn construction_end(lines: &[String], line: usize, name: &str) -> usize {
@@ -2396,6 +3501,7 @@ mod tests {
         start: usize,
     ) -> Row {
         Row {
+            css_named_definition: false,
             symbol: Symbol {
                 symbol_id: format!("{name}{start}"),
                 start_line: start,

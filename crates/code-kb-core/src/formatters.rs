@@ -238,7 +238,7 @@ fn sanitize_skeleton_sig<'a>(sig: &'a str, sym: &'a Symbol) -> std::borrow::Cow<
 }
 
 /// The signature cut at its first `{`, which opens the body that the skeleton renders.
-fn container_signature<'a>(sig: &'a str, sym: &'a Symbol) -> std::borrow::Cow<'a, str> {
+pub(crate) fn container_signature<'a>(sig: &'a str, sym: &'a Symbol) -> std::borrow::Cow<'a, str> {
     let expression_arrow = if sym.language == "csharp"
         && matches!(
             sym.kind.as_str(),
@@ -323,7 +323,37 @@ fn is_shown(sym: &Symbol, parent: Option<&Symbol>) -> bool {
     let python_declaration = sym.kind == "variable"
         && sym.language == "python"
         && parent.is_none_or(|parent| parent.kind == "class");
-    !is_skippable_kind(&sym.kind) || python_declaration
+    let css_custom_property =
+        sym.language == "css" && sym.kind == "property" && sym.name.starts_with("--");
+    let nested_css_declaration = sym.language == "css"
+        && sym.kind == "property"
+        && parent.is_some_and(|parent| parent.language == "css" && parent.kind == "property");
+    if nested_css_declaration {
+        return css_custom_property;
+    }
+    !is_skippable_kind(&sym.kind) || python_declaration || css_custom_property
+}
+
+fn is_structural_inline_child(sym: &Symbol, parent: Option<&Symbol>) -> bool {
+    let Some(parent) = parent else {
+        return false;
+    };
+    if !matches!(
+        sym.language.as_str(),
+        "html" | "ini" | "json" | "toml" | "vue" | "xml" | "yaml"
+    ) || sym.language != parent.language
+        || sym.start_line != parent.start_line
+        || parent.start_line != parent.end_line
+    {
+        return false;
+    }
+    let owner_signature = parent.signature.as_deref().unwrap_or(&parent.name);
+    let child_signature = sym.signature.as_deref().unwrap_or(&sym.name);
+    !child_signature.is_empty() && !owner_signature.contains(child_signature)
+}
+
+fn is_skeleton_row_shown(sym: &Symbol, parent: Option<&Symbol>) -> bool {
+    is_shown(sym, parent) || is_structural_inline_child(sym, parent)
 }
 
 /// `; defines `a`, `b`` for the functions and classes declared inside a hidden body, so a view
@@ -374,7 +404,7 @@ fn render_symbol_skeleton(
     children_map: &HashMap<Option<String>, Vec<&Symbol>>,
     indent_level: usize,
 ) {
-    if !is_shown(sym, parent) {
+    if !is_skeleton_row_shown(sym, parent) {
         return;
     }
 
@@ -412,10 +442,20 @@ fn render_symbol_skeleton(
     let children = children_map.get(&Some(sym.symbol_id.clone()));
 
     let spans_multiple_lines = sym.end_line > sym.start_line;
+    let css_rule_has_custom_property = sym.language == "css"
+        && sym.kind == "property"
+        && children.is_some_and(|list| {
+            list.iter().any(|child| {
+                child.language == "css" && child.kind == "property" && child.name.starts_with("--")
+            })
+        });
 
-    if is_container_kind(&sym.kind)
-        && children.is_some_and(|list| list.iter().any(|child| is_shown(child, Some(sym))))
-        && (spans_multiple_lines || sym.kind == "enum")
+    if (is_container_kind(&sym.kind) || css_rule_has_custom_property)
+        && children.is_some_and(|list| {
+            list.iter()
+                .any(|child| is_skeleton_row_shown(child, Some(sym)))
+        })
+        && (spans_multiple_lines || sym.kind == "enum" || css_rule_has_custom_property)
     {
         let raw_sig = sym.signature.as_deref().unwrap_or(&sym.name);
         let sig = container_signature(raw_sig, sym);
@@ -460,6 +500,23 @@ fn render_symbol_skeleton(
         {
             for child in child_list {
                 render_symbol_skeleton(out, child, Some(sym), children_map, indent_level);
+            }
+        } else if let Some(child_list) = children
+            && child_list.iter().any(|child| {
+                child.start_line > sym.end_line || is_structural_inline_child(child, Some(sym))
+            })
+        {
+            for child in child_list
+                .iter()
+                .filter(|child| child.start_line > sym.end_line)
+            {
+                render_symbol_skeleton(out, child, Some(sym), children_map, indent_level);
+            }
+            for child in child_list
+                .iter()
+                .filter(|child| is_structural_inline_child(child, Some(sym)))
+            {
+                render_symbol_skeleton(out, child, Some(sym), children_map, indent_level + 1);
             }
         }
     }
@@ -911,6 +968,91 @@ pub fn format_references(
     out
 }
 
+/// Format the requested window from a bounded references query result.
+pub fn format_references_page(
+    target_name: &str,
+    refs: &[ReferenceSite],
+    direction: &str,
+    limit: usize,
+    offset: usize,
+) -> String {
+    if let Some(error) = invalid_page_window(offset, limit) {
+        return error;
+    }
+    if limit == 0 {
+        return "Result limit is 0; increase it to check for matches.\n".to_string();
+    }
+    if offset == 0 {
+        return format_references(target_name, refs, direction, limit);
+    }
+    let (start, end) = page_bounds(refs.len(), offset, limit);
+    if start == end {
+        return format!(
+            "Page offset {offset}: no rows within the {} queried results.\n",
+            refs.len()
+        );
+    }
+    format!(
+        "Page offset {offset}: showing {} rows from {} queried results.\n\n{}",
+        end - start,
+        refs.len(),
+        format_references(target_name, &refs[start..end], direction, limit)
+    )
+}
+
+/// Format a paged callee query whose rows and complete count came from SQL LIMIT/OFFSET.
+pub fn format_references_window(
+    target_name: &str,
+    refs: &[ReferenceSite],
+    direction: &str,
+    limit: usize,
+    offset: usize,
+    total: usize,
+) -> String {
+    if let Some(error) = invalid_page_window(offset, limit) {
+        return error;
+    }
+    if limit == 0 {
+        return "Result limit is 0; increase it to check for matches.\n".to_string();
+    }
+    if offset == 0 && total <= limit {
+        return format_references(target_name, refs, direction, limit.saturating_add(1));
+    }
+    if refs.is_empty() {
+        if offset == 0 {
+            return format_references(target_name, refs, direction, limit.saturating_add(1));
+        }
+        return format!("Page offset {offset}: no rows within the {total} queried results.\n");
+    }
+
+    let dir_label = if direction == "callers" {
+        "Callers of"
+    } else {
+        "Callees called by"
+    };
+    let mut out = if offset == 0 {
+        format!("{dir_label} `{target_name}` ({total} found):\n")
+    } else {
+        format!(
+            "Page offset {offset}: showing {} {} from {total} queried results.\n\n{dir_label} `{target_name}` ({total} found):\n",
+            refs.len(),
+            plural(refs.len(), "row")
+        )
+    };
+    let page_body = format_references(target_name, refs, direction, limit.saturating_add(1));
+    if let Some((_, body)) = page_body.split_once('\n') {
+        out.push_str(body);
+    }
+    if offset == 0 && refs.len() < total {
+        out.push_str(&format!(
+            "\n[Showing {} of {total} results; use --offset {} to see more.]\n",
+            refs.len(),
+            refs.len()
+        ));
+    }
+    out
+}
+
 fn caller_text(site: &ReferenceSite) -> String {
     if site.from_symbol_name.is_empty() && site.enclosing_symbol_name.is_none() {
         "(no enclosing symbol)".to_string()
@@ -974,6 +1116,360 @@ pub fn format_reference_report(report: &ReferenceReport, limit: usize) -> String
     if !body.is_empty() {
         out.push('\n');
         out.push_str(&body);
+    }
+    out
+}
+
+/// Format a caller report page from the current report without changing its complete counts.
+pub fn format_reference_report_page(
+    report: &ReferenceReport,
+    limit: usize,
+    offset: usize,
+) -> String {
+    if let Some(error) = invalid_page_window(offset, limit) {
+        return error;
+    }
+    if limit == 0 {
+        return "Result limit is 0; increase it to check for matches.\n".to_string();
+    }
+    if offset == 0 {
+        return format_reference_report(report, limit);
+    }
+
+    let target = &report.target;
+    let counts = &report.counts;
+    let mut out = format!(
+        "References to {} `{}` ({}:{})\nSites: {} · proven {} · likely {} · unresolved {} · excluded {}\n",
+        target.kind,
+        target.display_name,
+        target.path,
+        target.line,
+        counts.sites,
+        counts.proven,
+        counts.likely,
+        counts.unresolved,
+        counts.excluded,
+    );
+    out.push_str(&text_count_line(report));
+    let scan = &report.text_scan;
+    if !scan.complete && scan.skipped.is_none() {
+        out.push_str(&format!(
+            "Text scan stopped after {} s: {} of {} files read; counts cover those files.\n",
+            (scan.elapsed_ms + 500) / 1000,
+            scan.files_scanned,
+            scan.files_total
+        ));
+    }
+
+    let mut body = site_groups_page(&report.sites, limit, offset);
+    body.push_str(&override_sections_page(report, limit, offset));
+    body.push_str(&construction_section_page(
+        &report.constructions,
+        limit,
+        offset,
+    ));
+    body.push_str(&variant_section_page(&report.variant_uses, limit, offset));
+    body.push_str(&registration_section_page(
+        &report.registrations,
+        limit,
+        offset,
+    ));
+    body.push_str(&test_section_page(&report.tests, limit, offset));
+    body.push_str(&text_only_section_page(report, limit, offset));
+    if !report.cannot_see.is_empty() {
+        body.push_str(&format!(
+            "Not visible to this index: {}.\n",
+            report.cannot_see.join("; ")
+        ));
+    }
+    body.push_str(&format_import_summary(&report.imports));
+    if !body.is_empty() {
+        out.push('\n');
+        out.push_str(&body);
+    }
+    out
+}
+
+fn page_bounds(len: usize, offset: usize, limit: usize) -> (usize, usize) {
+    let start = offset.min(len);
+    (start, start + limit.min(len - start))
+}
+
+fn invalid_page_window(offset: usize, limit: usize) -> Option<String> {
+    crate::queries::validate_result_page(offset, limit)
+        .err()
+        .map(|error| format!("Invalid report page: {error}\n"))
+}
+
+fn page_caption(out: &mut String, total: usize, start: usize, end: usize, offset: usize) {
+    if start == end {
+        out.push_str(&format!(
+            "  Page offset {offset}: no rows; {total} total.\n"
+        ));
+    } else {
+        out.push_str(&format!(
+            "  Page offset {start}: rows {}-{} of {total}.\n",
+            start + 1,
+            end
+        ));
+    }
+}
+
+fn site_groups_page(sites: &[LabeledSite], limit: usize, offset: usize) -> String {
+    let mut out = String::new();
+    for label in SiteLabel::ALL {
+        let group: Vec<&LabeledSite> = sites.iter().filter(|site| site.label == label).collect();
+        if group.is_empty() {
+            continue;
+        }
+        let title = match label {
+            SiteLabel::Proven => "Proven",
+            SiteLabel::Likely => "Likely",
+            SiteLabel::Unresolved => "Unresolved",
+            SiteLabel::Excluded => "Excluded",
+        };
+        let (start, end) = page_bounds(group.len(), offset, limit);
+        out.push_str(&format!("{title} ({}):\n", group.len()));
+        page_caption(&mut out, group.len(), start, end, offset);
+        for labeled in &group[start..end] {
+            let site = &labeled.site;
+            let line = site
+                .start_line
+                .map(|line| format!(":{line}"))
+                .unwrap_or_default();
+            out.push_str(&format!(
+                "- {} [{}{line}] (kind: {}; {}{})\n",
+                caller_text(site),
+                site.path,
+                site.kind,
+                labeled.basis,
+                arg_count_text(labeled)
+            ));
+        }
+        if end < group.len() {
+            out.push_str(&fold_line(label, &group[end..]));
+        }
+    }
+    out
+}
+
+fn override_sections_page(report: &ReferenceReport, limit: usize, offset: usize) -> String {
+    let name = &report.target.display_name;
+    let mut out = method_section_page(
+        &format!(
+            "Overrides ({}): calls through `{name}` can reach these",
+            report.overrides.len()
+        ),
+        &report.overrides,
+        limit,
+        offset,
+    );
+    out.push_str(&method_section_page(
+        &format!(
+            "Overrides of ({}): calls to these can reach `{name}`",
+            report.overridden.len()
+        ),
+        &report.overridden,
+        limit,
+        offset,
+    ));
+    out
+}
+
+fn method_section_page(title: &str, rows: &[OverrideRow], limit: usize, offset: usize) -> String {
+    section_page(
+        rows,
+        limit,
+        offset,
+        format!("{title}\n"),
+        "method",
+        |row| row.path.as_str(),
+        |row| {
+            format!(
+                "- `{}.{}` ({}:{})\n",
+                row.owner, row.name, row.path, row.line
+            )
+        },
+    )
+}
+
+fn section_page<'a, T>(
+    rows: &'a [T],
+    limit: usize,
+    offset: usize,
+    title: String,
+    noun: &str,
+    path: impl Fn(&'a T) -> &'a str,
+    row_text: impl Fn(&T) -> String,
+) -> String {
+    if rows.is_empty() {
+        return String::new();
+    }
+    let (start, end) = page_bounds(rows.len(), offset, limit);
+    let mut out = title;
+    page_caption(&mut out, rows.len(), start, end, offset);
+    for row in &rows[start..end] {
+        out.push_str(&row_text(row));
+    }
+    if end < rows.len() {
+        out.push_str(&section_fold(rows[end..].iter().map(path), noun));
+    }
+    out
+}
+
+fn construction_section_page(rows: &[ConstructionSite], limit: usize, offset: usize) -> String {
+    if rows.is_empty() {
+        return String::new();
+    }
+    let (start, end) = page_bounds(rows.len(), offset, limit);
+    let mut per_file: Vec<(&str, Vec<String>)> = Vec::new();
+    for row in &rows[start..end] {
+        match per_file.last_mut() {
+            Some((path, lines)) if *path == row.path => lines.push(row.line.to_string()),
+            _ => per_file.push((&row.path, vec![row.line.to_string()])),
+        }
+    }
+    let listed: Vec<String> = per_file
+        .iter()
+        .map(|(path, lines)| format!("{path}: {}", lines.join(", ")))
+        .collect();
+    let mut out = format!("Constructions ({}):", rows.len());
+    if !listed.is_empty() {
+        out.push_str(&format!(" {}", listed.join(" · ")));
+    }
+    out.push('\n');
+    page_caption(&mut out, rows.len(), start, end, offset);
+    if end < rows.len() {
+        out.push_str(&section_fold(
+            rows[end..].iter().map(|row| row.path.as_str()),
+            "construction",
+        ));
+    }
+    out
+}
+
+fn variant_section_page(rows: &[VariantUse], limit: usize, offset: usize) -> String {
+    section_page(
+        rows,
+        limit,
+        offset,
+        format!(
+            "Variant uses ({} {}): a match in them may need a new arm\n",
+            rows.len(),
+            plural(rows.len(), "function")
+        ),
+        "function",
+        |row| row.path.as_str(),
+        |row| {
+            let caller = if row.caller.is_empty() {
+                "(no enclosing symbol)".to_string()
+            } else {
+                format!("`{}`", row.caller)
+            };
+            format!(
+                "- {caller} [{}:{}] names {} of {} {}\n",
+                row.path,
+                row.line,
+                row.variants_used,
+                row.variants_total,
+                plural(row.variants_total, "variant"),
+            )
+        },
+    )
+}
+
+fn registration_section_page(rows: &[Registration], limit: usize, offset: usize) -> String {
+    section_page(
+        rows,
+        limit,
+        offset,
+        format!("Registrations ({}):\n", rows.len()),
+        "registration",
+        |row| row.path.as_str(),
+        |row| {
+            format!(
+                "- {} [{}:{}]{}\n",
+                registration_label(row),
+                row.path,
+                row.line,
+                if row.by_name { " (by name)" } else { "" }
+            )
+        },
+    )
+}
+
+fn test_section_page(rows: &[CallingTest], limit: usize, offset: usize) -> String {
+    section_page(
+        rows,
+        limit,
+        offset,
+        format!("Tests that call or use it ({}):\n", rows.len()),
+        "test",
+        |row| row.path.as_str(),
+        |row| {
+            let run = row
+                .command
+                .as_ref()
+                .map(|command| format!(" run: {command}"))
+                .unwrap_or_default();
+            let name_only = if row.name_only { " (name only)" } else { "" };
+            format!(
+                "- `{}` [{}:{}]{name_only}{run}\n",
+                on_one_line(&row.name),
+                row.path,
+                row.line
+            )
+        },
+    )
+}
+
+fn text_only_section_page(report: &ReferenceReport, limit: usize, offset: usize) -> String {
+    let total = report
+        .text_only
+        .iter()
+        .map(|file| file.lines.len())
+        .sum::<usize>();
+    if total == 0 {
+        return String::new();
+    }
+    let (start, end) = page_bounds(total, offset, limit);
+    let mut out = format!(
+        "Text only ({}): docs, comments, strings, or code the index did not record\n",
+        report.counts.text_only_lines
+    );
+    page_caption(&mut out, total, start, end, offset);
+    let mut per_file: Vec<(&str, Vec<usize>)> = Vec::new();
+    let page = report
+        .text_only
+        .iter()
+        .flat_map(|file| {
+            file.lines
+                .iter()
+                .map(move |line| (file.path.as_str(), line))
+        })
+        .skip(start)
+        .take(end - start);
+    for (path, line) in page {
+        match per_file.last_mut() {
+            Some((previous, lines)) if *previous == path => lines.push(*line),
+            _ => per_file.push((path, vec![*line])),
+        }
+    }
+    for (path, lines) in per_file {
+        let lines = lines
+            .iter()
+            .map(usize::to_string)
+            .collect::<Vec<_>>()
+            .join(", ");
+        out.push_str(&format!("  {path}: {lines}\n"));
+    }
+    if end < total {
+        let remainder = report
+            .text_only
+            .iter()
+            .flat_map(|file| file.lines.iter().map(move |_| file.path.as_str()))
+            .skip(end);
+        out.push_str(&section_fold_with_count(remainder, total - end, "line"));
     }
     out
 }
@@ -1207,6 +1703,14 @@ fn registration_label(row: &Registration) -> String {
 
 fn section_fold<'a>(hidden: impl ExactSizeIterator<Item = &'a str>, word: &str) -> String {
     let count = hidden.len();
+    section_fold_with_count(hidden, count, word)
+}
+
+fn section_fold_with_count<'a>(
+    hidden: impl Iterator<Item = &'a str>,
+    count: usize,
+    word: &str,
+) -> String {
     let (files, named) = files_by_count(hidden);
     format!(
         "… {count} more {} in {files} {}: {named}\n",
@@ -1841,7 +2345,8 @@ fn explain_line(score: f64, e: &SearchExplain) -> String {
     line
 }
 
-const EDIT_SITES_LISTED: usize = 12;
+pub const DEFAULT_EDIT_PAGE_SIZE: usize = 12;
+const EDIT_SITES_LISTED: usize = DEFAULT_EDIT_PAGE_SIZE;
 const EDIT_TESTS_LISTED: usize = 8;
 pub const STOP_SITES_LISTED: usize = 15;
 
@@ -1885,8 +2390,97 @@ pub fn format_edit_check(check: &EditCheck) -> String {
         }
         out.push('\n');
     }
-    out.push_str("Not checked: calls inside macro arguments, functions passed as values.\n");
+    out.push_str(
+        "Not checked: calls inside macro arguments, callback invocation contracts. Indexed callable values are advisory dependencies.\n",
+    );
     out
+}
+
+/// Format one offset window for each folded edit-check section.
+pub fn format_edit_check_page(check: &EditCheck, offset: usize, limit: usize) -> String {
+    if let Some(error) = invalid_page_window(offset, limit) {
+        return error;
+    }
+    if limit == 0 {
+        return "Result limit is 0; increase it to check for matches.\n".to_string();
+    }
+    if offset == 0 && limit == DEFAULT_EDIT_PAGE_SIZE {
+        return format_edit_check(check);
+    }
+    let source = match check.source {
+        BaseSource::Given => "given",
+        BaseSource::Session => "session base",
+        BaseSource::Head => "HEAD",
+    };
+    let mut out = String::new();
+    if check.changes.is_empty() {
+        out.push_str(&format!(
+            "check_edit: working tree against {} ({source}): no symbol changed shape.\n",
+            check.rev
+        ));
+        push_edit_cuts(&mut out, check);
+        return out;
+    }
+    out.push_str(&format!(
+        "check_edit: working tree against {} ({source}), {} {} changed\n{} shape {}:\n",
+        check.rev,
+        check.files_changed,
+        plural(check.files_changed, "file"),
+        check.changes.len(),
+        plural(check.changes.len(), "change"),
+    ));
+    for change in &check.changes {
+        push_shape_change_page(&mut out, change, offset, limit);
+    }
+    push_edit_cuts(&mut out, check);
+    if !check.tests.is_empty() {
+        let (start, end) = page_bounds(check.tests.len(), offset, limit);
+        out.push_str(&format!("Tests to run ({}):\n", check.tests.len()));
+        page_caption(&mut out, check.tests.len(), start, end, offset);
+        if start < end {
+            out.push_str(&check.tests[start..end].join("; "));
+            out.push('\n');
+        }
+    }
+    out.push_str(
+        "Not checked: calls inside macro arguments, callback invocation contracts. Indexed callable values are advisory dependencies.\n",
+    );
+    out
+}
+
+fn push_shape_change_page(out: &mut String, change: &ShapeChange, offset: usize, limit: usize) {
+    out.push_str(&format!(
+        "  {} `{}` ({}): {}\n",
+        change.kind, change.display, change.path, change.change
+    ));
+    if !change.in_diff.is_empty() {
+        let (start, end) = page_bounds(change.in_diff.len(), offset, limit);
+        out.push_str(&format!("    In your diff ({}):\n", change.in_diff.len()));
+        page_caption(out, change.in_diff.len(), start, end, offset);
+        for site in &change.in_diff[start..end] {
+            out.push_str(&format!("      {}:{}\n", site.path, site.line));
+        }
+    }
+    for (label, sites) in [("proven", &change.proven), ("likely", &change.likely)] {
+        if sites.is_empty() {
+            continue;
+        }
+        let (start, end) = page_bounds(sites.len(), offset, limit);
+        out.push_str(&format!(
+            "    Not in your diff, {label} ({}):\n",
+            sites.len()
+        ));
+        page_caption(out, sites.len(), start, end, offset);
+        for site in &sites[start..end] {
+            out.push_str(&edit_site_row(site));
+        }
+    }
+    if change.unresolved > 0 {
+        out.push_str(&format!(
+            "    Unresolved outside the diff: {}\n",
+            change.unresolved
+        ));
+    }
 }
 
 /// The reason a Stop hook gives for a check: how many `proven` sites outside the diff still use
@@ -2044,9 +2638,51 @@ fn open_ends_text(open_ends: &[OpenEnd]) -> String {
 
 /// Format blast radius and likely test targets into token-dense markdown.
 pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
+    format_blast_radius_with_page(result, 0, usize::MAX, false, false)
+}
+
+/// Format a bounded page of impact and test rows.
+pub fn format_blast_radius_page(
+    result: &BlastRadiusResult,
+    offset: usize,
+    limit: usize,
+    include_low_signal: bool,
+) -> String {
+    if let Some(error) = invalid_page_window(offset, limit) {
+        return error;
+    }
+    if limit == 0 {
+        return "Result limit is 0; increase it to check for matches.".to_string();
+    }
+    if offset == 0 && !include_low_signal {
+        return format_blast_radius(result);
+    }
+    format_blast_radius_with_page(result, offset, limit, include_low_signal, true)
+}
+
+fn format_blast_radius_with_page(
+    result: &BlastRadiusResult,
+    offset: usize,
+    limit: usize,
+    include_low_signal: bool,
+    paged: bool,
+) -> String {
     if result.seed_type == "none" {
         return "No uncommitted changes detected in git working tree. Pass a 'symbol' or 'file' parameter to analyze blast radius.".to_string();
     }
+
+    let (test_start, test_end) = if paged {
+        page_bounds(result.likely_tests.len(), offset, limit)
+    } else {
+        (0, result.likely_tests.len())
+    };
+    let test_rows = &result.likely_tests[test_start..test_end];
+    let (impact_start, impact_end) = if paged {
+        page_bounds(result.impacted_symbols.len(), offset, limit)
+    } else {
+        (0, result.impacted_symbols.len())
+    };
+    let impact_candidates = &result.impacted_symbols[impact_start..impact_end];
 
     let mut out = String::new();
     let seed_label = if result.seed_type == "file" {
@@ -2058,6 +2694,11 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
     };
 
     out.push_str(&format!("## Blast Radius & Test Impact ({seed_label})\n\n"));
+    if paged {
+        out.push_str(&format!(
+            "Page offset {offset}, limit {limit}; each section pages independently. Restart at offset 0 after an index change.\n\n"
+        ));
+    }
 
     let more = if result.limit_at_maximum {
         "limit is at its maximum, so narrow the target to a symbol or fewer files"
@@ -2071,14 +2712,14 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
             format!("Requested limit hid additional {noun}; {more}.\n\n")
         }
     };
-    if result.likely_tests_truncated {
+    if result.likely_tests_truncated && !paged {
         out.push_str(&shown_of(
             result.likely_tests.len(),
             result.likely_tests_found,
             "likely tests",
         ));
     }
-    if result.impacted_symbols_truncated {
+    if result.impacted_symbols_truncated && !paged {
         out.push_str(&shown_of(
             result.impacted_symbols.len(),
             result.impacted_symbols_found,
@@ -2089,13 +2730,24 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
         out.push_str("Traversal stopped at the 200-row discovery ceiling; narrow the target because increasing limit cannot raise this ceiling.\n\n");
     }
 
-    if !result.likely_tests.is_empty() {
-        let total = result.likely_tests.len();
-        out.push_str(&format!("### Likely Tests to Run ({} returned)\n", total));
+    if !test_rows.is_empty() {
+        if paged {
+            out.push_str(&format!(
+                "### Likely Tests to Run ({} shown at offset {}; {} found)\n",
+                test_rows.len(),
+                offset,
+                result.likely_tests_found
+            ));
+        } else {
+            out.push_str(&format!(
+                "### Likely Tests to Run ({} returned)\n",
+                result.likely_tests.len()
+            ));
+        }
 
         // Preserve ranked row order; collecting every row by file can put lower-ranked tests first.
         let mut previous_path = None;
-        for t in &result.likely_tests {
+        for t in test_rows {
             if previous_path != Some(t.path.as_str()) {
                 out.push_str(&format!("{}:\n", t.path));
                 previous_path = Some(t.path.as_str());
@@ -2121,6 +2773,11 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
         }
 
         out.push('\n');
+    } else if paged && result.likely_tests_found > 0 {
+        out.push_str(&format!(
+            "### Likely Tests to Run (0 shown at offset {}; {} found)\nNo tests at this offset.\n\n",
+            offset, result.likely_tests_found
+        ));
     } else if result.likely_tests_truncated || result.traversal_ceiling_reached {
         out.push_str("### Likely Tests to Run (0 returned)\n\n");
     } else if let Some(depth) = result.stopped_at_depth {
@@ -2153,19 +2810,30 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
 
     out.push_str(&open_ends_text(&result.open_ends));
 
-    if !result.impacted_symbols.is_empty() {
-        let total = result.impacted_symbols.len();
+    if !impact_candidates.is_empty() {
         let mut visible = Vec::new();
         let mut low_signal_count = 0;
-        for s in &result.impacted_symbols {
-            if matches!(s.kind.as_str(), "import" | "module" | "namespace") {
+        for s in impact_candidates {
+            if matches!(s.kind.as_str(), "import" | "module" | "namespace") && !include_low_signal {
                 low_signal_count += 1;
             } else {
                 visible.push(s);
             }
         }
 
-        out.push_str(&format!("### Downstream Impact ({} returned)\n", total));
+        if paged {
+            out.push_str(&format!(
+                "### Downstream Impact ({} shown at offset {}; {} found)\n",
+                visible.len(),
+                offset,
+                result.impacted_symbols_found
+            ));
+        } else {
+            out.push_str(&format!(
+                "### Downstream Impact ({} returned)\n",
+                result.impacted_symbols.len()
+            ));
+        }
 
         if visible.is_empty() && low_signal_count > 0 {
             let row_word = if low_signal_count == 1 {
@@ -2222,6 +2890,11 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
         {
             out.push_str(&untied_sites(report, " more"));
         }
+    } else if paged && result.impacted_symbols_found > 0 {
+        out.push_str(&format!(
+            "### Downstream Impact (0 shown at offset {}; {} found)\nNo symbols at this offset.\n",
+            offset, result.impacted_symbols_found
+        ));
     } else if result.impacted_symbols_truncated || result.traversal_ceiling_reached {
         out.push_str("### Downstream Impact (0 returned)\n");
     } else {
@@ -2245,6 +2918,52 @@ pub fn format_blast_radius(result: &BlastRadiusResult) -> String {
         }
     }
 
+    out
+}
+
+/// Format blast radius with the broader suite command selected from this report's paths.
+pub fn format_blast_radius_report(
+    root: &Path,
+    result: &BlastRadiusResult,
+    offset: usize,
+    limit: usize,
+    include_low_signal: bool,
+) -> String {
+    if let Some(error) = invalid_page_window(offset, limit) {
+        return error;
+    }
+    let mut out = format_blast_radius_page(result, offset, limit, include_low_signal);
+    let needs_broader_suite = result.likely_tests.is_empty()
+        || result.likely_tests_truncated
+        || result.traversal_ceiling_reached
+        || result.stopped_at_depth.is_some()
+        || !result.open_ends.is_empty();
+    if !needs_broader_suite || result.seed_type == "none" {
+        return out;
+    }
+
+    let path = result
+        .likely_tests
+        .first()
+        .map(|test| test.path.as_str())
+        .or_else(|| {
+            result
+                .impacted_symbols
+                .first()
+                .map(|symbol| symbol.path.as_str())
+        });
+    let command = crate::test_commands::CommandFinder::new(root).broader_test_command(path);
+    out.push_str("\n### Broader Test Scope\n");
+    if let Some(command) = command {
+        out.push_str(&format!("Broader test command: `{command}`\n"));
+        if cfg!(windows) {
+            out.push_str("Command syntax uses POSIX shell quoting; translate it before running in a Windows shell.\n");
+        }
+    } else {
+        out.push_str(
+            "Broader scope: full project test suite.\nNo supported runner configuration was found; run the full suite manually.\n",
+        );
+    }
     out
 }
 
@@ -3424,6 +4143,182 @@ mod tests {
             is_test: false,
             test_container: false,
         }
+    }
+
+    #[test]
+    fn skeleton_renders_children_after_one_line_scope_owners() {
+        let erlang_owner = Symbol {
+            language: "erlang".into(),
+            kind: "module".into(),
+            signature: Some("-module(conformance);".into()),
+            start_line: 1,
+            end_line: 1,
+            body_start_line: None,
+            body_end_line: None,
+            ..sample_symbol("conformance")
+        };
+        let erlang_function = |name: &str, line: usize| Symbol {
+            language: "erlang".into(),
+            kind: "function".into(),
+            signature: Some(format!("{name}() -> ok.")),
+            parent_symbol_id: Some("id_conformance".into()),
+            start_line: line,
+            end_line: line,
+            body_start_line: None,
+            body_end_line: None,
+            ..sample_symbol(name)
+        };
+        let gdscript_owner = Symbol {
+            language: "gdscript".into(),
+            kind: "class".into(),
+            signature: Some("extends Node".into()),
+            start_line: 1,
+            end_line: 1,
+            body_start_line: None,
+            body_end_line: None,
+            ..sample_symbol("sample")
+        };
+        let gdscript_method = |name: &str, line: usize| Symbol {
+            language: "gdscript".into(),
+            kind: "method".into(),
+            signature: Some(format!("func {name}() -> int")),
+            parent_symbol_id: Some("id_sample".into()),
+            start_line: line,
+            end_line: line + 1,
+            body_start_line: None,
+            body_end_line: None,
+            ..sample_symbol(name)
+        };
+        let symbols = vec![
+            erlang_owner,
+            erlang_function("anchor_erlang", 3),
+            erlang_function("caller_erlang", 4),
+            gdscript_owner,
+            gdscript_method("anchor_gdscript", 2),
+            gdscript_method("caller_gdscript", 4),
+        ];
+
+        let out = format_file_skeleton("sample", &symbols, None, 0);
+
+        for expected in [
+            "anchor_erlang",
+            "caller_erlang",
+            "anchor_gdscript",
+            "caller_gdscript",
+        ] {
+            assert!(out.contains(expected), "{out}");
+        }
+    }
+
+    #[test]
+    fn skeleton_renders_same_line_xml_and_json_children_missing_from_owner_signatures() {
+        let mut xml = vec![
+            skeleton_row(
+                "project",
+                None,
+                "module",
+                "Project",
+                "<Project Sdk=\"Microsoft.NET.Sdk\">",
+                (1, 1),
+                None,
+            ),
+            skeleton_row(
+                "anchor",
+                Some("project"),
+                "function",
+                "anchor_xml",
+                "<Target Name=\"anchor_xml\">",
+                (1, 1),
+                None,
+            ),
+            skeleton_row(
+                "caller",
+                Some("project"),
+                "function",
+                "caller_xml",
+                "<Target Name=\"caller_xml\">",
+                (1, 1),
+                None,
+            ),
+        ];
+        for symbol in &mut xml {
+            symbol.language = "xml".into();
+        }
+        let xml = format_file_skeleton("Project.csproj", &xml, Some(1), 0);
+        assert!(xml.contains("<Target Name=\"anchor_xml\">"), "{xml}");
+        assert!(xml.contains("<Target Name=\"caller_xml\">"), "{xml}");
+
+        let mut json = vec![
+            skeleton_row(
+                "anchor",
+                None,
+                "module",
+                "anchor_json",
+                "anchor_json",
+                (1, 1),
+                None,
+            ),
+            skeleton_row(
+                "value",
+                Some("anchor"),
+                "variable",
+                "value",
+                "\"value\": 41",
+                (1, 1),
+                None,
+            ),
+        ];
+        for symbol in &mut json {
+            symbol.language = "json".into();
+        }
+        let json = format_file_skeleton("sample.json", &json, Some(1), 0);
+        assert!(json.contains("\"value\": 41"), "{json}");
+    }
+
+    #[test]
+    fn skeleton_shows_css_custom_properties_without_nested_style_declarations() {
+        let rule = Symbol {
+            language: "css".into(),
+            kind: "property".into(),
+            signature: Some(":root { --accent-color: #ffffff }".into()),
+            start_line: 1,
+            end_line: 1,
+            body_start_line: None,
+            body_end_line: None,
+            ..sample_symbol(":root")
+        };
+        let custom_property = Symbol {
+            language: "css".into(),
+            kind: "property".into(),
+            signature: Some("--accent-color: #ffffff".into()),
+            parent_symbol_id: Some("id_:root".into()),
+            start_line: 1,
+            end_line: 1,
+            body_start_line: None,
+            body_end_line: None,
+            ..sample_symbol("--accent-color")
+        };
+        let style_declaration = Symbol {
+            language: "css".into(),
+            kind: "property".into(),
+            signature: Some("color: var(--accent-color)".into()),
+            parent_symbol_id: Some("id_:root".into()),
+            start_line: 1,
+            end_line: 1,
+            body_start_line: None,
+            body_end_line: None,
+            ..sample_symbol("color")
+        };
+
+        let out = format_file_skeleton(
+            "sample.css",
+            &[rule, custom_property, style_declaration],
+            None,
+            0,
+        );
+
+        assert!(out.contains("--accent-color: #ffffff"), "{out}");
+        assert!(!out.contains("color: var"), "{out}");
     }
 
     fn sample_context_slice() -> ContextSlice {

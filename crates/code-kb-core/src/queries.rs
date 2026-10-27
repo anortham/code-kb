@@ -28,6 +28,8 @@ pub enum QueryError {
     InvalidDirection(String),
     #[error("Result limit must be between 0 and {MAX_RESULT_LIMIT}, got {0}")]
     InvalidResultLimit(usize),
+    #[error("Report page offset {offset} with limit {limit} overflows the platform page range")]
+    InvalidResultPage { offset: usize, limit: usize },
 }
 
 pub const MAX_RESULT_LIMIT: usize = 200;
@@ -37,6 +39,15 @@ pub fn validate_result_limit(limit: usize) -> Result<(), QueryError> {
         return Err(QueryError::InvalidResultLimit(limit));
     }
     Ok(())
+}
+
+/// Validate a per-page size and return its checked end offset.
+pub fn validate_result_page(offset: usize, limit: usize) -> Result<usize, QueryError> {
+    validate_result_limit(limit)?;
+    let end = offset
+        .checked_add(limit)
+        .ok_or(QueryError::InvalidResultPage { offset, limit })?;
+    Ok(end)
 }
 
 fn map_symbol(row: &Row) -> rusqlite::Result<Symbol> {
@@ -2619,6 +2630,28 @@ pub fn get_symbol_by_id(conn: &Connection, symbol_id: &str) -> Result<Option<Sym
     .map_err(QueryError::from)
 }
 
+const CSS_CONTEXT_SIGNATURE_PREFIX_CHARS: usize = 1024;
+const CSS_CONTEXT_SYMBOL_BY_ID_SQL: &str = "SELECT symbol_id, file_id, path, language, name, kind,
+        substr(signature, 1, ?2) AS signature, NULL AS doc_comment,
+        visibility, parent_symbol_id, start_line, start_column, end_line, end_column,
+        start_byte, end_byte, body_start_line, body_start_column, body_end_line,
+        body_end_column, body_start_byte, body_end_byte, body_hash, semantic_group,
+        is_test, test_container
+ FROM symbols WHERE symbol_id = ?1";
+
+fn get_css_context_symbol_by_id(
+    conn: &Connection,
+    symbol_id: &str,
+) -> Result<Option<Symbol>, QueryError> {
+    conn.query_row(
+        CSS_CONTEXT_SYMBOL_BY_ID_SQL,
+        params![symbol_id, CSS_CONTEXT_SIGNATURE_PREFIX_CHARS as i64],
+        map_symbol,
+    )
+    .optional()
+    .map_err(QueryError::from)
+}
+
 /// Split `Outer::Inner::run` or `Outer.Inner.run` into its ancestor segments, outermost first, and the terminal name.
 fn split_qualified_name(name: &str) -> (Vec<&str>, &str) {
     let separator = if name.contains("::") {
@@ -3314,6 +3347,242 @@ pub fn find_references_for_symbol_ext(
         limit,
         Some(symbol_id),
         include_external,
+    )
+}
+
+/// Find one bounded, source-ordered page of a symbol's callees and the complete matching count.
+pub fn find_callees_page_scoped(
+    conn: &Connection,
+    symbol_name: &str,
+    limit: usize,
+    offset: usize,
+    include_external: bool,
+    path_filter: Option<&str>,
+) -> Result<(Vec<ReferenceSite>, usize), QueryError> {
+    validate_result_page(offset, limit)?;
+    match get_symbol_by_name(conn, symbol_name, path_filter)? {
+        Some(target) => find_callees_page_internal(
+            conn,
+            &target.name,
+            Some(&target.symbol_id),
+            limit,
+            offset,
+            include_external,
+        ),
+        None => {
+            let (workspace, hint) = symbol_not_found_parts(conn, symbol_name, path_filter);
+            Err(QueryError::SymbolNotFound {
+                name: symbol_name.to_string(),
+                workspace,
+                hint,
+            })
+        }
+    }
+}
+
+/// Find one bounded, source-ordered page of a selected symbol's callees and the complete count.
+pub fn find_callees_page_for_symbol(
+    conn: &Connection,
+    symbol_name: &str,
+    symbol_id: &str,
+    limit: usize,
+    offset: usize,
+    include_external: bool,
+) -> Result<(Vec<ReferenceSite>, usize), QueryError> {
+    validate_result_page(offset, limit)?;
+    find_callees_page_internal(
+        conn,
+        symbol_name,
+        Some(symbol_id),
+        limit,
+        offset,
+        include_external,
+    )
+}
+
+fn find_callees_page_internal(
+    conn: &Connection,
+    symbol_name: &str,
+    symbol_id: Option<&str>,
+    limit: usize,
+    offset: usize,
+    include_external: bool,
+) -> Result<(Vec<ReferenceSite>, usize), QueryError> {
+    let cte = callee_page_cte(conn, include_external);
+    let total: i64 = conn.query_row(
+        &format!("{cte} SELECT COUNT(*) FROM merged_sites"),
+        params![symbol_name, symbol_id],
+        |row| row.get(0),
+    )?;
+    let total = total as usize;
+    if limit == 0 || offset > i64::MAX as usize {
+        return Ok((Vec::new(), total));
+    }
+
+    let mut stmt = conn.prepare(&format!(
+        "{cte}
+         SELECT from_symbol_name, from_symbol_id, to_symbol_name, kind, path,
+                start_line, start_column
+         FROM merged_sites
+         ORDER BY path, start_line, start_column, to_symbol_name, kind, from_symbol_id
+         LIMIT ?3 OFFSET ?4"
+    ))?;
+    let rows = stmt.query_map(
+        params![symbol_name, symbol_id, limit as i64, offset as i64],
+        |row| {
+            Ok(ReferenceSite {
+                from_symbol_name: row.get(0)?,
+                from_symbol_id: row.get(1)?,
+                to_symbol_name: row.get(2)?,
+                kind: row.get(3)?,
+                path: row.get::<_, String>(4)?.replace('\\', "/"),
+                start_line: row.get::<_, Option<i64>>(5)?.map(|line| line as usize),
+                start_column: row.get::<_, Option<i64>>(6)?.map(|column| column as usize),
+                occurrences: None,
+                target: None,
+                enclosing_symbol_name: None,
+            })
+        },
+    )?;
+    let mut sites = rows.collect::<Result<Vec<_>, _>>()?;
+    describe_callee_targets(conn, &mut sites)?;
+    Ok((sites, total))
+}
+
+const CSS_CALL_IDENTIFIER_SITES_SQL: &str = "
+    SELECT target.symbol_id,
+           target.name AS to_symbol_name,
+           caller.name AS from_symbol_name,
+           caller.symbol_id AS from_symbol_id,
+           i.path,
+           i.start_line,
+           i.start_column,
+           i.identifier_id
+    FROM identifiers i
+    JOIN symbols caller ON caller.symbol_id = i.containing_symbol_id
+    JOIN symbols target
+      ON target.name = i.name
+     AND target.path = i.path
+     AND target.language = i.language
+     AND target.kind = 'function'
+     AND target.parent_symbol_id IS NULL
+    WHERE caller.language = 'css'
+      AND caller.kind = 'function'
+      AND caller.path = i.path
+      AND i.language = 'css'
+      AND i.kind = 'call'
+      AND i.name LIKE '--%'
+      AND (SELECT COUNT(*) FROM symbols candidate
+           WHERE candidate.name = i.name
+             AND candidate.path = i.path
+             AND candidate.language = i.language
+             AND candidate.kind = 'function'
+             AND candidate.parent_symbol_id IS NULL) = 1";
+
+fn has_css_call_identifier_site_schema(conn: &Connection) -> bool {
+    has_column(conn, "identifiers", "containing_symbol_id")
+        && has_column(conn, "identifiers", "identifier_id")
+}
+
+fn callee_page_cte(conn: &Connection, include_external: bool) -> String {
+    let pending = if has_pending_namespace_column(conn) {
+        if include_external {
+            "SELECT s_from.name AS from_symbol_name,
+                    p.from_symbol_id AS from_symbol_id,
+                    COALESCE(NULLIF(p.target_display_name, ''), p.target_terminal_name) AS to_symbol_name,
+                    p.kind AS kind,
+                    p.path AS path,
+                    p.start_line AS start_line,
+                    p.start_column AS start_column
+             FROM pending_relationships p
+             JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
+             WHERE s_from.name = ?1 AND (?2 IS NULL OR p.from_symbol_id = ?2)"
+                .to_string()
+        } else {
+            format!(
+                "SELECT s_from.name AS from_symbol_name,
+                        p.from_symbol_id AS from_symbol_id,
+                        p.target_terminal_name AS to_symbol_name,
+                        p.kind AS kind,
+                        p.path AS path,
+                        p.start_line AS start_line,
+                        p.start_column AS start_column
+                 FROM pending_relationships p
+                 JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
+                 WHERE s_from.name = ?1 AND (?2 IS NULL OR p.from_symbol_id = ?2)
+                   AND EXISTS (
+                       SELECT 1 FROM symbols s_to
+                       LEFT JOIN symbols s_to_parent ON s_to.parent_symbol_id = s_to_parent.symbol_id
+                       WHERE s_to.name = p.target_terminal_name
+                         AND {}
+                         AND {}
+                   )",
+                callee_target_kind("s_to_parent"),
+                pending_target_predicate(conn, "s_to", "s_to_parent"),
+            )
+        }
+    } else if include_external {
+        "SELECT s_from.name AS from_symbol_name,
+                p.from_symbol_id AS from_symbol_id,
+                p.target_terminal_name AS to_symbol_name,
+                p.kind AS kind,
+                p.path AS path,
+                p.start_line AS start_line,
+                p.start_column AS start_column
+         FROM pending_relationships p
+         JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
+         WHERE s_from.name = ?1 AND (?2 IS NULL OR p.from_symbol_id = ?2)"
+            .to_string()
+    } else {
+        "SELECT s_from.name AS from_symbol_name,
+                p.from_symbol_id AS from_symbol_id,
+                p.target_terminal_name AS to_symbol_name,
+                p.kind AS kind,
+                p.path AS path,
+                p.start_line AS start_line,
+                p.start_column AS start_column
+         FROM pending_relationships p
+         JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
+         WHERE s_from.name = ?1 AND (?2 IS NULL OR p.from_symbol_id = ?2)
+           AND EXISTS (SELECT 1 FROM symbols s_to WHERE s_to.name = p.target_terminal_name)"
+            .to_string()
+    };
+    let css_candidate_sites = if has_css_call_identifier_site_schema(conn) {
+        format!("css_candidate_sites AS ({CSS_CALL_IDENTIFIER_SITES_SQL}),")
+    } else {
+        String::new()
+    };
+    let css_call_sites = if has_css_call_identifier_site_schema(conn) {
+        "UNION ALL
+             SELECT from_symbol_name, from_symbol_id, to_symbol_name, 'calls' AS kind,
+                    path, start_line, start_column
+             FROM css_candidate_sites
+             WHERE from_symbol_name = ?1 AND (?2 IS NULL OR from_symbol_id = ?2)"
+    } else {
+        ""
+    };
+    format!(
+        "WITH {css_candidate_sites} raw_sites AS (
+             SELECT s_from.name AS from_symbol_name,
+                    r.from_symbol_id AS from_symbol_id,
+                    s_to.name AS to_symbol_name,
+                    r.kind AS kind,
+                    r.path AS path,
+                    r.start_line AS start_line,
+                    r.start_column AS start_column
+             FROM relationships r
+             JOIN symbols s_from ON r.from_symbol_id = s_from.symbol_id
+             JOIN symbols s_to ON r.to_symbol_id = s_to.symbol_id
+             WHERE s_from.name = ?1 AND (?2 IS NULL OR r.from_symbol_id = ?2)
+             UNION ALL
+             {pending}
+             {css_call_sites}
+         ), merged_sites AS (
+             SELECT from_symbol_name, from_symbol_id, to_symbol_name, kind, path,
+                    start_line, MIN(start_column) AS start_column
+             FROM raw_sites
+             GROUP BY from_symbol_name, from_symbol_id, to_symbol_name, kind, path, start_line
+         )"
     )
 }
 
@@ -4517,6 +4786,43 @@ pub(crate) fn grouped_member_access_rows(
     Ok(rows.collect::<Result<_, _>>()?)
 }
 
+fn css_call_identifier_callee_sites(
+    conn: &Connection,
+    symbol_name: &str,
+    symbol_id: Option<&str>,
+    limit: usize,
+) -> Result<Vec<ReferenceSite>, QueryError> {
+    if limit == 0 || !has_css_call_identifier_site_schema(conn) {
+        return Ok(Vec::new());
+    }
+    let mut stmt = conn.prepare(&format!(
+        "WITH css_candidate_sites AS ({CSS_CALL_IDENTIFIER_SITES_SQL})
+         SELECT from_symbol_name, from_symbol_id, to_symbol_name, path, start_line,
+                MIN(start_column) AS start_column
+         FROM css_candidate_sites
+         WHERE from_symbol_name = ?1 AND (?3 IS NULL OR from_symbol_id = ?3)
+         GROUP BY from_symbol_name, from_symbol_id, to_symbol_name, path, start_line
+         ORDER BY path, start_line, start_column, to_symbol_name, from_symbol_id
+         LIMIT ?2"
+    ))?;
+    let rows = stmt.query_map(params![symbol_name, limit as i64, symbol_id], |row| {
+        Ok(ReferenceSite {
+            from_symbol_name: row.get(0)?,
+            from_symbol_id: row.get(1)?,
+            to_symbol_name: row.get(2)?,
+            kind: "calls".to_string(),
+            path: row.get::<_, String>(3)?.replace('\\', "/"),
+            start_line: row.get::<_, Option<i64>>(4)?.map(|line| line as usize),
+            start_column: row.get::<_, Option<i64>>(5)?.map(|column| column as usize),
+            occurrences: None,
+            target: None,
+            enclosing_symbol_name: None,
+        })
+    })?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(QueryError::from)
+}
+
 fn find_direct_references(
     conn: &Connection,
     symbol_name: &str,
@@ -4859,6 +5165,14 @@ fn find_direct_references(
                 results.push(r);
             }
         }
+        if results.len() < limit {
+            results.extend(css_call_identifier_callee_sites(
+                conn,
+                symbol_name,
+                symbol_id,
+                limit - results.len(),
+            )?);
+        }
         results.sort_by(|a, b| {
             a.path
                 .cmp(&b.path)
@@ -5156,6 +5470,59 @@ fn merge_same_site(sites: Vec<ReferenceSite>) -> Vec<ReferenceSite> {
         }
     }
     merged
+}
+
+/// CSS call identifier targets in the caller's file; each target must be a unique top-level CSS function.
+pub(crate) fn css_call_identifier_callee_candidates(
+    conn: &Connection,
+    caller: &Symbol,
+    limit: usize,
+) -> Result<Vec<(Symbol, usize, usize)>, QueryError> {
+    if caller.language != "css" || caller.kind != "function" || limit == 0 {
+        return Ok(Vec::new());
+    }
+    if !has_css_call_identifier_site_schema(conn) {
+        return Ok(Vec::new());
+    }
+    let mut stmt = conn.prepare(&format!(
+        "WITH css_candidate_sites AS ({CSS_CALL_IDENTIFIER_SITES_SQL}),
+         candidate_sites AS (
+             SELECT symbol_id, to_symbol_name AS name, start_line, start_column,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY symbol_id
+                        ORDER BY start_line, start_column, identifier_id
+                    ) AS site_rank
+             FROM css_candidate_sites
+             WHERE from_symbol_id = ?1 AND path = ?2
+         )
+         SELECT symbol_id, start_line, start_column
+         FROM candidate_sites
+         WHERE site_rank = 1
+         ORDER BY start_line, start_column, name
+         LIMIT ?3"
+    ))?;
+    let rows = stmt.query_map(
+        params![
+            caller.symbol_id,
+            caller.path,
+            limit.min(MAX_RESULT_LIMIT) as i64
+        ],
+        |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, i64>(1)?.max(0) as usize,
+                row.get::<_, i64>(2)?.max(0) as usize,
+            ))
+        },
+    )?;
+    let mut candidates = Vec::new();
+    for row in rows {
+        let (symbol_id, line, column) = row?;
+        if let Some(symbol) = get_css_context_symbol_by_id(conn, &symbol_id)? {
+            candidates.push((symbol, line, column));
+        }
+    }
+    Ok(candidates)
 }
 
 /// Resolve callee signatures directly in a single joined query, avoiding N+1 queries
@@ -6045,6 +6412,32 @@ pub fn compute_blast_radius_scoped_with_ids(
     )
 }
 
+/// Compute a blast radius and optionally include import, module, and namespace rows.
+#[allow(clippy::too_many_arguments)]
+pub fn compute_blast_radius_scoped_with_ids_and_low_signal(
+    conn: &Connection,
+    seed_symbols: &[&str],
+    seed_ids: &[&str],
+    symbol_path_filter: Option<&str>,
+    seed_paths: &[&str],
+    max_depth: usize,
+    limit: usize,
+    include_low_signal: bool,
+) -> Result<BlastRadiusResult, QueryError> {
+    blast_radius_walk_with_options(
+        conn,
+        seed_symbols,
+        seed_ids,
+        symbol_path_filter,
+        seed_paths,
+        None,
+        max_depth,
+        limit,
+        Some(MAX_BLAST_DEPTH),
+        include_low_signal,
+    )
+}
+
 /// Compute blast radius from the callers of a target that only its callers report found, one
 /// level below the target, so a walk to the largest depth counts the tests past `max_depth`.
 pub(crate) fn compute_blast_radius_from_callers(
@@ -6063,6 +6456,27 @@ pub(crate) fn compute_blast_radius_from_callers(
         max_depth,
         limit,
         Some(MAX_BLAST_DEPTH - 1),
+    )
+}
+
+pub(crate) fn compute_blast_radius_from_callers_with_low_signal(
+    conn: &Connection,
+    caller_ids: &[&str],
+    max_depth: usize,
+    limit: usize,
+    include_low_signal: bool,
+) -> Result<BlastRadiusResult, QueryError> {
+    blast_radius_walk_with_options(
+        conn,
+        &[],
+        caller_ids,
+        None,
+        &[],
+        None,
+        max_depth,
+        limit,
+        Some(MAX_BLAST_DEPTH - 1),
+        include_low_signal,
     )
 }
 
@@ -6090,6 +6504,29 @@ pub fn compute_blast_radius_for_changes(
     )
 }
 
+/// Compute blast radius for changed files, optionally including import, module, and namespace rows.
+pub fn compute_blast_radius_for_changes_with_low_signal(
+    conn: &Connection,
+    changes: &BTreeMap<String, Vec<(usize, usize)>>,
+    max_depth: usize,
+    limit: usize,
+    include_low_signal: bool,
+) -> Result<BlastRadiusResult, QueryError> {
+    let seed_paths: Vec<&str> = changes.keys().map(String::as_str).collect();
+    blast_radius_walk_with_options(
+        conn,
+        &[],
+        &[],
+        None,
+        &seed_paths,
+        Some(changes),
+        max_depth,
+        limit,
+        Some(MAX_BLAST_DEPTH),
+        include_low_signal,
+    )
+}
+
 #[allow(clippy::too_many_arguments)]
 fn blast_radius_walk(
     conn: &Connection,
@@ -6101,6 +6538,33 @@ fn blast_radius_walk(
     max_depth: usize,
     limit: usize,
     probe_depth: Option<usize>,
+) -> Result<BlastRadiusResult, QueryError> {
+    blast_radius_walk_with_options(
+        conn,
+        seed_symbols,
+        seed_ids,
+        symbol_path_filter,
+        seed_paths,
+        changed,
+        max_depth,
+        limit,
+        probe_depth,
+        false,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn blast_radius_walk_with_options(
+    conn: &Connection,
+    seed_symbols: &[&str],
+    seed_ids: &[&str],
+    symbol_path_filter: Option<&str>,
+    seed_paths: &[&str],
+    changed: Option<&BTreeMap<String, Vec<(usize, usize)>>>,
+    max_depth: usize,
+    limit: usize,
+    probe_depth: Option<usize>,
+    include_low_signal: bool,
 ) -> Result<BlastRadiusResult, QueryError> {
     validate_result_limit(limit)?;
     let max_depth = max_depth.min(MAX_BLAST_DEPTH);
@@ -6236,9 +6700,15 @@ fn blast_radius_walk(
         changed,
         file_seed: seed_type == "file",
     };
-    let mut walk = CallerWalk::start(conn, has_relationships, has_pending, &seeds)?;
+    let mut walk = CallerWalk::start(
+        conn,
+        has_relationships,
+        has_pending,
+        &seeds,
+        include_low_signal,
+    )?;
     walk.extend(conn, walk_bound(max_depth))?;
-    let collected = collect_walk(conn, &walk, &seeds, max_depth)?;
+    let collected = collect_walk(conn, &walk, &seeds, max_depth, include_low_signal)?;
     let mut likely_tests = collected.likely_tests;
     let mut impacted_symbols = collected.impacted_symbols;
     let mut reached = collected.reached;
@@ -6249,7 +6719,7 @@ fn blast_radius_walk(
         probe_depth.filter(|&depth| collected.callers_beyond_depth && depth > max_depth)
     {
         walk.extend(conn, walk_bound(probe_depth))?;
-        let deeper = collect_walk(conn, &walk, &seeds, probe_depth)?;
+        let deeper = collect_walk(conn, &walk, &seeds, probe_depth, include_low_signal)?;
         reached = deeper.reached;
         let listed: HashSet<(&str, usize)> = likely_tests
             .iter()
@@ -6347,8 +6817,15 @@ impl CallerWalk {
         has_relationships: bool,
         has_pending: bool,
         seeds: &WalkSeeds,
+        include_low_signal: bool,
     ) -> Result<Self, QueryError> {
-        let branches = walk_caller_branches(conn, has_relationships, has_pending, "?1");
+        let branches = walk_caller_branches(
+            conn,
+            has_relationships,
+            has_pending,
+            "?1",
+            include_low_signal,
+        );
         let level_sql = (!branches.is_empty()).then(|| {
             format!(
                 "WITH impact_walk(symbol_id, depth, via) AS ({WALK_ROWS_SQL})
@@ -6628,6 +7105,7 @@ fn collect_walk(
     walk: &CallerWalk,
     seeds: &WalkSeeds,
     max_depth: usize,
+    include_low_signal: bool,
 ) -> Result<CollectedWalk, QueryError> {
     let mut traversal_ceiling_reached = false;
     let mut callers_beyond_depth = false;
@@ -6698,6 +7176,11 @@ fn collect_walk(
         let test_path = test_path_predicate("s");
         let test_name = names_a_test_sql("s");
         let walk_rows = WALK_ROWS_SQL.replace("?2", "?1");
+        let low_signal_filter = if include_low_signal {
+            "1".to_string()
+        } else {
+            format!("s.kind NOT IN ({LOW_SIGNAL_KINDS_SQL})")
+        };
         let sql = format!(
             "WITH impact_walk(symbol_id, depth, via) AS ({walk_rows})
             SELECT s.name, s.kind, s.path, s.start_line, s.is_test, s.test_container,
@@ -6709,7 +7192,7 @@ fn collect_walk(
                    s.language, s.signature, MIN(iw.depth) = 0 AS is_seed, s.symbol_id
             FROM impact_walk iw
             CROSS JOIN symbols s ON iw.symbol_id = s.symbol_id
-            WHERE s.kind NOT IN ({LOW_SIGNAL_KINDS_SQL})
+            WHERE {low_signal_filter}
               AND {not_documentation}
             GROUP BY s.symbol_id, s.name, s.kind, s.path, s.start_line, s.is_test, s.test_container
             HAVING {reached_depth} IS NOT NULL
@@ -6988,8 +7471,19 @@ fn walk_caller_branches(
     has_relationships: bool,
     has_pending: bool,
     depth_bound: &str,
+    include_low_signal: bool,
 ) -> Vec<String> {
     let mut recursive_branches = Vec::new();
+    let from_signal_filter = if include_low_signal {
+        String::new()
+    } else {
+        format!("AND s_from.kind NOT IN ({LOW_SIGNAL_KINDS_SQL})")
+    };
+    let target_signal_filter = if include_low_signal {
+        String::new()
+    } else {
+        format!("AND s_target.kind NOT IN ({LOW_SIGNAL_KINDS_SQL})")
+    };
 
     if has_relationships {
         recursive_branches.push(format!(
@@ -6998,7 +7492,7 @@ fn walk_caller_branches(
              JOIN impact_walk iw ON r.to_symbol_id = iw.symbol_id
              JOIN symbols s_from ON r.from_symbol_id = s_from.symbol_id
              WHERE iw.depth < {depth_bound}
-               AND s_from.kind NOT IN ({LOW_SIGNAL_KINDS_SQL})"
+               {from_signal_filter}"
         ));
     }
 
@@ -7027,7 +7521,7 @@ fn walk_caller_branches(
              JOIN impact_walk iw ON s_target.symbol_id = iw.symbol_id
              {parent_join}
              WHERE iw.depth < {depth_bound}
-               AND s_target.kind NOT IN ({LOW_SIGNAL_KINDS_SQL})
+               {target_signal_filter}
                {ns_condition}"
         ));
     }
@@ -7547,6 +8041,23 @@ mod tests {
     }
 
     #[test]
+    fn report_pages_bound_page_size_and_allow_large_offsets_until_overflow() {
+        assert!(validate_result_page(200, 1).is_ok_and(|end| end == 201));
+        assert!(validate_result_page(usize::MAX, 0).is_ok_and(|end| end == usize::MAX));
+        assert!(matches!(
+            validate_result_page(usize::MAX, 1),
+            Err(QueryError::InvalidResultPage {
+                offset: usize::MAX,
+                limit: 1
+            })
+        ));
+        assert!(matches!(
+            validate_result_page(0, MAX_RESULT_LIMIT + 1),
+            Err(QueryError::InvalidResultLimit(limit)) if limit == MAX_RESULT_LIMIT + 1
+        ));
+    }
+
+    #[test]
     fn find_references_rejects_an_unbounded_limit_before_sql_execution() {
         let conn = Connection::open_in_memory().unwrap();
 
@@ -7558,6 +8069,190 @@ mod tests {
 
     use super::*;
     use crate::db::{ensure_fts_index, open_read_write};
+
+    #[test]
+    fn css_context_candidates_keep_only_a_bounded_signature_prefix() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE symbols (
+                symbol_id TEXT, file_id TEXT, path TEXT, language TEXT, name TEXT,
+                kind TEXT, signature TEXT, doc_comment TEXT, visibility TEXT,
+                parent_symbol_id TEXT, start_line INTEGER, start_column INTEGER,
+                end_line INTEGER, end_column INTEGER, start_byte INTEGER, end_byte INTEGER,
+                body_start_line INTEGER, body_start_column INTEGER, body_end_line INTEGER,
+                body_end_column INTEGER, body_start_byte INTEGER, body_end_byte INTEGER,
+                body_hash TEXT, semantic_group TEXT, is_test INTEGER, test_container INTEGER
+            );
+            CREATE TABLE identifiers (
+                identifier_id INTEGER PRIMARY KEY, name TEXT, path TEXT, language TEXT,
+                kind TEXT, start_line INTEGER, start_column INTEGER, containing_symbol_id TEXT
+            );
+            CREATE TABLE relationships (
+                from_symbol_id TEXT, to_symbol_id TEXT, kind TEXT, path TEXT,
+                start_line INTEGER, start_column INTEGER
+            );
+            CREATE TABLE pending_relationships (
+                from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT, path TEXT,
+                start_line INTEGER, start_column INTEGER
+            );
+            CREATE INDEX idx_symbols_id ON symbols(symbol_id);
+            CREATE INDEX idx_symbols_name_kind ON symbols(name, kind);
+            CREATE INDEX idx_identifiers_containing ON identifiers(containing_symbol_id);
+            CREATE INDEX idx_relationships_from ON relationships(from_symbol_id);
+            CREATE INDEX idx_pending_from ON pending_relationships(from_symbol_id);",
+        )
+        .unwrap();
+        let large_body = "x".repeat(1_000_000);
+        conn.execute(
+            "INSERT INTO symbols VALUES (
+                'caller', 'f', 'sample.css', 'css', '--caller_css', 'function',
+                '@function --caller_css()', NULL, NULL, NULL, 4, 0, 4, 70, 200, 270,
+                4, 30, 4, 69, 230, 269, 'caller-hash', NULL, 0, 0
+            )",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO symbols VALUES (
+                'callee', 'f', 'sample.css', 'css', '--anchor_css', 'function',
+                '@function --anchor_css() { ' || ?1 || ' }', ?2, NULL, NULL,
+                3, 0, 3, 1, 100, 1_000_200, 3, 28, 3, 1_000_199,
+                128, 1_000_199, 'callee-hash', NULL, 0, 0
+            )",
+            [&large_body, &large_body],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO identifiers VALUES (1, '--anchor_css', 'sample.css', 'css', 'call', 4, 35, 'caller')",
+            [],
+        )
+        .unwrap();
+        let caller = get_symbol_by_id(&conn, "caller").unwrap().unwrap();
+
+        let candidates = css_call_identifier_callee_candidates(&conn, &caller, 10).unwrap();
+
+        assert_eq!(candidates.len(), 1);
+        let (callee, line, column) = &candidates[0];
+        assert_eq!(callee.symbol_id, "callee");
+        assert_eq!(*line, 4);
+        assert_eq!(*column, 35);
+        assert_eq!(callee.body_start_byte, Some(128));
+        assert_eq!(callee.body_end_byte, Some(1_000_199));
+        assert!(callee.doc_comment.is_none());
+        assert!(callee.signature.as_ref().unwrap().len() <= 1024);
+        let (stored_signature_len, stored_doc_comment_len): (i64, i64) = conn
+            .query_row(
+                "SELECT length(signature), length(doc_comment) FROM symbols WHERE symbol_id = 'callee'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert!(stored_signature_len > 1_000_000);
+        assert_eq!(stored_doc_comment_len, 1_000_000);
+
+        let mut stmt = conn
+            .prepare(&format!(
+                "EXPLAIN QUERY PLAN WITH css_candidate_sites AS ({CSS_CALL_IDENTIFIER_SITES_SQL})
+                 SELECT symbol_id FROM css_candidate_sites
+                 WHERE from_symbol_id = ?1 AND path = ?2"
+            ))
+            .unwrap();
+        let plan = stmt
+            .query_map(params!["caller", "sample.css"], |row| {
+                row.get::<_, String>(3)
+            })
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap()
+            .join("\n");
+        assert!(plan.contains("idx_identifiers_containing"), "{plan}");
+        assert!(plan.contains("idx_symbols_id"), "{plan}");
+
+        let cte = callee_page_cte(&conn, false);
+        let mut stmt = conn
+            .prepare(&format!(
+                "EXPLAIN QUERY PLAN {cte}
+                 SELECT from_symbol_name, from_symbol_id, to_symbol_name, kind, path,
+                        start_line, start_column
+                 FROM merged_sites
+                 ORDER BY path, start_line, start_column, to_symbol_name, kind, from_symbol_id
+                 LIMIT ?3 OFFSET ?4"
+            ))
+            .unwrap();
+        let plan = stmt
+            .query_map(params!["--caller_css", "caller", 10, 0], |row| {
+                row.get::<_, String>(3)
+            })
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap()
+            .join("\n");
+        assert!(plan.contains("idx_identifiers_containing"), "{plan}");
+
+        let mut stmt = conn
+            .prepare(&format!(
+                "EXPLAIN QUERY PLAN {CSS_CONTEXT_SYMBOL_BY_ID_SQL}"
+            ))
+            .unwrap();
+        let plan = stmt
+            .query_map(
+                params!["callee", CSS_CONTEXT_SIGNATURE_PREFIX_CHARS as i64],
+                |row| row.get::<_, String>(3),
+            )
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap()
+            .join("\n");
+        assert!(plan.contains("idx_symbols_id"), "{plan}");
+    }
+
+    #[test]
+    fn callee_page_query_uses_source_indexes_before_offset() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE symbols (symbol_id TEXT, name TEXT, kind TEXT, parent_symbol_id TEXT);
+             CREATE INDEX idx_symbols_name_kind ON symbols(name, kind);
+             CREATE INDEX idx_symbols_id ON symbols(symbol_id);
+             CREATE TABLE relationships (from_symbol_id TEXT, to_symbol_id TEXT, kind TEXT, path TEXT, start_line INTEGER, start_column INTEGER);
+             CREATE INDEX idx_relationships_from ON relationships(from_symbol_id);
+             CREATE TABLE pending_relationships (from_symbol_id TEXT, target_terminal_name TEXT, kind TEXT, path TEXT, start_line INTEGER, start_column INTEGER, target_receiver TEXT, target_namespace_json TEXT, target_display_name TEXT);
+             CREATE INDEX idx_pending_from ON pending_relationships(from_symbol_id);
+             WITH RECURSIVE n(value) AS (VALUES(1) UNION ALL SELECT value + 1 FROM n WHERE value < 1000)
+             INSERT INTO symbols SELECT 'noise-' || value, 'noise_' || value, 'function', NULL FROM n;
+             INSERT INTO symbols VALUES ('caller', 'caller', 'function', NULL), ('callee', 'callee', 'function', NULL);
+             WITH RECURSIVE n(value) AS (VALUES(1) UNION ALL SELECT value + 1 FROM n WHERE value < 1000)
+             INSERT INTO relationships SELECT 'noise-' || value, 'noise-' || value, 'calls', 'noise.py', value, 0 FROM n;
+             INSERT INTO relationships VALUES ('caller', 'callee', 'calls', 'app.py', 2, 4);
+             WITH RECURSIVE n(value) AS (VALUES(1) UNION ALL SELECT value + 1 FROM n WHERE value < 1000)
+             INSERT INTO pending_relationships (from_symbol_id, target_terminal_name, kind, path, start_line, start_column) SELECT 'noise-' || value, 'noise', 'calls', 'noise.py', value, 0 FROM n;
+             INSERT INTO pending_relationships (from_symbol_id, target_terminal_name, kind, path, start_line, start_column) VALUES ('caller', 'callee', 'calls', 'app.py', 2, 4);
+             ANALYZE;",
+        )
+        .unwrap();
+
+        let cte = callee_page_cte(&conn, true);
+        let mut stmt = conn
+            .prepare(&format!(
+                "EXPLAIN QUERY PLAN {cte}
+                 SELECT from_symbol_name, from_symbol_id, to_symbol_name, kind, path,
+                        start_line, start_column
+                 FROM merged_sites
+                 ORDER BY path, start_line, start_column, to_symbol_name, kind, from_symbol_id
+                 LIMIT ?3 OFFSET ?4"
+            ))
+            .unwrap();
+        let plan = stmt
+            .query_map(params!["caller", "caller", 1, 200], |row| {
+                row.get::<_, String>(3)
+            })
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap()
+            .join("\n");
+        assert!(plan.contains("idx_symbols_name_kind"), "{plan}");
+        assert!(plan.contains("idx_relationships_from"), "{plan}");
+        assert!(plan.contains("idx_pending_from"), "{plan}");
+    }
 
     #[test]
     fn count_parse_diagnostics_counts_rows_for_one_file() {

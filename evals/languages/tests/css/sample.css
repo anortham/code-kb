@@ -1,0 +1,8 @@
+:root { --accent-color: #ffffff; }
+.button { color: var(--accent-color); }
+@function --anchor_css() { result: 41; }
+@function --caller_css() { result: --anchor_css(); }
+@function --名_css() { result: 42; }
+@function --escaped\ name_css() { result: 43; }
+@function --caller_unicode_css() { result: --名_css(); }
+@function --caller_escaped_css() { result: --escaped\ name_css(); }

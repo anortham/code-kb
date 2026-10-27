@@ -4,10 +4,9 @@ use std::process::ExitCode;
 
 use code_kb_core::workspace::NO_PROJECT_MARKER_REASON;
 use code_kb_core::{
-    SymbolSelector, Workspace, WorkspaceError, blast_radius_selected_op, codebase_outline_op,
-    edit_check_op, ensure_fresh_file, ensure_fts_index_path, file_skeleton_op,
-    find_references_for_symbol_ext, format_context_slices, format_edit_check,
-    format_fact_categories, format_reference_report, format_references, format_search_results,
+    SymbolSelector, Workspace, WorkspaceError, codebase_outline_op, edit_check_op,
+    ensure_fresh_file, ensure_fts_index_path, file_skeleton_op, find_references_for_symbol_ext,
+    format_context_slices, format_edit_check, format_fact_categories, format_search_results,
     format_structural_facts, format_symbol_bodies, fts_search_symbols_explained,
     get_context_slices_selected_op, get_symbol_bodies_selected_op,
     list_structural_fact_categories_scoped, load_file_symbols, lookup_symbols_op, open_read_only,
@@ -213,6 +212,9 @@ pub struct RefsArgs {
     /// Listed rows (0-200). Callers counts and --json stay complete.
     #[arg(long, default_value_t = 20, value_parser = parse_result_limit)]
     pub limit: usize,
+    /// Text page offset for each report section; page limit is at most 200, while offset may extend beyond 200.
+    #[arg(long, default_value_t = 0)]
+    pub offset: usize,
     /// Include unresolved external runtime/stdlib primitives in callees.
     #[arg(long)]
     pub include_external: bool,
@@ -233,6 +235,12 @@ pub struct BlastRadiusArgs {
     /// Maximum results to return, 0-200 (default: 20).
     #[arg(long, short = 'l', default_value_t = 20, value_parser = parse_result_limit)]
     pub limit: usize,
+    /// Text page offset per section; keep the same root/filter and restart after index changes. Discovery stops at 200 rows.
+    #[arg(long, default_value_t = 0)]
+    pub offset: usize,
+    /// Include low-signal import, variable, parameter, field, property, module, and namespace rows.
+    #[arg(long)]
+    pub include_low_signal: bool,
 }
 
 #[derive(Debug, Args)]
@@ -243,6 +251,12 @@ pub struct CheckArgs {
     /// Exit with code 3 after the report when a change has a proven site outside the diff (default: exit 0; errors exit 1; usage errors exit 2).
     #[arg(long)]
     pub fail_on_proven: bool,
+    /// Text page offset per folded section; page limit is at most 200, while offset may extend beyond 200.
+    #[arg(long, default_value_t = 0)]
+    pub offset: usize,
+    /// Text page size for folded sections (0-200; omitted keeps the compact default).
+    #[arg(long, value_parser = parse_result_limit)]
+    pub limit: Option<usize>,
 }
 
 #[derive(Debug, Args)]
@@ -577,7 +591,7 @@ fn main() -> anyhow::Result<ExitCode> {
                 println!("{}", serde_json::to_string_pretty(&symbols)?);
             } else {
                 let skeleton = file_skeleton_op(&workspace, &db_path, &conn, &args.file)?;
-                println!("{skeleton}");
+                print!("{skeleton}");
             }
         }
         Command::Lookup(args) => {
@@ -670,10 +684,11 @@ fn main() -> anyhow::Result<ExitCode> {
                     _ => println!("{}", serde_json::to_string_pretty(&slices)?),
                 }
             } else {
-                println!("{}", format_context_slices(&slices));
+                print!("{}", format_context_slices(&slices));
             }
         }
         Command::Refs(args) if args.direction == "callers" => {
+            queries::validate_result_page(args.offset, args.limit)?;
             let selector = symbol_selector(args.symbol.as_ref(), args.symbol_id.as_ref())?;
             let selected = match selector {
                 SymbolSelector::Name(name) => {
@@ -692,34 +707,59 @@ fn main() -> anyhow::Result<ExitCode> {
                 )?,
             };
             if !cli.json && args.limit == 0 {
-                println!("{ZERO_LIMIT_NOTICE}");
+                print!("{ZERO_LIMIT_NOTICE}");
             } else {
                 let report =
                     reference_report(&conn, &workspace.root, &selected, args.include_external)?;
                 if cli.json {
                     println!("{}", serde_json::to_string_pretty(&report)?);
                 } else {
-                    print!("{}", format_reference_report(&report, args.limit));
+                    print!(
+                        "{}",
+                        code_kb_core::formatters::format_reference_report_page(
+                            &report,
+                            args.limit,
+                            args.offset,
+                        )
+                    );
                 }
             }
         }
         Command::Refs(args) => {
+            let page_end = queries::validate_result_page(args.offset, args.limit)?;
+            let query_limit = if cli.json {
+                args.limit
+            } else {
+                page_end.min(queries::MAX_RESULT_LIMIT)
+            };
             let selector = symbol_selector(args.symbol.as_ref(), args.symbol_id.as_ref())?;
-            let (target, refs) = match selector {
+            let (target, refs, page_total) = match selector {
                 SymbolSelector::Name(name) => {
                     let path = args
                         .file
                         .as_deref()
                         .map(|path| workspace.relativize_filter(path));
-                    let refs = code_kb_core::find_references_scoped(
-                        &conn,
-                        &name,
-                        &args.direction,
-                        args.limit,
-                        args.include_external,
-                        path.as_deref(),
-                    )?;
-                    (name, refs)
+                    if !cli.json && args.direction == "callees" && args.limit > 0 {
+                        let (refs, total) = queries::find_callees_page_scoped(
+                            &conn,
+                            &name,
+                            args.limit,
+                            args.offset,
+                            args.include_external,
+                            path.as_deref(),
+                        )?;
+                        (name, refs, Some(total))
+                    } else {
+                        let refs = code_kb_core::find_references_scoped(
+                            &conn,
+                            &name,
+                            &args.direction,
+                            query_limit,
+                            args.include_external,
+                            path.as_deref(),
+                        )?;
+                        (name, refs, None)
+                    }
                 }
                 SymbolSelector::Id(id) => {
                     let selected = resolve_symbol_op(
@@ -729,30 +769,61 @@ fn main() -> anyhow::Result<ExitCode> {
                         &SymbolSelector::Id(id),
                         args.file.as_deref(),
                     )?;
-                    let refs = find_references_for_symbol_ext(
-                        &conn,
-                        &selected.name,
-                        &args.direction,
-                        args.limit,
-                        &selected.symbol_id,
-                        args.include_external,
-                    )?;
-                    (selected.name, refs)
+                    if !cli.json && args.direction == "callees" && args.limit > 0 {
+                        let (refs, total) = queries::find_callees_page_for_symbol(
+                            &conn,
+                            &selected.name,
+                            &selected.symbol_id,
+                            args.limit,
+                            args.offset,
+                            args.include_external,
+                        )?;
+                        (selected.name, refs, Some(total))
+                    } else {
+                        let refs = find_references_for_symbol_ext(
+                            &conn,
+                            &selected.name,
+                            &args.direction,
+                            query_limit,
+                            &selected.symbol_id,
+                            args.include_external,
+                        )?;
+                        (selected.name, refs, None)
+                    }
                 }
             };
             if cli.json {
                 println!("{}", serde_json::to_string_pretty(&refs)?);
             } else if args.limit == 0 {
-                println!("{ZERO_LIMIT_NOTICE}");
+                print!("{ZERO_LIMIT_NOTICE}");
+            } else if let Some(total) = page_total {
+                print!(
+                    "{}",
+                    code_kb_core::formatters::format_references_window(
+                        &target,
+                        &refs,
+                        &args.direction,
+                        args.limit,
+                        args.offset,
+                        total,
+                    )
+                );
             } else {
                 print!(
                     "{}",
-                    format_references(&target, &refs, &args.direction, args.limit)
+                    code_kb_core::formatters::format_references_page(
+                        &target,
+                        &refs,
+                        &args.direction,
+                        args.limit,
+                        args.offset,
+                    )
                 );
                 println!();
             }
         }
         Command::BlastRadius(args) | Command::Impact(args) => {
+            let page_end = queries::validate_result_page(args.offset, args.limit)?;
             if args.symbol.is_some() && args.symbol_id.is_some() {
                 anyhow::bail!("Specify only one of symbol or --symbol-id");
             }
@@ -763,27 +834,61 @@ fn main() -> anyhow::Result<ExitCode> {
                     args.symbol_id.as_ref(),
                 )?),
             };
-            let result = blast_radius_selected_op(
+            let query_limit = if cli.json {
+                args.limit
+            } else {
+                page_end.min(queries::MAX_RESULT_LIMIT)
+            };
+            if !cli.json && args.limit == 0 {
+                print!("{ZERO_LIMIT_NOTICE}");
+                return Ok(ExitCode::SUCCESS);
+            }
+            let result = code_kb_core::ops::blast_radius_selected_op_with_options(
                 &workspace,
                 Some(&db_path),
                 &conn,
                 selector,
                 args.file.as_deref(),
                 args.depth,
-                args.limit,
+                query_limit,
+                args.include_low_signal,
             )?;
             if cli.json {
                 println!("{}", serde_json::to_string_pretty(&result)?);
             } else {
-                println!("{}", code_kb_core::format_blast_radius(&result));
+                print!(
+                    "{}",
+                    code_kb_core::formatters::format_blast_radius_report(
+                        &workspace.root,
+                        &result,
+                        args.offset,
+                        args.limit,
+                        args.include_low_signal,
+                    )
+                );
             }
         }
         Command::Check(args) => {
+            let page_limit = args
+                .limit
+                .unwrap_or(code_kb_core::formatters::DEFAULT_EDIT_PAGE_SIZE);
+            queries::validate_result_page(args.offset, page_limit)?;
             let check = edit_check_op(&workspace, &db_path, &conn, args.base.as_deref())?;
             if cli.json {
                 println!("{}", serde_json::to_string_pretty(&check)?);
-            } else {
+            } else if page_limit == 0 {
+                print!("{ZERO_LIMIT_NOTICE}");
+            } else if args.offset == 0 && args.limit.is_none() {
                 print!("{}", format_edit_check(&check));
+            } else {
+                print!(
+                    "{}",
+                    code_kb_core::formatters::format_edit_check_page(
+                        &check,
+                        args.offset,
+                        page_limit,
+                    )
+                );
             }
             if args.fail_on_proven && check.changes.iter().any(|change| !change.proven.is_empty()) {
                 return Ok(ExitCode::from(3));

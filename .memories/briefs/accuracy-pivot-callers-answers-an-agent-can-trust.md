@@ -3,7 +3,7 @@ id: accuracy-pivot-callers-answers-an-agent-can-trust
 title: "Accuracy pivot: callers answers an agent can trust"
 status: active
 created: 2026-10-17T17:10:13.294Z
-updated: 2026-10-26T22:00:51.905Z
+updated: 2026-10-27T00:04:53.811Z
 tags:
   - project-direction
   - accuracy
@@ -13,34 +13,24 @@ tags:
 
 ## Direction
 
-Keep the owner-approved accuracy and completeness pivot: coding agents need source-backed answers with explicit uncertainty and missing coverage. Progressive disclosure and small responses support that goal; compression is not evidence of cheaper or more successful completed work.
+Code-kb gives coding agents source-backed answers with explicit uncertainty and missing coverage. Progressive disclosure supports useful work; compact output alone does not prove lower task cost or higher success. Keep the seven-tool surface, exact CLI counterparts, per-call absolute project_root, SQLite queries, bounded retained memory, and Windows support.
 
-The owner explicitly requires support for every language julie-extractors supports. Shared extraction and navigation do not establish parity of advanced checks. Track applicable capabilities per language, implement common behavior over extractor facts, and test language-specific semantics. Do not narrow the roadmap to Python because recent dogfood used Flask.
+Every language supported by the pinned Julie extractor is in scope. Build common behavior on extracted facts, add language-specific semantics where needed, and test accepted valid code alongside stale uses. Missing facts or consumer behavior are gaps, never language N/A. AGENTS.md and CLAUDE.md must remain identical and state this requirement.
 
-## Current status, 2026-10-26
+## Review implementation
 
-Main has shipped v2.9.1 with julie-extract 3.9.1. The phase 1–3 features are implemented: labeled callers and text accounting, seven MCP tools, reach sections, argument evidence, check_edit and Stop hooks, and offline edit/session replays. The index uses the references level, not full. Test-reach warnings and the level-by-level walk shipped in v2.9.1.
+The owner approved docs/reviews/2026-10-26-project-direction.md fixes. Initial repairs are committed on main at aeebe72: stale-index failures are surfaced/retried, unknown tools rejected before preparation, lookup suggestions filtered correctly, and benchmarks/graders/CI repaired.
 
-Accuracy and usefulness still have measured limits. Existing edit and planted-bug holdout sets were used for fixes and are now regression/tuning evidence. Runtime/framework test entry points, removed Python attributes, and functions passed as values remain coverage gaps. A controlled agent-task comparison on the current release remains outstanding; the two-worker live check was diagnostic, not a controlled outcome baseline.
+The broader slice is implemented in /home/murphy/.codex/worktrees/1e6f/code-kb on fix/cross-language-review, starting at aeebe72; foundation HEAD19cc584 precedes the pending coherent runtime commit. The plan is docs/plans/2026-10-26-cross-language-review-fixes.md. Real-extractor fixtures cover all42 pinned Julie3.9.1 IDs and detect language-set drift. Advanced argument, construction, removed-member, callable-value, CSS/HTML navigation, bounded paging, broader test-command fallback, and release-evidence binding have real regressions. Callback values remain advisory without an invocation contract. Separate dataclass constructor deltas avoid confusing ClassVar/unannotated class members with constructor fields.
 
-## Completed project review
+Linux verification passes:1818 Rust tests,172 Python tests,20 plugin tests, workspace Clippy, formatting, release build, whitespace, and guidance synchronization. Final lint-equivalent private helper refactors receive focused checks. Live same-root20-call MCP comparison retained23.64MiB before/24.46MiB after. Clean-source commit and Windows verification remain before the final evidence commit. No push/release/paid model session is authorized.
 
-The full assessment is in docs/reviews/2026-10-26-project-direction.md. It recommends retaining the lean tools, an explicit language-by-capability inventory and conformance coverage, fresh held-out tasks across language families, and actionable incomplete-result handling. The initial Python-first edit-check recommendation was corrected after the owner's clarification: removed-member and callback handling must be evaluated across applicable languages. The owner authorized implementing the review fixes on 2026-10-26, with explicit all-language coverage and matching AGENTS.md/CLAUDE.md guidance. The active implementation plan is docs/plans/2026-10-26-cross-language-review-fixes.md.
+## Remaining evidence and limits
 
-The review fixes are verified locally: failed refreshes now return errors and retry rather than answering from stale indexes; unknown tools are rejected before preparation; lookup miss suggestions respect kind filters; the benchmark parses current output and fails on malformed results; stale graders and CI coverage are repaired. Legacy integration fixtures were made compatible with real updates. Verification passed: 1,663 Rust tests, 149 Python tests, 20 plugin tests, release build, Clippy, formatting, and guidance synchronization. All work stayed in the original main checkout; no push or release was performed.
+Docs/language-support.md records observed42-language fixture coverage separately from Julie capability flags and advanced grammar coverage. Julie still omits a CSS call identifier in a concrete Unicode-suffix case, loses U+2000 declaration spelling, and lacks CSS formal contracts and dialect-safe SQL argument facts. F# currying and dynamic/framework invocation remain conservative. These are documented gaps, not empty-result safety proofs.
 
-## Active implementation
+Eight fresh retrieval/test-reach tasks and separate hidden oracles are prepared under evals/review-2026-10-26 with an updated controlled comparison procedure. No paid comparison ran. Historical edit/planted-bug corpora are regression/tuning evidence. Next strategic evidence is an approved controlled agent-task comparison and reusable upstream facts; do not claim task-success, time, or token-cost improvement from local checks alone.
 
-Worktree: /home/murphy/.codex/worktrees/1e6f/code-kb, branch fix/cross-language-review, based on aeebe72. All task work remains there. Batch A: real-extractor conformance for all 42 languages, argument semantics, construction semantics, bounded report recovery/test fallback, and release-evidence validation. Removed member reads and callable value dependencies now run in parallel through a single orchestration owner with explicit private interface handoffs. Task 8 adds narrow fact normalization for CSS custom-function declarations. Real conformance is also driving shared skeleton/reference fixes; current implementation status and rulings are in the plan and ignored SDD ledger. The plan records source-backed ownership, verification, and prior authorization. Missing applicable extractor facts remain gaps; coverage labels cannot certify them away. No paid agent runs, push, PR, or release is authorized.
+## Boundaries
 
-## Constraints
-
-Keep the per-call absolute project_root contract, per-project SQLite index, bounded retained memory, pinned extractor, Windows support, and native host editing/testing. No registry, dashboard, embedding runtime, or compiler rewrite without a demonstrated task need. Pushes, releases, and paid model comparisons require explicit approval.
-
-## Evidence and plans
-
-- docs/bug-replay-baseline.md
-- docs/replay-baseline.md
-- docs/reviews/2026-10-22-v2.9.1-dogfood.md
-- docs/plans/2026-09-23-retrieval-value-and-optional-routing.md
-- docs/reviews/2026-10-26-project-direction.md
+No dashboard, registry, embedding runtime, compiler rewrite, new general MCP tools, external messaging, push, publishing, or release without demonstrated need and applicable authorization. Keep task work in its active worktree; commit .memories artifacts. No paid runs without budget approval.

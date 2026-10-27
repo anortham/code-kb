@@ -6,14 +6,12 @@ use std::time::Duration;
 use code_kb_core::workspace::{NO_PROJECT_MARKER_REASON, paths_equal};
 use code_kb_core::{
     Connection, MAX_CONTEXT_OVERLOADS, SymbolSelector, WatcherHandle, Workspace, WorkspaceError,
-    blast_radius_selected_op, create_index, edit_check_op, ensure_fts_index_path,
-    ensure_index_matches_extractor, file_sizes_for_paths, file_skeleton_op,
-    find_references_for_symbol_ext, format_blast_radius, format_context_slices, format_edit_check,
-    format_reference_report, format_references, format_symbol_bodies,
-    get_context_slices_selected_op, get_symbol_bodies_selected_op, installed_extractor_version,
-    is_project_root, is_unreadable_database, lookup_symbols_op, open_global_telemetry_db,
-    open_read_only, reconcile_offline_edits, record_tool_call, record_tool_call_conn,
-    reference_report, render_symbol_lookup, resolve_symbol_op, scan_remedy,
+    create_index, edit_check_op, ensure_fts_index_path, ensure_index_matches_extractor,
+    file_sizes_for_paths, file_skeleton_op, find_references_for_symbol_ext, format_context_slices,
+    format_symbol_bodies, get_context_slices_selected_op, get_symbol_bodies_selected_op,
+    installed_extractor_version, is_project_root, is_unreadable_database, lookup_symbols_op,
+    open_global_telemetry_db, open_read_only, reconcile_offline_edits, record_tool_call,
+    record_tool_call_conn, reference_report, render_symbol_lookup, resolve_symbol_op, scan_remedy,
     select_reference_target, start_watcher,
 };
 
@@ -146,6 +144,32 @@ fn result_limit(arguments: &Value, default: usize) -> Result<usize, CallToolResu
             }
         }
     }
+}
+
+fn result_offset(arguments: &Value) -> Result<usize, CallToolResult> {
+    match arguments.get("offset") {
+        None => Ok(0),
+        Some(value) => match value
+            .as_u64()
+            .and_then(|offset| usize::try_from(offset).ok())
+        {
+            Some(offset) => Ok(offset),
+            None => Err(CallToolResult::error(
+                "Invalid offset: expected a nonnegative integer representable on this platform",
+            )),
+        },
+    }
+}
+
+fn result_page(
+    arguments: &Value,
+    default_limit: usize,
+) -> Result<(usize, usize, usize), CallToolResult> {
+    let limit = result_limit(arguments, default_limit)?;
+    let offset = result_offset(arguments)?;
+    let end = code_kb_core::queries::validate_result_page(offset, limit)
+        .map_err(|error| CallToolResult::error(error.to_string()))?;
+    Ok((limit, offset, end))
 }
 
 impl McpServer {
@@ -368,7 +392,7 @@ impl McpServer {
             },
             Tool {
                 name: "find_references".to_string(),
-                description: "Callers of a symbol: every indexed site with its name, each labeled proven, likely, unresolved, or excluded by its evidence, plus a whole-word text count that accounts for every line of the name. Use instead of rg or grep on a name. Callees: the calls a symbol makes. Pass file_path or a qualified name for a common name.".to_string(),
+                description: "Callers of a symbol: every indexed site with its name, each labeled proven, likely, unresolved, or excluded by its evidence, plus a whole-word text count that accounts for every line of the name. Use instead of rg or grep on a name. Callees: the calls a symbol makes. Pass file_path or a qualified name for a common name. Text reports support bounded per-section pages; each call reads the current index, keep the same project_root and filter, and restart at offset 0 after index changes. Page limit is at most 200; offset may extend beyond 200.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -392,6 +416,11 @@ impl McpServer {
                             "maximum": code_kb_core::queries::MAX_RESULT_LIMIT,
                             "description": "Default: 20."
                         },
+                        "offset": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "Text page offset in each report section (default: 0). restart at offset 0 after an index change. The offset may exceed 200."
+                        },
                         "include_external": {
                             "type": "boolean",
                             "description": "Include library callees (default: false)."
@@ -401,7 +430,7 @@ impl McpServer {
             },
             Tool {
                 name: "blast_radius".to_string(),
-                description: "The symbols a change affects and the tests to run. With no symbol, symbol_id, or file, it reads the uncommitted git changes.".to_string(),
+                description: "The symbols a change affects and the tests to run. With no symbol, symbol_id, or file, it reads the uncommitted git changes. Text output supports bounded per-section pages and optional low-signal import, variable, parameter, field, property, module, and namespace rows. Each call reads the current index; keep the same project_root and filter, and restart at offset 0 after index changes. The page limit is at most 200; discovery stops at 200 rows and larger offsets return no rows.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -423,19 +452,39 @@ impl McpServer {
                             "minimum": 0,
                             "maximum": code_kb_core::queries::MAX_RESULT_LIMIT,
                             "description": "Per section (default: 20)."
+                        },
+                        "offset": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "Text page offset in the test and impact sections (default: 0). restart at offset 0 after an index change. Larger offsets return no rows after the 200-row discovery ceiling."
+                        },
+                        "include_low_signal": {
+                            "type": "boolean",
+                            "description": "Include low-signal import, variable, parameter, field, property, module, and namespace impact rows (default: false)."
                         }
                     }
                 }),
             },
             Tool {
                 name: "check_edit".to_string(),
-                description: "After you edit: the symbols whose shape changed against the session base (or base, or HEAD) and every site of each that your diff did not reach. Run it before you say a change is done.".to_string(),
+                description: "After you edit: the symbols whose shape changed against the session base (or base, or HEAD) and every site of each that your diff did not reach. Run it before you say a change is done. Text output supports bounded pages for each folded section; each call reads the current index, keep the same project_root and filter, and restart at offset 0 after index changes. The default page size is 12; page limit is at most 200 and offset may extend beyond 200.".to_string(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
                         "base": {
                             "type": "string",
                             "description": "Git revision to compare with (default: the session base, else HEAD)."
+                        },
+                        "offset": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "Text page offset per folded section (default: 0). restart at offset 0 after an index change. The offset may exceed 200."
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": code_kb_core::queries::MAX_RESULT_LIMIT,
+                            "description": "Page size per folded section (default: 12 when paging is requested; maximum 200)."
                         }
                     }
                 }),
@@ -980,8 +1029,8 @@ impl McpServer {
                     .get("direction")
                     .and_then(|v| v.as_str())
                     .unwrap_or("callers");
-                let limit = match result_limit(arguments, 20) {
-                    Ok(limit) => limit,
+                let (limit, offset, page_end) = match result_page(arguments, 20) {
+                    Ok(page) => page,
                     Err(error) => return error,
                 };
                 let include_external = arguments
@@ -1030,25 +1079,45 @@ impl McpServer {
                             .collect();
                         baseline_paths.sort();
                         baseline_paths.dedup();
-                        CallToolResult::text(format_reference_report(&report, limit))
-                            .with_logical_result_count(report.counts.sites)
-                            .with_baseline_paths(baseline_paths)
+                        CallToolResult::text(
+                            code_kb_core::formatters::format_reference_report_page(
+                                &report, limit, offset,
+                            ),
+                        )
+                        .with_logical_result_count(report.counts.sites)
+                        .with_baseline_paths(baseline_paths)
                     }
                 } else {
-                    let (target, refs) = match selector {
+                    let (target, refs, page_total) = match selector {
                         SymbolSelector::Name(name) => {
                             let path =
                                 raw_file_path.map(|path| self.workspace.relativize_filter(path));
-                            match code_kb_core::find_references_scoped(
-                                &conn,
-                                &name,
-                                direction,
-                                limit,
-                                include_external,
-                                path.as_deref(),
-                            ) {
-                                Ok(refs) => (name, refs),
-                                Err(error) => return CallToolResult::error(error.to_string()),
+                            if direction == "callees" && limit > 0 {
+                                match code_kb_core::queries::find_callees_page_scoped(
+                                    &conn,
+                                    &name,
+                                    limit,
+                                    offset,
+                                    include_external,
+                                    path.as_deref(),
+                                ) {
+                                    Ok((refs, total)) => (name, refs, Some(total)),
+                                    Err(error) => {
+                                        return CallToolResult::error(error.to_string());
+                                    }
+                                }
+                            } else {
+                                match code_kb_core::find_references_scoped(
+                                    &conn,
+                                    &name,
+                                    direction,
+                                    page_end.min(code_kb_core::queries::MAX_RESULT_LIMIT),
+                                    include_external,
+                                    path.as_deref(),
+                                ) {
+                                    Ok(refs) => (name, refs, None),
+                                    Err(error) => return CallToolResult::error(error.to_string()),
+                                }
                             }
                         }
                         SymbolSelector::Id(id) => {
@@ -1062,16 +1131,32 @@ impl McpServer {
                                 Ok(symbol) => symbol,
                                 Err(error) => return CallToolResult::error(error.to_string()),
                             };
-                            match find_references_for_symbol_ext(
-                                &conn,
-                                &selected.name,
-                                direction,
-                                limit,
-                                &selected.symbol_id,
-                                include_external,
-                            ) {
-                                Ok(refs) => (selected.name, refs),
-                                Err(error) => return CallToolResult::error(error.to_string()),
+                            if direction == "callees" && limit > 0 {
+                                match code_kb_core::queries::find_callees_page_for_symbol(
+                                    &conn,
+                                    &selected.name,
+                                    &selected.symbol_id,
+                                    limit,
+                                    offset,
+                                    include_external,
+                                ) {
+                                    Ok((refs, total)) => (selected.name, refs, Some(total)),
+                                    Err(error) => {
+                                        return CallToolResult::error(error.to_string());
+                                    }
+                                }
+                            } else {
+                                match find_references_for_symbol_ext(
+                                    &conn,
+                                    &selected.name,
+                                    direction,
+                                    page_end.min(code_kb_core::queries::MAX_RESULT_LIMIT),
+                                    &selected.symbol_id,
+                                    include_external,
+                                ) {
+                                    Ok(refs) => (selected.name, refs, None),
+                                    Err(error) => return CallToolResult::error(error.to_string()),
+                                }
                             }
                         }
                     };
@@ -1080,11 +1165,17 @@ impl McpServer {
 
                     let output = if limit == 0 {
                         ZERO_LIMIT_NOTICE.to_string()
+                    } else if let Some(total) = page_total {
+                        code_kb_core::formatters::format_references_window(
+                            &target, &refs, direction, limit, offset, total,
+                        )
                     } else {
-                        format_references(&target, &refs, direction, limit)
+                        code_kb_core::formatters::format_references_page(
+                            &target, &refs, direction, limit, offset,
+                        )
                     };
                     CallToolResult::text(output)
-                        .with_logical_result_count(refs.len())
+                        .with_logical_result_count(if limit == 0 { 0 } else { refs.len() })
                         .with_baseline_paths(baseline_paths)
                 }
             }
@@ -1110,35 +1201,53 @@ impl McpServer {
                     .or_else(|| arguments.get("max_depth"))
                     .and_then(|v| v.as_u64())
                     .unwrap_or(2) as usize;
-                let limit = match result_limit(arguments, 20) {
-                    Ok(limit) => limit,
+                let (limit, offset, page_end) = match result_page(arguments, 20) {
+                    Ok(page) => page,
                     Err(error) => return error,
                 };
+                let include_low_signal = arguments
+                    .get("include_low_signal")
+                    .and_then(|value| value.as_bool())
+                    .unwrap_or(false);
 
-                match blast_radius_selected_op(
-                    &self.workspace,
-                    Some(&self.db_path),
-                    &conn,
-                    selector,
-                    file,
-                    depth,
-                    limit,
-                ) {
-                    Ok(res) => {
-                        let baseline_paths = res
-                            .likely_tests
-                            .iter()
-                            .map(|test| test.path.clone())
-                            .chain(res.impacted_symbols.iter().map(|sym| sym.path.clone()))
-                            .collect();
+                if limit == 0 {
+                    CallToolResult::text(ZERO_LIMIT_NOTICE.to_string()).with_logical_result_count(0)
+                } else {
+                    match code_kb_core::ops::blast_radius_selected_op_with_options(
+                        &self.workspace,
+                        Some(&self.db_path),
+                        &conn,
+                        selector,
+                        file,
+                        depth,
+                        page_end.min(code_kb_core::queries::MAX_RESULT_LIMIT),
+                        include_low_signal,
+                    ) {
+                        Ok(res) => {
+                            let baseline_paths = res
+                                .likely_tests
+                                .iter()
+                                .map(|test| test.path.clone())
+                                .chain(res.impacted_symbols.iter().map(|sym| sym.path.clone()))
+                                .collect();
 
-                        CallToolResult::text(format_blast_radius(&res))
-                            .with_logical_result_count(
-                                res.likely_tests.len() + res.impacted_symbols.len(),
+                            let logical_count =
+                                res.likely_tests.len().saturating_sub(offset).min(limit)
+                                    + res.impacted_symbols.len().saturating_sub(offset).min(limit);
+                            CallToolResult::text(
+                                code_kb_core::formatters::format_blast_radius_report(
+                                    &self.workspace.root,
+                                    &res,
+                                    offset,
+                                    limit,
+                                    include_low_signal,
+                                ),
                             )
+                            .with_logical_result_count(logical_count)
                             .with_baseline_paths(baseline_paths)
+                        }
+                        Err(e) => CallToolResult::error(e.to_string()),
                     }
-                    Err(e) => CallToolResult::error(e.to_string()),
                 }
             }
             "check_edit" => {
@@ -1147,9 +1256,22 @@ impl McpServer {
                     Some(Value::String(rev)) => Some(rev.as_str()),
                     Some(_) => return CallToolResult::error("base must be a string"),
                 };
+                let (limit, offset, _) = match result_page(
+                    arguments,
+                    code_kb_core::formatters::DEFAULT_EDIT_PAGE_SIZE,
+                ) {
+                    Ok(page) => page,
+                    Err(error) => return error,
+                };
+                if limit == 0 {
+                    return CallToolResult::text(ZERO_LIMIT_NOTICE.to_string())
+                        .with_logical_result_count(0);
+                }
                 match edit_check_op(&self.workspace, &self.db_path, &conn, base) {
-                    Ok(check) => CallToolResult::text(format_edit_check(&check))
-                        .with_logical_result_count(check.changes.len()),
+                    Ok(check) => CallToolResult::text(
+                        code_kb_core::formatters::format_edit_check_page(&check, offset, limit),
+                    )
+                    .with_logical_result_count(check.changes.len()),
                     Err(e) => CallToolResult::error(e.to_string()),
                 }
             }

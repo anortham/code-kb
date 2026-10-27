@@ -1,0 +1,1 @@
+<Project Sdk="Microsoft.NET.Sdk"><Target Name="anchor_xml"><Message Text="41" /></Target><Target Name="caller_xml"><CallTarget Targets="anchor_xml" /></Target></Project>

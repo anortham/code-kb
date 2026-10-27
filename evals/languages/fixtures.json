@@ -1,0 +1,443 @@
+{
+  "rust": {
+    "file": "rust/sample.rs",
+    "symbol": "anchor_rust",
+    "replacement": "fresh_rust_anchor",
+    "body_contains": "value + 41",
+    "caller": "caller_rust",
+    "symbol_kind": "function",
+    "source": "tests/rust/sample.rs"
+  },
+  "c": {
+    "file": "c/sample.c",
+    "symbol": "anchor_c",
+    "replacement": "fresh_c_anchor",
+    "body_contains": "return value + 41;",
+    "caller": "caller_c",
+    "symbol_kind": "function",
+    "source": "tests/c/sample.c"
+  },
+  "cpp": {
+    "file": "cpp/sample.cpp",
+    "symbol": "anchor_cpp",
+    "replacement": "fresh_cpp_anchor",
+    "body_contains": "return value + 41;",
+    "caller": "caller_cpp",
+    "symbol_kind": "function",
+    "source": "tests/cpp/sample.cpp"
+  },
+  "go": {
+    "file": "go/sample.go",
+    "symbol": "AnchorGo",
+    "replacement": "fresh_go_anchor",
+    "body_contains": "value + 41",
+    "caller": "CallerGo",
+    "symbol_kind": "function",
+    "source": "tests/go/sample.go"
+  },
+  "gomod": {
+    "file": "gomod/go.mod",
+    "symbol": "example.com/conformance",
+    "replacement": "fresh_gomod_anchor",
+    "symbol_kind": "module",
+    "body_contains": "module example.com/conformance",
+    "body_symbol": "example.com/conformance",
+    "source": "tests/gomod/go.mod"
+  },
+  "gosum": {
+    "file": "gosum/go.sum",
+    "symbol": null,
+    "no_symbol_reason": "go.sum records checksums and has no declarations",
+    "refresh_from": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    "refresh_to": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=",
+    "source": "tests/gosum/go.sum"
+  },
+  "zig": {
+    "file": "zig/sample.zig",
+    "symbol": "anchor_zig",
+    "replacement": "fresh_zig_anchor",
+    "body_contains": "value + 41",
+    "caller": "caller_zig",
+    "symbol_kind": "function",
+    "source": "tests/zig/sample.zig"
+  },
+  "typescript": {
+    "file": "typescript/sample.ts",
+    "symbol": "anchor_typescript",
+    "replacement": "fresh_typescript_anchor",
+    "body_contains": "value + 41",
+    "caller": "caller_typescript",
+    "symbol_kind": "function",
+    "source": "tests/typescript/sample.ts"
+  },
+  "tsx": {
+    "file": "tsx/sample.tsx",
+    "symbol": "anchor_tsx",
+    "replacement": "fresh_tsx_anchor",
+    "body_contains": "value + 41",
+    "caller": "caller_tsx",
+    "symbol_kind": "function",
+    "source": "tests/tsx/sample.tsx"
+  },
+  "javascript": {
+    "file": "javascript/sample.js",
+    "symbol": "anchor_javascript",
+    "replacement": "fresh_javascript_anchor",
+    "body_contains": "value + 41",
+    "caller": "caller_javascript",
+    "symbol_kind": "function",
+    "source": "tests/javascript/sample.js"
+  },
+  "jsx": {
+    "file": "jsx/sample.jsx",
+    "symbol": "anchor_jsx",
+    "replacement": "fresh_jsx_anchor",
+    "body_contains": "value + 41",
+    "caller": "caller_jsx",
+    "symbol_kind": "function",
+    "source": "tests/jsx/sample.jsx"
+  },
+  "html": {
+    "file": "html/sample.html",
+    "symbol": "anchor_html",
+    "replacement": "fresh_html_anchor",
+    "body_contains": "value + 41",
+    "caller": "caller_html",
+    "symbol_kind": "function",
+    "source": "tests/html/sample.html"
+  },
+  "css": {
+    "file": "css/sample.css",
+    "symbol": ".button",
+    "body_contains": "color: var(--accent-color)",
+    "symbol_kind": "property",
+    "body_symbol": ".button",
+    "skeleton_symbols": [
+      "--accent-color",
+      "--anchor_css",
+      "--caller_css",
+      "--名_css",
+      "--escaped\\ name_css",
+      "--caller_unicode_css",
+      "--caller_escaped_css"
+    ],
+    "references": {
+      "target_name": "--accent-color",
+      "source_name": ".button",
+      "relationship_kind": "references"
+    },
+    "custom_function": {
+      "declaration_name": "--anchor_css",
+      "declaration_kind": "function",
+      "caller_name": "--caller_css",
+      "call_identifier": "--anchor_css"
+    },
+    "additional_custom_functions": [
+      {
+        "name": "--名_css",
+        "signature": "@function --名_css()"
+      },
+      {
+        "name": "--escaped\\ name_css",
+        "signature": "@function --escaped\\ name_css()"
+      },
+      {
+        "name": "--caller_unicode_css",
+        "signature": "@function --caller_unicode_css()"
+      },
+      {
+        "name": "--caller_escaped_css",
+        "signature": "@function --caller_escaped_css()"
+      }
+    ],
+    "unicode_and_escape_calls": [
+      {
+        "target": "--名_css",
+        "caller": "--caller_unicode_css",
+        "identifier": "--名_css",
+        "span": {
+          "start_line": 7,
+          "start_column": 43,
+          "end_line": 7,
+          "end_column": 45
+        }
+      },
+      {
+        "target": "--escaped\\ name_css",
+        "caller": "--caller_escaped_css",
+        "identifier": "--escaped\\ name_css",
+        "span": {
+          "start_line": 8,
+          "start_column": 54,
+          "end_line": 8,
+          "end_column": 62
+        }
+      }
+    ],
+    "edit_check": true,
+    "edit_symbol": "--accent-color",
+    "edit_replacement": "--fresh-accent-color",
+    "selector_edit_replacement": ".renamed-button",
+    "source": "tests/css/sample.css"
+  },
+  "vue": {
+    "file": "vue/sample.vue",
+    "symbol": "anchor_vue",
+    "replacement": "fresh_vue_anchor",
+    "refresh_after": "<script>\nexport function ",
+    "body_contains": "value + 41",
+    "caller": "caller_vue",
+    "symbol_kind": "function",
+    "source": "tests/vue/sample.vue"
+  },
+  "python": {
+    "file": "python/sample.py",
+    "symbol": "anchor_python",
+    "replacement": "fresh_python_anchor",
+    "body_contains": "value + 41",
+    "caller": "caller_python",
+    "symbol_kind": "function",
+    "source": "tests/python/sample.py"
+  },
+  "java": {
+    "file": "java/Sample.java",
+    "symbol": "anchor_java",
+    "replacement": "fresh_java_anchor",
+    "body_contains": "value + 41",
+    "caller": "caller_java",
+    "symbol_kind": "method",
+    "source": "tests/java/Sample.java"
+  },
+  "csharp": {
+    "file": "csharp/Sample.cs",
+    "symbol": "AnchorCsharp",
+    "replacement": "fresh_csharp_anchor",
+    "body_contains": "value + 41",
+    "caller": "CallerCsharp",
+    "symbol_kind": "method",
+    "source": "tests/csharp/Sample.cs"
+  },
+  "vbnet": {
+    "file": "vbnet/Sample.vb",
+    "symbol": "AnchorVbnet",
+    "replacement": "fresh_vbnet_anchor",
+    "body_contains": "value + 41",
+    "caller": "CallerVbnet",
+    "symbol_kind": "method",
+    "source": "tests/vbnet/Sample.vb"
+  },
+  "php": {
+    "file": "php/sample.php",
+    "symbol": "anchor_php",
+    "replacement": "fresh_php_anchor",
+    "body_contains": "value + 41",
+    "caller": "caller_php",
+    "symbol_kind": "function",
+    "source": "tests/php/sample.php"
+  },
+  "ruby": {
+    "file": "ruby/sample.rb",
+    "symbol": "anchor_ruby",
+    "replacement": "fresh_ruby_anchor",
+    "body_contains": "value + 41",
+    "caller": "caller_ruby",
+    "symbol_kind": "method",
+    "source": "tests/ruby/sample.rb"
+  },
+  "swift": {
+    "file": "swift/sample.swift",
+    "symbol": "anchor_swift",
+    "replacement": "fresh_swift_anchor",
+    "body_contains": "value + 41",
+    "caller": "caller_swift",
+    "symbol_kind": "function",
+    "source": "tests/swift/sample.swift"
+  },
+  "kotlin": {
+    "file": "kotlin/sample.kt",
+    "symbol": "anchor_kotlin",
+    "replacement": "fresh_kotlin_anchor",
+    "body_contains": "value + 41",
+    "caller": "caller_kotlin",
+    "symbol_kind": "function",
+    "source": "tests/kotlin/sample.kt"
+  },
+  "scala": {
+    "file": "scala/sample.scala",
+    "symbol": "anchor_scala",
+    "replacement": "fresh_scala_anchor",
+    "body_contains": "value + 41",
+    "caller": "caller_scala",
+    "symbol_kind": "function",
+    "source": "tests/scala/sample.scala"
+  },
+  "dart": {
+    "file": "dart/sample.dart",
+    "symbol": "anchor_dart",
+    "replacement": "fresh_dart_anchor",
+    "body_contains": "value + 41",
+    "caller": "caller_dart",
+    "symbol_kind": "function",
+    "source": "tests/dart/sample.dart"
+  },
+  "elixir": {
+    "file": "elixir/sample.ex",
+    "symbol": "anchor_elixir",
+    "replacement": "fresh_elixir_anchor",
+    "body_contains": "value + 41",
+    "caller": "caller_elixir",
+    "symbol_kind": "function",
+    "source": "tests/elixir/sample.ex"
+  },
+  "fsharp": {
+    "file": "fsharp/sample.fs",
+    "symbol": "anchor_fsharp",
+    "replacement": "fresh_fsharp_anchor",
+    "body_contains": "value + 41",
+    "caller": "caller_fsharp",
+    "symbol_kind": "function",
+    "source": "tests/fsharp/sample.fs"
+  },
+  "erlang": {
+    "file": "erlang/sample.erl",
+    "symbol": "anchor_erlang",
+    "replacement": "fresh_erlang_anchor",
+    "body_contains": "Value + 41",
+    "refresh_occurrences": 2,
+    "caller": "caller_erlang",
+    "symbol_kind": "function",
+    "source": "tests/erlang/sample.erl"
+  },
+  "lua": {
+    "file": "lua/sample.lua",
+    "symbol": "anchor_lua",
+    "replacement": "fresh_lua_anchor",
+    "body_contains": "value + 41",
+    "caller": "caller_lua",
+    "symbol_kind": "function",
+    "source": "tests/lua/sample.lua"
+  },
+  "qml": {
+    "file": "qml/Sample.qml",
+    "symbol": "anchor_qml",
+    "replacement": "fresh_qml_anchor",
+    "body_contains": "value + 41",
+    "caller": "caller_qml",
+    "symbol_kind": "function",
+    "source": "tests/qml/Sample.qml"
+  },
+  "qmldir": {
+    "file": "qmldir/qmldir",
+    "symbol": "Conformance",
+    "replacement": "fresh_qmldir_anchor",
+    "symbol_kind": "module",
+    "source": "tests/qmldir/qmldir"
+  },
+  "r": {
+    "file": "r/sample.R",
+    "symbol": "anchor_r",
+    "replacement": "fresh_r_anchor",
+    "body_contains": "value + 41",
+    "caller": "caller_r",
+    "symbol_kind": "function",
+    "source": "tests/r/sample.R"
+  },
+  "bash": {
+    "file": "bash/sample.sh",
+    "symbol": "anchor_bash",
+    "replacement": "fresh_bash_anchor",
+    "body_contains": "value+41",
+    "caller": "caller_bash",
+    "symbol_kind": "function",
+    "source": "tests/bash/sample.sh"
+  },
+  "powershell": {
+    "file": "powershell/sample.ps1",
+    "symbol": "AnchorPowershell",
+    "replacement": "fresh_powershell_anchor",
+    "body_contains": "$Value + 41",
+    "caller": "CallerPowershell",
+    "symbol_kind": "function",
+    "source": "tests/powershell/sample.ps1"
+  },
+  "gdscript": {
+    "file": "gdscript/sample.gd",
+    "symbol": "anchor_gdscript",
+    "replacement": "fresh_gdscript_anchor",
+    "body_contains": "value + 41",
+    "caller": "caller_gdscript",
+    "symbol_kind": "method",
+    "source": "tests/gdscript/sample.gd"
+  },
+  "razor": {
+    "file": "razor/Sample.razor",
+    "symbol": "AnchorRazor",
+    "replacement": "fresh_razor_anchor",
+    "body_contains": "value + 41",
+    "caller": "CallerRazor",
+    "symbol_kind": "method",
+    "source": "tests/razor/Sample.razor"
+  },
+  "sql": {
+    "file": "sql/sample.sql",
+    "symbol": "anchor_sql",
+    "replacement": "fresh_sql_anchor",
+    "body_contains": "value + 41",
+    "caller": "caller_sql",
+    "symbol_kind": "function",
+    "source": "tests/sql/sample.sql"
+  },
+  "regex": {
+    "file": "regex/sample.regex",
+    "symbol": "anchor_regex",
+    "replacement": "fresh_regex_anchor",
+    "symbol_kind": "function",
+    "body_contains": "(?<anchor_regex>[0-9]+)",
+    "body_symbol": "anchor_regex",
+    "source": "tests/regex/sample.regex"
+  },
+  "markdown": {
+    "file": "markdown/sample.md",
+    "symbol": "anchor_markdown",
+    "replacement": "fresh_markdown_anchor",
+    "symbol_kind": "module",
+    "source": "tests/markdown/sample.md"
+  },
+  "json": {
+    "file": "json/sample.json",
+    "symbol": "anchor_json",
+    "replacement": "fresh_json_anchor",
+    "symbol_kind": "module",
+    "body_contains": "\"anchor_json\": {\"value\": 41}",
+    "body_symbol": "anchor_json",
+    "source": "tests/json/sample.json"
+  },
+  "toml": {
+    "file": "toml/sample.toml",
+    "symbol": "anchor_toml",
+    "replacement": "fresh_toml_anchor",
+    "symbol_kind": "module",
+    "body_contains": "value = 41",
+    "body_symbol": "anchor_toml",
+    "source": "tests/toml/sample.toml"
+  },
+  "yaml": {
+    "file": "yaml/sample.yaml",
+    "symbol": "anchor_yaml",
+    "replacement": "fresh_yaml_anchor",
+    "symbol_kind": "module",
+    "body_contains": "value: 41",
+    "body_symbol": "anchor_yaml",
+    "source": "tests/yaml/sample.yaml"
+  },
+  "xml": {
+    "file": "xml/Project.csproj",
+    "symbol": "anchor_xml",
+    "replacement": "fresh_xml_anchor",
+    "body_contains": "<Message Text=\"41\" />",
+    "caller": "caller_xml",
+    "caller_in_diff": true,
+    "symbol_kind": "function",
+    "source": "tests/xml/Project.csproj"
+  }
+}

@@ -3,7 +3,7 @@
 # release-dogfood.sh — run one dogfood round of the local build in Claude Code and Codex.
 #
 # Each round writes target/release-dogfood/report.md for the lead to fill in, and the
-# session answers under target/release-dogfood/<UTC time>/. Preflight step 10 reads the report.
+# session answers under target/release-dogfood/<UTC time>/. Preflight validates both artifacts.
 #
 set -euo pipefail
 
@@ -30,11 +30,14 @@ if ! git diff --quiet HEAD -- crates scripts/julie-pins.json; then
   echo "error: uncommitted code changes; commit them so the report names the code it tested." >&2
   exit 1
 fi
-COMMIT="$(git rev-parse HEAD)"
 CODE_KB_VER="$(target/release/code-kb --version | awk '{print $2}')"
 JULIE_VER="$(.tools/julie-extract --version | awk '{print $2}')"
 
 mkdir -p "${OUT}"
+EVIDENCE="${OUT_ROOT}/evidence.json"
+python3 "${REPO_ROOT}/scripts/release_evidence.py" start-dogfood \
+  --repo "${REPO_ROOT}" --extractor "${REPO_ROOT}/.tools/julie-extract" \
+  --binary "${REPO_ROOT}/target/release/code-kb" --session-dir "${OUT}" --out "${EVIDENCE}"
 WORKTREES=()
 cleanup() {
   for wt in "${WORKTREES[@]}"; do git -C "${PROJECT}" worktree remove --force "${wt}" || true; rmdir "$(dirname "${wt}")" || true; done
@@ -68,29 +71,14 @@ FAILED=0
 wait -n || FAILED=1
 wait -n || FAILED=1
 
-cat >"${OUT_ROOT}/report.md" <<EOF
-# Release dogfood report
-
-Commit: ${COMMIT}
-New: code-kb ${CODE_KB_VER}, julie-extract ${JULIE_VER}
-Sessions: ${ROUND}/claude.md, ${ROUND}/codex.md
-
-## Defects
-
-Check every defect that a session reports against the source. List each one here as:
-- [open] <defect>
-- [fixed <commit>] <defect>: a wrong answer, fixed with a regression test and a rerun of the call
-- [gap] <defect>: a true but incomplete answer, a heuristic miss, or a feature request
-- [not a defect] <defect>: <why the output is correct>
-- [deferred: "<the user's own words>"] <defect>
-
-Run one round per release. A fix does not need a new round (docs/RELEASING.md, step 7).
-
-## Result: PENDING
-EOF
-
-echo "Round ${ROUND}: answers in ${OUT}, report template at ${OUT_ROOT}/report.md"
 if [[ "${FAILED}" -ne 0 ]]; then
   echo "error: a session failed; read ${OUT}/*.log." >&2
   exit 1
 fi
+
+python3 "${REPO_ROOT}/scripts/release_evidence.py" finalize-dogfood --evidence "${EVIDENCE}"
+python3 "${REPO_ROOT}/scripts/release_evidence.py" render-dogfood-report \
+  --evidence "${EVIDENCE}" --out "${OUT_ROOT}/report.md" \
+  --code-kb-version "${CODE_KB_VER}" --julie-version "${JULIE_VER}" --round "${ROUND}"
+
+echo "Round ${ROUND}: answers in ${OUT}, report template at ${OUT_ROOT}/report.md"

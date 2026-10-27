@@ -94,7 +94,19 @@ Run the automated pre-flight script, or execute each check manually:
    The gate fails when a language has proven precision, excluded precision, or accounted share
    under 0.98. Fix a wrong proven or excluded site on a dev symbol only, and adjudicate a holdout
    disagreement without a fix for it. `scripts/reach_gate.py disagreements --repo R` lists them.
-   `evals/reach/README.md` has the scoring rules.
+   `evals/reach/README.md` has the scoring rules. The JSON report records a source-input fingerprint
+   covering the Rust code, Cargo manifests and lockfile, build workflow, and any tracked
+   `.cargo/config`, `.cargo/config.toml`, `rust-toolchain`, or `rust-toolchain.toml` file, the pinned
+   extractor binary and level, grading code, frozen cases, local evaluation fixtures (including
+   the `evals/languages` inventory), and configured test commands. Optional build-config patterns
+   may match no files; when present, they are fingerprinted and relevant untracked additions are
+   rejected. Glob inputs come from Git's tracked or staged file list; relevant dirty or
+   untracked source inputs are rejected, and build/cache output directories are excluded.
+   Only explicit package-version fields, local workspace lockfile versions, and the configured
+   `code-kb-core` path-dependency version are normalized. Dependency and build-configuration
+   changes still invalidate the evidence. Preflight compares it with current inputs; an ancestor
+   PASS does not cover changed inputs. Documentation and package-version-only changes do not
+   change this fingerprint. A semantic change needs a fresh local reach run.
 8. **Harness Dogfood Round (preflight step 11 requires it): one round per release.**
    The corpus check finds only output that changed since the previous release, so a defect that
    both releases share passes it. The dogfood round finds those wrong answers. Run exactly one
@@ -105,21 +117,38 @@ Run the automated pre-flight script, or execute each check manually:
    The script builds the local code and runs one Claude Code and one Codex session on detached
    worktrees of the project. The sessions use every tool and check each answer against the source.
    `code-kb` on `PATH` must be `target/release/code-kb`. The script writes
-   `target/release-dogfood/report.md`. Check each reported defect against the source, then list it
-   in the report as one of:
+   `target/release-dogfood/report.md` and captures its source-input fingerprint and tested
+   `code-kb` binary SHA-256 in `target/release-dogfood/evidence.json`. Reach and dogfood reports
+   identify repository HEAD separately from the measured binary hash; the hash does not claim that
+   the binary was built from that commit. After both sessions succeed, the script hashes their
+   non-empty `claude.md` and `codex.md` outputs under the round directory. Preflight checks the
+   recorded relative paths and hashes against those files. Check each reported defect against the
+   source, then list it in the report as one of:
    - `[fixed <commit>]`: the tool gave a wrong answer (a false statement, a wrong location, a
      wrong count, a crash). Fix it before the tag, add a regression test, and rerun the exact call
-     from the report to confirm the new answer. A fix does not need a new round.
+     from the report to confirm the new answer. Rebuild the fixed candidate first with
+     `cargo build --release` when using `target/release/code-kb`. Commit the fix and run `record-fix` while that commit
+     is `HEAD`; it executes the configured regression command and an exact call using an absolute
+     `code-kb` binary path, absolute `--root`, and a supported query/report command. It records the
+     tested source snapshot, binary path and SHA-256, outputs, and changed paths. The binary hash
+     identifies the bytes tested and does not prove build provenance. Preflight validates the
+     metadata and requires evidence for every later changed input. Review the recorded command and
+     output with the source. A documented source fix does not need another full or paid dogfood
+     round.
    - `[gap]`: the answer is true but incomplete, a heuristic misses or over-includes, or the
      session asks for a new feature. A gap does not block the release. List the gaps in the
      release notes, and tell the user after the release.
    - `[not a defect]` with the reason.
    - `[deferred: "<the user's own words>"]`: a wrong answer the user chose to ship.
 
-   Set `## Result: PASS` when no line is `[open]`. Do not run a second round for the same
+   Set `## Result: PASS` when no line is `[open]`. Do not run a second full round for the same
    release: the sessions always find something new, so a second round only delays the release.
-   Preflight fails when the report is not `PASS`, lists an `[open]` defect, or tested a commit that
-   is not an ancestor of `HEAD`. Commits after the round are allowed.
+   The report must contain exactly one result heading and one full `Commit:` line.
+   Later source fixes are covered only by their explicit regression and exact-call evidence; an
+   arbitrary semantic commit is not covered just because the original round is its ancestor.
+   Extractor identity or level changes need a new full round. Documentation and package-version-only
+   commits need no new round. Preflight fails when the report is not `PASS`, lists an `[open]`
+   defect, or tested a commit that is not an ancestor of `HEAD`.
 9. **New julie-extract version:** Do not tag it in `julie-extractors` first. Copy the local
    release build to `.tools/julie-extract`, set the version in `scripts/julie-pins.json` and
    `PINNED_JULIE_VERSION`, and run the dogfood round on that code-kb build. Tag and publish julie

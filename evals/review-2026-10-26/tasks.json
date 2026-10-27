@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "status": "reserved; no agent comparison run",
+  "fixture": "fixture/",
+  "tasks": [
+    {
+      "id": "python-registration-concept",
+      "language": "python",
+      "prompt": "A user asks where the account registration request is handled and which focused test exercises it. Find the intended request handler and test. Explain how you located them."
+    },
+    {
+      "id": "javascript-commonjs-test-reach",
+      "language": "javascript",
+      "prompt": "A defect appears only when a registration request passes through the application's exported CommonJS route builder. Identify the handler and the test that exercises it through the public export."
+    },
+    {
+      "id": "typescript-signature-change",
+      "language": "typescript",
+      "prompt": "The invitation service must receive a required display name. Identify the service signature, every caller on the route path, and the focused test that must be updated."
+    },
+    {
+      "id": "go-ambiguous-method-test-reach",
+      "language": "go",
+      "prompt": "The HTTP invitation endpoint should use the account invitation service, not the similarly named mail service. Trace the endpoint to the right method and identify the focused test."
+    },
+    {
+      "id": "java-framework-entry-test-reach",
+      "language": "java",
+      "prompt": "Find the controller method that sends an invitation, the service method it calls, and the test that reaches it through the controller."
+    },
+    {
+      "id": "csharp-default-argument-caller",
+      "language": "csharp",
+      "prompt": "The invitation service method is changing. Find the controller call and its test, preserving the omitted optional note argument."
+    },
+    {
+      "id": "rust-handler-test-reach",
+      "language": "rust",
+      "prompt": "Trace the public invitation handler to the service method and focused integration test. Report the exact test command supported by the fixture."
+    },
+    {
+      "id": "literal-config-exact-error",
+      "language": "json",
+      "prompt": "Find the exact error text returned when an account email is missing and the configured registration endpoint. Give the file and line for both values."
+    }
+  ]
+}

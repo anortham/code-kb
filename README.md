@@ -6,6 +6,11 @@
 
 Backed by the rich AST fact tables produced by [`julie-extractors`](https://github.com/anortham/julie-extractors), `code-kb` provides progressive disclosure, semantic symbol navigation, and surgical context slicing—enabling agents to navigate and understand codebases with responses **61–99% smaller than a full-file read** in [measured examples](docs/reviews/2026-09-26-project-evaluation.md#what-the-token-measurements-establish), without burning context on full file reads or noisy text grep. Agents edit with their native filesystem tools; code-kb automatically refreshes indexed files after filesystem changes.
 
+Support covers every language reported by the pinned Julie extractor, currently 42 code, markup,
+configuration, and data languages. Real-extractor fixtures check each language; advanced checks
+follow its call and type semantics. See [language support and tested coverage](docs/language-support.md)
+for the fixture inventory and remaining limits.
+
 ---
 
 ## Why code-kb?
@@ -433,8 +438,8 @@ code-kb facts property --path src/layouts/columnview.h --limit 5
 - `.ui` designer files and CMake files are not indexed.
 - A QML module imported through an alias resolves to a workspace file only when the alias
   is not a Qt module. `QtQuick.*` and `QtQml.*` aliases never name a workspace symbol.
-- A reference list caps at 200 rows. For a heavily used singleton, `refs` groups the
-  member accesses per file, one row per file with a count.
+- Reference pages contain at most 200 rows. Use `offset` to retrieve more rows. For a heavily
+  used singleton, `refs` groups member accesses per file, one row per file with a count.
 
 ---
 
@@ -450,9 +455,15 @@ git worktree you work in. The table does not repeat it. `path` and `file_path` a
 | `lookup_symbol` | Find symbols by name, qualified name (`Type::method`), prefix, or concept. A query that names no symbol exactly also lists the ranked matches under `No exact name match; N full-text matches`. The ranking credits each query term once from its strongest field (name, signature, docstring), weighted by the term's rarity across the index, plus kind and path priors; substrings inside identifiers are found (`sha256` finds `parseSha256Sidecar`). When nothing matches, the answer names the workspace and lists up to three similar names, definitions before imports; a one-word query that no row names exactly lists them before the ranked matches too (CLI `lookup --json`: `suggestions`). Test functions, test containers, and rows from test files are hidden unless `is_test` is true, except a row whose name equals the query. | `query` (req), `path` (opt), `kind` (opt), `is_test` (opt), `limit` (opt) | `name`, `q` |
 | `get_symbol_body` | Slices the source of a symbol from disk as written, with its declaration and decorators; a name with overloads in one class returns each overload. | Exactly one `symbol_name` or current-index `symbol_id`; `file_path` (opt, a file or a folder) | `symbol`, `name`, `path` |
 | `get_symbol_context` | Surgical bundle: target body + callee signatures + parameter types + tests; up to four overloads in one class return a bundle each, and more return an error that lists each overload's id. | Exactly one `symbol_name` or current-index `symbol_id`; `file_path` (opt, a file or a folder), `include_external` (opt, def: false) | `symbol`, `name`, `path` |
-| `find_references` | Callers: every indexed site of the name, each labeled proven, likely, unresolved, or excluded with its evidence and, for a call, its argument count (a count that no definition of the target accepts excludes a `likely` or `unresolved` Python, Java, C#, Go, Rust, Kotlin, or TypeScript call), plus a whole-word text count that accounts for every line of the name. After the sites, up to six sections list what else a change may reach: `Overrides` and `Overrides of` (same-named methods in subtypes and in ancestors), `Constructions` (lines that build a class, struct, or record), `Variant uses` (functions that name variants of an enum), `Registrations` (route facts that register a function as a handler), and `Tests that call it` (each with the command that runs it). The sections never change a label or a count; CLI `refs --json` adds them as arrays. Callees: the calls a symbol makes (filters external stdlib noise). Qualify overloaded names. | Exactly one `symbol_name` or current-index `symbol_id`; `file_path` (opt), `direction` ("callers" \| "callees", def: callers), `limit` (opt, def: 20, listed rows only), `include_external` (opt, def: false) | `symbol`, `name`, `file`, `path` |
-| `blast_radius` | Traces callers across multiple steps. Lists the tests the call graph reaches; when the walk finds none for one symbol, it lists the tests of its callers report, or the target itself when it is a test. When no test is found, it says whether a larger `depth` may find some, and to run the full test suite. | `symbol` or current-index `symbol_id` (opt), `file` (opt guard for an ID), `depth` (opt, def: 2), `limit` (opt) | `name`, `path`, `impact` |
-| `check_edit` | After you edit: the symbols whose shape changed against the session base (or `base`, or `HEAD`) and every site of each that your diff did not reach. Run it before you say a change is done. | `base` (opt, a git revision) | |
+| `find_references` | Callers: every indexed site of the name, each labeled proven, likely, unresolved, or excluded with its evidence and, for a call, its argument count (a count that no definition of the target accepts excludes a `likely` or `unresolved` Python, Java, C#, Go, Rust, Kotlin, or TypeScript call), plus a whole-word text count that accounts for every line of the name. After the sites, up to six sections list what else a change may reach: `Overrides` and `Overrides of` (same-named methods in subtypes and in ancestors), `Constructions` (lines that build a class, struct, or record), `Variant uses` (functions that name variants of an enum), `Registrations` (route facts that register a function as a handler), and `Tests that call it` (each with the command that runs it). The sections never change a label or a count; CLI `refs --json` adds them as arrays. Callees: the calls a symbol makes (filters external stdlib noise). Qualify overloaded names. | Exactly one `symbol_name` or current-index `symbol_id`; `file_path` (opt), `direction` ("callers" \| "callees", def: callers), `offset` (opt, def: 0), `limit` (opt, def: 20, listed rows only), `include_external` (opt, def: false) | `symbol`, `name`, `file`, `path` |
+| `blast_radius` | Traces callers across multiple steps. Lists the tests the call graph reaches; when the walk finds none for one symbol, it lists the tests of its callers report, or the target itself when it is a test. Incomplete coverage names a broader configured test command when project files identify one; otherwise it names the broader scope to verify. A larger `depth` may find more tests. The graph discovery ceiling remains 200 rows. | `symbol` or current-index `symbol_id` (opt), `file` (opt guard for an ID), `depth` (opt, def: 2), `offset` (opt, def: 0), `limit` (opt), `include_low_signal` (opt, def: false) | `name`, `path`, `impact` |
+| `check_edit` | After you edit: the symbols whose shape changed against the session base (or `base`, or `HEAD`) and every site of each that your diff did not reach. Run it before you say a change is done. | `base` (opt, a git revision), `offset` (opt, def: 0), `limit` (opt, def: 12) | |
+
+Pages use the current index. Restart at offset 0 after editing or rebuilding. `offset` applies
+to each displayed section independently; counts describe the complete report, subject to any
+explicit graph or edit-check cut. CLI `refs`, `blast-radius`, and `check` take the same `--offset`
+and `--limit` controls. `blast-radius --include-low-signal` exposes discovered imports, fields,
+properties, variables, parameters, modules, and namespaces that the default view hides.
 
 Four query commands have no MCP tool: `outline` (a folder's layout; `file_skeleton` on a folder returns the same), `search` (the ranked search with `--explain`), `facts` (routes, SQL queries, models, and config keys), and `stats` (token savings and tool errors).
 
@@ -470,7 +481,7 @@ check_edit: working tree against fb5628e809 (HEAD), 2 files changed
     In your diff (1): src/lib.rs:4
     Not in your diff, likely (1):
       src/lib.rs:8  `second`  passes 2 args; takes 3
-Not checked: calls inside macro arguments, functions passed as values.
+Not checked: calls inside macro arguments, callback invocation contracts. Indexed callable values are advisory dependencies.
 ```
 
 - `code-kb hook SessionStart` records the session base in

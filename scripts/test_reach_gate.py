@@ -1,5 +1,6 @@
 import contextlib
 import io
+import hashlib
 import json
 import re
 import shlex
@@ -8,8 +9,10 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import reach_gate
+import release_evidence
 import reach_truth
 import scip_decode
 
@@ -474,18 +477,43 @@ class RunTest(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
         self.stub = gate_fixture(self.root)
+        capture = patch.object(
+            reach_gate.release_evidence,
+            "capture",
+            return_value={"fingerprint": "sha256:" + "a" * 64},
+        )
+        capture.start()
+        self.addCleanup(capture.stop)
 
     def test_run_scores_cases_with_a_stub_binary_and_writes_both_reports(self):
         out = self.root / "out"
-        code = quiet_main(gate_args("run", self.root, self.stub, ["--repos", "demo", "--out", str(out)]))
+        evidence = {"fingerprint": "sha256:" + "a" * 64}
+        with patch.object(reach_gate.release_evidence, "capture", return_value=evidence):
+            code = quiet_main(
+                gate_args("run", self.root, self.stub, ["--repos", "demo", "--out", str(out)])
+            )
         self.assertEqual(code, 0)
         report = json.loads((out / "report.json").read_text())
         self.assertEqual(report["result"], "PASS")
+        self.assertEqual(report["source_commit"], report["commit"])
+        self.assertEqual(report["tested_binary"]["path"], str(self.stub.resolve()))
+        self.assertEqual(
+            report["tested_binary"]["sha256"],
+            hashlib.sha256(self.stub.read_bytes()).hexdigest(),
+        )
+        self.assertIn("evidence", report)
+        self.assertRegex(report["evidence"]["fingerprint"], r"^sha256:[0-9a-f]{64}$")
         self.assertEqual(report["languages"]["python"]["all"]["accounted"], 1.0)
         self.assertEqual(report["languages"]["python"]["all"]["proven_precision"], 1.0)
         text = (out / "report.md").read_text()
         self.assertEqual(text.rstrip("\n").splitlines()[-1], "## Result: PASS")
         self.assertRegex(text, r"(?m)^Commit: [0-9a-f]{7,40}$")
+        self.assertIn("Commit identifies source HEAD", text)
+        self.assertIn(
+            "Tested binary SHA-256: " + report["tested_binary"]["sha256"],
+            text,
+        )
+        self.assertRegex(text, r"(?m)^Input fingerprint: sha256:[0-9a-f]{64}$")
         self.assertNotIn("go-holdout", text)
 
     def test_run_exits_one_and_still_writes_the_report_when_a_mark_is_missed(self):
@@ -596,13 +624,70 @@ class PreflightStepTest(unittest.TestCase):
     def repo_with_commit(self, tmp):
         repo = Path(tmp)
         git("init", "-q", "-b", "main", cwd=repo)
-        git("commit", "-q", "--allow-empty", "-m", "one", cwd=repo)
+        git("config", "user.name", "Preflight Test", cwd=repo)
+        git("config", "user.email", "preflight@example.test", cwd=repo)
+        files = {
+            ".gitignore": "target/\n",
+            "Cargo.lock": "version = 4\n",
+            "crates/code-kb-core/src/lib.rs": "pub fn query() -> u32 { 1 }\n",
+            "scripts/reach_gate.py": "def score():\n    return 1\n",
+            "scripts/release_evidence.py": Path(__file__).with_name("release_evidence.py").read_text(),
+            "scripts/test_reach_gate.py": "",
+            "scripts/test_release_evidence.py": "",
+            "scripts/julie-pins.json": json.dumps({"version": "3.9.1"}),
+            "scripts/release-evidence-inputs.json": json.dumps(
+                {
+                    "schema": 1,
+                    "files": [
+                        "Cargo.lock",
+                        "crates/code-kb-core/src/lib.rs",
+                        "scripts/reach_gate.py",
+                        "scripts/release_evidence.py",
+                        "scripts/test_reach_gate.py",
+                        "scripts/test_release_evidence.py",
+                        "scripts/julie-pins.json",
+                        "scripts/release-evidence-inputs.json",
+                    ],
+                    "globs": ["crates/code-kb-core/**/*.rs"],
+                    "exclude_globs": ["**/target/**", "**/tmp/**"],
+                    "extractor_level": "references",
+                    "test_commands": ["python3 -c \"print('test passed')\""],
+                }
+            ),
+            "evals/reach/corpus.json": "[]\n",
+        }
+        for relative, content in files.items():
+            path = repo / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content)
+        extractor = repo / ".tools" / "julie-extract"
+        extractor.parent.mkdir(parents=True, exist_ok=True)
+        extractor.write_text("#!/bin/sh\nprintf 'julie-extract 3.9.1\\n'\n")
+        extractor.chmod(0o755)
+        git("add", "-A", cwd=repo)
+        git("commit", "-q", "-m", "one", cwd=repo)
         return repo, git("rev-parse", "HEAD", cwd=repo)
 
     def write_report(self, repo, commit, result):
         report = repo / "target" / "reach-gate" / "report.md"
         report.parent.mkdir(parents=True)
         report.write_text(f"# Reach gate report\n\nCommit: {commit}\n\n## Result: {result}\n")
+        binary = repo / "target" / "release" / "code-kb"
+        binary.parent.mkdir(parents=True, exist_ok=True)
+        binary.write_text("#!/bin/sh\nprintf 'code-kb test binary\\n'\n")
+        binary.chmod(0o755)
+        evidence = release_evidence.capture(repo, repo / ".tools" / "julie-extract")
+        (report.parent / "report.json").write_text(
+            json.dumps(
+                {
+                    "commit": commit,
+                    "source_commit": commit,
+                    "result": result,
+                    "tested_binary": release_evidence.binary_identity(binary),
+                    "evidence": evidence,
+                }
+            )
+        )
 
     def test_step_fails_without_a_report(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -635,6 +720,29 @@ class PreflightStepTest(unittest.TestCase):
             done = self.run_step(repo)
             self.assertEqual(done.returncode, 0, done.stderr)
             self.assertIn("OK", done.stdout)
+
+    def test_step_fails_when_a_semantic_input_changes_after_the_pass(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, commit = self.repo_with_commit(tmp)
+            self.write_report(repo, commit, "PASS")
+            source = repo / "crates/code-kb-core/src/lib.rs"
+            source.write_text("pub fn query() -> u32 { 2 }\n")
+            git("add", "-A", cwd=repo)
+            git("commit", "-q", "-m", "semantic change", cwd=repo)
+            done = self.run_step(repo)
+            self.assertEqual(done.returncode, 1)
+            self.assertIn("does not cover current inputs", done.stderr)
+
+    def test_step_fails_when_a_relevant_untracked_source_exists(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, commit = self.repo_with_commit(tmp)
+            self.write_report(repo, commit, "PASS")
+            source = repo / "crates/code-kb-core/src/untracked.rs"
+            source.write_text("pub fn untracked() {}\n")
+            done = self.run_step(repo)
+            self.assertEqual(done.returncode, 1)
+            self.assertIn("uncommitted release evidence inputs", done.stderr)
+            self.assertIn("crates/code-kb-core/src/untracked.rs", done.stderr)
 
 
 def scip_fixture(root):

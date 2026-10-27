@@ -117,6 +117,43 @@ pub fn reference_report_for_edit(
     )
 }
 
+pub(crate) fn reference_report_for_removed_member(
+    conn: &Connection,
+    root: &Path,
+    owner: &Symbol,
+    name: &str,
+) -> Result<ReferenceReport, QueryError> {
+    let mut target = owner.clone();
+    target.symbol_id = format!("removed-member:{}:{name}", owner.symbol_id);
+    target.name = name.to_string();
+    target.kind = "field".to_string();
+    target.signature = None;
+    target.parent_symbol_id = Some(owner.symbol_id.clone());
+    target.start_line = owner.start_line;
+    target.start_column = owner.start_column;
+    target.end_line = owner.start_line;
+    target.end_column = owner.start_column;
+    target.body_start_line = None;
+    target.body_start_column = None;
+    target.body_end_line = None;
+    target.body_end_column = None;
+    target.body_start_byte = None;
+    target.body_end_byte = None;
+    target.body_hash = None;
+    report_with(
+        conn,
+        root,
+        &target,
+        ACCOUNTING_TIME_LIMIT,
+        ReportMode {
+            text_scan: false,
+            arity_exclusion: false,
+            absent_target: true,
+        },
+        None,
+    )
+}
+
 /// The report `blast_radius` reads when its walk finds no caller or no test: the labels and the
 /// reach sections of `find_references`, without the whole-word text scan.
 pub fn reference_report_for_impact(
@@ -865,7 +902,7 @@ fn condition_terms(condition: &str) -> impl Iterator<Item = &str> {
 
 /// The namespace a C# `using` directive opens (`A.B` for `using A.B;` or `global using A.B;`),
 /// none for a `using static` or an alias.
-fn csharp_using_namespace(signature: &str) -> Option<&str> {
+pub(crate) fn csharp_using_namespace(signature: &str) -> Option<&str> {
     let signature = signature.trim();
     let directive = signature.strip_prefix("global ").unwrap_or(signature);
     let namespace = directive
@@ -874,6 +911,146 @@ fn csharp_using_namespace(signature: &str) -> Option<&str> {
         .trim_end_matches(';')
         .trim();
     (!namespace.starts_with("static ") && !namespace.contains('=')).then_some(namespace)
+}
+
+pub(crate) fn csharp_using_alias(signature: &str) -> Option<(&str, &str)> {
+    let signature = signature.trim();
+    let directive = signature.strip_prefix("global ").unwrap_or(signature);
+    let alias = directive
+        .strip_prefix("using ")?
+        .trim()
+        .trim_end_matches(';');
+    let (name, target) = alias.split_once('=')?;
+    let name = name.trim();
+    let target = target.trim();
+    (is_plain_identifier(name) && !target.is_empty()).then_some((name, target))
+}
+
+pub(crate) struct CSharpConstructorQualifier {
+    pub(crate) path: String,
+    pub(crate) global: bool,
+}
+
+pub(crate) fn csharp_constructor_qualifier(
+    line: &str,
+    column: usize,
+) -> Option<CSharpConstructorQualifier> {
+    let before = line.get(..column)?.trim_end();
+    let before = before.strip_suffix('.')?;
+    let split = before.rfind(char::is_whitespace)?;
+    let before_new = before.get(..split)?.trim_end();
+    let path = before.get(split + 1..)?;
+    let global = path.starts_with("global::");
+    let path = path.strip_prefix("global::").unwrap_or(path);
+    if path.is_empty() || !path.split('.').all(is_plain_identifier) {
+        return None;
+    }
+    let new_start = before_new.rfind("new")?;
+    if before_new.get(new_start..)? != "new"
+        || before_new[..new_start]
+            .chars()
+            .next_back()
+            .is_some_and(is_word_char)
+    {
+        return None;
+    }
+    Some(CSharpConstructorQualifier {
+        path: path.to_string(),
+        global,
+    })
+}
+
+pub(crate) fn csharp_namespace_for_symbol(
+    conn: &Connection,
+    symbol_id: &str,
+) -> Result<String, QueryError> {
+    let mut stmt = conn.prepare(SYMBOL_CHAIN_SQL)?;
+    let chain = stmt
+        .query_map(params![symbol_id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut parts: Vec<String> = chain
+        .into_iter()
+        .filter(|(kind, _)| kind == "namespace")
+        .map(|(_, name)| name)
+        .collect();
+    parts.reverse();
+    Ok(parts.join("."))
+}
+
+pub(crate) fn csharp_type_qualification_for_symbol(
+    conn: &Connection,
+    symbol_id: &str,
+) -> Result<Vec<String>, QueryError> {
+    let mut stmt = conn.prepare(SYMBOL_CHAIN_SQL)?;
+    let chain = stmt
+        .query_map(params![symbol_id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut path = Vec::new();
+    let mut containing_types = Vec::new();
+    for (depth, (kind, name)) in chain.into_iter().enumerate() {
+        if kind == "namespace" {
+            path.push(name);
+        } else if depth > 0 && CSHARP_TYPE_KINDS.contains(&kind.as_str()) {
+            containing_types.push(name);
+        }
+    }
+    path.reverse();
+    containing_types.reverse();
+    path.extend(containing_types);
+    Ok(path)
+}
+
+pub(crate) type CSharpTypeQualifications = (Vec<(String, Vec<String>)>, bool);
+
+pub(crate) fn csharp_type_qualifications_for_name(
+    conn: &Connection,
+    name: &str,
+) -> Result<CSharpTypeQualifications, QueryError> {
+    let mut stmt = conn.prepare(
+        "SELECT symbol_id FROM symbols
+         WHERE language = 'csharp' AND name = ?1
+           AND kind IN ('class', 'struct', 'interface', 'enum', 'record', 'delegate')
+         LIMIT 13",
+    )?;
+    let ids = stmt
+        .query_map(params![name], |row| row.get::<_, String>(0))?
+        .collect::<Result<Vec<_>, _>>()?;
+    let complete = ids.len() <= 12;
+    let mut paths = Vec::with_capacity(ids.len());
+    for id in ids {
+        paths.push((id.clone(), csharp_type_qualification_for_symbol(conn, &id)?));
+    }
+    Ok((paths, complete))
+}
+
+pub(crate) fn csharp_type_prefix_in_scope(
+    conn: &Connection,
+    caller_id: &str,
+    prefix: &str,
+) -> Result<bool, QueryError> {
+    conn.query_row(
+        "WITH RECURSIVE chain(symbol_id, depth) AS (
+             SELECT ?1, 0
+             UNION ALL
+             SELECT s.parent_symbol_id, chain.depth + 1
+             FROM symbols s JOIN chain ON s.symbol_id = chain.symbol_id
+             WHERE s.parent_symbol_id IS NOT NULL AND chain.depth < 32
+         )
+         SELECT EXISTS(
+             SELECT 1 FROM symbols child JOIN chain
+               ON child.parent_symbol_id = chain.symbol_id
+             WHERE chain.depth > 0 AND child.language = 'csharp'
+               AND child.name = ?2
+               AND child.kind IN ('class', 'struct', 'interface', 'enum', 'record', 'delegate')
+         )",
+        params![caller_id, prefix],
+        |row| row.get(0),
+    )
+    .map_err(QueryError::from)
 }
 
 /// The type a C# extension method extends: `IEnumerable` for `Foo(this IEnumerable<T> source)`.
@@ -2115,7 +2292,14 @@ impl<'a> Accounting<'a> {
              LEFT JOIN symbols s ON s.symbol_id = r.from_symbol_id
              LEFT JOIN files f ON f.file_id = r.file_id
              WHERE t.name = ?1 AND r.kind != 'imports'
-               AND COALESCE(f.language, s.language, '') NOT IN ({docs})"
+               AND (
+                    COALESCE(f.language, s.language, '') NOT IN ({docs})
+                    OR r.kind IN ('calls', 'call', 'instantiates')
+                    OR COALESCE(f.language, s.language, '') = 'css'
+                       AND CASE WHEN json_valid(r.metadata_json)
+                                THEN json_extract(r.metadata_json, '$.referenceType') END
+                           IN ('custom-property', 'composes')
+               )"
             ))?;
             let mut query = stmt.query(params![name])?;
             while let Some(row) = query.next()? {
@@ -2163,7 +2347,8 @@ impl<'a> Accounting<'a> {
                  FROM identifiers i
                  LEFT JOIN symbols s ON s.symbol_id = i.containing_symbol_id
                  WHERE i.name = ?1 AND COALESCE(s.kind, '') != 'import'
-                   AND i.language NOT IN ({docs})"
+                   AND (i.language NOT IN ({docs})
+                        OR i.kind IN ('call', 'calls', 'instantiates'))"
             ))?;
             let mut query = stmt.query(params![name])?;
             while let Some(row) = query.next()? {
@@ -2496,6 +2681,9 @@ impl<'a> Accounting<'a> {
                 "other language",
                 false,
             )));
+        }
+        if let Some(verdict) = self.csharp_qualified_constructor(row, target)? {
+            return Ok(Some(verdict));
         }
         if spec
             .group
@@ -2931,6 +3119,19 @@ impl<'a> Accounting<'a> {
                 false,
             ));
         }
+        if row.kind == "member_access"
+            && rivals.is_empty()
+            && let Some(target) = self.absent.as_ref()
+            && matches!(target.kind.as_str(), "function" | "method" | "constructor")
+            && let Some(parent) = target.parent_symbol_id.as_deref()
+            && let Some(owner) = crate::queries::get_symbol_by_id(self.conn, parent)?
+            && CLASS_LIKE_KINDS.contains(&owner.kind.as_str())
+            && owner.language == row.language
+            && let Some(receiver) = row.qualifier()
+            && self.receiver_type(row, receiver)?.as_deref() == Some(owner.name.as_str())
+        {
+            return Ok(Verdict::new(SiteLabel::Proven, "receiver type", false));
+        }
         if let Some(object) = self.object_assigned_on(row, group_definitions, rivals)? {
             return Ok(Verdict::new(
                 SiteLabel::Likely,
@@ -3116,7 +3317,7 @@ impl<'a> Accounting<'a> {
             owner_signature,
             class_name: assigned_object(symbol),
             top_level: symbol.parent_symbol_id.is_none(),
-            callable: true,
+            callable: matches!(symbol.kind.as_str(), "function" | "method" | "constructor"),
             free: false,
             module_value: false,
         })
@@ -3337,9 +3538,27 @@ impl<'a> Accounting<'a> {
     ) -> Result<Vec<&'d Definition>, QueryError> {
         let module_receiver = self.receiver_is_python_module(row)?;
         let bare_csharp = row.language == "csharp" && !row.has_qualifier();
+        let absent_member = self.absent.as_ref().is_some_and(|target| {
+            target.kind == "field"
+                || matches!(target.kind.as_str(), "function" | "method" | "constructor")
+        });
+        let receiver_type = match (row.kind.as_str(), absent_member) {
+            ("member_access", true) => row
+                .qualifier()
+                .map(|receiver| self.receiver_type(row, receiver))
+                .transpose()?
+                .flatten(),
+            _ => None,
+        };
         let mut rivals = Vec::new();
         for &other in others {
             if !row.can_reach(other) || module_receiver && other.owner_name.is_some() {
+                continue;
+            }
+            if let Some(type_name) = receiver_type.as_deref()
+                && let Some(symbol) = crate::queries::get_symbol_by_id(self.conn, &other.symbol_id)?
+                && !self.receiver_type_related(row, type_name, std::slice::from_ref(&symbol))?
+            {
                 continue;
             }
             let csharp_type = other.language == "csharp"
@@ -3393,6 +3612,112 @@ impl<'a> Accounting<'a> {
                 false,
             )
         }))
+    }
+
+    fn csharp_qualified_constructor(
+        &self,
+        row: &NameRow,
+        target: &Symbol,
+    ) -> Result<Option<Verdict>, QueryError> {
+        if row.language != "csharp"
+            || target.language != "csharp"
+            || !row.is_call()
+            || row.has_qualifier()
+            || !CSHARP_TYPE_KINDS.contains(&target.kind.as_str())
+        {
+            return Ok(None);
+        }
+        let Some(column) = row.site_column else {
+            return Ok(None);
+        };
+        let Some(source) =
+            caller_source_through_site(self.root, &row.path, row.site_line, row.site_line)
+        else {
+            return Ok(None);
+        };
+        let Some(line) = source.lines().next() else {
+            return Ok(None);
+        };
+        let Some(qualifier) = csharp_constructor_qualifier(line, column) else {
+            return Ok(None);
+        };
+        if !qualifier.global {
+            let alias = qualifier.path.split('.').next().unwrap_or_default();
+            let aliases = self.with_statement(CSHARP_USINGS_SQL, |stmt| {
+                stmt.query_map(params![row.path], |r| r.get::<_, String>(0))?
+                    .collect::<Result<Vec<_>, _>>()
+            })?;
+            if aliases
+                .iter()
+                .filter_map(|using| csharp_using_alias(using))
+                .any(|(name, _)| name == alias)
+            {
+                return Ok(Some(Verdict::new(
+                    SiteLabel::Unresolved,
+                    format!("qualified type alias `{alias}` is not resolved"),
+                    false,
+                )));
+            }
+        }
+        let caller_namespace = match row.caller_id.as_deref() {
+            Some(caller) => csharp_namespace_for_symbol(self.conn, caller)?,
+            None => {
+                return Ok(Some(Verdict::new(
+                    SiteLabel::Unresolved,
+                    "qualified C# type path has no indexed caller scope",
+                    false,
+                )));
+            }
+        };
+        if !qualifier.global && !caller_namespace.is_empty() {
+            return Ok(Some(Verdict::new(
+                SiteLabel::Unresolved,
+                "relative C# type qualification is not resolved",
+                false,
+            )));
+        }
+        if !qualifier.global
+            && let Some(caller) = row.caller_id.as_deref()
+            && csharp_type_prefix_in_scope(
+                self.conn,
+                caller,
+                qualifier.path.split('.').next().unwrap_or_default(),
+            )?
+        {
+            return Ok(Some(Verdict::new(
+                SiteLabel::Unresolved,
+                "qualified C# path may name a nested type in the caller scope",
+                false,
+            )));
+        }
+        let target_path = csharp_type_qualification_for_symbol(self.conn, &target.symbol_id)?;
+        if qualifier.path == target_path.join(".") {
+            return Ok(Some(Verdict::new(
+                SiteLabel::Proven,
+                "qualified type",
+                true,
+            )));
+        }
+        let (candidates, complete) = csharp_type_qualifications_for_name(self.conn, &target.name)?;
+        if candidates
+            .iter()
+            .any(|(id, path)| id != &target.symbol_id && path.join(".") == qualifier.path)
+        {
+            return Ok(Some(Verdict::new(
+                SiteLabel::Excluded,
+                "qualified path matches another indexed C# type",
+                false,
+            )));
+        }
+        Ok(Some(Verdict::new(
+            SiteLabel::Unresolved,
+            if complete {
+                "qualified C# type path does not match an indexed definition"
+            } else {
+                "qualified C# type path is ambiguous across indexed definitions"
+            },
+            false,
+        )))
     }
 
     /// A bare C# use of a target that julie kept from an `#if !X` branch, in a file that always
@@ -3508,19 +3833,7 @@ impl<'a> Accounting<'a> {
             },
             None => symbol_id,
         };
-        let chain = self.with_statement(SYMBOL_CHAIN_SQL, |stmt| {
-            stmt.query_map(params![start], |r| {
-                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
-            })?
-            .collect::<Result<Vec<_>, _>>()
-        })?;
-        let mut parts: Vec<String> = chain
-            .into_iter()
-            .filter(|(kind, _)| kind == "namespace")
-            .map(|(_, name)| name)
-            .collect();
-        parts.reverse();
-        Ok(parts.join("."))
+        csharp_namespace_for_symbol(self.conn, start)
     }
 
     /// Whether the receiver chain of a Python row names a module of the project: `flask.json`

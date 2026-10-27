@@ -42,19 +42,20 @@ Moving large functions into more files would not by itself improve correctness.
 When repeated source parsing compensates for missing AST facts, prefer adding
 the reusable fact in julie-extractors over another independent parser here.
 
-**Language coverage needs explicit review.** The owner's requirement is support
+**The initial review found uneven language coverage.** The owner's requirement is support
 for every language julie-extractors supports. Indexing and basic navigation use
 the shared extracted records, but advanced analysis adds language-specific rules.
 Extracting a language does not establish that every applicable check works for
-it. The current implementation has concrete coverage limits:
+it. The starting implementation had these concrete coverage limits:
 
-| Check | Current language/type gate | Evidence |
+| Check | Starting language/type gate | Evidence |
 | --- | --- | --- |
 | Accepted argument ranges | Python, Java, C#, Go, Rust, Kotlin, TypeScript/TSX | `rule_language` in [arity.rs](../../crates/code-kb-core/src/reference_report/arity.rs) returns no rule for other languages. Applicability depends on the language's call semantics. |
 | Named-parameter rename detection | Python, Kotlin, C#, Swift | `NAMED_ARGUMENT_LANGUAGES` in [signatures.rs](../../crates/code-kb-core/src/edit_check/signatures.rs) omits other languages with named arguments, including PHP, Scala, Ruby, and Dart. |
 | Field changes and affected constructions | Rust structs, Go structs, Python dataclasses, Java records | `owner_of` in [fields.rs](../../crates/code-kb-core/src/edit_check/fields.rs) rejects other owners, including C# records, Kotlin data classes, and Swift structs. |
 
-These are verified examples, not a complete language-by-capability inventory.
+These are baseline examples, not a complete language-by-capability inventory. The
+follow-up inventory is [language support](../language-support.md).
 Language-specific rules are necessary where semantics differ. Missing equivalent
 capabilities in other applicable languages are coverage gaps. The initial
 Python-first recommendation over-weighted the Flask dogfood examples; the next
@@ -178,7 +179,7 @@ retrieval improvements.
 The review covers recent changes, tool contracts and plugin guidance, index
 lifecycle, shared query architecture, evaluation/release evidence, and local
 Linux verification. The repository's CI matrix also covers macOS and Windows;
-those platforms were not rerun locally for this review.
+those platforms were not rerun locally for the initial review.
 
 **Repairs included with this review.**
 
@@ -213,7 +214,7 @@ smoke benchmark measured final RSS of 29.24 MB before and 29.77 MB after the
 changes, with its changed-file probe visible in about 212 ms in both runs.
 These are small local measurements, not large-repository performance claims.
 
-**Final verification:** 1,663 Rust tests, 149 Python harness tests, and 20 Node
+**Initial review verification:** 1,663 Rust tests, 149 Python harness tests, and 20 Node
 plugin tests passed. The release build, workspace Clippy with warnings denied,
 format check, whitespace check, and AGENTS/CLAUDE synchronization check passed.
 `check_edit` identified the two expected shape changes: new reconciliation error
@@ -221,3 +222,65 @@ variants and the watcher's private failure state. The error uses were reviewed
 and compiled; no missed required edit was found. Its unresolved sites and known
 coverage omissions were not treated as proof of safety. No paid agent comparison,
 push, release, or Windows/macOS test run was performed.
+
+**Local cross-language follow-up.** The approved implementation keeps the seven
+MCP tools and their CLI equivalents. Both guidance files now explicitly require
+every pinned Julie language and distinguish missing facts from semantic N/A.
+[Language support](../language-support.md) records all 42 IDs, real-extractor
+fixtures, deeper semantic tests, and remaining limits.
+
+- Named-argument and range checks now cover more language families, including
+  PHP, Ruby, Scala, Dart, F#, VB.NET, R, and PowerShell where their semantics apply.
+  PHP extra positional arguments, R/PowerShell prefixes, Swift external labels,
+  C declarations, receiver arguments, defaults, and variadics have valid-call
+  regressions. A total count cannot stand in for named-argument binding.
+- Construction checks cover Kotlin data classes, Scala case classes, C# records,
+  Swift memberwise initialization, C/C++ aggregates, Zig structs, F# typed
+  records, Elixir structs, and Ruby keyword structs. Defaults, custom
+  constructors, copy updates, and known foreign owners retain their own rules.
+- Removed members include indexed class variables, properties, constants,
+  instance attributes, and callable attributes. Changed callable values are
+  advisory dependencies; their framework invocation is not proven. Typed
+  foreign receivers, assignments, overload ambiguity, and same-line calls have
+  precision regressions.
+- Erlang/GDScript and one-line structural skeletons, embedded HTML calls, and CSS
+  custom properties/functions now consume facts the initial fixtures exposed.
+  CSS compatibility corrections preserve IDs, source ranges, and stored written
+  signatures. They use bounded indexed queries and exact source evidence.
+- Folded reports can be paged through MCP and CLI. Page sizes remain bounded;
+  callers and edit-check offsets can pass 200, while impact traversal keeps its
+  explicit 200-row discovery ceiling. Incomplete test reach supplies a broader
+  configured command or names the missing runner evidence.
+- Release evidence fingerprints semantic inputs and records binary identity
+  separately from source HEAD. A later fix needs current-commit regression and
+  exact-call evidence; dogfood PASS also requires the actual finalized session
+  outputs. Docs/package-version-only continuations remain permitted.
+
+This establishes broader tested behavior, not complete grammar coverage. Julie
+still omits some CSS call identifiers and formal facts, can lose a declaration's
+Unicode spelling, and does not provide a dialect-safe SQL argument contract.
+Curried F# calls and dynamic binding remain conservative. The inventory records
+these limits without calling them N/A or presenting an empty result as proof of
+safety.
+
+Eight fresh task prompts and separate oracles are prepared under
+`evals/review-2026-10-26/`, with an updated comparison procedure. No paid agent
+comparison was run. That comparison and reusable upstream facts remain the next
+sources of evidence for retrieval and test-reach work; the current changes do
+not establish a task-success, time, or token-cost improvement.
+
+
+**Cross-language Linux verification:** 1,818 Rust tests, 172 Python harness tests,
+and 20 plugin tests passed. The release build, workspace Clippy with warnings
+denied, formatting, whitespace, and guidance synchronization passed. The final
+private helper and lint cleanup passed 391 focused edit tests. The
+connected MCP and freshly built CLI post-edit reports were reviewed: 27 intended
+shape changes, with no proven or likely stale site outside the diff. Unresolved
+name matches and known omissions are not proof of safety.
+
+Fresh MCP processes ran the same 20 calls on the same final worktree and index:
+skeleton, lookup, context, callers, and impact, four calls each. Retained RSS
+was 23.64 MiB before and 24.46 MiB after; anonymous memory was 13.86 and
+14.50 MiB. The measured binaries were `af37420953d7` and `fbde44e013a80`.
+These small local measurements do not establish large-repository performance
+or an agent-task outcome. Windows verification follows the clean source commit.

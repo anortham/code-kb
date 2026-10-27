@@ -181,6 +181,7 @@ echo "OK (PASS for code-kb ${WS_VER} with julie-extract ${PIN_VER})"
 # 10. Reach gate: ground-truth score of this build on the pinned corpus
 echo -n "[10/11] Checking the reach gate report... "
 REACH_REPORT="${REPO_ROOT}/target/reach-gate/report.md"
+REACH_JSON="${REPO_ROOT}/target/reach-gate/report.json"
 REACH_COMMIT=$(sed -n 's/^Commit: //p' "${REACH_REPORT}" 2>/dev/null || true)
 REACH_ERROR=""
 if [[ ! -f "${REACH_REPORT}" ]]; then
@@ -189,6 +190,8 @@ elif ! grep -q "^## Result: PASS$" "${REACH_REPORT}"; then
   REACH_ERROR="the result is not '## Result: PASS'"
 elif ! git merge-base --is-ancestor "${REACH_COMMIT}" HEAD 2>/dev/null; then
   REACH_ERROR="the report commit '${REACH_COMMIT}' is not an ancestor of HEAD"
+elif ! python3 scripts/release_evidence.py validate-reach --repo "${REPO_ROOT}" --report "${REACH_JSON}"; then
+  REACH_ERROR="the PASS report does not match current semantic inputs; rerun scripts/reach_gate.py run"
 fi
 if [[ -n "${REACH_ERROR}" ]]; then
   echo "FAIL"
@@ -200,6 +203,7 @@ echo "OK (PASS at ${REACH_COMMIT:0:7})"
 # 11. Dogfood round in real harness sessions with no open defect
 echo -n "[11/11] Checking the dogfood report... "
 DOGFOOD_REPORT="${REPO_ROOT}/target/release-dogfood/report.md"
+DOGFOOD_EVIDENCE="${REPO_ROOT}/target/release-dogfood/evidence.json"
 DOGFOOD_COMMIT=$(sed -n 's/^Commit: //p' "${DOGFOOD_REPORT}" 2>/dev/null || true)
 DOGFOOD_ERROR=""
 if [[ ! -f "${DOGFOOD_REPORT}" ]]; then
@@ -212,6 +216,8 @@ elif ! grep -q "julie-extract ${PIN_VER}$" "${DOGFOOD_REPORT}"; then
   DOGFOOD_ERROR="the round did not use julie-extract ${PIN_VER}"
 elif ! git merge-base --is-ancestor "${DOGFOOD_COMMIT}" HEAD 2>/dev/null; then
   DOGFOOD_ERROR="the round commit '${DOGFOOD_COMMIT}' is not an ancestor of HEAD"
+elif ! python3 scripts/release_evidence.py validate-dogfood --repo "${REPO_ROOT}" --evidence "${DOGFOOD_EVIDENCE}" --report "${DOGFOOD_REPORT}"; then
+  DOGFOOD_ERROR="the one full round or its recorded local fixes do not cover current inputs"
 fi
 if [[ -n "${DOGFOOD_ERROR}" ]]; then
   echo "FAIL"

@@ -186,7 +186,7 @@ pub(super) fn reach_sections<'a>(
     }
     match target.kind.as_str() {
         "class" | "struct" | "record" => {
-            sections.constructions = constructions(root, &target.name, sites);
+            sections.constructions = constructions(root, target, sites);
         }
         "enum" => {
             let variants = enum_variant_names(conn, target)?;
@@ -1727,31 +1727,53 @@ fn implemented_trait(text: &str) -> Option<&str> {
     None
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum BracedLanguage {
     Rust,
     Go,
+    C,
+    Cpp,
+    Zig,
+    FSharp,
+    Elixir,
 }
 
 fn braced_language(path: &str) -> Option<BracedLanguage> {
-    match path.rsplit_once('.')?.1 {
+    let extension = path.rsplit_once('.')?.1;
+    if extension == "C" {
+        return Some(BracedLanguage::Cpp);
+    }
+    match extension.to_ascii_lowercase().as_str() {
         "rs" => Some(BracedLanguage::Rust),
         "go" => Some(BracedLanguage::Go),
+        "zig" => Some(BracedLanguage::Zig),
+        "fs" | "fsi" | "fsx" => Some(BracedLanguage::FSharp),
+        "ex" | "exs" => Some(BracedLanguage::Elixir),
+        "c" => Some(BracedLanguage::C),
+        "cc" | "cpp" | "cxx" | "h" | "hh" | "hpp" | "hxx" | "h++" | "c++" => {
+            Some(BracedLanguage::Cpp)
+        }
         _ => None,
     }
 }
 
 /// The lines that build a value of the target type, one row per line, files in the order of
 /// their first site. A site counts when it is a call, `new`, or the constructor step's
-/// `builds the class`, or, in Rust and Go, when it is a type use that opens a literal (`Foo {`). julie writes some
-/// literals (inside `vec![…]`, as a field value) as a variable read, so that counts too.
+/// `builds the class`, or a type use that opens an aggregate initializer in Rust, Go, C, or C++.
+/// Constructor-shaped `uses` rows are checked against source for Kotlin, Scala, Swift, and C#.
 /// Excluded sites never count.
-fn constructions(root: &Path, name: &str, sites: &[LabeledSite]) -> Vec<ConstructionSite> {
+fn constructions(root: &Path, target: &Symbol, sites: &[LabeledSite]) -> Vec<ConstructionSite> {
+    let name = target.name.as_str();
     let mut hits: Vec<(usize, &str, usize)> = Vec::new();
     let mut literals: BTreeMap<&str, Vec<(usize, usize, usize)>> = BTreeMap::new();
+    let mut calls: BTreeMap<&str, Vec<(usize, usize)>> = BTreeMap::new();
     for (index, labeled) in sites.iter().enumerate() {
         let site = &labeled.site;
-        if labeled.label == SiteLabel::Excluded {
+        let target_resolution = format!("resolves to `{}` ({}:", target.name, target.path);
+        let excluded_type_resolves_to_target = site.kind == "type_usage"
+            && labeled.basis.starts_with(&target_resolution)
+            && labeled.basis.ends_with(')');
+        if labeled.label == SiteLabel::Excluded && !excluded_type_resolves_to_target {
             continue;
         }
         let Some(line) = site.start_line else {
@@ -1761,14 +1783,23 @@ fn constructions(root: &Path, name: &str, sites: &[LabeledSite]) -> Vec<Construc
             || labeled.basis == BUILDS_THE_CLASS
         {
             hits.push((index, &site.path, line));
-        } else if matches!(site.kind.as_str(), "type_usage" | "variable_ref")
-            && braced_language(&site.path).is_some()
-            && let Some(column) = site.start_column
+        } else if matches!(site.kind.as_str(), "type_usage" | "variable_ref" | "uses")
+            && let Some(language) = braced_language(&site.path)
+            && (site.start_column.is_some()
+                || matches!(language, BracedLanguage::Zig | BracedLanguage::Elixir)
+                || (site.kind == "uses"
+                    && matches!(language, BracedLanguage::C | BracedLanguage::Cpp)))
         {
+            let column = site.start_column.unwrap_or_default();
             literals
                 .entry(&site.path)
                 .or_default()
                 .push((index, line, column));
+        } else if (site.kind == "uses"
+            || (site.kind == "type_usage" && constructor_call_language(&site.path) == Some("ruby")))
+            && constructor_call_language(&site.path).is_some()
+        {
+            calls.entry(&site.path).or_default().push((index, line));
         }
     }
     for (path, candidates) in literals {
@@ -1789,6 +1820,28 @@ fn constructions(root: &Path, name: &str, sites: &[LabeledSite]) -> Vec<Construc
             }
         }
     }
+    for (path, candidates) in calls {
+        let (Some(language), Ok(text)) = (
+            constructor_call_language(path),
+            std::fs::read_to_string(root.join(path)),
+        ) else {
+            continue;
+        };
+        let starts = line_starts(&text);
+        for (index, line) in candidates {
+            let builds = line
+                .checked_sub(1)
+                .and_then(|index| starts.get(index))
+                .and_then(|&start| {
+                    text.get(start..)
+                        .map(|rest| rest.split('\n').next().unwrap_or_default())
+                })
+                .is_some_and(|source_line| line_calls_constructor(source_line, name, language));
+            if builds {
+                hits.push((index, path, line));
+            }
+        }
+    }
     let mut first_site: HashMap<&str, usize> = HashMap::new();
     for &(index, path, _) in &hits {
         let first = first_site.entry(path).or_insert(index);
@@ -1802,6 +1855,65 @@ fn constructions(root: &Path, name: &str, sites: &[LabeledSite]) -> Vec<Construc
             line,
         })
         .collect()
+}
+
+fn constructor_call_language(path: &str) -> Option<&'static str> {
+    match path.rsplit_once('.')?.1.to_ascii_lowercase().as_str() {
+        "cs" => Some("csharp"),
+        "kt" | "kts" => Some("kotlin"),
+        "scala" | "sc" => Some("scala"),
+        "swift" => Some("swift"),
+        "rb" => Some("ruby"),
+        _ => None,
+    }
+}
+
+fn line_calls_constructor(line: &str, name: &str, language: &str) -> bool {
+    let code = super::variant_names::code_only(line, language);
+    let mut calls = 0;
+    for (at, _) in code.char_indices() {
+        if !code[at..].starts_with(name)
+            || (at > 0 && code[..at].ends_with(is_identifier_char))
+            || code[at + name.len()..].starts_with(is_identifier_char)
+        {
+            continue;
+        }
+        let before = code[..at].trim_end();
+        if language == "csharp" && !starts_csharp_new(before) {
+            continue;
+        }
+        let mut after = code[at + name.len()..].trim_start();
+        if after.starts_with('<') {
+            let Some(after_generics) = after_balanced(after, '<', '>') else {
+                continue;
+            };
+            after = after_generics.trim_start();
+        }
+        if matches!(language, "scala" | "swift") {
+            after = after
+                .strip_prefix(".apply")
+                .or_else(|| after.strip_prefix(".init"))
+                .map_or(after, str::trim_start);
+        }
+        if language == "ruby" {
+            after = after.strip_prefix(".new").map_or(after, str::trim_start);
+        }
+        if after.starts_with('(') {
+            calls += 1;
+        }
+    }
+    calls > 0
+}
+
+fn starts_csharp_new(before: &str) -> bool {
+    before.rfind("new").is_some_and(|at| {
+        let prefix = &before[..at];
+        let after = before[at + "new".len()..].trim();
+        !prefix.ends_with(is_identifier_char)
+            && after
+                .chars()
+                .all(|character| is_identifier_char(character) || matches!(character, '.' | ':'))
+    })
 }
 
 /// The lines where a Rust type use opens braces that close into a pattern (`let Foo { a, b } =
@@ -1860,9 +1972,82 @@ fn line_builds(
     name: &str,
     language: BracedLanguage,
 ) -> bool {
-    name_columns(text, line_start, column, name, language)
-        .into_iter()
-        .any(|at| opens_a_literal(text, line_start, at, name, language))
+    let spellings =
+        std::iter::once(name).chain(name.rsplit('.').next().filter(|last| *last != name));
+    spellings.into_iter().any(|spelling| {
+        name_columns(text, line_start, column, spelling, language)
+            .into_iter()
+            .any(|at| {
+                if language == BracedLanguage::FSharp {
+                    fsharp_typed_record_literal(text, line_start, at).is_some()
+                } else {
+                    opens_a_literal(text, line_start, at, spelling, language)
+                }
+            })
+    })
+}
+
+fn fsharp_typed_record_literal(text: &str, line_start: usize, column: usize) -> Option<usize> {
+    let line = text.get(line_start..)?.split('\n').next()?;
+    let after_site = line.get(column..)?;
+    let type_end = after_site
+        .char_indices()
+        .take_while(|(_, character)| is_identifier_char(*character) || *character == '.')
+        .map(|(at, character)| at + character.len_utf8())
+        .last()?;
+    let after_type = after_site.get(type_end..)?;
+    let before_type = line.get(..column)?.trim_end();
+    let equals = after_type.trim_start();
+    if let Some(rest) = equals.strip_prefix('=') {
+        let before_colon = before_type.rfind(':')?;
+        if before_type[..before_colon].trim_end().ends_with(':') {
+            return None;
+        }
+        let declaration = before_type[..before_colon].trim_start();
+        if ["let ", "use ", "member ", "val "]
+            .iter()
+            .any(|prefix| declaration.starts_with(prefix))
+        {
+            let value = rest.trim_start();
+            let brace = line.len() - value.len();
+            if line.get(brace..)?.starts_with('{') {
+                return Some(brace);
+            }
+        }
+    }
+    let colon = before_type.len().checked_sub(1)?;
+    if before_type.as_bytes().get(colon) != Some(&b':')
+        || before_type[..colon].trim_end().ends_with(':')
+    {
+        return None;
+    }
+    let close = before_type[..colon].trim_end().len().checked_sub(1)?;
+    if before_type.as_bytes().get(close) != Some(&b'}') {
+        return None;
+    }
+    let mut depth = 0usize;
+    let mut opening = None;
+    for (at, character) in before_type[..=close].char_indices().rev() {
+        match character {
+            '}' => depth += 1,
+            '{' => {
+                depth = depth.checked_sub(1)?;
+                if depth == 0 {
+                    opening = Some(at);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let opening = opening?;
+    let prefix = line.get(..opening)?;
+    let equals = prefix.rfind('=')?;
+    let declaration = prefix[..equals].trim_start();
+    ["let ", "use ", "member ", "val "]
+        .iter()
+        .any(|prefix| declaration.starts_with(prefix))
+        .then_some(opening)
 }
 
 pub(super) fn line_starts(text: &str) -> Vec<usize> {
@@ -1916,13 +2101,23 @@ fn name_columns(
 fn non_code_end(line: &str, open: usize, language: BracedLanguage) -> Option<usize> {
     let bytes = line.as_bytes();
     let rest = &line[open..];
+    if language == BracedLanguage::Cpp
+        && !line[..open].ends_with(is_identifier_char)
+        && let Some(end) = cpp_raw_string_end(line, open)
+    {
+        return Some(end);
+    }
     match bytes[open] {
+        b'#' if language == BracedLanguage::Elixir => Some(line.len()),
         b'/' if rest.starts_with("//") => Some(line.len()),
         b'/' if rest.starts_with("/*") => Some(block_comment_end(
             bytes,
             open,
             language == BracedLanguage::Rust,
         )),
+        b'(' if language == BracedLanguage::FSharp && rest.starts_with("(*") => {
+            Some(fsharp_comment_end(line, open))
+        }
         b'"' => Some(quoted_end(bytes, open)),
         b'`' if language == BracedLanguage::Go => Some(
             rest[1..]
@@ -1937,6 +2132,54 @@ fn non_code_end(line: &str, open: usize, language: BracedLanguage) -> Option<usi
         }
         _ => None,
     }
+}
+
+fn fsharp_comment_end(line: &str, open: usize) -> usize {
+    let bytes = line.as_bytes();
+    let mut at = open + 2;
+    let mut depth = 1usize;
+    while at + 1 < bytes.len() {
+        match &bytes[at..at + 2] {
+            b"(*" => {
+                depth += 1;
+                at += 2;
+            }
+            b"*)" => {
+                depth -= 1;
+                at += 2;
+                if depth == 0 {
+                    return at;
+                }
+            }
+            _ => at += 1,
+        }
+    }
+    line.len()
+}
+
+fn cpp_raw_string_end(line: &str, open: usize) -> Option<usize> {
+    let rest = &line[open..];
+    let prefix = ["u8R\"", "uR\"", "UR\"", "LR\"", "R\""]
+        .into_iter()
+        .find(|prefix| rest.starts_with(prefix))?;
+    let delimiter_start = open + prefix.len();
+    let opening = line[delimiter_start..]
+        .find('(')
+        .map(|offset| delimiter_start + offset)?;
+    let delimiter = &line[delimiter_start..opening];
+    if delimiter.len() > 16
+        || delimiter
+            .chars()
+            .any(|c| c.is_whitespace() || matches!(c, '(' | ')' | '\\'))
+    {
+        return None;
+    }
+    let closing = format!("){delimiter}\"");
+    Some(
+        line[opening + 1..]
+            .find(&closing)
+            .map_or(line.len(), |offset| opening + 1 + offset + closing.len()),
+    )
 }
 
 /// The byte after the character literal (`'x'`, `'"'`, `'\''`, `'\u{22}'`) that opens at `open`;
@@ -2007,27 +2250,166 @@ fn brace_after_name(
     language: BracedLanguage,
 ) -> Option<usize> {
     let at = line_start + column;
-    let after = text
+    let raw_after = text
         .get(at..)
         .and_then(|rest| rest.strip_prefix(name))
         .and_then(|rest| rest.split('\n').next())?;
-    if names_a_type(&text[line_start..at], language) {
+    if language == BracedLanguage::C {
+        return c_aggregate_brace(&text[line_start..at], raw_after)
+            .map(|offset| at + name.len() + offset);
+    }
+    if language == BracedLanguage::FSharp {
+        return None;
+    }
+    if language == BracedLanguage::Zig {
+        let before = text.get(line_start..at)?.trim_end();
+        if names_a_type(before, language)
+            || before
+                .rfind("fn ")
+                .is_some_and(|function| function > before.rfind('{').unwrap_or(0))
+        {
+            return None;
+        }
+        let whitespace = raw_after.len() - raw_after.trim_start().len();
+        return raw_after
+            .trim_start()
+            .starts_with('{')
+            .then(|| at + name.len() + whitespace);
+    }
+    if language == BracedLanguage::Elixir {
+        let before = text.get(line_start..at)?.trim_end();
+        let percent = before.rfind('%')?;
+        let module = &before[percent + 1..];
+        if module.contains([' ', '\t'])
+            || !module
+                .chars()
+                .all(|character| is_identifier_char(character) || character == '.')
+        {
+            return None;
+        }
+        let whitespace = raw_after.len() - raw_after.trim_start().len();
+        return raw_after
+            .trim_start()
+            .starts_with('{')
+            .then(|| at + name.len() + whitespace);
+    }
+    if language == BracedLanguage::Cpp
+        && let Some(offset) = cpp_object_brace(raw_after)
+    {
+        return Some(at + name.len() + offset);
+    }
+    if names_a_type(&text[line_start..at], language)
+        && !(language == BracedLanguage::Cpp && cpp_value_follows_type(raw_after))
+    {
         return None;
     }
     let (open, close) = match language {
-        BracedLanguage::Rust => ('<', '>'),
+        BracedLanguage::Rust | BracedLanguage::Cpp => ('<', '>'),
         BracedLanguage::Go => ('[', ']'),
+        BracedLanguage::C
+        | BracedLanguage::Zig
+        | BracedLanguage::FSharp
+        | BracedLanguage::Elixir => return None,
     };
-    let mut rest = after.trim_start();
-    let arguments = match language {
-        BracedLanguage::Rust => rest.strip_prefix("::").unwrap_or(rest),
-        BracedLanguage::Go => rest,
-    };
-    if arguments.starts_with(open) {
-        rest = after_balanced(arguments, open, close)?.trim_start();
+    let mut offset = raw_after.len() - raw_after.trim_start().len();
+    let mut rest = &raw_after[offset..];
+    if language == BracedLanguage::Rust && rest.starts_with("::") {
+        rest = &rest[2..];
+        offset += 2;
     }
-    rest.starts_with('{')
-        .then(|| at + name.len() + (after.len() - rest.len()))
+    if rest.starts_with(open) {
+        let after_arguments = after_balanced(rest, open, close)?;
+        offset += rest.len() - after_arguments.len();
+        rest = after_arguments;
+    }
+    let whitespace = rest.len() - rest.trim_start().len();
+    rest = rest.trim_start();
+    offset += whitespace;
+    rest.starts_with('{').then(|| at + name.len() + offset)
+}
+
+fn c_aggregate_brace(before: &str, after: &str) -> Option<usize> {
+    let leading = after.len() - after.trim_start().len();
+    let after = &after[leading..];
+    if let Some(rest) = after.strip_prefix(')') {
+        let open = before.rfind('(')?;
+        let type_prefix = before[open + 1..].trim();
+        if type_prefix
+            .split_whitespace()
+            .any(|word| !matches!(word, "const" | "volatile" | "struct" | "union" | "enum"))
+        {
+            return None;
+        }
+        let before_open = before[..open].trim_end();
+        let last_word = before_open
+            .rsplit(|c: char| !is_identifier_char(c))
+            .next()
+            .unwrap_or_default();
+        if before_open.ends_with(is_identifier_char)
+            && !matches!(last_word, "return" | "throw" | "sizeof" | "_Alignof")
+        {
+            return None;
+        }
+        if !before_open.is_empty()
+            && !before_open.ends_with(is_identifier_char)
+            && !before_open.ends_with(['=', ',', '(', ':', '?'])
+        {
+            return None;
+        }
+        let whitespace = rest.len() - rest.trim_start().len();
+        return rest
+            .trim_start()
+            .starts_with('{')
+            .then_some(leading + 1 + whitespace);
+    }
+    let brace = after.find('{')?;
+    let prefix = &after[..brace];
+    if prefix.contains([';', '}', '(', ')']) || !prefix.contains('=') {
+        return None;
+    }
+    let declaration = prefix.split_once('=')?.0.trim();
+    (!declaration.is_empty()).then_some(leading + brace)
+}
+
+fn cpp_value_follows_type(after: &str) -> bool {
+    cpp_object_brace(after).is_some()
+}
+
+fn cpp_object_brace(after: &str) -> Option<usize> {
+    let mut offset = after.len() - after.trim_start().len();
+    let mut rest = &after[offset..];
+    if rest.starts_with('<') {
+        let after_generics = after_balanced(rest, '<', '>')?;
+        offset += rest.len() - after_generics.len();
+        rest = after_generics;
+    }
+    let whitespace = rest.len() - rest.trim_start().len();
+    offset += whitespace;
+    rest = rest.trim_start();
+    let indirection = rest.len() - rest.trim_start_matches(['*', '&']).len();
+    offset += indirection;
+    rest = rest.trim_start_matches(['*', '&']);
+    let whitespace = rest.len() - rest.trim_start().len();
+    offset += whitespace;
+    rest = rest.trim_start();
+    let name_len = rest
+        .char_indices()
+        .take_while(|(_, c)| is_identifier_char(*c))
+        .map(|(at, c)| at + c.len_utf8())
+        .last()?;
+    offset += name_len;
+    rest = &rest[name_len..];
+    let whitespace = rest.len() - rest.trim_start().len();
+    offset += whitespace;
+    rest = rest.trim_start();
+    if rest.starts_with('=') {
+        offset += 1;
+        rest = &rest[1..];
+        let whitespace = rest.len() - rest.trim_start().len();
+        offset += whitespace;
+        rest = rest.trim_start();
+    }
+    rest.starts_with('{').then_some(offset)
 }
 
 /// The text after the group that opens `text` with `open` and closes with the matching `close`;
@@ -2080,7 +2462,7 @@ fn last_word(text: &str) -> &str {
 }
 
 fn strip_qualifier(before: &str, language: BracedLanguage) -> Option<&str> {
-    let separator = if language == BracedLanguage::Rust {
+    let separator = if matches!(language, BracedLanguage::Rust | BracedLanguage::Cpp) {
         "::"
     } else {
         "."
@@ -3342,6 +3724,53 @@ mod tests {
         ] {
             assert!(!builds(line, "Foo", BracedLanguage::Go), "{line}");
         }
+    }
+
+    #[test]
+    fn a_c_aggregate_initializer_is_built_but_a_type_declaration_is_not() {
+        for line in [
+            "struct Point point = {.x = 1};",
+            "Point point = {.x = 1};",
+            "return (struct Point){.x = 1};",
+            "(Point){.x = 1};",
+        ] {
+            assert!(builds(line, "Point", BracedLanguage::C), "{line}");
+        }
+        for line in [
+            "struct Point { int x; };",
+            "struct Point make() {",
+            "void make(struct Point point) {",
+        ] {
+            assert!(!builds(line, "Point", BracedLanguage::C), "{line}");
+        }
+    }
+
+    #[test]
+    fn a_cpp_aggregate_initializer_is_built_but_type_declarations_and_functions_are_not() {
+        for line in [
+            "Point point{.x = 1};",
+            "Point point = {.x = 1};",
+            "return ns::Point{.x = 1};",
+            "struct Point point{.x = 1};",
+            "Point<int> point{.x = 1};",
+        ] {
+            assert!(builds(line, "Point", BracedLanguage::Cpp), "{line}");
+        }
+        for line in [
+            "struct Point { int x; };",
+            "Point make() {",
+            "struct Point make() {",
+        ] {
+            assert!(!builds(line, "Point", BracedLanguage::Cpp), "{line}");
+        }
+    }
+
+    #[test]
+    fn aggregate_and_constructor_languages_accept_case_insensitive_extensions() {
+        assert_eq!(braced_language("Point.C"), Some(BracedLanguage::Cpp));
+        assert_eq!(braced_language("Point.CPP"), Some(BracedLanguage::Cpp));
+        assert_eq!(braced_language("point.c"), Some(BracedLanguage::C));
+        assert_eq!(constructor_call_language("Point.CS"), Some("csharp"));
     }
 
     fn builds_beside_the_first(line: &str, name: &str, language: BracedLanguage) -> bool {

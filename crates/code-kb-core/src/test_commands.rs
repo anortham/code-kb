@@ -22,9 +22,9 @@ pub struct TestSpec<'a> {
     pub classes: &'a [TestClass<'a>],
 }
 
-/// Finds run commands. A marker file (`Cargo.toml`, `go.mod`, `package.json`, `pom.xml`,
-/// `build.gradle`, `build.gradle.kts`, `gradlew`) is read from disk at most once per folder for
-/// the life of the finder. A Rust or Go test file is read at most once for the same time.
+/// Finds test commands. Runner markers and pytest configuration are read at most once per folder
+/// for the life of the finder; project-file entries for .NET are listed once. A Rust or Go test
+/// file is read at most once for the same time.
 pub struct CommandFinder {
     root: PathBuf,
     folders: HashMap<String, Folder>,
@@ -54,6 +54,7 @@ struct Cargo {
 #[derive(Clone)]
 struct PackageJson {
     runner: Option<Runner>,
+    has_test_script: bool,
 }
 
 struct Folder {
@@ -62,6 +63,9 @@ struct Folder {
     package_json: Option<PackageJson>,
     build: Option<Build>,
     gradlew: bool,
+    gradlew_bat: bool,
+    pytest_config: bool,
+    dotnet_test_scope: bool,
 }
 
 impl Folder {
@@ -72,6 +76,21 @@ impl Folder {
                 .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
         };
         let has = |name: &str| dir.join(name).is_file();
+        let pyproject = text("pyproject.toml");
+        let setup_cfg = text("setup.cfg");
+        let tox_ini = text("tox.ini");
+        let pytest_config = has("pytest.ini")
+            || pyproject.as_deref().is_some_and(|content| {
+                content
+                    .lines()
+                    .any(|line| line.trim() == "[tool.pytest.ini_options]")
+            })
+            || setup_cfg
+                .as_deref()
+                .is_some_and(|content| content.lines().any(|line| line.trim() == "[tool:pytest]"))
+            || tox_ini
+                .as_deref()
+                .is_some_and(|content| content.lines().any(|line| line.trim() == "[pytest]"));
         Folder {
             cargo: text("Cargo.toml").map(|toml| Cargo {
                 package: package_name(&toml),
@@ -80,6 +99,7 @@ impl Folder {
             go_mod: has("go.mod"),
             package_json: text("package.json").map(|json| PackageJson {
                 runner: runner(&json),
+                has_test_script: has_test_script(&json),
             }),
             build: if has("pom.xml") {
                 Some(Build::Maven)
@@ -89,6 +109,24 @@ impl Folder {
                 None
             },
             gradlew: has("gradlew"),
+            gradlew_bat: has("gradlew.bat"),
+            pytest_config,
+            dotnet_test_scope: fs::read_dir(dir)
+                .ok()
+                .into_iter()
+                .flatten()
+                .filter_map(Result::ok)
+                .any(|entry| {
+                    let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
+                    if is_dotnet_solution_marker(&name) {
+                        true
+                    } else if is_dotnet_project_marker(&name) {
+                        fs::read_to_string(entry.path())
+                            .is_ok_and(|source| is_dotnet_test_project(&source))
+                    } else {
+                        false
+                    }
+                }),
         }
     }
 }
@@ -115,6 +153,41 @@ fn has_workspace(toml: &str) -> bool {
         .any(|line| line == "[workspace]" || line.starts_with("[workspace."))
 }
 
+fn is_dotnet_solution_marker(name: &str) -> bool {
+    [".sln", ".slnx"]
+        .iter()
+        .any(|extension| name.ends_with(extension))
+}
+
+fn is_dotnet_project_marker(name: &str) -> bool {
+    [".csproj", ".fsproj", ".vbproj"]
+        .iter()
+        .any(|extension| name.ends_with(extension))
+}
+
+fn is_dotnet_test_project(source: &str) -> bool {
+    let normalized = source
+        .chars()
+        .filter(|character| !character.is_whitespace())
+        .flat_map(char::to_lowercase)
+        .collect::<String>();
+    if normalized.contains("<istestproject>false</istestproject>") {
+        return false;
+    }
+    normalized.contains("<istestproject>true</istestproject>")
+        || normalized.contains("microsoft.net.test.sdk")
+}
+
+fn gradle_test_command(windows: bool, gradlew: bool, gradlew_bat: bool) -> String {
+    if windows && gradlew_bat {
+        "gradlew.bat test".to_string()
+    } else if gradlew {
+        "./gradlew test".to_string()
+    } else {
+        "gradle test".to_string()
+    }
+}
+
 fn runner(package_json: &str) -> Option<Runner> {
     let json: serde_json::Value = serde_json::from_str(package_json).ok()?;
     let script = json["scripts"]["test"].as_str().unwrap_or_default();
@@ -135,6 +208,18 @@ fn runner(package_json: &str) -> Option<Runner> {
     } else {
         None
     }
+}
+
+fn has_test_script(package_json: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(package_json)
+        .ok()
+        .and_then(|json| {
+            json["scripts"]["test"]
+                .as_str()
+                .map(str::trim)
+                .map(str::to_string)
+        })
+        .is_some_and(|script| !script.is_empty())
 }
 
 fn parent_dir(path: &str) -> &str {
@@ -551,6 +636,43 @@ impl CommandFinder {
             }),
             _ => None,
         }
+    }
+
+    /// The configured command for the broader suite nearest to `path`.
+    pub fn broader_test_command(&mut self, path: Option<&str>) -> Option<String> {
+        let directory = path.map(parent_dir).unwrap_or("");
+        self.nearest(directory, |folder| {
+            if let Some(cargo) = &folder.cargo {
+                Some(if cargo.workspace {
+                    "cargo test --workspace".to_string()
+                } else {
+                    "cargo test".to_string()
+                })
+            } else if folder.go_mod {
+                Some("go test ./...".to_string())
+            } else if folder
+                .package_json
+                .as_ref()
+                .is_some_and(|package| package.has_test_script)
+            {
+                Some("npm test".to_string())
+            } else if matches!(folder.build, Some(Build::Maven)) {
+                Some("mvn test".to_string())
+            } else if matches!(folder.build, Some(Build::Gradle)) {
+                Some(gradle_test_command(
+                    cfg!(windows),
+                    folder.gradlew,
+                    folder.gradlew_bat,
+                ))
+            } else if folder.pytest_config {
+                Some("pytest".to_string())
+            } else if folder.dotnet_test_scope {
+                Some("dotnet test".to_string())
+            } else {
+                None
+            }
+        })
+        .map(|(directory, command)| in_folder(&directory, command))
     }
 
     fn folder(&mut self, dir: &str) -> &Folder {
@@ -1670,6 +1792,121 @@ mod tests {
                 None,
                 "{language}"
             );
+        }
+    }
+
+    #[test]
+    fn a_broader_command_uses_only_a_configured_package_script() {
+        let configured = project(&[("package.json", r#"{"scripts":{"test":"node --test"}}"#)]);
+        let unconfigured = project(&[("package.json", r#"{"scripts":{"build":"node"}}"#)]);
+        assert_eq!(
+            CommandFinder::new(configured.path()).broader_test_command(None),
+            Some("npm test".into())
+        );
+        assert_eq!(
+            CommandFinder::new(unconfigured.path()).broader_test_command(None),
+            None
+        );
+    }
+
+    #[test]
+    fn a_broader_command_uses_the_nearest_configured_folder() {
+        let project = project(&[
+            ("package.json", r#"{"scripts":{"test":"node --test"}}"#),
+            (
+                "packages/test suite/package.json",
+                r#"{"scripts":{"test":"node --test"}}"#,
+            ),
+        ]);
+        let mut finder = CommandFinder::new(project.path());
+
+        assert_eq!(
+            finder.broader_test_command(Some("packages/test suite/test/a.test.js")),
+            Some("cd 'packages/test suite' && npm test".into())
+        );
+    }
+
+    #[test]
+    fn a_broader_python_command_requires_pytest_configuration() {
+        let configured = project(&[(
+            "pyproject.toml",
+            "[project]\nname = 'configured'\n[tool.pytest.ini_options]\npython_files = ['test_*.py']\n",
+        )]);
+        let unconfigured = project(&[("pyproject.toml", "[project]\nname = 'plain'\n")]);
+
+        assert_eq!(
+            CommandFinder::new(configured.path()).broader_test_command(Some("tests/test_a.py")),
+            Some("pytest".into())
+        );
+        assert_eq!(
+            CommandFinder::new(unconfigured.path()).broader_test_command(Some("tests/test_a.py")),
+            None
+        );
+    }
+
+    #[test]
+    fn broader_dotnet_command_recognizes_solutions_and_test_project_evidence() {
+        for marker in ["app.sln", "app.slnx"] {
+            let project = project(&[(marker, "")]);
+            assert_eq!(
+                CommandFinder::new(project.path()).broader_test_command(None),
+                Some("dotnet test".into()),
+                "{marker}"
+            );
+        }
+
+        for marker in ["app.csproj", "app.fsproj", "app.vbproj"] {
+            for source in [
+                "<Project><PropertyGroup><IsTestProject>true</IsTestProject></PropertyGroup></Project>",
+                "<Project><ItemGroup><PackageReference Include=\"Microsoft.NET.Test.Sdk\" Version=\"17.0\" /></ItemGroup></Project>",
+            ] {
+                let project = project(&[(marker, source)]);
+                assert_eq!(
+                    CommandFinder::new(project.path()).broader_test_command(None),
+                    Some("dotnet test".into()),
+                    "{marker} {source}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn broader_dotnet_command_does_not_treat_a_production_project_as_test_scope() {
+        for source in [
+            "<Project />",
+            "<Project><PropertyGroup><IsTestProject>false</IsTestProject></PropertyGroup></Project>",
+        ] {
+            let production_only = project(&[("app.csproj", source)]);
+            assert_eq!(
+                CommandFinder::new(production_only.path()).broader_test_command(None),
+                None,
+                "{source}"
+            );
+        }
+
+        let sibling_test = project(&[
+            ("app.csproj", "<Project />"),
+            (
+                "tests/tests.csproj",
+                "<Project><PropertyGroup><IsTestProject>true</IsTestProject></PropertyGroup></Project>",
+            ),
+        ]);
+        assert_eq!(
+            CommandFinder::new(sibling_test.path()).broader_test_command(Some("src/app.cs")),
+            None
+        );
+    }
+
+    #[test]
+    fn gradle_broader_command_uses_the_native_windows_wrapper() {
+        for (windows, gradlew, gradlew_bat, expected) in [
+            (false, true, true, "./gradlew test"),
+            (true, true, true, "gradlew.bat test"),
+            (true, false, true, "gradlew.bat test"),
+            (false, false, true, "gradle test"),
+            (true, false, false, "gradle test"),
+        ] {
+            assert_eq!(gradle_test_command(windows, gradlew, gradlew_bat), expected);
         }
     }
 

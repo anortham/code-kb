@@ -61,7 +61,8 @@ and the affected routing/asset checks under `tests/plugin/`.
   - The interface of a file that is not small: `file_skeleton` before any full read.
   - Callers before a change to a function or type: `find_references`.
   - The tests to run for a change: `blast_radius`.
-  - A concept with an unknown name: `search_symbols`.
+  - A concept with an unknown name: `lookup_symbol` with a few query words; its ranked fallback
+    returns full-text matches when no exact name is listed.
 - [ ] Name the native cases just as explicitly:
   - literal text
   - a small file read or edited as a whole
@@ -112,42 +113,81 @@ and the affected routing/asset checks under `tests/plugin/`.
 ### 3. Test code-kb against competent native retrieval
 
 **Starting assets:** `scripts/benchmark_quality.py` and its tests for existing
-query checks. Reuse captured agent transcripts for task outcomes; no new
-benchmark platform is required. Razorback's TODO owns the shared task selection
-and comparison protocol; this task owns the retrieval-specific evidence.
+query checks, plus the fresh source-backed tasks in
+`evals/review-2026-10-26/tasks.json`. Keep their answer key in
+`evals/review-2026-10-26/oracles.json` out of agent context. The fixture set is
+reserved and has no agent outcomes yet. Historical reach and replay cases stay
+regression data; they are not counted as fresh held-out tasks. Reuse captured
+agent transcripts for task outcomes; no new benchmark platform is required.
+Razorback's TODO owns the shared task selection and comparison protocol; this
+task owns the retrieval-specific evidence.
 
-- [ ] Run after the code-kb release that pins julie-extract 3.6.0. Earlier builds
+- [ ] Run after the approved cross-language fixes land. Verify the candidate's
+  extractor against `scripts/julie-pins.json`; do not rely on an old binary's
+  printed version alone. The current pin is julie-extract 3.9.1. Earlier builds
   miss callers through untyped locals (for example `let x = f()?; x.method()`), so a
   comparison on them measures a gap that is already fixed.
 - [ ] Compare three arms on the same repository revisions and task inputs:
   - native tools only
   - native tools plus code-kb under the current guidance
-  - native tools plus code-kb under the Task 1 guidance
+  - native tools plus code-kb under the revised Task 1 guidance
 
   The second arm is the baseline for the code-kb adoption check in Task 1. Keep
   model, effort, harness, workflow instructions, and memory configuration constant.
   Use isolated run configuration; do not change the user's global agent setup to
   run a trial.
+- [ ] Before any paid run, execute the fixture extraction check and keep its output with the
+  run record:
+  ```bash
+  evals/review-2026-10-26/verify-extraction.sh
+  ```
+  The task inputs cover Python framework routing, JavaScript CommonJS exports, a TypeScript
+  multi-file signature change, an ambiguous Go method, Java and C# caller/test paths, a Rust
+  integration test, and a literal JSON configuration query. The local check validates only facts
+  the pinned extractor actually writes; it does not claim that code-kb finds every framework or
+  CommonJS test path.
 - [ ] Repeat each task at least three times per arm, and alternate the arm order
   between repeats. Agent runs vary from run to run, and a fixed order adds drift: in
   the 2026-09-24 latency check, a fixed order alone showed a false 5-15% slowdown.
-  Report the spread, not only the mean.
+  Use these orders so every arm appears in each position:
+  - Repeat 1: native, current guidance, revised guidance.
+  - Repeat 2: revised guidance, current guidance, native.
+  - Repeat 3: current guidance, native, revised guidance.
+  Keep each task, fixture commit, model, effort, harness, and isolated memory/configuration the
+  same across its nine runs. Record the spread, not only the mean.
 - [ ] For each run, record per step whether the step matches a code-kb case from
   Task 1 and whether the agent called code-kb for it first.
 - [ ] Include exact-name lookup, a literal error/config query, an unfamiliar
   concept, an indirect or ambiguous caller, and a change needing surrounding
-  module state. Predefine the relevant source locations and acceptance behavior
-  without exposing the solution to the agent.
+  module state. Use the held-out task prompts and separate oracles in
+  `evals/review-2026-10-26/`; predefine the relevant source locations and acceptance behavior
+  without exposing the solution to the agent. If replacing or adding a task, freeze its oracle
+  before the first run and include it in the task-set fingerprint.
 - [ ] Check whether each route finds the necessary source, callers, and tests;
   record omissions, misleading matches, subsequent full-file reads, and repairs.
   On selected queries, record whether historical plans appear and displace useful
   current source. Preserve Markdown discovery for documentation/skill repositories.
+- [ ] Record an outcome row per run with fixture commit, code-kb and extractor versions, arm,
+  repeat and order, tool calls, input/output/cache tokens when the harness exposes them, query and
+  cold-index latency, retries, follow-up reads, acceptance result, missed required edits, and
+  repair rounds. Mark unavailable values unavailable. Do not infer them from response length.
+  Report measured task outcomes separately from code-kb's full-file compression estimate and from
+  the scripted local extraction check.
+  Copy `evals/review-2026-10-26/run-log-template.csv` to
+  `target/review-comparison/<run-id>/results.csv` before the first run. Append one row for each
+  task/arm/repeat and store that run's prompt and transcript in a matching directory. The template
+  has no result rows until a comparison actually runs.
 - [ ] Inspect each result against current source and existing tests. Reference
   and blast-radius predictions must not be treated as proof that omitted paths
   or tests are irrelevant. Use the acceptance checks to judge the change.
 - [ ] Acceptance: results show task success and measured cost by query/task type,
   including cold-start costs and failure cases. Comparisons use realistic targeted
-  reads, not an assumed baseline that reads every referenced file in full.
+  reads, not an assumed baseline that reads every referenced file in full. A task type stays
+  code-kb-first when its code-kb arm uses code-kb on matching steps and succeeds at no higher
+  measured cost. Consider native-first only when both code-kb arms use code-kb and still have
+  worse success or cost. If runs disagree, cost is unavailable, or the task was not used as
+  directed, call the result inconclusive and keep the guidance under review; low adoption alone
+  does not show that code-kb failed.
 
 ### 4. Decide the next scope from results
 

@@ -1,0 +1,88 @@
+{
+  "schema": 1,
+  "extractor_pin_file": "scripts/julie-pins.json",
+  "extractor_level": "references",
+  "files": [
+    "scripts/reach_gate.py",
+    "scripts/reach_truth.py",
+    "scripts/scip_decode.py",
+    "scripts/release_evidence.py",
+    "scripts/release-preflight.sh",
+    "scripts/release-dogfood.sh",
+    "scripts/release-dogfood-prompt.md",
+    ".github/workflows/ci.yml",
+    "scripts/test_reach_gate.py",
+    "scripts/test_release_evidence.py",
+    "scripts/julie-pins.json",
+    "scripts/release-evidence-inputs.json",
+    "Cargo.toml",
+    "Cargo.lock",
+    "crates/code-kb-core/Cargo.toml",
+    "crates/code-kb-cli/Cargo.toml",
+    "scripts/release-corpus-check.py",
+    "evals/reach/corpus.json",
+    "evals/review-2026-10-26/README.md",
+    "evals/review-2026-10-26/tasks.json",
+    "evals/review-2026-10-26/oracles.json",
+    "evals/review-2026-10-26/run-log-template.csv",
+    "evals/review-2026-10-26/verify-extraction.sh",
+    "evals/review-2026-10-26/fixture/Cargo.toml",
+    "evals/review-2026-10-26/fixture/Cargo.lock",
+    "evals/languages/fixtures.json"
+  ],
+  "globs": [
+    "evals/languages/**/*",
+    "crates/code-kb-core/**/*.rs",
+    "crates/code-kb-cli/**/*.rs",
+    "evals/reach/cases/**/*.json",
+    "evals/review-2026-10-26/fixture/**/*.rs",
+    "evals/review-2026-10-26/fixture/**/*.py",
+    "evals/review-2026-10-26/fixture/**/*.cjs",
+    "evals/review-2026-10-26/fixture/**/*.ts",
+    "evals/review-2026-10-26/fixture/**/*.go",
+    "evals/review-2026-10-26/fixture/**/*.java",
+    "evals/review-2026-10-26/fixture/**/*.cs",
+    "evals/review-2026-10-26/fixture/**/*.json",
+    "evals/review-2026-10-26/fixture/**/*.toml"
+  ],
+  "optional_globs": [
+    ".cargo/config",
+    ".cargo/config.toml",
+    "rust-toolchain",
+    "rust-toolchain.toml"
+  ],
+  "exclude_globs": [
+    "target/**",
+    "**/target/**",
+    "tmp/**",
+    "**/tmp/**",
+    "build/**",
+    "**/build/**",
+    "dist/**",
+    "**/dist/**",
+    "node_modules/**",
+    "**/node_modules/**",
+    "__pycache__/**",
+    "**/__pycache__/**",
+    ".git/**",
+    "**/.git/**",
+    ".code-kb/**",
+    "**/.code-kb/**"
+  ],
+  "normalize_cargo_package_versions": true,
+  "normalize_cargo_path_dependency_versions": [
+    {
+      "file": "crates/code-kb-cli/Cargo.toml",
+      "section": "dependencies",
+      "name": "code-kb-core",
+      "path": "../code-kb-core"
+    }
+  ],
+  "test_commands": [
+    "python3 -m unittest discover -s scripts -p test_reach_gate.py",
+    "python3 -m unittest discover -s scripts -p test_release_evidence.py",
+    "cargo test --workspace --locked",
+    "evals/review-2026-10-26/verify-extraction.sh",
+    "cargo test --manifest-path evals/review-2026-10-26/fixture/Cargo.toml handler_sends_invitation"
+  ]
+}

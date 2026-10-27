@@ -1,0 +1,1 @@
+run_id,task_id,fixture_commit,arm,repeat,order,model,effort,harness,guidance_revision,memory_config,code_kb_version,julie_version,tool_calls,code_kb_calls,input_tokens,output_tokens,cache_tokens,wall_seconds,cold_index_seconds,query_p50_ms,query_p95_ms,retries,follow_up_reads,acceptance,missed_required_edits,repair_rounds,tool_adoption,metric_availability,notes

@@ -1,0 +1,9 @@
+{
+  "routes": {
+    "registration": "/register",
+    "invitation": "/invite"
+  },
+  "errors": {
+    "email_required": "account email required"
+  }
+}

@@ -22,6 +22,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import release_evidence
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CORPUS_PATH = REPO_ROOT / "evals/reach/corpus.json"
 CASES_DIR = REPO_ROOT / "evals/reach/cases"
@@ -232,7 +234,11 @@ def render_markdown(report):
         "# Reach gate report",
         "",
         f"Commit: {report.get('commit', 'unknown')}",
+        f"Source commit: {report.get('source_commit', report.get('commit', 'unknown'))}",
+        "Commit identifies source HEAD; it does not prove how the tested binary was built.",
+        f"Input fingerprint: {report.get('evidence', {}).get('fingerprint', 'unknown')}",
         f"Binary: {report.get('binary', 'unknown')} ({report.get('version', 'unknown')})",
+        f"Tested binary SHA-256: {report.get('tested_binary', {}).get('sha256', 'unknown')}",
         f"Generated: {report.get('generated', 'unknown')}",
         f"Answer shape: {', '.join(report['shapes']) or 'none'}",
         f"Scored repos: {', '.join(report['scored']) or 'none'}",
@@ -398,6 +404,8 @@ def cmd_materialize(args):
 
 def cmd_run(args):
     corpus = load_corpus(args.corpus)
+    tested_binary = release_evidence.binary_identity(args.binary)
+    source_commit = head_commit()
     names = [entry["name"] for entry in corpus]
     wanted = args.repos.split(",") if args.repos else names
     for name in wanted:
@@ -431,10 +439,13 @@ def cmd_run(args):
             })
             print(f"{name}: {number}/{len(cases['symbols'])} {symbol['id']} {status}", file=sys.stderr)
     report = build_report(results, scored, names, args.show_holdout)
-    report["commit"] = head_commit()
-    report["binary"] = str(args.binary)
+    report["commit"] = source_commit
+    report["source_commit"] = source_commit
+    report["binary"] = tested_binary["path"]
+    report["tested_binary"] = tested_binary
     report["version"] = binary_version(args.binary)
     report["generated"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    report["evidence"] = release_evidence.capture(REPO_ROOT)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     (out / "report.json").write_text(json.dumps(report, indent=2) + "\n")

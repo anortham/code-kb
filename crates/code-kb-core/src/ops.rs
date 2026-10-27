@@ -497,13 +497,49 @@ pub fn get_context_slice_selected_op(
     let (target_symbol, target_body) =
         get_symbol_body_selected_op(workspace, db_path, conn, selector, file_path)?;
 
-    let callee_signatures = queries::find_callee_signatures(
+    let mut callee_signatures = queries::find_callee_signatures(
         conn,
         &target_symbol.name,
         &target_symbol.symbol_id,
         10,
         include_external,
     )?;
+    if callee_signatures.len() < 10 {
+        let identifier_callees = queries::css_call_identifier_callee_candidates(
+            conn,
+            &target_symbol,
+            10 - callee_signatures.len(),
+        )?;
+        for (callee, line, column) in identifier_callees {
+            let Ok(report) = reference_report_for_impact(conn, &workspace.root, &callee) else {
+                continue;
+            };
+            let path = target_symbol.path.replace('\\', "/");
+            if !report.sites.iter().any(|site| {
+                site.label == SiteLabel::Proven
+                    && site.site.kind == "calls"
+                    && site.site.from_symbol_id == target_symbol.symbol_id
+                    && site.site.path.replace('\\', "/") == path
+                    && site.site.start_line == Some(line)
+                    && site.site.start_column == Some(column)
+            }) {
+                continue;
+            }
+            let raw_signature = callee.signature.as_deref().unwrap_or(&callee.name);
+            let signature = crate::formatters::container_signature(raw_signature, &callee);
+            let signature = format!(
+                "{signature} ({}:{})",
+                callee.path.replace('\\', "/"),
+                callee.start_line
+            );
+            if !callee_signatures.contains(&signature) {
+                callee_signatures.push(signature);
+            }
+            if callee_signatures.len() == 10 {
+                break;
+            }
+        }
+    }
 
     let related_types = queries::find_related_types(conn, &target_symbol, 10)?;
     let related_tests = queries::find_related_tests(conn, &target_symbol, 5)?;
@@ -744,10 +780,27 @@ pub fn blast_radius_selected_op(
     max_depth: usize,
     limit: usize,
 ) -> Result<BlastRadiusResult, OpError> {
+    blast_radius_selected_op_with_options(
+        workspace, db_path, conn, selector, file, max_depth, limit, false,
+    )
+}
+
+/// Analyze a selected seed, optionally including import, module, and namespace rows.
+#[allow(clippy::too_many_arguments)]
+pub fn blast_radius_selected_op_with_options(
+    workspace: &Workspace,
+    db_path: Option<&Path>,
+    conn: &Connection,
+    selector: Option<SymbolSelector>,
+    file: Option<&str>,
+    max_depth: usize,
+    limit: usize,
+    include_low_signal: bool,
+) -> Result<BlastRadiusResult, OpError> {
     if let Some(selector @ SymbolSelector::Id(_)) = selector.as_ref() {
         let db_path = db_path.ok_or(OpError::SymbolIdRequiresDatabasePath)?;
         let selected = resolve_symbol_op(workspace, db_path, conn, selector, file)?;
-        let res = queries::compute_blast_radius_scoped_with_ids(
+        let res = queries::compute_blast_radius_scoped_with_ids_and_low_signal(
             conn,
             &[],
             &[&selected.symbol_id],
@@ -755,9 +808,18 @@ pub fn blast_radius_selected_op(
             &[],
             if max_depth == 0 { 2 } else { max_depth.min(5) },
             limit,
+            include_low_signal,
         )?;
         let depth = if max_depth == 0 { 2 } else { max_depth.min(5) };
-        return with_calling_tests(workspace, conn, Some(selected), res, depth, limit);
+        return with_calling_tests(
+            workspace,
+            conn,
+            Some(selected),
+            res,
+            depth,
+            limit,
+            include_low_signal,
+        );
     }
     let symbol = selector.as_ref().and_then(|selector| match selector {
         SymbolSelector::Name(name) => Some(name.as_str()),
@@ -784,26 +846,42 @@ pub fn blast_radius_selected_op(
         (None, None) => {
             let mut changes = edit_check::uncommitted_changes(&workspace.root)?;
             changes.retain(|path, _| !crate::workspace::is_hard_excluded(path));
-            let res = queries::compute_blast_radius_for_changes(conn, &changes, depth, limit)?;
+            let res = queries::compute_blast_radius_for_changes_with_low_signal(
+                conn,
+                &changes,
+                depth,
+                limit,
+                include_low_signal,
+            )?;
             let targets = queries::diff_targets(conn, &changes)?;
             return with_report_tests(workspace, conn, targets, res, limit);
         }
     };
 
     let seed_paths_refs: Vec<&str> = seed_paths.iter().map(|s| s.as_str()).collect();
-    let res = queries::compute_blast_radius_scoped(
+    let res = queries::compute_blast_radius_scoped_with_ids_and_low_signal(
         conn,
         &seed_symbols,
+        &[],
         symbol_path_filter.as_deref(),
         &seed_paths_refs,
         depth,
         limit,
+        include_low_signal,
     )?;
     let target = match seed_symbols.as_slice() {
         [name] => select_reference_target(conn, name, symbol_path_filter.as_deref()).ok(),
         _ => None,
     };
-    with_calling_tests(workspace, conn, target, res, depth, limit)
+    with_calling_tests(
+        workspace,
+        conn,
+        target,
+        res,
+        depth,
+        limit,
+        include_low_signal,
+    )
 }
 
 fn report_test(test: CallingTest) -> TestTarget {
@@ -877,6 +955,7 @@ fn with_calling_tests(
     mut res: BlastRadiusResult,
     depth: usize,
     limit: usize,
+    include_low_signal: bool,
 ) -> Result<BlastRadiusResult, OpError> {
     let Some(target) = target else {
         return Ok(res);
@@ -903,12 +982,17 @@ fn with_calling_tests(
         let callers = report_callers(conn, &report)?;
         let ids: Vec<&str> = callers.iter().filter_map(|(id, _)| id.as_deref()).collect();
         if depth > 1 && !ids.is_empty() {
-            deeper = Some(queries::compute_blast_radius_from_callers(
-                conn,
-                &ids,
-                depth - 1,
-                limit,
-            )?);
+            deeper = Some(if include_low_signal {
+                queries::compute_blast_radius_from_callers_with_low_signal(
+                    conn,
+                    &ids,
+                    depth - 1,
+                    limit,
+                    true,
+                )?
+            } else {
+                queries::compute_blast_radius_from_callers(conn, &ids, depth - 1, limit)?
+            });
         }
         res.impacted_symbols = callers.into_iter().map(|(_, row)| row).collect();
         if let Some(deeper) = &deeper {

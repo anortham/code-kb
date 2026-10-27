@@ -1,0 +1,8 @@
+CREATE FUNCTION anchor_sql(value INTEGER) RETURNS INTEGER
+BEGIN
+    RETURN value + 41;
+END;
+CREATE FUNCTION caller_sql() RETURNS INTEGER
+BEGIN
+    RETURN anchor_sql(1);
+END;

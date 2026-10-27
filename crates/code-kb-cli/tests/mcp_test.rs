@@ -73,7 +73,10 @@ fn three_caller_repo() -> tempfile::TempDir {
 
 fn cli_stdout(root: &Path, args: &[&str]) -> String {
     let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
-        .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+        .env(
+            "CODE_KB_TELEMETRY_DIR",
+            root.join(".code-kb/telemetry_test"),
+        )
         .arg("--root")
         .arg(root)
         .args(args)
@@ -141,7 +144,7 @@ fn test_mcp_find_references_description_names_the_labels_and_keeps_its_schema() 
         .unwrap();
     assert_eq!(
         tool["description"],
-        "Callers of a symbol: every indexed site with its name, each labeled proven, likely, unresolved, or excluded by its evidence, plus a whole-word text count that accounts for every line of the name. Use instead of rg or grep on a name. Callees: the calls a symbol makes. Pass file_path or a qualified name for a common name."
+        "Callers of a symbol: every indexed site with its name, each labeled proven, likely, unresolved, or excluded by its evidence, plus a whole-word text count that accounts for every line of the name. Use instead of rg or grep on a name. Callees: the calls a symbol makes. Pass file_path or a qualified name for a common name. Text reports support bounded per-section pages; each call reads the current index, keep the same project_root and filter, and restart at offset 0 after index changes. Page limit is at most 200; offset may extend beyond 200."
     );
     let mut properties: Vec<&str> = tool["inputSchema"]["properties"]
         .as_object()
@@ -157,6 +160,7 @@ fn test_mcp_find_references_description_names_the_labels_and_keeps_its_schema() 
             "file_path",
             "include_external",
             "limit",
+            "offset",
             "project_root",
             "symbol_id",
             "symbol_name"
@@ -187,7 +191,11 @@ fn test_mcp_find_references_counts_sites_as_its_result_count() {
     );
     assert_ne!(with_sites["isError"], true, "{with_sites}");
 
-    let summary = cli_stats_json(root, &root.join(".telemetry_test"), &["--workspace"]);
+    let summary = cli_stats_json(
+        root,
+        &root.join(".code-kb/telemetry_test"),
+        &["--workspace"],
+    );
     let refs_stat = summary["tool_stats"]
         .as_array()
         .unwrap()
@@ -375,7 +383,10 @@ const MISSING_PROJECT_ROOT: &str = "Missing required parameter: project_root. Pa
 fn serve_command(launch_root: &Path) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_code-kb"));
     command
-        .env("CODE_KB_TELEMETRY_DIR", launch_root.join(".telemetry_test"))
+        .env(
+            "CODE_KB_TELEMETRY_DIR",
+            launch_root.join(".code-kb/telemetry_test"),
+        )
         .arg("serve")
         .arg("--root")
         .arg(launch_root);
@@ -732,7 +743,10 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
 
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
-            .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+            .env(
+                "CODE_KB_TELEMETRY_DIR",
+                root.join(".code-kb/telemetry_test"),
+            )
             .arg("serve")
             .arg("--root")
             .arg(&root)
@@ -1074,7 +1088,6 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
     let skeleton_text = resp7["result"]["content"][0]["text"].as_str().unwrap();
     assert!(skeleton_text.contains("pub struct Workspace"));
 
-    // 8. Test blast_radius via MCP
     let blast_req = json!({
         "jsonrpc": "2.0",
         "id": 8,
@@ -1083,7 +1096,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
             "name": "blast_radius",
             "arguments": { "project_root": root,
                 "symbol": "Workspace",
-                "limit": 0
+                "limit": 1
             }
         }
     });
@@ -1099,9 +1112,20 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
     assert_eq!(resp8["id"], 8);
     let blast_text = resp8["result"]["content"][0]["text"].as_str().unwrap();
     assert!(blast_text.contains("Blast Radius"));
-    assert!(blast_text.contains("impacted symbols; raise limit to see the rest"));
-    assert!(blast_text.contains("Downstream Impact (0 returned)"));
+    assert!(
+        blast_text.contains("Downstream Impact (1 returned)"),
+        "{blast_text}"
+    );
     assert!(!blast_text.contains("No downstream callers found within depth"));
+    let mut zero_blast_req = blast_req.clone();
+    zero_blast_req["id"] = json!(80);
+    zero_blast_req["params"]["arguments"]["limit"] = json!(0);
+    let zero_blast = mcp_request(&mut stdin, &mut reader, &zero_blast_req);
+    assert_ne!(zero_blast["result"]["isError"], true, "{zero_blast}");
+    assert_eq!(
+        result_text(&zero_blast["result"]),
+        "Result limit is 0; increase it to check for matches."
+    );
 
     // 9. Test get_symbol_context via MCP with include_external: false
     let slice_req = json!({
@@ -1364,7 +1388,10 @@ fn test_mcp_invalid_project_root_or_path_does_not_poison_later_calls() {
 
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
-            .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+            .env(
+                "CODE_KB_TELEMETRY_DIR",
+                root.join(".code-kb/telemetry_test"),
+            )
             .arg("serve")
             .arg("--root")
             .arg(&root)
@@ -1786,7 +1813,10 @@ fn test_mcp_worktree_auto_copy_fast_path() {
     // Spawn server pointing to main_root
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
-            .env("CODE_KB_TELEMETRY_DIR", main_root.join(".telemetry_test"))
+            .env(
+                "CODE_KB_TELEMETRY_DIR",
+                main_root.join(".code-kb/telemetry_test"),
+            )
             .arg("serve")
             .arg("--root")
             .arg(&main_root)
@@ -2010,7 +2040,10 @@ fn test_mcp_initialize_roots_are_ignored_and_file_uri_project_roots_resolve() {
 
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
-            .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+            .env(
+                "CODE_KB_TELEMETRY_DIR",
+                root.join(".code-kb/telemetry_test"),
+            )
             .current_dir(root)
             .arg("serve")
             .stdin(Stdio::piped())
@@ -2139,14 +2172,17 @@ fn test_mcp_server_start_creates_missing_index() {
     std::fs::write(src.join("lib.rs"), "pub fn unindexed_func() {}\n").unwrap();
 
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_code-kb"));
-    cmd.env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
-        .env("CODE_KB_INDEX_WAIT_MS", "60000")
-        .arg("serve")
-        .arg("--root")
-        .arg(root)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit());
+    cmd.env(
+        "CODE_KB_TELEMETRY_DIR",
+        root.join(".code-kb/telemetry_test"),
+    )
+    .env("CODE_KB_INDEX_WAIT_MS", "60000")
+    .arg("serve")
+    .arg("--root")
+    .arg(root)
+    .stdin(Stdio::piped())
+    .stdout(Stdio::piped())
+    .stderr(Stdio::inherit());
 
     let mut child = ChildGuard(cmd.spawn().expect("Failed to spawn code-kb mcp"));
     let mut stdin = child.stdin.take().expect("Failed to open stdin");
@@ -2467,7 +2503,10 @@ fn test_mcp_lookup_symbol_accepts_symbol_name_and_symbol_aliases() {
 
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
-            .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+            .env(
+                "CODE_KB_TELEMETRY_DIR",
+                root.join(".code-kb/telemetry_test"),
+            )
             .current_dir(root)
             .arg("serve")
             .stdin(Stdio::piped())
@@ -2568,7 +2607,10 @@ fn test_first_tool_call_sees_files_changed_while_no_server_ran() {
 
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
-            .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+            .env(
+                "CODE_KB_TELEMETRY_DIR",
+                root.join(".code-kb/telemetry_test"),
+            )
             .env("CODE_KB_INDEX_WAIT_MS", "60000")
             .arg("serve")
             .arg("--root")
@@ -2614,7 +2656,10 @@ fn test_mcp_lookup_symbol_reports_a_broken_search_index() {
 
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
-            .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+            .env(
+                "CODE_KB_TELEMETRY_DIR",
+                root.join(".code-kb/telemetry_test"),
+            )
             .current_dir(root)
             .arg("serve")
             .stdin(Stdio::piped())
@@ -2651,7 +2696,11 @@ fn test_mcp_lookup_symbol_reports_a_broken_search_index() {
     assert!(text.contains("symbols_fts"), "{text}");
     assert!(!text.contains("No exact name match"), "{text}");
 
-    let summary_json = cli_stats_json(root, &root.join(".telemetry_test"), &["--workspace"]);
+    let summary_json = cli_stats_json(
+        root,
+        &root.join(".code-kb/telemetry_test"),
+        &["--workspace"],
+    );
     let recent_errors = summary_json["recent_errors"].as_array().unwrap();
     assert!(
         recent_errors
@@ -2691,7 +2740,10 @@ fn test_mcp_records_a_known_baseline_for_references_and_none_for_a_folder_skelet
 
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
-            .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+            .env(
+                "CODE_KB_TELEMETRY_DIR",
+                root.join(".code-kb/telemetry_test"),
+            )
             .env("CODE_KB_INDEX_WAIT_MS", "60000")
             .arg("serve")
             .arg("--root")
@@ -2752,7 +2804,11 @@ fn test_mcp_records_a_known_baseline_for_references_and_none_for_a_folder_skelet
     );
     assert_ne!(folder["result"]["isError"], true, "{folder}");
 
-    let summary = cli_stats_json(root, &root.join(".telemetry_test"), &["--workspace"]);
+    let summary = cli_stats_json(
+        root,
+        &root.join(".code-kb/telemetry_test"),
+        &["--workspace"],
+    );
 
     let refs_stat = summary["tool_stats"]
         .as_array()
@@ -2799,7 +2855,10 @@ fn test_mcp_lookup_baseline_counts_only_the_files_its_answer_shows() {
 
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
-            .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+            .env(
+                "CODE_KB_TELEMETRY_DIR",
+                root.join(".code-kb/telemetry_test"),
+            )
             .env("CODE_KB_INDEX_WAIT_MS", "60000")
             .arg("serve")
             .arg("--root")
@@ -2840,7 +2899,11 @@ fn test_mcp_lookup_baseline_counts_only_the_files_its_answer_shows() {
     assert!(text.contains("WidgetFactory"), "{text}");
     assert!(!text.contains("src/factory.rs"), "{text}");
 
-    let summary = cli_stats_json(root, &root.join(".telemetry_test"), &["--workspace"]);
+    let summary = cli_stats_json(
+        root,
+        &root.join(".code-kb/telemetry_test"),
+        &["--workspace"],
+    );
     let lookup_stat = summary["tool_stats"]
         .as_array()
         .unwrap()
@@ -2873,7 +2936,10 @@ fn mcp_read_tool_handlers_validate_selectors_and_preserve_git_discovery() {
     code_kb_core::scan_workspace(&workspace, &db_dir.join("artifact.db"), true).unwrap();
     let mut child = ChildGuard(
         Command::new(env!("CARGO_BIN_EXE_code-kb"))
-            .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+            .env(
+                "CODE_KB_TELEMETRY_DIR",
+                root.join(".code-kb/telemetry_test"),
+            )
             .arg("serve")
             .arg("--root")
             .arg(&root)
@@ -3200,12 +3266,12 @@ fn test_mcp_check_edit_is_described_and_takes_an_optional_base() {
 
     assert_eq!(
         check["description"],
-        "After you edit: the symbols whose shape changed against the session base (or base, or HEAD) and every site of each that your diff did not reach. Run it before you say a change is done."
+        "After you edit: the symbols whose shape changed against the session base (or base, or HEAD) and every site of each that your diff did not reach. Run it before you say a change is done. Text output supports bounded pages for each folded section; each call reads the current index, keep the same project_root and filter, and restart at offset 0 after index changes. The default page size is 12; page limit is at most 200 and offset may extend beyond 200."
     );
     let properties = check["inputSchema"]["properties"].as_object().unwrap();
     let mut names: Vec<&str> = properties.keys().map(String::as_str).collect();
     names.sort_unstable();
-    assert_eq!(names, ["base", "project_root"]);
+    assert_eq!(names, ["base", "limit", "offset", "project_root"]);
     assert_eq!(properties["base"]["type"], "string");
     assert_eq!(
         properties["base"]["description"],
@@ -3327,7 +3393,10 @@ fn mcp_and_cli_name_a_revision_that_does_not_exist() {
     session.finish();
 
     let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
-        .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+        .env(
+            "CODE_KB_TELEMETRY_DIR",
+            root.join(".code-kb/telemetry_test"),
+        )
         .arg("--root")
         .arg(root)
         .args(["check", "--base", "no-such-revision"])
@@ -4541,7 +4610,10 @@ fn blast_radius_without_a_target_outside_a_git_repository_is_the_check_edit_erro
     session.finish();
 
     let output = Command::new(env!("CARGO_BIN_EXE_code-kb"))
-        .env("CODE_KB_TELEMETRY_DIR", root.join(".telemetry_test"))
+        .env(
+            "CODE_KB_TELEMETRY_DIR",
+            root.join(".code-kb/telemetry_test"),
+        )
         .env("GIT_CEILING_DIRECTORIES", ceiling)
         .arg("--root")
         .arg(root)

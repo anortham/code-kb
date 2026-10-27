@@ -2,6 +2,7 @@
 //! definitions, and the exclusion of a call whose argument count no definition of the target
 //! accepts. A target the index cannot describe exactly gets no range, so no call is excluded.
 
+use std::fs;
 use std::ops::Range;
 use std::path::Path;
 
@@ -25,11 +26,20 @@ const SIGNATURE_KEEPING_DECORATORS: &[&str] = &[
     "typing.overload",
 ];
 
-const PARAMETER_ROWS_SQL: &str = "SELECT name, COALESCE(start_byte, 0), signature FROM symbols
-     WHERE parent_symbol_id = ?1
-       AND CASE WHEN json_valid(metadata_json)
-                THEN json_extract(metadata_json, '$.role') END = 'parameter'
-     ORDER BY start_line, start_column, symbol_id";
+const PARAMETER_ROWS_SQL: &str =
+    "SELECT symbols.name, COALESCE(symbols.start_byte, 0), symbols.signature FROM symbols
+     JOIN symbols owner ON owner.symbol_id = symbols.parent_symbol_id
+     WHERE symbols.parent_symbol_id = ?1
+       AND (CASE WHEN json_valid(symbols.metadata_json)
+                 THEN json_extract(symbols.metadata_json, '$.role') END = 'parameter'
+            OR (owner.language IN ('kotlin', 'scala', 'csharp')
+                AND owner.kind = 'class'
+                AND symbols.kind = 'property'
+                AND owner.signature IS NOT NULL
+                AND COALESCE(symbols.start_byte, 0) >= COALESCE(owner.start_byte, 0)
+                AND COALESCE(symbols.start_byte, 0)
+                    < COALESCE(owner.start_byte, 0) + length(CAST(owner.signature AS BLOB))))
+     ORDER BY symbols.start_line, symbols.start_column, symbols.symbol_id";
 
 const CLASS_ATTRIBUTES_SQL: &str = "SELECT s.signature FROM symbols s
      JOIN symbols owner ON owner.symbol_id = s.parent_symbol_id
@@ -53,7 +63,21 @@ fn rule_language(language: &str) -> Option<&'static str> {
         "go" => "go",
         "rust" => "rust",
         "kotlin" => "kotlin",
+        "c" => "c",
+        "cpp" => "cpp",
         "typescript" | "tsx" => "typescript",
+        "swift" => "swift",
+        "php" => "php",
+        "ruby" => "ruby",
+        "scala" => "scala",
+        "dart" => "dart",
+        "fsharp" => "fsharp",
+        "vbnet" => "vbnet",
+        "r" => "r",
+        "zig" => "zig",
+        "gdscript" => "gdscript",
+        "elixir" => "elixir",
+        "erlang" => "erlang",
         _ => return None,
     })
 }
@@ -175,6 +199,15 @@ fn group_arity_of(
             None => arity,
         });
     }
+    if group
+        .first()
+        .is_some_and(|member| member.language == "erlang")
+        && let Some(arity) = union.as_ref()
+        && let Some(max) = arity.max
+        && max - arity.min + 1 != group.len() as u32
+    {
+        return Ok(None);
+    }
     Ok(union)
 }
 
@@ -215,6 +248,7 @@ enum Receiver {
 struct Parameter {
     optional: bool,
     variadic: bool,
+    positional: bool,
 }
 
 fn definition_arity(
@@ -227,10 +261,14 @@ fn definition_arity(
     let Some(language) = rule_language(&symbol.language) else {
         return Ok(None);
     };
-    if !matches!(symbol.kind.as_str(), "function" | "method" | "constructor") {
+    let primary_constructor_class =
+        symbol.kind == "class" && matches!(language, "csharp" | "fsharp" | "kotlin" | "scala");
+    if !matches!(symbol.kind.as_str(), "function" | "method" | "constructor")
+        && !primary_constructor_class
+    {
         return Ok(None);
     }
-    let Some(signature) = symbol.signature.as_deref() else {
+    let Some(indexed_signature) = symbol.signature.as_deref() else {
         return Ok(None);
     };
     if symbol.kind == "constructor" {
@@ -256,25 +294,75 @@ fn definition_arity(
         }
         _ => (symbol, symbol.name.as_str()),
     };
+    let swift_signature;
+    let signature = if language == "swift" {
+        if symbol.body_start_byte.is_some() {
+            let Some(source) = swift_parameter_source(root, symbol) else {
+                return Ok(None);
+            };
+            swift_signature = source;
+            swift_signature.as_str()
+        } else {
+            indexed_signature
+        }
+    } else {
+        indexed_signature
+    };
+    let csharp_signature;
+    let signature = if language == "csharp"
+        && symbol.kind == "class"
+        && parameter_list(signature, name, language).is_none()
+    {
+        let Some(source) = csharp_primary_constructor_source(root, symbol) else {
+            return Ok(None);
+        };
+        csharp_signature = source;
+        csharp_signature.as_str()
+    } else {
+        signature
+    };
     let Some(list) = parameter_list(signature, name, language) else {
         return Ok(None);
     };
+    if language == "c"
+        && symbol.kind == "function"
+        && list.trim().is_empty()
+        && c_declaration_is_nonprototyped(conn, symbol)?
+    {
+        return Ok(None);
+    }
     if language == "typescript" && !is_written_as_function(root, symbol) {
         return Ok(None);
     }
-    let mut segments = split_top_level(list, language);
+    let mut segments = formal_segments(list, language);
     let mut variadic_marker = false;
-    segments.retain(|segment| match (language, *segment) {
+    segments.retain(|(segment, _, _)| match (language, segment.as_str()) {
         ("python", "*" | "/") => false,
-        ("rust", "...") => {
+        ("rust" | "c" | "cpp" | "r" | "zig", "...") => {
             variadic_marker = true;
             false
         }
+        ("c" | "cpp", "void") => false,
         ("typescript", text) => !is_this_parameter(text),
         _ => true,
     });
+    let php_last_required = (language == "php")
+        .then(|| {
+            segments
+                .iter()
+                .enumerate()
+                .filter_map(|(index, (segment, _, _))| {
+                    let parameter = classify(segment, language);
+                    (!parameter.optional && !parameter.variadic).then_some(index)
+                })
+                .next_back()
+        })
+        .flatten();
 
     let mut names = parameter_names(conn, symbol, list)?;
+    if matches!(language, "c" | "cpp") && list.trim() == "void" {
+        names.clear();
+    }
     if language == "go" && symbol.kind == "method" && names.len() == segments.len() + 1 {
         names.remove(0);
     }
@@ -282,37 +370,94 @@ fn definition_arity(
         || names
             .iter()
             .zip(&segments)
-            .any(|(name, segment)| !contains_word(segment, name))
+            .any(|(name, (segment, _, _))| !contains_parameter_name(segment, name, language))
     {
         return Ok(None);
     }
 
     let mut parameters: Vec<Parameter> = segments
         .iter()
-        .map(|segment| classify(segment, language))
+        .enumerate()
+        .map(|(index, (segment, optional_group, positional))| {
+            let mut parameter = classify(segment, language);
+            parameter.optional |= *optional_group;
+            if php_last_required.is_some_and(|last| index < last) {
+                parameter.optional = false;
+            }
+            parameter.positional = *positional;
+            parameter
+        })
         .collect();
     if variadic_marker {
         parameters.push(Parameter {
             optional: false,
             variadic: true,
+            positional: true,
         });
     }
-    let Some(receiver) = receiver_of(conn, symbol, language, &segments, constructing)? else {
+    let segment_refs: Vec<&str> = segments
+        .iter()
+        .map(|(segment, _, _)| segment.as_str())
+        .collect();
+    let Some(receiver) = receiver_of(conn, symbol, language, &segment_refs, constructing)? else {
         return Ok(None);
     };
     if receiver != Receiver::None && !parameters.is_empty() && is_receiver_slot(language, symbol) {
         parameters.remove(0);
     }
-    let max = (!parameters.iter().any(|p| p.variadic)).then_some(parameters.len() as u32);
+    let positional_parameters: Vec<&Parameter> = parameters
+        .iter()
+        .filter(|parameter| parameter.positional)
+        .collect();
+    let max = (language != "php"
+        && !positional_parameters
+            .iter()
+            .any(|parameter| parameter.variadic))
+    .then_some(positional_parameters.len() as u32);
     Ok(Some(Arity {
         language,
-        min: parameters
+        min: positional_parameters
             .iter()
-            .filter(|p| !p.optional && !p.variadic)
+            .filter(|parameter| !parameter.optional && !parameter.variadic)
             .count() as u32,
         max,
         accepted_max: max.map(|max| max + u32::from(receiver == Receiver::Passable)),
     }))
+}
+
+fn c_declaration_is_nonprototyped(conn: &Connection, symbol: &Symbol) -> Result<bool, QueryError> {
+    let is_definition: Option<String> = conn.query_row(
+        "SELECT CASE WHEN json_valid(metadata_json)
+                     THEN CAST(json_extract(metadata_json, '$.isDefinition') AS TEXT) END
+         FROM symbols WHERE symbol_id = ?1",
+        params![symbol.symbol_id],
+        |row| row.get(0),
+    )?;
+    Ok(matches!(is_definition.as_deref(), Some("false" | "0")))
+}
+
+fn swift_parameter_source(root: &Path, symbol: &Symbol) -> Option<String> {
+    let start = symbol.start_byte;
+    let end = symbol.body_start_byte?;
+    if end <= start {
+        return None;
+    }
+    fs::read_to_string(root.join(&symbol.path))
+        .ok()?
+        .get(start..end)
+        .map(str::to_string)
+}
+
+fn csharp_primary_constructor_source(root: &Path, symbol: &Symbol) -> Option<String> {
+    let start = symbol.start_byte;
+    let end = symbol.body_start_byte?;
+    if end <= start {
+        return None;
+    }
+    let source = fs::read_to_string(root.join(&symbol.path)).ok()?;
+    let header = source.get(start..end)?.trim_end();
+    parameter_list(header, &symbol.name, "csharp")?;
+    Some(header.to_string())
 }
 
 /// Whether the first parameter row stands for a receiver that a bound call does not pass. A Go
@@ -357,7 +502,17 @@ pub(crate) fn parameter_rows(
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
-    rows.retain(|row| symbol.body_start_byte.is_none_or(|body| row.start < body));
+    rows.retain(|row| {
+        symbol.language == "powershell"
+            || symbol.body_start_byte.is_none_or(|body| row.start < body)
+    });
+    rows.retain(|row| {
+        symbol.language != "fsharp"
+            || !row
+                .signature
+                .as_deref()
+                .is_some_and(|signature| signature.contains("ParamArray"))
+    });
     Ok(rows)
 }
 
@@ -546,7 +701,7 @@ fn is_written_as_function(root: &Path, symbol: &Symbol) -> bool {
     false
 }
 
-fn is_rust_self(segment: &str) -> bool {
+pub(crate) fn is_rust_self(segment: &str) -> bool {
     let mut text = segment.trim_start();
     text = text.strip_prefix('&').unwrap_or(text).trim_start();
     if let Some(rest) = text.strip_prefix('\'') {
@@ -562,7 +717,7 @@ fn is_rust_self(segment: &str) -> bool {
 /// the parameter has no `this`. Attribute groups and the modifiers `ref`, `in`, `scoped`, and
 /// `readonly` may come before it (`[NotNull] this Lib l`, `ref this Big b`), and the modifiers
 /// again after it (`this ref int x`).
-pub(super) fn after_csharp_this(parameter: &str) -> Option<&str> {
+pub(crate) fn after_csharp_this(parameter: &str) -> Option<&str> {
     let mut text = parameter.trim_start();
     while text.starts_with('[') {
         text = after_attribute_group(text)?.trim_start();
@@ -595,7 +750,7 @@ pub(crate) fn after_attribute_group(text: &str) -> Option<&str> {
     None
 }
 
-fn is_this_parameter(segment: &str) -> bool {
+pub(crate) fn is_this_parameter(segment: &str) -> bool {
     segment == "this" || segment.starts_with("this:") || segment.starts_with("this ")
 }
 
@@ -626,20 +781,99 @@ fn classify(segment: &str, language: &str) -> Parameter {
     let variadic = match language {
         "python" => segment.starts_with('*'),
         "typescript" => segment.starts_with("..."),
-        "java" | "go" => segment.contains("..."),
+        "java" | "go" | "c" | "cpp" => segment.contains("..."),
         "csharp" => contains_word(segment, "params"),
         "kotlin" => contains_word(segment, "vararg"),
+        "swift" | "gdscript" => segment.contains("..."),
+        "php" => {
+            let declaration = default_start(segment).map_or(segment, |at| &segment[..at]);
+            declaration.contains("...")
+        }
+        "ruby" => segment.trim_start().starts_with('*') || segment.trim() == "...",
+        "scala" => segment.trim_end().ends_with('*'),
+        "fsharp" | "vbnet" => contains_word(segment, "ParamArray"),
         _ => false,
     };
     let optional = match language {
-        "python" | "kotlin" => has_default(segment),
+        "python" | "kotlin" | "cpp" | "php" | "scala" | "swift" | "gdscript" => {
+            has_default(segment)
+        }
+        "ruby" => has_default(segment) || ruby_keyword_default(segment),
         "csharp" => has_default(segment) || contains_word(segment, "Optional"),
+        "fsharp" => segment.trim_start().starts_with('?'),
+        "vbnet" => has_default(segment) || contains_word(segment, "Optional"),
+        "elixir" => segment.contains("\\\\"),
+        "r" => true,
         "typescript" => {
             has_default(segment) || is_marked_optional(segment) || accepts_void(segment)
         }
         _ => false,
     };
-    Parameter { optional, variadic }
+    Parameter {
+        optional,
+        variadic,
+        positional: true,
+    }
+}
+
+pub(crate) fn parameter_properties(segment: &str, language: &str) -> Option<(bool, bool)> {
+    let language = rule_language(language)?;
+    let parameter = classify(segment, language);
+    Some((parameter.optional, parameter.variadic))
+}
+
+fn ruby_keyword_default(segment: &str) -> bool {
+    segment
+        .split_once(':')
+        .is_some_and(|(_, value)| !value.trim().is_empty())
+}
+
+fn contains_parameter_name(segment: &str, name: &str, language: &str) -> bool {
+    if language == "php" {
+        let variable = format!("${name}");
+        return contains_word(segment, &variable);
+    }
+    contains_word(segment, name)
+}
+
+fn formal_segments(list: &str, language: &str) -> Vec<(String, bool, bool)> {
+    let mut segments = Vec::new();
+    for segment in split_top_level(list, language) {
+        let segment = segment.trim();
+        if language == "dart" {
+            if let Some(inner) = segment
+                .strip_prefix('{')
+                .and_then(|text| text.strip_suffix('}'))
+            {
+                segments.extend(
+                    split_top_level(inner, language)
+                        .into_iter()
+                        .map(|parameter| {
+                            let parameter = parameter.trim();
+                            (
+                                parameter.to_string(),
+                                !contains_word(parameter, "required"),
+                                false,
+                            )
+                        }),
+                );
+                continue;
+            }
+            if let Some(inner) = segment
+                .strip_prefix('[')
+                .and_then(|text| text.strip_suffix(']'))
+            {
+                segments.extend(
+                    split_top_level(inner, language)
+                        .into_iter()
+                        .map(|parameter| (parameter.trim().to_string(), true, true)),
+                );
+                continue;
+            }
+        }
+        segments.push((segment.to_string(), false, true));
+    }
+    segments
 }
 
 /// Whether the type of a TypeScript parameter is `void` or a union with `void`: a call may leave
@@ -709,6 +943,19 @@ pub(crate) fn parameter_segments<'a>(
 /// generic parameters) at the top level of `signature`: decorators, annotations, and attributes
 /// before the name sit in brackets or are skipped as words.
 fn parameter_list<'a>(signature: &'a str, name: &str, language: &str) -> Option<&'a str> {
+    if language == "r" {
+        let start = signature.find("function")? + "function".len();
+        return list_after(&signature[start..], language);
+    }
+    if language == "erlang" {
+        let start = signature.find(name)? + name.len();
+        let after = signature[start..].trim_start().strip_prefix('/')?;
+        let digits = after.bytes().take_while(u8::is_ascii_digit).count();
+        if digits == 0 {
+            return None;
+        }
+        return list_after(&after[digits..], language);
+    }
     let mut scanner = Scanner::new(language);
     for (index, c) in signature.char_indices() {
         if scanner.at_top_level()
