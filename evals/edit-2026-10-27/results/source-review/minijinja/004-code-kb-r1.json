@@ -1,0 +1,242 @@
+{
+  "acceptance_status": "not_assessed_root_owns_synthesis",
+  "added_test_files": [
+    "minijinja-cli/tests/test_autoescape.rs"
+  ],
+  "arm": "code-kb",
+  "attempt_status": "completed",
+  "bundle_json_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/004-minijinja-code-kb-r1/bundle/bundle.json",
+  "bundle_json_sha256": "7b5d362344f2ef642de1f94253d8ed33e27990618d53f35345e21de2ac8cf8da",
+  "case_id": "minijinja",
+  "changed_production_files": [
+    "minijinja-cli/src/command.rs",
+    "minijinja-cli/src/config.rs"
+  ],
+  "evidence_paths": [
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/minijinja/logs/attempt-004/candidate-vs-seed.diff",
+      "supports": "Production logic, long-help wording, and added public tests compared with the exact seed."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/minijinja/logs/attempt-004/config-skeleton.stdout.log",
+      "supports": "Candidate config module interface."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/minijinja/logs/attempt-004/apply-to-env-body.stdout.log",
+      "supports": "Actual filename normalization, one-wrapper stripping, extension mapping, and explicit mode branches."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/minijinja/logs/attempt-004/command-skeleton.stdout.log",
+      "supports": "Candidate command declarations and long-help location."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/minijinja/logs/attempt-004/test-skeleton.stdout.log",
+      "supports": "Four focused CLI tests are present."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/minijinja/logs/attempt-004/output-suffix-test-body.stdout.log",
+      "supports": "Added coverage across existing extensions and wrapper/case variants."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/minijinja/logs/attempt-004/one-wrapper-test-body.stdout.log",
+      "supports": "Added no-recursion and unsupported-suffix coverage."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/minijinja/logs/attempt-004/explicit-mode-test-body.stdout.log",
+      "supports": "Added explicit mode override coverage."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/minijinja/logs/attempt-004/long-help-test-body.stdout.log",
+      "supports": "Added public test asserts the actual phrase and examples."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/minijinja/logs/attempt-004/hidden-help-diagnostic.md",
+      "supports": "Exact hidden predicate compared with the captured help wording and request."
+    },
+    {
+      "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/004-minijinja-code-kb-r1/grade/grade.json",
+      "supports": "Fresh strict grade; canonical public passes and hidden help assertion fails."
+    },
+    {
+      "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/004-minijinja-code-kb-r1/evidence/grade/grade-006-stdout_log.log",
+      "supports": "Actual `--autoescape` help output from the failed hidden test."
+    },
+    {
+      "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/004-minijinja-code-kb-r1/evidence/grade/grade-007-stderr_log.log",
+      "supports": "Cargo hidden-test failure summary."
+    },
+    {
+      "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/004-minijinja-code-kb-r1/evidence/agent/stdout.log",
+      "supports": "Captured in-trial added tests, including its exact help test, passed."
+    },
+    {
+      "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/004-minijinja-code-kb-r1/evidence/answer.txt",
+      "supports": "Captured agent summary; raw strict outcome remains in grade.json."
+    }
+  ],
+  "findings": [],
+  "grade_diagnostic": {
+    "assessment": "The actual wording is semantically equivalent and more specific than the request; the hidden checker does not accept the inserted words \u201cASCII letter\u201d. Preserve the original grade failure; do not edit frozen case/tests or re-run/replace it.",
+    "captured_actual_autoescape_help": "The suffix immediately before one optional .j2, .jinja, or .jinja2 suffix is used. Suffixes are matched without regard to ASCII letter case, so report.html.jinja2 uses HTML escaping and report.JSON.JINJA uses JSON escaping.",
+    "diagnostic_log": "evals/edit-2026-10-27/results/source-review/minijinja/logs/attempt-004/hidden-help-diagnostic.md",
+    "exact_predicate": {
+      "case_phrase_any_of": [
+        "ignoring case",
+        "case-insensitive",
+        "case insensitive",
+        "regardless of case",
+        "without regard to case"
+      ],
+      "wrapper_markers": [
+        ".j2",
+        ".jinja",
+        ".jinja2"
+      ]
+    },
+    "failed_command": "autoescape_suffix_acceptance",
+    "failure_kind": "help wording allowlist false negative; behavioral tests and wrapper-marker assertions passed",
+    "hidden_test_path": "evals/edit-2026-10-27/cases/minijinja/checks/edit_eval_autoescape.rs",
+    "strict_grade_acceptance_status": "failed",
+    "strict_grade_behavioral_pass": false,
+    "task_request_text": "Match wrapper and output suffixes without regard to ASCII letter case."
+  },
+  "raw_attempt_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/004-minijinja-code-kb-r1/attempt.json",
+  "raw_attempt_sha256": "353c9dac685d33a30ed6bdbbbda976727a19c41974d07a7e277f18891616d62c",
+  "repeat": 1,
+  "schedule_index": 4,
+  "schema": 1,
+  "source_review": "passed",
+  "source_review_basis": "The autoescape callback ASCII-normalizes the filename and strips at most one recognized wrapper before applying the existing output-extension mapping. Explicit modes stay authoritative. Added tests cover ordinary/wrapped/case-varied suffixes, no recursive wrapper removal, explicit overrides, and the updated help. The one strict hidden failure is a wording allowlist false negative documented separately; implementation and help satisfy the request.",
+  "trusted_grade": {
+    "behavioral_pass": false,
+    "hidden_passed": false,
+    "patch_valid": true,
+    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/004-minijinja-code-kb-r1/grade/grade.json",
+    "protection_status": "unchanged",
+    "public_passed": true,
+    "replay_valid": true,
+    "sha256": "45efa65e040e70e796f69537c4f80566e9cb28304b505a6ab8a9ddcc9a6a650d"
+  },
+  "verification_commands": [
+    {
+      "argv": [
+        "/usr/bin/env",
+        "CARGO_HOME=/state/cargo",
+        "CARGO_NET_OFFLINE=true",
+        "CARGO_TARGET_DIR=/state/target",
+        "CARGO_INCREMENTAL=0",
+        "RUSTC=/tools/rust/bin/rustc",
+        "/tools/rust/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "-p",
+        "minijinja-cli",
+        "--bin",
+        "minijinja-cli",
+        "--test",
+        "test_basic",
+        "--",
+        "--skip",
+        "test_help"
+      ],
+      "elapsed_seconds": 7.337816,
+      "exit_status": 0,
+      "expected_markers": [
+        "test result: ok. 4 passed",
+        "test result: ok. 30 passed",
+        "1 filtered out"
+      ],
+      "kind": "trusted_fresh_grade_public",
+      "result": "passed",
+      "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/004-minijinja-code-kb-r1/evidence/grade/grade-005-stderr_log.log",
+      "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/004-minijinja-code-kb-r1/evidence/grade/grade-004-stdout_log.log"
+    },
+    {
+      "argv": [
+        "/usr/bin/env",
+        "CARGO_HOME=/state/cargo",
+        "CARGO_NET_OFFLINE=true",
+        "CARGO_TARGET_DIR=/state/target",
+        "CARGO_INCREMENTAL=0",
+        "RUSTC=/tools/rust/bin/rustc",
+        "/tools/rust/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "-p",
+        "minijinja-cli",
+        "--test",
+        "edit_eval_autoescape"
+      ],
+      "elapsed_seconds": 7.287448,
+      "exit_status": 101,
+      "kind": "trusted_fresh_grade_hidden",
+      "missing_markers": [
+        "test long_help_documents_template_wrapper_suffixes ... ok",
+        "test result: ok. 3 passed"
+      ],
+      "result": "failed only the long_help_documents_template_wrapper_suffixes wording assertion",
+      "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/004-minijinja-code-kb-r1/evidence/grade/grade-007-stderr_log.log",
+      "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/004-minijinja-code-kb-r1/evidence/grade/grade-006-stdout_log.log"
+    },
+    {
+      "argv": [
+        "/usr/bin/env",
+        "CARGO_HOME=/state/cargo",
+        "CARGO_NET_OFFLINE=true",
+        "CARGO_TARGET_DIR=/state/target",
+        "CARGO_INCREMENTAL=0",
+        "RUSTC=/tools/rust/bin/rustc",
+        "/tools/rust/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "-p",
+        "minijinja-cli",
+        "--bin",
+        "minijinja-cli",
+        "--test",
+        "test_basic",
+        "--test",
+        "test_autoescape",
+        "--",
+        "--skip",
+        "test_help"
+      ],
+      "evidence_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/004-minijinja-code-kb-r1/evidence/agent/stdout.log",
+      "exit_status": 0,
+      "kind": "captured_agent_added_public_test_run",
+      "result": "passed: 4 CLI unit, 4 added autoescape, and 30 basic CLI tests; one help snapshot filtered"
+    },
+    {
+      "argv": [
+        "/usr/bin/env",
+        "CARGO_HOME=/state/cargo",
+        "CARGO_NET_OFFLINE=true",
+        "CARGO_TARGET_DIR=/state/target",
+        "CARGO_INCREMENTAL=0",
+        "RUSTC=/tools/rust/bin/rustc",
+        "/tools/rust/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "-p",
+        "minijinja-cli",
+        "--test",
+        "test_autoescape"
+      ],
+      "dependency_inputs": [
+        "cargo-cache"
+      ],
+      "kind": "independent_added_public_test_verification",
+      "network": "disabled",
+      "project": "grade/work/public-project",
+      "result": "pending_campaign_completion; do not rerun any campaign grade",
+      "state": "grade/work/state-grade-public",
+      "tool_inputs": [
+        "rust"
+      ]
+    }
+  ]
+}

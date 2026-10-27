@@ -1,0 +1,20 @@
+// minijinja-cli/tests/test_autoescape.rs:57-73 (autoescape_only_ignores_one_final_wrapper)
+fn autoescape_only_ignores_one_final_wrapper() {
+    for filename in [
+        "report",
+        "report.txt",
+        "report.txt.j2",
+        "report.jinja2",
+        "report.html.j2.jinja",
+        "report.JSON.JINJA2.J2",
+        "report.html.other.jinja2",
+        "report.json.jinja2.bak",
+        "report.html.jinja3",
+        "report.html.",
+        "report.html.j2.",
+    ] {
+        assert_render(filename, Some("auto"), NONE);
+    }
+}
+
+--- STDERR ---

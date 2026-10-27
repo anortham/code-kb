@@ -299,14 +299,14 @@ def _text_files(root: Path, generated_roots: Sequence[str]) -> tuple[bytes, dict
     return bytes(payload), {"files_scanned": scanned_files, "binary_files_skipped": skipped_binary, "source_bytes": source_bytes}
 
 
-def _source_audit(project: Path, case: Mapping[str, Any], seed_digest: str, seed_project: Path) -> tuple[dict[str, Any], bytes]:
+def _source_audit(project: Path, case: Mapping[str, Any], seed_digest: str, seed_project: Path, redactor=None) -> tuple[dict[str, Any], bytes]:
     payload, counts = _text_files(project, case["generated_roots"])
     try:
-        redacted = comparison_campaign.redact_bytes(payload)
+        redacted = comparison_campaign.redact_bytes(payload, redactor=redactor)
         redactor_error = None
     except Exception as error:
         redacted = b""
-        redactor_error = f"{type(error).__name__}: {error}"
+        redactor_error = type(error).__name__
     seed_unchanged = edit_snapshot.snapshot_tree(seed_project, excluded=case["generated_roots"])["digest"] == seed_digest
     return ({
         **counts,
@@ -356,11 +356,11 @@ def _make_prompt(case: Mapping[str, Any], dependencies: Mapping[str, Path], tool
     )
 
 
-def _trace_redaction(raw: bytes) -> tuple[bytes | None, dict[str, Any]]:
+def _trace_redaction(raw: bytes, redactor=None) -> tuple[bytes | None, dict[str, Any]]:
     try:
-        cleaned = comparison_campaign.redact_bytes(raw)
+        cleaned = comparison_campaign.redact_bytes(raw, redactor=redactor)
     except Exception as error:
-        return None, {"status": "unavailable", "error": f"{type(error).__name__}: {error}"}
+        return None, {"status": "unavailable", "error_type": type(error).__name__}
     return cleaned, {
         "status": "complete",
         "original_sha256": _sha256_bytes(raw),
@@ -371,23 +371,23 @@ def _trace_redaction(raw: bytes) -> tuple[bytes | None, dict[str, Any]]:
     }
 
 
-def _redact_trace_value(value: Any, field_name: str | None = None) -> tuple[Any, bool]:
+def _redact_trace_value(value: Any, field_name: str | None = None, redactor=None) -> tuple[Any, bool]:
     compact_field = re.sub(r"[^a-z0-9]", "", field_name.lower()) if isinstance(field_name, str) else ""
     if isinstance(value, str) and any(marker in compact_field for marker in TRACE_SECRET_FIELDS) and value:
         return "<REDACTED>", True
     if isinstance(value, str):
-        redacted = comparison_campaign.redact_bytes(value.encode("utf-8")).decode("utf-8")
+        redacted = comparison_campaign.redact_bytes(value.encode("utf-8"), redactor=redactor).decode("utf-8")
         return redacted, redacted != value
     if isinstance(value, list):
-        items = [_redact_trace_value(item, field_name) for item in value]
+        items = [_redact_trace_value(item, field_name, redactor) for item in value]
         return [item for item, _ in items], any(changed for _, changed in items)
     if isinstance(value, dict):
-        items = {key: _redact_trace_value(item, key) for key, item in value.items()}
+        items = {key: _redact_trace_value(item, key, redactor) for key, item in value.items()}
         return {key: item for key, (item, _) in items.items()}, any(changed for _, changed in items.values())
     return value, False
 
 
-def _redact_jsonl(raw: bytes) -> tuple[bytes, bytes, bool]:
+def _redact_jsonl(raw: bytes, redactor=None) -> tuple[bytes, bytes, bool]:
     retained_events = []
     malformed_lines = []
     changed = False
@@ -398,11 +398,11 @@ def _redact_jsonl(raw: bytes) -> tuple[bytes, bytes, bool]:
         try:
             event = json.loads(line)
         except (UnicodeError, json.JSONDecodeError):
-            cleaned = comparison_campaign.redact_bytes(line)
+            cleaned = comparison_campaign.redact_bytes(line, redactor=redactor)
             malformed_lines.append(cleaned)
             changed = changed or cleaned != line
             continue
-        cleaned, value_changed = _redact_trace_value(event)
+        cleaned, value_changed = _redact_trace_value(event, redactor=redactor)
         changed = changed or value_changed
         retained_events.append(json.dumps(cleaned, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8"))
     retained = b"\n".join(retained_events) + (b"\n" if retained_events else b"")
@@ -410,14 +410,23 @@ def _redact_jsonl(raw: bytes) -> tuple[bytes, bytes, bool]:
     return retained, malformed, changed
 
 
-def _safe_trace(raw_path: Path, retained_path: Path, *, jsonl: bool = False) -> dict[str, Any]:
-    if not raw_path.is_file():
-        return {"status": "missing", "path": str(retained_path)}
-    raw = raw_path.read_bytes()
+def _safe_trace(raw_path: Path, retained_path: Path, *, jsonl: bool = False, redactor=None) -> dict[str, Any]:
+    try:
+        raw = raw_path.read_bytes()
+    except FileNotFoundError:
+        return {"status": "missing", "path": None, "raw_retained": False}
+    except OSError as error:
+        return {
+            "status": "unavailable",
+            "error_type": type(error).__name__,
+            "error": error.strerror or str(error),
+            "path": None,
+            "raw_retained": True,
+        }
     malformed = b""
     try:
         if jsonl:
-            cleaned, malformed, value_changed = _redact_jsonl(raw)
+            cleaned, malformed, value_changed = _redact_jsonl(raw, redactor=redactor)
             metadata = {
                 "status": "partial" if malformed else "complete",
                 "original_sha256": _sha256_bytes(raw),
@@ -429,40 +438,95 @@ def _safe_trace(raw_path: Path, retained_path: Path, *, jsonl: bool = False) -> 
                 "malformed_lines": len(malformed.splitlines()),
             }
         else:
-            cleaned, metadata = _trace_redaction(raw)
+            cleaned, metadata = _trace_redaction(raw, redactor=redactor)
     except Exception as error:
         cleaned = None
-        metadata = {"status": "unavailable", "error": f"{type(error).__name__}: {error}"}
+        metadata = {"status": "unavailable", "error_type": type(error).__name__}
     if cleaned is None:
-        retained_path.unlink(missing_ok=True)
-        retained_path.with_name(retained_path.name + ".malformed").unlink(missing_ok=True)
-        return {**metadata, "path": str(retained_path)}
-    retained_path.parent.mkdir(parents=True, exist_ok=True)
-    retained_path.write_bytes(cleaned)
-    retained_path.chmod(0o600)
-    if malformed:
-        malformed_path = retained_path.with_name(retained_path.name + ".malformed")
-        malformed_path.write_bytes(malformed)
-        malformed_path.chmod(0o600)
-        metadata["malformed_path"] = str(malformed_path)
-        metadata["malformed_sha256"] = _sha256_bytes(malformed)
-    return {**metadata, "path": str(retained_path)}
+        return {**metadata, "path": None, "raw_retained": True}
+    try:
+        _atomic_trace_write(retained_path, cleaned)
+        if malformed:
+            malformed_path = retained_path.with_name(retained_path.name + ".malformed")
+            _atomic_trace_write(malformed_path, malformed)
+            metadata["malformed_path"] = str(malformed_path)
+            metadata["malformed_sha256"] = _sha256_bytes(malformed)
+    except OSError as error:
+        return {
+            "status": "unavailable",
+            "error_type": type(error).__name__,
+            "error": error.strerror or str(error),
+            "path": None,
+            "raw_retained": True,
+        }
+    return {**metadata, "path": str(retained_path), "raw_retained": False}
 
 
-def _sanitize_command_records(records: list[dict[str, Any]], evidence_root: Path, prefix: str) -> list[dict[str, Any]]:
+def _atomic_trace_write(path: Path, payload: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(payload)
+        temporary.replace(path)
+    except OSError as error:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError as cleanup_error:
+            raise OSError(f"{error}; incomplete trace cleanup failed: {cleanup_error}") from error
+        raise
+
+
+def _retained_trace_path(
+    raw_path: Path,
+    retained_path: Path,
+    trace: dict[str, Any],
+    *,
+    private_root: Path | None = None,
+    private_name: str | None = None,
+) -> str | None:
+    if trace.get("status") in ("complete", "partial") and retained_path.is_file():
+        if raw_path.resolve(strict=False) != retained_path.resolve(strict=False):
+            raw_path.unlink(missing_ok=True)
+        trace["path"] = str(retained_path)
+        trace["raw_retained"] = False
+        return str(retained_path)
+    if raw_path.is_file():
+        if private_root is not None:
+            private_root.mkdir(parents=True, exist_ok=True, mode=0o700)
+            private_root.chmod(0o700)
+            private_path = private_root / (private_name or raw_path.name)
+            shutil.copy2(raw_path, private_path)
+            private_path.chmod(0o600)
+            trace["path"] = None
+            trace["raw_path"] = str(private_path)
+            trace["raw_retained"] = True
+            return str(private_path)
+        raw_path.chmod(0o600)
+        trace["path"] = None
+        trace["raw_path"] = str(raw_path)
+        trace["raw_retained"] = True
+        return str(raw_path)
+    trace["path"] = None
+    trace["raw_retained"] = False
+    return None
+
+
+def _sanitize_command_records(records: list[dict[str, Any]], evidence_root: Path, prefix: str, redactor=None) -> list[dict[str, Any]]:
     for index, record in enumerate(records):
         for field in ("stdout_log", "stderr_log"):
             if not record.get(field):
                 continue
             raw_path = Path(record[field])
             safe_path = evidence_root / f"{prefix}-{index:02d}-{field}.log"
-            record[field] = str(safe_path)
-            record.setdefault("retained_traces", {})[field] = _safe_trace(raw_path, safe_path)
-            raw_path.unlink(missing_ok=True)
+            trace = _safe_trace(raw_path, safe_path, redactor=redactor)
+            record[field] = _retained_trace_path(raw_path, safe_path, trace)
+            record.setdefault("retained_traces", {})[field] = trace
     return records
 
 
-def _sanitize_grade_logs(grade: dict[str, Any], evidence_root: Path) -> None:
+def _sanitize_grade_logs(grade: dict[str, Any], evidence_root: Path, redactor=None) -> None:
     checks = grade.get("checks", {})
     if not isinstance(checks, dict):
         return
@@ -481,9 +545,9 @@ def _sanitize_grade_logs(grade: dict[str, Any], evidence_root: Path) -> None:
                     continue
                 raw_path = Path(command[field])
                 safe_path = evidence_root / f"grade-{counter:03d}-{field}.log"
-                command[field] = str(safe_path)
-                command.setdefault("retained_traces", {})[field] = _safe_trace(raw_path, safe_path)
-                raw_path.unlink(missing_ok=True)
+                trace = _safe_trace(raw_path, safe_path, redactor=redactor)
+                command[field] = _retained_trace_path(raw_path, safe_path, trace)
+                command.setdefault("retained_traces", {})[field] = trace
                 counter += 1
 
 
@@ -495,6 +559,7 @@ def _preindex_code_kb(
     seed_digest: str,
     intelligence: Path,
     timeout: float,
+    redactor=None,
 ) -> dict[str, Any]:
     result: dict[str, Any] = {
         "status": "failed",
@@ -533,11 +598,16 @@ def _preindex_code_kb(
     stdout_path = Path(execution["stdout_log"]) if execution and execution.get("stdout_log") else output / "stdout.log"
     stderr_path = Path(execution["stderr_log"]) if execution and execution.get("stderr_log") else output / "stderr.log"
     log_root = evidence / "indexing"
-    stdout_trace = _safe_trace(stdout_path, log_root / "stdout.log")
-    stderr_trace = _safe_trace(stderr_path, log_root / "stderr.log")
-    for path in (stdout_path, stderr_path):
-        path.unlink(missing_ok=True)
-    shutil.rmtree(output, ignore_errors=True)
+    stdout_safe_path = log_root / "stdout.log"
+    stderr_safe_path = log_root / "stderr.log"
+    stdout_trace = _safe_trace(stdout_path, stdout_safe_path, redactor=redactor)
+    stderr_trace = _safe_trace(stderr_path, stderr_safe_path, redactor=redactor)
+    stdout_log = _retained_trace_path(stdout_path, stdout_safe_path, stdout_trace)
+    stderr_log = _retained_trace_path(stderr_path, stderr_safe_path, stderr_trace)
+    if stdout_trace.get("raw_retained") or stderr_trace.get("raw_retained"):
+        output.chmod(0o700)
+    else:
+        shutil.rmtree(output, ignore_errors=True)
     try:
         source_after = edit_snapshot.snapshot_tree(project, excluded=case["generated_roots"])["digest"]
     except Exception as error:
@@ -548,8 +618,8 @@ def _preindex_code_kb(
         "exit_status": execution.get("exit_status") if execution else None,
         "timed_out": execution.get("timed_out") if execution else False,
         "process_cleanup": execution.get("process_cleanup") if execution else None,
-        "stdout_log": stdout_trace.get("path"),
-        "stderr_log": stderr_trace.get("path"),
+        "stdout_log": stdout_log,
+        "stderr_log": stderr_log,
         "stdout_redaction": stdout_trace,
         "stderr_redaction": stderr_trace,
         "source_digest_after": source_after,
@@ -589,6 +659,79 @@ def _attempt_timing(indexing: Mapping[str, Any], execution: Mapping[str, Any]) -
     }
 
 
+def _progress_metadata(value: Mapping[str, Any], fields: Sequence[str]) -> dict[str, Any]:
+    return {field: value[field] for field in fields if field in value}
+
+
+def _runtime_setup_progress(records: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    fields = ("command_id", "exit_status", "timed_out", "elapsed_seconds", "process_cleanup", "test_execution_observed", "passed")
+    return [_progress_metadata(record, fields) for record in records if isinstance(record, Mapping)]
+
+
+def _indexing_progress(indexing: Mapping[str, Any]) -> dict[str, Any]:
+    fields = ("status", "elapsed_seconds", "source_digest_before", "source_digest_after", "exit_status", "timed_out", "process_cleanup")
+    return _progress_metadata(indexing, fields)
+
+
+def _source_audit_progress(source_audit: Mapping[str, Any]) -> dict[str, Any]:
+    fields = ("source_sha256", "redacted_sha256", "redactor_changed", "redactor_status", "seed_unchanged", "seed_digest")
+    return _progress_metadata(source_audit, fields)
+
+
+def _execution_progress(execution: Mapping[str, Any], error: str | None = None) -> dict[str, Any]:
+    fields = ("exit_status", "timed_out", "elapsed_seconds", "process_cleanup", "network_scope", "turn_completed_event")
+    result = _progress_metadata(execution, fields)
+    if error:
+        result["error_type"] = error.partition(":")[0]
+    for name in ("stdout_redaction", "stderr_redaction", "answer_redaction"):
+        trace = execution.get(name)
+        if isinstance(trace, Mapping):
+            result[name] = _progress_metadata(trace, ("status", "error_type", "error", "replacement_error", "analysis_read_error", "original_sha256", "redacted_sha256", "changed", "original_bytes", "redacted_bytes", "malformed_lines", "raw_retained"))
+    return result
+
+
+def _trace_metrics_progress(metrics: Mapping[str, Any]) -> dict[str, Any]:
+    fields = ("status", "input_tokens", "output_tokens", "cache_tokens", "tool_calls", "code_kb_calls", "mcp_call_count", "command_count", "error_count", "completed", "event_count", "invalid_json_lines")
+    return _progress_metadata(metrics, fields)
+
+
+def _checkpoint_attempt(
+    attempt_path: Path,
+    identity: Mapping[str, Any],
+    state: str,
+    started_at: str,
+    dispatch_may_occur: bool,
+    *,
+    runtime_setup: Sequence[Mapping[str, Any]] | None = None,
+    source_audit: Mapping[str, Any] | None = None,
+    indexing: Mapping[str, Any] | None = None,
+    timing: Mapping[str, Any] | None = None,
+    execution: Mapping[str, Any] | None = None,
+    execution_error: str | None = None,
+    trace_metrics: Mapping[str, Any] | None = None,
+) -> None:
+    progress: dict[str, Any] = {
+        **identity,
+        "state": state,
+        "started_at": started_at,
+        "updated_at": _timestamp(),
+        "dispatch_may_occur": dispatch_may_occur,
+    }
+    if runtime_setup is not None:
+        progress["runtime_setup"] = _runtime_setup_progress(runtime_setup)
+    if source_audit is not None:
+        progress["source_audit"] = _source_audit_progress(source_audit)
+    if indexing is not None:
+        progress["indexing"] = _indexing_progress(indexing)
+    if timing is not None:
+        progress["timing"] = dict(timing)
+    if execution is not None:
+        progress["execution"] = _execution_progress(execution, execution_error)
+    if trace_metrics is not None:
+        progress["trace_metrics"] = _trace_metrics_progress(trace_metrics)
+    _atomic_json(attempt_path / "status.json", progress)
+
+
 def _turn_completed(stdout: bytes) -> bool:
     for line in stdout.splitlines():
         try:
@@ -600,7 +743,7 @@ def _turn_completed(stdout: bytes) -> bool:
     return False
 
 
-def _trace_metrics(stdout: bytes) -> dict[str, Any]:
+def _trace_metrics(stdout: bytes, redactor=None) -> dict[str, Any]:
     if len(stdout) > 64 * 1024 * 1024:
         return {"status": "too_large", "bytes": len(stdout)}
     events = []
@@ -627,8 +770,8 @@ def _trace_metrics(stdout: bytes) -> dict[str, Any]:
     if not isinstance(mcp_calls, list) or not isinstance(commands, list) or not isinstance(errors, list):
         return {"status": "invalid_summary", "event_count": len(events), "invalid_json_lines": invalid_lines}
     try:
-        safe_mcp_calls, _ = _redact_trace_value(mcp_calls)
-        safe_commands, _ = _redact_trace_value(commands)
+        safe_mcp_calls, _ = _redact_trace_value(mcp_calls, redactor=redactor)
+        safe_commands, _ = _redact_trace_value(commands, redactor=redactor)
     except Exception:
         return {"status": "unavailable", "event_count": len(events), "invalid_json_lines": invalid_lines}
     return {
@@ -758,6 +901,13 @@ def _verify_codex_artifacts(artifact_paths: Mapping[str, Path]) -> tuple[Path, P
     return codex, companion
 
 
+def _verify_outbound_redactor(artifact_paths: Mapping[str, Path]) -> Path:
+    redactor = artifact_paths["outbound_redactor"]
+    if redactor.is_symlink() or not redactor.is_file() or not os.access(redactor, os.X_OK):
+        raise CampaignError("outbound redactor must be an executable regular file")
+    return redactor
+
+
 def _assert_disjoint_mounts(dependencies: Mapping[str, Path], tools: Mapping[str, Path], codex: Path, companion: Path, intelligence: Path | None) -> None:
     mounts = [(f"dependency:{name}", path) for name, path in dependencies.items()]
     mounts.extend((f"tool:{name}", path) for name, path in tools.items())
@@ -789,6 +939,7 @@ def _run_slot(
     runtime_hash: str,
     output_root: Path,
     auth_file: Path,
+    outbound_redactor: Path,
 ) -> dict[str, Any]:
     identity = _attempt_identity(manifest_hash, runner_hash, runtime_hash, schedule_index, job)
     attempt_path = _slot_path(output_root, schedule_index, job)
@@ -796,8 +947,8 @@ def _run_slot(
     if previous is not None:
         return previous
     attempt_path.mkdir(parents=True)
-    status_path = attempt_path / "status.json"
-    _atomic_json(status_path, {**identity, "state": "preparing", "started_at": _timestamp(), "dispatch_may_occur": False})
+    started_at = _timestamp()
+    _checkpoint_attempt(attempt_path, identity, "preparing", started_at, False)
     work = attempt_path / "work"
     evidence = attempt_path / "evidence"
     work.mkdir()
@@ -837,7 +988,16 @@ def _run_slot(
         runtime_setup = edit_evaluation._prepared_runtime_state(agent_project, work, evidence, case_validated, dependencies, case_tools, "agent")
     except Exception as error:
         return _finish_preflight(attempt_path, identity, "runtime_setup_failed", {"failure": f"{type(error).__name__}: {error}", "seed_digest": seed_digest})
-    _sanitize_command_records(runtime_setup, evidence / "runtime", "setup")
+    _sanitize_command_records(runtime_setup, evidence / "runtime", "setup", redactor=outbound_redactor)
+    _checkpoint_attempt(
+        attempt_path,
+        identity,
+        "runtime_setup_complete",
+        started_at,
+        False,
+        runtime_setup=runtime_setup,
+        indexing={"status": "not_started", "elapsed_seconds": None},
+    )
     if runtime_setup and not edit_evaluation._commands_pass(runtime_setup):
         return _finish_preflight(attempt_path, identity, "runtime_setup_failed", {"runtime_setup": runtime_setup, "seed_digest": seed_digest})
     try:
@@ -851,7 +1011,8 @@ def _run_slot(
         indexing = {"status": "not_started", "elapsed_seconds": None, "failure": "runtime setup created a preexisting code-kb index"}
         return _finish_preflight(attempt_path, identity, "preexisting_index", {"failure": indexing["failure"], "indexing": indexing, "runtime_setup": runtime_setup})
     if job["arm"] == "code-kb":
-        _atomic_json(status_path, {**identity, "state": "preindexing", "started_at": _timestamp(), "dispatch_may_occur": False})
+        indexing = {"status": "running", "elapsed_seconds": None}
+        _checkpoint_attempt(attempt_path, identity, "preindexing", started_at, False, runtime_setup=runtime_setup, indexing=indexing)
         indexing = _preindex_code_kb(
             agent_project,
             work / "state-agent",
@@ -860,13 +1021,46 @@ def _run_slot(
             seed_digest,
             intelligence,
             controls["timeout_seconds"],
+            redactor=outbound_redactor,
+        )
+        _checkpoint_attempt(
+            attempt_path,
+            identity,
+            "preindex_complete",
+            started_at,
+            False,
+            runtime_setup=runtime_setup,
+            indexing=indexing,
+            timing=_attempt_timing(indexing, {}),
         )
         if indexing["status"] != "completed":
             return _finish_preflight(attempt_path, identity, "preindex_failed", {"indexing": indexing, "runtime_setup": runtime_setup})
+    else:
+        _checkpoint_attempt(
+            attempt_path,
+            identity,
+            "preindex_complete",
+            started_at,
+            False,
+            runtime_setup=runtime_setup,
+            indexing=indexing,
+            timing=_attempt_timing(indexing, {}),
+        )
     try:
-        source_audit, source_payload = _source_audit(agent_project, case_validated, seed_digest, durable_seed)
+        source_audit, source_payload = _source_audit(agent_project, case_validated, seed_digest, durable_seed, redactor=outbound_redactor)
     except Exception as error:
         return _finish_preflight(attempt_path, identity, "source_audit_failed", {"failure": f"{type(error).__name__}: {error}"})
+    _checkpoint_attempt(
+        attempt_path,
+        identity,
+        "source_audited",
+        started_at,
+        False,
+        runtime_setup=runtime_setup,
+        source_audit=source_audit,
+        indexing=indexing,
+        timing=_attempt_timing(indexing, {}),
+    )
     if not source_audit["seed_unchanged"]:
         return _finish_preflight(attempt_path, identity, "durable_seed_changed", {"source_audit": source_audit})
     try:
@@ -876,7 +1070,7 @@ def _run_slot(
         profile_payload = _framed_payload(profile_files)
     except Exception as error:
         return _finish_preflight(attempt_path, identity, "profile_preflight_failed", {"failure": f"{type(error).__name__}: {error}", "source_audit": source_audit})
-    profile_redacted, profile_redaction = _trace_redaction(profile_payload)
+    profile_redacted, profile_redaction = _trace_redaction(profile_payload, redactor=outbound_redactor)
     request_path = case_dir / case_validated["request"]
     try:
         request_bytes = request_path.read_bytes()
@@ -891,7 +1085,7 @@ def _run_slot(
     except Exception as error:
         return _finish_preflight(attempt_path, identity, "prompt_preflight_failed", {"failure": f"{type(error).__name__}: {error}", "source_audit": source_audit})
     prompt_bytes = prompt.encode("utf-8")
-    prompt_redacted, prompt_redaction = _trace_redaction(prompt_bytes)
+    prompt_redacted, prompt_redaction = _trace_redaction(prompt_bytes, redactor=outbound_redactor)
     combined_outbound = source_payload + prompt_bytes + profile_payload
     secret_matches = _secret_environment_matches(combined_outbound)
     if profile_redacted is None or prompt_redacted is None or profile_redaction["changed"] or prompt_redaction["changed"] or secret_matches:
@@ -927,54 +1121,92 @@ def _run_slot(
         private_profile = Path(private_profile_context.name) / "profile"
         agent_argv = ["codex", "exec", "--json", "--ephemeral", "--ignore-rules", "--color", "never", "-o", "/state/final.txt", prompt]
         command_hash = _sha256_bytes(json.dumps(agent_argv, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
-        _atomic_json(status_path, {
-            **identity,
-            "state": "dispatching",
-            "started_at": _timestamp(),
-            "dispatch_may_occur": True,
-            "prompt_sha256": _sha256_bytes(prompt_bytes),
-            "profile_sha256": profile_hash,
-            "command_sha256": command_hash,
-            "source_seed_digest": seed_digest,
-        })
+        _checkpoint_attempt(
+            attempt_path,
+            identity,
+            "dispatching",
+            started_at,
+            True,
+            runtime_setup=runtime_setup,
+            source_audit=source_audit,
+            indexing=indexing,
+            timing=_attempt_timing(indexing, {}),
+        )
         raw_execution = None
         execution_error = None
-        with tempfile.TemporaryDirectory(prefix="completed-edit-agent-log-") as temporary_logs:
-            raw_output = Path(temporary_logs) / "codex-output"
+        private_raw_root = attempt_path / "private-raw"
+        private_raw_root.mkdir(mode=0o700)
+        private_raw_root.chmod(0o700)
+        raw_output = private_raw_root / "agent-output"
+        try:
+            raw_execution = edit_sandbox.run(
+                agent_project,
+                work / "state-agent",
+                raw_output,
+                controls["timeout_seconds"],
+                "agent",
+                agent_argv,
+                dependencies=dependencies,
+                tools=agent_tools,
+                protect=edit_evaluation._existing_protection(agent_project, case_validated),
+                network=False,
+                private_profile=private_profile,
+                auth_file=auth_file,
+            )
+        except Exception as error:
+            execution_error = f"{type(error).__name__}: {error}"
+        returned_execution = raw_execution or {
+            "exit_status": None,
+            "timed_out": False,
+            "elapsed_seconds": None,
+            "process_cleanup": {"attempted": False, "complete": False, "signal": None},
+            "network_scope": "disabled",
+        }
+        _checkpoint_attempt(
+            attempt_path,
+            identity,
+            "execution_returned",
+            started_at,
+            True,
+            runtime_setup=runtime_setup,
+            source_audit=source_audit,
+            indexing=indexing,
+            timing=_attempt_timing(indexing, returned_execution),
+            execution=returned_execution,
+            execution_error=execution_error,
+        )
+        raw_stdout_path = Path(raw_execution["stdout_log"]) if raw_execution and raw_execution.get("stdout_log") else raw_output / "stdout.log"
+        raw_stderr_path = Path(raw_execution["stderr_log"]) if raw_execution and raw_execution.get("stderr_log") else raw_output / "stderr.log"
+        stdout_read_error = None
+        try:
+            raw_stdout = raw_stdout_path.read_bytes()
+        except OSError as error:
+            raw_stdout = b""
+            stdout_read_error = {"error_type": type(error).__name__, "error": error.strerror or str(error)}
+        turn_completed = _turn_completed(raw_stdout)
+        agent_evidence = evidence / "agent"
+        stdout_safe_path = agent_evidence / "stdout.log"
+        stderr_safe_path = agent_evidence / "stderr.log"
+        stdout_trace = _safe_trace(raw_stdout_path, stdout_safe_path, jsonl=True, redactor=outbound_redactor)
+        stderr_trace = _safe_trace(raw_stderr_path, stderr_safe_path, redactor=outbound_redactor)
+        if stdout_read_error is not None:
+            stdout_trace["analysis_read_error"] = stdout_read_error
+        stdout_log = _retained_trace_path(raw_stdout_path, stdout_safe_path, stdout_trace)
+        stderr_log = _retained_trace_path(raw_stderr_path, stderr_safe_path, stderr_trace)
+        final_path = work / "state-agent" / "final.txt"
+        answer_trace = _safe_trace(final_path, evidence / "answer.txt", redactor=outbound_redactor)
+        if answer_trace.get("status") == "complete" and final_path.is_file():
             try:
-                raw_execution = edit_sandbox.run(
-                    agent_project,
-                    work / "state-agent",
-                    raw_output,
-                    controls["timeout_seconds"],
-                    "agent",
-                    agent_argv,
-                    dependencies=dependencies,
-                    tools=agent_tools,
-                    protect=edit_evaluation._existing_protection(agent_project, case_validated),
-                    network=False,
-                    private_profile=private_profile,
-                    auth_file=auth_file,
-                )
-            except Exception as error:
-                execution_error = f"{type(error).__name__}: {error}"
-            raw_stdout_path = Path(raw_execution["stdout_log"]) if raw_execution and raw_execution.get("stdout_log") else raw_output / "stdout.log"
-            raw_stderr_path = Path(raw_execution["stderr_log"]) if raw_execution and raw_execution.get("stderr_log") else raw_output / "stderr.log"
-            raw_stdout = raw_stdout_path.read_bytes() if raw_stdout_path.is_file() else b""
-            turn_completed = _turn_completed(raw_stdout)
-            agent_evidence = evidence / "agent"
-            stdout_trace = _safe_trace(raw_stdout_path, agent_evidence / "stdout.log", jsonl=True)
-            stderr_trace = _safe_trace(raw_stderr_path, agent_evidence / "stderr.log")
-            final_path = work / "state-agent" / "final.txt"
-            answer_trace = _safe_trace(final_path, evidence / "answer.txt")
-            if answer_trace.get("status") == "complete" and final_path.is_file():
                 final_path.write_bytes((evidence / "answer.txt").read_bytes())
+            except OSError as error:
+                answer_trace["replacement_error"] = error.strerror or str(error)
+                answer_trace["raw_retained"] = True
         if raw_execution is None:
             raw_execution = {"exit_status": None, "timed_out": False, "elapsed_seconds": None, "process_cleanup": {"attempted": False, "complete": False, "signal": None}, "network_scope": "disabled"}
         execution = {
             **raw_execution,
-            "stdout_log": stdout_trace.get("path"),
-            "stderr_log": stderr_trace.get("path"),
+            "stdout_log": stdout_log,
+            "stderr_log": stderr_log,
             "stdout_redaction": stdout_trace,
             "stderr_redaction": stderr_trace,
             "answer_path": answer_trace.get("path") if answer_trace.get("status") == "complete" else None,
@@ -982,7 +1214,21 @@ def _run_slot(
             "error": execution_error,
             "turn_completed_event": turn_completed,
         }
-        trace_metrics = _trace_metrics(raw_stdout)
+        trace_metrics = _trace_metrics(raw_stdout, redactor=outbound_redactor)
+        _checkpoint_attempt(
+            attempt_path,
+            identity,
+            "agent_captured",
+            started_at,
+            True,
+            runtime_setup=runtime_setup,
+            source_audit=source_audit,
+            indexing=indexing,
+            timing=_attempt_timing(indexing, raw_execution),
+            execution=execution,
+            execution_error=execution_error,
+            trace_metrics=trace_metrics,
+        )
         completed = bool(raw_execution.get("exit_status") == 0 and not raw_execution.get("timed_out") and turn_completed and execution_error is None)
         try:
             seed_after_agent = edit_snapshot.snapshot_tree(seed_copy, excluded=case_validated["generated_roots"])["digest"]
@@ -990,6 +1236,20 @@ def _run_slot(
             seed_unchanged = seed_after_agent == seed_digest and durable_after_agent == seed_digest
         except Exception:
             seed_unchanged = False
+        _checkpoint_attempt(
+            attempt_path,
+            identity,
+            "capture_ready",
+            started_at,
+            True,
+            runtime_setup=runtime_setup,
+            source_audit={**source_audit, "seed_unchanged": seed_unchanged},
+            indexing=indexing,
+            timing=_attempt_timing(indexing, raw_execution),
+            execution=execution,
+            execution_error=execution_error,
+            trace_metrics=trace_metrics,
+        )
         bundle_path = attempt_path / "bundle"
         try:
             bundle = edit_snapshot.capture_bundle(seed_snapshot, agent_project, bundle_path, protected=case_validated["protected_paths"], excluded=case_validated["generated_roots"])
@@ -1012,6 +1272,20 @@ def _run_slot(
                 "seed_project": str(seed_copy),
             })
         grade_path = attempt_path / "grade"
+        _checkpoint_attempt(
+            attempt_path,
+            identity,
+            "grading",
+            started_at,
+            True,
+            runtime_setup=runtime_setup,
+            source_audit={**source_audit, "seed_unchanged": seed_unchanged},
+            indexing=indexing,
+            timing=_attempt_timing(indexing, raw_execution),
+            execution=execution,
+            execution_error=execution_error,
+            trace_metrics=trace_metrics,
+        )
         try:
             grade = edit_evaluation.replay_and_grade(
                 case_dir,
@@ -1025,7 +1299,7 @@ def _run_slot(
             )
         except Exception as error:
             grade = {"behavioral_pass": False, "source_review": "pending", "acceptance_status": "grading_failed", "success": False, "error": f"{type(error).__name__}: {error}"}
-        _sanitize_grade_logs(grade, evidence / "grade")
+        _sanitize_grade_logs(grade, evidence / "grade", redactor=outbound_redactor)
         if (grade_path / "grade.json").is_file():
             _atomic_json(grade_path / "grade.json", grade)
         status = "completed" if completed else "timed_out" if raw_execution.get("timed_out") else "incomplete"
@@ -1082,7 +1356,7 @@ def run_campaign(
         raise CampaignError("campaign output must be an absolute non-symbolic path")
     output = output.resolve(strict=False)
     artifacts = _artifact_map(artifact_paths)
-    required_artifacts = {"codex", "codex_code_mode_host", "profiles", "corpus", "binary", "extractor", "trace_metrics"}
+    required_artifacts = {"codex", "codex_code_mode_host", "profiles", "corpus", "binary", "extractor", "trace_metrics", "outbound_redactor"}
     required_artifacts.add("campaign_runner")
     missing_artifacts = required_artifacts - artifacts.keys()
     if missing_artifacts:
@@ -1149,6 +1423,7 @@ def run_campaign(
         raise CampaignError("campaign schedule contains a non-object entry")
     needs_intelligence = any(schedule[index - 1].get("arm") == "code-kb" for index in selected)
     intelligence = _verify_intelligence(artifacts, bindings) if needs_intelligence else None
+    outbound_redactor = _verify_outbound_redactor(artifacts)
     for index in selected:
         job = schedule[index - 1]
         case_id = job.get("case_id")
@@ -1202,6 +1477,7 @@ def run_campaign(
             runtime_hash=runtime_hash,
             output_root=output,
             auth_file=auth,
+            outbound_redactor=outbound_redactor,
         ))
     status = "in_progress" if any(run["slot_state"] == "in_progress" for run in runs) else "finished"
     return {"status": status, "manifest_sha256": manifest_hash, "campaign_runner_sha256": runner_hash, "runtime_bindings_sha256": runtime_hash, "runs": runs}

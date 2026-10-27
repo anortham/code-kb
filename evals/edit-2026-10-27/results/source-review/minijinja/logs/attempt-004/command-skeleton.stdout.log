@@ -1,0 +1,43 @@
+// File: minijinja-cli/src/command.rs (Lines 1-457)
+
+const ADVANCED: &str = "Advanced"; // L6-6
+const BEHAVIOR: &str = "Template Behavior"; // L7-7
+const SECURITY: &str = "Security"; // L8-8
+/// Supported formats
+pub static SUPPORTED_FORMATS: &[(&str, &str, &[&str])] = &[#[cfg(feature = "cbor")] ("cbor", "CBOR", &["cbor"]), #[cfg(…; // L11-30
+/// The values for `--format` with their descriptions (and detected file
+/// extensions) for the help page and completions.
+static FORMAT_VALUES: &[(&str, &str)] = &[("auto", "detect from the file extension"), #[cfg(feature = "cbor")] ("cbor",…; // L34-53
+/// Identifies the options and arguments of the command line interface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)] pub enum Arg {
+    ConfigFile; // L59-59
+    Format; // L60-60
+    Define; // L61-61
+    Template; // L62-62
+    Output; // L63-63
+    Select; // L64-64
+    PrintConfig; // L65-65
+    Help; // L66-66
+    LongHelp; // L67-67
+    SyntaxHelp; // L68-68
+    Autoescape; // L69-69
+    Strict; // L70-70
+    NoNewline; // L71-71
+    TrimBlocks; // L72-72
+    LstripBlocks; // L73-73
+    PyCompat; // L75-75
+    Syntax; // L76-76
+    Env; // L77-77
+    NoInclude; // L78-78
+    SafePath; // L79-79
+    Fuel; // L80-80
+    Expr; // L81-81
+    ExprOut; // L82-82
+    Dump; // L83-83
+    Repl; // L85-85
+    GenerateCompletion; // L87-87
+    TemplateFile; // L88-88
+    DataFile; // L89-89
+} // L57-90
+
+pub static CLI: Cli<Arg> = Cli::new("minijinja-cli") .version(env!("CARGO_PKG_VERSION")) .max_width(120) .before_help("…; // L92-457

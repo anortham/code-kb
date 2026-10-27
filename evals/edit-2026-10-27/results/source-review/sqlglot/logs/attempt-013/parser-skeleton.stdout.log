@@ -1,0 +1,135 @@
+// File: sqlglot/parsers/bigquery.py (Lines 1-799)
+
+def _build_contains_substring(args: list) -> exp.Contains { /* 3 lines hidden: L21-L23 */ }
+def _build_date(args: list) -> exp.Date | exp.DateFromParts { /* 2 lines hidden: L27-L28 */ }
+def _normalize_bare_week(expr: E) -> E { /* 5 lines hidden: L33-L37 */ }
+def build_date_diff(expr_type: type[exp.DateDiff | exp.DatetimeDiff]) -> t.Callable[[list], exp.Expr] { /* 11 lines hidden: L43-L53; defines `_builder` */ }
+def _build_datetime(args: list) -> exp.Func { /* 5 lines hidden: L57-L61 */ }
+def _build_extract_json_with_default_path(expr_type: type[E]) -> t.Callable { /* 6 lines hidden: L67-L72; defines `_builder` */ }
+def _build_format_time(expr_type: type[exp.Expr]) -> t.Callable[[list, Dialect], exp.TimeToStr] { /* 8 lines hidden: L76-L83; defines `_builder` */ }
+def _build_json_strip_nulls(args: list) -> exp.JSONStripNulls { /* 7 lines hidden: L87-L93 */ }
+def _build_levenshtein(args: list) -> exp.Levenshtein { /* 6 lines hidden: L97-L102 */ }
+def _build_parse_date(args: list, dialect: Dialect) -> exp.StrToDate { /* 3 lines hidden: L106-L108 */ }
+def _build_parse_timestamp(args: list, dialect: Dialect) -> exp.StrToTime { /* 4 lines hidden: L112-L115 */ }
+def _build_parse_datetime(args: list, dialect: Dialect) -> exp.ParseDatetime { /* 3 lines hidden: L119-L121 */ }
+def _build_regexp_extract(expr_type: type[E], default_group: exp.Expr | None = None) -> t.Callable { /* 20 lines hidden: L125-L144; defines `_builder` */ }
+def _build_time(args: list) -> exp.Func { /* 5 lines hidden: L148-L152 */ }
+def _build_timestamp(args: list) -> exp.Timestamp { /* 3 lines hidden: L156-L158 */ }
+def _build_to_hex(args: list) -> exp.Hex | exp.MD5 { /* 2 lines hidden: L162-L163 */ }
+_DOMAIN_DOT = "\0"; // L166-166
+def _split_qualified_name(name: str, min_num_words: int) -> list[str | None] { /* 8 lines hidden: L176-L183 */ }
+MAKE_INTERVAL_KWARGS = ["year", "month", "day", "hour", "minute", "second"]; // L186-186
+class BigQueryParser extends parser.Parser {
+    PREFIXED_PIVOT_COLUMNS: t.ClassVar = True; // L190-190
+    LOG_DEFAULTS_TO_LN: t.ClassVar = True; // L191-191
+    SUPPORTS_IMPLICIT_UNNEST: t.ClassVar = True; // L192-192
+    JOINS_HAVE_EQUAL_PRECEDENCE: t.ClassVar = True; // L193-193
+    ADJACENT_STRINGS_CANNOT_BE_CONNECTED: t.ClassVar = True; // L194-194
+    SUPPORTS_DIGIT_PREFIXED_FIELD_NAMES: t.ClassVar = True; // L195-195
+    ID_VAR_TOKENS: t.ClassVar = {*parser.Parser.ID_VAR_TOKENS, TokenType.GRANT} - {TokenType.ASC, TokenType.DESC}; // L198-201
+    ALIAS_TOKENS: t.ClassVar = {*parser.Parser.ALIAS_TOKENS, TokenType.GRANT} - {TokenType.ASC, TokenType.DESC, *parser.Par…; // L203-206
+    TABLE_ALIAS_TOKENS: t.ClassVar = {*parser.Parser.TABLE_ALIAS_TOKENS, TokenType.ANTI, TokenType.GRANT, TokenType.SEMI} -…; // L208-213
+    COMMENT_TABLE_ALIAS_TOKENS: t.ClassVar = {*parser.Parser.COMMENT_TABLE_ALIAS_TOKENS, TokenType.GRANT} - {TokenType.ASC,…; // L215-218
+    UPDATE_ALIAS_TOKENS: t.ClassVar = {*parser.Parser.UPDATE_ALIAS_TOKENS, TokenType.GRANT} - {TokenType.ASC, TokenType.DES…; // L220-223
+    FUNCTIONS: t.ClassVar[dict[str, t.Callable]] = {**{k: v for k, v in parser.Parser.FUNCTIONS.items() if k != "SEARCH"},…; // L225-329
+    lambda args: _normalize_bare_week(
+            exp.DateTrunc(
+                unit=seq_get(args, 1),
+                this=seq_get(args, 0),
+                zone=seq_get(args, 2),
+            )
+        ) { /* 7 lines hidden: L238-L244 */ }
+    lambda args: _normalize_bare_week(exp.DatetimeTrunc.from_arg_list(args)); // L249-249
+    lambda args: _normalize_bare_week(exp.LastDay.from_arg_list(args)); // L265-265
+    lambda args: exp.Length(this=seq_get(args, 0), binary=True); // L266-266
+    lambda args: exp.Normalize(
+            this=seq_get(args, 0), form=seq_get(args, 1), is_casefold=True
+        ) { /* 3 lines hidden: L269-L271 */ }
+    lambda args, dialect: build_formatted_time(exp.ParseTime)(
+            [seq_get(args, 1), seq_get(args, 0)], dialect
+        ) { /* 3 lines hidden: L275-L277 */ }
+    lambda args: exp.SHA2Digest(
+            this=seq_get(args, 0), length=exp.Literal.number(256)
+        ) { /* 3 lines hidden: L286-L288 */ }
+    lambda args: exp.SHA2Digest(
+            this=seq_get(args, 0), length=exp.Literal.number(512)
+        ) { /* 3 lines hidden: L289-L291 */ }
+    lambda args: exp.Split(
+            # https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#split
+            this=seq_get(args, 0),
+            expression=seq_get(args, 1) or exp.Literal.string(","),
+        ) { /* 5 lines hidden: L293-L297 */ }
+    lambda args: exp.DateBin(
+            this=seq_get(args, 1),
+            expression=seq_get(args, 0),
+            origin=seq_get(args, 2),
+        ) { /* 5 lines hidden: L305-L309 */ }
+    lambda args: exp.UnixToTime(
+            this=seq_get(args, 0), scale=exp.UnixToTime.MICROS
+        ) { /* 3 lines hidden: L310-L312 */ }
+    lambda args: exp.UnixToTime(
+            this=seq_get(args, 0), scale=exp.UnixToTime.MILLIS
+        ) { /* 3 lines hidden: L313-L315 */ }
+    lambda args: exp.UnixToTime(this=seq_get(args, 0)); // L316-316
+    lambda args: _normalize_bare_week(
+            exp.TimestampTrunc.from_arg_list(args)
+        ) { /* 3 lines hidden: L317-L319 */ }
+    lambda args: exp.JSONFormat(
+            this=seq_get(args, 0), options=seq_get(args, 1), to_json=True
+        ) { /* 3 lines hidden: L320-L322 */ }
+    lambda args: exp.WeekStart(this=exp.var(seq_get(args, 0))); // L328-328
+    FUNCTION_PARSERS = {**{k: v for k, v in parser.Parser.FUNCTION_PARSERS.items() if k != "TRIM"}, "ARRAY": lambda self: s…; // L331-352
+    lambda self: self.expression(
+            exp.Array(expressions=[self._parse_statement()], struct_name_inheritance=True)
+        ) { /* 3 lines hidden: L333-L335 */ }
+    lambda self: self.expression(
+            exp.JSONArray(expressions=self._parse_csv(self._parse_bitwise))
+        ) { /* 3 lines hidden: L336-L338 */ }
+    lambda self: self._parse_make_interval(); // L339-339
+    lambda self: self._parse_ml(exp.Predict); // L340-340
+    lambda self: self._parse_translate(); // L341-341
+    lambda self: self._parse_features_at_time(); // L342-342
+    lambda self: self._parse_ml(exp.GenerateEmbedding); // L343-343
+    lambda self: self._parse_ml(exp.GenerateEmbedding, is_text=True); // L344-344
+    lambda self: self._parse_generate(exp.GenerateText); // L345-345
+    lambda self: self._parse_generate(exp.GenerateTable); // L346-346
+    lambda self: self._parse_generate(exp.GenerateBool); // L347-347
+    lambda self: self._parse_generate(exp.GenerateInt); // L348-348
+    lambda self: self._parse_generate(exp.GenerateDouble); // L349-349
+    lambda self: self._parse_vector_search(); // L350-350
+    lambda self: self._parse_forecast(); // L351-351
+    NO_PAREN_FUNCTIONS: t.ClassVar = {**parser.Parser.NO_PAREN_FUNCTIONS, TokenType.CURRENT_DATETIME: exp.CurrentDatetime}; // L354-357
+    NESTED_TYPE_TOKENS: t.ClassVar = {*parser.Parser.NESTED_TYPE_TOKENS, TokenType.TABLE}; // L359-362
+    PROPERTY_PARSERS: t.ClassVar = {**parser.Parser.PROPERTY_PARSERS, "OPTIONS": lambda self: self._parse_with_property()}; // L364-367
+    lambda self: self._parse_with_property(); // L366-366
+    CONSTRAINT_PARSERS: t.ClassVar = {**parser.Parser.CONSTRAINT_PARSERS, "OPTIONS": lambda self: exp.Properties(expression…; // L369-372
+    lambda self: exp.Properties(expressions=self._parse_with_property()); // L371-371
+    RANGE_PARSERS: t.ClassVar = {k: v for k, v in parser.Parser.RANGE_PARSERS.items() if k != TokenType.OVERLAPS}; // L374-376
+    DASHED_TABLE_PART_FOLLOW_TOKENS: t.ClassVar = {TokenType.DOT, TokenType.L_PAREN, TokenType.R_PAREN}; // L378-382
+    STATEMENT_PARSERS: t.ClassVar = {**parser.Parser.STATEMENT_PARSERS, TokenType.ELSE: lambda self: self._parse_as_command…; // L384-390
+    lambda self: self._parse_as_command(self._prev); // L386-386
+    lambda self: self._parse_as_command(self._prev); // L387-387
+    lambda self: self._parse_for_in(); // L388-388
+    lambda self: self._parse_export_data(); // L389-389
+    BRACKET_OFFSETS: t.ClassVar = {"OFFSET": (0, False), "ORDINAL": (1, False), "SAFE_OFFSET": (0, True), "SAFE_ORDINAL": (…; // L392-397
+    def _parse_for_in(self) -> exp.ForIn | exp.Command { /* 7 lines hidden: L400-L406 */ }
+    def _parse_table_part(self, schema: bool = False) -> exp.Expr | None { /* 29 lines hidden: L409-L437 */ }
+    def _parse_table_parts(self, schema: bool = False, is_db_reference: bool = False, wildcard: bool = False, fast: bool = False) -> exp.Table | exp.Dot | None { /* 79 lines hidden: L446-L524 */ }
+    def _parse_column(self) -> exp.Expr | None { /* 17 lines hidden: L527-L543 */ }
+    def _parse_cluster_property(self) -> exp.ClusterProperty { /* 5 lines hidden: L546-L550 */ }
+    @t.overload def _parse_json_object(self, agg: t.Literal[False]) -> exp.JSONObject; // L553-553
+    @t.overload def _parse_json_object(self, agg: t.Literal[True]) -> exp.JSONObjectAgg; // L556-556
+    def _parse_json_object(self, agg=False) { /* 19 lines hidden: L559-L577 */ }
+    def _parse_bracket(self, this: exp.Expr | None = None) -> exp.Expr | None { /* 23 lines hidden: L580-L602 */ }
+    def _parse_unnest(self, with_alias: bool = True) -> exp.Unnest | None { /* 19 lines hidden: L605-L623 */ }
+    def _parse_make_interval(self) -> exp.MakeInterval { /* 18 lines hidden: L626-L643 */ }
+    def _parse_ml(self, expr_type: type[E], **kwargs: t.Any) -> E { /* 18 lines hidden: L646-L663 */ }
+    def _parse_generate(self, expr_type: type[E], **kwargs: t.Any) -> E { /* 17 lines hidden: L666-L682 */ }
+    def _parse_translate(self) -> exp.Translate | exp.MLTranslate { /* 5 lines hidden: L686-L690 */ }
+    def _parse_forecast(self) -> exp.AIForecast | exp.MLForecast { /* 21 lines hidden: L694-L714 */ }
+    def _parse_features_at_time(self) -> exp.FeaturesAtTime { /* 14 lines hidden: L717-L730 */ }
+    def _parse_vector_search(self) -> exp.VectorSearch { /* 28 lines hidden: L733-L760 */ }
+    def _parse_export_data(self) -> exp.Export { /* 9 lines hidden: L763-L771 */ }
+    def _parse_column_ops(self, this: exp.Expr | None) -> exp.Expr | None { /* 26 lines hidden: L774-L799 */ }
+} // L189-799
+

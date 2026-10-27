@@ -1,0 +1,99 @@
+{
+  "behavioral_pass": false,
+  "case_id": "commons-lang",
+  "case_sha256": "a09f9cfab6fb450c742102aaaf5028c58bb9c8a61cf2aca4b4cbeed55f890a14",
+  "checks": {
+    "baseline_public": {
+      "commands": [
+        {
+          "command_id": "commons-public-comparable-regressions",
+          "elapsed_seconds": 14.247774,
+          "exit_status": 0,
+          "expected_output_missing": [
+            "Tests run: 130, Failures: 0, Errors: 0, Skipped: 0"
+          ],
+          "passed": false,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang/evidence/baseline-public-00-commons-public-comparable-regressions/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang/evidence/baseline-public-00-commons-public-comparable-regressions/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": false
+    },
+    "baseline_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "commons-copy-prepared-maven-cache",
+          "elapsed_seconds": 0.464979,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang/evidence/runtime-baseline-00-commons-copy-prepared-maven-cache/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang/evidence/runtime-baseline-00-commons-copy-prepared-maven-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "commons-resolve-dependencies-offline",
+          "elapsed_seconds": 3.020261,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang/evidence/runtime-baseline-01-commons-resolve-dependencies-offline/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang/evidence/runtime-baseline-01-commons-resolve-dependencies-offline/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "commons-surefire-provider-offline-cache",
+          "elapsed_seconds": 1.667409,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang/evidence/runtime-baseline-02-commons-surefire-provider-offline-cache/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang/evidence/runtime-baseline-02-commons-surefire-provider-offline-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "preparation": {
+      "commands": [],
+      "mode": "reused-inputs",
+      "passed": true
+    }
+  },
+  "created_utc": "2026-10-27T21:34:53Z",
+  "dependencies": {
+    "commons-m2": "cd2d5dbf77c5e1e38296de7e5393ae46743b745775eb15c898ddec17c5504f65"
+  },
+  "readiness_error": "EvaluationError: pinned upstream public checks did not pass",
+  "repo_id": "commons-lang",
+  "schema": 1,
+  "source_pin": "a5d6c5ed8847b2b14dacf062b646f94d6cc61a10",
+  "source_review": "pending",
+  "source_tree_sha256": "6a3a572d1f84211a81c0f35e0caf78069900ff6562794ba90afb2f3c7a05d402",
+  "status": "not_ready"
+}

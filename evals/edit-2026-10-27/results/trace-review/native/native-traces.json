@@ -1,0 +1,1522 @@
+{
+  "schema_version": 1,
+  "scope": {
+    "campaign": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2",
+    "arm": "native",
+    "schedule_slots": [
+      1,
+      3,
+      5,
+      9,
+      11,
+      14,
+      16,
+      18,
+      22,
+      24
+    ],
+    "definition_source": "trace-review sibling classification rules"
+  },
+  "inputs": [
+    {
+      "slot": 1,
+      "trial_id": "001-sqlglot-native-r1",
+      "log_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/001-sqlglot-native-r1/evidence/agent/stdout.log",
+      "log_sha256": "08f24fbbac27efbe7f8eed2390b6c412d87e26a32aca36ee862ca50b7f7005ba"
+    },
+    {
+      "slot": 3,
+      "trial_id": "003-minijinja-native-r1",
+      "log_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/003-minijinja-native-r1/evidence/agent/stdout.log",
+      "log_sha256": "7333d1e9e2845ca836305c75be5889f89de3e24f89af650841cb8176a3e17cca"
+    },
+    {
+      "slot": 5,
+      "trial_id": "005-hcl-native-r1",
+      "log_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/005-hcl-native-r1/evidence/agent/stdout.log",
+      "log_sha256": "5c8552461840e6123af3759b3bf455d634984558f85c24c3a1119fcc96584642"
+    },
+    {
+      "slot": 9,
+      "trial_id": "009-commons-lang-native-r1",
+      "log_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/009-commons-lang-native-r1/evidence/agent/stdout.log",
+      "log_sha256": "ec9d8168f4d9a534474e1bb0577265592eac307f5cf6de7d6558c8c481cce25d"
+    },
+    {
+      "slot": 11,
+      "trial_id": "011-nodatime-native-r1",
+      "log_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/011-nodatime-native-r1/evidence/agent/stdout.log",
+      "log_sha256": "3abba247465a4606b40b09ba77b3445e36d89a45c7d2b894ef39015dd2c4b210"
+    },
+    {
+      "slot": 14,
+      "trial_id": "014-sqlglot-native-r2",
+      "log_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/014-sqlglot-native-r2/evidence/agent/stdout.log",
+      "log_sha256": "aebad438345592c96f360d1f2de69787aedb03cc025b929b419da16ce1ecbf7d"
+    },
+    {
+      "slot": 16,
+      "trial_id": "016-minijinja-native-r2",
+      "log_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/016-minijinja-native-r2/evidence/agent/stdout.log",
+      "log_sha256": "44f5e397cf65cfcd2f15a44a52db36ef61138f826c72b1077bb2b6c8f55e4f9a"
+    },
+    {
+      "slot": 18,
+      "trial_id": "018-hcl-native-r2",
+      "log_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/018-hcl-native-r2/evidence/agent/stdout.log",
+      "log_sha256": "32014553f8760e3c97218483efd558afc71400324147c42a379a74a5a3ae1f1b"
+    },
+    {
+      "slot": 22,
+      "trial_id": "022-commons-lang-native-r2",
+      "log_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/022-commons-lang-native-r2/evidence/agent/stdout.log",
+      "log_sha256": "5bb21cdec0ec57cc108bbeb8a3ad981576a00535a2cb1c2bfff183cd10d73bc2"
+    },
+    {
+      "slot": 24,
+      "trial_id": "024-nodatime-native-r2",
+      "log_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/024-nodatime-native-r2/evidence/agent/stdout.log",
+      "log_sha256": "9b9618794fb526a2d52001e7e89ad5566f25a45b04c9df60e6aa08253c3033f0"
+    }
+  ],
+  "native_actions": [
+    {
+      "slot": 1,
+      "item_id": "item_2",
+      "action_kind": "source_search",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search or read of source symbols and files without relevant preceding MCP output."
+    },
+    {
+      "slot": 1,
+      "item_id": "item_3",
+      "action_kind": "repository_or_environment_state",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Repository status or environment inspection; no source navigation."
+    },
+    {
+      "slot": 1,
+      "item_id": "item_4",
+      "action_kind": "source_read",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Read of source files without relevant preceding MCP output."
+    },
+    {
+      "slot": 1,
+      "item_id": "item_5",
+      "action_kind": "source_search",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search or read of source symbols and files without relevant preceding MCP output."
+    },
+    {
+      "slot": 1,
+      "item_id": "item_6",
+      "action_kind": "compound_search",
+      "classification": "unknown",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search combines literal text and identifier terms in one command."
+    },
+    {
+      "slot": 1,
+      "item_id": "item_7",
+      "action_kind": "source_read",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Read of source files without relevant preceding MCP output."
+    },
+    {
+      "slot": 1,
+      "item_id": "item_8",
+      "action_kind": "source_read",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Read of source files without relevant preceding MCP output."
+    },
+    {
+      "slot": 1,
+      "item_id": "item_9",
+      "action_kind": "compound_search",
+      "classification": "unknown",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search combines literal text and identifier terms in one command."
+    },
+    {
+      "slot": 1,
+      "item_id": "item_11",
+      "action_kind": "repository_or_environment_state",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Repository status or environment inspection; no source navigation."
+    },
+    {
+      "slot": 1,
+      "item_id": "item_12",
+      "action_kind": "edit_or_test",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 1,
+      "item_id": "item_13",
+      "action_kind": "compound_search",
+      "classification": "unknown",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search combines literal text and identifier terms in one command."
+    },
+    {
+      "slot": 1,
+      "item_id": "item_14",
+      "action_kind": "edit_or_test",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 1,
+      "item_id": "item_15",
+      "action_kind": "edit_test_build_or_format",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 3,
+      "item_id": "item_2",
+      "action_kind": "source_search",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search or read of source symbols and files without relevant preceding MCP output."
+    },
+    {
+      "slot": 3,
+      "item_id": "item_3",
+      "action_kind": "repository_or_environment_state",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Repository status or environment inspection; no source navigation."
+    },
+    {
+      "slot": 3,
+      "item_id": "item_5",
+      "action_kind": "source_read",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Read of source files without relevant preceding MCP output."
+    },
+    {
+      "slot": 3,
+      "item_id": "item_4",
+      "action_kind": "source_search",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search or read of source symbols and files without relevant preceding MCP output."
+    },
+    {
+      "slot": 3,
+      "item_id": "item_7",
+      "action_kind": "repository_or_environment_state",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Repository status or environment inspection; no source navigation."
+    },
+    {
+      "slot": 3,
+      "item_id": "item_6",
+      "action_kind": "source_search",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search or read of source symbols and files without relevant preceding MCP output."
+    },
+    {
+      "slot": 3,
+      "item_id": "item_8",
+      "action_kind": "source_search",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search or read of source symbols and files without relevant preceding MCP output."
+    },
+    {
+      "slot": 3,
+      "item_id": "item_10",
+      "action_kind": "source_search",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search or read of source symbols and files without relevant preceding MCP output."
+    },
+    {
+      "slot": 3,
+      "item_id": "item_12",
+      "action_kind": "format_or_lint",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 3,
+      "item_id": "item_13",
+      "action_kind": "edit_or_test",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 3,
+      "item_id": "item_14",
+      "action_kind": "format_or_lint",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 3,
+      "item_id": "item_16",
+      "action_kind": "literal_search",
+      "classification": "permitted_literal_search",
+      "preceding_mcp_item_ids": [],
+      "basis": "Explicit search targets a CLI, SQL, config, or comment literal."
+    },
+    {
+      "slot": 3,
+      "item_id": "item_17",
+      "action_kind": "format_or_lint",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 5,
+      "item_id": "item_2",
+      "action_kind": "source_file_discovery",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Source-file discovery without relevant preceding MCP output."
+    },
+    {
+      "slot": 5,
+      "item_id": "item_3",
+      "action_kind": "repository_or_environment_state",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Repository status or environment inspection; no source navigation."
+    },
+    {
+      "slot": 5,
+      "item_id": "item_4",
+      "action_kind": "source_search",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search or read of source symbols and files without relevant preceding MCP output."
+    },
+    {
+      "slot": 5,
+      "item_id": "item_5",
+      "action_kind": "source_search",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search or read of source symbols and files without relevant preceding MCP output."
+    },
+    {
+      "slot": 5,
+      "item_id": "item_6",
+      "action_kind": "source_search",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search or read of source symbols and files without relevant preceding MCP output."
+    },
+    {
+      "slot": 5,
+      "item_id": "item_7",
+      "action_kind": "edit_or_test",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 5,
+      "item_id": "item_8",
+      "action_kind": "source_search",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search or read of source symbols and files without relevant preceding MCP output."
+    },
+    {
+      "slot": 5,
+      "item_id": "item_11",
+      "action_kind": "edit_or_test",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 5,
+      "item_id": "item_12",
+      "action_kind": "edit_test_build_or_format",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 9,
+      "item_id": "item_2",
+      "action_kind": "source_search",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search or read of source symbols and files without relevant preceding MCP output."
+    },
+    {
+      "slot": 9,
+      "item_id": "item_3",
+      "action_kind": "repository_or_environment_state",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Repository status or environment inspection; no source navigation."
+    },
+    {
+      "slot": 9,
+      "item_id": "item_4",
+      "action_kind": "repository_or_environment_state",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Repository status or environment inspection; no source navigation."
+    },
+    {
+      "slot": 9,
+      "item_id": "item_5",
+      "action_kind": "compound_search",
+      "classification": "unknown",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search combines literal text and identifier terms in one command."
+    },
+    {
+      "slot": 9,
+      "item_id": "item_6",
+      "action_kind": "source_read",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Read of source files without relevant preceding MCP output."
+    },
+    {
+      "slot": 9,
+      "item_id": "item_7",
+      "action_kind": "mixed_navigation_and_check",
+      "classification": "unknown",
+      "preceding_mcp_item_ids": [],
+      "basis": "Command combines source navigation with an edit or check."
+    },
+    {
+      "slot": 9,
+      "item_id": "item_8",
+      "action_kind": "other_command",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Non-navigation shell operation."
+    },
+    {
+      "slot": 9,
+      "item_id": "item_9",
+      "action_kind": "repository_or_environment_state",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Repository status or environment inspection; no source navigation."
+    },
+    {
+      "slot": 9,
+      "item_id": "item_10",
+      "action_kind": "source_search",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search or read of source symbols and files without relevant preceding MCP output."
+    },
+    {
+      "slot": 9,
+      "item_id": "item_12",
+      "action_kind": "edit_or_test",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 9,
+      "item_id": "item_13",
+      "action_kind": "repository_or_environment_state",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Repository status or environment inspection; no source navigation."
+    },
+    {
+      "slot": 9,
+      "item_id": "item_15",
+      "action_kind": "compound_search",
+      "classification": "unknown",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search combines literal text and identifier terms in one command."
+    },
+    {
+      "slot": 9,
+      "item_id": "item_14",
+      "action_kind": "edit_or_test",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 9,
+      "item_id": "item_16",
+      "action_kind": "edit_test_build_or_format",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 9,
+      "item_id": "item_18",
+      "action_kind": "source_search",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search or read of source symbols and files without relevant preceding MCP output."
+    },
+    {
+      "slot": 9,
+      "item_id": "item_19",
+      "action_kind": "edit_or_test",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 11,
+      "item_id": "item_2",
+      "action_kind": "source_file_discovery",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Source-file discovery without relevant preceding MCP output."
+    },
+    {
+      "slot": 11,
+      "item_id": "item_3",
+      "action_kind": "repository_or_environment_state",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Repository status or environment inspection; no source navigation."
+    },
+    {
+      "slot": 11,
+      "item_id": "item_4",
+      "action_kind": "other_command",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Non-navigation shell operation."
+    },
+    {
+      "slot": 11,
+      "item_id": "item_5",
+      "action_kind": "source_search",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search or read of source symbols and files without relevant preceding MCP output."
+    },
+    {
+      "slot": 11,
+      "item_id": "item_6",
+      "action_kind": "repository_or_environment_state",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Repository status or environment inspection; no source navigation."
+    },
+    {
+      "slot": 11,
+      "item_id": "item_7",
+      "action_kind": "source_search",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search or read of source symbols and files without relevant preceding MCP output."
+    },
+    {
+      "slot": 11,
+      "item_id": "item_9",
+      "action_kind": "edit_test_build_or_format",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 11,
+      "item_id": "item_10",
+      "action_kind": "edit_or_test",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 11,
+      "item_id": "item_12",
+      "action_kind": "edit_test_build_or_format",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 11,
+      "item_id": "item_11",
+      "action_kind": "repository_or_environment_state",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Repository status or environment inspection; no source navigation."
+    },
+    {
+      "slot": 11,
+      "item_id": "item_13",
+      "action_kind": "edit_or_test",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 11,
+      "item_id": "item_14",
+      "action_kind": "repository_or_environment_state",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Repository status or environment inspection; no source navigation."
+    },
+    {
+      "slot": 11,
+      "item_id": "item_15",
+      "action_kind": "edit_or_test",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 11,
+      "item_id": "item_17",
+      "action_kind": "repository_or_environment_state",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Repository status or environment inspection; no source navigation."
+    },
+    {
+      "slot": 11,
+      "item_id": "item_18",
+      "action_kind": "source_search",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search or read of source symbols and files without relevant preceding MCP output."
+    },
+    {
+      "slot": 11,
+      "item_id": "item_19",
+      "action_kind": "edit_or_test",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 11,
+      "item_id": "item_20",
+      "action_kind": "edit_or_test",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 11,
+      "item_id": "item_21",
+      "action_kind": "source_search",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search or read of source symbols and files without relevant preceding MCP output."
+    },
+    {
+      "slot": 11,
+      "item_id": "item_23",
+      "action_kind": "edit_or_test",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 11,
+      "item_id": "item_24",
+      "action_kind": "repository_or_environment_state",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Repository status or environment inspection; no source navigation."
+    },
+    {
+      "slot": 11,
+      "item_id": "item_25",
+      "action_kind": "mixed_navigation_and_check",
+      "classification": "unknown",
+      "preceding_mcp_item_ids": [],
+      "basis": "Command combines source navigation with an edit or check."
+    },
+    {
+      "slot": 14,
+      "item_id": "item_2",
+      "action_kind": "source_file_discovery",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Source-file discovery without relevant preceding MCP output."
+    },
+    {
+      "slot": 14,
+      "item_id": "item_3",
+      "action_kind": "compound_search",
+      "classification": "unknown",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search combines literal text and identifier terms in one command."
+    },
+    {
+      "slot": 14,
+      "item_id": "item_4",
+      "action_kind": "compound_search",
+      "classification": "unknown",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search combines literal text and identifier terms in one command."
+    },
+    {
+      "slot": 14,
+      "item_id": "item_5",
+      "action_kind": "format_or_lint",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 14,
+      "item_id": "item_6",
+      "action_kind": "source_read",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Read of source files without relevant preceding MCP output."
+    },
+    {
+      "slot": 14,
+      "item_id": "item_8",
+      "action_kind": "format_or_lint",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 14,
+      "item_id": "item_10",
+      "action_kind": "edit_or_test",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 14,
+      "item_id": "item_12",
+      "action_kind": "edit_or_test",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 14,
+      "item_id": "item_13",
+      "action_kind": "mixed_navigation_and_check",
+      "classification": "unknown",
+      "preceding_mcp_item_ids": [],
+      "basis": "Command combines source navigation with an edit or check."
+    },
+    {
+      "slot": 14,
+      "item_id": "item_14",
+      "action_kind": "edit_test_build_or_format",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 16,
+      "item_id": "item_2",
+      "action_kind": "source_search",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search or read of source symbols and files without relevant preceding MCP output."
+    },
+    {
+      "slot": 16,
+      "item_id": "item_3",
+      "action_kind": "source_search",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search or read of source symbols and files without relevant preceding MCP output."
+    },
+    {
+      "slot": 16,
+      "item_id": "item_4",
+      "action_kind": "repository_or_environment_state",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Repository status or environment inspection; no source navigation."
+    },
+    {
+      "slot": 16,
+      "item_id": "item_5",
+      "action_kind": "compound_search",
+      "classification": "unknown",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search combines literal text and identifier terms in one command."
+    },
+    {
+      "slot": 16,
+      "item_id": "item_7",
+      "action_kind": "source_search",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search or read of source symbols and files without relevant preceding MCP output."
+    },
+    {
+      "slot": 16,
+      "item_id": "item_8",
+      "action_kind": "source_search",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search or read of source symbols and files without relevant preceding MCP output."
+    },
+    {
+      "slot": 16,
+      "item_id": "item_11",
+      "action_kind": "format_or_lint",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 16,
+      "item_id": "item_10",
+      "action_kind": "edit_or_test",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 16,
+      "item_id": "item_12",
+      "action_kind": "repository_or_environment_state",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Repository status or environment inspection; no source navigation."
+    },
+    {
+      "slot": 16,
+      "item_id": "item_13",
+      "action_kind": "edit_test_build_or_format",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 18,
+      "item_id": "item_2",
+      "action_kind": "source_file_discovery",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Source-file discovery without relevant preceding MCP output."
+    },
+    {
+      "slot": 18,
+      "item_id": "item_3",
+      "action_kind": "repository_or_environment_state",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Repository status or environment inspection; no source navigation."
+    },
+    {
+      "slot": 18,
+      "item_id": "item_4",
+      "action_kind": "repository_or_environment_state",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Repository status or environment inspection; no source navigation."
+    },
+    {
+      "slot": 18,
+      "item_id": "item_5",
+      "action_kind": "source_read",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Read of source files without relevant preceding MCP output."
+    },
+    {
+      "slot": 18,
+      "item_id": "item_6",
+      "action_kind": "other_command",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Non-navigation shell operation."
+    },
+    {
+      "slot": 18,
+      "item_id": "item_7",
+      "action_kind": "source_search",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search or read of source symbols and files without relevant preceding MCP output."
+    },
+    {
+      "slot": 18,
+      "item_id": "item_8",
+      "action_kind": "edit_or_test",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 18,
+      "item_id": "item_10",
+      "action_kind": "source_search",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search or read of source symbols and files without relevant preceding MCP output."
+    },
+    {
+      "slot": 18,
+      "item_id": "item_12",
+      "action_kind": "format_or_lint",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 18,
+      "item_id": "item_13",
+      "action_kind": "edit_or_test",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 18,
+      "item_id": "item_14",
+      "action_kind": "source_search",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search or read of source symbols and files without relevant preceding MCP output."
+    },
+    {
+      "slot": 18,
+      "item_id": "item_15",
+      "action_kind": "edit_test_build_or_format",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 22,
+      "item_id": "item_2",
+      "action_kind": "source_search",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search or read of source symbols and files without relevant preceding MCP output."
+    },
+    {
+      "slot": 22,
+      "item_id": "item_3",
+      "action_kind": "repository_or_environment_state",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Repository status or environment inspection; no source navigation."
+    },
+    {
+      "slot": 22,
+      "item_id": "item_4",
+      "action_kind": "compound_search",
+      "classification": "unknown",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search combines literal text and identifier terms in one command."
+    },
+    {
+      "slot": 22,
+      "item_id": "item_5",
+      "action_kind": "source_search",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search or read of source symbols and files without relevant preceding MCP output."
+    },
+    {
+      "slot": 22,
+      "item_id": "item_6",
+      "action_kind": "other_command",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Non-navigation shell operation."
+    },
+    {
+      "slot": 22,
+      "item_id": "item_7",
+      "action_kind": "source_read",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Read of source files without relevant preceding MCP output."
+    },
+    {
+      "slot": 22,
+      "item_id": "item_8",
+      "action_kind": "edit_or_test",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 22,
+      "item_id": "item_9",
+      "action_kind": "source_search",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search or read of source symbols and files without relevant preceding MCP output."
+    },
+    {
+      "slot": 22,
+      "item_id": "item_13",
+      "action_kind": "compound_search",
+      "classification": "unknown",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search combines literal text and identifier terms in one command."
+    },
+    {
+      "slot": 22,
+      "item_id": "item_14",
+      "action_kind": "mixed_navigation_and_check",
+      "classification": "unknown",
+      "preceding_mcp_item_ids": [],
+      "basis": "Command combines source navigation with an edit or check."
+    },
+    {
+      "slot": 22,
+      "item_id": "item_12",
+      "action_kind": "edit_or_test",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 22,
+      "item_id": "item_16",
+      "action_kind": "repository_or_environment_state",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Repository status or environment inspection; no source navigation."
+    },
+    {
+      "slot": 22,
+      "item_id": "item_17",
+      "action_kind": "edit_or_test",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 22,
+      "item_id": "item_18",
+      "action_kind": "edit_test_build_or_format",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 24,
+      "item_id": "item_2",
+      "action_kind": "source_file_discovery",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Source-file discovery without relevant preceding MCP output."
+    },
+    {
+      "slot": 24,
+      "item_id": "item_3",
+      "action_kind": "repository_or_environment_state",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Repository status or environment inspection; no source navigation."
+    },
+    {
+      "slot": 24,
+      "item_id": "item_4",
+      "action_kind": "other_command",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Non-navigation shell operation."
+    },
+    {
+      "slot": 24,
+      "item_id": "item_5",
+      "action_kind": "source_search",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search or read of source symbols and files without relevant preceding MCP output."
+    },
+    {
+      "slot": 24,
+      "item_id": "item_6",
+      "action_kind": "source_search",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search or read of source symbols and files without relevant preceding MCP output."
+    },
+    {
+      "slot": 24,
+      "item_id": "item_7",
+      "action_kind": "repository_or_environment_state",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Repository status or environment inspection; no source navigation."
+    },
+    {
+      "slot": 24,
+      "item_id": "item_10",
+      "action_kind": "other_command",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Non-navigation shell operation."
+    },
+    {
+      "slot": 24,
+      "item_id": "item_12",
+      "action_kind": "edit_or_test",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 24,
+      "item_id": "item_14",
+      "action_kind": "edit_or_test",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 24,
+      "item_id": "item_13",
+      "action_kind": "repository_or_environment_state",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Repository status or environment inspection; no source navigation."
+    },
+    {
+      "slot": 24,
+      "item_id": "item_15",
+      "action_kind": "edit_or_test",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 24,
+      "item_id": "item_16",
+      "action_kind": "repository_or_environment_state",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Repository status or environment inspection; no source navigation."
+    },
+    {
+      "slot": 24,
+      "item_id": "item_18",
+      "action_kind": "repository_or_environment_state",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Repository status or environment inspection; no source navigation."
+    },
+    {
+      "slot": 24,
+      "item_id": "item_17",
+      "action_kind": "edit_or_test",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 24,
+      "item_id": "item_19",
+      "action_kind": "source_search",
+      "classification": "direct_native_structural_lookup",
+      "preceding_mcp_item_ids": [],
+      "basis": "Search or read of source symbols and files without relevant preceding MCP output."
+    },
+    {
+      "slot": 24,
+      "item_id": "item_21",
+      "action_kind": "repository_or_environment_state",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Repository status or environment inspection; no source navigation."
+    },
+    {
+      "slot": 24,
+      "item_id": "item_22",
+      "action_kind": "edit_or_test",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    },
+    {
+      "slot": 24,
+      "item_id": "item_23",
+      "action_kind": "repository_or_environment_state",
+      "classification": "non_navigation_other",
+      "preceding_mcp_item_ids": [],
+      "basis": "Repository status or environment inspection; no source navigation."
+    },
+    {
+      "slot": 24,
+      "item_id": "item_24",
+      "action_kind": "edit_test_build_or_format",
+      "classification": "non_navigation_edit_test_build",
+      "preceding_mcp_item_ids": [],
+      "basis": "Edit, test, build, formatting, lint, or diff validation command."
+    }
+  ],
+  "per_trial_counts": [
+    {
+      "slot": 1,
+      "trial_id": "001-sqlglot-native-r1",
+      "command_count": 13,
+      "code_navigation_candidate_count": 5,
+      "direct_native_structural_lookup": 5,
+      "permitted_literal_search": 0,
+      "genuine_fallback": 0,
+      "non_navigation_edit_test_build": 3,
+      "non_navigation_other": 2,
+      "unknown": 3,
+      "implementation_check_failure_repair_pass_count": 0,
+      "metrics": {
+        "input_tokens": 232336,
+        "output_tokens": 2768,
+        "cache_tokens": 200064,
+        "agent_wall_seconds": 48.206025,
+        "mcp_call_count": 0
+      }
+    },
+    {
+      "slot": 3,
+      "trial_id": "003-minijinja-native-r1",
+      "command_count": 13,
+      "code_navigation_candidate_count": 7,
+      "direct_native_structural_lookup": 6,
+      "permitted_literal_search": 1,
+      "genuine_fallback": 0,
+      "non_navigation_edit_test_build": 4,
+      "non_navigation_other": 2,
+      "unknown": 0,
+      "implementation_check_failure_repair_pass_count": 0,
+      "metrics": {
+        "input_tokens": 215334,
+        "output_tokens": 3408,
+        "cache_tokens": 190720,
+        "agent_wall_seconds": 78.424393,
+        "mcp_call_count": 0
+      }
+    },
+    {
+      "slot": 5,
+      "trial_id": "005-hcl-native-r1",
+      "command_count": 9,
+      "code_navigation_candidate_count": 5,
+      "direct_native_structural_lookup": 5,
+      "permitted_literal_search": 0,
+      "genuine_fallback": 0,
+      "non_navigation_edit_test_build": 3,
+      "non_navigation_other": 1,
+      "unknown": 0,
+      "implementation_check_failure_repair_pass_count": 0,
+      "metrics": {
+        "input_tokens": 155650,
+        "output_tokens": 1511,
+        "cache_tokens": 134272,
+        "agent_wall_seconds": 39.72963,
+        "mcp_call_count": 0
+      }
+    },
+    {
+      "slot": 9,
+      "trial_id": "009-commons-lang-native-r1",
+      "command_count": 16,
+      "code_navigation_candidate_count": 4,
+      "direct_native_structural_lookup": 4,
+      "permitted_literal_search": 0,
+      "genuine_fallback": 0,
+      "non_navigation_edit_test_build": 4,
+      "non_navigation_other": 5,
+      "unknown": 3,
+      "implementation_check_failure_repair_pass_count": 0,
+      "metrics": {
+        "input_tokens": 428015,
+        "output_tokens": 5138,
+        "cache_tokens": 397312,
+        "agent_wall_seconds": 124.66978,
+        "mcp_call_count": 0
+      }
+    },
+    {
+      "slot": 11,
+      "trial_id": "011-nodatime-native-r1",
+      "command_count": 21,
+      "code_navigation_candidate_count": 5,
+      "direct_native_structural_lookup": 5,
+      "permitted_literal_search": 0,
+      "genuine_fallback": 0,
+      "non_navigation_edit_test_build": 8,
+      "non_navigation_other": 7,
+      "unknown": 1,
+      "implementation_check_failure_repair_pass_count": null,
+      "metrics": {
+        "input_tokens": 629945,
+        "output_tokens": 7915,
+        "cache_tokens": 597760,
+        "agent_wall_seconds": 167.627043,
+        "mcp_call_count": 0
+      }
+    },
+    {
+      "slot": 14,
+      "trial_id": "014-sqlglot-native-r2",
+      "command_count": 10,
+      "code_navigation_candidate_count": 2,
+      "direct_native_structural_lookup": 2,
+      "permitted_literal_search": 0,
+      "genuine_fallback": 0,
+      "non_navigation_edit_test_build": 5,
+      "non_navigation_other": 0,
+      "unknown": 3,
+      "implementation_check_failure_repair_pass_count": 0,
+      "metrics": {
+        "input_tokens": 240652,
+        "output_tokens": 2559,
+        "cache_tokens": 214272,
+        "agent_wall_seconds": 58.433087,
+        "mcp_call_count": 0
+      }
+    },
+    {
+      "slot": 16,
+      "trial_id": "016-minijinja-native-r2",
+      "command_count": 10,
+      "code_navigation_candidate_count": 4,
+      "direct_native_structural_lookup": 4,
+      "permitted_literal_search": 0,
+      "genuine_fallback": 0,
+      "non_navigation_edit_test_build": 3,
+      "non_navigation_other": 2,
+      "unknown": 1,
+      "implementation_check_failure_repair_pass_count": 0,
+      "metrics": {
+        "input_tokens": 273695,
+        "output_tokens": 3142,
+        "cache_tokens": 251264,
+        "agent_wall_seconds": 81.164913,
+        "mcp_call_count": 0
+      }
+    },
+    {
+      "slot": 18,
+      "trial_id": "018-hcl-native-r2",
+      "command_count": 12,
+      "code_navigation_candidate_count": 5,
+      "direct_native_structural_lookup": 5,
+      "permitted_literal_search": 0,
+      "genuine_fallback": 0,
+      "non_navigation_edit_test_build": 4,
+      "non_navigation_other": 3,
+      "unknown": 0,
+      "implementation_check_failure_repair_pass_count": 0,
+      "metrics": {
+        "input_tokens": 177940,
+        "output_tokens": 2572,
+        "cache_tokens": 147072,
+        "agent_wall_seconds": 63.553128,
+        "mcp_call_count": 0
+      }
+    },
+    {
+      "slot": 22,
+      "trial_id": "022-commons-lang-native-r2",
+      "command_count": 14,
+      "code_navigation_candidate_count": 4,
+      "direct_native_structural_lookup": 4,
+      "permitted_literal_search": 0,
+      "genuine_fallback": 0,
+      "non_navigation_edit_test_build": 4,
+      "non_navigation_other": 3,
+      "unknown": 3,
+      "implementation_check_failure_repair_pass_count": 0,
+      "metrics": {
+        "input_tokens": 473838,
+        "output_tokens": 5765,
+        "cache_tokens": 433664,
+        "agent_wall_seconds": 106.645801,
+        "mcp_call_count": 0
+      }
+    },
+    {
+      "slot": 24,
+      "trial_id": "024-nodatime-native-r2",
+      "command_count": 19,
+      "code_navigation_candidate_count": 4,
+      "direct_native_structural_lookup": 4,
+      "permitted_literal_search": 0,
+      "genuine_fallback": 0,
+      "non_navigation_edit_test_build": 6,
+      "non_navigation_other": 9,
+      "unknown": 0,
+      "implementation_check_failure_repair_pass_count": null,
+      "metrics": {
+        "input_tokens": 523076,
+        "output_tokens": 6289,
+        "cache_tokens": 465792,
+        "agent_wall_seconds": 127.38131,
+        "mcp_call_count": 0
+      }
+    }
+  ],
+  "summary": {
+    "completed_trials": 10,
+    "expected_trials": 10,
+    "missing_slots": [],
+    "command_and_classification_counts": {
+      "command_count": 137,
+      "code_navigation_candidate_count": 45,
+      "direct_native_structural_lookup": 44,
+      "permitted_literal_search": 1,
+      "genuine_fallback": 0,
+      "non_navigation_edit_test_build": 44,
+      "non_navigation_other": 34,
+      "unknown": 14
+    },
+    "token_totals": {
+      "input_tokens": 3350481,
+      "output_tokens": 41067,
+      "cache_tokens": 3032192
+    },
+    "agent_wall_seconds_total": 895.83511,
+    "confirmed_implementation_check_failure_repair_pass_count": 0,
+    "implementation_check_unknown_slots": [
+      11,
+      24
+    ],
+    "implementation_check_review": [
+      {
+        "slot": 1,
+        "item_ids": [
+          "item_12",
+          "item_14"
+        ],
+        "status": "excluded_pre_implementation_tdd",
+        "basis": "The failing test command precedes the production change; the later check passes after the production edit."
+      },
+      {
+        "slot": 3,
+        "item_ids": [
+          "item_12",
+          "item_13"
+        ],
+        "status": "excluded_formatting",
+        "basis": "The observed nonzero command is a formatting check; a later test command passes."
+      },
+      {
+        "slot": 5,
+        "item_ids": [
+          "item_7",
+          "item_10"
+        ],
+        "status": "excluded_pre_implementation_tdd",
+        "basis": "The failing test command precedes the production file-change event; the later test passes."
+      },
+      {
+        "slot": 9,
+        "item_ids": [
+          "item_14",
+          "item_19"
+        ],
+        "status": "excluded_infrastructure",
+        "basis": "The failed Maven check reports Mockito initialization; a later check passes without a production repair event."
+      },
+      {
+        "slot": 11,
+        "item_ids": [
+          "item_9",
+          "item_10",
+          "item_13",
+          "item_15",
+          "item_23",
+          "item_24"
+        ],
+        "status": "unknown",
+        "basis": "A check exits nonzero after a write operation, but its captured output is empty and no production repair followed by a passing check is established."
+      },
+      {
+        "slot": 14,
+        "item_ids": [
+          "item_9",
+          "item_10",
+          "item_11",
+          "item_12"
+        ],
+        "status": "excluded_pre_implementation_tdd",
+        "basis": "The failing test command follows a test-only file-change and precedes the production file-change; the later check passes."
+      },
+      {
+        "slot": 16,
+        "item_ids": [
+          "item_4",
+          "item_9",
+          "item_10"
+        ],
+        "status": "no_observed_implementation_check_failure",
+        "basis": "The pre-edit failure is dependency-related; the post-edit test check passes."
+      },
+      {
+        "slot": 18,
+        "item_ids": [
+          "item_8",
+          "item_11",
+          "item_13"
+        ],
+        "status": "excluded_pre_implementation_tdd",
+        "basis": "The failing test command precedes the production file-change event; the later test passes."
+      },
+      {
+        "slot": 22,
+        "item_ids": [
+          "item_11",
+          "item_12",
+          "item_17"
+        ],
+        "status": "excluded_infrastructure",
+        "basis": "The failed Maven check reports Mockito initialization; a later check passes after test-runner setup, with no production repair event."
+      },
+      {
+        "slot": 24,
+        "item_ids": [
+          "item_9",
+          "item_10",
+          "item_11",
+          "item_12",
+          "item_14",
+          "item_15",
+          "item_16",
+          "item_17",
+          "item_21",
+          "item_22",
+          "item_23"
+        ],
+        "status": "unknown",
+        "basis": "A post-production check exits 1 without a captured diagnostic; later passing checks do not follow a confirmed production repair event."
+      }
+    ],
+    "notes": [
+      "No preceding MCP calls were recorded in the available native traces.",
+      "Counts cover completed command_execution items; source and output contents are not included."
+    ]
+  }
+}

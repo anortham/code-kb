@@ -1,0 +1,165 @@
+{
+  "acceptance_status": "not_assessed_root_owns_synthesis",
+  "added_test_files": [
+    "tests/dialects/test_bigquery_timestamp_bucket.py"
+  ],
+  "arm": "native",
+  "attempt_status": "completed",
+  "bundle_json_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/001-sqlglot-native-r1/bundle/bundle.json",
+  "bundle_json_sha256": "f0d6a3e290a0dabc994240a67b055764d31dfee38cfe7d9ff1aeca5fd686605b",
+  "case_id": "sqlglot",
+  "changed_production_files": [
+    "sqlglot/generators/bigquery.py",
+    "sqlglot/parsers/bigquery.py"
+  ],
+  "evidence_paths": [
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/sqlglot/logs/attempt-001/candidate-vs-seed.diff",
+      "supports": "Production argument mapping and added test file are reviewed against the exact seed."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/sqlglot/logs/attempt-001/parser-skeleton.stdout.log",
+      "supports": "Candidate parser structure and changed TIMESTAMP_BUCKET mapping."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/sqlglot/logs/attempt-001/generator-skeleton.stdout.log",
+      "supports": "Candidate BigQuery DateBin-to-TIMESTAMP_BUCKET generator mapping."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/sqlglot/logs/attempt-001/datebin-context.stdout.log",
+      "supports": "Seeded DateBin requires this and expression, with optional origin."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/sqlglot/logs/attempt-001/datebin-callers.stdout.log",
+      "supports": "Candidate parser/generator references and relevant tests."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/sqlglot/logs/attempt-001/test-parse-body.stdout.log",
+      "supports": "Added parsing test asserts AST width, timestamp, and origin."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/sqlglot/logs/attempt-001/test-generate-body.stdout.log",
+      "supports": "Added generator test asserts ordering and both arities."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/sqlglot/logs/attempt-001/test-roundtrip-body.stdout.log",
+      "supports": "Added round-trip tests include both arities and NULL origin."
+    },
+    {
+      "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/001-sqlglot-native-r1/grade/grade.json",
+      "supports": "Fresh replay grade result."
+    },
+    {
+      "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/001-sqlglot-native-r1/evidence/agent/stdout.log",
+      "supports": "Captured in-trial combined run reports 67 tests passed and diff check succeeded."
+    },
+    {
+      "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/001-sqlglot-native-r1/evidence/answer.txt",
+      "supports": "Agent report records make check stopped because pre-commit could not execute."
+    }
+  ],
+  "findings": [],
+  "raw_attempt_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/001-sqlglot-native-r1/attempt.json",
+  "raw_attempt_sha256": "0fa4b9845c78a3641877ecddac569204d6a6e8e6cd304d78e869d1abbee5c98a",
+  "repeat": 1,
+  "schedule_index": 1,
+  "schema": 1,
+  "source_review": "passed",
+  "source_review_basis": "The parser maps the first BigQuery argument to DateBin.expression (timestamp) and the second to DateBin.this (bucket width); the generator emits timestamp, width, optional origin in that order. This matches the request and the seeded DateBin argument contract. The patch adds focused tests for parsing, generation, two- and three-argument forms, and round trips including NULL origin.",
+  "trusted_grade": {
+    "behavioral_pass": true,
+    "hidden_passed": true,
+    "patch_valid": true,
+    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/001-sqlglot-native-r1/grade/grade.json",
+    "protection_status": "unchanged",
+    "public_passed": true,
+    "replay_valid": true,
+    "sha256": "9b83216aac6585aac0ccc1aec1d8ee921a832f792bdba79927b942c6bc0f7564"
+  },
+  "verification_commands": [
+    {
+      "argv": [
+        "/usr/bin/env",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "PYTHONPATH=/state/python-site:/workspace/project",
+        "/usr/bin/python3",
+        "-m",
+        "unittest",
+        "tests.dialects.test_bigquery"
+      ],
+      "elapsed_seconds": 0.86537,
+      "exit_status": 0,
+      "expected_markers": [
+        "Ran 64 tests",
+        "OK"
+      ],
+      "kind": "trusted_fresh_grade_public",
+      "result": "passed",
+      "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/001-sqlglot-native-r1/evidence/grade/grade-005-stderr_log.log",
+      "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/001-sqlglot-native-r1/evidence/grade/grade-004-stdout_log.log"
+    },
+    {
+      "argv": [
+        "/usr/bin/env",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "PYTHONPATH=/state/python-site:/workspace/project",
+        "/usr/bin/python3",
+        "-m",
+        "unittest",
+        "tests.dialects.test_edit_eval_timestamp_bucket"
+      ],
+      "elapsed_seconds": 0.315012,
+      "exit_status": 0,
+      "expected_markers": [
+        "Ran 2 tests",
+        "OK"
+      ],
+      "kind": "trusted_fresh_grade_hidden",
+      "result": "passed",
+      "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/001-sqlglot-native-r1/evidence/grade/grade-007-stderr_log.log",
+      "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/001-sqlglot-native-r1/evidence/grade/grade-006-stdout_log.log"
+    },
+    {
+      "argv": [
+        "/usr/bin/env",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "PYTHONPATH=/state/python-site:/workspace/project",
+        "/usr/bin/python3",
+        "-m",
+        "unittest",
+        "tests.dialects.test_bigquery_timestamp_bucket",
+        "tests.dialects.test_bigquery"
+      ],
+      "evidence_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/001-sqlglot-native-r1/evidence/agent/stdout.log",
+      "exit_status": 0,
+      "kind": "captured_agent_added_public_test_run",
+      "output_marker": "Ran 67 tests in 0.457s; OK",
+      "result": "passed in captured run; not rerun post hoc during the active measured campaign"
+    },
+    {
+      "argv": [
+        "make",
+        "check"
+      ],
+      "evidence_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/001-sqlglot-native-r1/evidence/answer.txt",
+      "kind": "style_check",
+      "result": "blocked: pre-commit could not execute due to permission denied"
+    },
+    {
+      "argv": [
+        "/usr/bin/env",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "PYTHONPATH=/state/python-site:/workspace/project",
+        "/usr/bin/python3",
+        "-m",
+        "unittest",
+        "tests.dialects.test_bigquery_timestamp_bucket"
+      ],
+      "kind": "independent_added_public_test_verification",
+      "network": "disabled",
+      "project": "grade/work/public-project",
+      "result": "pending_campaign_completion; no post hoc run during active measured campaign",
+      "state": "grade/work/state-grade-public"
+    }
+  ]
+}

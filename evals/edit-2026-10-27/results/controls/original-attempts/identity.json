@@ -1,0 +1,48 @@
+{
+  "archive_bytes": 9544678,
+  "archive_history": [
+    {
+      "bytes": 942151,
+      "member_count": 549,
+      "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/original-attempts-2ec7fad2.tar.gz",
+      "sha256": "5b4d46c4cfbd7b220a0acfcd55a7ca249f45f9d19d56bf9fab0b4b6a082ac1c6",
+      "superseded_reason": "Initial curated v1 omitted two referenced compiled Go test-build blobs; v2 preserves all original bundle descriptors and blobs.",
+      "version": 1
+    }
+  ],
+  "archive_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/original-attempts-2ec7fad2-v2.tar.gz",
+  "archive_sha256": "97883246a802432d015f5a2adffbbf89727cc97630746baa47fad1b47a6437d6",
+  "attempt_slots": 24,
+  "campaign_runner_sha256": "ec8ff008b510a46395e8e030dae2c7fb5835ef9e61a9e7d123088017732da0eb",
+  "capture_blob_members": 63,
+  "capture_bundles": 20,
+  "capture_bundles_fully_replayable": 20,
+  "classification": "original completed-edit24 recovery archive; source cache attempt records remain immutable",
+  "compiled_go_build_outputs_included_exactly": 2,
+  "effective_015_record": "attempts/015-minijinja-code-kb-r2/recovery/recovered-attempt-v3.json",
+  "exact_capture_files": 63,
+  "frozen_attempt_records_unchanged": true,
+  "index_path": "evals/edit-2026-10-27/results/controls/original-attempts/index.json",
+  "index_sha256": "314f8460adb797dcdab44dd4774cb640bb488e920c272452d8947b54955c2f69",
+  "manifest_sha256": "2ec7fad27dfb508efdefb6a1190d32eb8d4587a16594d3948e63328d562072e8",
+  "member_count": 531,
+  "missing_015_grade_logs": {
+    "grade-recovery-1": 8,
+    "grade-recovery-2": 8
+  },
+  "model_dispatches": 20,
+  "provider_calls_during_archive": 0,
+  "redactor_delta_disposition": {
+    "already_sanitized_agent_traces_reprocessed": 3,
+    "compiled_go_build_outputs_excluded": 0,
+    "compiled_go_build_outputs_preserved_exactly": 2,
+    "host_environment_value_matches": 0,
+    "nonsecret_source_code_preserved_exactly": 16,
+    "secret_format_matches": 0
+  },
+  "redactor_sha256": "09c521c0f39bf83c1f877edf7fd1799b9eb7df3780e9c99c52707d6d3620c36f",
+  "runtime_bindings_sha256": "7fbf8bd3b8024c70076bf281aca80bca255b9f6537e8249c9dd537e0d00fb103",
+  "schema": 1,
+  "setup_only_slots": 4,
+  "strict_grade_results": 22
+}

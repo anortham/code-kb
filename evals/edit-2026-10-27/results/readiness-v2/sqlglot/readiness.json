@@ -1,0 +1,207 @@
+{
+  "behavioral_pass": true,
+  "case_id": "sqlglot",
+  "case_sha256": "1a5a93f77ceb315e8fe41e941c96201d21054fa37895c3464c1919262eead81a",
+  "checks": {
+    "baseline_public": {
+      "commands": [
+        {
+          "command_id": "bigquery_regressions",
+          "elapsed_seconds": 1.066608,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/sqlglot/evidence/baseline-public-00-bigquery_regressions/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/sqlglot/evidence/baseline-public-00-bigquery_regressions/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "baseline_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "install_pytz_offline",
+          "elapsed_seconds": 0.314563,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/sqlglot/evidence/runtime-baseline-00-install_pytz_offline/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/sqlglot/evidence/runtime-baseline-00-install_pytz_offline/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "preparation": {
+      "commands": [],
+      "mode": "reused-inputs",
+      "passed": true
+    },
+    "reference_hidden": {
+      "commands": [
+        {
+          "command_id": "timestamp_bucket_acceptance",
+          "elapsed_seconds": 0.364541,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/sqlglot/evidence/reference-hidden-00-timestamp_bucket_acceptance/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/sqlglot/evidence/reference-hidden-00-timestamp_bucket_acceptance/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_hidden_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "install_pytz_offline",
+          "elapsed_seconds": 0.364916,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/sqlglot/evidence/runtime-reference-hidden-00-install_pytz_offline/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/sqlglot/evidence/runtime-reference-hidden-00-install_pytz_offline/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_public": {
+      "commands": [
+        {
+          "command_id": "bigquery_regressions",
+          "elapsed_seconds": 1.116052,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/sqlglot/evidence/reference-public-00-bigquery_regressions/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/sqlglot/evidence/reference-public-00-bigquery_regressions/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_public_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "install_pytz_offline",
+          "elapsed_seconds": 0.364967,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/sqlglot/evidence/runtime-reference-public-00-install_pytz_offline/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/sqlglot/evidence/runtime-reference-public-00-install_pytz_offline/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "seed_hidden_failure": {
+      "commands": [
+        {
+          "command_id": "timestamp_bucket_acceptance",
+          "elapsed_seconds": 0.415091,
+          "exit_status": 1,
+          "expected_output_missing": [
+            "Ran 2 tests",
+            "OK"
+          ],
+          "passed": false,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/sqlglot/evidence/seed-hidden-00-timestamp_bucket_acceptance/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/sqlglot/evidence/seed-hidden-00-timestamp_bucket_acceptance/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "seed_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "install_pytz_offline",
+          "elapsed_seconds": 0.365094,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/sqlglot/evidence/runtime-seed-00-install_pytz_offline/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/sqlglot/evidence/runtime-seed-00-install_pytz_offline/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    }
+  },
+  "created_utc": "2026-10-27T21:34:46Z",
+  "dependencies": {
+    "python-packages": "47cb32636d3296545e7e40015bf2a8189c6ce4cc9d647c62ae12714c4d2e92f3"
+  },
+  "readiness_error": null,
+  "reference_bundle_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/sqlglot/evidence/reference-bundle",
+  "reference_digest": "67153486dd9a059835f0417000dbe253b71c6b2a0d3727ed9ba360f10f33f5b6",
+  "reference_production_files_changed": [
+    "sqlglot/generators/bigquery.py",
+    "sqlglot/parsers/bigquery.py"
+  ],
+  "repo_id": "sqlglot",
+  "schema": 1,
+  "seed_digest": "495821034999b04d914bcb1ee64b3ffa84e33a7d6f519ac9df84b804efd594a2",
+  "seed_project_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds-v2/sqlglot",
+  "source_pin": "feb0e08aba28a29590596bb3f5761fbaeb0e98b9",
+  "source_review": "passed",
+  "source_tree_sha256": "67f8d6f079a5fcd3c512ca367ec9c1744e78302b44795b025dc8e90827725b59",
+  "status": "ready",
+  "raw_readiness_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/sqlglot/readiness.json",
+  "raw_readiness_sha256": "ffad89995e31aa9b456748f97a5875f57ecf32dc4fc1de617628a893ec9da49d",
+  "source_review_path": "results/readiness-v2/sqlglot/source-review.json",
+  "source_review_sha256": "e1e98b40c73df11236d1d01a3ea4469da45779ded22a2d28a1e6e012348a486e",
+  "acceptance_basis": "Live checks plus unchanged reviewed task/reference and explicit correction/seed-equivalence audit; raw pending-review result preserved."
+}

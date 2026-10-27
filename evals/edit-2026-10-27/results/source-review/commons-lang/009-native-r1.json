@@ -1,0 +1,86 @@
+{
+  "schema": 1,
+  "reviewed_at_utc": "2026-10-27T20:35:34Z",
+  "schedule_index": 9,
+  "case_id": "commons-lang",
+  "arm": "native",
+  "repeat": 1,
+  "raw_attempt_sha256": "82c055f09f4213e7a878fcd48a1be20bf0b61a61cdda937f22df339a3603f7b8",
+  "bundle_json_sha256": "99d583851ee69d279dd6197b7da93b627ebfb84b483a7ab6ac5f5ee58177e0ba",
+  "source_review": "passed",
+  "findings": [
+    {
+      "finding": "The captured production changes satisfy the migration contract. Both new compare overloads and varargs max/min use the required Comparable<? super T> bound. Compare handles identical references, null ordering, and delegates non-null values to compareTo. The varargs methods safely handle null arrays and all-null input, ignore null entries, and use strict comparison so equal values retain the first entry. The existing two-argument ComparableUtils max/min implementations remain in place. All ObjectUtils compare/max/min signatures remain and delegate to ComparableUtils.",
+      "evidence": [
+        "Code-kb CLI body/context on the completed grade public-project showed ComparableUtils.compare at lines 163-190, max at 263-291, min at 307-335, and ObjectUtils delegates at lines 292-310, 1016-1019, and 1076-1079.",
+        "A read-only seed-to-captured diff showed the existing two-argument ComparableUtils max/min methods remain behaviorally unchanged; their delegation target is now the local compare helper. ObjectUtils compatibility bodies are direct delegates.",
+        "Code-kb refs on ObjectUtils.max showed the existing ObjectUtilsTest#testMax caller and the new migration-test callers; the captured public grade ran ObjectUtilsTest#testMax and ComparableUtilsTest#testMax."
+      ]
+    },
+    {
+      "finding": "The added test file covers null ordering in both directions, comparison of values implementing Comparable on a base type, null/empty/all-null varargs, ignored null entries, first-entry tie behavior, the unchanged fixed-arity overload behavior, and ObjectUtils delegation. Its source is sound. The trusted fresh grade did not select this additional file, so a separate grade-mode run is queued after the 24 scored trials.",
+      "evidence": [
+        "Code-kb CLI body for all five methods in src/test/java/org/apache/commons/lang3/compare/ComparableUtilsMigrationTest.java showed the stated cases.",
+        "The trusted grade commands selected the 130 canonical public regressions and the five injected hidden contract tests; neither selected ComparableUtilsMigrationTest."
+      ],
+      "verification_status": "additional trusted execution pending after campaign"
+    }
+  ],
+  "changed_production_files": [
+    "src/main/java/org/apache/commons/lang3/ObjectUtils.java",
+    "src/main/java/org/apache/commons/lang3/compare/ComparableUtils.java"
+  ],
+  "added_tests": [
+    "src/test/java/org/apache/commons/lang3/compare/ComparableUtilsMigrationTest.java"
+  ],
+  "executed_verification": [
+    {
+      "kind": "trusted_public_grade",
+      "command_id": "commons-public-comparable-regressions",
+      "status": "passed",
+      "observed_tests": 130,
+      "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/009-commons-lang-native-r1/evidence/grade/grade-012-stdout_log.log"
+    },
+    {
+      "kind": "trusted_hidden_grade",
+      "command_id": "commons-comparable-migration-contract",
+      "status": "passed",
+      "observed_tests": 5,
+      "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/009-commons-lang-native-r1/evidence/grade/grade-014-stdout_log.log"
+    },
+    {
+      "kind": "additional_test_run",
+      "status": "queued_after_campaign",
+      "reason": "Avoid compiler/test work concurrent with scored trials; the trusted grade selectors did not include the agent-added test.",
+      "proposed_argv": [
+        "/usr/bin/env",
+        "JAVA_HOME=/tools/java",
+        "PATH=/tools/java/bin:/tools/maven/bin:/usr/bin:/bin",
+        "/tools/maven/bin/mvn",
+        "-B",
+        "-o",
+        "-Dmaven.repo.local=/state/commons-m2",
+        "-Dtest=ComparableUtilsMigrationTest",
+        "test"
+      ]
+    },
+    {
+      "kind": "additional_test_run",
+      "command_id": "commons-comparable-migration-added-tests",
+      "status": "passed",
+      "exit_status": 0,
+      "observed_tests": 5,
+      "offline": true,
+      "project": "/tmp/code-kb-source-review-20261027-kHXOtu/009-commons-lang-native-r1/project",
+      "stdout_log": "logs/009-commons-lang-native-r1-java-test.stdout.log",
+      "argv": [
+        "mvn",
+        "-B",
+        "-o",
+        "-Dmaven.repo.local=<scratch>/commons-m2",
+        "-Dtest=ComparableUtilsMigrationTest",
+        "test"
+      ]
+    }
+  ]
+}

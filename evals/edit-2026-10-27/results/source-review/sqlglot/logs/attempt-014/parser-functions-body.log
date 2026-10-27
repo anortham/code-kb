@@ -1,0 +1,108 @@
+// sqlglot/parsers/bigquery.py:225-329 (FUNCTIONS)
+    FUNCTIONS: t.ClassVar[dict[str, t.Callable]] = {
+        **{k: v for k, v in parser.Parser.FUNCTIONS.items() if k != "SEARCH"},
+        "APPROX_TOP_COUNT": exp.ApproxTopK.from_arg_list,
+        "BIT_AND": exp.BitwiseAndAgg.from_arg_list,
+        "BIT_OR": exp.BitwiseOrAgg.from_arg_list,
+        "BIT_XOR": exp.BitwiseXorAgg.from_arg_list,
+        "BIT_COUNT": exp.BitwiseCount.from_arg_list,
+        "BOOL": exp.JSONBool.from_arg_list,
+        "CONTAINS_SUBSTR": _build_contains_substring,
+        "DATE": _build_date,
+        "DATE_ADD": build_date_delta_with_interval(exp.DateAdd),
+        "DATE_DIFF": build_date_diff(exp.DateDiff),
+        "DATE_SUB": build_date_delta_with_interval(exp.DateSub),
+        "DATE_TRUNC": lambda args: _normalize_bare_week(
+            exp.DateTrunc(
+                unit=seq_get(args, 1),
+                this=seq_get(args, 0),
+                zone=seq_get(args, 2),
+            )
+        ),
+        "DATETIME": _build_datetime,
+        "DATETIME_ADD": build_date_delta_with_interval(exp.DatetimeAdd),
+        "DATETIME_DIFF": build_date_diff(exp.DatetimeDiff),
+        "DATETIME_SUB": build_date_delta_with_interval(exp.DatetimeSub),
+        "DATETIME_TRUNC": lambda args: _normalize_bare_week(exp.DatetimeTrunc.from_arg_list(args)),
+        "DIV": binary_from_function(exp.IntDiv),
+        "EDIT_DISTANCE": _build_levenshtein,
+        "EMBED": exp.AIEmbed.from_arg_list,
+        "FORMAT_DATE": _build_format_time(exp.TsOrDsToDate),
+        "GENERATE": exp.AIGenerate.from_arg_list,
+        "GENERATE_ARRAY": exp.GenerateSeries.from_arg_list,
+        "JSON_EXTRACT_SCALAR": _build_extract_json_with_default_path(exp.JSONExtractScalar),
+        "JSON_EXTRACT_ARRAY": _build_extract_json_with_default_path(exp.JSONExtractArray),
+        "JSON_EXTRACT_STRING_ARRAY": _build_extract_json_with_default_path(exp.JSONValueArray),
+        "JSON_KEYS": exp.JSONKeysAtDepth.from_arg_list,
+        "JSON_QUERY": parser.build_extract_json_with_path(exp.JSONExtract),
+        "JSON_QUERY_ARRAY": _build_extract_json_with_default_path(exp.JSONExtractArray),
+        "JSON_STRIP_NULLS": _build_json_strip_nulls,
+        "JSON_VALUE": _build_extract_json_with_default_path(exp.JSONExtractScalar),
+        "JSON_VALUE_ARRAY": _build_extract_json_with_default_path(exp.JSONValueArray),
+        "LAST_DAY": lambda args: _normalize_bare_week(exp.LastDay.from_arg_list(args)),
+        "LENGTH": lambda args: exp.Length(this=seq_get(args, 0), binary=True),
+        "MD5": exp.MD5Digest.from_arg_list,
+        "SHA1": exp.SHA1Digest.from_arg_list,
+        "NORMALIZE_AND_CASEFOLD": lambda args: exp.Normalize(
+            this=seq_get(args, 0), form=seq_get(args, 1), is_casefold=True
+        ),
+        "OCTET_LENGTH": exp.ByteLength.from_arg_list,
+        "TO_HEX": _build_to_hex,
+        "PARSE_DATE": _build_parse_date,
+        "PARSE_TIME": lambda args, dialect: build_formatted_time(exp.ParseTime)(
+            [seq_get(args, 1), seq_get(args, 0)], dialect
+        ),
+        "PARSE_TIMESTAMP": _build_parse_timestamp,
+        "PARSE_DATETIME": _build_parse_datetime,
+        "REGEXP_CONTAINS": exp.RegexpLike.from_arg_list,
+        "REGEXP_EXTRACT": _build_regexp_extract(exp.RegexpExtract),
+        "REGEXP_SUBSTR": _build_regexp_extract(exp.RegexpExtract),
+        "REGEXP_EXTRACT_ALL": _build_regexp_extract(
+            exp.RegexpExtractAll, default_group=exp.Literal.number(0)
+        ),
+        "SHA256": lambda args: exp.SHA2Digest(
+            this=seq_get(args, 0), length=exp.Literal.number(256)
+        ),
+        "SHA512": lambda args: exp.SHA2Digest(
+            this=seq_get(args, 0), length=exp.Literal.number(512)
+        ),
+        "SIMILARITY": exp.AISimilarity.from_arg_list,
+        "SPLIT": lambda args: exp.Split(
+            # https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#split
+            this=seq_get(args, 0),
+            expression=seq_get(args, 1) or exp.Literal.string(","),
+        ),
+        "STRPOS": exp.StrPosition.from_arg_list,
+        "TIME": _build_time,
+        "TIME_ADD": build_date_delta_with_interval(exp.TimeAdd),
+        "TIME_SUB": build_date_delta_with_interval(exp.TimeSub),
+        "TIMESTAMP": _build_timestamp,
+        "TIMESTAMP_ADD": build_date_delta_with_interval(exp.TimestampAdd),
+        "TIMESTAMP_SUB": build_date_delta_with_interval(exp.TimestampSub),
+        "TIMESTAMP_BUCKET": lambda args: exp.DateBin(
+            this=seq_get(args, 1),
+            expression=seq_get(args, 0),
+            origin=seq_get(args, 2),
+        ),
+        "TIMESTAMP_MICROS": lambda args: exp.UnixToTime(
+            this=seq_get(args, 0), scale=exp.UnixToTime.MICROS
+        ),
+        "TIMESTAMP_MILLIS": lambda args: exp.UnixToTime(
+            this=seq_get(args, 0), scale=exp.UnixToTime.MILLIS
+        ),
+        "TIMESTAMP_SECONDS": lambda args: exp.UnixToTime(this=seq_get(args, 0)),
+        "TIMESTAMP_TRUNC": lambda args: _normalize_bare_week(
+            exp.TimestampTrunc.from_arg_list(args)
+        ),
+        "TO_JSON": lambda args: exp.JSONFormat(
+            this=seq_get(args, 0), options=seq_get(args, 1), to_json=True
+        ),
+        "TO_JSON_STRING": exp.JSONFormat.from_arg_list,
+        "FORMAT_DATETIME": _build_format_time(exp.TsOrDsToDatetime),
+        "FORMAT_TIMESTAMP": _build_format_time(exp.TsOrDsToTimestamp),
+        "FORMAT_TIME": _build_format_time(exp.TsOrDsToTime),
+        "FROM_HEX": exp.Unhex.from_arg_list,
+        "WEEK": lambda args: exp.WeekStart(this=exp.var(seq_get(args, 0))),
+    }
+
+--- STDERR ---

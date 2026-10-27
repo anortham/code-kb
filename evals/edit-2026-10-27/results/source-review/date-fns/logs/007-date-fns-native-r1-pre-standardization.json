@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "schedule_index": 7,
+  "case_id": "date-fns",
+  "arm": "native",
+  "repeat": 1,
+  "raw_attempt_sha256": "0903b1c74641dd200ab92a55a0523d08b9ae414b7255fa49733b2441431c0141",
+  "bundle_json_sha256": null,
+  "source_review": "failed",
+  "disposition": "incomplete",
+  "findings": [
+    {
+      "severity": "blocker",
+      "finding": "Runtime preparation changed the trial source before agent dispatch, so this attempt has no patch or behavioral grade to review.",
+      "evidence": [
+        "attempt.json status is runtime_changed_source; dispatch_started is false; trial_completed is false.",
+        "acceptance_status is not_dispatched, and bundle_path and grade_path are null.",
+        "The workspace dependency setup command exited 0; no agent run or test command is recorded."
+      ]
+    }
+  ],
+  "changed_production_files": [],
+  "added_test_files": [],
+  "grade_evidence": null
+}

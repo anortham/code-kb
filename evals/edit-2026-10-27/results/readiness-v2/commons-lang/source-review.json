@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "case_id": "commons-lang",
+  "source_review": "passed",
+  "basis": "Original accepted reference implementation and task are unchanged. Lead reviewed bounded configuration/oracle corrections, live readiness and seed-source equivalence.",
+  "changed_case_files": [],
+  "original_approved_readiness": "results/readiness/commons-lang/readiness.json",
+  "original_approved_readiness_sha256": "3f12f30ecd5db5b2e68990e775ff9c0edbe51f0042641f93105745fdb2ff701b",
+  "raw_fresh_readiness": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/readiness.json",
+  "raw_fresh_readiness_sha256": "01c8138090933411806aff09bad6f23d94e86d79ac5241678963afc9ae2b301b",
+  "case_sha256": "a09f9cfab6fb450c742102aaaf5028c58bb9c8a61cf2aca4b4cbeed55f890a14",
+  "request_sha256": "4c9ea6ce172cf41413f9a546dee7bea4bbb261ee05032c534d646b9519e00662",
+  "seed_patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "reference_patch_sha256": "14321fc687ae3d84d8bd6109522aee24ff007891e7dca3dc9343bf6914678276",
+  "source_only_digest": "6a3a572d1f84211a81c0f35e0caf78069900ff6562794ba90afb2f3c7a05d402",
+  "source_bytes_unchanged": true,
+  "negative_checks": "Mini matcher positive/negative and exact suffix-boundary verification retained; Noda existing purity test passes upstream/reference; generated-root changes hide no source/protected paths."
+}

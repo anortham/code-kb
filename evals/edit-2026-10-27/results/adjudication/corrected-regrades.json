@@ -1,0 +1,2418 @@
+{
+  "cases": {
+    "minijinja": {
+      "common_inputs_unchanged_during_recorded_runs": true,
+      "corrected_case_path": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/corrected-cases/minijinja",
+      "corrected_case_sha256": "9c7b081fd68fe8b0284262d1cf105d780eac91af3e4e7656ad9fc351e637e647",
+      "dependency_cache_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_minijinja_cargo-cache",
+      "dependency_cache_sha256": "eac88f77d5490563112b892dcb38a804d9fdb32e52de2624bd5c0738faef538a",
+      "fresh_readiness_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/minijinja-restored-cache/readiness.json",
+      "fresh_readiness_sha256": "ef724b3d4402d538d7a9504150197c8c604ab6b127aa2c86df16db9d90afdd49",
+      "frozen_dependency_cache_sha256": "eac88f77d5490563112b892dcb38a804d9fdb32e52de2624bd5c0738faef538a",
+      "original_seed_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds/minijinja",
+      "original_seed_snapshot_sha256": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+      "original_seed_tree_sha256": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+      "preflight_diagnostics": [
+        {
+          "cause": "initial guard expected attempt seed copy to differ at .git/index; snapshot review found zero differing entries vs canonical original seed",
+          "grader_invocations": 0,
+          "status": "aborted-before-grader"
+        }
+      ],
+      "runtime_bindings_path": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/lead/runtime-bindings.json",
+      "runtime_bindings_sha256_at_run": "7fbf8bd3b8024c70076bf281aca80bca255b9f6537e8249c9dd537e0d00fb103",
+      "rust_tool_tree_sha256": "9bb3ada2e04cf6c70356f9fddee8f03d47a485cdece85ca8d06c920aaf913779",
+      "slot_003_report_capture_diagnostic": {
+        "grade_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/003-native-r1/grade.json",
+        "grader_completed": true,
+        "post_run_reporter_error": "The attempt record path was passed as a string to the Path-only hash helper; grade output is present and was not rerun."
+      },
+      "superseded_readiness_dependency_sha256": "4c2e829eb200ae3a7a7a58d6ac04dea47e7cd07c48269004102035e452b701bd",
+      "superseded_readiness_path": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/results/readiness-v2/minijinja/readiness.json",
+      "superseded_readiness_sha256": "f5dcda236686b21264b9a640ae88addbda535ff1fc19ba99b64bf2de7dec977c"
+    },
+    "nodatime": {
+      "common_inputs_unchanged_during_recorded_runs": true,
+      "corrected_case_path": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/corrected-cases/nodatime",
+      "corrected_case_sha256": "80ac1e39e6333f5e2723371b800d1c852510e14966b870c4fbdd62ed244e00df",
+      "dependency_cache_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_nodatime_nodatime-nuget",
+      "dependency_cache_sha256": "b33c5d38a4b9541a64ea5105150e5bbcd49ba2b5a7cd583b7cdee8faf9cb11dd",
+      "dotnet_tool_path": "/usr/lib64/dotnet",
+      "dotnet_tool_tree_sha256": "2be7a815b5bd470fc51789d9c6e510be8df7bf322c81656c24d497ee9fc4bdf4",
+      "original_seed_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds/nodatime",
+      "original_seed_snapshot_sha256": "21cc469ed0702c23063650f6e73547fa34f9aedebddb81b7cdffefafc7384a3d",
+      "original_seed_tree_sha256": "21cc469ed0702c23063650f6e73547fa34f9aedebddb81b7cdffefafc7384a3d",
+      "readiness_path": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/results/readiness-v2/nodatime/readiness.json",
+      "readiness_sha256": "361d4f00171ec7a47cf8545b90f1632708a7b912add79da19226ffce978c20d0",
+      "runtime_bindings_sha256_at_run": "7fbf8bd3b8024c70076bf281aca80bca255b9f6537e8249c9dd537e0d00fb103"
+    }
+  },
+  "created_utc": "2026-10-27T22:15:31.709501+00:00",
+  "execution_policy": {
+    "auth_file": null,
+    "network_scope": "disabled",
+    "provider_calls": 0
+  },
+  "frozen_campaign_metadata": {
+    "frozen_inputs_path": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/frozen-inputs.json",
+    "frozen_inputs_sha256": "6da8d9902ca39c31d312406f130a4c6f7184f5fa41df4bdc46c7a3e1fc1248a0",
+    "manifest_path": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/manifest.json",
+    "manifest_sha256": "2ec7fad27dfb508efdefb6a1190d32eb8d4587a16594d3948e63328d562072e8"
+  },
+  "grader_sha256": "a8107d69595a23d25aa00447ff38a69738188ce9ddea5ed846580f3d9bf72100",
+  "purpose": "Uniform corrected regrading of the four captured MiniJinja and four captured NodaTime patches. Original attempts, bundles, and strict grades remain separate.",
+  "results": [
+    {
+      "arm": "native",
+      "attempt_seed_matches_canonical": true,
+      "auth_file": null,
+      "bundle_json_sha256": "973831ad95b7b28d9cc73bc04d56d0087a8dee7a0f8420e6677d3f8e8cb7f4ce",
+      "bundle_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/003-minijinja-native-r1/bundle",
+      "bundle_tree_sha256": "5c3dbecfb5b481f8cd74b0f2fe799bebfe2b120a346ede6e2c25fc8a7f6947aa",
+      "case_id": "minijinja",
+      "effective_attempt_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/003-minijinja-native-r1/attempt.json",
+      "effective_attempt_sha256": "659d16b000b9ae5f3d1e8a45a1bfb0256dfa73735d48bd248fb157a953d2afc5",
+      "fresh_regrade": {
+        "acceptance_status": "pending_source_review",
+        "behavioral_pass": true,
+        "checks": {
+          "hidden": {
+            "commands": [
+              {
+                "command_id": "autoescape_suffix_acceptance",
+                "elapsed_seconds": 7.435956,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/003-native-r1/evidence/grade-hidden-00-autoescape_suffix_acceptance/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "618614841c7ff723828b2bda0ef3abc91dfda0ca546f469e04843f50d8e01f1d",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/003-native-r1/evidence/grade-hidden-00-autoescape_suffix_acceptance/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [
+                      "running 3 tests",
+                      "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+                    ],
+                    "sensitive_pattern_found": false,
+                    "sha256": "04d2b6cb76bb233dfcd6b277b1fb78a85c13530544bc00aa08e723e0fd718895",
+                    "status": "retained"
+                  }
+                },
+                "passed": true,
+                "test_execution_observed": true,
+                "timed_out": false
+              }
+            ],
+            "passed": true
+          },
+          "hidden_runtime_setup": {
+            "commands": [
+              {
+                "command_id": "restore_cargo_cache",
+                "elapsed_seconds": 1.166304,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/003-native-r1/evidence/runtime-grade-hidden-00-restore_cargo_cache/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/003-native-r1/evidence/runtime-grade-hidden-00-restore_cargo_cache/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  }
+                },
+                "passed": true,
+                "test_execution_observed": null,
+                "timed_out": false
+              }
+            ],
+            "passed": true
+          },
+          "public": {
+            "commands": [
+              {
+                "command_id": "minijinja_cli_regressions",
+                "elapsed_seconds": 7.886334,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/003-native-r1/evidence/grade-public-00-minijinja_cli_regressions/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "fe007b5019b8447a3547d068471a1ac6c2d087edc2c404bc83aba3b15c7239dd",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/003-native-r1/evidence/grade-public-00-minijinja_cli_regressions/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [
+                      "running 4 tests",
+                      "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+                      "running 30 tests",
+                      "test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.02s"
+                    ],
+                    "sensitive_pattern_found": false,
+                    "sha256": "0effbd00ee1b17a392b68c552bf4b3f59b1e2fa8194449e1d6e6aede27da30f6",
+                    "status": "retained"
+                  }
+                },
+                "passed": true,
+                "test_execution_observed": true,
+                "timed_out": false
+              }
+            ],
+            "passed": true
+          },
+          "public_runtime_setup": {
+            "commands": [
+              {
+                "command_id": "restore_cargo_cache",
+                "elapsed_seconds": 1.116586,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/003-native-r1/evidence/runtime-grade-public-00-restore_cargo_cache/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/003-native-r1/evidence/runtime-grade-public-00-restore_cargo_cache/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  }
+                },
+                "passed": true,
+                "test_execution_observed": null,
+                "timed_out": false
+              }
+            ],
+            "passed": true
+          }
+        },
+        "failure": null,
+        "grade_json_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/003-native-r1/grade.json",
+        "grade_json_sha256": "63c0649344e890ab27cd8d3473c16ba30229fcf2c463fc794927e89933ee0c6f",
+        "patch_valid": true,
+        "protection_status": "unchanged",
+        "replay_valid": true
+      },
+      "input_integrity": {
+        "current_revalidation": {
+          "attempt_seed_snapshot_sha256": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+          "attempt_seed_tree_sha256": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+          "bundle_json_sha256": "973831ad95b7b28d9cc73bc04d56d0087a8dee7a0f8420e6677d3f8e8cb7f4ce",
+          "bundle_tree_sha256": "5c3dbecfb5b481f8cd74b0f2fe799bebfe2b120a346ede6e2c25fc8a7f6947aa",
+          "canonical_seed_snapshot_sha256": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+          "canonical_seed_tree_sha256": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+          "case_sha256": "9c7b081fd68fe8b0284262d1cf105d780eac91af3e4e7656ad9fc351e637e647",
+          "dependency_tree_sha256": "eac88f77d5490563112b892dcb38a804d9fdb32e52de2624bd5c0738faef538a",
+          "original_grade_tree_sha256": "ba73055351108e07861f56148d215dde2ff825fcec56710bdb975ddda4d9e052",
+          "raw_attempt_sha256": "659d16b000b9ae5f3d1e8a45a1bfb0256dfa73735d48bd248fb157a953d2afc5",
+          "readiness_sha256": "ef724b3d4402d538d7a9504150197c8c604ab6b127aa2c86df16db9d90afdd49",
+          "runtime_bindings_sha256": "7fbf8bd3b8024c70076bf281aca80bca255b9f6537e8249c9dd537e0d00fb103",
+          "rust_tool_tree_sha256": "9bb3ada2e04cf6c70356f9fddee8f03d47a485cdece85ca8d06c920aaf913779",
+          "source_review_receipt_sha256": "834026cf2d1abe2af41d95beac89d9c85990bd65d03b339bc43f25b7bfb64e67"
+        },
+        "frozen_identity_checks_passed": true,
+        "paired_before_after_snapshot_retained": false,
+        "pre_run_guard_passed": true,
+        "report_capture_diagnostic": "Grade completed; the result serializer then failed hashing a string path with a Path-only helper. No grade rerun was made."
+      },
+      "network_scope": "disabled",
+      "original_strict_records_and_grades": [
+        {
+          "acceptance_status": "pending_source_review",
+          "behavioral_pass": true,
+          "grade_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/003-minijinja-native-r1/grade",
+          "grade_tree_sha256": "ba73055351108e07861f56148d215dde2ff825fcec56710bdb975ddda4d9e052",
+          "record_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/003-minijinja-native-r1/attempt.json",
+          "record_sha256": "659d16b000b9ae5f3d1e8a45a1bfb0256dfa73735d48bd248fb157a953d2afc5"
+        }
+      ],
+      "raw_attempt_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/003-minijinja-native-r1/attempt.json",
+      "raw_attempt_sha256": "659d16b000b9ae5f3d1e8a45a1bfb0256dfa73735d48bd248fb157a953d2afc5",
+      "repeat": 1,
+      "schedule_index": 3,
+      "seed_project_path_from_attempt": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/003-minijinja-native-r1/work/seed-project",
+      "seed_project_path_used": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds/minijinja",
+      "seed_project_tree_sha256_from_attempt": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+      "seed_project_tree_sha256_used": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+      "seed_snapshot_sha256_from_attempt": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+      "seed_snapshot_sha256_used": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+      "source_review_receipt_path": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/results/source-review/minijinja/003-native-r1.json",
+      "source_review_receipt_sha256": "834026cf2d1abe2af41d95beac89d9c85990bd65d03b339bc43f25b7bfb64e67",
+      "trial_completed": true
+    },
+    {
+      "arm": "code-kb",
+      "attempt_seed_matches_canonical": true,
+      "auth_file": null,
+      "bundle_json_sha256": "7b5d362344f2ef642de1f94253d8ed33e27990618d53f35345e21de2ac8cf8da",
+      "bundle_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/004-minijinja-code-kb-r1/bundle",
+      "bundle_tree_sha256": "9cbe083010c545d3856e444cde3373014f492f4424ba806db115364b06e34e42",
+      "case_id": "minijinja",
+      "effective_attempt_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/004-minijinja-code-kb-r1/attempt.json",
+      "effective_attempt_sha256": "353c9dac685d33a30ed6bdbbbda976727a19c41974d07a7e277f18891616d62c",
+      "fresh_regrade": {
+        "acceptance_status": "pending_source_review",
+        "behavioral_pass": true,
+        "checks": {
+          "hidden": {
+            "commands": [
+              {
+                "command_id": "autoescape_suffix_acceptance",
+                "elapsed_seconds": 7.387681,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "passed": true,
+                "stderr_log": {
+                  "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/004-code-kb-r1/evidence/grade-hidden-00-autoescape_suffix_acceptance/stderr.log",
+                  "raw_content_copied": false,
+                  "sanitized_summary_lines": [],
+                  "sensitive_pattern_found": false,
+                  "sha256": "b9849b96a98e7fc9e8bf1a3cfdc59036d6a816ba598a627c83fa499995aa4f82"
+                },
+                "stdout_log": {
+                  "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/004-code-kb-r1/evidence/grade-hidden-00-autoescape_suffix_acceptance/stdout.log",
+                  "raw_content_copied": false,
+                  "sanitized_summary_lines": [
+                    "running 3 tests",
+                    "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+                  ],
+                  "sensitive_pattern_found": false,
+                  "sha256": "04d2b6cb76bb233dfcd6b277b1fb78a85c13530544bc00aa08e723e0fd718895"
+                },
+                "test_execution_observed": true,
+                "timed_out": false
+              }
+            ],
+            "passed": true
+          },
+          "hidden_runtime_setup": {
+            "commands": [
+              {
+                "command_id": "restore_cargo_cache",
+                "elapsed_seconds": 1.117344,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "passed": true,
+                "stderr_log": {
+                  "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/004-code-kb-r1/evidence/runtime-grade-hidden-00-restore_cargo_cache/stderr.log",
+                  "raw_content_copied": false,
+                  "sanitized_summary_lines": [],
+                  "sensitive_pattern_found": false,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                "stdout_log": {
+                  "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/004-code-kb-r1/evidence/runtime-grade-hidden-00-restore_cargo_cache/stdout.log",
+                  "raw_content_copied": false,
+                  "sanitized_summary_lines": [],
+                  "sensitive_pattern_found": false,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                "test_execution_observed": null,
+                "timed_out": false
+              }
+            ],
+            "passed": true
+          },
+          "public": {
+            "commands": [
+              {
+                "command_id": "minijinja_cli_regressions",
+                "elapsed_seconds": 7.682678,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "passed": true,
+                "stderr_log": {
+                  "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/004-code-kb-r1/evidence/grade-public-00-minijinja_cli_regressions/stderr.log",
+                  "raw_content_copied": false,
+                  "sanitized_summary_lines": [],
+                  "sensitive_pattern_found": false,
+                  "sha256": "2db0e5dc9108f6e8fa3bed1d2e659833329647129e696afd265a4311112b3d22"
+                },
+                "stdout_log": {
+                  "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/004-code-kb-r1/evidence/grade-public-00-minijinja_cli_regressions/stdout.log",
+                  "raw_content_copied": false,
+                  "sanitized_summary_lines": [
+                    "running 4 tests",
+                    "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+                    "running 30 tests",
+                    "test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.03s"
+                  ],
+                  "sensitive_pattern_found": false,
+                  "sha256": "bdc934a7d11ef8ac94663bb9024bf51933019b2aa4c875b468847d75a74d9635"
+                },
+                "test_execution_observed": true,
+                "timed_out": false
+              }
+            ],
+            "passed": true
+          },
+          "public_runtime_setup": {
+            "commands": [
+              {
+                "command_id": "restore_cargo_cache",
+                "elapsed_seconds": 1.166653,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "passed": true,
+                "stderr_log": {
+                  "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/004-code-kb-r1/evidence/runtime-grade-public-00-restore_cargo_cache/stderr.log",
+                  "raw_content_copied": false,
+                  "sanitized_summary_lines": [],
+                  "sensitive_pattern_found": false,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                "stdout_log": {
+                  "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/004-code-kb-r1/evidence/runtime-grade-public-00-restore_cargo_cache/stdout.log",
+                  "raw_content_copied": false,
+                  "sanitized_summary_lines": [],
+                  "sensitive_pattern_found": false,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                "test_execution_observed": null,
+                "timed_out": false
+              }
+            ],
+            "passed": true
+          }
+        },
+        "failure": null,
+        "grade_json_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/004-code-kb-r1/grade.json",
+        "grade_json_sha256": "09738b70fe6b1493d7859efd8ddc4f0fa393f7e83d4b6f4fbbc58da30c7cbcd1",
+        "patch_valid": true,
+        "protection_status": "unchanged",
+        "replay_valid": true
+      },
+      "immutable_inputs_unchanged": true,
+      "input_hashes_after": {
+        "attempt_seed_copy_snapshot_sha256": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+        "attempt_seed_copy_tree_sha256": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+        "bundle_json_sha256": "7b5d362344f2ef642de1f94253d8ed33e27990618d53f35345e21de2ac8cf8da",
+        "bundle_tree_sha256": "9cbe083010c545d3856e444cde3373014f492f4424ba806db115364b06e34e42",
+        "canonical_seed_project_tree_sha256": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+        "canonical_seed_snapshot_sha256": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+        "effective_attempt_sha256": "353c9dac685d33a30ed6bdbbbda976727a19c41974d07a7e277f18891616d62c",
+        "grade_records": [
+          {
+            "acceptance_status": "failed",
+            "behavioral_pass": false,
+            "grade_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/004-minijinja-code-kb-r1/grade",
+            "grade_tree_sha256": "b7b0bf9fe2bfface5194613e079d7a40338e3569bdd7960615d8c57156fe476d",
+            "record_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/004-minijinja-code-kb-r1/attempt.json",
+            "record_sha256": "353c9dac685d33a30ed6bdbbbda976727a19c41974d07a7e277f18891616d62c"
+          }
+        ],
+        "raw_attempt_sha256": "353c9dac685d33a30ed6bdbbbda976727a19c41974d07a7e277f18891616d62c",
+        "source_review_receipt_sha256": "40f091796b11cef683b9916ddea4591b5f324634cd9609ad86fe7b0d9904c0a3"
+      },
+      "input_hashes_before": {
+        "attempt_seed_copy_snapshot_sha256": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+        "attempt_seed_copy_tree_sha256": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+        "bundle_json_sha256": "7b5d362344f2ef642de1f94253d8ed33e27990618d53f35345e21de2ac8cf8da",
+        "bundle_tree_sha256": "9cbe083010c545d3856e444cde3373014f492f4424ba806db115364b06e34e42",
+        "canonical_seed_project_tree_sha256": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+        "canonical_seed_snapshot_sha256": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+        "effective_attempt_sha256": "353c9dac685d33a30ed6bdbbbda976727a19c41974d07a7e277f18891616d62c",
+        "grade_records": [
+          {
+            "acceptance_status": "failed",
+            "behavioral_pass": false,
+            "grade_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/004-minijinja-code-kb-r1/grade",
+            "grade_tree_sha256": "b7b0bf9fe2bfface5194613e079d7a40338e3569bdd7960615d8c57156fe476d",
+            "record_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/004-minijinja-code-kb-r1/attempt.json",
+            "record_sha256": "353c9dac685d33a30ed6bdbbbda976727a19c41974d07a7e277f18891616d62c"
+          }
+        ],
+        "raw_attempt_sha256": "353c9dac685d33a30ed6bdbbbda976727a19c41974d07a7e277f18891616d62c",
+        "source_review_receipt_sha256": "40f091796b11cef683b9916ddea4591b5f324634cd9609ad86fe7b0d9904c0a3"
+      },
+      "network_scope": "disabled",
+      "original_strict_records_and_grades": [
+        {
+          "acceptance_status": "failed",
+          "behavioral_pass": false,
+          "grade_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/004-minijinja-code-kb-r1/grade",
+          "grade_tree_sha256": "b7b0bf9fe2bfface5194613e079d7a40338e3569bdd7960615d8c57156fe476d",
+          "record_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/004-minijinja-code-kb-r1/attempt.json",
+          "record_sha256": "353c9dac685d33a30ed6bdbbbda976727a19c41974d07a7e277f18891616d62c"
+        }
+      ],
+      "raw_attempt_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/004-minijinja-code-kb-r1/attempt.json",
+      "raw_attempt_sha256": "353c9dac685d33a30ed6bdbbbda976727a19c41974d07a7e277f18891616d62c",
+      "repeat": 1,
+      "sanitized_retained_logs": {
+        "logs": [
+          {
+            "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/004-code-kb-r1/evidence/runtime-grade-public-00-restore_cargo_cache/stdout.log",
+            "raw_content_copied": false,
+            "sanitized_summary_lines": [],
+            "sensitive_pattern_found": false,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/004-code-kb-r1/evidence/runtime-grade-public-00-restore_cargo_cache/stderr.log",
+            "raw_content_copied": false,
+            "sanitized_summary_lines": [],
+            "sensitive_pattern_found": false,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/004-code-kb-r1/evidence/runtime-grade-hidden-00-restore_cargo_cache/stdout.log",
+            "raw_content_copied": false,
+            "sanitized_summary_lines": [],
+            "sensitive_pattern_found": false,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/004-code-kb-r1/evidence/runtime-grade-hidden-00-restore_cargo_cache/stderr.log",
+            "raw_content_copied": false,
+            "sanitized_summary_lines": [],
+            "sensitive_pattern_found": false,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/004-code-kb-r1/evidence/grade-public-00-minijinja_cli_regressions/stdout.log",
+            "raw_content_copied": false,
+            "sanitized_summary_lines": [
+              "running 4 tests",
+              "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+              "running 30 tests",
+              "test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.03s"
+            ],
+            "sensitive_pattern_found": false,
+            "sha256": "bdc934a7d11ef8ac94663bb9024bf51933019b2aa4c875b468847d75a74d9635"
+          },
+          {
+            "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/004-code-kb-r1/evidence/grade-public-00-minijinja_cli_regressions/stderr.log",
+            "raw_content_copied": false,
+            "sanitized_summary_lines": [],
+            "sensitive_pattern_found": false,
+            "sha256": "2db0e5dc9108f6e8fa3bed1d2e659833329647129e696afd265a4311112b3d22"
+          },
+          {
+            "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/004-code-kb-r1/evidence/grade-hidden-00-autoescape_suffix_acceptance/stdout.log",
+            "raw_content_copied": false,
+            "sanitized_summary_lines": [
+              "running 3 tests",
+              "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+            ],
+            "sensitive_pattern_found": false,
+            "sha256": "04d2b6cb76bb233dfcd6b277b1fb78a85c13530544bc00aa08e723e0fd718895"
+          },
+          {
+            "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/004-code-kb-r1/evidence/grade-hidden-00-autoescape_suffix_acceptance/stderr.log",
+            "raw_content_copied": false,
+            "sanitized_summary_lines": [],
+            "sensitive_pattern_found": false,
+            "sha256": "b9849b96a98e7fc9e8bf1a3cfdc59036d6a816ba598a627c83fa499995aa4f82"
+          }
+        ],
+        "policy": "only whitelisted test summary lines are embedded; raw outputs stay in the sandbox cache",
+        "status": "safe"
+      },
+      "schedule_index": 4,
+      "seed_project_path_from_attempt": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/004-minijinja-code-kb-r1/work/seed-project",
+      "seed_project_path_used": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds/minijinja",
+      "seed_project_tree_sha256_from_attempt": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+      "seed_project_tree_sha256_used": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+      "seed_snapshot_sha256_from_attempt": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+      "seed_snapshot_sha256_used": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+      "source_review_receipt_path": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/results/source-review/minijinja/004-code-kb-r1.json",
+      "source_review_receipt_sha256": "40f091796b11cef683b9916ddea4591b5f324634cd9609ad86fe7b0d9904c0a3",
+      "trial_completed": true
+    },
+    {
+      "arm": "native",
+      "attempt_seed_matches_canonical": false,
+      "auth_file": null,
+      "bundle_json_sha256": "ab5ab7f6fde45865b3c9fc04ec5c5f7b300b57c9f32d9b3c0ed5cd5c9d8cb51c",
+      "bundle_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/011-nodatime-native-r1/bundle",
+      "bundle_tree_sha256": "ea3b43cbdb934e68a231c662e2b79acaaabb40a17639381c3051257b259001c2",
+      "case_id": "nodatime",
+      "effective_attempt_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/011-nodatime-native-r1/attempt.json",
+      "effective_attempt_sha256": "84a9d7f68a89e5bcf11d60db34a6e9ea418b59276c5140b1bd49b944e0b6995a",
+      "fresh_regrade": {
+        "acceptance_status": "failed",
+        "behavioral_pass": false,
+        "checks": {
+          "hidden": {
+            "commands": [
+              {
+                "command_id": "nodatime-calendar-neutral-contract",
+                "elapsed_seconds": 12.446533,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/011-native-r1/evidence/grade-hidden-00-nodatime-calendar-neutral-contract/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/011-native-r1/evidence/grade-hidden-00-nodatime-calendar-neutral-contract/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [
+                      "   NUnit3TestExecutor discovered 2 of 2 NUnit test cases using Current Discovery mode, Non-Explicit run",
+                      "  Passed LocalDateComparesPhysicalDayAcrossCalendars [6 ms]",
+                      "  Passed LocalDateTimeComparesPhysicalDayThenTimeAcrossCalendars [< 1 ms]",
+                      "Test Run Successful.",
+                      "Total tests: 2",
+                      "     Passed: 2"
+                    ],
+                    "sensitive_pattern_found": false,
+                    "sha256": "d22be51345e84b46ec31b6052c4cf0a8ec0d78e4f92ae5e62ad0361aa36df103",
+                    "status": "retained"
+                  }
+                },
+                "passed": true,
+                "test_execution_observed": true,
+                "timed_out": false
+              }
+            ],
+            "passed": true
+          },
+          "hidden_runtime_setup": {
+            "commands": [
+              {
+                "command_id": "nodatime-copy-prepared-nuget-cache",
+                "elapsed_seconds": 0.264827,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/011-native-r1/evidence/runtime-grade-hidden-00-nodatime-copy-prepared-nuget-cache/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/011-native-r1/evidence/runtime-grade-hidden-00-nodatime-copy-prepared-nuget-cache/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  }
+                },
+                "passed": true,
+                "test_execution_observed": null,
+                "timed_out": false
+              },
+              {
+                "command_id": "nodatime-restore-from-local-cache",
+                "elapsed_seconds": 1.417093,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/011-native-r1/evidence/runtime-grade-hidden-01-nodatime-restore-from-local-cache/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/011-native-r1/evidence/runtime-grade-hidden-01-nodatime-restore-from-local-cache/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "68fc37cfb76e223e48c8f5e9dfe0f4c87b3ff3abe160b7fa269cc48411c8445c",
+                    "status": "retained"
+                  }
+                },
+                "passed": true,
+                "test_execution_observed": null,
+                "timed_out": false
+              }
+            ],
+            "passed": true
+          },
+          "public": {
+            "commands": [
+              {
+                "command_id": "nodatime-public-local-date-regressions",
+                "elapsed_seconds": 12.092472,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/011-native-r1/evidence/grade-public-00-nodatime-public-local-date-regressions/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/011-native-r1/evidence/grade-public-00-nodatime-public-local-date-regressions/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [
+                      "   NUnit3TestExecutor discovered 296 of 296 NUnit test cases using Current Discovery mode, Non-Explicit run",
+                      "  Passed CompareTo_DifferentCalendars_Throws [< 1 ms]",
+                      "  Passed CompareTo_DifferentCalendars_Throws [< 1 ms]",
+                      "Test Run Successful.",
+                      "Total tests: 296",
+                      "     Passed: 296"
+                    ],
+                    "sensitive_pattern_found": false,
+                    "sha256": "c6e3217b6e7c32822b3031587be4225ca75f409cca1f8d85835384cf97a4aa5f",
+                    "status": "retained"
+                  }
+                },
+                "passed": true,
+                "test_execution_observed": true,
+                "timed_out": false
+              },
+              {
+                "command_id": "nodatime-public-pure-struct-methods",
+                "elapsed_seconds": 5.427242,
+                "exit_status": 1,
+                "expected_output_missing": [
+                  "NUnit3TestExecutor discovered 1 of 1 NUnit test cases",
+                  "Passed AllPublicStructMethodsArePure",
+                  "Test Run Successful.",
+                  "Total tests: 1",
+                  "Passed: 1"
+                ],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/011-native-r1/evidence/grade-public-01-nodatime-public-pure-struct-methods/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [
+                      "Test Run Failed."
+                    ],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e6585bd2f919397946a69d39b3756561df54296f9e867be55b60abc93abd8526",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/011-native-r1/evidence/grade-public-01-nodatime-public-pure-struct-methods/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [
+                      "   NUnit3TestExecutor discovered 1 of 1 NUnit test cases using Current Discovery mode, Non-Explicit run",
+                      "Total tests: 1",
+                      "     Failed: 1"
+                    ],
+                    "sensitive_pattern_found": false,
+                    "sha256": "6eff6d2a1db1ff45a385bc1028ef6638f2a9ce6d6b4dd66602a31f5a91112385",
+                    "status": "retained"
+                  }
+                },
+                "passed": false,
+                "test_execution_observed": true,
+                "timed_out": false
+              }
+            ],
+            "passed": false
+          },
+          "public_runtime_setup": {
+            "commands": [
+              {
+                "command_id": "nodatime-copy-prepared-nuget-cache",
+                "elapsed_seconds": 0.264842,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/011-native-r1/evidence/runtime-grade-public-00-nodatime-copy-prepared-nuget-cache/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/011-native-r1/evidence/runtime-grade-public-00-nodatime-copy-prepared-nuget-cache/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  }
+                },
+                "passed": true,
+                "test_execution_observed": null,
+                "timed_out": false
+              },
+              {
+                "command_id": "nodatime-restore-from-local-cache",
+                "elapsed_seconds": 1.467497,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/011-native-r1/evidence/runtime-grade-public-01-nodatime-restore-from-local-cache/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/011-native-r1/evidence/runtime-grade-public-01-nodatime-restore-from-local-cache/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "fed14f7fc7288691b727c93aa6f5683d7944716f2bdb3748464c88ab64d37a4f",
+                    "status": "retained"
+                  }
+                },
+                "passed": true,
+                "test_execution_observed": null,
+                "timed_out": false
+              }
+            ],
+            "passed": true
+          }
+        },
+        "failure": null,
+        "grade_json_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/011-native-r1/grade.json",
+        "grade_json_sha256": "fc1c23f32437ea786b0993ff8a606018408643889d5cc7768b885f5c7c08ace0",
+        "patch_valid": true,
+        "protection_status": "unchanged",
+        "replay_valid": true
+      },
+      "immutable_inputs_unchanged": true,
+      "input_hashes_after": {
+        "attempt_json_sha256": "84a9d7f68a89e5bcf11d60db34a6e9ea418b59276c5140b1bd49b944e0b6995a",
+        "attempt_seed_git_index_sha256": "745896ca13fbdbf10e50137d1077717e5b3d582ca4907ff0e3dc47463b465469",
+        "attempt_seed_project_tree_sha256": "3f4b9be8ccc20422fd5368bd812a33c72547e7b853dd12f0f013460835284fb8",
+        "attempt_seed_snapshot_sha256": "3f4b9be8ccc20422fd5368bd812a33c72547e7b853dd12f0f013460835284fb8",
+        "bundle_json_sha256": "ab5ab7f6fde45865b3c9fc04ec5c5f7b300b57c9f32d9b3c0ed5cd5c9d8cb51c",
+        "bundle_tree_sha256": "ea3b43cbdb934e68a231c662e2b79acaaabb40a17639381c3051257b259001c2",
+        "canonical_seed_git_index_sha256": "3aa386462f8b93a612ff731addb81a223e834abc9b495b948e2616c57cbd4340",
+        "canonical_seed_project_tree_sha256": "21cc469ed0702c23063650f6e73547fa34f9aedebddb81b7cdffefafc7384a3d",
+        "canonical_seed_snapshot_sha256": "21cc469ed0702c23063650f6e73547fa34f9aedebddb81b7cdffefafc7384a3d",
+        "original_grade_tree_sha256": "4ee10ce5784e643f83aa21232906cfc3c08e721581a11eef61453af065529a3c",
+        "source_review_receipt_sha256": "a4b47176eb29b09d7fe694cbda7775d2bb6de2aae22fe53cf6258a138b8ce367"
+      },
+      "input_hashes_before": {
+        "attempt_json_sha256": "84a9d7f68a89e5bcf11d60db34a6e9ea418b59276c5140b1bd49b944e0b6995a",
+        "attempt_seed_git_index_sha256": "745896ca13fbdbf10e50137d1077717e5b3d582ca4907ff0e3dc47463b465469",
+        "attempt_seed_project_tree_sha256": "3f4b9be8ccc20422fd5368bd812a33c72547e7b853dd12f0f013460835284fb8",
+        "attempt_seed_snapshot_sha256": "3f4b9be8ccc20422fd5368bd812a33c72547e7b853dd12f0f013460835284fb8",
+        "bundle_json_sha256": "ab5ab7f6fde45865b3c9fc04ec5c5f7b300b57c9f32d9b3c0ed5cd5c9d8cb51c",
+        "bundle_tree_sha256": "ea3b43cbdb934e68a231c662e2b79acaaabb40a17639381c3051257b259001c2",
+        "canonical_seed_git_index_sha256": "3aa386462f8b93a612ff731addb81a223e834abc9b495b948e2616c57cbd4340",
+        "canonical_seed_project_tree_sha256": "21cc469ed0702c23063650f6e73547fa34f9aedebddb81b7cdffefafc7384a3d",
+        "canonical_seed_snapshot_sha256": "21cc469ed0702c23063650f6e73547fa34f9aedebddb81b7cdffefafc7384a3d",
+        "original_grade_tree_sha256": "4ee10ce5784e643f83aa21232906cfc3c08e721581a11eef61453af065529a3c",
+        "source_review_receipt_sha256": "a4b47176eb29b09d7fe694cbda7775d2bb6de2aae22fe53cf6258a138b8ce367"
+      },
+      "network_scope": "disabled",
+      "original_strict_records_and_grades": [
+        {
+          "acceptance_status": "failed",
+          "behavioral_pass": false,
+          "grade_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/011-nodatime-native-r1/grade",
+          "grade_tree_sha256": "4ee10ce5784e643f83aa21232906cfc3c08e721581a11eef61453af065529a3c",
+          "record_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/011-nodatime-native-r1/attempt.json",
+          "record_sha256": "84a9d7f68a89e5bcf11d60db34a6e9ea418b59276c5140b1bd49b944e0b6995a"
+        }
+      ],
+      "raw_attempt_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/011-nodatime-native-r1/attempt.json",
+      "raw_attempt_sha256": "84a9d7f68a89e5bcf11d60db34a6e9ea418b59276c5140b1bd49b944e0b6995a",
+      "repeat": 1,
+      "schedule_index": 11,
+      "seed_copy_mismatch": {
+        "attempt_git_index_sha256": "745896ca13fbdbf10e50137d1077717e5b3d582ca4907ff0e3dc47463b465469",
+        "canonical_git_index_sha256": "3aa386462f8b93a612ff731addb81a223e834abc9b495b948e2616c57cbd4340",
+        "classification": "attempt seed copy differs only in .git/index; original source entries match frozen seed",
+        "differing_paths": [
+          ".git/index"
+        ]
+      },
+      "seed_project_path_from_attempt": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/011-nodatime-native-r1/work/seed-project",
+      "seed_project_path_used": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds/nodatime",
+      "seed_project_tree_sha256_from_attempt": "3f4b9be8ccc20422fd5368bd812a33c72547e7b853dd12f0f013460835284fb8",
+      "seed_project_tree_sha256_used": "21cc469ed0702c23063650f6e73547fa34f9aedebddb81b7cdffefafc7384a3d",
+      "seed_snapshot_sha256_from_attempt": "3f4b9be8ccc20422fd5368bd812a33c72547e7b853dd12f0f013460835284fb8",
+      "seed_snapshot_sha256_used": "21cc469ed0702c23063650f6e73547fa34f9aedebddb81b7cdffefafc7384a3d",
+      "source_review_receipt_path": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/results/source-review/nodatime/011-native-r1.json",
+      "source_review_receipt_sha256": "a4b47176eb29b09d7fe694cbda7775d2bb6de2aae22fe53cf6258a138b8ce367",
+      "trial_completed": true
+    },
+    {
+      "arm": "code-kb",
+      "attempt_seed_matches_canonical": false,
+      "auth_file": null,
+      "bundle_json_sha256": "d53d70671554366041622ee752630b3e2182d283db374eeebdb7eba43fb8ed8f",
+      "bundle_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/012-nodatime-code-kb-r1/bundle",
+      "bundle_tree_sha256": "df1c3dbd91ae962a20f806d3c04281bb5621bb93c8aa804d3236e421a2cae0f5",
+      "case_id": "nodatime",
+      "effective_attempt_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/012-nodatime-code-kb-r1/attempt.json",
+      "effective_attempt_sha256": "da1705e56c2bad765ec5adf187e4f9e1fd0f7b5fd0f13c7cc9045a8bccc7eb2a",
+      "fresh_regrade": {
+        "acceptance_status": "pending_source_review",
+        "behavioral_pass": true,
+        "checks": {
+          "hidden": {
+            "commands": [
+              {
+                "command_id": "nodatime-calendar-neutral-contract",
+                "elapsed_seconds": 11.843142,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/012-code-kb-r1/evidence/grade-hidden-00-nodatime-calendar-neutral-contract/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/012-code-kb-r1/evidence/grade-hidden-00-nodatime-calendar-neutral-contract/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [
+                      "   NUnit3TestExecutor discovered 2 of 2 NUnit test cases using Current Discovery mode, Non-Explicit run",
+                      "  Passed LocalDateComparesPhysicalDayAcrossCalendars [6 ms]",
+                      "  Passed LocalDateTimeComparesPhysicalDayThenTimeAcrossCalendars [< 1 ms]",
+                      "Test Run Successful.",
+                      "Total tests: 2",
+                      "     Passed: 2"
+                    ],
+                    "sensitive_pattern_found": false,
+                    "sha256": "63f525454063b9eab7c156dc1f84d14ba9f6df6ac6e654bdf9de330a795665ff",
+                    "status": "retained"
+                  }
+                },
+                "passed": true,
+                "test_execution_observed": true,
+                "timed_out": false
+              }
+            ],
+            "passed": true
+          },
+          "hidden_runtime_setup": {
+            "commands": [
+              {
+                "command_id": "nodatime-copy-prepared-nuget-cache",
+                "elapsed_seconds": 0.264806,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/012-code-kb-r1/evidence/runtime-grade-hidden-00-nodatime-copy-prepared-nuget-cache/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/012-code-kb-r1/evidence/runtime-grade-hidden-00-nodatime-copy-prepared-nuget-cache/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  }
+                },
+                "passed": true,
+                "test_execution_observed": null,
+                "timed_out": false
+              },
+              {
+                "command_id": "nodatime-restore-from-local-cache",
+                "elapsed_seconds": 1.467727,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/012-code-kb-r1/evidence/runtime-grade-hidden-01-nodatime-restore-from-local-cache/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/012-code-kb-r1/evidence/runtime-grade-hidden-01-nodatime-restore-from-local-cache/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "dadf528dc24fec7d02155cd7c1414d1d4926312755617639cd34e42829152b9c",
+                    "status": "retained"
+                  }
+                },
+                "passed": true,
+                "test_execution_observed": null,
+                "timed_out": false
+              }
+            ],
+            "passed": true
+          },
+          "public": {
+            "commands": [
+              {
+                "command_id": "nodatime-public-local-date-regressions",
+                "elapsed_seconds": 12.605903,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/012-code-kb-r1/evidence/grade-public-00-nodatime-public-local-date-regressions/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/012-code-kb-r1/evidence/grade-public-00-nodatime-public-local-date-regressions/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [
+                      "   NUnit3TestExecutor discovered 266 of 266 NUnit test cases using Current Discovery mode, Non-Explicit run",
+                      "  Passed CompareTo_DifferentCalendars_Throws [< 1 ms]",
+                      "  Passed CompareTo_DifferentCalendars_Throws [< 1 ms]",
+                      "Test Run Successful.",
+                      "Total tests: 266",
+                      "     Passed: 266"
+                    ],
+                    "sensitive_pattern_found": false,
+                    "sha256": "4b025e5cba3935280e48489438588176b565ad11a1d7649dcf509445cc6a6e91",
+                    "status": "retained"
+                  }
+                },
+                "passed": true,
+                "test_execution_observed": true,
+                "timed_out": false
+              },
+              {
+                "command_id": "nodatime-public-pure-struct-methods",
+                "elapsed_seconds": 5.225564,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/012-code-kb-r1/evidence/grade-public-01-nodatime-public-pure-struct-methods/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/012-code-kb-r1/evidence/grade-public-01-nodatime-public-pure-struct-methods/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [
+                      "   NUnit3TestExecutor discovered 1 of 1 NUnit test cases using Current Discovery mode, Non-Explicit run",
+                      "  Passed AllPublicStructMethodsArePure [3 ms]",
+                      "Test Run Successful.",
+                      "Total tests: 1",
+                      "     Passed: 1"
+                    ],
+                    "sensitive_pattern_found": false,
+                    "sha256": "c693d6bf433871ef46212ef3dcb56888f9e2f4a54a9505b641be6fd6d7de7892",
+                    "status": "retained"
+                  }
+                },
+                "passed": true,
+                "test_execution_observed": true,
+                "timed_out": false
+              }
+            ],
+            "passed": true
+          },
+          "public_runtime_setup": {
+            "commands": [
+              {
+                "command_id": "nodatime-copy-prepared-nuget-cache",
+                "elapsed_seconds": 0.314908,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/012-code-kb-r1/evidence/runtime-grade-public-00-nodatime-copy-prepared-nuget-cache/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/012-code-kb-r1/evidence/runtime-grade-public-00-nodatime-copy-prepared-nuget-cache/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  }
+                },
+                "passed": true,
+                "test_execution_observed": null,
+                "timed_out": false
+              },
+              {
+                "command_id": "nodatime-restore-from-local-cache",
+                "elapsed_seconds": 1.467402,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/012-code-kb-r1/evidence/runtime-grade-public-01-nodatime-restore-from-local-cache/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/012-code-kb-r1/evidence/runtime-grade-public-01-nodatime-restore-from-local-cache/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e78326f15e5d57ae3630d2b2280e77352e4e22826d8f37b62671bdaf8361a321",
+                    "status": "retained"
+                  }
+                },
+                "passed": true,
+                "test_execution_observed": null,
+                "timed_out": false
+              }
+            ],
+            "passed": true
+          }
+        },
+        "failure": null,
+        "grade_json_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/012-code-kb-r1/grade.json",
+        "grade_json_sha256": "d6a7f3eb754e1110b96377c9c1e40d307ff3da0370589e57c232a0768ba1d8d7",
+        "patch_valid": true,
+        "protection_status": "unchanged",
+        "replay_valid": true
+      },
+      "immutable_inputs_unchanged": true,
+      "input_hashes_after": {
+        "attempt_json_sha256": "da1705e56c2bad765ec5adf187e4f9e1fd0f7b5fd0f13c7cc9045a8bccc7eb2a",
+        "attempt_seed_git_index_sha256": "01020af2e061dba60c5f6991a9100ff9ecb57917bb622cf64d034ad9fe60fb56",
+        "attempt_seed_project_tree_sha256": "9b816fdf648995b278a7f7ca5774ef6d369e024c2694132ea1fa47da5c05c742",
+        "attempt_seed_snapshot_sha256": "9b816fdf648995b278a7f7ca5774ef6d369e024c2694132ea1fa47da5c05c742",
+        "bundle_json_sha256": "d53d70671554366041622ee752630b3e2182d283db374eeebdb7eba43fb8ed8f",
+        "bundle_tree_sha256": "df1c3dbd91ae962a20f806d3c04281bb5621bb93c8aa804d3236e421a2cae0f5",
+        "canonical_seed_git_index_sha256": "3aa386462f8b93a612ff731addb81a223e834abc9b495b948e2616c57cbd4340",
+        "canonical_seed_project_tree_sha256": "21cc469ed0702c23063650f6e73547fa34f9aedebddb81b7cdffefafc7384a3d",
+        "canonical_seed_snapshot_sha256": "21cc469ed0702c23063650f6e73547fa34f9aedebddb81b7cdffefafc7384a3d",
+        "original_grade_tree_sha256": "c426147558203a8a89226952808dbd1b3961118a801e5de4bf2e22ecd653c7d4",
+        "source_review_receipt_sha256": "8cbafd7c795917ccc0afdd1677b7d80367c97c3759413a452e53d5de994d7324"
+      },
+      "input_hashes_before": {
+        "attempt_json_sha256": "da1705e56c2bad765ec5adf187e4f9e1fd0f7b5fd0f13c7cc9045a8bccc7eb2a",
+        "attempt_seed_git_index_sha256": "01020af2e061dba60c5f6991a9100ff9ecb57917bb622cf64d034ad9fe60fb56",
+        "attempt_seed_project_tree_sha256": "9b816fdf648995b278a7f7ca5774ef6d369e024c2694132ea1fa47da5c05c742",
+        "attempt_seed_snapshot_sha256": "9b816fdf648995b278a7f7ca5774ef6d369e024c2694132ea1fa47da5c05c742",
+        "bundle_json_sha256": "d53d70671554366041622ee752630b3e2182d283db374eeebdb7eba43fb8ed8f",
+        "bundle_tree_sha256": "df1c3dbd91ae962a20f806d3c04281bb5621bb93c8aa804d3236e421a2cae0f5",
+        "canonical_seed_git_index_sha256": "3aa386462f8b93a612ff731addb81a223e834abc9b495b948e2616c57cbd4340",
+        "canonical_seed_project_tree_sha256": "21cc469ed0702c23063650f6e73547fa34f9aedebddb81b7cdffefafc7384a3d",
+        "canonical_seed_snapshot_sha256": "21cc469ed0702c23063650f6e73547fa34f9aedebddb81b7cdffefafc7384a3d",
+        "original_grade_tree_sha256": "c426147558203a8a89226952808dbd1b3961118a801e5de4bf2e22ecd653c7d4",
+        "source_review_receipt_sha256": "8cbafd7c795917ccc0afdd1677b7d80367c97c3759413a452e53d5de994d7324"
+      },
+      "network_scope": "disabled",
+      "original_strict_records_and_grades": [
+        {
+          "acceptance_status": "failed",
+          "behavioral_pass": false,
+          "grade_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/012-nodatime-code-kb-r1/grade",
+          "grade_tree_sha256": "c426147558203a8a89226952808dbd1b3961118a801e5de4bf2e22ecd653c7d4",
+          "record_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/012-nodatime-code-kb-r1/attempt.json",
+          "record_sha256": "da1705e56c2bad765ec5adf187e4f9e1fd0f7b5fd0f13c7cc9045a8bccc7eb2a"
+        }
+      ],
+      "raw_attempt_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/012-nodatime-code-kb-r1/attempt.json",
+      "raw_attempt_sha256": "da1705e56c2bad765ec5adf187e4f9e1fd0f7b5fd0f13c7cc9045a8bccc7eb2a",
+      "repeat": 1,
+      "schedule_index": 12,
+      "seed_copy_mismatch": {
+        "attempt_git_index_sha256": "01020af2e061dba60c5f6991a9100ff9ecb57917bb622cf64d034ad9fe60fb56",
+        "canonical_git_index_sha256": "3aa386462f8b93a612ff731addb81a223e834abc9b495b948e2616c57cbd4340",
+        "classification": "attempt seed copy differs only in .git/index; original source entries match frozen seed",
+        "differing_paths": [
+          ".git/index"
+        ]
+      },
+      "seed_project_path_from_attempt": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/012-nodatime-code-kb-r1/work/seed-project",
+      "seed_project_path_used": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds/nodatime",
+      "seed_project_tree_sha256_from_attempt": "9b816fdf648995b278a7f7ca5774ef6d369e024c2694132ea1fa47da5c05c742",
+      "seed_project_tree_sha256_used": "21cc469ed0702c23063650f6e73547fa34f9aedebddb81b7cdffefafc7384a3d",
+      "seed_snapshot_sha256_from_attempt": "9b816fdf648995b278a7f7ca5774ef6d369e024c2694132ea1fa47da5c05c742",
+      "seed_snapshot_sha256_used": "21cc469ed0702c23063650f6e73547fa34f9aedebddb81b7cdffefafc7384a3d",
+      "source_review_receipt_path": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/results/source-review/nodatime/012-code-kb-r1.json",
+      "source_review_receipt_sha256": "8cbafd7c795917ccc0afdd1677b7d80367c97c3759413a452e53d5de994d7324",
+      "trial_completed": true
+    },
+    {
+      "arm": "code-kb",
+      "attempt_seed_matches_canonical": true,
+      "auth_file": null,
+      "bundle_json_sha256": "5c8138783c09af2ee53db1100d478ed3aaf1912f75d8c441af468d376cc279ae",
+      "bundle_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/bundle",
+      "bundle_tree_sha256": "ca14800a9ff9211f0940b417f8f7113bb6d583d41a841f1aff9979ca925cc8bb",
+      "case_id": "minijinja",
+      "effective_attempt_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/recovery/recovered-attempt-v3.json",
+      "effective_attempt_sha256": "46b62b9d53a2c8d1fd976e5664976a76657951a7cdf955b9ae31ca816cfcd351",
+      "fresh_regrade": {
+        "acceptance_status": "pending_source_review",
+        "behavioral_pass": true,
+        "checks": {
+          "hidden": {
+            "commands": [
+              {
+                "command_id": "autoescape_suffix_acceptance",
+                "elapsed_seconds": 8.295448,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "passed": true,
+                "stderr_log": {
+                  "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/015-code-kb-r2/evidence/grade-hidden-00-autoescape_suffix_acceptance/stderr.log",
+                  "raw_content_copied": false,
+                  "sanitized_summary_lines": [],
+                  "sensitive_pattern_found": false,
+                  "sha256": "c9aae7e9f3609744e5f3cdaf571afe7d0e26ef48c9a57495b38709555f66fa4b"
+                },
+                "stdout_log": {
+                  "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/015-code-kb-r2/evidence/grade-hidden-00-autoescape_suffix_acceptance/stdout.log",
+                  "raw_content_copied": false,
+                  "sanitized_summary_lines": [
+                    "running 3 tests",
+                    "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+                  ],
+                  "sensitive_pattern_found": false,
+                  "sha256": "04d2b6cb76bb233dfcd6b277b1fb78a85c13530544bc00aa08e723e0fd718895"
+                },
+                "test_execution_observed": true,
+                "timed_out": false
+              }
+            ],
+            "passed": true
+          },
+          "hidden_runtime_setup": {
+            "commands": [
+              {
+                "command_id": "restore_cargo_cache",
+                "elapsed_seconds": 1.21634,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "passed": true,
+                "stderr_log": {
+                  "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/015-code-kb-r2/evidence/runtime-grade-hidden-00-restore_cargo_cache/stderr.log",
+                  "raw_content_copied": false,
+                  "sanitized_summary_lines": [],
+                  "sensitive_pattern_found": false,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                "stdout_log": {
+                  "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/015-code-kb-r2/evidence/runtime-grade-hidden-00-restore_cargo_cache/stdout.log",
+                  "raw_content_copied": false,
+                  "sanitized_summary_lines": [],
+                  "sensitive_pattern_found": false,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                "test_execution_observed": null,
+                "timed_out": false
+              }
+            ],
+            "passed": true
+          },
+          "public": {
+            "commands": [
+              {
+                "command_id": "minijinja_cli_regressions",
+                "elapsed_seconds": 8.337843,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "passed": true,
+                "stderr_log": {
+                  "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/015-code-kb-r2/evidence/grade-public-00-minijinja_cli_regressions/stderr.log",
+                  "raw_content_copied": false,
+                  "sanitized_summary_lines": [],
+                  "sensitive_pattern_found": false,
+                  "sha256": "6b91d2f216a34ab07f2b5fd4f4c356e55ee72eb6a0428932db28d093c6dca3d9"
+                },
+                "stdout_log": {
+                  "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/015-code-kb-r2/evidence/grade-public-00-minijinja_cli_regressions/stdout.log",
+                  "raw_content_copied": false,
+                  "sanitized_summary_lines": [
+                    "running 4 tests",
+                    "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+                    "running 30 tests",
+                    "test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.03s"
+                  ],
+                  "sensitive_pattern_found": false,
+                  "sha256": "4b47fc4b1d94aca1a3bbcf4518fc1b027f8e0db0fdcc7edc7d4f70810f1cfeea"
+                },
+                "test_execution_observed": true,
+                "timed_out": false
+              }
+            ],
+            "passed": true
+          },
+          "public_runtime_setup": {
+            "commands": [
+              {
+                "command_id": "restore_cargo_cache",
+                "elapsed_seconds": 1.267207,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "passed": true,
+                "stderr_log": {
+                  "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/015-code-kb-r2/evidence/runtime-grade-public-00-restore_cargo_cache/stderr.log",
+                  "raw_content_copied": false,
+                  "sanitized_summary_lines": [],
+                  "sensitive_pattern_found": false,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                "stdout_log": {
+                  "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/015-code-kb-r2/evidence/runtime-grade-public-00-restore_cargo_cache/stdout.log",
+                  "raw_content_copied": false,
+                  "sanitized_summary_lines": [],
+                  "sensitive_pattern_found": false,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                "test_execution_observed": null,
+                "timed_out": false
+              }
+            ],
+            "passed": true
+          }
+        },
+        "failure": null,
+        "grade_json_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/015-code-kb-r2/grade.json",
+        "grade_json_sha256": "ce02302d24b7a1f983bca0866d9abb94a3ef6a9a7cabc82f9db7367a7679e727",
+        "patch_valid": true,
+        "protection_status": "unchanged",
+        "replay_valid": true
+      },
+      "immutable_inputs_unchanged": true,
+      "input_hashes_after": {
+        "attempt_seed_copy_snapshot_sha256": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+        "attempt_seed_copy_tree_sha256": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+        "bundle_json_sha256": "5c8138783c09af2ee53db1100d478ed3aaf1912f75d8c441af468d376cc279ae",
+        "bundle_tree_sha256": "ca14800a9ff9211f0940b417f8f7113bb6d583d41a841f1aff9979ca925cc8bb",
+        "canonical_seed_project_tree_sha256": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+        "canonical_seed_snapshot_sha256": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+        "effective_attempt_sha256": "46b62b9d53a2c8d1fd976e5664976a76657951a7cdf955b9ae31ca816cfcd351",
+        "grade_records": [
+          {
+            "acceptance_status": "failed",
+            "behavioral_pass": false,
+            "grade_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/grade-recovery-1",
+            "grade_tree_sha256": "47169ea5869d1e658c59f70fd9cf2712d59956a97764ea1bb13a3995c88fe721",
+            "record_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/attempt.json",
+            "record_sha256": "2662c1379103f16523c8a05bc2c6904becb0a473276e5648e592c7db4065c1eb"
+          },
+          {
+            "acceptance_status": "failed",
+            "behavioral_pass": false,
+            "grade_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/grade-recovery-2",
+            "grade_tree_sha256": "632ab60994b5e4047ac5c0ffb51672a9e32f54702e6c3fc25c655d2aea39737f",
+            "record_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/recovery/recovered-attempt-v2.json",
+            "record_sha256": "24c7cbd477c1343f73e8ed56cb790aa9721fe3403bf37aaab39c6789b436a563"
+          },
+          {
+            "acceptance_status": "failed",
+            "behavioral_pass": false,
+            "grade_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/grade-recovery-3",
+            "grade_tree_sha256": "a63a312f4cce523fcbead51b617b05dc4622de87db08c1775338e38a0a9f535e",
+            "record_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/recovery/recovered-attempt-v3.json",
+            "record_sha256": "46b62b9d53a2c8d1fd976e5664976a76657951a7cdf955b9ae31ca816cfcd351"
+          }
+        ],
+        "raw_attempt_sha256": "2662c1379103f16523c8a05bc2c6904becb0a473276e5648e592c7db4065c1eb",
+        "source_review_receipt_sha256": "6695b4c89a1b8f5aa050f5292db377bc79ed25d400edf1ca90c755a5d72aeee2"
+      },
+      "input_hashes_before": {
+        "attempt_seed_copy_snapshot_sha256": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+        "attempt_seed_copy_tree_sha256": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+        "bundle_json_sha256": "5c8138783c09af2ee53db1100d478ed3aaf1912f75d8c441af468d376cc279ae",
+        "bundle_tree_sha256": "ca14800a9ff9211f0940b417f8f7113bb6d583d41a841f1aff9979ca925cc8bb",
+        "canonical_seed_project_tree_sha256": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+        "canonical_seed_snapshot_sha256": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+        "effective_attempt_sha256": "46b62b9d53a2c8d1fd976e5664976a76657951a7cdf955b9ae31ca816cfcd351",
+        "grade_records": [
+          {
+            "acceptance_status": "failed",
+            "behavioral_pass": false,
+            "grade_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/grade-recovery-1",
+            "grade_tree_sha256": "47169ea5869d1e658c59f70fd9cf2712d59956a97764ea1bb13a3995c88fe721",
+            "record_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/attempt.json",
+            "record_sha256": "2662c1379103f16523c8a05bc2c6904becb0a473276e5648e592c7db4065c1eb"
+          },
+          {
+            "acceptance_status": "failed",
+            "behavioral_pass": false,
+            "grade_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/grade-recovery-2",
+            "grade_tree_sha256": "632ab60994b5e4047ac5c0ffb51672a9e32f54702e6c3fc25c655d2aea39737f",
+            "record_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/recovery/recovered-attempt-v2.json",
+            "record_sha256": "24c7cbd477c1343f73e8ed56cb790aa9721fe3403bf37aaab39c6789b436a563"
+          },
+          {
+            "acceptance_status": "failed",
+            "behavioral_pass": false,
+            "grade_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/grade-recovery-3",
+            "grade_tree_sha256": "a63a312f4cce523fcbead51b617b05dc4622de87db08c1775338e38a0a9f535e",
+            "record_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/recovery/recovered-attempt-v3.json",
+            "record_sha256": "46b62b9d53a2c8d1fd976e5664976a76657951a7cdf955b9ae31ca816cfcd351"
+          }
+        ],
+        "raw_attempt_sha256": "2662c1379103f16523c8a05bc2c6904becb0a473276e5648e592c7db4065c1eb",
+        "source_review_receipt_sha256": "6695b4c89a1b8f5aa050f5292db377bc79ed25d400edf1ca90c755a5d72aeee2"
+      },
+      "network_scope": "disabled",
+      "original_strict_records_and_grades": [
+        {
+          "acceptance_status": "failed",
+          "behavioral_pass": false,
+          "grade_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/grade-recovery-1",
+          "grade_tree_sha256": "47169ea5869d1e658c59f70fd9cf2712d59956a97764ea1bb13a3995c88fe721",
+          "record_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/attempt.json",
+          "record_sha256": "2662c1379103f16523c8a05bc2c6904becb0a473276e5648e592c7db4065c1eb"
+        },
+        {
+          "acceptance_status": "failed",
+          "behavioral_pass": false,
+          "grade_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/grade-recovery-2",
+          "grade_tree_sha256": "632ab60994b5e4047ac5c0ffb51672a9e32f54702e6c3fc25c655d2aea39737f",
+          "record_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/recovery/recovered-attempt-v2.json",
+          "record_sha256": "24c7cbd477c1343f73e8ed56cb790aa9721fe3403bf37aaab39c6789b436a563"
+        },
+        {
+          "acceptance_status": "failed",
+          "behavioral_pass": false,
+          "grade_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/grade-recovery-3",
+          "grade_tree_sha256": "a63a312f4cce523fcbead51b617b05dc4622de87db08c1775338e38a0a9f535e",
+          "record_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/recovery/recovered-attempt-v3.json",
+          "record_sha256": "46b62b9d53a2c8d1fd976e5664976a76657951a7cdf955b9ae31ca816cfcd351"
+        }
+      ],
+      "raw_attempt_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/attempt.json",
+      "raw_attempt_sha256": "2662c1379103f16523c8a05bc2c6904becb0a473276e5648e592c7db4065c1eb",
+      "repeat": 2,
+      "sanitized_retained_logs": {
+        "logs": [
+          {
+            "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/015-code-kb-r2/evidence/runtime-grade-public-00-restore_cargo_cache/stdout.log",
+            "raw_content_copied": false,
+            "sanitized_summary_lines": [],
+            "sensitive_pattern_found": false,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/015-code-kb-r2/evidence/runtime-grade-public-00-restore_cargo_cache/stderr.log",
+            "raw_content_copied": false,
+            "sanitized_summary_lines": [],
+            "sensitive_pattern_found": false,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/015-code-kb-r2/evidence/runtime-grade-hidden-00-restore_cargo_cache/stdout.log",
+            "raw_content_copied": false,
+            "sanitized_summary_lines": [],
+            "sensitive_pattern_found": false,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/015-code-kb-r2/evidence/runtime-grade-hidden-00-restore_cargo_cache/stderr.log",
+            "raw_content_copied": false,
+            "sanitized_summary_lines": [],
+            "sensitive_pattern_found": false,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/015-code-kb-r2/evidence/grade-public-00-minijinja_cli_regressions/stdout.log",
+            "raw_content_copied": false,
+            "sanitized_summary_lines": [
+              "running 4 tests",
+              "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+              "running 30 tests",
+              "test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.03s"
+            ],
+            "sensitive_pattern_found": false,
+            "sha256": "4b47fc4b1d94aca1a3bbcf4518fc1b027f8e0db0fdcc7edc7d4f70810f1cfeea"
+          },
+          {
+            "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/015-code-kb-r2/evidence/grade-public-00-minijinja_cli_regressions/stderr.log",
+            "raw_content_copied": false,
+            "sanitized_summary_lines": [],
+            "sensitive_pattern_found": false,
+            "sha256": "6b91d2f216a34ab07f2b5fd4f4c356e55ee72eb6a0428932db28d093c6dca3d9"
+          },
+          {
+            "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/015-code-kb-r2/evidence/grade-hidden-00-autoescape_suffix_acceptance/stdout.log",
+            "raw_content_copied": false,
+            "sanitized_summary_lines": [
+              "running 3 tests",
+              "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+            ],
+            "sensitive_pattern_found": false,
+            "sha256": "04d2b6cb76bb233dfcd6b277b1fb78a85c13530544bc00aa08e723e0fd718895"
+          },
+          {
+            "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/015-code-kb-r2/evidence/grade-hidden-00-autoescape_suffix_acceptance/stderr.log",
+            "raw_content_copied": false,
+            "sanitized_summary_lines": [],
+            "sensitive_pattern_found": false,
+            "sha256": "c9aae7e9f3609744e5f3cdaf571afe7d0e26ef48c9a57495b38709555f66fa4b"
+          }
+        ],
+        "policy": "only whitelisted test summary lines are embedded; raw outputs stay in the sandbox cache",
+        "status": "safe"
+      },
+      "schedule_index": 15,
+      "seed_project_path_from_attempt": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/work/seed-project",
+      "seed_project_path_used": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds/minijinja",
+      "seed_project_tree_sha256_from_attempt": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+      "seed_project_tree_sha256_used": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+      "seed_snapshot_sha256_from_attempt": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+      "seed_snapshot_sha256_used": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+      "source_review_receipt_path": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/results/source-review/minijinja/015-code-kb-r2.json",
+      "source_review_receipt_sha256": "6695b4c89a1b8f5aa050f5292db377bc79ed25d400edf1ca90c755a5d72aeee2",
+      "trial_completed": true
+    },
+    {
+      "arm": "native",
+      "attempt_seed_matches_canonical": true,
+      "auth_file": null,
+      "bundle_json_sha256": "ca7380e542079be1a8d157e9d66c344aa464d275bf682e8643f9483e97ec2d4b",
+      "bundle_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/016-minijinja-native-r2/bundle",
+      "bundle_tree_sha256": "86909e7bda8ba081ba065b4a38ef51650c8a79ba9e9e91b8606be62f4ef6e045",
+      "case_id": "minijinja",
+      "effective_attempt_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/016-minijinja-native-r2/attempt.json",
+      "effective_attempt_sha256": "912c2ab23337c610998b110bc159895bf7af83a550aea0bfeeab0b720b284f85",
+      "fresh_regrade": {
+        "acceptance_status": "pending_source_review",
+        "behavioral_pass": true,
+        "checks": {
+          "hidden": {
+            "commands": [
+              {
+                "command_id": "autoescape_suffix_acceptance",
+                "elapsed_seconds": 7.534792,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "passed": true,
+                "stderr_log": {
+                  "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/016-native-r2/evidence/grade-hidden-00-autoescape_suffix_acceptance/stderr.log",
+                  "raw_content_copied": false,
+                  "sanitized_summary_lines": [],
+                  "sensitive_pattern_found": false,
+                  "sha256": "a6d892b24e2306694b928d71c07784bdb64ddabed1b262c997921552b0278d9e"
+                },
+                "stdout_log": {
+                  "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/016-native-r2/evidence/grade-hidden-00-autoescape_suffix_acceptance/stdout.log",
+                  "raw_content_copied": false,
+                  "sanitized_summary_lines": [
+                    "running 3 tests",
+                    "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+                  ],
+                  "sensitive_pattern_found": false,
+                  "sha256": "04d2b6cb76bb233dfcd6b277b1fb78a85c13530544bc00aa08e723e0fd718895"
+                },
+                "test_execution_observed": true,
+                "timed_out": false
+              }
+            ],
+            "passed": true
+          },
+          "hidden_runtime_setup": {
+            "commands": [
+              {
+                "command_id": "restore_cargo_cache",
+                "elapsed_seconds": 1.116679,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "passed": true,
+                "stderr_log": {
+                  "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/016-native-r2/evidence/runtime-grade-hidden-00-restore_cargo_cache/stderr.log",
+                  "raw_content_copied": false,
+                  "sanitized_summary_lines": [],
+                  "sensitive_pattern_found": false,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                "stdout_log": {
+                  "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/016-native-r2/evidence/runtime-grade-hidden-00-restore_cargo_cache/stdout.log",
+                  "raw_content_copied": false,
+                  "sanitized_summary_lines": [],
+                  "sensitive_pattern_found": false,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                "test_execution_observed": null,
+                "timed_out": false
+              }
+            ],
+            "passed": true
+          },
+          "public": {
+            "commands": [
+              {
+                "command_id": "minijinja_cli_regressions",
+                "elapsed_seconds": 7.837023,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "passed": true,
+                "stderr_log": {
+                  "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/016-native-r2/evidence/grade-public-00-minijinja_cli_regressions/stderr.log",
+                  "raw_content_copied": false,
+                  "sanitized_summary_lines": [],
+                  "sensitive_pattern_found": false,
+                  "sha256": "8da73e9fe232aeb226a5c8e0964e066d8a4cce72a9158b368f342cf98a36195b"
+                },
+                "stdout_log": {
+                  "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/016-native-r2/evidence/grade-public-00-minijinja_cli_regressions/stdout.log",
+                  "raw_content_copied": false,
+                  "sanitized_summary_lines": [
+                    "running 4 tests",
+                    "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+                    "running 30 tests",
+                    "test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.03s"
+                  ],
+                  "sensitive_pattern_found": false,
+                  "sha256": "96517c1858683735243b99489e69c6db6483a657a6bb4a389d9c785797649f8c"
+                },
+                "test_execution_observed": true,
+                "timed_out": false
+              }
+            ],
+            "passed": true
+          },
+          "public_runtime_setup": {
+            "commands": [
+              {
+                "command_id": "restore_cargo_cache",
+                "elapsed_seconds": 1.216703,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "passed": true,
+                "stderr_log": {
+                  "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/016-native-r2/evidence/runtime-grade-public-00-restore_cargo_cache/stderr.log",
+                  "raw_content_copied": false,
+                  "sanitized_summary_lines": [],
+                  "sensitive_pattern_found": false,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                "stdout_log": {
+                  "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/016-native-r2/evidence/runtime-grade-public-00-restore_cargo_cache/stdout.log",
+                  "raw_content_copied": false,
+                  "sanitized_summary_lines": [],
+                  "sensitive_pattern_found": false,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                "test_execution_observed": null,
+                "timed_out": false
+              }
+            ],
+            "passed": true
+          }
+        },
+        "failure": null,
+        "grade_json_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/016-native-r2/grade.json",
+        "grade_json_sha256": "a8779e69a79494c6e8075a5c82426de90738a823277d98fee2315dc641dcbc58",
+        "patch_valid": true,
+        "protection_status": "unchanged",
+        "replay_valid": true
+      },
+      "immutable_inputs_unchanged": true,
+      "input_hashes_after": {
+        "attempt_seed_copy_snapshot_sha256": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+        "attempt_seed_copy_tree_sha256": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+        "bundle_json_sha256": "ca7380e542079be1a8d157e9d66c344aa464d275bf682e8643f9483e97ec2d4b",
+        "bundle_tree_sha256": "86909e7bda8ba081ba065b4a38ef51650c8a79ba9e9e91b8606be62f4ef6e045",
+        "canonical_seed_project_tree_sha256": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+        "canonical_seed_snapshot_sha256": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+        "effective_attempt_sha256": "912c2ab23337c610998b110bc159895bf7af83a550aea0bfeeab0b720b284f85",
+        "grade_records": [
+          {
+            "acceptance_status": "failed",
+            "behavioral_pass": false,
+            "grade_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/016-minijinja-native-r2/grade",
+            "grade_tree_sha256": "598a5d6b5318333731fc57416ae5256bc03368e4a2de08af006328dcf8e09777",
+            "record_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/016-minijinja-native-r2/attempt.json",
+            "record_sha256": "912c2ab23337c610998b110bc159895bf7af83a550aea0bfeeab0b720b284f85"
+          }
+        ],
+        "raw_attempt_sha256": "912c2ab23337c610998b110bc159895bf7af83a550aea0bfeeab0b720b284f85",
+        "source_review_receipt_sha256": "d72bd02a28e75cc71cf5dde9e95bcf014bcda2eae436ecacfd741cc38a177bd1"
+      },
+      "input_hashes_before": {
+        "attempt_seed_copy_snapshot_sha256": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+        "attempt_seed_copy_tree_sha256": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+        "bundle_json_sha256": "ca7380e542079be1a8d157e9d66c344aa464d275bf682e8643f9483e97ec2d4b",
+        "bundle_tree_sha256": "86909e7bda8ba081ba065b4a38ef51650c8a79ba9e9e91b8606be62f4ef6e045",
+        "canonical_seed_project_tree_sha256": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+        "canonical_seed_snapshot_sha256": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+        "effective_attempt_sha256": "912c2ab23337c610998b110bc159895bf7af83a550aea0bfeeab0b720b284f85",
+        "grade_records": [
+          {
+            "acceptance_status": "failed",
+            "behavioral_pass": false,
+            "grade_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/016-minijinja-native-r2/grade",
+            "grade_tree_sha256": "598a5d6b5318333731fc57416ae5256bc03368e4a2de08af006328dcf8e09777",
+            "record_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/016-minijinja-native-r2/attempt.json",
+            "record_sha256": "912c2ab23337c610998b110bc159895bf7af83a550aea0bfeeab0b720b284f85"
+          }
+        ],
+        "raw_attempt_sha256": "912c2ab23337c610998b110bc159895bf7af83a550aea0bfeeab0b720b284f85",
+        "source_review_receipt_sha256": "d72bd02a28e75cc71cf5dde9e95bcf014bcda2eae436ecacfd741cc38a177bd1"
+      },
+      "network_scope": "disabled",
+      "original_strict_records_and_grades": [
+        {
+          "acceptance_status": "failed",
+          "behavioral_pass": false,
+          "grade_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/016-minijinja-native-r2/grade",
+          "grade_tree_sha256": "598a5d6b5318333731fc57416ae5256bc03368e4a2de08af006328dcf8e09777",
+          "record_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/016-minijinja-native-r2/attempt.json",
+          "record_sha256": "912c2ab23337c610998b110bc159895bf7af83a550aea0bfeeab0b720b284f85"
+        }
+      ],
+      "raw_attempt_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/016-minijinja-native-r2/attempt.json",
+      "raw_attempt_sha256": "912c2ab23337c610998b110bc159895bf7af83a550aea0bfeeab0b720b284f85",
+      "repeat": 2,
+      "sanitized_retained_logs": {
+        "logs": [
+          {
+            "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/016-native-r2/evidence/runtime-grade-public-00-restore_cargo_cache/stdout.log",
+            "raw_content_copied": false,
+            "sanitized_summary_lines": [],
+            "sensitive_pattern_found": false,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/016-native-r2/evidence/runtime-grade-public-00-restore_cargo_cache/stderr.log",
+            "raw_content_copied": false,
+            "sanitized_summary_lines": [],
+            "sensitive_pattern_found": false,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/016-native-r2/evidence/runtime-grade-hidden-00-restore_cargo_cache/stdout.log",
+            "raw_content_copied": false,
+            "sanitized_summary_lines": [],
+            "sensitive_pattern_found": false,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/016-native-r2/evidence/runtime-grade-hidden-00-restore_cargo_cache/stderr.log",
+            "raw_content_copied": false,
+            "sanitized_summary_lines": [],
+            "sensitive_pattern_found": false,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/016-native-r2/evidence/grade-public-00-minijinja_cli_regressions/stdout.log",
+            "raw_content_copied": false,
+            "sanitized_summary_lines": [
+              "running 4 tests",
+              "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+              "running 30 tests",
+              "test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.03s"
+            ],
+            "sensitive_pattern_found": false,
+            "sha256": "96517c1858683735243b99489e69c6db6483a657a6bb4a389d9c785797649f8c"
+          },
+          {
+            "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/016-native-r2/evidence/grade-public-00-minijinja_cli_regressions/stderr.log",
+            "raw_content_copied": false,
+            "sanitized_summary_lines": [],
+            "sensitive_pattern_found": false,
+            "sha256": "8da73e9fe232aeb226a5c8e0964e066d8a4cce72a9158b368f342cf98a36195b"
+          },
+          {
+            "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/016-native-r2/evidence/grade-hidden-00-autoescape_suffix_acceptance/stdout.log",
+            "raw_content_copied": false,
+            "sanitized_summary_lines": [
+              "running 3 tests",
+              "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+            ],
+            "sensitive_pattern_found": false,
+            "sha256": "04d2b6cb76bb233dfcd6b277b1fb78a85c13530544bc00aa08e723e0fd718895"
+          },
+          {
+            "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/minijinja/016-native-r2/evidence/grade-hidden-00-autoescape_suffix_acceptance/stderr.log",
+            "raw_content_copied": false,
+            "sanitized_summary_lines": [],
+            "sensitive_pattern_found": false,
+            "sha256": "a6d892b24e2306694b928d71c07784bdb64ddabed1b262c997921552b0278d9e"
+          }
+        ],
+        "policy": "only whitelisted test summary lines are embedded; raw outputs stay in the sandbox cache",
+        "status": "safe"
+      },
+      "schedule_index": 16,
+      "seed_project_path_from_attempt": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/016-minijinja-native-r2/work/seed-project",
+      "seed_project_path_used": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds/minijinja",
+      "seed_project_tree_sha256_from_attempt": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+      "seed_project_tree_sha256_used": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+      "seed_snapshot_sha256_from_attempt": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+      "seed_snapshot_sha256_used": "3dbcd17b614b3d559ba6c6bbb12fb1c04a8fd1e2db47c991e53d9404a70fe9fb",
+      "source_review_receipt_path": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/results/source-review/minijinja/016-native-r2.json",
+      "source_review_receipt_sha256": "d72bd02a28e75cc71cf5dde9e95bcf014bcda2eae436ecacfd741cc38a177bd1",
+      "trial_completed": true
+    },
+    {
+      "arm": "code-kb",
+      "attempt_seed_matches_canonical": false,
+      "auth_file": null,
+      "bundle_json_sha256": "8d15101791b57175bf1270f5563c38d507fdf71feaf6e577b75a6de0fe5bfb7b",
+      "bundle_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/023-nodatime-code-kb-r2/bundle",
+      "bundle_tree_sha256": "b38f2079a718158dcef4339c94c701f5ead40b1f6b2d45617ccb6ec409be1760",
+      "case_id": "nodatime",
+      "effective_attempt_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/023-nodatime-code-kb-r2/attempt.json",
+      "effective_attempt_sha256": "dea62b7c91b014b6976e40e21c3e630c8ecdcb95d0ad8ee06db475316402e4d7",
+      "fresh_regrade": {
+        "acceptance_status": "pending_source_review",
+        "behavioral_pass": true,
+        "checks": {
+          "hidden": {
+            "commands": [
+              {
+                "command_id": "nodatime-calendar-neutral-contract",
+                "elapsed_seconds": 11.793677,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/023-code-kb-r2/evidence/grade-hidden-00-nodatime-calendar-neutral-contract/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/023-code-kb-r2/evidence/grade-hidden-00-nodatime-calendar-neutral-contract/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [
+                      "   NUnit3TestExecutor discovered 2 of 2 NUnit test cases using Current Discovery mode, Non-Explicit run",
+                      "  Passed LocalDateComparesPhysicalDayAcrossCalendars [7 ms]",
+                      "  Passed LocalDateTimeComparesPhysicalDayThenTimeAcrossCalendars [< 1 ms]",
+                      "Test Run Successful.",
+                      "Total tests: 2",
+                      "     Passed: 2"
+                    ],
+                    "sensitive_pattern_found": false,
+                    "sha256": "d4f3d0c52c67c6bbd123f43634fdbae74a37960306f0dbb01a2a204f61848fd3",
+                    "status": "retained"
+                  }
+                },
+                "passed": true,
+                "test_execution_observed": true,
+                "timed_out": false
+              }
+            ],
+            "passed": true
+          },
+          "hidden_runtime_setup": {
+            "commands": [
+              {
+                "command_id": "nodatime-copy-prepared-nuget-cache",
+                "elapsed_seconds": 0.265139,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/023-code-kb-r2/evidence/runtime-grade-hidden-00-nodatime-copy-prepared-nuget-cache/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/023-code-kb-r2/evidence/runtime-grade-hidden-00-nodatime-copy-prepared-nuget-cache/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  }
+                },
+                "passed": true,
+                "test_execution_observed": null,
+                "timed_out": false
+              },
+              {
+                "command_id": "nodatime-restore-from-local-cache",
+                "elapsed_seconds": 1.317664,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/023-code-kb-r2/evidence/runtime-grade-hidden-01-nodatime-restore-from-local-cache/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/023-code-kb-r2/evidence/runtime-grade-hidden-01-nodatime-restore-from-local-cache/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "00a11d24c2fbe42076d6acfb2ace235a59ec4d0eb4d3617f514a34b8aec864b9",
+                    "status": "retained"
+                  }
+                },
+                "passed": true,
+                "test_execution_observed": null,
+                "timed_out": false
+              }
+            ],
+            "passed": true
+          },
+          "public": {
+            "commands": [
+              {
+                "command_id": "nodatime-public-local-date-regressions",
+                "elapsed_seconds": 11.848675,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/023-code-kb-r2/evidence/grade-public-00-nodatime-public-local-date-regressions/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/023-code-kb-r2/evidence/grade-public-00-nodatime-public-local-date-regressions/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [
+                      "   NUnit3TestExecutor discovered 258 of 258 NUnit test cases using Current Discovery mode, Non-Explicit run",
+                      "  Passed CompareTo_DifferentCalendars_Throws [< 1 ms]",
+                      "  Passed CompareTo_DifferentCalendars_Throws [< 1 ms]",
+                      "Test Run Successful.",
+                      "Total tests: 258",
+                      "     Passed: 258"
+                    ],
+                    "sensitive_pattern_found": false,
+                    "sha256": "ae8a234552cd80232dda1cc7aedd39834c1ff02fc123c403c1cd796aeda0120c",
+                    "status": "retained"
+                  }
+                },
+                "passed": true,
+                "test_execution_observed": true,
+                "timed_out": false
+              },
+              {
+                "command_id": "nodatime-public-pure-struct-methods",
+                "elapsed_seconds": 5.174779,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/023-code-kb-r2/evidence/grade-public-01-nodatime-public-pure-struct-methods/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/023-code-kb-r2/evidence/grade-public-01-nodatime-public-pure-struct-methods/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [
+                      "   NUnit3TestExecutor discovered 1 of 1 NUnit test cases using Current Discovery mode, Non-Explicit run",
+                      "  Passed AllPublicStructMethodsArePure [3 ms]",
+                      "Test Run Successful.",
+                      "Total tests: 1",
+                      "     Passed: 1"
+                    ],
+                    "sensitive_pattern_found": false,
+                    "sha256": "38f5309624dfa9e6a8b4fee0d0e29d906d0ba42781a0bfb6e732c6e4a0a7b48e",
+                    "status": "retained"
+                  }
+                },
+                "passed": true,
+                "test_execution_observed": true,
+                "timed_out": false
+              }
+            ],
+            "passed": true
+          },
+          "public_runtime_setup": {
+            "commands": [
+              {
+                "command_id": "nodatime-copy-prepared-nuget-cache",
+                "elapsed_seconds": 0.214509,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/023-code-kb-r2/evidence/runtime-grade-public-00-nodatime-copy-prepared-nuget-cache/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/023-code-kb-r2/evidence/runtime-grade-public-00-nodatime-copy-prepared-nuget-cache/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  }
+                },
+                "passed": true,
+                "test_execution_observed": null,
+                "timed_out": false
+              },
+              {
+                "command_id": "nodatime-restore-from-local-cache",
+                "elapsed_seconds": 1.316844,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/023-code-kb-r2/evidence/runtime-grade-public-01-nodatime-restore-from-local-cache/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/023-code-kb-r2/evidence/runtime-grade-public-01-nodatime-restore-from-local-cache/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "3969911dcb69797c0fe66a976e5a0bba7d047c120eb737376a9be514ec007ba2",
+                    "status": "retained"
+                  }
+                },
+                "passed": true,
+                "test_execution_observed": null,
+                "timed_out": false
+              }
+            ],
+            "passed": true
+          }
+        },
+        "failure": null,
+        "grade_json_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/023-code-kb-r2/grade.json",
+        "grade_json_sha256": "7f63653d95df939eb27df1fb70bee2bb65a0815cedfbc0bacbcb054722536a3b",
+        "patch_valid": true,
+        "protection_status": "unchanged",
+        "replay_valid": true
+      },
+      "immutable_inputs_unchanged": true,
+      "input_hashes_after": {
+        "attempt_json_sha256": "dea62b7c91b014b6976e40e21c3e630c8ecdcb95d0ad8ee06db475316402e4d7",
+        "attempt_seed_git_index_sha256": "55eea4e9a57755ddf4389a52c8f68db6c44dabea9608f0cd3741944193ab66a6",
+        "attempt_seed_project_tree_sha256": "6e8f2bb8267e97b4f11e84c2f1383ebbbd1ccb4716c23bc66f1a0fb0d1c5f20c",
+        "attempt_seed_snapshot_sha256": "6e8f2bb8267e97b4f11e84c2f1383ebbbd1ccb4716c23bc66f1a0fb0d1c5f20c",
+        "bundle_json_sha256": "8d15101791b57175bf1270f5563c38d507fdf71feaf6e577b75a6de0fe5bfb7b",
+        "bundle_tree_sha256": "b38f2079a718158dcef4339c94c701f5ead40b1f6b2d45617ccb6ec409be1760",
+        "canonical_seed_git_index_sha256": "3aa386462f8b93a612ff731addb81a223e834abc9b495b948e2616c57cbd4340",
+        "canonical_seed_project_tree_sha256": "21cc469ed0702c23063650f6e73547fa34f9aedebddb81b7cdffefafc7384a3d",
+        "canonical_seed_snapshot_sha256": "21cc469ed0702c23063650f6e73547fa34f9aedebddb81b7cdffefafc7384a3d",
+        "original_grade_tree_sha256": "63773c770b304226e568c759d6c09b01a1f6c276010feeb9dd9049cd181243fa",
+        "source_review_receipt_sha256": "d1008ed64485ee68272cfd436c34b6b122b4914dfbf3761e45864b578daf13c9"
+      },
+      "input_hashes_before": {
+        "attempt_json_sha256": "dea62b7c91b014b6976e40e21c3e630c8ecdcb95d0ad8ee06db475316402e4d7",
+        "attempt_seed_git_index_sha256": "55eea4e9a57755ddf4389a52c8f68db6c44dabea9608f0cd3741944193ab66a6",
+        "attempt_seed_project_tree_sha256": "6e8f2bb8267e97b4f11e84c2f1383ebbbd1ccb4716c23bc66f1a0fb0d1c5f20c",
+        "attempt_seed_snapshot_sha256": "6e8f2bb8267e97b4f11e84c2f1383ebbbd1ccb4716c23bc66f1a0fb0d1c5f20c",
+        "bundle_json_sha256": "8d15101791b57175bf1270f5563c38d507fdf71feaf6e577b75a6de0fe5bfb7b",
+        "bundle_tree_sha256": "b38f2079a718158dcef4339c94c701f5ead40b1f6b2d45617ccb6ec409be1760",
+        "canonical_seed_git_index_sha256": "3aa386462f8b93a612ff731addb81a223e834abc9b495b948e2616c57cbd4340",
+        "canonical_seed_project_tree_sha256": "21cc469ed0702c23063650f6e73547fa34f9aedebddb81b7cdffefafc7384a3d",
+        "canonical_seed_snapshot_sha256": "21cc469ed0702c23063650f6e73547fa34f9aedebddb81b7cdffefafc7384a3d",
+        "original_grade_tree_sha256": "63773c770b304226e568c759d6c09b01a1f6c276010feeb9dd9049cd181243fa",
+        "source_review_receipt_sha256": "d1008ed64485ee68272cfd436c34b6b122b4914dfbf3761e45864b578daf13c9"
+      },
+      "network_scope": "disabled",
+      "original_strict_records_and_grades": [
+        {
+          "acceptance_status": "failed",
+          "behavioral_pass": false,
+          "grade_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/023-nodatime-code-kb-r2/grade",
+          "grade_tree_sha256": "63773c770b304226e568c759d6c09b01a1f6c276010feeb9dd9049cd181243fa",
+          "record_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/023-nodatime-code-kb-r2/attempt.json",
+          "record_sha256": "dea62b7c91b014b6976e40e21c3e630c8ecdcb95d0ad8ee06db475316402e4d7"
+        }
+      ],
+      "raw_attempt_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/023-nodatime-code-kb-r2/attempt.json",
+      "raw_attempt_sha256": "dea62b7c91b014b6976e40e21c3e630c8ecdcb95d0ad8ee06db475316402e4d7",
+      "repeat": 2,
+      "schedule_index": 23,
+      "seed_copy_mismatch": {
+        "attempt_git_index_sha256": "55eea4e9a57755ddf4389a52c8f68db6c44dabea9608f0cd3741944193ab66a6",
+        "canonical_git_index_sha256": "3aa386462f8b93a612ff731addb81a223e834abc9b495b948e2616c57cbd4340",
+        "classification": "attempt seed copy differs only in .git/index; original source entries match frozen seed",
+        "differing_paths": [
+          ".git/index"
+        ]
+      },
+      "seed_project_path_from_attempt": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/023-nodatime-code-kb-r2/work/seed-project",
+      "seed_project_path_used": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds/nodatime",
+      "seed_project_tree_sha256_from_attempt": "6e8f2bb8267e97b4f11e84c2f1383ebbbd1ccb4716c23bc66f1a0fb0d1c5f20c",
+      "seed_project_tree_sha256_used": "21cc469ed0702c23063650f6e73547fa34f9aedebddb81b7cdffefafc7384a3d",
+      "seed_snapshot_sha256_from_attempt": "6e8f2bb8267e97b4f11e84c2f1383ebbbd1ccb4716c23bc66f1a0fb0d1c5f20c",
+      "seed_snapshot_sha256_used": "21cc469ed0702c23063650f6e73547fa34f9aedebddb81b7cdffefafc7384a3d",
+      "source_review_receipt_path": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/results/source-review/nodatime/023-code-kb-r2.json",
+      "source_review_receipt_sha256": "d1008ed64485ee68272cfd436c34b6b122b4914dfbf3761e45864b578daf13c9",
+      "trial_completed": true
+    },
+    {
+      "arm": "native",
+      "attempt_seed_matches_canonical": false,
+      "auth_file": null,
+      "bundle_json_sha256": "bf0f8c6c07bc570e960d369c8155b3794bb274b4462d6b7c7605998b401d6651",
+      "bundle_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/024-nodatime-native-r2/bundle",
+      "bundle_tree_sha256": "c96561ddb66f71194429cac605a589f57bb56ddea5d90ae09187e134c7a1528b",
+      "case_id": "nodatime",
+      "effective_attempt_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/024-nodatime-native-r2/attempt.json",
+      "effective_attempt_sha256": "4e7664c08eabb28ac1ba1ab78ee1cb86e498db0592c4e48f9615e98ab616e5f4",
+      "fresh_regrade": {
+        "acceptance_status": "failed",
+        "behavioral_pass": false,
+        "checks": {
+          "hidden": {
+            "commands": [
+              {
+                "command_id": "nodatime-calendar-neutral-contract",
+                "elapsed_seconds": 12.045564,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/024-native-r2/evidence/grade-hidden-00-nodatime-calendar-neutral-contract/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/024-native-r2/evidence/grade-hidden-00-nodatime-calendar-neutral-contract/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [
+                      "   NUnit3TestExecutor discovered 2 of 2 NUnit test cases using Current Discovery mode, Non-Explicit run",
+                      "  Passed LocalDateComparesPhysicalDayAcrossCalendars [6 ms]",
+                      "  Passed LocalDateTimeComparesPhysicalDayThenTimeAcrossCalendars [< 1 ms]",
+                      "Test Run Successful.",
+                      "Total tests: 2",
+                      "     Passed: 2"
+                    ],
+                    "sensitive_pattern_found": false,
+                    "sha256": "454315708fe13082cc8f513a2c155644f09cb2a7bd21af4c9066f12a7ffb39a6",
+                    "status": "retained"
+                  }
+                },
+                "passed": true,
+                "test_execution_observed": true,
+                "timed_out": false
+              }
+            ],
+            "passed": true
+          },
+          "hidden_runtime_setup": {
+            "commands": [
+              {
+                "command_id": "nodatime-copy-prepared-nuget-cache",
+                "elapsed_seconds": 0.214407,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/024-native-r2/evidence/runtime-grade-hidden-00-nodatime-copy-prepared-nuget-cache/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/024-native-r2/evidence/runtime-grade-hidden-00-nodatime-copy-prepared-nuget-cache/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  }
+                },
+                "passed": true,
+                "test_execution_observed": null,
+                "timed_out": false
+              },
+              {
+                "command_id": "nodatime-restore-from-local-cache",
+                "elapsed_seconds": 1.31708,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/024-native-r2/evidence/runtime-grade-hidden-01-nodatime-restore-from-local-cache/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/024-native-r2/evidence/runtime-grade-hidden-01-nodatime-restore-from-local-cache/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "dca86e4015df4732fea7cdfb2eb0f50ac3fb0385f91733e2b5f6eaec4ee6bad1",
+                    "status": "retained"
+                  }
+                },
+                "passed": true,
+                "test_execution_observed": null,
+                "timed_out": false
+              }
+            ],
+            "passed": true
+          },
+          "public": {
+            "commands": [
+              {
+                "command_id": "nodatime-public-local-date-regressions",
+                "elapsed_seconds": 11.949644,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/024-native-r2/evidence/grade-public-00-nodatime-public-local-date-regressions/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/024-native-r2/evidence/grade-public-00-nodatime-public-local-date-regressions/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [
+                      "   NUnit3TestExecutor discovered 292 of 292 NUnit test cases using Current Discovery mode, Non-Explicit run",
+                      "  Passed CompareTo_DifferentCalendars_Throws [< 1 ms]",
+                      "  Passed CompareTo_DifferentCalendars_Throws [< 1 ms]",
+                      "Test Run Successful.",
+                      "Total tests: 292",
+                      "     Passed: 292"
+                    ],
+                    "sensitive_pattern_found": false,
+                    "sha256": "a87e794b30549573954f3003695e41b974af698c2c81805d784759c932711fbc",
+                    "status": "retained"
+                  }
+                },
+                "passed": true,
+                "test_execution_observed": true,
+                "timed_out": false
+              },
+              {
+                "command_id": "nodatime-public-pure-struct-methods",
+                "elapsed_seconds": 5.178957,
+                "exit_status": 1,
+                "expected_output_missing": [
+                  "NUnit3TestExecutor discovered 1 of 1 NUnit test cases",
+                  "Passed AllPublicStructMethodsArePure",
+                  "Test Run Successful.",
+                  "Total tests: 1",
+                  "Passed: 1"
+                ],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/024-native-r2/evidence/grade-public-01-nodatime-public-pure-struct-methods/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [
+                      "Test Run Failed."
+                    ],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e6585bd2f919397946a69d39b3756561df54296f9e867be55b60abc93abd8526",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/024-native-r2/evidence/grade-public-01-nodatime-public-pure-struct-methods/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [
+                      "   NUnit3TestExecutor discovered 1 of 1 NUnit test cases using Current Discovery mode, Non-Explicit run",
+                      "Total tests: 1",
+                      "     Failed: 1"
+                    ],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e4348491ff5cb578923b419958db8c9be777ee3ce2c36700488ddd16d39e0b93",
+                    "status": "retained"
+                  }
+                },
+                "passed": false,
+                "test_execution_observed": true,
+                "timed_out": false
+              }
+            ],
+            "passed": false
+          },
+          "public_runtime_setup": {
+            "commands": [
+              {
+                "command_id": "nodatime-copy-prepared-nuget-cache",
+                "elapsed_seconds": 0.265307,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/024-native-r2/evidence/runtime-grade-public-00-nodatime-copy-prepared-nuget-cache/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/024-native-r2/evidence/runtime-grade-public-00-nodatime-copy-prepared-nuget-cache/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  }
+                },
+                "passed": true,
+                "test_execution_observed": null,
+                "timed_out": false
+              },
+              {
+                "command_id": "nodatime-restore-from-local-cache",
+                "elapsed_seconds": 1.367002,
+                "exit_status": 0,
+                "expected_output_missing": [],
+                "logs": {
+                  "stderr": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/024-native-r2/evidence/runtime-grade-public-01-nodatime-restore-from-local-cache/stderr.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "status": "retained"
+                  },
+                  "stdout": {
+                    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/024-native-r2/evidence/runtime-grade-public-01-nodatime-restore-from-local-cache/stdout.log",
+                    "raw_content_copied": false,
+                    "sanitized_summary_lines": [],
+                    "sensitive_pattern_found": false,
+                    "sha256": "41acecb7f21d453ced5d3e9b7cf1ede4aa24b667324d52ae513d1f0a02a2a0d0",
+                    "status": "retained"
+                  }
+                },
+                "passed": true,
+                "test_execution_observed": null,
+                "timed_out": false
+              }
+            ],
+            "passed": true
+          }
+        },
+        "failure": null,
+        "grade_json_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/regrades/nodatime/024-native-r2/grade.json",
+        "grade_json_sha256": "5b0db70c4dd23cd89a3db6d4a29ba9fa8129d4da3695e1896ceb91e498630dd6",
+        "patch_valid": true,
+        "protection_status": "unchanged",
+        "replay_valid": true
+      },
+      "immutable_inputs_unchanged": true,
+      "input_hashes_after": {
+        "attempt_json_sha256": "4e7664c08eabb28ac1ba1ab78ee1cb86e498db0592c4e48f9615e98ab616e5f4",
+        "attempt_seed_git_index_sha256": "f19102cbd29d326c2c145583ba26b4ff8588a08ba4aa0a3c606b78f916f2a07b",
+        "attempt_seed_project_tree_sha256": "ccc0ac9d19c73d35298991f83a9f253708041be907a12fe15e318f44b77e3364",
+        "attempt_seed_snapshot_sha256": "ccc0ac9d19c73d35298991f83a9f253708041be907a12fe15e318f44b77e3364",
+        "bundle_json_sha256": "bf0f8c6c07bc570e960d369c8155b3794bb274b4462d6b7c7605998b401d6651",
+        "bundle_tree_sha256": "c96561ddb66f71194429cac605a589f57bb56ddea5d90ae09187e134c7a1528b",
+        "canonical_seed_git_index_sha256": "3aa386462f8b93a612ff731addb81a223e834abc9b495b948e2616c57cbd4340",
+        "canonical_seed_project_tree_sha256": "21cc469ed0702c23063650f6e73547fa34f9aedebddb81b7cdffefafc7384a3d",
+        "canonical_seed_snapshot_sha256": "21cc469ed0702c23063650f6e73547fa34f9aedebddb81b7cdffefafc7384a3d",
+        "original_grade_tree_sha256": "3fc4bcc2cfcdac26dd04e18513426cdd2507da17fa7b19bc6d5fe072ca3f72bd",
+        "source_review_receipt_sha256": "8c8b77b9abda85aa0078b07cdf00846b6f30de3dc1330f34ee795cb3f118a2fe"
+      },
+      "input_hashes_before": {
+        "attempt_json_sha256": "4e7664c08eabb28ac1ba1ab78ee1cb86e498db0592c4e48f9615e98ab616e5f4",
+        "attempt_seed_git_index_sha256": "f19102cbd29d326c2c145583ba26b4ff8588a08ba4aa0a3c606b78f916f2a07b",
+        "attempt_seed_project_tree_sha256": "ccc0ac9d19c73d35298991f83a9f253708041be907a12fe15e318f44b77e3364",
+        "attempt_seed_snapshot_sha256": "ccc0ac9d19c73d35298991f83a9f253708041be907a12fe15e318f44b77e3364",
+        "bundle_json_sha256": "bf0f8c6c07bc570e960d369c8155b3794bb274b4462d6b7c7605998b401d6651",
+        "bundle_tree_sha256": "c96561ddb66f71194429cac605a589f57bb56ddea5d90ae09187e134c7a1528b",
+        "canonical_seed_git_index_sha256": "3aa386462f8b93a612ff731addb81a223e834abc9b495b948e2616c57cbd4340",
+        "canonical_seed_project_tree_sha256": "21cc469ed0702c23063650f6e73547fa34f9aedebddb81b7cdffefafc7384a3d",
+        "canonical_seed_snapshot_sha256": "21cc469ed0702c23063650f6e73547fa34f9aedebddb81b7cdffefafc7384a3d",
+        "original_grade_tree_sha256": "3fc4bcc2cfcdac26dd04e18513426cdd2507da17fa7b19bc6d5fe072ca3f72bd",
+        "source_review_receipt_sha256": "8c8b77b9abda85aa0078b07cdf00846b6f30de3dc1330f34ee795cb3f118a2fe"
+      },
+      "network_scope": "disabled",
+      "original_strict_records_and_grades": [
+        {
+          "acceptance_status": "failed",
+          "behavioral_pass": false,
+          "grade_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/024-nodatime-native-r2/grade",
+          "grade_tree_sha256": "3fc4bcc2cfcdac26dd04e18513426cdd2507da17fa7b19bc6d5fe072ca3f72bd",
+          "record_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/024-nodatime-native-r2/attempt.json",
+          "record_sha256": "4e7664c08eabb28ac1ba1ab78ee1cb86e498db0592c4e48f9615e98ab616e5f4"
+        }
+      ],
+      "raw_attempt_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/024-nodatime-native-r2/attempt.json",
+      "raw_attempt_sha256": "4e7664c08eabb28ac1ba1ab78ee1cb86e498db0592c4e48f9615e98ab616e5f4",
+      "repeat": 2,
+      "schedule_index": 24,
+      "seed_copy_mismatch": {
+        "attempt_git_index_sha256": "f19102cbd29d326c2c145583ba26b4ff8588a08ba4aa0a3c606b78f916f2a07b",
+        "canonical_git_index_sha256": "3aa386462f8b93a612ff731addb81a223e834abc9b495b948e2616c57cbd4340",
+        "classification": "attempt seed copy differs only in .git/index; original source entries match frozen seed",
+        "differing_paths": [
+          ".git/index"
+        ]
+      },
+      "seed_project_path_from_attempt": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/024-nodatime-native-r2/work/seed-project",
+      "seed_project_path_used": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds/nodatime",
+      "seed_project_tree_sha256_from_attempt": "ccc0ac9d19c73d35298991f83a9f253708041be907a12fe15e318f44b77e3364",
+      "seed_project_tree_sha256_used": "21cc469ed0702c23063650f6e73547fa34f9aedebddb81b7cdffefafc7384a3d",
+      "seed_snapshot_sha256_from_attempt": "ccc0ac9d19c73d35298991f83a9f253708041be907a12fe15e318f44b77e3364",
+      "seed_snapshot_sha256_used": "21cc469ed0702c23063650f6e73547fa34f9aedebddb81b7cdffefafc7384a3d",
+      "source_review_receipt_path": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/results/source-review/nodatime/024-native-r2.json",
+      "source_review_receipt_sha256": "8c8b77b9abda85aa0078b07cdf00846b6f30de3dc1330f34ee795cb3f118a2fe",
+      "trial_completed": true
+    }
+  ],
+  "sandbox_sha256": "be41b956ee91def3be885440f10248340d0d618286c64d03d0b64989b340770d",
+  "schema": 1,
+  "status": "complete"
+}

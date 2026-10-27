@@ -1,0 +1,271 @@
+{
+  "behavioral_pass": true,
+  "case_id": "hcl",
+  "case_sha256": "ffca3a556c95780143ffb8ac93a454c58c4735073ba2742093c87c4f57e9ba61",
+  "checks": {
+    "baseline_public": {
+      "commands": [
+        {
+          "command_id": "gohcl_regressions",
+          "elapsed_seconds": 3.582576,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/hcl/evidence/baseline-public-00-gohcl_regressions/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/hcl/evidence/baseline-public-00-gohcl_regressions/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "baseline_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "materialize_go_module_cache",
+          "elapsed_seconds": 0.21448,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/hcl/evidence/runtime-baseline-00-materialize_go_module_cache/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/hcl/evidence/runtime-baseline-00-materialize_go_module_cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "create_go_build_cache",
+          "elapsed_seconds": 0.114691,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/hcl/evidence/runtime-baseline-01-create_go_build_cache/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/hcl/evidence/runtime-baseline-01-create_go_build_cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "preparation": {
+      "commands": [],
+      "mode": "reused-inputs",
+      "passed": true
+    },
+    "reference_hidden": {
+      "commands": [
+        {
+          "command_id": "expression_field_acceptance",
+          "elapsed_seconds": 3.725286,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/hcl/evidence/reference-hidden-00-expression_field_acceptance/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/hcl/evidence/reference-hidden-00-expression_field_acceptance/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_hidden_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "materialize_go_module_cache",
+          "elapsed_seconds": 0.214821,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/hcl/evidence/runtime-reference-hidden-00-materialize_go_module_cache/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/hcl/evidence/runtime-reference-hidden-00-materialize_go_module_cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "create_go_build_cache",
+          "elapsed_seconds": 0.114379,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/hcl/evidence/runtime-reference-hidden-01-create_go_build_cache/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/hcl/evidence/runtime-reference-hidden-01-create_go_build_cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_public": {
+      "commands": [
+        {
+          "command_id": "gohcl_regressions",
+          "elapsed_seconds": 3.67475,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/hcl/evidence/reference-public-00-gohcl_regressions/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/hcl/evidence/reference-public-00-gohcl_regressions/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_public_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "materialize_go_module_cache",
+          "elapsed_seconds": 0.2146,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/hcl/evidence/runtime-reference-public-00-materialize_go_module_cache/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/hcl/evidence/runtime-reference-public-00-materialize_go_module_cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "create_go_build_cache",
+          "elapsed_seconds": 0.11451,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/hcl/evidence/runtime-reference-public-01-create_go_build_cache/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/hcl/evidence/runtime-reference-public-01-create_go_build_cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "seed_hidden_failure": {
+      "commands": [
+        {
+          "command_id": "expression_field_acceptance",
+          "elapsed_seconds": 3.625781,
+          "exit_status": 1,
+          "expected_output_missing": [
+            "--- PASS: TestEditEvaluationExpressionFieldBehavior",
+            "PASS"
+          ],
+          "passed": false,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/hcl/evidence/seed-hidden-00-expression_field_acceptance/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/hcl/evidence/seed-hidden-00-expression_field_acceptance/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "seed_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "materialize_go_module_cache",
+          "elapsed_seconds": 0.214841,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/hcl/evidence/runtime-seed-00-materialize_go_module_cache/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/hcl/evidence/runtime-seed-00-materialize_go_module_cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "create_go_build_cache",
+          "elapsed_seconds": 0.114804,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/hcl/evidence/runtime-seed-01-create_go_build_cache/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/hcl/evidence/runtime-seed-01-create_go_build_cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    }
+  },
+  "created_utc": "2026-10-27T21:32:27Z",
+  "dependencies": {
+    "go-mod-cache": "d5786c23facd1162171bb5462cb4b01fbd4003ab8cddedbecc6beb2aa70bd3c6"
+  },
+  "readiness_error": null,
+  "reference_bundle_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/hcl/evidence/reference-bundle",
+  "reference_digest": "7e6a5fba17e1b9d8b4667d162543b8082772bfc23b5b1d9fe6334eef26f24810",
+  "reference_production_files_changed": [
+    "gohcl/decode.go",
+    "gohcl/schema.go"
+  ],
+  "repo_id": "hcl",
+  "schema": 1,
+  "seed_digest": "1c58dd1a8dc827c1564e2c30b3e9fac02a284a94f9dbd0036beeff22aee94e9d",
+  "seed_project_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds-v2/hcl",
+  "source_pin": "4a347c448ee961e556dde0fad522a996e04c00c0",
+  "source_review": "passed",
+  "source_tree_sha256": "8ff36484a1c2f3868e37ae605a4f709aad796d9c6c58c699a792c625ffa82373",
+  "status": "ready",
+  "raw_readiness_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/hcl/readiness.json",
+  "raw_readiness_sha256": "f7f9d2ce55007732240795d84191db0496e4b7af2a0dcdfe6395a7c01d56bb91",
+  "source_review_path": "results/readiness-v2/hcl/source-review.json",
+  "source_review_sha256": "b5bef43ceaa5cc54067e4d5c36245ccb595276f8b220e1458640759018e1fb8e",
+  "acceptance_basis": "Live checks plus unchanged reviewed task/reference and explicit correction/seed-equivalence audit; raw pending-review result preserved."
+}

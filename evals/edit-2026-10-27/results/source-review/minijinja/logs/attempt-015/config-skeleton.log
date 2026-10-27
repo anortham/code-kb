@@ -1,0 +1,52 @@
+// File: minijinja-cli/src/config.rs (Lines 1-346)
+
+/// Overrides specific syntax settings.
+#[derive(Debug, Clone, Serialize, Deserialize)] pub struct SyntaxElements {
+    block_start: String; // L17-17
+    block_end: String; // L18-18
+    variable_start: String; // L19-19
+    variable_end: String; // L20-20
+    comment_start: String; // L21-21
+    comment_end: String; // L22-22
+    line_statement_prefix: String; // L23-23
+    line_comment_prefix: String; // L24-24
+    fn default() -> Self { /* 12 lines hidden: L28-L39 */ }
+} // L16-25
+
+/// Holds in-memory config state for the execution.
+#[derive(Debug, Clone, Serialize, Deserialize)] pub struct Config {
+    format: String; // L46-46
+    autoescape: String; // L47-47
+    include: bool; // L48-48
+    newline: bool; // L49-49
+    trim_blocks: bool; // L50-50
+    lstrip_blocks: bool; // L51-51
+    py_compat: bool; // L52-52
+    env: bool; // L53-53
+    strict: bool; // L54-54
+    safe_paths: Vec<PathBuf>; // L55-55
+    expr_out: String; // L56-56
+    fuel: u64; // L57-57
+    syntax: SyntaxElements; // L58-58
+    defines: BTreeMap<String, deser_value::Value>; // L59-59
+    fn default() -> Self { /* 18 lines hidden: L63-L80 */ }
+    pub fn update_from_args(&mut self, args: &Args) -> Result<(), Error> { /* 50 lines hidden: L84-L133 */ }
+    pub fn load_from_toml(p: &std::path::Path) -> Result<Config, Error> { /* 5 lines hidden: L136-L140 */ }
+    pub fn update_from_env(&mut self) -> Result<(), Error> { /* 49 lines hidden: L142-L190 */ }
+    pub fn allow_include(&self) -> bool { /* 3 lines hidden: L192-L194 */ }
+    pub fn newline(&self) -> bool { /* 3 lines hidden: L196-L198 */ }
+    pub fn format(&self) -> &str { /* 3 lines hidden: L200-L202 */ }
+    pub fn expr_out(&self) -> &str { /* 3 lines hidden: L204-L206 */ }
+    pub fn defines(&self) -> Value { /* 7 lines hidden: L208-L214 */ }
+    pub fn safe_paths(&self) -> Vec<PathBuf> { /* 3 lines hidden: L216-L218 */ }
+    pub fn apply_to_env(&self, env: &mut Environment) -> Result<(), Error> { /* 48 lines hidden: L220-L267 */ }
+    fn make_syntax(&self) -> Result<SyntaxConfig, Error> { /* 13 lines hidden: L269-L281 */ }
+    fn update_syntax_from_pairs<'a, I>(&mut self, iter: I) -> Result<(), Error> where
+        I: Iterator<Item = &'a str>, { /* 23 lines hidden: L286-L308 */ }
+    fn add_defines_from_args(&mut self, args: &Args) -> Result<(), Error> { /* 15 lines hidden: L310-L324 */ }
+} // L45-60
+
+fn interpret_raw_value(s: &str) -> Result<deser_value::Value, Error> { /* 12 lines hidden: L327-L338 */ }
+fn parse_env_bool(s: &str, var_name: &str) -> Result<bool, Error> { /* 7 lines hidden: L340-L346 */ }
+
+--- STDERR ---

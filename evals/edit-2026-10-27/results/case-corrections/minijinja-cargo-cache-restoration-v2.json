@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "case_id": "minijinja",
+  "canonical_cache": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_minijinja_cargo-cache",
+  "frozen_expected_sha256": "eac88f77d5490563112b892dcb38a804d9fdb32e52de2624bd5c0738faef538a",
+  "observed_pre_restore_sha256": "4c2e829eb200ae3a7a7a58d6ac04dea47e7cd07c48269004102035e452b701bd",
+  "preserved_drifted_cache": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_minijinja_cargo-cache-drifted-20261027-matcher-tdd",
+  "preserved_drifted_cache_sha256": "4c2e829eb200ae3a7a7a58d6ac04dea47e7cd07c48269004102035e452b701bd",
+  "verified_original_backup": "/tmp/code-kb-edit-python-rust-20261027/inputs/cargo-cache",
+  "verified_original_backup_sha256": "eac88f77d5490563112b892dcb38a804d9fdb32e52de2624bd5c0738faef538a",
+  "restored_canonical_sha256": "eac88f77d5490563112b892dcb38a804d9fdb32e52de2624bd5c0738faef538a",
+  "restoration_method": "Preserved the complete drifted cache tree under a distinct path, verified the original backup against the frozen full-tree digest, copied it back, and verified the canonical full-tree digest.",
+  "cache_usage": {
+    "matcher_tdd_commands_used_canonical_cargo_home": true,
+    "matcher_tdd_mutation_cause": "likely but not proven; no per-file before/after trace isolates the writer",
+    "initial_fresh_readiness_used_drifted_cache": true,
+    "initial_readiness_reported_dependency_sha256": "4c2e829eb200ae3a7a7a58d6ac04dea47e7cd07c48269004102035e452b701bd",
+    "restored_readiness_used_frozen_cache": true,
+    "restored_readiness_reported_dependency_sha256": "eac88f77d5490563112b892dcb38a804d9fdb32e52de2624bd5c0738faef538a",
+    "restored_readiness_status": "ready",
+    "restored_readiness_all_checks_passed": true,
+    "restored_readiness_json": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/minijinja-restored-cache/readiness.json",
+    "restored_readiness_sha256": "ef724b3d4402d538d7a9504150197c8c604ab6b127aa2c86df16db9d90afdd49"
+  },
+  "seed_recovery": {
+    "canonical_v2_seed_expected_sha256": "5a4833dcd8e450eefbf86d38f2074e2fc5077d90635714494a8403e6894c82c2",
+    "diagnostic_git_status_snapshot_sha256": "ec8556816b8919055ae023679a5d013939889f88e3f7eaa3b1340bf65735cca1",
+    "diagnostic_git_status_copy": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds-v2/minijinja-after-git-status-20261027",
+    "original_seed_source": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/minijinja/work/seed-project",
+    "original_seed_source_sha256": "5a4833dcd8e450eefbf86d38f2074e2fc5077d90635714494a8403e6894c82c2",
+    "canonical_v2_seed_restored_sha256": "5a4833dcd8e450eefbf86d38f2074e2fc5077d90635714494a8403e6894c82c2",
+    "staging_copy": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds-v2/minijinja-ec855681-recovery-staging"
+  },
+  "fresh_seed": {
+    "seed_project": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds-v2/minijinja-restored-cargo",
+    "seed_digest": "01c0e239f0d4d956d7fcae86e4f7a53fbf925486ca4f47965291e345866f9292",
+    "source_only_digest": "059d5f0b2a82a36e9c8299e4538483f164e2df1abc35703acf53228dd8bb8806",
+    "git_metadata_differences": [
+      "index"
+    ],
+    "old_git_index_sha256": "38b25f7ab5b3f39560a29beb26d1308376f79e679f3f873c298f90d9b71e0d42",
+    "fresh_git_index_sha256": "b657485d6ee4b16e47b4d1bd17e4e7427ec9e29efecac148cee44a7bc2e6fd36"
+  },
+  "prior_seed_equivalence_sha256": "cea587614db16273cd527cd6fc8c584c155e9a5f46f55bc95b94d0b892279de8",
+  "prior_seed_equivalence_backup": "evals/edit-2026-10-27/results/case-corrections/seed-equivalence-v2-before-restored-cache.json",
+  "prior_runtime_bindings_backup": "target/edit-evaluation/lead/runtime-bindings-v2-before-restored-cache.json"
+}

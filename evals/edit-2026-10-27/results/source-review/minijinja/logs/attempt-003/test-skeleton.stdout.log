@@ -1,0 +1,10 @@
+// File: minijinja-cli/tests/test_autoescape.rs (Lines 1-84)
+
+const TEMPLATE: &str = "{{ '<tag>&' }}"; // L6-6
+const HTML: &str = "&lt;tag&gt;&amp;"; // L7-7
+const JSON: &str = "\"<tag>&\""; // L8-8
+const RAW: &str = "<tag>&"; // L9-9
+fn assert_rendered(filename: &str, mode: Option<&str>, expected: &str) { /* 25 lines hidden: L11-L35 */ }
+fn autoescape_matches_output_suffix_with_or_without_one_wrapper() { /* 20 lines hidden: L38-L57 */ }
+fn autoescape_ignores_only_one_final_wrapper() { /* 16 lines hidden: L60-L75 */ }
+fn explicit_autoescape_modes_override_filename_detection() { /* 7 lines hidden: L78-L84 */ }

@@ -1,0 +1,14 @@
+// minijinja-cli/tests/test_autoescape.rs:73-83 (test_explicit_autoescape_overrides_suffix)
+fn test_explicit_autoescape_overrides_suffix() {
+    for filename in ["report.html.jinja2", "report.JSON.JINJA", "report.txt.j2"] {
+        for (mode, expected) in [
+            ("html", "&lt;tag&gt;&amp;"),
+            ("json", "\"<tag>&\""),
+            ("none", "<tag>&"),
+        ] {
+            assert_autoescape(filename, Some(mode), expected);
+        }
+    }
+}
+
+--- STDERR ---

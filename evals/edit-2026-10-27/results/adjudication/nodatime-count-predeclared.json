@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "declared_utc": "2026-10-27T20:49:16.843169+00:00",
+  "classification": "mechanical exact-test-count false negative",
+  "baseline_tests": 248,
+  "evidence": [
+    {
+      "schedule_index": 11,
+      "raw_attempt_sha256": "84a9d7f68a89e5bcf11d60db34a6e9ea418b59276c5140b1bd49b944e0b6995a",
+      "exit_status": 0,
+      "hidden_passed": true,
+      "missing_literal_markers": [
+        "NUnit3TestExecutor discovered 248 of 248 NUnit test cases",
+        "Total tests: 248"
+      ],
+      "actual_success_summary": [
+        "NUnit3TestExecutor discovered 296 of 296 NUnit test cases using Current Discovery mode, Non-Explicit run",
+        "Test Run Successful.",
+        "Total tests: 296",
+        "Passed: 296"
+      ]
+    },
+    {
+      "schedule_index": 12,
+      "raw_attempt_sha256": "da1705e56c2bad765ec5adf187e4f9e1fd0f7b5fd0f13c7cc9045a8bccc7eb2a",
+      "exit_status": 0,
+      "hidden_passed": true,
+      "missing_literal_markers": [
+        "NUnit3TestExecutor discovered 248 of 248 NUnit test cases",
+        "Total tests: 248"
+      ],
+      "actual_success_summary": [
+        "NUnit3TestExecutor discovered 266 of 266 NUnit test cases using Current Discovery mode, Non-Explicit run",
+        "Test Run Successful.",
+        "Total tests: 266",
+        "Passed: 266"
+      ]
+    }
+  ],
+  "correction": "Version generic summary-marker matching for recognized framework grammars: verified passing counts may exceed baseline; preserve distinct suites, test names, success/failure/skip checks and ordinary numeric literals. Counts are a floor, not proof of original identity; canonical protection and source review remain.",
+  "scope": "Apply uniformly to all four C# captured patches after original timed schedule; no model reruns, raw strict records/cases remain immutable. Fresh readiness covers all six cases with amended evaluator before supplemental TypeScript calls."
+}

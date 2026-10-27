@@ -1,0 +1,12 @@
+diff --git a/minijinja-cli/src/config.rs b/minijinja-cli/src/config.rs
+--- a/minijinja-cli/src/config.rs
++++ b/minijinja-cli/src/config.rs
+@@ -240,7 +240,7 @@
+             "none" => AutoEscape::None,
+             "html" => AutoEscape::Html,
+             "json" => AutoEscape::Json,
+-            "auto" => match name.strip_suffix(".j2").unwrap_or(name).rsplit('.').next() {
++            "auto" => match name.rsplit('.').next() {
+                 Some("htm" | "html" | "xml" | "xhtml") => AutoEscape::Html,
+                 Some("json" | "json5" | "yml" | "yaml") => AutoEscape::Json,
+                 _ => AutoEscape::None,

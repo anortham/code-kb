@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "cases": [
+    {
+      "id": "hcl",
+      "case_path": "corrected-cases/hcl",
+      "case_sha256": "ffca3a556c95780143ffb8ac93a454c58c4735073ba2742093c87c4f57e9ba61",
+      "readiness_path": "results/readiness-v2/hcl/readiness.json",
+      "readiness_sha256": "aa0b7bc63a3731e2078871981bf80c134d8352c69a09e7390bc8a0e71cab9817",
+      "seed_digest": "1c58dd1a8dc827c1564e2c30b3e9fac02a284a94f9dbd0036beeff22aee94e9d",
+      "source_review": "passed"
+    },
+    {
+      "id": "date-fns",
+      "case_path": "corrected-cases/date-fns",
+      "case_sha256": "4244c3c81603a09b13264f2f5b04d60047f60c1d5139c3f84a707ccbb576f62d",
+      "readiness_path": "results/readiness-v2/date-fns/readiness.json",
+      "readiness_sha256": "c3e7aaf804d35d22510dfe81008301d8652b22025792346fe64148ecddbc8143",
+      "seed_digest": "e0d8d6c9700a1bf4660aa8d759cf31858197e14b937ca93c8c2cca0732fe796f",
+      "source_review": "passed"
+    },
+    {
+      "id": "minijinja",
+      "case_path": "corrected-cases/minijinja",
+      "case_sha256": "9c7b081fd68fe8b0284262d1cf105d780eac91af3e4e7656ad9fc351e637e647",
+      "readiness_path": "results/readiness-v2/minijinja-restored-cache/readiness.json",
+      "readiness_sha256": "dbe0b1efaec597f4ce8f53daac091e737d60c0b51d09519d71127de2702a0cb0",
+      "seed_digest": "01c0e239f0d4d956d7fcae86e4f7a53fbf925486ca4f47965291e345866f9292",
+      "source_review": "passed"
+    },
+    {
+      "id": "sqlglot",
+      "case_path": "cases/sqlglot",
+      "case_sha256": "1a5a93f77ceb315e8fe41e941c96201d21054fa37895c3464c1919262eead81a",
+      "readiness_path": "results/readiness-v2/sqlglot/readiness.json",
+      "readiness_sha256": "c58a76315e905d27cdcd53d63014d6f10461e09597e0277ddfb2b4198ad15846",
+      "seed_digest": "495821034999b04d914bcb1ee64b3ffa84e33a7d6f519ac9df84b804efd594a2",
+      "source_review": "passed"
+    },
+    {
+      "id": "commons-lang",
+      "case_path": "cases/commons-lang",
+      "case_sha256": "a09f9cfab6fb450c742102aaaf5028c58bb9c8a61cf2aca4b4cbeed55f890a14",
+      "readiness_path": "results/readiness-v2/commons-lang/readiness.json",
+      "readiness_sha256": "834438f10e754a417e977cac6dd37d3d1e824c0982a2d6dd74033f36e91603c7",
+      "seed_digest": "1b27eddcb69508862613b2feb40aecfec803b98c58b67d5946c386b68f4b763d",
+      "source_review": "passed"
+    },
+    {
+      "id": "nodatime",
+      "case_path": "corrected-cases/nodatime",
+      "case_sha256": "80ac1e39e6333f5e2723371b800d1c852510e14966b870c4fbdd62ed244e00df",
+      "readiness_path": "results/readiness-v2/nodatime/readiness.json",
+      "readiness_sha256": "361d4f00171ec7a47cf8545b90f1632708a7b912add79da19226ffce978c20d0",
+      "seed_digest": "d3b4d1e76ec36f1587f992d7360fb591dab6aada4b7dcd0f41e25926d6208be5",
+      "source_review": "passed"
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+   Compiling minijinja-cli v3.0.4 (/workspace/project/minijinja-cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.40s
+     Running tests/test_autoescape.rs (/state/target/debug/deps/test_autoescape-016d8bb75d033115)

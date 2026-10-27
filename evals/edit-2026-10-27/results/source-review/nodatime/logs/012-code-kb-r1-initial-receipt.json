@@ -1,0 +1,68 @@
+{
+  "schema": 1,
+  "reviewed_at_utc": "2026-10-27T20:48:34Z",
+  "schedule_index": 12,
+  "case_id": "nodatime",
+  "arm": "code-kb",
+  "repeat": 1,
+  "raw_attempt_sha256": "da1705e56c2bad765ec5adf187e4f9e1fd0f7b5fd0f13c7cc9045a8bccc7eb2a",
+  "bundle_json_sha256": "d53d70671554366041622ee752630b3e2182d283db374eeebdb7eba43fb8ed8f",
+  "source_review": "passed",
+  "findings": [
+    {
+      "finding": "The captured methods implement the requested calendar-neutral order. LocalDate compares DaysSinceEpoch, and LocalDateTime compares dates with the same method before comparing LocalTime. Both are marked Pure. The existing calendar-sensitive CompareTo methods and equality/operators are unchanged; no DateTime conversion or calendar mutation was added.",
+      "evidence": [
+        "Code-kb CLI body/context on the completed grade public-project showed LocalDate.CompareToIgnoringCalendar at src/NodaTime/LocalDate.cs:539-540 comparing DaysSinceEpoch and LocalDateTime.CompareToIgnoringCalendar at src/NodaTime/LocalDateTime.cs:492-497 comparing date first, then time.",
+        "Read-only seed-to-captured source diff showed only the two method additions in production files. LocalDate.CompareTo still checks CalendarOrdinal; LocalDateTime.CompareTo still uses date.CompareTo, which enforces that check."
+      ]
+    },
+    {
+      "finding": "The added partial test files cover cross-calendar same-day comparison, different calendar fields for a different physical day, same-calendar dates whose month numbering is not chronological, time/nanosecond comparison, day precedence over time, and values outside another calendar's supported range. The selected public grader executed all 18 added cases successfully.",
+      "evidence": [
+        "Code-kb CLI skeleton/body/context/refs showed four new LocalDate tests and four new LocalDateTime tests, including six year cases in each physical-day test.",
+        "The trusted public output contains 18 successful CompareToIgnoringCalendar test-case lines."
+      ]
+    },
+    {
+      "finding": "The trusted grade marked the public check failed because its expected-output markers require a total of 248 tests, while the successful run contained 266 after the agent added 18 selected tests. The run output says Test Run Successful; all 266 tests passed. This is an expected-output marker mismatch, not a source behavior failure. The trusted grade's overall acceptance remains failed and is owned by the lead.",
+      "evidence": [
+        "The public command exited 0 and reported `NUnit3TestExecutor discovered 266 of 266 NUnit test cases`, `Test Run Successful.`, and `Total tests: 266`.",
+        "The two missing expected markers were `NUnit3TestExecutor discovered 248 of 248 NUnit test cases` and `Total tests: 248`.",
+        "The trusted hidden grade passed both contract tests. The attempt record reports `behavioral_pass: false` and `acceptance_status: failed` solely alongside those missing public-count markers."
+      ],
+      "verification_status": "source review passed; trusted grade acceptance failed on expected-output markers"
+    }
+  ],
+  "changed_production_files": [
+    "src/NodaTime/LocalDate.cs",
+    "src/NodaTime/LocalDateTime.cs"
+  ],
+  "added_tests": [
+    "src/NodaTime.Test/LocalDateTest.CompareToIgnoringCalendar.cs",
+    "src/NodaTime.Test/LocalDateTimeTest.CompareToIgnoringCalendar.cs"
+  ],
+  "executed_verification": [
+    {
+      "kind": "trusted_public_grade",
+      "command_id": "nodatime-public-local-date-regressions",
+      "status": "test_run_succeeded_expected_output_markers_missing",
+      "exit_status": 0,
+      "observed_tests": 266,
+      "observed_new_test_cases": 18,
+      "test_run_successful": true,
+      "expected_output_missing": [
+        "NUnit3TestExecutor discovered 248 of 248 NUnit test cases",
+        "Total tests: 248"
+      ],
+      "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/012-nodatime-code-kb-r1/evidence/grade/grade-008-stdout_log.log"
+    },
+    {
+      "kind": "trusted_hidden_grade",
+      "command_id": "nodatime-calendar-neutral-contract",
+      "status": "passed",
+      "exit_status": 0,
+      "observed_tests": 2,
+      "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/012-nodatime-code-kb-r1/evidence/grade/grade-010-stdout_log.log"
+    }
+  ]
+}

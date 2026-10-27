@@ -1,0 +1,9 @@
+// File: minijinja-cli/tests/test_autoescape.rs (Lines 1-99)
+
+fn assert_autoescape(filename: &str, mode: Option<&str>, expected: &str) { /* 26 lines hidden: L3-L28 */ }
+fn test_autoescape_output_suffixes() { /* 20 lines hidden: L31-L50 */ }
+fn test_autoescape_only_skips_one_wrapper() { /* 18 lines hidden: L53-L70 */ }
+fn test_explicit_autoescape_overrides_suffix() { /* 11 lines hidden: L73-L83 */ }
+fn test_autoescape_long_help() { /* 14 lines hidden: L86-L99 */ }
+
+--- STDERR ---

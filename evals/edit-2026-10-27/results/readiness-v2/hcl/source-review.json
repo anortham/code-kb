@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "case_id": "hcl",
+  "source_review": "passed",
+  "basis": "Original accepted reference implementation and task are unchanged. Lead reviewed bounded configuration/oracle corrections, live readiness and seed-source equivalence.",
+  "changed_case_files": [
+    "case.json"
+  ],
+  "original_approved_readiness": "results/readiness/hcl/readiness.json",
+  "original_approved_readiness_sha256": "7ef6a83c1993b46ba0194311114468f6d39d97d8cee8467ab6cf1679f7d2a30f",
+  "raw_fresh_readiness": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/hcl/readiness.json",
+  "raw_fresh_readiness_sha256": "f7f9d2ce55007732240795d84191db0496e4b7af2a0dcdfe6395a7c01d56bb91",
+  "case_sha256": "ffca3a556c95780143ffb8ac93a454c58c4735073ba2742093c87c4f57e9ba61",
+  "request_sha256": "73ae2cf2797b4196d930c5b9dbfbbe222b2272a3675a95599b3ce9ca6431df0e",
+  "seed_patch_sha256": "00389ada4651aa1494bb0b08904fc40e48c2b929d6535aa8092d35c88369da10",
+  "reference_patch_sha256": "0575fcec6ea5ac520c1851cfc1b3abdc10a6e3b670676c368866507c2c80a213",
+  "source_only_digest": "3503745dffeb1adc423d1626b8966e83552b24580c5df591ffd774e1205d827d",
+  "source_bytes_unchanged": true,
+  "negative_checks": "Mini matcher positive/negative and exact suffix-boundary verification retained; Noda existing purity test passes upstream/reference; generated-root changes hide no source/protected paths."
+}

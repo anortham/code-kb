@@ -1,0 +1,98 @@
+{
+  "schema": 1,
+  "schedule_index": 14,
+  "case_id": "sqlglot",
+  "arm": "native",
+  "repeat": 2,
+  "attempt_status": "completed",
+  "acceptance_status": "not_assessed_root_owns_synthesis",
+  "raw_attempt_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/014-sqlglot-native-r2/attempt.json",
+  "raw_attempt_sha256": "803e5663ea28c9929168f6bcb54f8c342ab61c68db9d86cd901994700f3d9c65",
+  "bundle_json_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/014-sqlglot-native-r2/bundle/bundle.json",
+  "bundle_json_sha256": "e2f5d304c0ab4a2206f3314dfd4398cc0862e0b35daa88c316583ce92b811c38",
+  "source_review": "passed",
+  "source_review_basis": "The parser maps TIMESTAMP_BUCKET(timestamp, width[, origin]) to DateBin with width in `this`, timestamp in `expression`, and optional origin. The generator emits `expression`, `this`, and optional origin in the same order. This matches the pinned DateBin contract and request. The public test file checks parse fields, generation order, both arities, optional origin, and parse-to-generate identity.",
+  "findings": [],
+  "changed_production_files": [
+    "sqlglot/generators/bigquery.py",
+    "sqlglot/parsers/bigquery.py"
+  ],
+  "added_test_files": [
+    "tests/dialects/test_bigquery_timestamp_bucket.py"
+  ],
+  "evidence_paths": [
+    {
+      "path": "evals/edit-2026-10-27/cases/sqlglot/request.md",
+      "supports": "Frozen user request."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/sqlglot/logs/attempt-014/parser-context.stdout.log",
+      "supports": "Fresh code-kb context of BigQueryParser.FUNCTIONS and argument mapping."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/sqlglot/logs/attempt-014/generator-context.stdout.log",
+      "supports": "Fresh code-kb context of BigQueryGenerator.TRANSFORMS and generation order."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/sqlglot/logs/attempt-014/datebin-context.stdout.log",
+      "supports": "Canonical DateBin fields: this, expression, optional origin."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/sqlglot/logs/attempt-014/datebin-callers.stdout.log",
+      "supports": "Fresh code-kb references identify the BigQuery parser/generator and added tests as DateBin sites."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/sqlglot/logs/attempt-014/parse-test-body.log",
+      "supports": "Regression test checks parser argument mapping with both arities."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/sqlglot/logs/attempt-014/generate-test-body.log",
+      "supports": "Regression test checks generated argument order with both arities."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/sqlglot/logs/attempt-014/roundtrip-test-body.log",
+      "supports": "Regression test checks two- and three-argument parse-to-generate identity."
+    },
+    {
+      "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/014-sqlglot-native-r2/attempt.json",
+      "supports": "Frozen attempt record links the changed-file bundle and grade."
+    },
+    {
+      "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/014-sqlglot-native-r2/grade/grade.json",
+      "supports": "Fresh public and hidden grade referenced by the attempt record."
+    }
+  ],
+  "trusted_grade": {
+    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/014-sqlglot-native-r2/grade/grade.json",
+    "sha256": "ab83294d57884eb325515297be3a1336ac620544365dcadec92ba93103c2d73d",
+    "behavioral_pass": true,
+    "public_passed": true,
+    "hidden_passed": true,
+    "patch_valid": true,
+    "protection_status": "unchanged",
+    "replay_valid": true,
+    "basis": "attempt.json grade summary"
+  },
+  "verification_commands": [
+    {
+      "kind": "trusted_fresh_grade_public",
+      "command_id": "bigquery_regressions",
+      "exit_status": 0,
+      "result": "passed"
+    },
+    {
+      "kind": "trusted_fresh_grade_hidden",
+      "command_id": "timestamp_bucket_acceptance",
+      "exit_status": 0,
+      "result": "passed"
+    }
+  ],
+  "pending_extra_runs": [
+    {
+      "kind": "independent_added_public_test_verification",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/state/python-site:/workspace/project /usr/bin/python3 -m unittest tests.dialects.test_bigquery_timestamp_bucket",
+      "project": "fresh public replay via edit_sandbox grade",
+      "state": "pending_ROOTGO; not run during timed campaign"
+    }
+  ]
+}

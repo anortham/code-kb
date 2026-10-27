@@ -1,0 +1,9 @@
+References to method `Config.apply_to_env` (minijinja-cli/src/config.rs:220)
+Sites: 1 · proven 1 · likely 0 · unresolved 0 · excluded 0
+Text: `apply_to_env` is on 2 lines: 1 site, 1 definition, 0 imports, 0 text only.
+
+Proven (1):
+- `create_env` [minijinja-cli/src/cli.rs:195] (kind: calls; receiver type; 1 arg)
+Not visible to this index: calls inside macro bodies.
+
+--- STDERR ---

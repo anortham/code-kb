@@ -1,0 +1,134 @@
+{
+  "schema": 1,
+  "schedule_index": 15,
+  "case_id": "minijinja",
+  "arm": "code-kb",
+  "repeat": 2,
+  "attempt_status": "completed_recovered_after_restart",
+  "completion_basis": "trusted turn.completed event and saved final response; model was not rerun",
+  "acceptance_status": "not_assessed_root_owns_synthesis",
+  "raw_attempt_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/attempt.json",
+  "raw_attempt_sha256": "2662c1379103f16523c8a05bc2c6904becb0a473276e5648e592c7db4065c1eb",
+  "effective_attempt_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/recovery/recovered-attempt-v3.json",
+  "effective_attempt_sha256": "46b62b9d53a2c8d1fd976e5664976a76657951a7cdf955b9ae31ca816cfcd351",
+  "bundle_json_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/bundle/bundle.json",
+  "bundle_json_sha256": "5c8138783c09af2ee53db1100d478ed3aaf1912f75d8c441af468d376cc279ae",
+  "source_review": "passed",
+  "source_review_basis": "The autoescape callback ASCII-lowercases the filename suffix and the suffix before one recognized wrapper, then applies the existing output-extension mapping. Explicit html/json/none modes return before filename detection. Added end-to-end CLI tests cover the existing suffixes, ASCII case variants, one-wrapper handling, explicit overrides, and long-help text. The source and tests satisfy the frozen request.",
+  "findings": [],
+  "changed_production_files": [
+    "minijinja-cli/src/command.rs",
+    "minijinja-cli/src/config.rs"
+  ],
+  "added_test_files": [
+    "minijinja-cli/tests/test_autoescape.rs"
+  ],
+  "strict_grade_failure": {
+    "failure_kind": "help wording allowlist false negative; source correctness is separate",
+    "failed_command": "autoescape_suffix_acceptance",
+    "strict_grade_acceptance_status": "failed",
+    "strict_grade_behavioral_pass": false,
+    "task_request_text": "Match wrapper and output suffixes without regard to ASCII letter case.",
+    "candidate_help_text": "Suffix matching ignores ASCII letter case.",
+    "matcher_case_phrase_any_of": [
+      "ignoring case",
+      "case-insensitive",
+      "case insensitive",
+      "regardless of case",
+      "without regard to case"
+    ],
+    "disposition": "The request wording is satisfied by the help text; the old phrase allowlist does not include this equivalent wording. Root will uniformly regrade all MiniJinja patches with the corrected case after timed study."
+  },
+  "timing": {
+    "agent_wall_seconds": null,
+    "index_wall_seconds": null,
+    "note": "Unavailable after daemon restart; no timing inferred."
+  },
+  "evidence_paths": [
+    {
+      "path": "evals/edit-2026-10-27/cases/minijinja/request.md",
+      "supports": "Frozen user request."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/minijinja/logs/attempt-015/config-skeleton.log",
+      "supports": "Fresh code-kb skeleton of Config and changed autoescape callback."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/minijinja/logs/attempt-015/apply-env-context.log",
+      "supports": "Fresh code-kb context of suffix mapping and explicit-mode precedence."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/minijinja/logs/attempt-015/apply-env-callers.log",
+      "supports": "Fresh code-kb caller proof from apply_to_env to create_env."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/minijinja/logs/attempt-015/create-env-context.log",
+      "supports": "Fresh code-kb context of the CLI environment construction path."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/minijinja/logs/attempt-015/output-suffix-test-body.log",
+      "supports": "End-to-end CLI test for output and wrapper suffixes and ASCII case variants."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/minijinja/logs/attempt-015/single-wrapper-test-body.log",
+      "supports": "Test ensures only one wrapper suffix is stripped."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/minijinja/logs/attempt-015/explicit-mode-test-body.log",
+      "supports": "Test confirms explicit html/json/none modes override filename detection."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/minijinja/logs/attempt-015/help-test-body.log",
+      "supports": "Test asserts the long help includes suffix examples, ASCII-case wording, and override behavior."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/minijinja/logs/attempt-015/autoescape-help-literal.log",
+      "supports": "Literal help text in the changed CLI argument definition."
+    },
+    {
+      "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/recovery/recovered-attempt-v3.json",
+      "supports": "Effective recovered record with restored pinned redactor binding and complete trace metrics."
+    },
+    {
+      "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/grade-recovery-3/grade.json",
+      "supports": "Fresh recovery grade referenced by effective v3 record."
+    }
+  ],
+  "trusted_grade": {
+    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/grade-recovery-3/grade.json",
+    "sha256": "5df29d89c0121331eb82cd37c6b32afbf8f876511150d540ace07add18b5265e",
+    "behavioral_pass": false,
+    "public_passed": true,
+    "hidden_passed": false,
+    "patch_valid": true,
+    "protection_status": "unchanged",
+    "replay_valid": true,
+    "basis": "recovered-attempt-v3 grade summary"
+  },
+  "verification_commands": [
+    {
+      "kind": "trusted_fresh_grade_public",
+      "command_id": "minijinja_cli_regressions",
+      "exit_status": 0,
+      "result": "passed"
+    },
+    {
+      "kind": "trusted_fresh_grade_hidden",
+      "command_id": "autoescape_suffix_acceptance",
+      "exit_status": 101,
+      "result": "failed only the long-help wording assertion per recovered grade summary"
+    }
+  ],
+  "pending_extra_runs": [
+    {
+      "kind": "independent_added_public_test_verification",
+      "command": "cargo test --locked --offline -p minijinja-cli --test test_autoescape",
+      "project": "fresh public replay via edit_sandbox grade",
+      "state": "pending_ROOTGO; not run during timed campaign"
+    },
+    {
+      "kind": "uniform_corrected_case_regrade",
+      "state": "pending timed-study completion and ROOTGO"
+    }
+  ]
+}

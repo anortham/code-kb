@@ -1,0 +1,20 @@
+// minijinja-cli/tests/test_autoescape.rs:44-62 (test_autoescape_only_skips_one_template_wrapper)
+fn test_autoescape_only_skips_one_template_wrapper() {
+    for filename in [
+        "report",
+        "report.j2",
+        "report.jinja",
+        "report.jinja2",
+        "report.txt.j2",
+        "report.html.j2.jinja2",
+        "report.json.jinja.j2",
+        "report.html.txt.j2",
+        "report.html.jinja2.bak",
+        "report.html.jinja3",
+        "report.html.j2x",
+        "report.html.",
+        "report.İSON.J2",
+    ] {
+        assert_eq!(render(filename, Some("auto")), "\"", "{filename}");
+    }
+}

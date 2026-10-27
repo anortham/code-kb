@@ -1,0 +1,26 @@
+230-            .help("Print short help (short texts)"),
+231-        Opt::new(Arg::LongHelp)
+232-            .long("long-help")
+233-            .help("Print long help (extended, long explanation texts)"),
+234-        Opt::new(Arg::SyntaxHelp)
+235-            .long("syntax-help")
+236-            .help("Print syntax help (primer on Jinja2/MiniJinja syntax)"),
+237-        Opt::section(BEHAVIOR),
+238-        Opt::new(Arg::Autoescape)
+239-            .short('a')
+240:            .long("autoescape")
+241-            .value("MODE")
+242-            .possible_values(&["auto", "html", "json", "none"])
+243:            .help("Reconfigures autoescape behavior")
+244-            .long_help("\
+245:                Reconfigures autoescape behavior.  The default is 'auto' which means that \
+246-                the file extension sets the auto escaping mode.  A single final .j2, .jinja, \
+247-                or .jinja2 suffix is ignored, so report.html.jinja2 uses HTML escaping.  \
+248-                Suffixes are matched without regard to ASCII letter case.  The extensions \
+249-                .htm, .html, .xml, and .xhtml use HTML escaping; .json, .json5, .yaml, and \
+250-                .yml use JSON escaping.  Other extensions disable escaping.\n\n\
+251-                \
+252-                html means that variables are escaped to HTML5 and XML rules.  json means \
+253-                that output is safe for both JSON and YAML rules (eg: strings are formatted \
+254-                as JSON strings etc.).  none disables escaping entirely.  These explicit \
+255-                modes override filename detection.\n\n\

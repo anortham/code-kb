@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "schedule_index": 18,
+  "case_id": "hcl",
+  "arm": "native",
+  "repeat": 2,
+  "raw_attempt_sha256": "28478c188954b79899c013aa4d1b292c34b180cc3bac2f0468562a7f6540048c",
+  "bundle_json_sha256": "42174d38c8a6b9c1b5deb7beff1f4c4a74eeb8bbe415ee7e92aace7c3dbdff9c",
+  "source_review": "passed",
+  "findings": [],
+  "behavior_review": "The production change makes hcl.Expression-compatible attributes optional in ImpliedBodySchema and assigns a non-nil StaticExpr containing a dynamic null and the missing-item range when such an attribute is omitted. Existing scalar and pointer behavior is preserved. The added test covers omitted expressions, preinitialized targets, partial bodies, source ranges, required scalar decoding, pointer optionality, and remain attributes.",
+  "changed_production_files": [
+    "gohcl/schema.go",
+    "gohcl/decode.go"
+  ],
+  "added_test_files": [
+    "gohcl/omitted_expression_test.go"
+  ],
+  "grade_evidence": {
+    "public": {
+      "exit_status": 0,
+      "test_execution_observed": true,
+      "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/018-hcl-native-r2/evidence/grade/grade-008-stdout_log.log"
+    },
+    "hidden": {
+      "exit_status": 0,
+      "test_execution_observed": true
+    },
+    "protection_status": "unchanged",
+    "patch_valid": true,
+    "replay_valid": true
+  },
+  "evidence": [
+    "The frozen request requires omitted expression fields to be optional and assigned a non-nil expression that evaluates to null, while scalar fields remain required and pointer fields remain optional.",
+    "The bundle changes only gohcl/schema.go, gohcl/decode.go, and gohcl/omitted_expression_test.go. Both production before hashes match the public replay source, and all after hashes match the immutable bundle blobs.",
+    "ImpliedBodySchema checks exprType.AssignableTo(field.Type) before the existing scalar requiredness branch. decodeBodyToStruct assigns hcl.StaticExpr(cty.NullVal(cty.DynamicPseudoType), body.MissingItemRange()) when the expression attribute is absent.",
+    "StaticExpr stores and returns the supplied cty.Value. The resulting expression is non-nil and evaluates to the dynamic null value.",
+    "The new TestDecodeBodyOmittedExpressionsPartial covers initialized and uninitialized targets, both required and optional expression fields, null evaluation, missing-item ranges, a required scalar, a nil pointer, and an extra attribute retained through a partial body.",
+    "The retained public gohcl_regressions command exited 0 and observed TestDecodeBodyOmittedExpressionsPartial, TestDecodeBody, and TestImpliedBodySchema passing. Attempt metadata records the hidden acceptance command passing, unchanged protection, valid patch, and valid replay.",
+    "The bundle has no protected-path changes, violations, or captured generated outputs."
+  ]
+}

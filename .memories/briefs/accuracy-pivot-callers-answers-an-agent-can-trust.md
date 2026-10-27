@@ -3,7 +3,7 @@ id: accuracy-pivot-callers-answers-an-agent-can-trust
 title: "Accuracy pivot: callers answers an agent can trust"
 status: active
 created: 2026-10-17T17:10:13.294Z
-updated: 2026-10-27T20:18:00.986Z
+updated: 2026-10-27T22:16:20.197Z
 tags:
   - project-direction
   - accuracy
@@ -13,24 +13,16 @@ tags:
 
 # Direction
 
-Support all 42 pinned Julie language IDs, seven MCP tools with CLI parity, explicit project_root, bounded SQLite memory, Windows, and byte-equivalent AGENTS.md/CLAUDE.md. Preserve original scored outcomes and raw evidence.
+Support all 42 Julie languages, seven MCP tools/CLI parity, explicit project_root, bounded SQLite memory, Windows, and byte-equivalent AGENTS/CLAUDE. Owner authorized necessary spending and removed ALL financial approvals/caps/receipts. Local commits approved; no push/release/global configuration or routing changes. Commit memories.
 
-# Owner's spending instruction
+# Verified correction slice
 
-The owner explicitly ordered removal of every budget/spending gate. Approved work includes model evaluation and necessary spending. Never ask for separate spending approval, impose financial dispatch caps, require approval receipts, or revive obsolete restrictions from older plans/handoffs/raw archives. Technical input, privacy, isolation and result-integrity checks remain. Push, publication, release and unrelated global configuration are outside this task.
+Task worktree /home/murphy/.codex/worktrees/1e6f/code-kb, branch fix/cross-language-review. Source hashes recorded in .razorback/completed-edit-dispatch/verification-v2.json: Linux1905 Rust tests/all42,301 Python,fmt/Clippy/release pass. Watcher handles a verified vanished nonroot directory with one rewalk; real failures stay errors. Recovery persists setup/execution metadata and preserves private raw logs if redaction fails; explicit pinned redactor replaces cache-version hardcode. Astra P2 closed. Original financial-removal commits007e2b3+bd85205 retained.
 
-# Completed
+# Completed-edit evidence
 
-007e2b3 removes financial enforcement from both evaluation tools and paired guidance; bd85205 clears obsolete restrictions from three older plans and eight handoffs. Regression coverage dispatches 73 fake jobs without any approval marker. Current full Python suite passes 281 tests, including 15 new launcher tests. New runner preserves every attempt, preindexes only code-kb offline, records index time, captures partial patches, grades fresh public/hidden trees, and leaves acceptance pending source review. Structurally redacted traces remain parseable; real host-secret values are blocked without corrupting pinned public code for generic key-annotation false positives.
+Original24 slots finished:20 actualmodeltrials,4TS pre-provider stops. Preserve original2ec7fad2 manifest/cases/attempts/strictgrades. Source acceptance18/20; originalstrictbehavior13/20. Uniform Mini/C#regrades now6pass/2nativeC#Pure failures; allMini4pass. Source-reviewed added tests verified. Effective015 recoveredv3 has unknownagent/indexelapsed; no model rerun. Original safe archivev2 97883246 containsall63captureblobs/20replayablebundles; v1retained. Metrics:9pairedtimesmean+78.14s code-kb,moreinputtokens,notestablishedsavings. No puretoolcausalclaim.
 
-# Freeze and calibration
+# Next
 
-Final 32-control manifest SHA 2ec7fad27dfb508efdefb6a1190d32eb8d4587a16594d3948e63328d562072e8 binds runner ec8ff008b510a46395e8e030dae2c7fb5835ef9e61a9e7d123088017732da0eb and unchanged six tasks/schedule/model/profiles/dependencies/engine. Three non-task provider calibrations retained: missing native Codex code-mode-host executable first, then native and code-kb pass with private read/network denial and fresh replay. Both native runtime files are byte-identical cache copies outside overlapping SDK roots. No scored task has run at this freeze. Real launcher scan and native engine isolation probes pass. Proof: evals/edit-2026-10-27/results/controls/{calibration,dispatch}/identity.json.
-
-# Product verification
-
-Runtime source70a2c9b passes Linux1904 / Windows1876 Rust tests, all42 languages, Clippy, fmt and release. No Rust source or runtime bytes changed in the current launcher/financial cleanup. Windows VM is off; start it when needed and shut down afterward; preserve guest test.log. Watch probe1016 to3 registrations, retainedRSS15760 to14760KiB. Original72-run navigation pilot is unchanged.
-
-# Continue
-
-Commit the verified dispatch slice, then execute all24 fixed scored cells in order, independently grade and source-review every patch, and report paired acceptance/time/tokens without changing global routing from this sample. No new financial question. Task worktree /home/murphy/.codex/worktrees/1e6f/code-kb, branchfix/cross-language-review. Durable seeds/tools/dependencies: /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0. Plan docs/plans/2026-10-27-completed-edit-dispatch.md.
+V2manifest542016a1 validates33controls includingbaseprotocol+amendment, unchangedmodels/profiles/deps/frozenengine d50d778 andschedule. MiniCargo cache drift was preserved/restoredexact eac88 andfreshreadinessrerunpassed; source-equivalent newseed01c0e239. Allworkerwritesclosed. Commitclean slice, runwindows-v2.py <commit> usingwin-test (VMrunning, alwaysdownfinally). ThenonlyTSindices7/8/19/20 serial, allheavychecksfinishedbeforetiming. CompleteTSsource/newtest/trace review,final24actual-modeltrialmetrics/report/docs/archive andcleanlocalcommit. No fulltask token-savings claim or globalroutingchange fromthissmallpilot.

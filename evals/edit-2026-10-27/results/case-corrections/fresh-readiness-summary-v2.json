@@ -1,0 +1,181 @@
+{
+  "schema": 1,
+  "status": "all_six_ready_with_retained_commons_marker_failure",
+  "created_utc": "2026-10-27T21:43:19Z",
+  "external_output_root": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2",
+  "runner": "scripts.edit_evaluation.prepare_case_readiness",
+  "inputs": "source pins, toolchains, and dependency caches from target/edit-evaluation/lead/runtime-bindings.json; dependencies supplied to skip network preparation",
+  "cases": [
+    {
+      "case_id": "hcl",
+      "case_path": "evals/edit-2026-10-27/corrected-cases/hcl",
+      "case_sha256": "ffca3a556c95780143ffb8ac93a454c58c4735073ba2742093c87c4f57e9ba61",
+      "source_pin": "4a347c448ee961e556dde0fad522a996e04c00c0",
+      "source_tree_sha256": "8ff36484a1c2f3868e37ae605a4f709aad796d9c6c58c699a792c625ffa82373",
+      "status": "ready",
+      "behavioral_pass": true,
+      "source_review": "pending",
+      "checks": {
+        "baseline_public": true,
+        "baseline_runtime_setup": true,
+        "preparation": true,
+        "reference_hidden": true,
+        "reference_hidden_runtime_setup": true,
+        "reference_public": true,
+        "reference_public_runtime_setup": true,
+        "seed_hidden_failure": true,
+        "seed_runtime_setup": true
+      },
+      "reference_production_files_changed": [
+        "gohcl/decode.go",
+        "gohcl/schema.go"
+      ],
+      "readiness_json": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/hcl/readiness.json"
+    },
+    {
+      "case_id": "date-fns",
+      "case_path": "evals/edit-2026-10-27/corrected-cases/date-fns",
+      "case_sha256": "4244c3c81603a09b13264f2f5b04d60047f60c1d5139c3f84a707ccbb576f62d",
+      "source_pin": "a9739fb3e5384a810e90d7376446f6d84ecc5029",
+      "source_tree_sha256": "305933d401477b329995b000c964d9d80828533c4af013866cdd42f86e3cc820",
+      "status": "ready",
+      "behavioral_pass": true,
+      "source_review": "pending",
+      "checks": {
+        "baseline_public": true,
+        "baseline_runtime_setup": true,
+        "preparation": true,
+        "reference_hidden": true,
+        "reference_hidden_runtime_setup": true,
+        "reference_public": true,
+        "reference_public_runtime_setup": true,
+        "seed_hidden_failure": true,
+        "seed_runtime_setup": true
+      },
+      "reference_production_files_changed": [
+        "pkgs/core/src/addBusinessDays/index.ts",
+        "pkgs/core/src/differenceInBusinessDays/index.ts"
+      ],
+      "readiness_json": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/date-fns/readiness.json"
+    },
+    {
+      "case_id": "minijinja",
+      "case_path": "evals/edit-2026-10-27/corrected-cases/minijinja",
+      "case_sha256": "9c7b081fd68fe8b0284262d1cf105d780eac91af3e4e7656ad9fc351e637e647",
+      "source_pin": "81787c4eab656f3a4f4e92dea53f303a36f1685c",
+      "source_tree_sha256": "286853b205b2dfa30f70e74245d9b4e32f86a33c2ac0cfb128a3821b4b82e10b",
+      "status": "ready",
+      "behavioral_pass": true,
+      "source_review": "pending",
+      "checks": {
+        "baseline_public": true,
+        "baseline_runtime_setup": true,
+        "preparation": true,
+        "reference_hidden": true,
+        "reference_hidden_runtime_setup": true,
+        "reference_public": true,
+        "reference_public_runtime_setup": true,
+        "seed_hidden_failure": true,
+        "seed_runtime_setup": true
+      },
+      "reference_production_files_changed": [
+        "minijinja-cli/src/command.rs",
+        "minijinja-cli/src/config.rs"
+      ],
+      "readiness_json": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/minijinja/readiness.json"
+    },
+    {
+      "case_id": "sqlglot",
+      "case_path": "evals/edit-2026-10-27/cases/sqlglot",
+      "case_sha256": "1a5a93f77ceb315e8fe41e941c96201d21054fa37895c3464c1919262eead81a",
+      "source_pin": "feb0e08aba28a29590596bb3f5761fbaeb0e98b9",
+      "source_tree_sha256": "67f8d6f079a5fcd3c512ca367ec9c1744e78302b44795b025dc8e90827725b59",
+      "status": "ready",
+      "behavioral_pass": true,
+      "source_review": "pending",
+      "checks": {
+        "baseline_public": true,
+        "baseline_runtime_setup": true,
+        "preparation": true,
+        "reference_hidden": true,
+        "reference_hidden_runtime_setup": true,
+        "reference_public": true,
+        "reference_public_runtime_setup": true,
+        "seed_hidden_failure": true,
+        "seed_runtime_setup": true
+      },
+      "reference_production_files_changed": [
+        "sqlglot/generators/bigquery.py",
+        "sqlglot/parsers/bigquery.py"
+      ],
+      "readiness_json": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/sqlglot/readiness.json"
+    },
+    {
+      "case_id": "commons-lang",
+      "case_path": "evals/edit-2026-10-27/cases/commons-lang",
+      "case_sha256": "a09f9cfab6fb450c742102aaaf5028c58bb9c8a61cf2aca4b4cbeed55f890a14",
+      "source_pin": "a5d6c5ed8847b2b14dacf062b646f94d6cc61a10",
+      "source_tree_sha256": "6a3a572d1f84211a81c0f35e0caf78069900ff6562794ba90afb2f3c7a05d402",
+      "status": "ready",
+      "behavioral_pass": true,
+      "source_review": "pending",
+      "checks": {
+        "baseline_public": true,
+        "baseline_runtime_setup": true,
+        "preparation": true,
+        "reference_hidden": true,
+        "reference_hidden_runtime_setup": true,
+        "reference_public": true,
+        "reference_public_runtime_setup": true,
+        "seed_hidden_failure": true,
+        "seed_runtime_setup": true
+      },
+      "reference_production_files_changed": [
+        "src/main/java/org/apache/commons/lang3/ObjectUtils.java",
+        "src/main/java/org/apache/commons/lang3/compare/ComparableUtils.java"
+      ],
+      "readiness_json": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/readiness.json"
+    },
+    {
+      "case_id": "nodatime",
+      "case_path": "evals/edit-2026-10-27/cases/nodatime",
+      "case_sha256": "615e70088a3c006fdf6cbfa5c0151e4eb339f7e36db2f129f6298945f5c238de",
+      "source_pin": "649ce5a1c8ddf439eaed7b3bf9157882363cb937",
+      "source_tree_sha256": "d809182eef59b2685373f0d7a51da696dcc67cdad291cff70b7180c9d38d5bfc",
+      "status": "ready",
+      "behavioral_pass": true,
+      "source_review": "pending",
+      "checks": {
+        "baseline_public": true,
+        "baseline_runtime_setup": true,
+        "preparation": true,
+        "reference_hidden": true,
+        "reference_hidden_runtime_setup": true,
+        "reference_public": true,
+        "reference_public_runtime_setup": true,
+        "seed_hidden_failure": true,
+        "seed_runtime_setup": true
+      },
+      "reference_production_files_changed": [
+        "src/NodaTime/LocalDate.cs",
+        "src/NodaTime/LocalDateTime.cs"
+      ],
+      "readiness_json": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/nodatime/readiness.json"
+    }
+  ],
+  "retained_commons_initial_failure": {
+    "case_id": "commons-lang",
+    "status": "not_ready",
+    "readiness_error": "EvaluationError: pinned upstream public checks did not pass",
+    "exit_status": 0,
+    "missing_markers": [
+      "Tests run: 130, Failures: 0, Errors: 0, Skipped: 0"
+    ],
+    "raw_stdout": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/results/case-corrections/readiness-v2/commons-lang/baseline-public-stdout.log",
+    "raw_stderr": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/results/case-corrections/readiness-v2/commons-lang/baseline-public-stderr.log",
+    "external_readiness_json": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang/readiness.json",
+    "final_retry_readiness_json": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/readiness.json"
+  },
+  "nodatime_purity_corrected_copy": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/results/case-corrections/nodatime-purity-correction.json",
+  "source_review": "pending"
+}

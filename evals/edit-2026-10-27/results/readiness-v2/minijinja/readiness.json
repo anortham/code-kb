@@ -1,0 +1,208 @@
+{
+  "behavioral_pass": true,
+  "case_id": "minijinja",
+  "case_sha256": "9c7b081fd68fe8b0284262d1cf105d780eac91af3e4e7656ad9fc351e637e647",
+  "checks": {
+    "baseline_public": {
+      "commands": [
+        {
+          "command_id": "minijinja_cli_regressions",
+          "elapsed_seconds": 8.093022,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/minijinja/evidence/baseline-public-00-minijinja_cli_regressions/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/minijinja/evidence/baseline-public-00-minijinja_cli_regressions/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "baseline_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "restore_cargo_cache",
+          "elapsed_seconds": 1.117369,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/minijinja/evidence/runtime-baseline-00-restore_cargo_cache/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/minijinja/evidence/runtime-baseline-00-restore_cargo_cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "preparation": {
+      "commands": [],
+      "mode": "reused-inputs",
+      "passed": true
+    },
+    "reference_hidden": {
+      "commands": [
+        {
+          "command_id": "autoescape_suffix_acceptance",
+          "elapsed_seconds": 8.862108,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/minijinja/evidence/reference-hidden-00-autoescape_suffix_acceptance/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/minijinja/evidence/reference-hidden-00-autoescape_suffix_acceptance/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_hidden_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "restore_cargo_cache",
+          "elapsed_seconds": 1.317629,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/minijinja/evidence/runtime-reference-hidden-00-restore_cargo_cache/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/minijinja/evidence/runtime-reference-hidden-00-restore_cargo_cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_public": {
+      "commands": [
+        {
+          "command_id": "minijinja_cli_regressions",
+          "elapsed_seconds": 8.641663,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/minijinja/evidence/reference-public-00-minijinja_cli_regressions/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/minijinja/evidence/reference-public-00-minijinja_cli_regressions/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_public_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "restore_cargo_cache",
+          "elapsed_seconds": 1.067556,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/minijinja/evidence/runtime-reference-public-00-restore_cargo_cache/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/minijinja/evidence/runtime-reference-public-00-restore_cargo_cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "seed_hidden_failure": {
+      "commands": [
+        {
+          "command_id": "autoescape_suffix_acceptance",
+          "elapsed_seconds": 7.588132,
+          "exit_status": 101,
+          "expected_output_missing": [
+            "test automatic_mode_uses_the_output_suffix_before_a_template_wrapper ... ok",
+            "test long_help_documents_template_wrapper_suffixes ... ok",
+            "test result: ok. 3 passed"
+          ],
+          "passed": false,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/minijinja/evidence/seed-hidden-00-autoescape_suffix_acceptance/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/minijinja/evidence/seed-hidden-00-autoescape_suffix_acceptance/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "seed_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "restore_cargo_cache",
+          "elapsed_seconds": 1.117684,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/minijinja/evidence/runtime-seed-00-restore_cargo_cache/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/minijinja/evidence/runtime-seed-00-restore_cargo_cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    }
+  },
+  "created_utc": "2026-10-27T21:33:38Z",
+  "dependencies": {
+    "cargo-cache": "4c2e829eb200ae3a7a7a58d6ac04dea47e7cd07c48269004102035e452b701bd"
+  },
+  "readiness_error": null,
+  "reference_bundle_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/minijinja/evidence/reference-bundle",
+  "reference_digest": "9d6672df8b0a101b20959e5dfcc5fda47f5f31428b6d5f26d84242af518a0419",
+  "reference_production_files_changed": [
+    "minijinja-cli/src/command.rs",
+    "minijinja-cli/src/config.rs"
+  ],
+  "repo_id": "minijinja",
+  "schema": 1,
+  "seed_digest": "5a4833dcd8e450eefbf86d38f2074e2fc5077d90635714494a8403e6894c82c2",
+  "seed_project_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds-v2/minijinja",
+  "source_pin": "81787c4eab656f3a4f4e92dea53f303a36f1685c",
+  "source_review": "passed",
+  "source_tree_sha256": "286853b205b2dfa30f70e74245d9b4e32f86a33c2ac0cfb128a3821b4b82e10b",
+  "status": "ready",
+  "raw_readiness_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/minijinja/readiness.json",
+  "raw_readiness_sha256": "1c2fa3b96f6eef709f068eac8c48c5cbf5b32342f7a81ff7a63284b5bb763afe",
+  "source_review_path": "results/readiness-v2/minijinja/source-review.json",
+  "source_review_sha256": "cd155ce12a5a3e682b220b561360533b6433b38b8a77d4d2ba79d01920228206",
+  "acceptance_basis": "Live checks plus unchanged reviewed task/reference and explicit correction/seed-equivalence audit; raw pending-review result preserved."
+}

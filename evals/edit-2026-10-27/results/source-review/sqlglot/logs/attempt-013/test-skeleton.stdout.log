@@ -1,0 +1,9 @@
+// File: tests/dialects/test_bigquery_timestamp_bucket.py (Lines 1-46)
+
+class TestBigQueryTimestampBucket extends Validator {
+    dialect = "bigquery"; // L6-6
+    def test_parse_argument_order(self) { /* 13 lines hidden: L9-L21 */ }
+    def test_generate_argument_order(self) { /* 11 lines hidden: L24-L34 */ }
+    def test_round_trip(self) { /* 10 lines hidden: L37-L46 */ }
+} // L5-46
+

@@ -1,0 +1,77 @@
+--- seed/sqlglot/parsers/bigquery.py
++++ grade-public/sqlglot/parsers/bigquery.py
+@@ -303,8 +303,8 @@
+         "TIMESTAMP_ADD": build_date_delta_with_interval(exp.TimestampAdd),
+         "TIMESTAMP_SUB": build_date_delta_with_interval(exp.TimestampSub),
+         "TIMESTAMP_BUCKET": lambda args: exp.DateBin(
+-            this=seq_get(args, 0),
+-            expression=seq_get(args, 1),
++            this=seq_get(args, 1),
++            expression=seq_get(args, 0),
+             origin=seq_get(args, 2),
+         ),
+         "TIMESTAMP_MICROS": lambda args: exp.UnixToTime(
+
+--- seed/sqlglot/generators/bigquery.py
++++ grade-public/sqlglot/generators/bigquery.py
+@@ -420,6 +420,9 @@
+         exp.Create: _create_sql,
+         exp.CTE: transforms.preprocess([_pushdown_cte_column_names]),
+         exp.DateAdd: date_add_interval_sql("DATE", "ADD"),
++        exp.DateBin: lambda self, e: self.func(
++            "TIMESTAMP_BUCKET", e.expression, e.this, e.args.get("origin")
++        ),
+         exp.DateDiff: lambda self, e: self.func("DATE_DIFF", e.this, e.expression, unit_to_var(e)),
+         exp.DateFromParts: rename_func("DATE"),
+         exp.DateStrToDate: datestrtodate_sql,
+
+--- seed/tests/dialects/test_bigquery_timestamp_bucket.py
++++ grade-public/tests/dialects/test_bigquery_timestamp_bucket.py
+@@ -0,0 +1,46 @@
++from sqlglot import exp, parse_one
++from tests.dialects.test_dialect import Validator
++
++
++class TestBigQueryTimestampBucket(Validator):
++    dialect = "bigquery"
++
++    def test_parse_argument_order(self):
++        for origin in (None, "bucket_origin"):
++            with self.subTest(origin=origin):
++                args = "ts, INTERVAL 15 MINUTE"
++                if origin:
++                    args += f", {origin}"
++                expression = parse_one(f"TIMESTAMP_BUCKET({args})", dialect="bigquery")
++
++                self.assertIsInstance(expression, exp.DateBin)
++                self.assertEqual(expression.this, parse_one("INTERVAL 15 MINUTE"))
++                self.assertEqual(expression.expression, exp.column("ts"))
++                self.assertEqual(
++                    expression.args.get("origin"), exp.column(origin) if origin else None
++                )
++
++    def test_generate_argument_order(self):
++        for origin in (None, "bucket_origin"):
++            with self.subTest(origin=origin):
++                expression = exp.DateBin(
++                    this=parse_one("INTERVAL 15 MINUTE"),
++                    expression=exp.column("ts"),
++                    origin=exp.column(origin) if origin else None,
++                )
++                args = "ts, INTERVAL '15' MINUTE"
++                if origin:
++                    args += f", {origin}"
++                self.assertEqual(expression.sql("bigquery"), f"TIMESTAMP_BUCKET({args})")
++
++    def test_round_trip(self):
++        for sql in (
++            "SELECT TIMESTAMP_BUCKET(ts, INTERVAL '15' MINUTE)",
++            "SELECT TIMESTAMP_BUCKET(ts, INTERVAL '15' MINUTE, bucket_origin)",
++            "SELECT TIMESTAMP_BUCKET(TIMESTAMP('2024-01-02 03:04:05'), INTERVAL '1' HOUR)",
++            "SELECT TIMESTAMP_BUCKET(TIMESTAMP('2024-01-02 03:04:05'), "
++            "INTERVAL '1' HOUR, TIMESTAMP('2024-01-01 00:00:00'))",
++        ):
++            with self.subTest(sql=sql):
++                expression = self.validate_identity(sql)
++                self.assertEqual(parse_one(expression.sql("bigquery"), dialect="bigquery"), expression)
+

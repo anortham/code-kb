@@ -1,0 +1,15 @@
+References to function `create_env` (minijinja-cli/src/cli.rs:186)
+Sites: 2 · proven 1 · likely 0 · unresolved 0 · excluded 1
+Text: `create_env` is on 7 lines: 2 sites, 2 definitions, 0 imports, 3 text only.
+
+Proven (1):
+- `execute` [minijinja-cli/src/cli.rs:442] (kind: calls; same file; 5 args)
+Excluded (1):
+- `test_basic` [minijinja/tests/test_loader.rs:18] (kind: calls; resolves to `create_env` (minijinja/tests/test_loader.rs:9); 0 args)
+Text only (3): docs, comments, strings, or code the index did not record
+  UPDATING.md: 94
+  minijinja/src/environment.rs: 216
+  minijinja/src/loader.rs: 437
+Not visible to this index: calls inside macro bodies.
+
+--- STDERR ---

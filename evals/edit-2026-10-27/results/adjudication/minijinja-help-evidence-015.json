@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "schedule_index": 15,
+  "effective_recovery_sha256": "46b62b9d53a2c8d1fd976e5664976a76657951a7cdf955b9ae31ca816cfcd351",
+  "actual_help": "Suffix matching ignores ASCII letter case.",
+  "classification": "same predeclared ASCII-case wording false negative",
+  "functional_hidden_checks": "both passed; only prose allowlist fails",
+  "uniform_correction": "Recognize accurate ignore/ignores/ignoring ASCII-letter-case family and without-regard variants, with distinct suffix boundaries and unchanged negative/scope checks. Apply to all four original Mini patches."
+}

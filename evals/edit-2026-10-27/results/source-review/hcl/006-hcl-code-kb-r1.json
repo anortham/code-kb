@@ -1,0 +1,60 @@
+{
+  "schema": 1,
+  "schedule_index": 6,
+  "case_id": "hcl",
+  "arm": "code-kb",
+  "repeat": 1,
+  "raw_attempt_sha256": "a0072ae47be68733a3acaa259e495f4017dae9c953f404dc7bccc4af7b2a53a4",
+  "bundle_json_sha256": "2dde4252eac016561a49eb2d2acfbef2caa65593b0d4a0ed79f8d152f98f8db3",
+  "source_review": "passed",
+  "findings": [
+    {
+      "severity": "nonblocking",
+      "category": "evaluator_artifact_capture",
+      "responsibility": "case_configuration",
+      "finding": "The bundle includes the two canonical temporary executables produced by the protected specsuite tests. The HCL case declares only `.code-kb` as a generated root, so these outputs are not filtered from the captured bundle.",
+      "evidence": [
+        "Trusted protected specsuite/spec_test.go:18-30 has TestMain build the test executables before running tests; :33-41 runs goBuild for tmp_hcldec and tmp_hclspecsuite; :47-52 executes both; :94-103 invokes go build -o.",
+        "Trusted protected specsuite/.gitignore:1 contains tmp_*.",
+        "evals/edit-2026-10-27/cases/hcl/case.json declares generated_roots as only [\".code-kb\"].",
+        "Attempt trace at attempts/006-hcl-code-kb-r1/evidence/agent/stdout.log event item_30 records the missing-ld failure; item_33 records CGO_ENABLED=0 go test ./... succeeding, including specsuite.",
+        "The immutable attempt bundle contains these canonical outputs; this is generated-root capture configuration, not an intentional source change by the agent."
+      ]
+    }
+  ],
+  "behavior_review": "The production changes correctly make hcl.Expression attributes optional and synthesize a dynamic-null StaticExpr for an omitted expression. Existing scalar and pointer behavior is preserved. The added tests cover native and JSON bodies, prepopulated targets, expression range/value, scalar requiredness, and pointer nil behavior.",
+  "changed_production_files": [
+    "gohcl/schema.go",
+    "gohcl/decode.go"
+  ],
+  "added_test_files": [
+    "gohcl/omitted_expression_test.go"
+  ],
+  "captured_generated_outputs": [
+    {
+      "path": "specsuite/tmp_hcldec",
+      "size": 7290044,
+      "sha256": "0e5dc1e729b8d864908006196c76fc9076ec775229d6cd620a42af4545eec1a5"
+    },
+    {
+      "path": "specsuite/tmp_hclspecsuite",
+      "size": 8335672,
+      "sha256": "043825cc5a2b185739a5e8fdcdafc5363709bcaa901f6f8ab12a369a6bb65d7f"
+    }
+  ],
+  "grade_evidence": {
+    "public": {
+      "exit_status": 0,
+      "test_execution_observed": true,
+      "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/006-hcl-code-kb-r1/evidence/grade/grade-008-stdout_log.log"
+    },
+    "hidden": {
+      "exit_status": 0,
+      "test_execution_observed": true,
+      "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/006-hcl-code-kb-r1/evidence/grade/grade-010-stdout_log.log"
+    },
+    "full_suite_note": "The agent log records `go test ./...` failing because the container cannot find ld, then `CGO_ENABLED=0 go test ./...` passing.",
+    "protection_status": "unchanged",
+    "patch_valid": true
+  }
+}

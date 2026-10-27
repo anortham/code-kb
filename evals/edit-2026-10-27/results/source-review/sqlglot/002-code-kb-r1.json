@@ -1,0 +1,174 @@
+{
+  "acceptance_status": "not_assessed_root_owns_synthesis",
+  "added_test_files": [
+    "tests/dialects/test_bigquery_timestamp_bucket.py"
+  ],
+  "arm": "code-kb",
+  "attempt_status": "completed",
+  "bundle_json_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/002-sqlglot-code-kb-r1/bundle/bundle.json",
+  "bundle_json_sha256": "6bd13fde536f57fd4de9693fc993d5addd8eb770a027f03981c5b53973e90f27",
+  "case_id": "sqlglot",
+  "changed_production_files": [
+    "sqlglot/generators/bigquery.py",
+    "sqlglot/parsers/bigquery.py"
+  ],
+  "evidence_paths": [
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/sqlglot/logs/attempt-002/candidate-vs-seed.diff",
+      "supports": "Production edits and added tests compared with the exact attempt seed."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/sqlglot/logs/attempt-002/parser-skeleton.stdout.log",
+      "supports": "Candidate parser mapping."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/sqlglot/logs/attempt-002/generator-skeleton.stdout.log",
+      "supports": "Candidate generator transform."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/sqlglot/logs/attempt-002/datebin-context.stdout.log",
+      "supports": "Canonical DateBin this/expression/origin contract."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/sqlglot/logs/attempt-002/datebin-callers.stdout.log",
+      "supports": "Parser/generator references and related added tests."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/sqlglot/logs/attempt-002/test_parse_argument_order-body.stdout.log",
+      "supports": "New test checks DateBin width, timestamp, and optional origin."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/sqlglot/logs/attempt-002/test_generate_argument_order-body.stdout.log",
+      "supports": "New test checks generation order and both arities."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/sqlglot/logs/attempt-002/test_round_trip-body.stdout.log",
+      "supports": "New test checks parse-to-generate identity for both arities."
+    },
+    {
+      "path": "evals/edit-2026-10-27/results/source-review/sqlglot/logs/attempt-002/validate-identity-body.stdout.log",
+      "supports": "Validator.validate_identity asserts generated SQL matches source SQL."
+    },
+    {
+      "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/002-sqlglot-code-kb-r1/grade/grade.json",
+      "supports": "Fresh public and hidden replay results."
+    },
+    {
+      "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/002-sqlglot-code-kb-r1/evidence/agent/stdout.log",
+      "supports": "Captured in-trial added-test and combined-run output."
+    },
+    {
+      "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/002-sqlglot-code-kb-r1/evidence/answer.txt",
+      "supports": "Captured final test/tooling summary."
+    }
+  ],
+  "findings": [],
+  "raw_attempt_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/002-sqlglot-code-kb-r1/attempt.json",
+  "raw_attempt_sha256": "dee782c437139c69625b2ace978966288adff8943ce340ff274815d8d2c98e15",
+  "repeat": 1,
+  "schedule_index": 2,
+  "schema": 1,
+  "source_review": "passed",
+  "source_review_basis": "The parser maps timestamp to DateBin.expression and bucket width to DateBin.this; the generator restores the same timestamp,width,optional-origin order. The new tests independently assert parsing and generation argument order and use Validator.validate_identity for both two- and three-argument round trips. This matches the request and the seeded DateBin contract.",
+  "trusted_grade": {
+    "behavioral_pass": true,
+    "hidden_passed": true,
+    "patch_valid": true,
+    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/002-sqlglot-code-kb-r1/grade/grade.json",
+    "protection_status": "unchanged",
+    "public_passed": true,
+    "replay_valid": true,
+    "sha256": "6fed90f9f69047affc9a438749a1932f9d889793d893c17077ef9c81b229f30d"
+  },
+  "verification_commands": [
+    {
+      "argv": [
+        "/usr/bin/env",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "PYTHONPATH=/state/python-site:/workspace/project",
+        "/usr/bin/python3",
+        "-m",
+        "unittest",
+        "tests.dialects.test_bigquery"
+      ],
+      "elapsed_seconds": 0.816084,
+      "exit_status": 0,
+      "expected_markers": [
+        "Ran 64 tests",
+        "OK"
+      ],
+      "kind": "trusted_fresh_grade_public",
+      "result": "passed",
+      "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/002-sqlglot-code-kb-r1/evidence/grade/grade-005-stderr_log.log",
+      "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/002-sqlglot-code-kb-r1/evidence/grade/grade-004-stdout_log.log"
+    },
+    {
+      "argv": [
+        "/usr/bin/env",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "PYTHONPATH=/state/python-site:/workspace/project",
+        "/usr/bin/python3",
+        "-m",
+        "unittest",
+        "tests.dialects.test_edit_eval_timestamp_bucket"
+      ],
+      "elapsed_seconds": 0.315058,
+      "exit_status": 0,
+      "expected_markers": [
+        "Ran 2 tests",
+        "OK"
+      ],
+      "kind": "trusted_fresh_grade_hidden",
+      "result": "passed",
+      "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/002-sqlglot-code-kb-r1/evidence/grade/grade-007-stderr_log.log",
+      "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/002-sqlglot-code-kb-r1/evidence/grade/grade-006-stdout_log.log"
+    },
+    {
+      "argv": [
+        "/usr/bin/env",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "PYTHONPATH=/state/python-site:/workspace/project",
+        "/usr/bin/python3",
+        "-m",
+        "unittest",
+        "tests.dialects.test_bigquery",
+        "tests.dialects.test_bigquery_timestamp_bucket"
+      ],
+      "evidence_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/002-sqlglot-code-kb-r1/evidence/agent/stdout.log",
+      "exit_status": 0,
+      "kind": "captured_agent_added_public_test_run",
+      "output_marker": "Ran 67 tests in 0.447s; OK",
+      "result": "captured combined canonical+added-test command passed 67 tests"
+    },
+    {
+      "argv": [
+        "/usr/bin/env",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "PYTHONPATH=/state/python-site:/workspace/project",
+        "/usr/bin/python3",
+        "-m",
+        "unittest",
+        "tests.dialects.test_bigquery_timestamp_bucket"
+      ],
+      "kind": "independent_added_public_test_verification",
+      "network": "disabled",
+      "project": "grade/work/public-project",
+      "result": "pending_campaign_completion; no post hoc run during active measured campaign",
+      "state": "grade/work/state-grade-public"
+    },
+    {
+      "evidence_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/002-sqlglot-code-kb-r1/evidence/agent/stdout.log",
+      "kind": "additional_full_suite",
+      "result": "not clean: two import errors due to missing duckdb; outside the declared narrow public/hidden gate"
+    },
+    {
+      "argv": [
+        "make",
+        "check"
+      ],
+      "evidence_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/002-sqlglot-code-kb-r1/evidence/answer.txt",
+      "kind": "style_check",
+      "result": "blocked: pre-commit could not execute due to permission denied"
+    }
+  ]
+}

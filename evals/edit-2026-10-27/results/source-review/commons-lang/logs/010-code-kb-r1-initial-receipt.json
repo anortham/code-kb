@@ -1,0 +1,78 @@
+{
+  "schema": 1,
+  "reviewed_at_utc": "2026-10-27T20:35:34Z",
+  "schedule_index": 10,
+  "case_id": "commons-lang",
+  "arm": "code-kb",
+  "repeat": 1,
+  "raw_attempt_sha256": "7881356ce123607f5530b88a43e6a9bf8021a0cb869ca21e84559efb8ae8f383",
+  "bundle_json_sha256": "cca1d3af62c0c1ce572858f1881329be3b762bf15586cfd77107744eebaf992e",
+  "source_review": "failed",
+  "findings": [
+    {
+      "severity": "must-fix",
+      "finding": "The added test contains a line comment, contrary to the repository instruction that tests have zero comments. The test name already states the behavior, and the comment can be removed without losing the exercised assertion.",
+      "evidence": [
+        "src/test/java/org/apache/commons/lang3/compare/ComparableUtilsMigrationTest.java:51 contains `// LocalDate implements Comparable<ChronoLocalDate>, rather than Comparable<LocalDate>.`",
+        "Code-kb CLI skeleton/body confirmed this is the only explanatory test comment; the project's license header remains intact."
+      ]
+    },
+    {
+      "severity": "informational",
+      "finding": "Production behavior meets the requested migration. Both new compare overloads and the new varargs max/min use Comparable<? super T>; null order is controlled only by nullGreater; non-null values use compareTo. Varargs skip nulls and retain the first equal value. The prior two-argument ComparableUtils max/min remain, and the ObjectUtils signatures delegate to ComparableUtils.",
+      "evidence": [
+        "Code-kb CLI body/context on the completed grade public-project showed ComparableUtils.compare at lines 163-189, max at 261-284, min at 299-322, and ObjectUtils delegates at lines 292-310, 1016-1019, and 1076-1079.",
+        "Read-only seed-to-captured source comparison showed the existing two-argument ComparableUtils max/min methods preserve their prior selection behavior; existing ObjectUtils APIs remain as direct delegates.",
+        "Code-kb refs showed the pre-existing ObjectUtilsTest#testMax callers, the new test callers, and no removed caller paths."
+      ]
+    },
+    {
+      "severity": "informational",
+      "finding": "The added test covers null ordering, Comparable-to-supertype generic bounds, null/empty/all-null varargs, null skipping, tie identity, and existing ObjectUtils delegation. The trusted grade did not select this new file; its grade-mode run is queued after the scored campaign.",
+      "evidence": [
+        "The trusted public grade ran 130 canonical regressions and the trusted hidden grade ran all five injected contract tests.",
+        "Neither trusted grade command selected src/test/java/org/apache/commons/lang3/compare/ComparableUtilsMigrationTest.java."
+      ],
+      "verification_status": "additional trusted execution pending after campaign"
+    }
+  ],
+  "changed_production_files": [
+    "src/main/java/org/apache/commons/lang3/ObjectUtils.java",
+    "src/main/java/org/apache/commons/lang3/compare/ComparableUtils.java"
+  ],
+  "added_tests": [
+    "src/test/java/org/apache/commons/lang3/compare/ComparableUtilsMigrationTest.java"
+  ],
+  "executed_verification": [
+    {
+      "kind": "trusted_public_grade",
+      "command_id": "commons-public-comparable-regressions",
+      "status": "passed",
+      "observed_tests": 130,
+      "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/010-commons-lang-code-kb-r1/evidence/grade/grade-012-stdout_log.log"
+    },
+    {
+      "kind": "trusted_hidden_grade",
+      "command_id": "commons-comparable-migration-contract",
+      "status": "passed",
+      "observed_tests": 5,
+      "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/010-commons-lang-code-kb-r1/evidence/grade/grade-014-stdout_log.log"
+    },
+    {
+      "kind": "additional_test_run",
+      "status": "queued_after_campaign",
+      "reason": "Avoid compiler/test work concurrent with scored trials; the trusted grade selectors did not include the agent-added test.",
+      "proposed_argv": [
+        "/usr/bin/env",
+        "JAVA_HOME=/tools/java",
+        "PATH=/tools/java/bin:/tools/maven/bin:/usr/bin:/bin",
+        "/tools/maven/bin/mvn",
+        "-B",
+        "-o",
+        "-Dmaven.repo.local=/state/commons-m2",
+        "-Dtest=ComparableUtilsMigrationTest",
+        "test"
+      ]
+    }
+  ]
+}

@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from scripts import completed_edit_campaign
+from scripts import completed_edit_campaign, comparison_campaign
 from scripts import edit_evaluation, edit_snapshot
 from scripts.completed_edit_campaign import CampaignError, run_campaign
 
@@ -199,6 +199,8 @@ int main(int argc, char **argv) {
         code_kb = intelligence / "code-kb"
         julie = intelligence / "julie-extract"
         companion = self.root / "codex-code-mode-host"
+        redactor = self.root / "outbound-redactor"
+        redactor_calls = self.root / "redactor-calls"
         intelligence.mkdir()
         shutil.copyfile(self.fake_codex, code_kb)
         self.write(julie, "fake extractor\n")
@@ -206,6 +208,8 @@ int main(int argc, char **argv) {
         code_kb.chmod(0o700)
         julie.chmod(0o700)
         companion.chmod(0o700)
+        self.write(redactor, f"#!/bin/sh\nprintf x >> '{redactor_calls}'\nexec sed -E 's/key: str/key: <REDACTED>/g; s/SYNTHETIC_[A-Za-z0-9_-]+/<REDACTED>/g; s/synthetic-[A-Za-z0-9_-]+/<REDACTED>/g'\n")
+        redactor.chmod(0o700)
         bindings = {
             "schema": 1,
             "intelligence_tools": str(intelligence),
@@ -231,7 +235,7 @@ int main(int argc, char **argv) {
         auth = self.root / "auth.json"
         self.write(auth, "{}")
         auth.chmod(0o600)
-        self.fixture_artifacts = {"codex": self.fake_codex, "codex_code_mode_host": companion, "campaign_runner": Path(completed_edit_campaign.__file__).resolve(), "trace_metrics": ROOT / "scripts/comparison_metrics.py", "profiles": profiles, "corpus": corpus, "binary": code_kb, "extractor": julie, "dependencies_fixture_fixture-cache": dependencies, "tools_fixture_rust": rust}
+        self.fixture_artifacts = {"codex": self.fake_codex, "codex_code_mode_host": companion, "campaign_runner": Path(completed_edit_campaign.__file__).resolve(), "trace_metrics": ROOT / "scripts/comparison_metrics.py", "outbound_redactor": redactor, "profiles": profiles, "corpus": corpus, "binary": code_kb, "extractor": julie, "dependencies_fixture_fixture-cache": dependencies, "tools_fixture_rust": rust}
         self.fixture_bindings_path = bindings_path
         self.fixture_manifest_path = manifest_path
         self.fixture_output = self.root / "results"
@@ -239,6 +243,7 @@ int main(int argc, char **argv) {
         self.fixture_seed = seed_project
         self.fixture_source = source_root
         self.fixture_original_source = "def lookup(key: str):\n    return key\n"
+        self.fixture_redactor_calls = redactor_calls
         return case
 
     def execute(self, *, schedule_indices, timeout=None):
@@ -246,8 +251,8 @@ int main(int argc, char **argv) {
             manifest = json.loads(self.fixture_manifest_path.read_text())
             manifest["controls"]["timeout_seconds"] = timeout
             self.fixture_manifest_path.write_text(json.dumps(manifest))
-        with patch.object(edit_evaluation, "validate_manifest", return_value={"valid": True, "case_count": 1, "scored_calls": 2}):
-            return run_campaign(
+        with patch.object(edit_evaluation, "validate_manifest", return_value={"valid": True, "case_count": 1, "scored_calls": 2}) as validate_manifest:
+            result = run_campaign(
                 self.fixture_manifest_path,
                 self.fixture_artifacts,
                 self.fixture_bindings_path,
@@ -255,6 +260,8 @@ int main(int argc, char **argv) {
                 self.fixture_auth,
                 schedule_indices=schedule_indices,
             )
+            self.last_validation_artifacts = validate_manifest.call_args.kwargs["artifact_paths"]
+            return result
 
     def refresh_case_binding(self):
         manifest = json.loads(self.fixture_manifest_path.read_text())
@@ -565,8 +572,9 @@ int main(int argc, char **argv) {
         )
         raw_path.write_bytes(raw)
 
-        trace = completed_edit_campaign._safe_trace(raw_path, retained_path, jsonl=True)
-        metrics = completed_edit_campaign._trace_metrics(raw)
+        redactor = self.fixture_artifacts["outbound_redactor"]
+        trace = completed_edit_campaign._safe_trace(raw_path, retained_path, jsonl=True, redactor=redactor)
+        metrics = completed_edit_campaign._trace_metrics(raw, redactor=redactor)
 
         events = [json.loads(line) for line in retained_path.read_text().splitlines()]
         self.assertEqual(len(events), 2)
@@ -581,6 +589,147 @@ int main(int argc, char **argv) {
         self.assertEqual(metrics["mcp_calls"][0]["tool"], "lookup_symbol")
         self.assertEqual(metrics["mcp_calls"][0]["arguments"]["api_key"], "<REDACTED>")
         self.assertNotIn("SYNTHETIC_TRACE_SECRET", json.dumps(metrics))
+
+    def test_completed_launcher_uses_the_validated_redactor_artifact(self):
+        result = self.execute(schedule_indices=[1])
+        outcome = result["runs"][0]["outcome"]
+
+        self.assertGreater(self.fixture_redactor_calls.stat().st_size, 0)
+        self.assertEqual(self.last_validation_artifacts["outbound_redactor"], self.fixture_artifacts["outbound_redactor"])
+        self.assertIs(completed_edit_campaign.comparison_campaign, comparison_campaign)
+        self.assertEqual(str(comparison_campaign.REDACTOR), "redact-outbound")
+        self.assertEqual(outcome["source_audit"]["redactor_status"], "complete")
+
+    def test_completed_launcher_requires_an_executable_redactor_artifact(self):
+        redactor = self.fixture_artifacts["outbound_redactor"]
+        redactor.chmod(0o600)
+
+        with self.assertRaisesRegex(CampaignError, "outbound redactor must be an executable"):
+            self.execute(schedule_indices=[1])
+
+    def test_failed_log_retention_keeps_raw_files_without_missing_safe_paths(self):
+        raw_command = self.root / "command.stdout"
+        raw_grade = self.root / "grade.stdout"
+        raw_command.write_text("private command output")
+        raw_grade.write_text("private grade output")
+        records = [{"stdout_log": str(raw_command)}]
+        grade = {"checks": {"public": {"commands": [{"stdout_log": str(raw_grade)}]}}}
+
+        def failed_redactor(payload):
+            raise CampaignError("outbound redaction failed")
+
+        completed_edit_campaign._sanitize_command_records(records, self.root / "safe-command", "setup", redactor=failed_redactor)
+        completed_edit_campaign._sanitize_grade_logs(grade, self.root / "safe-grade", redactor=failed_redactor)
+
+        command_record = records[0]
+        grade_record = grade["checks"]["public"]["commands"][0]
+        self.assertEqual(command_record["stdout_log"], str(raw_command))
+        self.assertEqual(grade_record["stdout_log"], str(raw_grade))
+        self.assertTrue(raw_command.is_file())
+        self.assertTrue(raw_grade.is_file())
+        self.assertEqual(command_record["retained_traces"]["stdout_log"]["status"], "unavailable")
+        self.assertTrue(command_record["retained_traces"]["stdout_log"]["raw_retained"])
+        self.assertEqual(grade_record["retained_traces"]["stdout_log"]["status"], "unavailable")
+        self.assertTrue(grade_record["retained_traces"]["stdout_log"]["raw_retained"])
+        self.assertFalse((self.root / "safe-command/setup-00-stdout_log.log").exists())
+        self.assertFalse((self.root / "safe-grade/grade-000-stdout_log.log").exists())
+
+    def test_trace_read_failure_reports_unavailable_and_keeps_raw_file(self):
+        raw_path = self.root / "unreadable.stdout"
+        raw_path.write_text("private trace")
+
+        with patch.object(Path, "read_bytes", side_effect=OSError("injected trace read failure")):
+            trace = completed_edit_campaign._safe_trace(raw_path, self.root / "safe.stdout", redactor=lambda payload: payload)
+
+        self.assertEqual(trace["status"], "unavailable")
+        self.assertEqual(trace["error"], "injected trace read failure")
+        self.assertTrue(trace["raw_retained"])
+        self.assertTrue(raw_path.is_file())
+        self.assertIsNone(trace["path"])
+
+    def test_successful_log_retention_replaces_and_removes_raw_files(self):
+        raw_command = self.root / "successful-command.stdout"
+        raw_grade = self.root / "successful-grade.stdout"
+        raw_command.write_text("command output")
+        raw_grade.write_text("grade output")
+        records = [{"stdout_log": str(raw_command)}]
+        grade = {"checks": {"public": {"commands": [{"stdout_log": str(raw_grade)}]}}}
+
+        completed_edit_campaign._sanitize_command_records(records, self.root / "safe-command", "setup", redactor=lambda payload: payload)
+        completed_edit_campaign._sanitize_grade_logs(grade, self.root / "safe-grade", redactor=lambda payload: payload)
+        completed_edit_campaign._sanitize_command_records(records, self.root / "safe-command", "setup", redactor=lambda payload: payload)
+        completed_edit_campaign._sanitize_grade_logs(grade, self.root / "safe-grade", redactor=lambda payload: payload)
+
+        command_record = records[0]
+        grade_record = grade["checks"]["public"]["commands"][0]
+        self.assertFalse(raw_command.exists())
+        self.assertFalse(raw_grade.exists())
+        self.assertTrue(Path(command_record["stdout_log"]).is_file())
+        self.assertTrue(Path(grade_record["stdout_log"]).is_file())
+        self.assertEqual(command_record["retained_traces"]["stdout_log"]["status"], "complete")
+        self.assertEqual(grade_record["retained_traces"]["stdout_log"]["status"], "complete")
+
+    def test_grader_interruption_keeps_timing_metadata_and_does_not_redispatch(self):
+        with patch.object(edit_evaluation, "replay_and_grade", side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                self.execute(schedule_indices=[2])
+
+        attempt = self.fixture_output / "attempts/002-fixture-code-kb-r1"
+        status_path = attempt / "status.json"
+        saved = json.loads(status_path.read_text())
+        invocation_log = attempt / "work/state-agent/fake-invocations"
+        invocations_before_resume = invocation_log.read_text()
+
+        self.assertEqual(saved["state"], "grading")
+        self.assertNotEqual(saved["source_audit"]["source_sha256"], saved["source_audit"]["redacted_sha256"])
+        self.assertEqual(saved["source_audit"]["redactor_status"], "complete")
+        self.assertEqual(len(saved["runtime_setup"]), 1)
+        self.assertTrue(saved["runtime_setup"][0]["passed"])
+        self.assertEqual(saved["indexing"]["status"], "completed")
+        self.assertIsInstance(saved["timing"]["agent_wall_seconds"], (int, float))
+        self.assertIsInstance(saved["timing"]["index_wall_seconds"], (int, float))
+        self.assertTrue(saved["execution"]["turn_completed_event"])
+        self.assertEqual(saved["execution"]["exit_status"], 0)
+        self.assertNotIn("SYNTHETIC_TRACE_SECRET", status_path.read_text())
+        self.assertNotIn("Implemented lookup", status_path.read_text())
+
+        resumed = self.execute(schedule_indices=[2])
+
+        self.assertEqual(resumed["runs"][0]["slot_state"], "in_progress")
+        self.assertEqual(invocation_log.read_text(), invocations_before_resume)
+
+    def test_trace_write_failure_preserves_private_logs_and_resume_does_not_redispatch(self):
+        with patch.object(completed_edit_campaign, "_atomic_trace_write", side_effect=OSError("injected trace write failure")):
+            with patch.object(edit_evaluation, "replay_and_grade", side_effect=KeyboardInterrupt):
+                with self.assertRaises(KeyboardInterrupt):
+                    self.execute(schedule_indices=[1])
+
+        attempt = self.fixture_output / "attempts/001-fixture-native-r1"
+        private_root = attempt / "private-raw"
+        raw_logs = private_root / "agent-output"
+        stdout = raw_logs / "stdout.log"
+        stderr = raw_logs / "stderr.log"
+        status_path = attempt / "status.json"
+        saved = json.loads(status_path.read_text())
+        invocation_log = attempt / "work/state-agent/fake-invocations"
+        invocations_before_resume = invocation_log.read_text()
+
+        self.assertEqual(saved["state"], "grading")
+        self.assertEqual(saved["execution"]["stdout_redaction"]["status"], "unavailable")
+        self.assertEqual(saved["execution"]["stderr_redaction"]["status"], "unavailable")
+        self.assertTrue(saved["execution"]["stdout_redaction"]["raw_retained"])
+        self.assertEqual(saved["execution"]["stdout_redaction"]["error"], "injected trace write failure")
+        self.assertTrue(stdout.is_file())
+        self.assertTrue(stderr.is_file())
+        self.assertEqual(private_root.stat().st_mode & 0o777, 0o700)
+        self.assertEqual(stdout.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(stderr.stat().st_mode & 0o777, 0o600)
+        self.assertNotIn("SYNTHETIC_TRACE_SECRET", status_path.read_text())
+
+        resumed = self.execute(schedule_indices=[1])
+
+        self.assertEqual(resumed["runs"][0]["slot_state"], "in_progress")
+        self.assertEqual(invocation_log.read_text(), invocations_before_resume)
 
 
 if __name__ == "__main__":

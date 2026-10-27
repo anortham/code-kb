@@ -1,0 +1,20 @@
+// minijinja-cli/tests/test_autoescape.rs:23-41 (test_autoescape_output_suffixes)
+fn test_autoescape_output_suffixes() {
+    for (extension, expected) in [
+        ("html", "&quot;"),
+        ("htm", "&quot;"),
+        ("xml", "&quot;"),
+        ("xhtml", "&quot;"),
+        ("json", "\"\\\"\""),
+        ("json5", "\"\\\"\""),
+        ("yaml", "\"\\\"\""),
+        ("yml", "\"\\\"\""),
+    ] {
+        for extension in [extension.to_string(), extension.to_ascii_uppercase()] {
+            for wrapper in ["", ".j2", ".jinja", ".jinja2", ".J2", ".JiNjA", ".JINJA2"] {
+                let filename = format!("report.{extension}{wrapper}");
+                assert_eq!(render(&filename, None), expected, "{filename}");
+            }
+        }
+    }
+}

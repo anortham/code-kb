@@ -1,0 +1,19 @@
+References to class `DateBin` (sqlglot/expressions/temporal.py:84)
+Sites: 9 · proven 9 · likely 0 · unresolved 0 · excluded 0
+Text: `DateBin` is on 10 lines: 9 sites, 1 definition, 0 imports, 0 text only.
+
+Proven (9):
+- `BigQueryGenerator` [sqlglot/generators/bigquery.py:423] (kind: member_access; import)
+- `DuckDBGenerator` [sqlglot/generators/duckdb.py:1853] (kind: member_access; import)
+- `SingleStoreGenerator` [sqlglot/generators/singlestore.py:109] (kind: member_access; import)
+- `<lambda> in BigQueryParser` [sqlglot/parsers/bigquery.py:305] (kind: calls; import; 3 args)
+- `DuckDBParser` [sqlglot/parsers/duckdb.py:235] (kind: member_access; import)
+- `<lambda> in SingleStoreParser` [sqlglot/parsers/singlestore.py:77] (kind: calls; import; 3 args)
+- `EXPRESSION_METADATA` [sqlglot/typing/duckdb.py:144] (kind: member_access; import)
+- `test_parse_argument_order` [tests/dialects/test_bigquery_timestamp_bucket.py:17] (kind: member_access; import)
+- `test_generate_argument_order` [tests/dialects/test_bigquery_timestamp_bucket.py:27] (kind: calls; import; 3 args)
+Constructions (3): sqlglot/parsers/bigquery.py: 305 · sqlglot/parsers/singlestore.py: 77 · tests/dialects/test_bigquery_timestamp_bucket.py: 27
+Tests that call or use it (2):
+- `test_parse_argument_order` [tests/dialects/test_bigquery_timestamp_bucket.py:8] run: pytest tests/dialects/test_bigquery_timestamp_bucket.py::TestBigQueryTimestampBucket::test_parse_argument_order
+- `test_generate_argument_order` [tests/dialects/test_bigquery_timestamp_bucket.py:24] run: pytest tests/dialects/test_bigquery_timestamp_bucket.py::TestBigQueryTimestampBucket::test_generate_argument_order
+Not visible to this index: calls through getattr() or names built at runtime.

@@ -64,3 +64,26 @@ The real preflight scanned every frozen seed plus task/public-command/profile pa
 ## Verified dispatch freeze
 
 The reviewed launcher and trace parser are bound in the 32-control manifest. All 281 Python tests and 15 focused launcher tests pass. A real offline preindex completed with unchanged source, and a sandbox probe confirms the native arm cannot find an engine or index. Both arm calibrations passed after the retained missing-companion failure. Evidence is in `evals/edit-2026-10-27/results/controls/dispatch/identity.json` and `calibration/identity.json`. No scored task exposure preceded this freeze.
+
+## Task 3: Correct evaluation defects without replacing outcomes
+
+Original cases, manifest and model outputs remain immutable. The daemon restart stopped the controller after slot015 had a completed model answer and captured bundle. Recovery v3 grades that same bundle; agent/index times are unavailable. The resumed controller uses a byte-identical redactor in the task cache because plugin cache 0.48.4 was removed during restart. No model rerun occurred.
+
+Compiler/test work below waits until the original timed schedule finishes. Finish extra verification and fresh readiness before the four supplemental TypeScript calls; no concurrent test/build jobs during their timed execution.
+
+| Owner | Files and responsibility |
+| --- | --- |
+| Grader worker | `scripts/edit_evaluation.py`, `scripts/test_edit_evaluation.py`: summary count floors with strict coverage/status guards |
+| Recovery worker | `scripts/completed_edit_campaign.py`, its tests, `scripts/comparison_campaign.py` and its tests: bind the pinned redactor, retain logs on sanitization failure, persist setup/execution metadata before grading |
+| Watcher worker | `crates/code-kb-core/src/watcher.rs` and its registration tests: recover once when a discovered non-root directory disappears before registration; preserve real failures and indexing policy |
+| Case worker | `corrected-cases/{hcl,date-fns,minijinja}`, `results/case-corrections/`: exact generated roots, help matcher and all-six fresh readiness after core grader is stable |
+| Curators | Existing per-case source reviews and independent added-test execution in protected public replays |
+| Lead | Protocol-v2, frozen-inputs/manifest-v2, corrected grades, supplemental calls, aggregate report, archives, final review/commits |
+
+- [x] Test-first count fix accepts additional passing tests but keeps arbitrary numeric literals and named markers exact. Only full framework-scoped summaries get count floors; ambiguous bare Vitest fragments remain literal. Distinct Cargo summaries cannot satisfy two expectations with one line. NUnit discovery must be complete, passed count at least baseline, failures/skips absent. Preserve exit/timeout/empty-run rejection. Astra reviewed this plan read-only.
+- [x] Versioned Mini matcher accepts accurate ASCII-letter-case wording, including both `without regard to ASCII letter case` and `ignores ASCII letter case`; all three suffixes have distinct boundaries. Missing suffix/case explanation and text outside the autoescape section still fail.
+- [x] Versioned generated-root lists cover the exact canonical pnpm directory and Go suite binaries, without hiding source changes.
+- [x] Recovery metadata survives a grader interruption; failed sanitization does not delete the only retained logs. Redactor selection uses the validated artifact rather than a private versioned plugin path.
+- [ ] A deterministic watcher regression covers disappearance between discovery and registration. Confirm `NotFound`, retry the walk once, and preserve root/permission/repeated-churn failures. Verify the affected Rust scope and final Linux/Windows checks; keep the frozen trial engine unchanged.
+- [ ] All-six fresh readiness, affected tests and full Python suite pass before a v2 freeze. Regrade all four MiniJinja and four C# patches uniformly, with no model calls.
+- [ ] Execute only four previously unexposed TypeScript cells with v2 inputs; retain original setup failures and disclose amended order. Complete all source/new-test reviews, original/corrected reporting and local commits.

@@ -1,0 +1,37 @@
+{
+  "schema": 1,
+  "schedule_index": 5,
+  "case_id": "hcl",
+  "arm": "native",
+  "repeat": 1,
+  "raw_attempt_sha256": "05412ccf1f237e8788d9c0011032d1510239aaedf0feef6518081181cfe8eb90",
+  "bundle_json_sha256": "5dabaf7c42eea60a15e2bafe35f166adbfc24e312bb4e341d1f1e2888511756a",
+  "source_review": "passed",
+  "findings": [],
+  "evidence": [
+    "gohcl/schema.go special-cases exprType.AssignableTo(field.Type) as optional; existing scalar and pointer rules remain intact.",
+    "gohcl/decode.go assigns an hcl.StaticExpr containing cty.NullVal(cty.DynamicPseudoType) with body.MissingItemRange() only when an expression field is omitted.",
+    "Case check TestEditEvaluationExpressionFieldBehavior passed; it checks expression optionality, scalar requiredness, pointer optionality, a non-nil omitted expression, and null evaluation.",
+    "Public grade log shows TestDecodeBody and TestImpliedBodySchema passed; hidden acceptance log shows TestEditEvaluationExpressionFieldBehavior passed. Both grade commands exited 0 with test execution observed.",
+    "Bundle lists only gohcl/schema.go and gohcl/decode.go; protection_status is unchanged and violations is empty."
+  ],
+  "changed_production_files": [
+    "gohcl/schema.go",
+    "gohcl/decode.go"
+  ],
+  "added_test_files": [],
+  "grade_evidence": {
+    "public": {
+      "exit_status": 0,
+      "test_execution_observed": true,
+      "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/005-hcl-native-r1/evidence/grade/grade-008-stdout_log.log"
+    },
+    "hidden": {
+      "exit_status": 0,
+      "test_execution_observed": true,
+      "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/005-hcl-native-r1/evidence/grade/grade-010-stdout_log.log"
+    },
+    "protection_status": "unchanged",
+    "patch_valid": true
+  }
+}

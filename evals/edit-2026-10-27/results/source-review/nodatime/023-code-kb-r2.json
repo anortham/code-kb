@@ -1,0 +1,80 @@
+{
+  "schema": 1,
+  "reviewed_at_utc": "2026-10-27T21:37:55Z",
+  "schedule_index": 23,
+  "case_id": "nodatime",
+  "arm": "code-kb",
+  "repeat": 2,
+  "raw_attempt_sha256": "dea62b7c91b014b6976e40e21c3e630c8ecdcb95d0ad8ee06db475316402e4d7",
+  "bundle_json_sha256": "8d15101791b57175bf1270f5563c38d507fdf71feaf6e577b75a6de0fe5bfb7b",
+  "source_review": "passed",
+  "findings": [
+    {
+      "severity": "informational",
+      "finding": "The final patch implements both calendar-neutral comparisons and marks both new public struct methods [Pure]. LocalDate compares DaysSinceEpoch. LocalDateTime compares dates with LocalDate.CompareToIgnoringCalendar first, then compares LocalTime only for the same physical day.",
+      "evidence": [
+        "Fresh public replay code-kb lookup/context shows [Pure] on LocalDate.CompareToIgnoringCalendar at src/NodaTime/LocalDate.cs:539-540; its body returns DaysSinceEpoch.CompareTo(other.DaysSinceEpoch).",
+        "Fresh public replay code-kb lookup/context shows [Pure] on LocalDateTime.CompareToIgnoringCalendar at src/NodaTime/LocalDateTime.cs:492-497; its body compares date.CompareToIgnoringCalendar(other.date), returns a nonzero day result, then compares time.",
+        "The new XML documentation describes physical-day ordering for LocalDate and physical day followed by time for LocalDateTime. Neither method converts through DateTime or mutates a calendar."
+      ]
+    },
+    {
+      "severity": "informational",
+      "finding": "Existing calendar-sensitive APIs remain protected. LocalDate.CompareTo still checks CalendarOrdinal; LocalDateTime.CompareTo still uses that date comparison before time. The added tests exercise calendar differences, physical-day precedence, nanosecond ordering, range edges, and unchanged equality operators.",
+      "evidence": [
+        "Fresh public replay code-kb context shows LocalDate.CompareTo at src/NodaTime/LocalDate.cs:525-529 checking CalendarOrdinal before TrustedCompareTo.",
+        "Fresh public replay code-kb context shows LocalDateTime.CompareTo at src/NodaTime/LocalDateTime.cs:473-482 calling date.CompareTo before comparing time; existing CompareTo_DifferentCalendars_Throws tests remain in the source.",
+        "The added src/NodaTime.Test/CompareToIgnoringCalendarTest.cs tests use ISO, Julian, and Coptic calendars, test different physical days with identical calendar fields, time-of-day precedence, nanosecond precision, and dates outside the other calendar's range."
+      ]
+    },
+    {
+      "severity": "informational",
+      "finding": "The existing public-grade check and hidden contract check passed their test runs. The public grade still reports failure only because its expected count markers remain at 248 while the selected run now contains 258 tests. The protected purity test is outside the frozen public filter, so it was separately executed and passed.",
+      "evidence": [
+        "The frozen public command filters FullyQualifiedName~LocalDateTest|FullyQualifiedName~LocalDateTimeTest and expects 248 cases; it does not include NodaTime.Test.Annotations.PurityTest.AllPublicStructMethodsArePure.",
+        "Trusted public stdout reports Test Run Successful and 258 of 258 cases passed; grade.json lists only the two stale 248-case markers as missing.",
+        "Trusted hidden stdout reports 2 of 2 contract tests passed.",
+        "A fresh public replay run of NodaTime.Test.Annotations.PurityTest.AllPublicStructMethodsArePure passed 1 of 1 test using an offline restore and the copied state-grade-public NuGet cache."
+      ],
+      "verification_status": "source review and focused purity test passed; trusted public acceptance remains failed on stale test-count markers"
+    }
+  ],
+  "changed_production_files": [
+    "src/NodaTime/LocalDate.cs",
+    "src/NodaTime/LocalDateTime.cs"
+  ],
+  "added_tests": [
+    "src/NodaTime.Test/CompareToIgnoringCalendarTest.cs"
+  ],
+  "executed_verification": [
+    {
+      "kind": "trusted_public_grade",
+      "command_id": "nodatime-public-local-date-regressions",
+      "status": "test_run_succeeded_expected_output_markers_missing",
+      "exit_status": 0,
+      "observed_tests": 258,
+      "expected_output_missing": [
+        "NUnit3TestExecutor discovered 248 of 248 NUnit test cases",
+        "Total tests: 248"
+      ],
+      "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/023-nodatime-code-kb-r2/evidence/grade/grade-008-stdout_log.log"
+    },
+    {
+      "kind": "trusted_hidden_grade",
+      "command_id": "nodatime-calendar-neutral-contract",
+      "status": "passed",
+      "exit_status": 0,
+      "observed_tests": 2,
+      "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/023-nodatime-code-kb-r2/evidence/grade/grade-010-stdout_log.log"
+    },
+    {
+      "kind": "focused_existing_purity_test",
+      "command_id": "nodatime-public-all-public-struct-methods-pure",
+      "status": "passed",
+      "exit_status": 0,
+      "observed_tests": 1,
+      "project": "/tmp/code-kb-source-review-20261027-kHXOtu/023-nodatime-code-kb-r2/project",
+      "stdout_log": "logs/023-code-kb-r2-purity.stdout.log"
+    }
+  ]
+}

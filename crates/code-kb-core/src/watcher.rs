@@ -28,6 +28,8 @@ const MAX_REGISTRATION_RETRY_INTERVAL: Duration = Duration::from_secs(30);
 static FAIL_NEXT_ROOT_WATCH: AtomicBool = AtomicBool::new(false);
 #[cfg(test)]
 static ROOT_WATCH_FAILURE_COUNT: AtomicUsize = AtomicUsize::new(0);
+#[cfg(test)]
+static REMOVE_DIRECTORY_BEFORE_WATCH: Mutex<Option<PathBuf>> = Mutex::new(None);
 const IGNORE_FILES: &[&str] = &[
     ".gitignore",
     ".ignore",
@@ -396,6 +398,17 @@ fn watch_workspace_root(
     debouncer.watch(root, RecursiveMode::NonRecursive)
 }
 
+#[cfg(test)]
+fn remove_directory_before_watch(path: &Path) {
+    let mut target = REMOVE_DIRECTORY_BEFORE_WATCH
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if target.as_deref() == Some(path) {
+        target.take();
+        std::fs::remove_dir(path).unwrap();
+    }
+}
+
 fn synchronize_registrations(
     debouncer: &mut WorkspaceDebouncer,
     workspace: &Workspace,
@@ -404,7 +417,8 @@ fn synchronize_registrations(
     let root = &workspace.canonical_root;
     let root_registration = RegistrationPath::new(root);
     let mut root_resets = 0;
-    loop {
+    let mut directory_race_retries = 0;
+    'registration: loop {
         registrations.generation = registrations.generation.wrapping_add(1).max(1);
         let generation = registrations.generation;
         if registrations.root_unwatch_requires_retry {
@@ -457,7 +471,27 @@ fn synchronize_registrations(
             if let Some(registered_generation) = registrations.paths.get_mut(&registration_path) {
                 *registered_generation = generation;
             } else {
-                debouncer.watch(&path, RecursiveMode::NonRecursive)?;
+                #[cfg(test)]
+                remove_directory_before_watch(&path);
+                match debouncer.watch(&path, RecursiveMode::NonRecursive) {
+                    Ok(()) => {}
+                    Err(error)
+                        if registration_path != root_registration
+                            && matches!(error.kind, notify::ErrorKind::PathNotFound)
+                            && matches!(
+                                std::fs::metadata(&path),
+                                Err(metadata_error)
+                                    if metadata_error.kind() == std::io::ErrorKind::NotFound
+                            ) =>
+                    {
+                        if directory_race_retries > 0 {
+                            return Err(error.into());
+                        }
+                        directory_race_retries += 1;
+                        continue 'registration;
+                    }
+                    Err(error) => return Err(error.into()),
+                }
                 registrations.paths.insert(registration_path, generation);
             }
         }
@@ -1006,6 +1040,38 @@ mod tests {
 
         assert!(watcher.pending_failure().is_none());
         drop(watcher);
+    }
+
+    #[test]
+    fn registration_rewalks_when_a_discovered_directory_disappears() {
+        let _guard = ROOT_WATCH_FAULT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let temp_dir = crate::safe_tempdir();
+        let root = temp_dir.path().join("project");
+        let disappearing = root.join("disappearing");
+        std::fs::create_dir_all(&disappearing).unwrap();
+        let workspace = Workspace::new(root);
+        let mut debouncer = new_debouncer(
+            Duration::from_millis(150),
+            None,
+            |_result: Result<Vec<DebouncedEvent>, _>| {},
+        )
+        .unwrap();
+        let mut registrations = RegisteredDirectories::default();
+        *REMOVE_DIRECTORY_BEFORE_WATCH
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(disappearing.clone());
+
+        let result = synchronize_registrations(&mut debouncer, &workspace, &mut registrations);
+
+        assert!(
+            result.is_ok(),
+            "the registration walk should recover after a discovered directory disappears: {result:?}"
+        );
+        assert!(!disappearing.exists());
+        assert_eq!(registrations.generation, 2);
+        assert_eq!(registrations.paths.len(), 1);
     }
 
     #[cfg(target_os = "linux")]

@@ -1,0 +1,23 @@
+// minijinja-cli/tests/test_autoescape.rs:35-54 (autoescape_output_suffixes_with_optional_template_wrapper)
+fn autoescape_output_suffixes_with_optional_template_wrapper() {
+    for (suffix, expected) in [
+        ("htm", HTML),
+        ("html", HTML),
+        ("xml", HTML),
+        ("xhtml", HTML),
+        ("json", JSON),
+        ("json5", JSON),
+        ("yaml", JSON),
+        ("yml", JSON),
+    ] {
+        for wrapper in ["", ".j2", ".jinja", ".jinja2"] {
+            let filename = format!("report.{suffix}{wrapper}");
+            assert_render(&filename, None, expected);
+            assert_render(&filename.to_ascii_uppercase(), Some("auto"), expected);
+        }
+    }
+    assert_render("report.hTmL.JiNjA2", None, HTML);
+    assert_render("report.JsOn.jInJa", None, JSON);
+}
+
+--- STDERR ---

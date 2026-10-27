@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "declared_utc": "2026-10-27T20:27:36.931365+00:00",
+  "trigger_attempt_sha256": "353c9dac685d33a30ed6bdbbbda976727a19c41974d07a7e277f18891616d62c",
+  "frozen_checker_sha256": "4b38e99ad284279aec145b5bf66134a8354152386eb05cff7bdc0f162f00b35d",
+  "classification": "mechanical wording false negative",
+  "actual_help": "Suffixes are matched without regard to ASCII letter case",
+  "original_accepted_phrases": [
+    "ignoring case",
+    "case-insensitive",
+    "case insensitive",
+    "regardless of case",
+    "without regard to case"
+  ],
+  "evidence": "Slot004 passes public regressions and both functional hidden checks; only the help wording assertion fails. Whitespace normalization retains ASCII letter between to and case.",
+  "correction_scope": "Keep frozen cases/manifest, model outputs and strict grades immutable. Create a separately versioned checker that accepts equivalent ASCII-letter-case wording; apply it uniformly to all four MiniJinja captured patches after all24 timed trials. No model reruns or result replacement. Report original strict and corrected results separately.",
+  "negative_requirement": "Missing wrapper suffixes or missing case-insensitivity explanation must still fail."
+}

@@ -1,0 +1,6 @@
+Unable to set __version__, run `pip install -e .` or `python setup.py develop` first.
+...
+----------------------------------------------------------------------
+Ran 3 tests in 0.003s
+
+OK

@@ -1,0 +1,19 @@
+### Target: `DateBin` (sqlglot/expressions/temporal.py:84-85)
+
+Signature: `class DateBin extends Expression, Func, IntervalOp`
+
+```python
+class DateBin(Expression, Func, IntervalOp):
+    arg_types = {"this": True, "expression": True, "unit": False, "zone": False, "origin": False}
+```
+
+### Dependencies (Signatures):
+- class Expression extends Expr (sqlglot/expressions/core.py:824)
+- @trait class Func extends Condition (sqlglot/expressions/core.py:1649)
+- @trait class IntervalOp extends TimeUnit (sqlglot/expressions/core.py:2096)
+
+### Related Tests:
+- `test_generate_argument_order` (tests/dialects/test_bigquery_timestamp_bucket.py:23)
+- `test_parse_argument_order` (tests/dialects/test_bigquery_timestamp_bucket.py:8)
+These tests call, use, or name this symbol; blast_radius also lists tests that can reach it through callers.
+

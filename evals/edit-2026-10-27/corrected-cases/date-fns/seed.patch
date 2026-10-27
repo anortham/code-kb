@@ -1,0 +1,24 @@
+diff --git a/pkgs/core/src/addBusinessDays/index.ts b/pkgs/core/src/addBusinessDays/index.ts
+--- a/pkgs/core/src/addBusinessDays/index.ts
++++ b/pkgs/core/src/addBusinessDays/index.ts
+@@ -48,7 +48,7 @@
+   amount: number,
+   options?: AddBusinessDaysOptions<ResultDate> | undefined,
+ ): ResultDate {
+-  const _date = toDate(date, options?.in);
++  const _date = toDate(date);
+   const startedOnWeekend = isWeekend(_date, options);
+ 
+   if (isNaN(amount)) return constructFrom(options?.in, NaN);
+diff --git a/pkgs/core/src/differenceInBusinessDays/index.ts b/pkgs/core/src/differenceInBusinessDays/index.ts
+--- a/pkgs/core/src/differenceInBusinessDays/index.ts
++++ b/pkgs/core/src/differenceInBusinessDays/index.ts
+@@ -73,7 +73,7 @@
+   options?: DifferenceInBusinessDaysOptions | undefined,
+ ): number {
+   const [laterDate_, earlierDate_] = normalizeDates(
+-    options?.in,
++    undefined,
+     laterDate,
+     earlierDate,
+   );

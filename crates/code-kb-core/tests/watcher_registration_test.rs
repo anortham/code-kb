@@ -397,7 +397,7 @@ fn watcher_startup_reconcile_failure_releases_notify_backend() {
 
     assert!(start_watcher(Workspace::new(root), db_path).is_err());
 
-    assert_eq!(inotify_instance_count().unwrap(), before);
+    wait_for_inotify_instance_count(before);
 }
 
 #[cfg(target_os = "linux")]

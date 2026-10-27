@@ -1,0 +1,16 @@
+// tests/dialects/test_bigquery_timestamp_bucket.py:24-36 (test_generate_argument_order)
+    def test_generate_argument_order(self):
+        for origin in (None, exp.column("bucket_origin")):
+            with self.subTest(origin=origin):
+                expression = exp.DateBin(
+                    this=self.parse_one("INTERVAL 15 MINUTE"),
+                    expression=exp.column("ts"),
+                    origin=origin,
+                )
+                args = "ts, INTERVAL '15' MINUTE"
+                if origin is not None:
+                    args += ", bucket_origin"
+
+                self.assertEqual(expression.sql("bigquery"), f"TIMESTAMP_BUCKET({args})")
+
+--- STDERR ---

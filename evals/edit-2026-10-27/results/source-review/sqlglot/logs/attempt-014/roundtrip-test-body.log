@@ -1,0 +1,12 @@
+// tests/dialects/test_bigquery_timestamp_bucket.py:38-46 (test_round_trip)
+    def test_round_trip(self):
+        for origin in ("", ", TIMESTAMP('2024-01-01 00:00:00+00')"):
+            with self.subTest(origin=origin):
+                sql = (
+                    "SELECT TIMESTAMP_BUCKET(TIMESTAMP('2024-01-02 12:34:56+00'), "
+                    f"INTERVAL '15' MINUTE{origin})"
+                )
+                expression = self.validate_identity(sql)
+                self.assertEqual(self.parse_one(expression.sql("bigquery")), expression)
+
+--- STDERR ---

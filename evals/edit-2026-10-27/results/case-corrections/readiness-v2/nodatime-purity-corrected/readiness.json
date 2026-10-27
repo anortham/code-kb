@@ -1,0 +1,301 @@
+{
+  "behavioral_pass": true,
+  "case_id": "nodatime",
+  "case_sha256": "80ac1e39e6333f5e2723371b800d1c852510e14966b870c4fbdd62ed244e00df",
+  "checks": {
+    "baseline_public": {
+      "commands": [
+        {
+          "command_id": "nodatime-public-local-date-regressions",
+          "elapsed_seconds": 11.345127,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/nodatime-purity-corrected/evidence/baseline-public-00-nodatime-public-local-date-regressions/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/nodatime-purity-corrected/evidence/baseline-public-00-nodatime-public-local-date-regressions/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        },
+        {
+          "command_id": "nodatime-public-pure-struct-methods",
+          "elapsed_seconds": 4.877489,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/nodatime-purity-corrected/evidence/baseline-public-01-nodatime-public-pure-struct-methods/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/nodatime-purity-corrected/evidence/baseline-public-01-nodatime-public-pure-struct-methods/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "baseline_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "nodatime-copy-prepared-nuget-cache",
+          "elapsed_seconds": 0.214608,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/nodatime-purity-corrected/evidence/runtime-baseline-00-nodatime-copy-prepared-nuget-cache/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/nodatime-purity-corrected/evidence/runtime-baseline-00-nodatime-copy-prepared-nuget-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "nodatime-restore-from-local-cache",
+          "elapsed_seconds": 1.267578,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/nodatime-purity-corrected/evidence/runtime-baseline-01-nodatime-restore-from-local-cache/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/nodatime-purity-corrected/evidence/runtime-baseline-01-nodatime-restore-from-local-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "preparation": {
+      "commands": [],
+      "mode": "reused-inputs",
+      "passed": true
+    },
+    "reference_hidden": {
+      "commands": [
+        {
+          "command_id": "nodatime-calendar-neutral-contract",
+          "elapsed_seconds": 11.198962,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/nodatime-purity-corrected/evidence/reference-hidden-00-nodatime-calendar-neutral-contract/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/nodatime-purity-corrected/evidence/reference-hidden-00-nodatime-calendar-neutral-contract/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_hidden_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "nodatime-copy-prepared-nuget-cache",
+          "elapsed_seconds": 0.214706,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/nodatime-purity-corrected/evidence/runtime-reference-hidden-00-nodatime-copy-prepared-nuget-cache/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/nodatime-purity-corrected/evidence/runtime-reference-hidden-00-nodatime-copy-prepared-nuget-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "nodatime-restore-from-local-cache",
+          "elapsed_seconds": 1.267852,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/nodatime-purity-corrected/evidence/runtime-reference-hidden-01-nodatime-restore-from-local-cache/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/nodatime-purity-corrected/evidence/runtime-reference-hidden-01-nodatime-restore-from-local-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_public": {
+      "commands": [
+        {
+          "command_id": "nodatime-public-local-date-regressions",
+          "elapsed_seconds": 11.299223,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/nodatime-purity-corrected/evidence/reference-public-00-nodatime-public-local-date-regressions/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/nodatime-purity-corrected/evidence/reference-public-00-nodatime-public-local-date-regressions/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        },
+        {
+          "command_id": "nodatime-public-pure-struct-methods",
+          "elapsed_seconds": 4.926963,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/nodatime-purity-corrected/evidence/reference-public-01-nodatime-public-pure-struct-methods/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/nodatime-purity-corrected/evidence/reference-public-01-nodatime-public-pure-struct-methods/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_public_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "nodatime-copy-prepared-nuget-cache",
+          "elapsed_seconds": 0.215122,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/nodatime-purity-corrected/evidence/runtime-reference-public-00-nodatime-copy-prepared-nuget-cache/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/nodatime-purity-corrected/evidence/runtime-reference-public-00-nodatime-copy-prepared-nuget-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "nodatime-restore-from-local-cache",
+          "elapsed_seconds": 1.267227,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/nodatime-purity-corrected/evidence/runtime-reference-public-01-nodatime-restore-from-local-cache/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/nodatime-purity-corrected/evidence/runtime-reference-public-01-nodatime-restore-from-local-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "seed_hidden_failure": {
+      "commands": [
+        {
+          "command_id": "nodatime-calendar-neutral-contract",
+          "elapsed_seconds": 7.49,
+          "exit_status": 1,
+          "expected_output_missing": [
+            "NUnit3TestExecutor discovered 2 of 2 NUnit test cases",
+            "Passed LocalDateComparesPhysicalDayAcrossCalendars",
+            "Passed LocalDateTimeComparesPhysicalDayThenTimeAcrossCalendars",
+            "Test Run Successful.",
+            "Total tests: 2"
+          ],
+          "passed": false,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/nodatime-purity-corrected/evidence/seed-hidden-00-nodatime-calendar-neutral-contract/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/nodatime-purity-corrected/evidence/seed-hidden-00-nodatime-calendar-neutral-contract/stdout.log",
+          "test_execution_observed": false,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "seed_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "nodatime-copy-prepared-nuget-cache",
+          "elapsed_seconds": 0.214584,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/nodatime-purity-corrected/evidence/runtime-seed-00-nodatime-copy-prepared-nuget-cache/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/nodatime-purity-corrected/evidence/runtime-seed-00-nodatime-copy-prepared-nuget-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "nodatime-restore-from-local-cache",
+          "elapsed_seconds": 1.267352,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/nodatime-purity-corrected/evidence/runtime-seed-01-nodatime-restore-from-local-cache/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/nodatime-purity-corrected/evidence/runtime-seed-01-nodatime-restore-from-local-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    }
+  },
+  "created_utc": "2026-10-27T21:41:11Z",
+  "dependencies": {
+    "nodatime-nuget": "b33c5d38a4b9541a64ea5105150e5bbcd49ba2b5a7cd583b7cdee8faf9cb11dd"
+  },
+  "readiness_error": null,
+  "reference_bundle_path": "evidence/reference-bundle",
+  "reference_digest": "4b7ba86f65e12c47a5d3544b7ef18eeb4d5b34f20008f98eb17af17e83cc91ad",
+  "reference_production_files_changed": [
+    "src/NodaTime/LocalDate.cs",
+    "src/NodaTime/LocalDateTime.cs"
+  ],
+  "repo_id": "nodatime",
+  "schema": 1,
+  "seed_digest": "d3b4d1e76ec36f1587f992d7360fb591dab6aada4b7dcd0f41e25926d6208be5",
+  "seed_project_path": "work/seed-project",
+  "source_pin": "649ce5a1c8ddf439eaed7b3bf9157882363cb937",
+  "source_review": "pending",
+  "source_tree_sha256": "d809182eef59b2685373f0d7a51da696dcc67cdad291cff70b7180c9d38d5bfc",
+  "status": "ready"
+}

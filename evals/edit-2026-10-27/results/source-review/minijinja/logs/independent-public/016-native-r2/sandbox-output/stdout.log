@@ -1,0 +1,8 @@
+
+running 3 tests
+test explicit_autoescape_modes_override_filename ... ok
+test autoescape_only_ignores_one_final_wrapper ... ok
+test autoescape_output_suffixes_with_optional_template_wrapper ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+

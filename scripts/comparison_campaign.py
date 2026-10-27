@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import time
@@ -21,7 +22,7 @@ except ImportError:
 
 
 REVIEW = Path("evals/review-2026-10-26")
-REDACTOR = Path("/home/murphy/.codex/plugins/cache/razorback/razorback/0.48.4/skills/security-review/scripts/redact-outbound")
+REDACTOR = "redact-outbound"
 AUTH_FILE = Path("/home/murphy/.codex/auth.json")
 PROFILE_TARGET = Path("/home/murphy/.codex")
 HIDDEN_ROOTS = (
@@ -152,15 +153,22 @@ class CampaignError(RuntimeError):
 
 
 def redact_bytes(payload, redactor=None):
-    if redactor is not None:
+    if callable(redactor):
         result = redactor(payload)
         if not isinstance(result, bytes):
             raise CampaignError("outbound redaction failed")
         return result
-    import subprocess
-
+    command = REDACTOR if redactor is None else redactor
+    if not isinstance(command, (str, Path)):
+        raise CampaignError("outbound redactor must be a callable or executable path")
+    command = str(command)
+    if not Path(command).is_absolute():
+        requested = command
+        command = shutil.which(requested)
+        if command is None:
+            raise CampaignError(f"outbound redactor `{requested}` is unavailable on PATH")
     try:
-        result = subprocess.run([str(REDACTOR)], input=payload, capture_output=True, check=False)
+        result = subprocess.run([command], input=payload, capture_output=True, check=False)
     except OSError as error:
         raise CampaignError("outbound redaction failed") from error
     if result.returncode != 0:
@@ -623,7 +631,7 @@ def run_campaign(args, *, jobs=None, auth_file=AUTH_FILE, hidden_roots=None, cap
                 raise CampaignError(f"in-progress metadata is incomplete: {run_id}")
             outcome = dict(saved_progress)
             outcome.update({"status": "interrupted_unknown", "human_review_required": True})
-            _atomic_json(run_dir / "outcome.json", outcome)
+            _atomic_json(run_dir / "outcome.json", outcome, redactor)
             _write_csv(output)
             print(f"[{position}/{len(jobs)}] {run_id}: interrupted_unknown", file=sys.stderr, flush=True)
             return outcome

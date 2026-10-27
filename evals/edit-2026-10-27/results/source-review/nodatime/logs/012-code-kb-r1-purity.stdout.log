@@ -1,0 +1,25 @@
+  Determining projects to restore...
+  Restored <source-review-temp>/012-nodatime-code-kb-r1/project/src/NodaTime.Test/NodaTime.Test.csproj (in 152 ms).
+  Restored <source-review-temp>/012-nodatime-code-kb-r1/project/src/NodaTime/NodaTime.csproj (in 135 ms).
+  Restored <source-review-temp>/012-nodatime-code-kb-r1/project/src/NodaTime.Testing/NodaTime.Testing.csproj (in 135 ms).
+  InheritDocTask replaced 53 of 53 inheritdoc tags and removed 649 non-public member docs in <source-review-temp>/012-nodatime-code-kb-r1/project/src/NodaTime/bin/Debug/net8.0/NodaTime.xml
+  NodaTime -> <source-review-temp>/012-nodatime-code-kb-r1/project/src/NodaTime/bin/Debug/net8.0/NodaTime.dll
+  InheritDocTask replaced 53 of 53 inheritdoc tags and removed 649 non-public member docs in <source-review-temp>/012-nodatime-code-kb-r1/project/src/NodaTime/bin/Debug/netstandard2.0/NodaTime.xml
+  NodaTime -> <source-review-temp>/012-nodatime-code-kb-r1/project/src/NodaTime/bin/Debug/netstandard2.0/NodaTime.dll
+  InheritDocTask replaced 5 of 5 inheritdoc tags and removed 2 non-public member docs in <source-review-temp>/012-nodatime-code-kb-r1/project/src/NodaTime.Testing/bin/Debug/netstandard2.0/NodaTime.Testing.xml
+  NodaTime.Testing -> <source-review-temp>/012-nodatime-code-kb-r1/project/src/NodaTime.Testing/bin/Debug/netstandard2.0/NodaTime.Testing.dll
+  NodaTime.Test -> <source-review-temp>/012-nodatime-code-kb-r1/project/src/NodaTime.Test/bin/Debug/net10.0/NodaTime.Test.dll
+Test run for <source-review-temp>/012-nodatime-code-kb-r1/project/src/NodaTime.Test/bin/Debug/net10.0/NodaTime.Test.dll (.NETCoreApp,Version=v10.0)
+VSTest version 18.0.2 (x64)
+
+Starting test execution, please wait...
+A total of 1 test files matched the specified pattern.
+NUnit Adapter 6.3.0.0: Test execution started
+Running selected tests in <source-review-temp>/012-nodatime-code-kb-r1/project/src/NodaTime.Test/bin/Debug/net10.0/NodaTime.Test.dll
+   NUnit3TestExecutor discovered 1 of 1 NUnit test cases using Current Discovery mode, Non-Explicit run
+  Passed AllPublicStructMethodsArePure [3 ms]
+
+Test Run Successful.
+Total tests: 1
+     Passed: 1
+ Total time: 3.8039 Seconds

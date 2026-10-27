@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "interrupted_slot": 15,
+  "retained_model_completed": true,
+  "provider_rerun": false,
+  "missing_time_metrics": true,
+  "original_plugin_path_removed_by_restart": true,
+  "pinned_redactor_sha256": "09c521c0f39bf83c1f877edf7fd1799b9eb7df3780e9c99c52707d6d3620c36f",
+  "task_cache_redactor": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/tools/redact-outbound",
+  "runtime_override": "Set comparison_campaign.REDACTOR to validated byte-identical task-cache artifact in recovery/resume process; repository source and frozen manifest unchanged.",
+  "node_sdk_hash_reverified_unchanged": true,
+  "initial_grade_recovery_redaction_failed": "Raw recovery1 logs were unavailable after existing sanitizer deleted them on redaction failure. Preserve recovery1 record; run a separately retained recovery2 grade without any model call."
+}

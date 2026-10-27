@@ -1,0 +1,105 @@
+### Target: `create_env` (minijinja-cli/src/cli.rs:186-265)
+
+Signature: `fn create_env(config: &Config, cwd: PathBuf, template_name: &str, template_source: Option<String>, stdin_used_for_data: bool) -> Result<Environment<'static>, Error>`
+
+```rust
+fn create_env(
+    config: &Config,
+    cwd: PathBuf,
+    template_name: &str,
+    template_source: Option<String>,
+    stdin_used_for_data: bool,
+) -> Result<Environment<'static>, Error> {
+    let mut env = Environment::new();
+    env.set_debug(true);
+    config.apply_to_env(&mut env)?;
+
+    env.set_path_join_callback(move |name, parent| {
+        let p = if parent == STDIN_STDOUT {
+            cwd.join(name)
+        } else {
+            Path::new(parent)
+                .parent()
+                .unwrap_or(Path::new(""))
+                .join(name)
+        };
+        canonicalize(&p)
+            .unwrap_or(p)
+            .to_string_lossy()
+            .to_string()
+            .into()
+    });
+
+    let cached_stdin = Mutex::new(None);
+    let safe_paths = config.safe_paths();
+    let allow_include = config.allow_include();
+    let template_name = template_name.to_string();
+    env.set_loader(move |name| -> Result<Option<String>, MError> {
+        if !allow_include && name != template_name {
+            return Ok(None);
+        }
+
+        if name == STDIN_STDOUT {
+            if stdin_used_for_data {
+                return Err(MError::new(
+                    ErrorKind::InvalidOperation,
+                    "cannot load template from stdin when data is from stdin",
+                ));
+            }
+
+            let mut stdin = cached_stdin.lock().unwrap();
+            if stdin.is_none() {
+                *stdin = Some(io::read_to_string(io::stdin()).map_err(|err| {
+                    MError::new(
+                        ErrorKind::InvalidOperation,
+                        "failed to read template from stdin",
+                    )
+                    .with_source(err)
+                })?);
+            }
+            return Ok(stdin.clone());
+        } else if name == template_name {
+            if let Some(ref source) = template_source {
+                return Ok(Some(source.clone()));
+            }
+        }
+
+        let fs_name = Path::new(name);
+        if !safe_paths.is_empty() && !safe_paths.iter().any(|x| fs_name.starts_with(x)) {
+            return Err(MError::new(
+                ErrorKind::InvalidOperation,
+                "Cannot include template from non-trusted path",
+            ));
+        }
+
+        match fs::read_to_string(name) {
+            Ok(contents) => Ok(Some(contents)),
+            Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(None),
+            Err(err) => Err(
+                MError::new(ErrorKind::TemplateNotFound, "cannot find template").with_source(err),
+            ),
+        }
+    });
+
+    Ok(env)
+}
+```
+
+### Dependencies (Signatures):
+- pub fn new() -> Self (minijinja-js/src/lib.rs:182)
+- pub fn new() -> Environment<'source> (minijinja/src/environment.rs:110)
+- pub fn set_debug(&self, yes: bool) -> Result<(), JsValue> (minijinja-js/src/lib.rs:525)
+- pub fn set_debug(&self, py: Python<'_>, value: bool) -> PyResult<()> (minijinja-py/src/environment.rs:196)
+- pub fn set_debug(&mut self, enabled: bool) (minijinja/src/environment.rs:568)
+- pub fn apply_to_env(&self, env: &mut Environment) -> Result<(), Error> (minijinja-cli/src/config.rs:220)
+- pub fn set_path_join_callback(&self, py: Python<'_>, callback: &Bound<'_, PyAny>) -> PyResult<()> (minijinja-py/src/environment.rs:524)
+- pub fn set_path_join_callback<F>(&mut self, f: F) where
+        F: for<'s> Fn(&'s str, &'s str) -> Cow<'s, str> + Send + Sync + 'static, (minijinja/src/environment.rs:299)
+- safe_paths: Vec<PathBuf> (minijinja-cli/src/config.rs:55)
+- pub fn safe_paths(&self) -> Vec<PathBuf> (minijinja-cli/src/config.rs:216)
+[Showing 10 dependencies (limit reached)]
+
+### Related Tests:
+No related test was found in the index; blast_radius may find tests through callers.
+
+--- STDERR ---

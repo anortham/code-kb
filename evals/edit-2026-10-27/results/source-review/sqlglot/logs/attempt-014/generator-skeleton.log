@@ -1,0 +1,138 @@
+// File: sqlglot/generators/bigquery.py (Lines 1-885)
+
+logger = logging.getLogger("sqlglot"); // L36-36
+JSON_EXTRACT_TYPE = t.Union[exp.JSONExtract, exp.JSONExtractScalar, exp.JSONExtractArray]; // L38-38
+DQUOTES_ESCAPING_JSON_FUNCTIONS = ("JSON_QUERY", "JSON_VALUE", "JSON_QUERY_ARRAY"); // L40-40
+def _derived_table_values_to_unnest(self: BigQueryGenerator, expression: exp.Values) -> str { /* 22 lines hidden: L44-L65 */ }
+def _returnsproperty_sql(self: BigQueryGenerator, expression: exp.ReturnsProperty) -> str { /* 6 lines hidden: L69-L74 */ }
+def _create_sql(self: BigQueryGenerator, expression: exp.Create) -> str { /* 8 lines hidden: L78-L85 */ }
+def _alias_ordered_group(expression: exp.Expr) -> exp.Expr { /* 19 lines hidden: L96-L114 */ }
+/// BigQuery doesn't allow column names when defining a CTE, so we try to push them down.
+def _pushdown_cte_column_names(expression: exp.Expr) -> exp.Expr { /* 24 lines hidden: L118-L141 */ }
+/// Rewrites exploding GENERATE_SERIES projections into table references, e.g.
+/// SELECT GENERATE_SERIES(1, 2) AS x           -> SELECT x FROM GENERATE_SERIES(1, 2) AS x
+/// SELECT y, GENERATE_SERIES(1, 2) AS x FROM t -> SELECT y, x FROM t CROSS JOIN GENERATE_SERIES(1, 2) AS x
+/// ... (2 more lines)
+def _unnest_explode_generate_series(expression: exp.Expr) -> exp.Expr { /* 25 lines hidden: L145-L169 */ }
+def _array_contains_sql(self: BigQueryGenerator, expression: exp.ArrayContains) -> str { /* 7 lines hidden: L173-L179 */ }
+def _widen_decimal(expression: exp.Expr) -> exp.Expr { /* 9 lines hidden: L184-L192 */ }
+def _extract_part(part: str) -> t.Callable[[BigQueryGenerator, exp.Func], str]; // L195-196
+def _day_of_week_iso_sql(self: BigQueryGenerator, expression: exp.DayOfWeekIso) -> str { /* 2 lines hidden: L201-L202 */ }
+def _array_agg_fold_sql(self: BigQueryGenerator, expression: exp.ArrayDistinct | exp.ArraySort) -> str { /* 56 lines hidden: L208-L263 */ }
+def _ts_or_ds_add_sql(self: BigQueryGenerator, expression: exp.TsOrDsAdd) -> str; // L266-267
+def _ts_or_ds_diff_sql(self: BigQueryGenerator, expression: exp.TsOrDsDiff) -> str { /* 4 lines hidden: L271-L274 */ }
+def _unix_to_time_sql(self: BigQueryGenerator, expression: exp.UnixToTime) -> str { /* 14 lines hidden: L278-L291 */ }
+def _str_to_datetime_sql(self: BigQueryGenerator, expression: exp.StrToDate | exp.StrToTime) -> str { /* 13 lines hidden: L295-L307 */ }
+@unsupported_args("ins_cost", "del_cost", "sub_cost") def _levenshtein_sql(self: BigQueryGenerator, expression: exp.Levenshtein) -> str { /* 5 lines hidden: L312-L316 */ }
+def _json_extract_sql(self: BigQueryGenerator, expression: JSON_EXTRACT_TYPE) -> str { /* 13 lines hidden: L320-L332 */ }
+self._quote_json_path_key_using_brackets = False; // L325-325
+self._quote_json_path_key_using_brackets = True; // L330-330
+class BigQueryGenerator extends generator.Generator {
+    TRY_SUPPORTED = False; // L336-336
+    SUPPORTS_UESCAPE = False; // L337-337
+    SUPPORTS_DECODE_CASE = False; // L338-338
+    INTERVAL_ALLOWS_PLURAL_FORM = False; // L339-339
+    JOIN_HINTS = False; // L340-340
+    QUERY_HINTS = False; // L341-341
+    TABLE_HINTS = False; // L342-342
+    LIMIT_FETCH = "LIMIT"; // L343-343
+    RENAME_TABLE_WITH_DB = False; // L344-344
+    NVL2_SUPPORTED = False; // L345-345
+    UNNEST_WITH_ORDINALITY = False; // L346-346
+    CAST_TO_INT_ROUNDS = True; // L347-347
+    COLLATE_IS_FUNC = True; // L348-348
+    LIMIT_ONLY_LITERALS = True; // L349-349
+    SUPPORTS_TABLE_ALIAS_COLUMNS = False; // L350-350
+    SUPPORTS_NAMED_CTE_COLUMNS = False; // L351-351
+    UNPIVOT_ALIASES_ARE_IDENTIFIERS = False; // L352-352
+    JSON_KEY_VALUE_PAIR_SEP = ","; // L353-353
+    NULL_ORDERING_SUPPORTED: bool | None = False; // L354-354
+    IGNORE_NULLS_IN_FUNC = True; // L355-355
+    JSON_PATH_SINGLE_QUOTE_ESCAPE = True; // L356-356
+    CAN_IMPLEMENT_ARRAY_ANY = True; // L357-357
+    SUPPORTS_TO_NUMBER = False; // L358-358
+    NAMED_PLACEHOLDER_TOKEN = "@"; // L359-359
+    HEX_FUNC = "TO_HEX"; // L360-360
+    WITH_PROPERTIES_PREFIX = "OPTIONS"; // L361-361
+    SUPPORTS_EXPLODING_PROJECTIONS = False; // L362-362
+    EXCEPT_INTERSECT_SUPPORT_ALL_CLAUSE = False; // L363-363
+    SUPPORTS_UNIX_SECONDS = True; // L364-364
+    DECLARE_DEFAULT_ASSIGNMENT = "DEFAULT"; // L365-365
+    SAFE_JSON_PATH_KEY_RE = re.compile(r"^[\-\w]*$"); // L367-367
+    WINDOW_FUNCS_WITH_NULL_ORDERING = (exp.CumeDist, exp.DenseRank, exp.FirstValue, exp.Lag, exp.LastValue, exp.Lead, exp.N…; // L369-381
+    TS_OR_DS_TYPES: t.ClassVar = (exp.TsOrDsToDatetime, exp.TsOrDsToTimestamp, exp.TsOrDsToTime, exp.TsOrDsToDate); // L383-388
+    TRANSFORMS = {**generator.Generator.TRANSFORMS, exp.AIEmbed: rename_func("EMBED"), exp.AIGenerate: rename_func("GENERAT…; // L390-539
+    lambda self, e: (
+            f"DEFAULT COLLATE { /* 5 lines hidden: L413-L417 */ }
+    lambda *_: "COMMIT TRANSACTION"; // L418-418
+    lambda self, e: self.func(
+            "TIMESTAMP_BUCKET", e.expression, e.this, e.args.get("origin")
+        ) { /* 3 lines hidden: L423-L425 */ }
+    lambda self, e: self.func("DATE_DIFF", e.this, e.expression, unit_to_var(e)); // L426-426
+    lambda self, e: self.func(
+            "DATETIME", self.func("TIMESTAMP", e.this, e.args.get("zone")), "'UTC'"
+        ) { /* 3 lines hidden: L439-L441 */ }
+    lambda self, e: groupconcat_sql(
+            self, e, func_name="STRING_AGG", within_group=False, sep=None
+        ) { /* 3 lines hidden: L443-L445 */ }
+    lambda self, e: self.func("UPPER", self.func("TO_HEX", self.sql(e, "this"))); // L446-446
+    lambda self, e: self.hexstring_sql(e, binary_function_repr="FROM_HEX"); // L447-447
+    lambda self, e: self.func(
+            "TO_JSON" if e.args.get("to_json") else "TO_JSON_STRING",
+            e.this,
+            e.args.get("options"),
+        ) { /* 5 lines hidden: L457-L461 */ }
+    lambda self, e: self.func("TO_HEX", self.func("MD5", e.this)); // L466-466
+    lambda self, e: self.func(
+            "NORMALIZE_AND_CASEFOLD" if e.args.get("is_casefold") else "NORMALIZE",
+            e.this,
+            e.args.get("form"),
+        ) { /* 5 lines hidden: L470-L474 */ }
+    lambda self, e: f"PARTITION BY; // L475-475
+    lambda self, e: self.func(
+            "REGEXP_EXTRACT",
+            e.this,
+            e.expression,
+            e.args.get("position"),
+            e.args.get("occurrence"),
+        ) { /* 7 lines hidden: L477-L483 */ }
+    lambda self, e: self.func("REGEXP_EXTRACT_ALL", e.this, e.expression); // L484-484
+    lambda *_: "ROLLBACK TRANSACTION"; // L488-488
+    lambda self, e: self.func("PARSE_TIME", self.format_time(e), e.this); // L489-489
+    lambda self, e: self.func("PARSE_DATETIME", self.format_time(e), e.this); // L490-490
+    lambda self, e: (
+            "DETERMINISTIC" if e.name == "IMMUTABLE" else "NOT DETERMINISTIC"
+        ) { /* 3 lines hidden: L505-L507 */ }
+    lambda self, e: strposition_sql(
+            self, e, func_name="INSTR", supports_position=True, supports_occurrence=True
+        ) { /* 3 lines hidden: L509-L511 */ }
+    lambda *_: "SESSION_USER()"; // L514-514
+    lambda *_: "BEGIN TRANSACTION"; // L524-524
+    lambda *_: "GENERATE_UUID()"; // L533-533
+    SUPPORTED_JSON_PATH_PARTS = {exp.JSONPathKey, exp.JSONPathRoot, exp.JSONPathSubscript}; // L541-545
+    TYPE_MAPPING = {**generator.Generator.TYPE_MAPPING, exp.DType.BIGDECIMAL: "BIGNUMERIC", exp.DType.BIGINT: "INT64", exp.…; // L547-573
+    PROPERTIES_LOCATION = {**generator.Generator.PROPERTIES_LOCATION, exp.PartitionedByProperty: exp.Properties.Location.PO…; // L575-579
+    AFTER_HAVING_MODIFIER_TRANSFORMS = {"qualify": generator.AFTER_HAVING_MODIFIER_TRANSFORMS["qualify"], "windows": genera…; // L584-587
+    RESERVED_KEYWORDS = {"all", "and", "any", "array", "as", "asc", "assert_rows_modified", "at", "between", "by", "case",…; // L590-687
+    def frombase_sql(self, expression: exp.FromBase) -> str { /* 12 lines hidden: L691-L702 */ }
+    def approxquantile_sql(self, expression: exp.ApproxQuantile) -> str { /* 24 lines hidden: L705-L728 */ }
+    def weekstart_sql(self, expression: exp.WeekStart) -> str { /* 5 lines hidden: L731-L735 */ }
+    def datetrunc_sql(self, expression: exp.DateTrunc) -> str { /* 3 lines hidden: L738-L740 */ }
+    def mod_sql(self, expression: exp.Mod) -> str { /* 7 lines hidden: L743-L749 */ }
+    def column_parts(self, expression: exp.Column) -> str { /* 8 lines hidden: L752-L759 */ }
+    def table_parts(self, expression: exp.Table) -> str { /* 5 lines hidden: L770-L774 */ }
+    def timetostr_sql(self, expression: exp.TimeToStr) -> str { /* 14 lines hidden: L777-L790 */ }
+    def eq_sql(self, expression: exp.EQ) -> str { /* 5 lines hidden: L794-L798 */ }
+    def attimezone_sql(self, expression: exp.AtTimeZone) -> str { /* 10 lines hidden: L801-L810 */ }
+    def trycast_sql(self, expression: exp.TryCast) -> str; // L812-813
+    def bracket_sql(self, expression: exp.Bracket) -> str { /* 28 lines hidden: L816-L843 */ }
+    def in_unnest_op(self, expression: exp.Unnest) -> str; // L845-846
+    def version_sql(self, expression: exp.Version) -> str { /* 3 lines hidden: L849-L851 */ }
+    def contains_sql(self, expression: exp.Contains) -> str { /* 8 lines hidden: L854-L861 */ }
+    def parsejson_sql(self, expression: exp.ParseJSON) -> str { /* 3 lines hidden: L864-L866 */ }
+    def cast_sql(self, expression: exp.Cast, safe_prefix: str | None = None) -> str { /* 11 lines hidden: L869-L879 */ }
+    def clusterproperty_sql(self, expression: exp.ClusterProperty) -> str { /* 4 lines hidden: L882-L885 */ }
+} // L335-885
+
+
+--- STDERR ---

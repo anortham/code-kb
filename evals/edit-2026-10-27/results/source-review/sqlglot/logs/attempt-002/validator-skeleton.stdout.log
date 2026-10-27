@@ -1,0 +1,131 @@
+// File: tests/dialects/test_dialect.py (Lines 1-5762)
+
+_PARSER_IS_COMPILED = is_compiled(_base_module); // L24-24
+class Validator extends unittest.TestCase {
+    dialect = None; // L28-28
+    def parse_one(self, sql, **kwargs); // L30-31
+    def assert_duckdb_sql(self, expression: exp.Expr, *, includes: t.Optional[Iterable[str]] = None, excludes: t.Optional[Iterable[str]] = None, chr_chars: t.Optional[Iterable[str]] = None) -> str { /* 12 lines hidden: L41-L52 */ }
+    def validate_identity(self, sql, write_sql=None, pretty=False, check_command_warning=False, identify=False) { /* 11 lines hidden: L57-L67 */ }
+    /// Validate that `sql`, parsed with self.dialect, generates `write_sql` in `write_dialect`.
+    def validate_transpile(self, sql, write_sql, write_dialect=None) { /* 4 lines hidden: L70-L73 */ }
+    /// Validate that:
+    /// 1. Everything in `read` transpiles to `sql`
+    /// 2. `sql` transpiles to everything in `write`
+    /// ... (6 more lines)
+    def validate_all(self, sql, read=None, write=None, pretty=False, identify=False) { /* 41 lines hidden: L76-L116 */ }
+} // L27-116
+
+class TestDialect extends Validator {
+    maxDiff = None; // L120-120
+    def test_preserve_original_names(self) { /* 12 lines hidden: L123-L134 */ }
+    def test_enum(self) { /* 7 lines hidden: L137-L143 */ }
+    def test_lazy_load(self) { /* 5 lines hidden: L146-L150 */ }
+    def test_get_or_raise(self) { /* 53 lines hidden: L153-L205; defines `MyDialect` */ }
+    def test_compare_dialects(self) { /* 24 lines hidden: L208-L231 */ }
+    def test_compare_dialect_versions(self) { /* 12 lines hidden: L234-L245 */ }
+    def test_decimal_literals(self) { /* 37 lines hidden: L248-L284 */ }
+    def test_spark2_negative_scale_decimal_literals(self) { /* 13 lines hidden: L287-L299 */ }
+    def test_cast(self) { /* 283 lines hidden: L302-L584 */ }
+    def test_ddl(self) { /* 23 lines hidden: L587-L609 */ }
+    def test_heredoc_strings(self) { /* 36 lines hidden: L612-L647 */ }
+    def test_decode(self) { /* 57 lines hidden: L650-L706 */ }
+    def test_to_binary(self) { /* 34 lines hidden: L709-L742 */ }
+    def test_if_null(self) { /* 13 lines hidden: L745-L757 */ }
+    def test_is_ascii(self) { /* 11 lines hidden: L760-L770 */ }
+    def test_nvl2(self) { /* 54 lines hidden: L773-L826 */ }
+    def test_time(self) { /* 612 lines hidden: L829-L1440 */ }
+    def _validate_array_sort(self, read: str, sql: str, write: dict) -> None { /* 12 lines hidden: L1443-L1454 */ }
+    def test_array(self) { /* 585 lines hidden: L1457-L2041 */ }
+    def test_order_by(self) { /* 22 lines hidden: L2044-L2065 */ }
+    def test_json(self) { /* 179 lines hidden: L2068-L2246 */ }
+    def test_cross_join(self) { /* 65 lines hidden: L2249-L2313 */ }
+    def test_multiple_chained_unnest(self) { /* 8 lines hidden: L2316-L2323 */ }
+    def test_lateral_subquery(self) { /* 6 lines hidden: L2326-L2331 */ }
+    def test_set_operators(self) { /* 148 lines hidden: L2334-L2481 */ }
+    def test_operators(self) { /* 498 lines hidden: L2484-L2981 */ }
+    def test_typeddiv(self) { /* 30 lines hidden: L2984-L3013 */ }
+    def test_safediv(self) { /* 18 lines hidden: L3016-L3033 */ }
+    def test_fetch_first_implicit_count(self) { /* 37 lines hidden: L3039-L3075 */ }
+    def test_limit(self) { /* 112 lines hidden: L3078-L3189 */ }
+    def test_alias(self) { /* 87 lines hidden: L3192-L3278 */ }
+    def test_nullsafe_eq(self) { /* 11 lines hidden: L3281-L3291 */ }
+    def test_nullsafe_neq(self) { /* 10 lines hidden: L3294-L3303 */ }
+    def test_hash_comments(self) { /* 26 lines hidden: L3306-L3331 */ }
+    def test_transactions(self) { /* 32 lines hidden: L3334-L3365 */ }
+    def test_update(self) { /* 12 lines hidden: L3368-L3379 */ }
+    def test_merge(self) { /* 78 lines hidden: L3382-L3459 */ }
+    def test_substring(self) { /* 16 lines hidden: L3462-L3477 */ }
+    def test_logarithm(self) { /* 85 lines hidden: L3480-L3564 */ }
+    def test_count_if(self) { /* 33 lines hidden: L3567-L3599 */ }
+    def test_cast_to_user_defined_type(self) { /* 16 lines hidden: L3602-L3617 */ }
+    def test_qualify(self) { /* 24 lines hidden: L3620-L3643 */ }
+    def test_window_exclude(self) { /* 27 lines hidden: L3646-L3672 */ }
+    def test_partition_by_excluding(self) { /* 8 lines hidden: L3675-L3682 */ }
+    def test_nested_ctes(self) { /* 110 lines hidden: L3685-L3794 */ }
+    def test_unsupported_null_ordering(self) { /* 43 lines hidden: L3799-L3841 */ }
+    def test_random(self) { /* 35 lines hidden: L3844-L3878 */ }
+    def test_array_any(self) { /* 27 lines hidden: L3881-L3907 */ }
+    def test_truncate(self) { /* 4 lines hidden: L3910-L3913 */ }
+    def test_create_sequence(self) { /* 32 lines hidden: L3916-L3947 */ }
+    def test_reserved_keywords(self) { /* 13 lines hidden: L3950-L3962 */ }
+    def test_string_functions(self) { /* 28 lines hidden: L3965-L3992 */ }
+    def test_generate_date_array(self) { /* 49 lines hidden: L3995-L4043 */ }
+    def test_set_operation_specifiers(self) { /* 21 lines hidden: L4046-L4066 */ }
+    def test_normalize(self) { /* 17 lines hidden: L4069-L4085 */ }
+    /// Validate that "expressions" is a list for all the exp.Coalesce instances; This is important
+    /// as some optimizer rules are coalesce specific and will iterate on "expressions"
+    def test_coalesce(self) { /* 21 lines hidden: L4088-L4108 */ }
+    def test_trim(self) { /* 119 lines hidden: L4111-L4229 */ }
+    def test_uuid(self) { /* 29 lines hidden: L4232-L4260 */ }
+    def test_escaped_identifier_delimiter(self) { /* 89 lines hidden: L4263-L4351 */ }
+    def test_median(self) { /* 25 lines hidden: L4354-L4378 */ }
+    def test_filter(self) { /* 15 lines hidden: L4381-L4395 */ }
+    def test_filter_within_group(self) { /* 12 lines hidden: L4398-L4409 */ }
+    def test_current_schema(self) { /* 14 lines hidden: L4412-L4425 */ }
+    def test_integer_hex_strings(self) { /* 20 lines hidden: L4429-L4448 */ }
+    def test_ascii(self) { /* 25 lines hidden: L4451-L4475 */ }
+    def test_between(self) { /* 68 lines hidden: L4478-L4545 */ }
+    def test_like_quantifiers(self) { /* 56 lines hidden: L4548-L4603 */ }
+    def test_date_to_unix_date(self) { /* 14 lines hidden: L4606-L4619 */ }
+    def test_week_of_year(self) { /* 11 lines hidden: L4622-L4632 */ }
+    def test_justify(self) { /* 42 lines hidden: L4635-L4676 */ }
+    def test_unix_time(self) { /* 28 lines hidden: L4679-L4706 */ }
+    def test_reverse(self) { /* 36 lines hidden: L4709-L4744 */ }
+    def test_regr_count(self) { /* 31 lines hidden: L4747-L4777 */ }
+    def test_regr_intercept(self) { /* 29 lines hidden: L4780-L4808 */ }
+    def test_regr_r2(self) { /* 29 lines hidden: L4811-L4839 */ }
+    def test_regr_slope(self) { /* 29 lines hidden: L4842-L4870 */ }
+    def test_regr_sxx(self) { /* 29 lines hidden: L4873-L4901 */ }
+    def test_regr_sxy(self) { /* 29 lines hidden: L4904-L4932 */ }
+    def test_regr_syy(self) { /* 29 lines hidden: L4935-L4963 */ }
+    def test_translate(self) { /* 35 lines hidden: L4966-L5000 */ }
+    def test_soundex(self) { /* 36 lines hidden: L5003-L5038 */ }
+    def test_grouping(self) { /* 50 lines hidden: L5041-L5090 */ }
+    def test_farm_fingerprint(self) { /* 14 lines hidden: L5093-L5106 */ }
+    def test_from_to_base32(self) { /* 28 lines hidden: L5109-L5136 */ }
+    def test_regexp_instr(self) { /* 84 lines hidden: L5139-L5222 */ }
+    def test_format(self) { /* 17 lines hidden: L5225-L5241 */ }
+    def test_json_array_append(self) { /* 11 lines hidden: L5244-L5254 */ }
+    def test_json_array_insert(self) { /* 11 lines hidden: L5257-L5267 */ }
+    def test_json_remove(self) { /* 12 lines hidden: L5270-L5281 */ }
+    def test_json_set(self) { /* 13 lines hidden: L5284-L5296 */ }
+    def test_json_strip_nulls(self) { /* 11 lines hidden: L5299-L5309 */ }
+    def test_is_unknown(self) { /* 32 lines hidden: L5313-L5344 */ }
+    def test_is_with_dcolon(self) { /* 23 lines hidden: L5347-L5369 */ }
+    def test_regexp_replace(self) { /* 11 lines hidden: L5372-L5382 */ }
+    def test_subquery_unwrap(self) { /* 9 lines hidden: L5385-L5393 */ }
+    def test_initcap(self) { /* 73 lines hidden: L5396-L5468; defines `assert_default_duckdb_sql`, `assert_custom_duckdb_sql` */ }
+    def test_initcap_custom_delimiter_warning(self) { /* 6 lines hidden: L5471-L5476 */ }
+    def test_parse_at_time_zone(self) { /* 11 lines hidden: L5479-L5489 */ }
+    def test_underscore_scientific_notation(self) { /* 17 lines hidden: L5492-L5508 */ }
+    def test_localtime_and_localtimestamp(self) { /* 66 lines hidden: L5511-L5576 */ }
+    def test_current_catalog(self) { /* 34 lines hidden: L5579-L5612 */ }
+    def test_session_user(self) { /* 36 lines hidden: L5615-L5650 */ }
+    def test_operator(self) { /* 16 lines hidden: L5653-L5668 */ }
+    def test_json_keys(self) { /* 41 lines hidden: L5671-L5711 */ }
+    def test_interval_with_units_dcolon(self) { /* 8 lines hidden: L5714-L5721 */ }
+    @unittest.skipIf(_PARSER_IS_COMPILED, "mypyc compiled parsers cannot be subclassed") def test_patch_dialect_parser(self) { /* 17 lines hidden: L5725-L5741; defines `CustomSnowflakeParser` */ }
+    @unittest.skipIf(_PARSER_IS_COMPILED, "mypyc compiled parsers cannot be subclassed") def test_custom_dialect(self) { /* 13 lines hidden: L5745-L5757; defines `MyDialect` */ }
+    def test_agg(self) { /* 3 lines hidden: L5760-L5762 */ }
+} // L119-5762
+

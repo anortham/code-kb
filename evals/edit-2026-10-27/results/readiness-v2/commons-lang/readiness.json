@@ -1,0 +1,335 @@
+{
+  "behavioral_pass": true,
+  "case_id": "commons-lang",
+  "case_sha256": "a09f9cfab6fb450c742102aaaf5028c58bb9c8a61cf2aca4b4cbeed55f890a14",
+  "checks": {
+    "baseline_public": {
+      "commands": [
+        {
+          "command_id": "commons-public-comparable-regressions",
+          "elapsed_seconds": 14.797468,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/baseline-public-00-commons-public-comparable-regressions/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/baseline-public-00-commons-public-comparable-regressions/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "baseline_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "commons-copy-prepared-maven-cache",
+          "elapsed_seconds": 0.515199,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/runtime-baseline-00-commons-copy-prepared-maven-cache/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/runtime-baseline-00-commons-copy-prepared-maven-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "commons-resolve-dependencies-offline",
+          "elapsed_seconds": 4.481593,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/runtime-baseline-01-commons-resolve-dependencies-offline/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/runtime-baseline-01-commons-resolve-dependencies-offline/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "commons-surefire-provider-offline-cache",
+          "elapsed_seconds": 1.918659,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/runtime-baseline-02-commons-surefire-provider-offline-cache/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/runtime-baseline-02-commons-surefire-provider-offline-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "preparation": {
+      "commands": [],
+      "mode": "reused-inputs",
+      "passed": true
+    },
+    "reference_hidden": {
+      "commands": [
+        {
+          "command_id": "commons-comparable-migration-contract",
+          "elapsed_seconds": 9.587557,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/reference-hidden-00-commons-comparable-migration-contract/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/reference-hidden-00-commons-comparable-migration-contract/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_hidden_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "commons-copy-prepared-maven-cache",
+          "elapsed_seconds": 0.465116,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/runtime-reference-hidden-00-commons-copy-prepared-maven-cache/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/runtime-reference-hidden-00-commons-copy-prepared-maven-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "commons-resolve-dependencies-offline",
+          "elapsed_seconds": 2.719774,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/runtime-reference-hidden-01-commons-resolve-dependencies-offline/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/runtime-reference-hidden-01-commons-resolve-dependencies-offline/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "commons-surefire-provider-offline-cache",
+          "elapsed_seconds": 1.568086,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/runtime-reference-hidden-02-commons-surefire-provider-offline-cache/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/runtime-reference-hidden-02-commons-surefire-provider-offline-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_public": {
+      "commands": [
+        {
+          "command_id": "commons-public-comparable-regressions",
+          "elapsed_seconds": 14.154405,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/reference-public-00-commons-public-comparable-regressions/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/reference-public-00-commons-public-comparable-regressions/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_public_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "commons-copy-prepared-maven-cache",
+          "elapsed_seconds": 0.515475,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/runtime-reference-public-00-commons-copy-prepared-maven-cache/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/runtime-reference-public-00-commons-copy-prepared-maven-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "commons-resolve-dependencies-offline",
+          "elapsed_seconds": 3.020541,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/runtime-reference-public-01-commons-resolve-dependencies-offline/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/runtime-reference-public-01-commons-resolve-dependencies-offline/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "commons-surefire-provider-offline-cache",
+          "elapsed_seconds": 1.718115,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/runtime-reference-public-02-commons-surefire-provider-offline-cache/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/runtime-reference-public-02-commons-surefire-provider-offline-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "seed_hidden_failure": {
+      "commands": [
+        {
+          "command_id": "commons-comparable-migration-contract",
+          "elapsed_seconds": 10.087429,
+          "exit_status": 1,
+          "expected_output_missing": [
+            "Running org.apache.commons.lang3.compare.ComparableUtilsMigrationContractTest",
+            "Tests run: 5, Failures: 0, Errors: 0, Skipped: 0"
+          ],
+          "passed": false,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/seed-hidden-00-commons-comparable-migration-contract/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/seed-hidden-00-commons-comparable-migration-contract/stdout.log",
+          "test_execution_observed": false,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "seed_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "commons-copy-prepared-maven-cache",
+          "elapsed_seconds": 0.515139,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/runtime-seed-00-commons-copy-prepared-maven-cache/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/runtime-seed-00-commons-copy-prepared-maven-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "commons-resolve-dependencies-offline",
+          "elapsed_seconds": 3.020361,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/runtime-seed-01-commons-resolve-dependencies-offline/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/runtime-seed-01-commons-resolve-dependencies-offline/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "commons-surefire-provider-offline-cache",
+          "elapsed_seconds": 1.667974,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/runtime-seed-02-commons-surefire-provider-offline-cache/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/runtime-seed-02-commons-surefire-provider-offline-cache/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    }
+  },
+  "created_utc": "2026-10-27T21:37:23Z",
+  "dependencies": {
+    "commons-m2": "cd2d5dbf77c5e1e38296de7e5393ae46743b745775eb15c898ddec17c5504f65"
+  },
+  "readiness_error": null,
+  "reference_bundle_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/evidence/reference-bundle",
+  "reference_digest": "2c56b5befaf4e98bc2dcebd8ed7d530767e27bc7dc4241c258e7d671795e4235",
+  "reference_production_files_changed": [
+    "src/main/java/org/apache/commons/lang3/ObjectUtils.java",
+    "src/main/java/org/apache/commons/lang3/compare/ComparableUtils.java"
+  ],
+  "repo_id": "commons-lang",
+  "schema": 1,
+  "seed_digest": "1b27eddcb69508862613b2feb40aecfec803b98c58b67d5946c386b68f4b763d",
+  "seed_project_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds-v2/commons-lang",
+  "source_pin": "a5d6c5ed8847b2b14dacf062b646f94d6cc61a10",
+  "source_review": "passed",
+  "source_tree_sha256": "6a3a572d1f84211a81c0f35e0caf78069900ff6562794ba90afb2f3c7a05d402",
+  "status": "ready",
+  "raw_readiness_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/commons-lang-maven-marker-fix/readiness.json",
+  "raw_readiness_sha256": "01c8138090933411806aff09bad6f23d94e86d79ac5241678963afc9ae2b301b",
+  "source_review_path": "results/readiness-v2/commons-lang/source-review.json",
+  "source_review_sha256": "9e2fe9541256045d5d056fc0b7e2cc51087a99c0a933792a2b08179f64db58cd",
+  "acceptance_basis": "Live checks plus unchanged reviewed task/reference and explicit correction/seed-equivalence audit; raw pending-review result preserved."
+}

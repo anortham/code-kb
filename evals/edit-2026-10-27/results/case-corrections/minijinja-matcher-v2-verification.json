@@ -1,0 +1,83 @@
+{
+  "schema": 1,
+  "case_id": "minijinja",
+  "matcher_version": 2,
+  "corrected_case_path": "corrected-cases/minijinja",
+  "changed_files": [
+    "checks/edit_eval_autoescape.rs"
+  ],
+  "hashes": {
+    "frozen_original_checker_sha256": "4b38e99ad284279aec145b5bf66134a8354152386eb05cff7bdc0f162f00b35d",
+    "corrected_checker_sha256": "9fc89efe9bda32c7f1283a5d7745c04e1685d59d2c33f95acd3aa4bb3b937611",
+    "corrected_case_tree_sha256": "9c7b081fd68fe8b0284262d1cf105d780eac91af3e4e7656ad9fc351e637e647",
+    "corrected_case_json_sha256": "6e0860a453b6185e87b9d3d512f550657f665ff440661534f8a85ab1c9aa2b00",
+    "reference_patch_sha256": "58558ff2dccc44a6d0d5092814c0a9f661309d5bfd7d6ad1d9d791afdd8d60d1",
+    "seed_patch_sha256": "8e86857b949bc8b34c2c40be253f6153a6eb92d63859e3f7b92e336556eda9be",
+    "request_sha256": "0d0795b302b6187984c0174140136af7fa22d4624da205286bf00154aceff916"
+  },
+  "matcher": {
+    "section_start": "--autoescape",
+    "section_end_exclusive": "[env var: minijinja_autoescape]",
+    "required_suffix_tokens": [
+      ".j2",
+      ".jinja",
+      ".jinja2"
+    ],
+    "case_insensitivity_phrases": [
+      "ignoring case",
+      "ignores case",
+      "ignore case",
+      "case-insensitive",
+      "case insensitive",
+      "regardless of case",
+      "without regard to case",
+      "ASCII letter case normalized to case"
+    ],
+    "negative_coverage": [
+      "all suffixes without a case explanation",
+      "missing .j2",
+      "missing .jinja while .jinja2 is present",
+      "missing .jinja2 while .jinja is present",
+      "generic mention of letter case",
+      "case-sensitive wording",
+      "case-insensitivity wording outside the autoescape section"
+    ],
+    "count_markers_unchanged": true
+  },
+  "tdd": {
+    "temporary_workspace": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/minijinja-matcher-tdd-v2.Qv9E4d",
+    "network": "disabled",
+    "commands": [
+      "/home/murphy/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo test --locked --offline -p minijinja-cli --test edit_eval_autoescape long_help_documents_template_wrapper_suffixes -- --exact",
+      "/home/murphy/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo test --locked --offline -p minijinja-cli --test edit_eval_autoescape"
+    ],
+    "red_runs": [
+      {
+        "cause": "The frozen five-phrase matcher rejected the accurate ASCII-letter wording.",
+        "exit_code": 101,
+        "raw_output": "running 1 test\ntest long_help_documents_template_wrapper_suffixes ... FAILED\n\nfailures:\n\n---- long_help_documents_template_wrapper_suffixes stdout ----\n\nthread 'long_help_documents_template_wrapper_suffixes' panicked at minijinja-cli/tests/edit_eval_autoescape.rs:100:9:\n--autoescape .j2, .jinja, and .jinja2 suffixes are matched without regard to ASCII letter case. [env var: minijinja_autoescape]\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\nfailures:\n    long_help_documents_template_wrapper_suffixes\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s\n\nerror: test failed, to rerun pass `-p minijinja-cli --test edit_eval_autoescape`"
+      },
+      {
+        "cause": "After phrase normalization, substring matching let .jinja2 satisfy the missing .jinja case.",
+        "exit_code": 101,
+        "raw_output": "running 1 test\ntest long_help_documents_template_wrapper_suffixes ... FAILED\n\nfailures:\n\n---- long_help_documents_template_wrapper_suffixes stdout ----\n\nthread 'long_help_documents_template_wrapper_suffixes' panicked at minijinja-cli/tests/edit_eval_autoescape.rs:114:9:\n--autoescape .j2 and .jinja2 suffixes are case-insensitive. [env var: minijinja_autoescape]\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\nfailures:\n    long_help_documents_template_wrapper_suffixes\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s\n\nerror: test failed, to rerun pass `-p minijinja-cli --test edit_eval_autoescape`"
+      }
+    ],
+    "green_runs": [
+      {
+        "scope": "focused matcher test",
+        "exit_code": 0,
+        "raw_output": "running 1 test\ntest long_help_documents_template_wrapper_suffixes ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s"
+      },
+      {
+        "scope": "full declared hidden command",
+        "exit_code": 0,
+        "raw_output": "running 3 tests\ntest long_help_documents_template_wrapper_suffixes ... ok\ntest explicit_modes_override_template_wrapper_detection ... ok\ntest automatic_mode_uses_the_output_suffix_before_a_template_wrapper ... ok\n\ntest result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+      }
+    ],
+    "rustfmt_check_exit_code": 0,
+    "validate_case_exit_code": 0,
+    "readiness_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/minijinja/readiness.json",
+    "readiness_status": "ready"
+  }
+}

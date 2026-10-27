@@ -1,0 +1,151 @@
+{
+  "case_preparations": {
+    "date-fns": {
+      "changed_contract_fields": [
+        "generated_roots"
+      ],
+      "changed_files": [
+        "case.json"
+      ],
+      "checks_sha256": {
+        "checks/test.ts": "a3df30b766067bf82a37cc8e291e0199fbb07ccd55cfab9c01c160c6fbba3407"
+      },
+      "corrected_case_json_sha256": "1eb395581fe9f69dba2405b903e7ebc8c4a74da0ec40e49c195629e92181224a",
+      "corrected_case_path": "corrected-cases/date-fns",
+      "corrected_generated_roots": [
+        ".code-kb",
+        "node_modules",
+        "pkgs/core/node_modules",
+        "pkgs/tz/node_modules",
+        "pkgs/utc/node_modules",
+        "pkgs/docs/node_modules",
+        "pkgs/dev/node_modules",
+        "pkgs/core/lib",
+        "pkgs/tz/lib",
+        "pkgs/utc/lib",
+        "pkgs/tz/test/engines/node_modules"
+      ],
+      "corrected_tree_sha256": "4244c3c81603a09b13264f2f5b04d60047f60c1d5139c3f84a707ccbb576f62d",
+      "dependency_inputs": [
+        "pnpm-store"
+      ],
+      "hidden_commands_sha256": "8f1fbbef3432b710cca324768c741a5677b911bc552ba0fe6b2917a21e9bb2f7",
+      "original_case_json_sha256": "51609366805dddf3788fdbbc9b0924c9969d71865cbc09df9cf8059aacd11277",
+      "original_case_path": "cases/date-fns",
+      "original_generated_roots": [
+        ".code-kb",
+        "node_modules",
+        "pkgs/core/node_modules",
+        "pkgs/tz/node_modules",
+        "pkgs/utc/node_modules",
+        "pkgs/docs/node_modules",
+        "pkgs/dev/node_modules",
+        "pkgs/core/lib",
+        "pkgs/tz/lib",
+        "pkgs/utc/lib"
+      ],
+      "original_tree_sha256": "04e0a0a7493c2b60131aa2dc138114ff190ee47728cca7b9990fc9e816769f5c",
+      "public_commands_sha256": "3d031bf8c05e5eabd3fc1e024a711e749c7d06e95fcf3011421b6fe73ee0d6a8",
+      "reference_patch_sha256": "c30943b965ef568af533db79a26dde9cf2182428a62b48062f0084f964191625",
+      "request_sha256": "fd586e2ce8ae6d85a594a898d31170e397159b020150d7c0eba4d4fab65607d4",
+      "seed_patch_sha256": "2e85d8f2d5a32d7e5da2382d5e75dcea336945d8c7ef8420676201fc7503e310",
+      "source_pin": "a9739fb3e5384a810e90d7376446f6d84ecc5029",
+      "tool_inputs": [
+        "node"
+      ],
+      "validate_case": "passed"
+    },
+    "hcl": {
+      "changed_contract_fields": [
+        "generated_roots"
+      ],
+      "changed_files": [
+        "case.json"
+      ],
+      "checks_sha256": {
+        "checks/expression_field_test.go": "c6a44473cde262db9d00ad7fca5dc41c360798d3e40d777e30ce5d6da9b20cfb"
+      },
+      "corrected_case_json_sha256": "77487615bd9d33e946ed92bb95f011a458bccd34dcc85c0589c7f88dd9c7481c",
+      "corrected_case_path": "corrected-cases/hcl",
+      "corrected_generated_roots": [
+        ".code-kb",
+        "specsuite/tmp_hcldec",
+        "specsuite/tmp_hclspecsuite"
+      ],
+      "corrected_tree_sha256": "ffca3a556c95780143ffb8ac93a454c58c4735073ba2742093c87c4f57e9ba61",
+      "dependency_inputs": [
+        "go-mod-cache"
+      ],
+      "hidden_commands_sha256": "444c01f409f11f1a6c893b6824b55a504d77ad9c6c430512c22ac4156c9c6f2a",
+      "original_case_json_sha256": "db5e73fe88181550c6f90e4e601e7a85156ae7d5de485bde20876e1c33735ff6",
+      "original_case_path": "cases/hcl",
+      "original_generated_roots": [
+        ".code-kb"
+      ],
+      "original_tree_sha256": "befde64d594b382d56bdb627966c19b18f0081ec6b678dacd073c5148e94271b",
+      "public_commands_sha256": "fb1a7d9c16757d2959e21de2eeb59c5cd35f45dfd7c7088c6b0303c28e30cacd",
+      "reference_patch_sha256": "0575fcec6ea5ac520c1851cfc1b3abdc10a6e3b670676c368866507c2c80a213",
+      "request_sha256": "73ae2cf2797b4196d930c5b9dbfbbe222b2272a3675a95599b3ce9ca6431df0e",
+      "seed_patch_sha256": "00389ada4651aa1494bb0b08904fc40e48c2b929d6535aa8092d35c88369da10",
+      "source_pin": "4a347c448ee961e556dde0fad522a996e04c00c0",
+      "tool_inputs": [],
+      "validate_case": "passed"
+    },
+    "minijinja": {
+      "changed_contract_fields": [],
+      "changed_files": [],
+      "checks_sha256": {
+        "checks/edit_eval_autoescape.rs": "4b38e99ad284279aec145b5bf66134a8354152386eb05cff7bdc0f162f00b35d",
+        "checks/edit_eval_autoescape_public.rs": "e700bb1620d0c36a0810f5878a8608e5275f6345f3282a3836a92e68adc4dec8",
+        "checks/source-evidence.md": "6d354eb0a82ae92d1d45e216064cf6c981881dddcb126ea170e2729c0a1ab584"
+      },
+      "corrected_case_json_sha256": "6e0860a453b6185e87b9d3d512f550657f665ff440661534f8a85ab1c9aa2b00",
+      "corrected_case_path": "corrected-cases/minijinja",
+      "corrected_generated_roots": [
+        ".code-kb",
+        "target"
+      ],
+      "corrected_tree_sha256": "7bac8a6a11372f4cbc5ce7332ec19fef64db0ee2f419e01284209535a18a52eb",
+      "dependency_inputs": [
+        "cargo-cache"
+      ],
+      "hidden_commands_sha256": "9752e3c4a21fbb33ca1b459060bb8c27c36e8c379b45150c8034c541e1c531da",
+      "original_case_json_sha256": "6e0860a453b6185e87b9d3d512f550657f665ff440661534f8a85ab1c9aa2b00",
+      "original_case_path": "cases/minijinja",
+      "original_generated_roots": [
+        ".code-kb",
+        "target"
+      ],
+      "original_tree_sha256": "7bac8a6a11372f4cbc5ce7332ec19fef64db0ee2f419e01284209535a18a52eb",
+      "public_commands_sha256": "9a23e95bb116d6dc9daaa00367ac5cbe52c813dcf47a0871121bd3ea3147e8e9",
+      "reference_patch_sha256": "58558ff2dccc44a6d0d5092814c0a9f661309d5bfd7d6ad1d9d791afdd8d60d1",
+      "request_sha256": "0d0795b302b6187984c0174140136af7fa22d4624da205286bf00154aceff916",
+      "seed_patch_sha256": "8e86857b949bc8b34c2c40be253f6153a6eb92d63859e3f7b92e336556eda9be",
+      "source_pin": "81787c4eab656f3a4f4e92dea53f303a36f1685c",
+      "tool_inputs": [
+        "rust"
+      ],
+      "validate_case": "passed"
+    }
+  },
+  "minijinja_predeclared_adjudication": {
+    "actual_help": "Suffixes are matched without regard to ASCII letter case",
+    "classification": "mechanical wording false negative",
+    "corrected_case_copy": "currently byte-identical to cases/minijinja",
+    "frozen_checker_sha256": "4b38e99ad284279aec145b5bf66134a8354152386eb05cff7bdc0f162f00b35d",
+    "path": "results/adjudication/minijinja-help-predeclared.json",
+    "sha256": "06f0019c25e2ae2f2f294fa0b69f77ba538fffd097c56d71cc50a87486829278",
+    "strict_original_outcomes": "remain immutable",
+    "trigger_attempt_sha256": "353c9dac685d33a30ed6bdbbbda976727a19c41974d07a7e277f18891616d62c"
+  },
+  "policy": "Independent corrected case copies only; original cases, attempts, grades, profiles, controls, and outcomes remain unchanged.",
+  "prepared_utc": "2026-10-27T20:35:19+00:00",
+  "schema": 1,
+  "status": "prepared_waiting_for_root_go",
+  "test_and_readiness_execution": "none; waiting for root go",
+  "worktree": {
+    "branch": "fix/cross-language-review",
+    "commit": "0ba3d1788f13299751f8b12cad9f3ce2ed548f12",
+    "path": "/home/murphy/.codex/worktrees/1e6f/code-kb"
+  }
+}

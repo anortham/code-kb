@@ -1,0 +1,10 @@
+// minijinja-cli/tests/test_autoescape.rs:76-82 (explicit_autoescape_modes_override_filename)
+fn explicit_autoescape_modes_override_filename() {
+    for filename in ["report.HTML.JINJA2", "report.JSON.JINJA", "report.txt"] {
+        for (mode, expected) in [("html", HTML), ("json", JSON), ("none", NONE)] {
+            assert_render(filename, Some(mode), expected);
+        }
+    }
+}
+
+--- STDERR ---

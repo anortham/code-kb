@@ -1,0 +1,16 @@
+// minijinja-cli/tests/test_autoescape.rs:65-79 (test_explicit_autoescape_modes_override_suffixes)
+fn test_explicit_autoescape_modes_override_suffixes() {
+    for filename in [
+        "report.html",
+        "report.json",
+        "report.HTML.JINJA2",
+        "report.JSON.JINJA",
+        "report.txt.j2",
+    ] {
+        for (mode, expected) in [("html", "&quot;"), ("json", "\"\\\"\""), ("none", "\"")] {
+            assert_eq!(render(filename, Some(mode)), expected, "{filename}: {mode}");
+        }
+    }
+    assert_eq!(render("report.html.jinja2", Some("auto")), "&quot;");
+    assert_eq!(render("report.JSON.JINJA", Some("auto")), "\"\\\"\"");
+}

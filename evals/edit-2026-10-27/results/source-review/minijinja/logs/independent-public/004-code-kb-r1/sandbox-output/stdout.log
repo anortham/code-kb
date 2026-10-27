@@ -1,0 +1,9 @@
+
+running 4 tests
+test test_autoescape_long_help_describes_wrapped_suffixes ... ok
+test test_autoescape_only_skips_one_template_wrapper ... ok
+test test_explicit_autoescape_modes_override_suffixes ... ok
+test test_autoescape_output_suffixes ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+

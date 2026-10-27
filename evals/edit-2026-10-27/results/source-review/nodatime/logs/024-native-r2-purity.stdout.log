@@ -1,0 +1,37 @@
+  Determining projects to restore...
+  Restored <source-review-temp>/024-nodatime-native-r2/project/src/NodaTime.Test/NodaTime.Test.csproj (in 164 ms).
+  Restored <source-review-temp>/024-nodatime-native-r2/project/src/NodaTime/NodaTime.csproj (in 146 ms).
+  Restored <source-review-temp>/024-nodatime-native-r2/project/src/NodaTime.Testing/NodaTime.Testing.csproj (in 146 ms).
+  InheritDocTask replaced 53 of 53 inheritdoc tags and removed 649 non-public member docs in <source-review-temp>/024-nodatime-native-r2/project/src/NodaTime/bin/Debug/net8.0/NodaTime.xml
+  NodaTime -> <source-review-temp>/024-nodatime-native-r2/project/src/NodaTime/bin/Debug/net8.0/NodaTime.dll
+  InheritDocTask replaced 53 of 53 inheritdoc tags and removed 649 non-public member docs in <source-review-temp>/024-nodatime-native-r2/project/src/NodaTime/bin/Debug/netstandard2.0/NodaTime.xml
+  NodaTime -> <source-review-temp>/024-nodatime-native-r2/project/src/NodaTime/bin/Debug/netstandard2.0/NodaTime.dll
+  InheritDocTask replaced 5 of 5 inheritdoc tags and removed 2 non-public member docs in <source-review-temp>/024-nodatime-native-r2/project/src/NodaTime.Testing/bin/Debug/netstandard2.0/NodaTime.Testing.xml
+  NodaTime.Testing -> <source-review-temp>/024-nodatime-native-r2/project/src/NodaTime.Testing/bin/Debug/netstandard2.0/NodaTime.Testing.dll
+  NodaTime.Test -> <source-review-temp>/024-nodatime-native-r2/project/src/NodaTime.Test/bin/Debug/net10.0/NodaTime.Test.dll
+Test run for <source-review-temp>/024-nodatime-native-r2/project/src/NodaTime.Test/bin/Debug/net10.0/NodaTime.Test.dll (.NETCoreApp,Version=v10.0)
+VSTest version 18.0.2 (x64)
+
+Starting test execution, please wait...
+A total of 1 test files matched the specified pattern.
+NUnit Adapter 6.3.0.0: Test execution started
+Running selected tests in <source-review-temp>/024-nodatime-native-r2/project/src/NodaTime.Test/bin/Debug/net10.0/NodaTime.Test.dll
+   NUnit3TestExecutor discovered 1 of 1 NUnit test cases using Current Discovery mode, Non-Explicit run
+  Failed AllPublicStructMethodsArePure [17 ms]
+  Error Message:
+   Failures: 2
+LocalDate.CompareToIgnoringCalendar
+LocalDateTime.CompareToIgnoringCalendar
+  Stack Trace:
+     at NodaTime.Test.TestHelper.AssertNoFailures[T](IEnumerable`1 failures, Func`2 failureFormatter) in <source-review-temp>/024-nodatime-native-r2/project/src/NodaTime.Test/TestHelper.cs:line 144
+   at NodaTime.Test.Annotations.PurityTest.AllPublicStructMethodsArePure() in <source-review-temp>/024-nodatime-native-r2/project/src/NodaTime.Test/Annotations/PurityTest.cs:line 33
+
+1)    at NodaTime.Test.TestHelper.AssertNoFailures[T](IEnumerable`1 failures, Func`2 failureFormatter) in <source-review-temp>/024-nodatime-native-r2/project/src/NodaTime.Test/TestHelper.cs:line 144
+   at NodaTime.Test.Annotations.PurityTest.AllPublicStructMethodsArePure() in <source-review-temp>/024-nodatime-native-r2/project/src/NodaTime.Test/Annotations/PurityTest.cs:line 33
+
+
+
+Test Run Failed.
+Total tests: 1
+     Failed: 1
+ Total time: 3.7536 Seconds

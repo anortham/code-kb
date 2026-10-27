@@ -1,0 +1,11 @@
+// File: minijinja-cli/tests/test_autoescape.rs (Lines 1-82)
+
+const HTML: &str = "&lt;&amp;\n"; // L6-6
+const JSON: &str = "\"<&\"\n"; // L7-7
+const NONE: &str = "<&\n"; // L8-8
+fn assert_render(filename: &str, mode: Option<&str>, expected: &str) { /* 23 lines hidden: L10-L32 */ }
+fn autoescape_output_suffixes_with_optional_template_wrapper() { /* 20 lines hidden: L35-L54 */ }
+fn autoescape_only_ignores_one_final_wrapper() { /* 17 lines hidden: L57-L73 */ }
+fn explicit_autoescape_modes_override_filename() { /* 7 lines hidden: L76-L82 */ }
+
+--- STDERR ---

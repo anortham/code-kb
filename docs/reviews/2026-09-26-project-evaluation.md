@@ -123,7 +123,8 @@ implemented by this report.
 
 Item 5 follows the other four improvements and largely executes the existing
 [retrieval-value backlog](../plans/2026-09-23-retrieval-value-and-optional-routing.md).
-It does not need another planning system. Paid agent replays require a budget;
+It does not need another planning system. The owner's October 27 instruction
+authorizes paid agent replays without separate budget or spending approval;
 this evaluation did not run them.
 
 ## What the token measurements establish

@@ -1,0 +1,350 @@
+{
+  "schema": 1,
+  "case_id": "minijinja",
+  "runtime_bindings_path": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/lead/runtime-bindings.json",
+  "runtime_bindings_sha256": "7fbf8bd3b8024c70076bf281aca80bca255b9f6537e8249c9dd537e0d00fb103",
+  "network": false,
+  "auth_file": null,
+  "private_profile": null,
+  "original_source_checks": [
+    {
+      "case_id": "minijinja",
+      "schedule_index": 3,
+      "source": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/003-minijinja-native-r1/grade/work/public-project",
+      "before": "654a9414adf07b0763c2b93f673efacaf7e1c6e1bb5388e6a14192d7c66f0eb5",
+      "after": "654a9414adf07b0763c2b93f673efacaf7e1c6e1bb5388e6a14192d7c66f0eb5",
+      "unchanged": true
+    },
+    {
+      "case_id": "minijinja",
+      "schedule_index": 4,
+      "source": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/004-minijinja-code-kb-r1/grade/work/public-project",
+      "before": "04c7f259ed84cc6b597c9253239645f9b601f02f473390f4156468647ffb4ea2",
+      "after": "04c7f259ed84cc6b597c9253239645f9b601f02f473390f4156468647ffb4ea2",
+      "unchanged": true
+    },
+    {
+      "case_id": "minijinja",
+      "schedule_index": 15,
+      "source": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/grade-recovery-3/work/public-project",
+      "before": "6005d706e7c65a3595e9f50994e6b8839ce6b8420644d376d9ab08e0411fb1a4",
+      "after": "6005d706e7c65a3595e9f50994e6b8839ce6b8420644d376d9ab08e0411fb1a4",
+      "unchanged": true
+    },
+    {
+      "case_id": "minijinja",
+      "schedule_index": 16,
+      "source": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/016-minijinja-native-r2/grade/work/public-project",
+      "before": "a15ceb79e08d83feba17d2161a162247e668efc52ca55c1118adbd47502e5c1e",
+      "after": "a15ceb79e08d83feba17d2161a162247e668efc52ca55c1118adbd47502e5c1e",
+      "unchanged": true
+    }
+  ],
+  "runs": [
+    {
+      "schema": 1,
+      "case_id": "minijinja",
+      "schedule_index": 3,
+      "arm": "native",
+      "repeat": 1,
+      "attempt_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/003-minijinja-native-r1/attempt.json",
+      "raw_attempt_sha256": "659d16b000b9ae5f3d1e8a45a1bfb0256dfa73735d48bd248fb157a953d2afc5",
+      "effective_attempt_path": null,
+      "effective_attempt_sha256": null,
+      "bundle_json_sha256": "973831ad95b7b28d9cc73bc04d56d0087a8dee7a0f8420e6677d3f8e8cb7f4ce",
+      "source_review_receipt": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/results/source-review/minijinja/003-native-r1.json",
+      "project_source": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/003-minijinja-native-r1/grade/work/public-project",
+      "fresh_public_replay": "/tmp/code-kb-independent-added-public-20261027-v5okz0p1/minijinja-003-native-r1/project",
+      "public_state": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/003-minijinja-native-r1/grade/work/state-grade-public",
+      "runtime_bindings_path": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/lead/runtime-bindings.json",
+      "runtime_bindings_sha256": "7fbf8bd3b8024c70076bf281aca80bca255b9f6537e8249c9dd537e0d00fb103",
+      "dependencies": {
+        "cargo-cache": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_minijinja_cargo-cache"
+      },
+      "tools": {
+        "rust": "/home/murphy/.rustup/toolchains/stable-x86_64-unknown-linux-gnu"
+      },
+      "network": false,
+      "auth_file": null,
+      "private_profile": null,
+      "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=/state/cargo",
+        "CARGO_NET_OFFLINE=true",
+        "CARGO_TARGET_DIR=/state/target",
+        "CARGO_INCREMENTAL=0",
+        "RUSTC=/tools/rust/bin/rustc",
+        "/tools/rust/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "-p",
+        "minijinja-cli",
+        "--test",
+        "test_autoescape"
+      ],
+      "timeout_seconds": 600,
+      "generated_roots_excluded_from_snapshot": [
+        ".code-kb",
+        "target"
+      ],
+      "protected_path_count": 741,
+      "protected_paths_sha256": "e9d114b159a5a6dc416137490dc56a4a8c7a7668afc049d0381a313de6d9cd4c",
+      "source_sha256_before": "654a9414adf07b0763c2b93f673efacaf7e1c6e1bb5388e6a14192d7c66f0eb5",
+      "source_sha256_after": "654a9414adf07b0763c2b93f673efacaf7e1c6e1bb5388e6a14192d7c66f0eb5",
+      "source_unchanged": true,
+      "edit_sandbox_cli_exit_status": 0,
+      "execution": {
+        "elapsed_seconds": 1.26732,
+        "exit_status": 0,
+        "mode": "grade",
+        "network_scope": "disabled",
+        "process_cleanup": {
+          "attempted": false,
+          "complete": true,
+          "signal": null
+        },
+        "stderr_log": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/results/source-review/minijinja/logs/independent-public/003-native-r1/sandbox-output/stderr.log",
+        "stdout_log": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/results/source-review/minijinja/logs/independent-public/003-native-r1/sandbox-output/stdout.log",
+        "timed_out": false
+      },
+      "logs_dir": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/results/source-review/minijinja/logs/independent-public/003-native-r1",
+      "original_public_source_unchanged": true,
+      "bundle_json_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/003-minijinja-native-r1/bundle/bundle.json",
+      "original_grade_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/003-minijinja-native-r1/grade/grade.json",
+      "original_grade_sha256": "7ce6609ee4e4fa1016e55d23cc2f5d3b9d9a3f2fad1d88e9c1fcf5e94c3fd3d4",
+      "original_grade_unchanged": true,
+      "raw_attempt_unchanged": true,
+      "bundle_json_unchanged": true
+    },
+    {
+      "schema": 1,
+      "case_id": "minijinja",
+      "schedule_index": 4,
+      "arm": "code-kb",
+      "repeat": 1,
+      "attempt_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/004-minijinja-code-kb-r1/attempt.json",
+      "raw_attempt_sha256": "353c9dac685d33a30ed6bdbbbda976727a19c41974d07a7e277f18891616d62c",
+      "effective_attempt_path": null,
+      "effective_attempt_sha256": null,
+      "bundle_json_sha256": "7b5d362344f2ef642de1f94253d8ed33e27990618d53f35345e21de2ac8cf8da",
+      "source_review_receipt": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/results/source-review/minijinja/004-code-kb-r1.json",
+      "project_source": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/004-minijinja-code-kb-r1/grade/work/public-project",
+      "fresh_public_replay": "/tmp/code-kb-independent-added-public-20261027-v5okz0p1/minijinja-004-code-kb-r1/project",
+      "public_state": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/004-minijinja-code-kb-r1/grade/work/state-grade-public",
+      "runtime_bindings_path": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/lead/runtime-bindings.json",
+      "runtime_bindings_sha256": "7fbf8bd3b8024c70076bf281aca80bca255b9f6537e8249c9dd537e0d00fb103",
+      "dependencies": {
+        "cargo-cache": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_minijinja_cargo-cache"
+      },
+      "tools": {
+        "rust": "/home/murphy/.rustup/toolchains/stable-x86_64-unknown-linux-gnu"
+      },
+      "network": false,
+      "auth_file": null,
+      "private_profile": null,
+      "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=/state/cargo",
+        "CARGO_NET_OFFLINE=true",
+        "CARGO_TARGET_DIR=/state/target",
+        "CARGO_INCREMENTAL=0",
+        "RUSTC=/tools/rust/bin/rustc",
+        "/tools/rust/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "-p",
+        "minijinja-cli",
+        "--test",
+        "test_autoescape"
+      ],
+      "timeout_seconds": 600,
+      "generated_roots_excluded_from_snapshot": [
+        ".code-kb",
+        "target"
+      ],
+      "protected_path_count": 741,
+      "protected_paths_sha256": "e9d114b159a5a6dc416137490dc56a4a8c7a7668afc049d0381a313de6d9cd4c",
+      "source_sha256_before": "04c7f259ed84cc6b597c9253239645f9b601f02f473390f4156468647ffb4ea2",
+      "source_sha256_after": "04c7f259ed84cc6b597c9253239645f9b601f02f473390f4156468647ffb4ea2",
+      "source_unchanged": true,
+      "edit_sandbox_cli_exit_status": 0,
+      "execution": {
+        "elapsed_seconds": 1.317602,
+        "exit_status": 0,
+        "mode": "grade",
+        "network_scope": "disabled",
+        "process_cleanup": {
+          "attempted": false,
+          "complete": true,
+          "signal": null
+        },
+        "stderr_log": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/results/source-review/minijinja/logs/independent-public/004-code-kb-r1/sandbox-output/stderr.log",
+        "stdout_log": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/results/source-review/minijinja/logs/independent-public/004-code-kb-r1/sandbox-output/stdout.log",
+        "timed_out": false
+      },
+      "logs_dir": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/results/source-review/minijinja/logs/independent-public/004-code-kb-r1",
+      "original_public_source_unchanged": true,
+      "bundle_json_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/004-minijinja-code-kb-r1/bundle/bundle.json",
+      "original_grade_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/004-minijinja-code-kb-r1/grade/grade.json",
+      "original_grade_sha256": "45efa65e040e70e796f69537c4f80566e9cb28304b505a6ab8a9ddcc9a6a650d",
+      "original_grade_unchanged": true,
+      "raw_attempt_unchanged": true,
+      "bundle_json_unchanged": true
+    },
+    {
+      "schema": 1,
+      "case_id": "minijinja",
+      "schedule_index": 15,
+      "arm": "code-kb",
+      "repeat": 2,
+      "attempt_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/attempt.json",
+      "raw_attempt_sha256": "2662c1379103f16523c8a05bc2c6904becb0a473276e5648e592c7db4065c1eb",
+      "effective_attempt_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/recovery/recovered-attempt-v3.json",
+      "effective_attempt_sha256": "46b62b9d53a2c8d1fd976e5664976a76657951a7cdf955b9ae31ca816cfcd351",
+      "bundle_json_sha256": "5c8138783c09af2ee53db1100d478ed3aaf1912f75d8c441af468d376cc279ae",
+      "source_review_receipt": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/results/source-review/minijinja/015-code-kb-r2.json",
+      "project_source": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/grade-recovery-3/work/public-project",
+      "fresh_public_replay": "/tmp/code-kb-independent-added-public-20261027-v5okz0p1/minijinja-015-code-kb-r2/project",
+      "public_state": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/grade-recovery-3/work/state-grade-public",
+      "runtime_bindings_path": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/lead/runtime-bindings.json",
+      "runtime_bindings_sha256": "7fbf8bd3b8024c70076bf281aca80bca255b9f6537e8249c9dd537e0d00fb103",
+      "dependencies": {
+        "cargo-cache": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_minijinja_cargo-cache"
+      },
+      "tools": {
+        "rust": "/home/murphy/.rustup/toolchains/stable-x86_64-unknown-linux-gnu"
+      },
+      "network": false,
+      "auth_file": null,
+      "private_profile": null,
+      "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=/state/cargo",
+        "CARGO_NET_OFFLINE=true",
+        "CARGO_TARGET_DIR=/state/target",
+        "CARGO_INCREMENTAL=0",
+        "RUSTC=/tools/rust/bin/rustc",
+        "/tools/rust/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "-p",
+        "minijinja-cli",
+        "--test",
+        "test_autoescape"
+      ],
+      "timeout_seconds": 600,
+      "generated_roots_excluded_from_snapshot": [
+        ".code-kb",
+        "target"
+      ],
+      "protected_path_count": 741,
+      "protected_paths_sha256": "e9d114b159a5a6dc416137490dc56a4a8c7a7668afc049d0381a313de6d9cd4c",
+      "source_sha256_before": "6005d706e7c65a3595e9f50994e6b8839ce6b8420644d376d9ab08e0411fb1a4",
+      "source_sha256_after": "6005d706e7c65a3595e9f50994e6b8839ce6b8420644d376d9ab08e0411fb1a4",
+      "source_unchanged": true,
+      "edit_sandbox_cli_exit_status": 0,
+      "execution": {
+        "elapsed_seconds": 1.167372,
+        "exit_status": 0,
+        "mode": "grade",
+        "network_scope": "disabled",
+        "process_cleanup": {
+          "attempted": false,
+          "complete": true,
+          "signal": null
+        },
+        "stderr_log": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/results/source-review/minijinja/logs/independent-public/015-code-kb-r2/sandbox-output/stderr.log",
+        "stdout_log": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/results/source-review/minijinja/logs/independent-public/015-code-kb-r2/sandbox-output/stdout.log",
+        "timed_out": false
+      },
+      "logs_dir": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/results/source-review/minijinja/logs/independent-public/015-code-kb-r2",
+      "original_public_source_unchanged": true,
+      "bundle_json_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/bundle/bundle.json",
+      "original_grade_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/015-minijinja-code-kb-r2/grade-recovery-3/grade.json",
+      "original_grade_sha256": "5df29d89c0121331eb82cd37c6b32afbf8f876511150d540ace07add18b5265e",
+      "original_grade_unchanged": true,
+      "raw_attempt_unchanged": true,
+      "effective_attempt_unchanged": true,
+      "bundle_json_unchanged": true
+    },
+    {
+      "schema": 1,
+      "case_id": "minijinja",
+      "schedule_index": 16,
+      "arm": "native",
+      "repeat": 2,
+      "attempt_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/016-minijinja-native-r2/attempt.json",
+      "raw_attempt_sha256": "912c2ab23337c610998b110bc159895bf7af83a550aea0bfeeab0b720b284f85",
+      "effective_attempt_path": null,
+      "effective_attempt_sha256": null,
+      "bundle_json_sha256": "ca7380e542079be1a8d157e9d66c344aa464d275bf682e8643f9483e97ec2d4b",
+      "source_review_receipt": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/results/source-review/minijinja/016-native-r2.json",
+      "project_source": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/016-minijinja-native-r2/grade/work/public-project",
+      "fresh_public_replay": "/tmp/code-kb-independent-added-public-20261027-v5okz0p1/minijinja-016-native-r2/project",
+      "public_state": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/016-minijinja-native-r2/grade/work/state-grade-public",
+      "runtime_bindings_path": "/home/murphy/.codex/worktrees/1e6f/code-kb/target/edit-evaluation/lead/runtime-bindings.json",
+      "runtime_bindings_sha256": "7fbf8bd3b8024c70076bf281aca80bca255b9f6537e8249c9dd537e0d00fb103",
+      "dependencies": {
+        "cargo-cache": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_minijinja_cargo-cache"
+      },
+      "tools": {
+        "rust": "/home/murphy/.rustup/toolchains/stable-x86_64-unknown-linux-gnu"
+      },
+      "network": false,
+      "auth_file": null,
+      "private_profile": null,
+      "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=/state/cargo",
+        "CARGO_NET_OFFLINE=true",
+        "CARGO_TARGET_DIR=/state/target",
+        "CARGO_INCREMENTAL=0",
+        "RUSTC=/tools/rust/bin/rustc",
+        "/tools/rust/bin/cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "-p",
+        "minijinja-cli",
+        "--test",
+        "test_autoescape"
+      ],
+      "timeout_seconds": 600,
+      "generated_roots_excluded_from_snapshot": [
+        ".code-kb",
+        "target"
+      ],
+      "protected_path_count": 741,
+      "protected_paths_sha256": "e9d114b159a5a6dc416137490dc56a4a8c7a7668afc049d0381a313de6d9cd4c",
+      "source_sha256_before": "a15ceb79e08d83feba17d2161a162247e668efc52ca55c1118adbd47502e5c1e",
+      "source_sha256_after": "a15ceb79e08d83feba17d2161a162247e668efc52ca55c1118adbd47502e5c1e",
+      "source_unchanged": true,
+      "edit_sandbox_cli_exit_status": 0,
+      "execution": {
+        "elapsed_seconds": 1.469874,
+        "exit_status": 0,
+        "mode": "grade",
+        "network_scope": "disabled",
+        "process_cleanup": {
+          "attempted": false,
+          "complete": true,
+          "signal": null
+        },
+        "stderr_log": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/results/source-review/minijinja/logs/independent-public/016-native-r2/sandbox-output/stderr.log",
+        "stdout_log": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/results/source-review/minijinja/logs/independent-public/016-native-r2/sandbox-output/stdout.log",
+        "timed_out": false
+      },
+      "logs_dir": "/home/murphy/.codex/worktrees/1e6f/code-kb/evals/edit-2026-10-27/results/source-review/minijinja/logs/independent-public/016-native-r2",
+      "original_public_source_unchanged": true,
+      "bundle_json_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/016-minijinja-native-r2/bundle/bundle.json",
+      "original_grade_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/016-minijinja-native-r2/grade/grade.json",
+      "original_grade_sha256": "269c167d75e2e78ab6305937a0ccbcf669ae6095b8e4d43c2f651fcedadd3373",
+      "original_grade_unchanged": true,
+      "raw_attempt_unchanged": true,
+      "bundle_json_unchanged": true
+    }
+  ]
+}

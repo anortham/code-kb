@@ -1,0 +1,7 @@
+// File: minijinja-cli/tests/test_autoescape.rs (Lines 1-95)
+
+fn render(filename: &str, mode: Option<&str>) -> String { /* 18 lines hidden: L3-L20 */ }
+fn test_autoescape_output_suffixes() { /* 19 lines hidden: L23-L41 */ }
+fn test_autoescape_only_skips_one_template_wrapper() { /* 19 lines hidden: L44-L62 */ }
+fn test_explicit_autoescape_modes_override_suffixes() { /* 15 lines hidden: L65-L79 */ }
+fn test_autoescape_long_help_describes_wrapped_suffixes() { /* 14 lines hidden: L82-L95 */ }

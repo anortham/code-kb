@@ -1,0 +1,45 @@
+diff --git a/src/NodaTime/LocalDate.cs b/src/NodaTime/LocalDate.cs
+index 80330d1f9..43e73958b 100644
+--- a/src/NodaTime/LocalDate.cs
++++ b/src/NodaTime/LocalDate.cs
+@@ -532,6 +532,15 @@ public readonly struct LocalDate : IEquatable<LocalDate>, IComparable<LocalDate>
++    /// <summary>
++    /// Compares this date with another date by physical day, ignoring the calendar system.
++    /// </summary>
++    /// <param name="other">The date to compare with this value.</param>
++    /// <returns>A negative value if this date occurs before <paramref name="other"/>, zero if both values occur
++    /// on the same physical day, or a positive value if this date occurs after <paramref name="other"/>.</returns>
++    [Pure]
++    public int CompareToIgnoringCalendar(LocalDate other) => DaysSinceEpoch.CompareTo(other.DaysSinceEpoch);
++
+     /// <summary>
+     /// Performs a comparison with another date, trusting that the calendar of the other date is already correct.
+     /// This avoids duplicate calendar checks.
+     /// </summary>
+     private int TrustedCompareTo([Trusted] LocalDate other) => Calendar.Compare(YearMonthDay, other.YearMonthDay);
+ 
+     /// <summary>
+diff --git a/src/NodaTime/LocalDateTime.cs b/src/NodaTime/LocalDateTime.cs
+index 9370c11d5..61112416f 100644
+--- a/src/NodaTime/LocalDateTime.cs
++++ b/src/NodaTime/LocalDateTime.cs
+@@ -481,6 +481,19 @@ public readonly struct LocalDateTime : IEquatable<LocalDateTime>, IComparable<Lo
+         return time.CompareTo(other.time);
+     }
+ 
++    /// <summary>
++    /// Compares this local date and time with another by physical day and time of day, ignoring the calendar system.
++    /// </summary>
++    /// <param name="other">The local date and time to compare with this value.</param>
++    /// <returns>A negative value if this value occurs before <paramref name="other"/>, zero if both values occur
++    /// at the same local date and time, or a positive value if this value occurs after <paramref name="other"/>.</returns>
++    [Pure]
++    public int CompareToIgnoringCalendar(LocalDateTime other)
++    {
++        int dateComparison = date.CompareToIgnoringCalendar(other.date);
++        return dateComparison != 0 ? dateComparison : time.CompareTo(other.time);
++    }
++
+     /// <summary>
+     /// Implementation of <see cref="IComparable.CompareTo"/> to compare two LocalDateTimes.
+     /// See the type documentation for a description of ordering semantics.

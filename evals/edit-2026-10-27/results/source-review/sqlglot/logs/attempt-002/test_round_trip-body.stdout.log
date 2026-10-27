@@ -1,0 +1,4 @@
+// tests/dialects/test_bigquery_timestamp_bucket.py:38-40 (test_round_trip)
+    def test_round_trip(self):
+        self.validate_identity("TIMESTAMP_BUCKET(timestamp_col, INTERVAL '15' MINUTE)")
+        self.validate_identity("TIMESTAMP_BUCKET(timestamp_col, INTERVAL '15' MINUTE, origin_col)")

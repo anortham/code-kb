@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from scripts import comparison_campaign as campaign
 
@@ -529,6 +530,15 @@ class CampaignCommandTests(unittest.TestCase):
         self.assertEqual(outcome["arm"], "native")
         self.assertEqual(outcome["repeat"], 1)
         self.assertFalse(any(path.is_file() for path in retained_files))
+
+    def test_default_redactor_resolves_stable_command_from_path(self):
+        self.assertEqual(str(campaign.REDACTOR), "redact-outbound")
+        with patch.object(campaign.shutil, "which", return_value=None):
+            with self.assertRaisesRegex(campaign.CampaignError, "redact-outbound.*PATH"):
+                campaign.redact_bytes(b"{}")
+
+    def test_redact_bytes_keeps_callable_override(self):
+        self.assertEqual(campaign.redact_bytes(b"payload", lambda value: value + b"!"), b"payload!")
 
 
 if __name__ == "__main__":

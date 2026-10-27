@@ -1,0 +1,37 @@
+{
+  "mode": "grade",
+  "network": false,
+  "auth_file": null,
+  "private_profile": null,
+  "argv": [
+    "/usr/bin/env",
+    "CARGO_HOME=/state/cargo",
+    "CARGO_NET_OFFLINE=true",
+    "CARGO_TARGET_DIR=/state/target",
+    "CARGO_INCREMENTAL=0",
+    "RUSTC=/tools/rust/bin/rustc",
+    "/tools/rust/bin/cargo",
+    "test",
+    "--locked",
+    "--offline",
+    "-p",
+    "minijinja-cli",
+    "--test",
+    "test_autoescape"
+  ],
+  "timeout_seconds": 600,
+  "project": "/tmp/code-kb-independent-added-public-20261027-v5okz0p1/minijinja-003-native-r1/project",
+  "state": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/003-minijinja-native-r1/grade/work/state-grade-public",
+  "dependencies": {
+    "cargo-cache": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_minijinja_cargo-cache"
+  },
+  "tools": {
+    "rust": "/home/murphy/.rustup/toolchains/stable-x86_64-unknown-linux-gnu"
+  },
+  "protected_path_count": 741,
+  "protected_paths_sha256": "e9d114b159a5a6dc416137490dc56a4a8c7a7668afc049d0381a313de6d9cd4c",
+  "generated_roots": [
+    ".code-kb",
+    "target"
+  ]
+}

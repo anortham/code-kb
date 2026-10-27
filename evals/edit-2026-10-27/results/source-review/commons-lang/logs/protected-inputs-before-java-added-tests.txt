@@ -1,0 +1,40 @@
+7fbf8bd3b8024c70076bf281aca80bca255b9f6537e8249c9dd537e0d00fb103  target/edit-evaluation/lead/runtime-bindings.json
+7386337bec18cbfb32ddf1cde0ba29dd9d1686b121c84df16a728cabe0c5b0ed  evals/edit-2026-10-27/cases/commons-lang/case.json
+1dffb6c9457d860d88e2b5d14712f91c65704df03dce4da213bba41f17f2b2e5  evals/edit-2026-10-27/cases/nodatime/case.json
+3b5fabe34f8f0bd0a83056a1536dd7f3d8ea2430346b9fae56eb54ebde57dc44  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/campaign.json
+82c055f09f4213e7a878fcd48a1be20bf0b61a61cdda937f22df339a3603f7b8  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/009-commons-lang-native-r1/attempt.json
+99d583851ee69d279dd6197b7da93b627ebfb84b483a7ab6ac5f5ee58177e0ba  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/009-commons-lang-native-r1/bundle/bundle.json
+9153a88471d0b153b51b314a281af4ab6ef0df66b4712ca4e4011ce865e51fbb  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/009-commons-lang-native-r1/grade/grade.json
+48b312f1fcde08c332d7bda8780ae99a8039bc009fa98bfce8627080eea87fff  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/009-commons-lang-native-r1/status.json
+7881356ce123607f5530b88a43e6a9bf8021a0cb869ca21e84559efb8ae8f383  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/010-commons-lang-code-kb-r1/attempt.json
+cca1d3af62c0c1ce572858f1881329be3b762bf15586cfd77107744eebaf992e  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/010-commons-lang-code-kb-r1/bundle/bundle.json
+dba8cb4dd9c87ea3f4701e5e98412b042953acfdb57ebf428885b539e47c0325  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/010-commons-lang-code-kb-r1/grade/grade.json
+6071149e65e7e1afecae60114e6307752902716621a266f3a7f24cb5893f36b8  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/010-commons-lang-code-kb-r1/status.json
+84a9d7f68a89e5bcf11d60db34a6e9ea418b59276c5140b1bd49b944e0b6995a  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/011-nodatime-native-r1/attempt.json
+ab5ab7f6fde45865b3c9fc04ec5c5f7b300b57c9f32d9b3c0ed5cd5c9d8cb51c  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/011-nodatime-native-r1/bundle/bundle.json
+08654bec59a824632a0c6609986b6a84eaac30814f32061801cdbca8a189a58c  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/011-nodatime-native-r1/grade/grade.json
+20bc91365ad05fbf091ab0f10792783a5b64c7a4efdff9dbfce2cfa730584418  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/011-nodatime-native-r1/status.json
+da1705e56c2bad765ec5adf187e4f9e1fd0f7b5fd0f13c7cc9045a8bccc7eb2a  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/012-nodatime-code-kb-r1/attempt.json
+d53d70671554366041622ee752630b3e2182d283db374eeebdb7eba43fb8ed8f  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/012-nodatime-code-kb-r1/bundle/bundle.json
+004004c2de51193ff70b91333b5ff144be45ec979e06de8c8ffe4f70220923ef  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/012-nodatime-code-kb-r1/grade/grade.json
+2f92bd60b711a250a1e0a22b9951b972f359e509e87feb694923b1045faa40cf  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/012-nodatime-code-kb-r1/status.json
+a6f57284a873e3f8662dad0b5ac067a8a98a7d5dad9643e292c9e701851ba10a  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/021-commons-lang-code-kb-r2/attempt.json
+0040ea8bda85d65a7b201baeea32cf3d01c135a2527a8a113a2c2f19d6e7dd5f  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/021-commons-lang-code-kb-r2/bundle/bundle.json
+da1a74161fb061aa9389ca1c719a1e5f2c73f7c69298c617aa78a88c8e957d7a  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/021-commons-lang-code-kb-r2/grade/grade.json
+435c2650aecf033698de0f1967db5cdcc379a387e189b4c63a26f7702d3ab958  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/021-commons-lang-code-kb-r2/status.json
+400c22e0663ee79c2016a45c38426778e066d2d7f1c677c24a434eaf4422269c  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/022-commons-lang-native-r2/attempt.json
+aa170445bef975b317b8a3cd26c4f038eb1fd421b2dc78aa24ca0a58f06e2a5d  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/022-commons-lang-native-r2/bundle/bundle.json
+bd93821de0984173c50ff7afcf8d4645ea353f0f3973644b544f3bc761d19067  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/022-commons-lang-native-r2/grade/grade.json
+aa03899f2d93bd3389d9f062be4dae71e59fb4f8d671113ad13b1f54f108b3ef  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/022-commons-lang-native-r2/status.json
+dea62b7c91b014b6976e40e21c3e630c8ecdcb95d0ad8ee06db475316402e4d7  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/023-nodatime-code-kb-r2/attempt.json
+8d15101791b57175bf1270f5563c38d507fdf71feaf6e577b75a6de0fe5bfb7b  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/023-nodatime-code-kb-r2/bundle/bundle.json
+829462a448771b686908bb81e977250fe17eb193ad48aa0cf405588793fc35f1  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/023-nodatime-code-kb-r2/grade/grade.json
+f7be60f0be6ad83883648d6c9ac35aaff62ecfc7fc1dc8a9b31a86f82bc30867  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/023-nodatime-code-kb-r2/status.json
+4e7664c08eabb28ac1ba1ab78ee1cb86e498db0592c4e48f9615e98ab616e5f4  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/024-nodatime-native-r2/attempt.json
+bf0f8c6c07bc570e960d369c8155b3794bb274b4462d6b7c7605998b401d6651  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/024-nodatime-native-r2/bundle/bundle.json
+67e545204e4918883ffe4a4994e024c990750acc1ddc50ead82fa87bc38b4f71  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/024-nodatime-native-r2/grade/grade.json
+c78b9ba1d3dcc48e09fe397837e4370525f632177f34d543bc6a6de0e0a5604d  /home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/024-nodatime-native-r2/status.json
+a5d6c5ed8847b2b14dacf062b646f94d6cc61a10
+## HEAD (no branch)
+649ce5a1c8ddf439eaed7b3bf9157882363cb937
+## HEAD (no branch)

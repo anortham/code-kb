@@ -1,0 +1,85 @@
+{
+  "schema": 1,
+  "reviewed_at_utc": "2026-10-27T21:37:55Z",
+  "schedule_index": 24,
+  "case_id": "nodatime",
+  "arm": "native",
+  "repeat": 2,
+  "raw_attempt_sha256": "4e7664c08eabb28ac1ba1ab78ee1cb86e498db0592c4e48f9615e98ab616e5f4",
+  "bundle_json_sha256": "bf0f8c6c07bc570e960d369c8155b3794bb274b4462d6b7c7605998b401d6651",
+  "source_review": "failed",
+  "findings": [
+    {
+      "severity": "informational",
+      "finding": "The comparison logic implements the requested physical-day order. LocalDate compares DaysSinceEpoch, and LocalDateTime compares the physical date first, then time. The existing calendar-sensitive CompareTo and equality behavior remain intact.",
+      "evidence": [
+        "Fresh public replay code-kb context shows LocalDate.CompareToIgnoringCalendar at src/NodaTime/LocalDate.cs:538 comparing DaysSinceEpoch.",
+        "Fresh public replay code-kb context shows LocalDateTime.CompareToIgnoringCalendar at src/NodaTime/LocalDateTime.cs:491-495 calling date.CompareToIgnoringCalendar and comparing time only when the day is equal.",
+        "Fresh public replay code-kb context shows LocalDate.CompareTo checking CalendarOrdinal and LocalDateTime.CompareTo calling date.CompareTo before time; added tests assert equality and relational operators remain calendar-sensitive."
+      ]
+    },
+    {
+      "severity": "blocking",
+      "finding": "Both new public struct methods are missing [Pure], violating the repository's existing public-value-type method invariant. This is an implementation defect even though the selected trusted public command did not include the invariant test.",
+      "evidence": [
+        "Fresh public replay code-kb lookup and context show signatures without [Pure] for LocalDate.CompareToIgnoringCalendar at src/NodaTime/LocalDate.cs:538 and LocalDateTime.CompareToIgnoringCalendar at src/NodaTime/LocalDateTime.cs:491.",
+        "The existing protected NodaTime.Test.Annotations.PurityTest.AllPublicStructMethodsArePure at src/NodaTime.Test/Annotations/PurityTest.cs:18-34 checks every public instance method on value types, excluding only Equals, GetHashCode, CompareTo, and ToString, and requires PureAttribute on the remaining methods.",
+        "The frozen public command filters FullyQualifiedName~LocalDateTest|FullyQualifiedName~LocalDateTimeTest, so it excludes PurityTest.AllPublicStructMethodsArePure.",
+        "A fresh public replay run of the focused purity test failed and reported exactly LocalDate.CompareToIgnoringCalendar and LocalDateTime.CompareToIgnoringCalendar."
+      ],
+      "verification_status": "source defect confirmed by the protected existing focused test"
+    },
+    {
+      "severity": "informational",
+      "finding": "The added tests cover ordering across calendar systems, physical-day precedence over time, range edges, nanosecond precision, and unchanged equality. The trusted public and hidden test runs passed their selected tests, but the public grade's overall status remains failed on the stale expected count markers and the public selector omits the purity invariant.",
+      "evidence": [
+        "Added tests in src/NodaTime.Test/LocalDateTest.CompareToIgnoringCalendar.cs and src/NodaTime.Test/LocalDateTimeTest.CompareToIgnoringCalendar.cs exercise all CalendarSystem.Ids, same-field/different-day ordering, full ranges, time-of-day precedence, and unchanged equality operators.",
+        "Trusted public stdout reports Test Run Successful and 292 of 292 cases passed; grade.json lists only the expected 248-case markers as missing.",
+        "Trusted hidden stdout reports 2 of 2 contract tests passed."
+      ]
+    }
+  ],
+  "changed_production_files": [
+    "src/NodaTime/LocalDate.cs",
+    "src/NodaTime/LocalDateTime.cs"
+  ],
+  "added_tests": [
+    "src/NodaTime.Test/LocalDateTest.CompareToIgnoringCalendar.cs",
+    "src/NodaTime.Test/LocalDateTimeTest.CompareToIgnoringCalendar.cs"
+  ],
+  "executed_verification": [
+    {
+      "kind": "trusted_public_grade",
+      "command_id": "nodatime-public-local-date-regressions",
+      "status": "test_run_succeeded_expected_output_markers_missing",
+      "exit_status": 0,
+      "observed_tests": 292,
+      "expected_output_missing": [
+        "NUnit3TestExecutor discovered 248 of 248 NUnit test cases",
+        "Total tests: 248"
+      ],
+      "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/024-nodatime-native-r2/evidence/grade/grade-008-stdout_log.log"
+    },
+    {
+      "kind": "trusted_hidden_grade",
+      "command_id": "nodatime-calendar-neutral-contract",
+      "status": "passed",
+      "exit_status": 0,
+      "observed_tests": 2,
+      "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/024-nodatime-native-r2/evidence/grade/grade-010-stdout_log.log"
+    },
+    {
+      "kind": "focused_existing_purity_test",
+      "command_id": "nodatime-public-all-public-struct-methods-pure",
+      "status": "failed",
+      "exit_status": 1,
+      "observed_tests": 1,
+      "failed_methods": [
+        "LocalDate.CompareToIgnoringCalendar",
+        "LocalDateTime.CompareToIgnoringCalendar"
+      ],
+      "project": "/tmp/code-kb-source-review-20261027-kHXOtu/024-nodatime-native-r2/project",
+      "stdout_log": "/tmp/code-kb-source-review-20261027-kHXOtu/results/024-nodatime-native-r2-purity.log"
+    }
+  ]
+}

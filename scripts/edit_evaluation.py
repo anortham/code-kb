@@ -596,6 +596,54 @@ def _strip_ansi(output: str) -> str:
     return ANSI_ESCAPE.sub("", output)
 
 
+def _nunit_execution_summary(output: str) -> dict[str, int] | None:
+    cleaned = _strip_ansi(output)
+    discoveries = re.findall(
+        r"^\s*NUnit3TestExecutor discovered\s+(\d+)\s+of\s+(\d+)\s+NUnit test cases\b.*$",
+        cleaned,
+        re.IGNORECASE | re.MULTILINE,
+    )
+    totals = re.findall(r"^\s*Total tests:\s*(\d+)\s*$", cleaned, re.IGNORECASE | re.MULTILINE)
+    passed = re.findall(r"^\s*Passed:\s*(\d+)\s*$", cleaned, re.IGNORECASE | re.MULTILINE)
+    failed = re.findall(r"^\s*Failed:\s*(\d+)\s*$", cleaned, re.IGNORECASE | re.MULTILINE)
+    skipped = re.findall(r"^\s*Skipped:\s*(\d+)\s*$", cleaned, re.IGNORECASE | re.MULTILINE)
+    run_statuses = re.findall(
+        r"^\s*Test Run (Successful|Failed|Aborted)\.\s*$",
+        cleaned,
+        re.IGNORECASE | re.MULTILINE,
+    )
+    if (
+        len(discoveries) != 1
+        or len(totals) != 1
+        or len(passed) != 1
+        or len(run_statuses) != 1
+        or run_statuses[0].lower() != "successful"
+    ):
+        return None
+
+    discovered, available = map(int, discoveries[0])
+    total = int(totals[0])
+    passed_count = int(passed[0])
+    if (
+        discovered == 0
+        or discovered != available
+        or total == 0
+        or passed_count == 0
+        or passed_count != total
+        or any(int(count) != 0 for count in failed)
+        or any(int(count) != 0 for count in skipped)
+    ):
+        return None
+    return {"discovered": discovered, "total": total, "passed": passed_count}
+
+
+def _nunit_execution_observed(output: str) -> bool:
+    lower = _strip_ansi(output).lower()
+    passed = re.findall(r"^[ \t]*passed:[ \t]*(\d+)[ \t]*$", lower, re.MULTILINE)
+    failed = re.findall(r"^[ \t]*failed:[ \t]*(\d+)[ \t]*$", lower, re.MULTILINE)
+    return any(int(count) > 0 for count in passed + failed)
+
+
 def _expected_test_execution(command: Mapping[str, Any], output: str) -> bool:
     lower = _strip_ansi(output).lower()
     argv = command["argv"]
@@ -612,10 +660,141 @@ def _expected_test_execution(command: Mapping[str, Any], output: str) -> bool:
     if "mvn" in joined or "maven" in joined:
         return bool(re.search(r"tests? run:\s*[1-9][0-9]*", lower))
     if "dotnet" in joined and "test" in joined:
-        return bool(re.search(r"passed:\s*[1-9][0-9]*", lower)) or bool(re.search(r"failed:\s*[1-9][0-9]*", lower)) or bool(re.search(r"total tests:\s*[1-9][0-9]*", lower)) or bool(re.search(r"\bpassed\s+[^\s]+", lower)) or "passed!" in lower
+        if "nunit3testexecutor discovered" in lower:
+            return _nunit_execution_observed(lower)
+        failed = re.search(r"failed:\s*([1-9][0-9]*)", lower)
+        if failed:
+            return True
+        passed = re.search(r"passed:\s*(\d+)", lower)
+        if passed:
+            return int(passed.group(1)) > 0
+        return bool(re.search(r"\bpassed\s+[^\s]+", lower)) or (
+            "passed!" in lower and not re.search(r"total tests:\s*[1-9][0-9]*", lower)
+        )
     if "test" in joined or "check" in joined:
         return bool(re.search(r"\b[1-9][0-9]*\s+(passed|tests? passed|tests? run)\b", lower))
     return True
+
+
+def _summary_marker_matches(
+    command: Mapping[str, Any], markers: Sequence[str], output: str
+) -> dict[int, bool]:
+    joined = " ".join(command["argv"]).lower()
+    lower = _strip_ansi(output).lower()
+    matches: dict[int, bool] = {}
+
+    def match_count_markers(expectations: Sequence[tuple[int, int]], summaries: Sequence[int]) -> None:
+        available = set(range(len(summaries)))
+        for marker_index, minimum in sorted(expectations, key=lambda item: (-item[1], item[0])):
+            summary_index = next(
+                (index for index in sorted(available) if summaries[index] >= minimum),
+                None,
+            )
+            if summary_index is None:
+                matches[marker_index] = False
+            else:
+                matches[marker_index] = True
+                available.remove(summary_index)
+
+    if "unittest" in joined:
+        expectations = []
+        for index, marker in enumerate(markers):
+            match = re.fullmatch(r"Ran ([1-9][0-9]*) tests?", marker, re.IGNORECASE)
+            if match:
+                expectations.append((index, int(match.group(1))))
+        if expectations:
+            runs = [
+                int(count)
+                for count in re.findall(r"^[ \t]*ran[ \t]+(\d+)[ \t]+tests?\b[^\n]*$", lower, re.MULTILINE)
+            ]
+            successful = len(re.findall(r"^[ \t]*ok[ \t]*$", lower, re.MULTILINE)) == 1
+            match_count_markers(expectations, runs if successful else [])
+
+    if "cargo" in joined and "test" in joined:
+        expectations = []
+        for index, marker in enumerate(markers):
+            match = re.fullmatch(r"test result: ok\. ([1-9][0-9]*) passed", marker, re.IGNORECASE)
+            if match:
+                expectations.append((index, int(match.group(1))))
+        if expectations:
+            summaries = []
+            for line in lower.splitlines():
+                match = re.fullmatch(
+                    r"\s*test result: ok\.\s*(\d+) passed;\s*(\d+) failed;\s*(\d+) ignored;\s*(\d+) measured;\s*(\d+) filtered out(?:;.*)?\s*",
+                    line,
+                    re.IGNORECASE,
+                )
+                if match:
+                    passed_count, failed_count, ignored_count = map(int, match.group(1, 2, 3))
+                    if failed_count == 0 and ignored_count == 0:
+                        summaries.append(passed_count)
+            match_count_markers(expectations, summaries)
+
+    if "vitest" in joined or "jest" in joined:
+        expectations = []
+        for index, marker in enumerate(markers):
+            match = re.fullmatch(r"Tests ([1-9][0-9]*) passed", marker, re.IGNORECASE)
+            if match:
+                expectations.append((index, int(match.group(1))))
+        if expectations:
+            summaries = []
+            for line in lower.splitlines():
+                match = re.match(r"^\s*Tests\s+(\d+) passed\b(.*)$", line, re.IGNORECASE)
+                if match and not re.search(r"\b[1-9][0-9]*\s+failed\b", match.group(2)):
+                    summaries.append(int(match.group(1)))
+            match_count_markers(expectations, summaries)
+
+    if "mvn" in joined or "maven" in joined:
+        expectations = []
+        for index, marker in enumerate(markers):
+            match = re.fullmatch(
+                r"Tests run: ([1-9][0-9]*), Failures: 0, Errors: 0, Skipped: 0",
+                marker,
+                re.IGNORECASE,
+            )
+            if match:
+                expectations.append((index, int(match.group(1))))
+        if expectations:
+            summaries = []
+            for line in lower.splitlines():
+                match = re.fullmatch(
+                    r"[ \t]*(?:\[info\][ \t]+)?Tests run:\s*(\d+),\s*Failures:\s*(\d+),\s*Errors:\s*(\d+),\s*Skipped:\s*(\d+)[ \t]*",
+                    line,
+                    re.IGNORECASE,
+                )
+                if match:
+                    run_count, failure_count, error_count, skipped_count = map(int, match.groups())
+                    if failure_count == 0 and error_count == 0 and skipped_count == 0:
+                        summaries.append(run_count)
+            match_count_markers(expectations, summaries)
+
+    nunit_command = "dotnet" in joined and "test" in joined and any(
+        re.fullmatch(
+            r"NUnit3TestExecutor discovered [1-9][0-9]* of [1-9][0-9]* NUnit test cases",
+            marker,
+            re.IGNORECASE,
+        )
+        for marker in markers
+    )
+    if nunit_command:
+        summary = _nunit_execution_summary(output)
+        for index, marker in enumerate(markers):
+            discovery = re.fullmatch(
+                r"NUnit3TestExecutor discovered ([1-9][0-9]*) of ([1-9][0-9]*) NUnit test cases",
+                marker,
+                re.IGNORECASE,
+            )
+            total = re.fullmatch(r"Total tests: ([1-9][0-9]*)", marker, re.IGNORECASE)
+            if discovery:
+                matches[index] = (
+                    discovery.group(1) == discovery.group(2)
+                    and summary is not None
+                    and summary["discovered"] >= int(discovery.group(1))
+                )
+            elif total:
+                matches[index] = summary is not None and summary["total"] >= int(total.group(1))
+
+    return matches
 
 
 def _run_command(
@@ -651,7 +830,12 @@ def _run_command(
     stderr = _read_output(result["stderr_log"])
     combined = _strip_ansi(stdout + "\n" + stderr)
     markers = command.get("expected_output", [])
-    markers_missing = [marker for marker in markers if marker not in combined]
+    summary_matches = _summary_marker_matches(command, markers, combined)
+    markers_missing = [
+        marker
+        for index, marker in enumerate(markers)
+        if not summary_matches.get(index, marker in combined)
+    ]
     test_execution_observed = _expected_test_execution(command, combined) if verify_test_execution else None
     return {
         "command_id": command["id"],

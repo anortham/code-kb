@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "case_id": "minijinja",
+  "source_review": "passed",
+  "basis": "The original task and reference implementation are byte-identical. The corrected matcher is the only case file changed. Fresh readiness passed using the restored frozen Cargo cache, and the versioned seed has identical source-only content.",
+  "changed_case_files": [
+    "checks/edit_eval_autoescape.rs"
+  ],
+  "original_approved_readiness": "results/readiness/minijinja/readiness.json",
+  "original_approved_readiness_sha256": "70ddb3219e92ec24e443550b082a842b497c88316a8e507d4f18531dd9a4db64",
+  "superseded_accepted_readiness": "results/readiness-v2/minijinja/readiness.json",
+  "superseded_accepted_readiness_sha256": "f5dcda236686b21264b9a640ae88addbda535ff1fc19ba99b64bf2de7dec977c",
+  "superseded_source_review": "results/readiness-v2/minijinja/source-review.json",
+  "superseded_source_review_sha256": "cd155ce12a5a3e682b220b561360533b6433b38b8a77d4d2ba79d01920228206",
+  "superseded_raw_readiness": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/minijinja/readiness.json",
+  "superseded_raw_readiness_sha256": "1c2fa3b96f6eef709f068eac8c48c5cbf5b32342f7a81ff7a63284b5bb763afe",
+  "raw_fresh_readiness": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/minijinja-restored-cache/readiness.json",
+  "raw_fresh_readiness_sha256": "ef724b3d4402d538d7a9504150197c8c604ab6b127aa2c86df16db9d90afdd49",
+  "case_sha256": "9c7b081fd68fe8b0284262d1cf105d780eac91af3e4e7656ad9fc351e637e647",
+  "request_sha256": "0d0795b302b6187984c0174140136af7fa22d4624da205286bf00154aceff916",
+  "seed_patch_sha256": "8e86857b949bc8b34c2c40be253f6153a6eb92d63859e3f7b92e336556eda9be",
+  "reference_patch_sha256": "58558ff2dccc44a6d0d5092814c0a9f661309d5bfd7d6ad1d9d791afdd8d60d1",
+  "source_only_digest": "059d5f0b2a82a36e9c8299e4538483f164e2df1abc35703acf53228dd8bb8806",
+  "source_bytes_unchanged": true,
+  "old_v2_seed_digest": "5a4833dcd8e450eefbf86d38f2074e2fc5077d90635714494a8403e6894c82c2",
+  "new_v2_seed_project": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds-v2/minijinja-restored-cargo",
+  "new_v2_seed_digest": "01c0e239f0d4d956d7fcae86e4f7a53fbf925486ca4f47965291e345866f9292",
+  "new_v2_seed_git_metadata_differences": [
+    "index"
+  ],
+  "cargo_cache_sha256": "eac88f77d5490563112b892dcb38a804d9fdb32e52de2624bd5c0738faef538a",
+  "cache_restoration_receipt": "results/case-corrections/minijinja-cargo-cache-restoration-v2.json",
+  "cache_restoration_receipt_sha256": "207f2acc121f0c8445ab5289ee727a679e07c33e1a4a5002e3bc869700d3697b",
+  "negative_checks": "Matcher verification retains positive wording variants, separate missing suffix negatives, missing case explanation, case-sensitive wording, and wording outside the autoescape section. Original case, task, and reference implementation remain unchanged."
+}

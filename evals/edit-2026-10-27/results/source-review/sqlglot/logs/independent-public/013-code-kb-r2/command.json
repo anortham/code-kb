@@ -1,0 +1,31 @@
+{
+  "mode": "grade",
+  "network": false,
+  "auth_file": null,
+  "private_profile": null,
+  "argv": [
+    "/usr/bin/env",
+    "PYTHONDONTWRITEBYTECODE=1",
+    "PYTHONPATH=/state/python-site:/workspace/project",
+    "/usr/bin/python3",
+    "-m",
+    "unittest",
+    "tests.dialects.test_bigquery_timestamp_bucket"
+  ],
+  "timeout_seconds": 240,
+  "project": "/tmp/code-kb-independent-added-public-20261027-v5okz0p1/sqlglot-013-code-kb-r2/project",
+  "state": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/013-sqlglot-code-kb-r2/grade/work/state-grade-public",
+  "dependencies": {
+    "python-packages": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_sqlglot_python-packages"
+  },
+  "tools": {},
+  "protected_path_count": 144,
+  "protected_paths_sha256": "2c97f23306687ddef9c2f85fc2366936d66aee73b004f8deeb97542cb8320de9",
+  "generated_roots": [
+    ".code-kb",
+    ".pytest_cache",
+    "build",
+    "dist",
+    "target"
+  ]
+}

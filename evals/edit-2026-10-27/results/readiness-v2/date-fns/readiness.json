@@ -1,0 +1,271 @@
+{
+  "behavioral_pass": true,
+  "case_id": "date-fns",
+  "case_sha256": "4244c3c81603a09b13264f2f5b04d60047f60c1d5139c3f84a707ccbb576f62d",
+  "checks": {
+    "baseline_public": {
+      "commands": [
+        {
+          "command_id": "business_day_regressions",
+          "elapsed_seconds": 1.668776,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/date-fns/evidence/baseline-public-00-business_day_regressions/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/date-fns/evidence/baseline-public-00-business_day_regressions/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "baseline_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "materialize_pnpm_store",
+          "elapsed_seconds": 1.117361,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/date-fns/evidence/runtime-baseline-00-materialize_pnpm_store/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/date-fns/evidence/runtime-baseline-00-materialize_pnpm_store/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "materialize_workspace_dependencies",
+          "elapsed_seconds": 2.069913,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/date-fns/evidence/runtime-baseline-01-materialize_workspace_dependencies/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/date-fns/evidence/runtime-baseline-01-materialize_workspace_dependencies/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "preparation": {
+      "commands": [],
+      "mode": "reused-inputs",
+      "passed": true
+    },
+    "reference_hidden": {
+      "commands": [
+        {
+          "command_id": "business_day_context_acceptance",
+          "elapsed_seconds": 1.919369,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/date-fns/evidence/reference-hidden-00-business_day_context_acceptance/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/date-fns/evidence/reference-hidden-00-business_day_context_acceptance/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_hidden_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "materialize_pnpm_store",
+          "elapsed_seconds": 1.266376,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/date-fns/evidence/runtime-reference-hidden-00-materialize_pnpm_store/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/date-fns/evidence/runtime-reference-hidden-00-materialize_pnpm_store/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "materialize_workspace_dependencies",
+          "elapsed_seconds": 2.470682,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/date-fns/evidence/runtime-reference-hidden-01-materialize_workspace_dependencies/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/date-fns/evidence/runtime-reference-hidden-01-materialize_workspace_dependencies/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_public": {
+      "commands": [
+        {
+          "command_id": "business_day_regressions",
+          "elapsed_seconds": 1.718967,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/date-fns/evidence/reference-public-00-business_day_regressions/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/date-fns/evidence/reference-public-00-business_day_regressions/stdout.log",
+          "test_execution_observed": true,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "reference_public_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "materialize_pnpm_store",
+          "elapsed_seconds": 1.216516,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/date-fns/evidence/runtime-reference-public-00-materialize_pnpm_store/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/date-fns/evidence/runtime-reference-public-00-materialize_pnpm_store/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "materialize_workspace_dependencies",
+          "elapsed_seconds": 2.220364,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/date-fns/evidence/runtime-reference-public-01-materialize_workspace_dependencies/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/date-fns/evidence/runtime-reference-public-01-materialize_workspace_dependencies/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "seed_hidden_failure": {
+      "commands": [
+        {
+          "command_id": "business_day_context_acceptance",
+          "elapsed_seconds": 1.718709,
+          "exit_status": 1,
+          "expected_output_missing": [
+            "1 passed",
+            "2 passed"
+          ],
+          "passed": false,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/date-fns/evidence/seed-hidden-00-business_day_context_acceptance/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/date-fns/evidence/seed-hidden-00-business_day_context_acceptance/stdout.log",
+          "test_execution_observed": false,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    },
+    "seed_runtime_setup": {
+      "commands": [
+        {
+          "command_id": "materialize_pnpm_store",
+          "elapsed_seconds": 1.117334,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/date-fns/evidence/runtime-seed-00-materialize_pnpm_store/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/date-fns/evidence/runtime-seed-00-materialize_pnpm_store/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        },
+        {
+          "command_id": "materialize_workspace_dependencies",
+          "elapsed_seconds": 2.019312,
+          "exit_status": 0,
+          "expected_output_missing": [],
+          "passed": true,
+          "process_cleanup": {
+            "attempted": false,
+            "complete": true,
+            "signal": null
+          },
+          "stderr_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/date-fns/evidence/runtime-seed-01-materialize_workspace_dependencies/stderr.log",
+          "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/date-fns/evidence/runtime-seed-01-materialize_workspace_dependencies/stdout.log",
+          "test_execution_observed": null,
+          "timed_out": false
+        }
+      ],
+      "passed": true
+    }
+  },
+  "created_utc": "2026-10-27T21:32:48Z",
+  "dependencies": {
+    "pnpm-store": "4a003414047840a0b33c95de11e151be9ab0bc694b9a739eb44a2464e629c21f"
+  },
+  "readiness_error": null,
+  "reference_bundle_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/date-fns/evidence/reference-bundle",
+  "reference_digest": "888df1ad131a4cdc4fe9c4c9b12aa08be65e5aa9aab611d89b8492dfd6146c8b",
+  "reference_production_files_changed": [
+    "pkgs/core/src/addBusinessDays/index.ts",
+    "pkgs/core/src/differenceInBusinessDays/index.ts"
+  ],
+  "repo_id": "date-fns",
+  "schema": 1,
+  "seed_digest": "e0d8d6c9700a1bf4660aa8d759cf31858197e14b937ca93c8c2cca0732fe796f",
+  "seed_project_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds-v2/date-fns",
+  "source_pin": "a9739fb3e5384a810e90d7376446f6d84ecc5029",
+  "source_review": "passed",
+  "source_tree_sha256": "305933d401477b329995b000c964d9d80828533c4af013866cdd42f86e3cc820",
+  "status": "ready",
+  "raw_readiness_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/date-fns/readiness.json",
+  "raw_readiness_sha256": "9620f245c4c2090918fe772de0cc9fddf1b135d8ecacb634e75a4b15b889bc2f",
+  "source_review_path": "results/readiness-v2/date-fns/source-review.json",
+  "source_review_sha256": "2c3c93de952df41c33ec36ca094be4d2f8a9761fb40143580f8ac3c37b36750d",
+  "acceptance_basis": "Live checks plus unchanged reviewed task/reference and explicit correction/seed-equivalence audit; raw pending-review result preserved."
+}

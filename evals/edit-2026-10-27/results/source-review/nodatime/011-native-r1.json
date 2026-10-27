@@ -1,0 +1,95 @@
+{
+  "schema": 1,
+  "reviewed_at_utc": "2026-10-27T21:39:54Z",
+  "schedule_index": 11,
+  "case_id": "nodatime",
+  "arm": "native",
+  "repeat": 1,
+  "raw_attempt_sha256": "84a9d7f68a89e5bcf11d60db34a6e9ea418b59276c5140b1bd49b944e0b6995a",
+  "bundle_json_sha256": "ab5ab7f6fde45865b3c9fc04ec5c5f7b300b57c9f32d9b3c0ed5cd5c9d8cb51c",
+  "source_review": "failed",
+  "findings": [
+    {
+      "finding": "Both production methods implement the requested calendar-neutral ordering without changing the existing calendar-sensitive comparisons. LocalDate compares DaysSinceEpoch values. LocalDateTime compares the physical date first by calling the new LocalDate method, then compares LocalTime only when the days match. The changes do not convert through DateTime or mutate either calendar.",
+      "evidence": [
+        "Code-kb CLI body/context on the completed grade public-project showed LocalDate.CompareToIgnoringCalendar at src/NodaTime/LocalDate.cs:540 as DaysSinceEpoch.CompareTo(other.DaysSinceEpoch).",
+        "Code-kb CLI body/context showed LocalDateTime.CompareToIgnoringCalendar at src/NodaTime/LocalDateTime.cs:493-497 calling date.CompareToIgnoringCalendar and then time.CompareTo.",
+        "Read-only seed-to-captured source comparison showed the existing LocalDate.CompareTo and LocalDateTime.CompareTo implementations were not changed. LocalDate.CompareTo still validates calendar identity; LocalDateTime.CompareTo still delegates through that validation. Equality and relational-operator implementations were untouched."
+      ]
+    },
+    {
+      "finding": "The two added partial test files cover same-day cross-calendar equality, day ordering, time-of-day and nanosecond ordering, calendar preservation, values across supported calendar systems and year ranges, and unchanged calendar-sensitive equality/CompareTo behavior.",
+      "evidence": [
+        "Code-kb CLI skeleton/body/context/refs showed five LocalDate test methods and four LocalDateTime test methods; the all-calendar cases use CalendarSystem.Ids.",
+        "The trusted public-grade output contains 48 successful CompareToIgnoringCalendar test-case lines, confirming the added cases were selected and executed."
+      ]
+    },
+    {
+      "finding": "The trusted grade classified the public check as failed because two expected-output count markers still specify the unmodified-source total of 248. The actual selected public test run succeeded with 296 tests, including all 48 added cases. This is a case-marker mismatch, not a source behavior failure; final acceptance remains failed in the trusted grade and belongs to the lead.",
+      "evidence": [
+        "The public command exited 0 and its output says `Test Run Successful.` and `Total tests: 296`; the expected markers `NUnit3TestExecutor discovered 248 of 248 NUnit test cases` and `Total tests: 248` are absent.",
+        "The trusted hidden grade passed both contract tests, with `NUnit3TestExecutor discovered 2 of 2 NUnit test cases` and `Total tests: 2`.",
+        "The attempt record has `behavioral_pass: false`, `acceptance_status: failed`, and `expected_output_missing` containing only the two stale public-count markers."
+      ],
+      "verification_status": "source review passed; trusted grade acceptance failed on expected-output markers"
+    },
+    {
+      "severity": "blocking",
+      "finding": "Both new public struct methods are missing [Pure], violating the existing public-value-type method invariant. The original source review missed this regression.",
+      "evidence": [
+        "Fresh public replay code-kb lookup/context shows signatures without [Pure] for LocalDate.CompareToIgnoringCalendar at src/NodaTime/LocalDate.cs:540 and LocalDateTime.CompareToIgnoringCalendar at src/NodaTime/LocalDateTime.cs:493.",
+        "The existing protected NodaTime.Test.Annotations.PurityTest.AllPublicStructMethodsArePure at src/NodaTime.Test/Annotations/PurityTest.cs:18-34 checks every public instance method on value types, excluding only Equals, GetHashCode, CompareTo, and ToString, and requires PureAttribute on the remaining methods.",
+        "The frozen public command filters FullyQualifiedName~LocalDateTest|FullyQualifiedName~LocalDateTimeTest, so it excludes PurityTest.AllPublicStructMethodsArePure.",
+        "A fresh public replay run of the focused purity test failed and reported exactly LocalDate.CompareToIgnoringCalendar and LocalDateTime.CompareToIgnoringCalendar."
+      ],
+      "verification_status": "source defect confirmed by the protected existing focused test"
+    }
+  ],
+  "changed_production_files": [
+    "src/NodaTime/LocalDate.cs",
+    "src/NodaTime/LocalDateTime.cs"
+  ],
+  "added_tests": [
+    "src/NodaTime.Test/LocalDateTest.CompareToIgnoringCalendar.cs",
+    "src/NodaTime.Test/LocalDateTimeTest.CompareToIgnoringCalendar.cs"
+  ],
+  "executed_verification": [
+    {
+      "kind": "trusted_public_grade",
+      "command_id": "nodatime-public-local-date-regressions",
+      "status": "test_run_succeeded_expected_output_markers_missing",
+      "exit_status": 0,
+      "observed_tests": 296,
+      "observed_new_test_cases": 48,
+      "test_run_successful": true,
+      "expected_output_missing": [
+        "NUnit3TestExecutor discovered 248 of 248 NUnit test cases",
+        "Total tests: 248"
+      ],
+      "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/011-nodatime-native-r1/evidence/grade/grade-008-stdout_log.log"
+    },
+    {
+      "kind": "trusted_hidden_grade",
+      "command_id": "nodatime-calendar-neutral-contract",
+      "status": "passed",
+      "exit_status": 0,
+      "observed_tests": 2,
+      "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/011-nodatime-native-r1/evidence/grade/grade-010-stdout_log.log"
+    },
+    {
+      "kind": "focused_existing_purity_test",
+      "command_id": "nodatime-public-all-public-struct-methods-pure",
+      "status": "failed",
+      "exit_status": 1,
+      "observed_tests": 1,
+      "failed_methods": [
+        "LocalDate.CompareToIgnoringCalendar",
+        "LocalDateTime.CompareToIgnoringCalendar"
+      ],
+      "project": "/tmp/code-kb-source-review-20261027-kHXOtu/011-nodatime-native-r1/project",
+      "stdout_log": "logs/011-native-r1-purity.stdout.log"
+    }
+  ],
+  "verification_status": "source review failed because both new public struct methods lack PureAttribute; focused existing purity test failed with those exact methods",
+  "review_revision": "Updated after focused protected purity verification; the initial receipt is preserved under logs/."
+}

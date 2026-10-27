@@ -1,0 +1,77 @@
+{
+  "schema": 1,
+  "reviewed_at_utc": "2026-10-27T21:39:54Z",
+  "schedule_index": 22,
+  "case_id": "commons-lang",
+  "arm": "native",
+  "repeat": 2,
+  "raw_attempt_sha256": "400c22e0663ee79c2016a45c38426778e066d2d7f1c677c24a434eaf4422269c",
+  "bundle_json_sha256": "aa170445bef975b317b8a3cd26c4f038eb1fd421b2dc78aa24ca0a58f06e2a5d",
+  "source_review": "passed",
+  "findings": [
+    {
+      "severity": "informational",
+      "finding": "The new ComparableUtils.compare overloads preserve the Comparable<? super T> bound, return compareTo results unchanged for non-null values, and implement the requested null ordering. The default overload passes nullGreater=false; the flag affects only null comparisons and two nulls compare equal.",
+      "evidence": [
+        "Fresh public replay code-kb lookup/context shows ComparableUtils.compare signatures at src/main/java/org/apache/commons/lang3/compare/ComparableUtils.java:163-165 and 178-189 with Comparable<? super T> bounds.",
+        "The bodies delegate default ordering to the boolean overload, return 0 for identical references, branch only for null operands, and otherwise return c1.compareTo(c2)."
+      ]
+    },
+    {
+      "severity": "informational",
+      "finding": "The new varargs max/min return null for null, empty, or all-null input, ignore null entries, and retain the first equal value. Existing two-value overloads keep their previous tie behavior, returning the second equal argument. ObjectUtils compatibility methods retain their signatures and delegate to ComparableUtils.",
+      "evidence": [
+        "Fresh public replay code-kb contexts show ComparableUtils.max/min varargs methods at src/main/java/org/apache/commons/lang3/compare/ComparableUtils.java:273-284 and 311-322 using strict greater-than/less-than updates, while the old two-value overloads remain present at 261-263 and 299-301.",
+        "A fresh baseline replay of the frozen seed showed the old two-value max/min used the same strict branch and selected the second argument on ties; the captured patch keeps that branch and routes the comparison through ComparableUtils.compare.",
+        "Fresh public replay code-kb contexts show ObjectUtils.compare, max, and min wrappers at src/main/java/org/apache/commons/lang3/ObjectUtils.java:292-294, 308-310, 1016-1019, and 1076-1079 delegating to ComparableUtils.",
+        "Code-kb callers reports show the ObjectUtils compatibility methods and the added test class call the ComparableUtils methods."
+      ]
+    },
+    {
+      "severity": "informational",
+      "finding": "The added migration test covers both null-ordering modes, the compatibility wrappers, null/empty/all-null varargs, null skipping, first-equal retention, existing two-value behavior, and comparison to a supertype. The trusted grade did not select this new test file, so it was run separately on the fresh public replay.",
+      "evidence": [
+        "Code-kb bodies for all five tests in src/test/java/org/apache/commons/lang3/compare/ComparableUtilsMigrationTest.java show the stated cases, including Child implementing Comparable through its Parent supertype and preserving non-normalized comparison results.",
+        "The frozen public grade selected ComparableUtilsTest and ObjectUtilsTest; the hidden grade selected ComparableUtilsMigrationContractTest, neither of which selected ComparableUtilsMigrationTest.",
+        "The trusted public grade passed 130 tests and the trusted hidden contract grade passed 5 tests.",
+        "An offline focused Maven run passed all 5 ComparableUtilsMigrationTest tests on the fresh public replay."
+      ],
+      "verification_status": "source review and separate added-test run passed"
+    }
+  ],
+  "changed_production_files": [
+    "src/main/java/org/apache/commons/lang3/ObjectUtils.java",
+    "src/main/java/org/apache/commons/lang3/compare/ComparableUtils.java"
+  ],
+  "added_tests": [
+    "src/test/java/org/apache/commons/lang3/compare/ComparableUtilsMigrationTest.java"
+  ],
+  "executed_verification": [
+    {
+      "kind": "trusted_public_grade",
+      "command_id": "commons-public-comparable-regressions",
+      "status": "passed",
+      "exit_status": 0,
+      "observed_tests": 130,
+      "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/022-commons-lang-native-r2/evidence/grade/grade-012-stdout_log.log"
+    },
+    {
+      "kind": "trusted_hidden_grade",
+      "command_id": "commons-comparable-migration-contract",
+      "status": "passed",
+      "exit_status": 0,
+      "observed_tests": 5,
+      "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/022-commons-lang-native-r2/evidence/grade/grade-014-stdout_log.log"
+    },
+    {
+      "kind": "additional_test_run",
+      "command_id": "commons-comparable-migration-added-tests",
+      "status": "passed",
+      "exit_status": 0,
+      "observed_tests": 5,
+      "offline": true,
+      "project": "/tmp/code-kb-source-review-20261027-kHXOtu/022-commons-lang-native-r2/project",
+      "stdout_log": "/tmp/code-kb-source-review-20261027-kHXOtu/results/022-commons-lang-native-r2-java-test.log"
+    }
+  ]
+}

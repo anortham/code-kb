@@ -1,0 +1,1300 @@
+{
+  "schema": 1,
+  "archive": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/control-freeze-v2/readiness-v2.tar.gz",
+  "archive_sha256": "1985720b9b2b848ebcd9c6265f1ee329b636060852902de73c2a7acedd4afa20",
+  "deterministic_rebuild_sha256": "1985720b9b2b848ebcd9c6265f1ee329b636060852902de73c2a7acedd4afa20",
+  "member_count": 258,
+  "member_bytes": 1327994,
+  "members": [
+    {
+      "path": "external/accepted/commons-lang/evidence/baseline-public-00-commons-public-comparable-regressions/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/baseline-public-00-commons-public-comparable-regressions/stdout.log",
+      "sha256": "9b5e101ce3a64453f8b8b536943eff7ea21e75bf2bac383fdbfc9c90dfe9031f",
+      "size": 9563
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/reference-bundle/blobs/0143e95b2516b5b44ed8bf381da9ca766abcb40a39092f830e8f7102d9041f9a",
+      "sha256": "0143e95b2516b5b44ed8bf381da9ca766abcb40a39092f830e8f7102d9041f9a",
+      "size": 12506
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/reference-bundle/blobs/adfccecc2c64f8200e41d87d09073a7471a141f281dfb2dadc61aa76830ee714",
+      "sha256": "adfccecc2c64f8200e41d87d09073a7471a141f281dfb2dadc61aa76830ee714",
+      "size": 53090
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/reference-bundle/bundle.json",
+      "sha256": "963845c512c5eb227a732e4115f66b39a1683d487cceead4c456112a8cef3dad",
+      "size": 1483
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/reference-hidden-00-commons-comparable-migration-contract/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/reference-hidden-00-commons-comparable-migration-contract/stdout.log",
+      "sha256": "2fa07eda3a92b5663af34d6c84ace6a00467d1a9b85b21f951c846921f507c08",
+      "size": 6183
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/reference-public-00-commons-public-comparable-regressions/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/reference-public-00-commons-public-comparable-regressions/stdout.log",
+      "sha256": "cc65fb0c9eeed0932bc53b4ab1cde5ca43b0a5038578fbf765816df7afe5ff71",
+      "size": 9563
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/runtime-baseline-00-commons-copy-prepared-maven-cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/runtime-baseline-00-commons-copy-prepared-maven-cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/runtime-baseline-01-commons-resolve-dependencies-offline/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/runtime-baseline-01-commons-resolve-dependencies-offline/stdout.log",
+      "sha256": "aa5c909916992c233d89087752dafece1bd8098a4187e1a0035e3f6c4b6bca3d",
+      "size": 76453
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/runtime-baseline-02-commons-surefire-provider-offline-cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/runtime-baseline-02-commons-surefire-provider-offline-cache/stdout.log",
+      "sha256": "62c6d4c9b2a76a1a1318dbd68682a1a34b9c64c4888d4a24316e8f0c840f5bd3",
+      "size": 996
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/runtime-reference-hidden-00-commons-copy-prepared-maven-cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/runtime-reference-hidden-00-commons-copy-prepared-maven-cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/runtime-reference-hidden-01-commons-resolve-dependencies-offline/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/runtime-reference-hidden-01-commons-resolve-dependencies-offline/stdout.log",
+      "sha256": "b12a54840b748f46537084ed1fd0272c595dbe56749d7651089e608a91513073",
+      "size": 76453
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/runtime-reference-hidden-02-commons-surefire-provider-offline-cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/runtime-reference-hidden-02-commons-surefire-provider-offline-cache/stdout.log",
+      "sha256": "8c678ea184224b2b25998ac2d5ef14256627eac04c1244aa0ddba38512141986",
+      "size": 996
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/runtime-reference-public-00-commons-copy-prepared-maven-cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/runtime-reference-public-00-commons-copy-prepared-maven-cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/runtime-reference-public-01-commons-resolve-dependencies-offline/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/runtime-reference-public-01-commons-resolve-dependencies-offline/stdout.log",
+      "sha256": "4c0349c202bfa597b6c31a3429b063670ebaa1bfe54e289d44620204bf33a616",
+      "size": 76453
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/runtime-reference-public-02-commons-surefire-provider-offline-cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/runtime-reference-public-02-commons-surefire-provider-offline-cache/stdout.log",
+      "sha256": "3cbd67eb4a951626f204b5794f11ebea9bbf4b89ce8a60d7c58276291bfad187",
+      "size": 996
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/runtime-seed-00-commons-copy-prepared-maven-cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/runtime-seed-00-commons-copy-prepared-maven-cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/runtime-seed-01-commons-resolve-dependencies-offline/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/runtime-seed-01-commons-resolve-dependencies-offline/stdout.log",
+      "sha256": "10f82cef8778187dae9be124718fb4d946741327bc95b762b3ca75c9c51547c0",
+      "size": 76453
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/runtime-seed-02-commons-surefire-provider-offline-cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/runtime-seed-02-commons-surefire-provider-offline-cache/stdout.log",
+      "sha256": "a867f4a86ad05a877fba08436aa5b4d29a34d391bc0e2848dc565a6cca9f50a3",
+      "size": 996
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/seed-hidden-00-commons-comparable-migration-contract/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/commons-lang/evidence/seed-hidden-00-commons-comparable-migration-contract/stdout.log",
+      "sha256": "e13fc7edb50b3cbea0aa02bc3a6c0f0d161930222131751e827e896144ec6d47",
+      "size": 22169
+    },
+    {
+      "path": "external/accepted/commons-lang/readiness.json",
+      "sha256": "01c8138090933411806aff09bad6f23d94e86d79ac5241678963afc9ae2b301b",
+      "size": 15942
+    },
+    {
+      "path": "external/accepted/date-fns/evidence/baseline-public-00-business_day_regressions/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/date-fns/evidence/baseline-public-00-business_day_regressions/stdout.log",
+      "sha256": "02274f99f3eb5c144bb3e186fbc91ca3ffc94671ea21bb016b7465232f04036f",
+      "size": 7146
+    },
+    {
+      "path": "external/accepted/date-fns/evidence/reference-bundle/blobs/21388be3c82415c3a7df6de3fd01595593d4c60af75cadd1ab80d6ea71899ad1",
+      "sha256": "21388be3c82415c3a7df6de3fd01595593d4c60af75cadd1ab80d6ea71899ad1",
+      "size": 3123
+    },
+    {
+      "path": "external/accepted/date-fns/evidence/reference-bundle/blobs/ca1a5e6356c42b354b696683daa12334fff438ba2650026700956d313fcc2caa",
+      "sha256": "ca1a5e6356c42b354b696683daa12334fff438ba2650026700956d313fcc2caa",
+      "size": 3146
+    },
+    {
+      "path": "external/accepted/date-fns/evidence/reference-bundle/bundle.json",
+      "sha256": "a1f42b3eb48e76b3e71b0f4317ec4348255d04b1795221c2ec6f21edf6858833",
+      "size": 1369
+    },
+    {
+      "path": "external/accepted/date-fns/evidence/reference-hidden-00-business_day_context_acceptance/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/date-fns/evidence/reference-hidden-00-business_day_context_acceptance/stdout.log",
+      "sha256": "c3206ecc578ee3bd93f9075bf2ff9ba548165c1b45a11b5bcfe3db6392996ac1",
+      "size": 734
+    },
+    {
+      "path": "external/accepted/date-fns/evidence/reference-public-00-business_day_regressions/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/date-fns/evidence/reference-public-00-business_day_regressions/stdout.log",
+      "sha256": "8ea0f7511136d7a7c84afd7143a602a96d3710f3658a6d08c3a0cd4f13e7ec58",
+      "size": 7146
+    },
+    {
+      "path": "external/accepted/date-fns/evidence/runtime-baseline-00-materialize_pnpm_store/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/date-fns/evidence/runtime-baseline-00-materialize_pnpm_store/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/date-fns/evidence/runtime-baseline-01-materialize_workspace_dependencies/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/date-fns/evidence/runtime-baseline-01-materialize_workspace_dependencies/stdout.log",
+      "sha256": "63d11c2f19e821529988b5b20b1bf453eb3713fd5debe8a79bd5cdb0df20f258",
+      "size": 736
+    },
+    {
+      "path": "external/accepted/date-fns/evidence/runtime-reference-hidden-00-materialize_pnpm_store/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/date-fns/evidence/runtime-reference-hidden-00-materialize_pnpm_store/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/date-fns/evidence/runtime-reference-hidden-01-materialize_workspace_dependencies/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/date-fns/evidence/runtime-reference-hidden-01-materialize_workspace_dependencies/stdout.log",
+      "sha256": "c7001b8fac9a623e08f85b971b3d73dad80dfc461281dc0aa27e78f71c70a3c2",
+      "size": 736
+    },
+    {
+      "path": "external/accepted/date-fns/evidence/runtime-reference-public-00-materialize_pnpm_store/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/date-fns/evidence/runtime-reference-public-00-materialize_pnpm_store/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/date-fns/evidence/runtime-reference-public-01-materialize_workspace_dependencies/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/date-fns/evidence/runtime-reference-public-01-materialize_workspace_dependencies/stdout.log",
+      "sha256": "b188633fcab2efa7327e41ee9ea92cb0da50f827e13ca19bd8f5df4286d95c4f",
+      "size": 736
+    },
+    {
+      "path": "external/accepted/date-fns/evidence/runtime-seed-00-materialize_pnpm_store/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/date-fns/evidence/runtime-seed-00-materialize_pnpm_store/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/date-fns/evidence/runtime-seed-01-materialize_workspace_dependencies/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/date-fns/evidence/runtime-seed-01-materialize_workspace_dependencies/stdout.log",
+      "sha256": "63d11c2f19e821529988b5b20b1bf453eb3713fd5debe8a79bd5cdb0df20f258",
+      "size": 736
+    },
+    {
+      "path": "external/accepted/date-fns/evidence/seed-hidden-00-business_day_context_acceptance/stderr.log",
+      "sha256": "afa3ceed491458aa57dc44446e6ffe8809094f9b999d0a42aa3ed73ea14977cc",
+      "size": 1696
+    },
+    {
+      "path": "external/accepted/date-fns/evidence/seed-hidden-00-business_day_context_acceptance/stdout.log",
+      "sha256": "87d5ce2a9b6f17b77f0e5d64708fe358dcd69ac78af5054ef476032aa0982351",
+      "size": 904
+    },
+    {
+      "path": "external/accepted/date-fns/readiness.json",
+      "sha256": "9620f245c4c2090918fe772de0cc9fddf1b135d8ecacb634e75a4b15b889bc2f",
+      "size": 11487
+    },
+    {
+      "path": "external/accepted/hcl/evidence/baseline-public-00-gohcl_regressions/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/hcl/evidence/baseline-public-00-gohcl_regressions/stdout.log",
+      "sha256": "64e27415b63314b4e225bce9ab6324564e64d2adce68df2205e085fb2df54cd3",
+      "size": 9231
+    },
+    {
+      "path": "external/accepted/hcl/evidence/reference-bundle/blobs/498929b34aa292bf1d8eb3e46b7e863021320047d900761d9354b7a67b1cdc99",
+      "sha256": "498929b34aa292bf1d8eb3e46b7e863021320047d900761d9354b7a67b1cdc99",
+      "size": 5329
+    },
+    {
+      "path": "external/accepted/hcl/evidence/reference-bundle/blobs/ec557c1684685d98585921631f079240d3f56b3f46e760a9606b7ca057902d2a",
+      "sha256": "ec557c1684685d98585921631f079240d3f56b3f46e760a9606b7ca057902d2a",
+      "size": 9845
+    },
+    {
+      "path": "external/accepted/hcl/evidence/reference-bundle/bundle.json",
+      "sha256": "d3ad1386ca60edaefd99ce778c40cbd85f696cc764f7a6ffc4d889653f973f2b",
+      "size": 1204
+    },
+    {
+      "path": "external/accepted/hcl/evidence/reference-hidden-00-expression_field_acceptance/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/hcl/evidence/reference-hidden-00-expression_field_acceptance/stdout.log",
+      "sha256": "72d46e878682819b0f2918d02647f276c9ba0bc210a78b434068bcd274908104",
+      "size": 163
+    },
+    {
+      "path": "external/accepted/hcl/evidence/reference-public-00-gohcl_regressions/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/hcl/evidence/reference-public-00-gohcl_regressions/stdout.log",
+      "sha256": "64e27415b63314b4e225bce9ab6324564e64d2adce68df2205e085fb2df54cd3",
+      "size": 9231
+    },
+    {
+      "path": "external/accepted/hcl/evidence/runtime-baseline-00-materialize_go_module_cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/hcl/evidence/runtime-baseline-00-materialize_go_module_cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/hcl/evidence/runtime-baseline-01-create_go_build_cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/hcl/evidence/runtime-baseline-01-create_go_build_cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/hcl/evidence/runtime-reference-hidden-00-materialize_go_module_cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/hcl/evidence/runtime-reference-hidden-00-materialize_go_module_cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/hcl/evidence/runtime-reference-hidden-01-create_go_build_cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/hcl/evidence/runtime-reference-hidden-01-create_go_build_cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/hcl/evidence/runtime-reference-public-00-materialize_go_module_cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/hcl/evidence/runtime-reference-public-00-materialize_go_module_cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/hcl/evidence/runtime-reference-public-01-create_go_build_cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/hcl/evidence/runtime-reference-public-01-create_go_build_cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/hcl/evidence/runtime-seed-00-materialize_go_module_cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/hcl/evidence/runtime-seed-00-materialize_go_module_cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/hcl/evidence/runtime-seed-01-create_go_build_cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/hcl/evidence/runtime-seed-01-create_go_build_cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/hcl/evidence/seed-hidden-00-expression_field_acceptance/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/hcl/evidence/seed-hidden-00-expression_field_acceptance/stdout.log",
+      "sha256": "2ba15e119ffe694ff0dd08337606a25cfb152ffb15fdec0d26f76936eab3b85c",
+      "size": 430
+    },
+    {
+      "path": "external/accepted/hcl/readiness.json",
+      "sha256": "f7f9d2ce55007732240795d84191db0496e4b7af2a0dcdfe6395a7c01d56bb91",
+      "size": 11175
+    },
+    {
+      "path": "external/accepted/minijinja/evidence/baseline-public-00-minijinja_cli_regressions/stderr.log",
+      "sha256": "9c06f8e3d80c76cc5a9a3abb506261ee672f9cbce828d6885c3a5422160dad78",
+      "size": 2280
+    },
+    {
+      "path": "external/accepted/minijinja/evidence/baseline-public-00-minijinja_cli_regressions/stdout.log",
+      "sha256": "e79a1f6e61bfdb2a2b0f259dff79264571ea490375e4ab2db4b534f1b7bc423c",
+      "size": 1382
+    },
+    {
+      "path": "external/accepted/minijinja/evidence/reference-bundle/blobs/178a620aa2bca872415375fcb7f01fd012074ba5924fc6a4b6f3862a5b6abdcd",
+      "sha256": "178a620aa2bca872415375fcb7f01fd012074ba5924fc6a4b6f3862a5b6abdcd",
+      "size": 11523
+    },
+    {
+      "path": "external/accepted/minijinja/evidence/reference-bundle/blobs/439ad36eb6b7c7e21648367790b70a66a6f87f3b95f5946b8194980e76ddd4a7",
+      "sha256": "439ad36eb6b7c7e21648367790b70a66a6f87f3b95f5946b8194980e76ddd4a7",
+      "size": 20612
+    },
+    {
+      "path": "external/accepted/minijinja/evidence/reference-bundle/blobs/e700bb1620d0c36a0810f5878a8608e5275f6345f3282a3836a92e68adc4dec8",
+      "sha256": "e700bb1620d0c36a0810f5878a8608e5275f6345f3282a3836a92e68adc4dec8",
+      "size": 1338
+    },
+    {
+      "path": "external/accepted/minijinja/evidence/reference-bundle/bundle.json",
+      "sha256": "1914b921f2d692bb79d7bcdf6d9882254ce8748f58ae09a11168b33965ab2cdb",
+      "size": 1641
+    },
+    {
+      "path": "external/accepted/minijinja/evidence/reference-hidden-00-autoescape_suffix_acceptance/stderr.log",
+      "sha256": "55c1d96af0234e36e7bc07d21d37ce783e42aae5df76b2a9252ff81f9e2020d0",
+      "size": 2207
+    },
+    {
+      "path": "external/accepted/minijinja/evidence/reference-hidden-00-autoescape_suffix_acceptance/stdout.log",
+      "sha256": "04d2b6cb76bb233dfcd6b277b1fb78a85c13530544bc00aa08e723e0fd718895",
+      "size": 310
+    },
+    {
+      "path": "external/accepted/minijinja/evidence/reference-public-00-minijinja_cli_regressions/stderr.log",
+      "sha256": "0b7124f7e1a2c5b61116c898cb4aa575bd4a2ec7470515403811b7de22cc6fea",
+      "size": 2280
+    },
+    {
+      "path": "external/accepted/minijinja/evidence/reference-public-00-minijinja_cli_regressions/stdout.log",
+      "sha256": "74016b1b1301aed2741b01b4c8664cb0b5dd16316c28897a213cbd8dd86d3270",
+      "size": 1382
+    },
+    {
+      "path": "external/accepted/minijinja/evidence/runtime-baseline-00-restore_cargo_cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/minijinja/evidence/runtime-baseline-00-restore_cargo_cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/minijinja/evidence/runtime-reference-hidden-00-restore_cargo_cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/minijinja/evidence/runtime-reference-hidden-00-restore_cargo_cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/minijinja/evidence/runtime-reference-public-00-restore_cargo_cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/minijinja/evidence/runtime-reference-public-00-restore_cargo_cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/minijinja/evidence/runtime-seed-00-restore_cargo_cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/minijinja/evidence/runtime-seed-00-restore_cargo_cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/minijinja/evidence/seed-hidden-00-autoescape_suffix_acceptance/stderr.log",
+      "sha256": "d171bc9023010ceb1c796c1e4e4d1d95aaacae9b8a0ad7e133b32e1cb1040f99",
+      "size": 2288
+    },
+    {
+      "path": "external/accepted/minijinja/evidence/seed-hidden-00-autoescape_suffix_acceptance/stdout.log",
+      "sha256": "1ea9578a8745a59ae7c8fab05f04355545ef9789842c5d07672e8ff9f14ec2d4",
+      "size": 13519
+    },
+    {
+      "path": "external/accepted/minijinja/readiness.json",
+      "sha256": "ef724b3d4402d538d7a9504150197c8c604ab6b127aa2c86df16db9d90afdd49",
+      "size": 8530
+    },
+    {
+      "path": "external/accepted/nodatime/evidence/baseline-public-00-nodatime-public-local-date-regressions/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/nodatime/evidence/baseline-public-00-nodatime-public-local-date-regressions/stdout.log",
+      "sha256": "0234e9a8c29d23059571489823ac2ddafa682548039a7978c9ed765bba52e413",
+      "size": 12871
+    },
+    {
+      "path": "external/accepted/nodatime/evidence/baseline-public-01-nodatime-public-pure-struct-methods/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/nodatime/evidence/baseline-public-01-nodatime-public-pure-struct-methods/stdout.log",
+      "sha256": "d932c0a105c1728a44fe49343df5df1d91fd88b097e124e919f7e061ed53cb0a",
+      "size": 973
+    },
+    {
+      "path": "external/accepted/nodatime/evidence/reference-bundle/blobs/21b8ab1979394c02cec8556350b77e9cb9964e72c8a310cdd4b998a737e1c399",
+      "sha256": "21b8ab1979394c02cec8556350b77e9cb9964e72c8a310cdd4b998a737e1c399",
+      "size": 52946
+    },
+    {
+      "path": "external/accepted/nodatime/evidence/reference-bundle/blobs/ca15d3d2e7a614aa8e84ffa7fbb773b2b39c4cd0301b0cf68f8b8feccb8852a0",
+      "sha256": "ca15d3d2e7a614aa8e84ffa7fbb773b2b39c4cd0301b0cf68f8b8feccb8852a0",
+      "size": 47131
+    },
+    {
+      "path": "external/accepted/nodatime/evidence/reference-bundle/bundle.json",
+      "sha256": "02d6c3605c85af189cad03f28c3c4620acaef0ede010662583c271744f8ca9ed",
+      "size": 1280
+    },
+    {
+      "path": "external/accepted/nodatime/evidence/reference-hidden-00-nodatime-calendar-neutral-contract/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/nodatime/evidence/reference-hidden-00-nodatime-calendar-neutral-contract/stdout.log",
+      "sha256": "7e025a85775f0a5069db360b01691d2bd4de73c2dd3ca2e30239bdb6c7df5a67",
+      "size": 1554
+    },
+    {
+      "path": "external/accepted/nodatime/evidence/reference-public-00-nodatime-public-local-date-regressions/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/nodatime/evidence/reference-public-00-nodatime-public-local-date-regressions/stdout.log",
+      "sha256": "1af34f61b5560ec190952fbdd516d85dfd528b923bf771b900084b50d36854ce",
+      "size": 12871
+    },
+    {
+      "path": "external/accepted/nodatime/evidence/reference-public-01-nodatime-public-pure-struct-methods/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/nodatime/evidence/reference-public-01-nodatime-public-pure-struct-methods/stdout.log",
+      "sha256": "80a9c778ca4caf3b8907a0731266df2d9a220a64276f6eb97ebcae1eb818f32b",
+      "size": 973
+    },
+    {
+      "path": "external/accepted/nodatime/evidence/runtime-baseline-00-nodatime-copy-prepared-nuget-cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/nodatime/evidence/runtime-baseline-00-nodatime-copy-prepared-nuget-cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/nodatime/evidence/runtime-baseline-01-nodatime-restore-from-local-cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/nodatime/evidence/runtime-baseline-01-nodatime-restore-from-local-cache/stdout.log",
+      "sha256": "283e4d85cff0349ed186fe6de6d6c8fb7b3b7faf419f89630b94f47462699f0f",
+      "size": 279
+    },
+    {
+      "path": "external/accepted/nodatime/evidence/runtime-reference-hidden-00-nodatime-copy-prepared-nuget-cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/nodatime/evidence/runtime-reference-hidden-00-nodatime-copy-prepared-nuget-cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/nodatime/evidence/runtime-reference-hidden-01-nodatime-restore-from-local-cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/nodatime/evidence/runtime-reference-hidden-01-nodatime-restore-from-local-cache/stdout.log",
+      "sha256": "7f2f7a2119965e694a6c47ffd35d697d2e2d4ce821f9e1385c6b0269e3d8677c",
+      "size": 279
+    },
+    {
+      "path": "external/accepted/nodatime/evidence/runtime-reference-public-00-nodatime-copy-prepared-nuget-cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/nodatime/evidence/runtime-reference-public-00-nodatime-copy-prepared-nuget-cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/nodatime/evidence/runtime-reference-public-01-nodatime-restore-from-local-cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/nodatime/evidence/runtime-reference-public-01-nodatime-restore-from-local-cache/stdout.log",
+      "sha256": "8e3bec1fd7a9204c45eae84606a575887134c194a94a2fe4a94c444f1e86230b",
+      "size": 279
+    },
+    {
+      "path": "external/accepted/nodatime/evidence/runtime-seed-00-nodatime-copy-prepared-nuget-cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/nodatime/evidence/runtime-seed-00-nodatime-copy-prepared-nuget-cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/nodatime/evidence/runtime-seed-01-nodatime-restore-from-local-cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/nodatime/evidence/runtime-seed-01-nodatime-restore-from-local-cache/stdout.log",
+      "sha256": "8e0a663efb3d16ea1becaaee17338b2fa963f12b5c64dfef339935471bf32fdb",
+      "size": 279
+    },
+    {
+      "path": "external/accepted/nodatime/evidence/seed-hidden-00-nodatime-calendar-neutral-contract/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/nodatime/evidence/seed-hidden-00-nodatime-calendar-neutral-contract/stdout.log",
+      "sha256": "9f991e19840cd12b3f4206869cd5eae77675ffe86fff4f38871e6ecbc5197c05",
+      "size": 3015
+    },
+    {
+      "path": "external/accepted/nodatime/readiness.json",
+      "sha256": "fa9b28f61f9738723cf135a62f7fc9b67088a4a8e0698b5ffa71d9317b5859f1",
+      "size": 14040
+    },
+    {
+      "path": "external/accepted/sqlglot/evidence/baseline-public-00-bigquery_regressions/stderr.log",
+      "sha256": "cc7c144c1aab4f95b0fc434e60d20cd3a2145e78786521364ca2b43fa6d7b85b",
+      "size": 249
+    },
+    {
+      "path": "external/accepted/sqlglot/evidence/baseline-public-00-bigquery_regressions/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/sqlglot/evidence/reference-bundle/blobs/2568bc0b539b3e7f8905a6adea96f09c26a9c402b7202f17f060e9f4de6d3c52",
+      "sha256": "2568bc0b539b3e7f8905a6adea96f09c26a9c402b7202f17f060e9f4de6d3c52",
+      "size": 1825
+    },
+    {
+      "path": "external/accepted/sqlglot/evidence/reference-bundle/blobs/9b80234efd6ff7108cf4ac7029053c4479ce9b3674e0a73698efd2116eed538f",
+      "sha256": "9b80234efd6ff7108cf4ac7029053c4479ce9b3674e0a73698efd2116eed538f",
+      "size": 31661
+    },
+    {
+      "path": "external/accepted/sqlglot/evidence/reference-bundle/blobs/b0e51eee50d922c0f186d839ee410101115f751e5c30dc364720610b88a72518",
+      "sha256": "b0e51eee50d922c0f186d839ee410101115f751e5c30dc364720610b88a72518",
+      "size": 33490
+    },
+    {
+      "path": "external/accepted/sqlglot/evidence/reference-bundle/bundle.json",
+      "sha256": "6aba872f1c1d4c414ba44a8d67dc22c5262f25fd797418395bd0bfd56d4c786e",
+      "size": 1639
+    },
+    {
+      "path": "external/accepted/sqlglot/evidence/reference-hidden-00-timestamp_bucket_acceptance/stderr.log",
+      "sha256": "15e2fdb198654312a62b88dd106b2f73389a1d29164408feb1715136b9dbae6b",
+      "size": 186
+    },
+    {
+      "path": "external/accepted/sqlglot/evidence/reference-hidden-00-timestamp_bucket_acceptance/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/sqlglot/evidence/reference-public-00-bigquery_regressions/stderr.log",
+      "sha256": "a38c5c87c734ae942793473a128fbf45bb5473e8b7f1d21111a1f02a6ffeaca9",
+      "size": 249
+    },
+    {
+      "path": "external/accepted/sqlglot/evidence/reference-public-00-bigquery_regressions/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/sqlglot/evidence/runtime-baseline-00-install_pytz_offline/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/sqlglot/evidence/runtime-baseline-00-install_pytz_offline/stdout.log",
+      "sha256": "ae6522ba2a9da33ea03442b6ea7e48f1b9e54234266e7b542bf70b6028b83981",
+      "size": 177
+    },
+    {
+      "path": "external/accepted/sqlglot/evidence/runtime-reference-hidden-00-install_pytz_offline/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/sqlglot/evidence/runtime-reference-hidden-00-install_pytz_offline/stdout.log",
+      "sha256": "ae6522ba2a9da33ea03442b6ea7e48f1b9e54234266e7b542bf70b6028b83981",
+      "size": 177
+    },
+    {
+      "path": "external/accepted/sqlglot/evidence/runtime-reference-public-00-install_pytz_offline/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/sqlglot/evidence/runtime-reference-public-00-install_pytz_offline/stdout.log",
+      "sha256": "ae6522ba2a9da33ea03442b6ea7e48f1b9e54234266e7b542bf70b6028b83981",
+      "size": 177
+    },
+    {
+      "path": "external/accepted/sqlglot/evidence/runtime-seed-00-install_pytz_offline/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/sqlglot/evidence/runtime-seed-00-install_pytz_offline/stdout.log",
+      "sha256": "ae6522ba2a9da33ea03442b6ea7e48f1b9e54234266e7b542bf70b6028b83981",
+      "size": 177
+    },
+    {
+      "path": "external/accepted/sqlglot/evidence/seed-hidden-00-timestamp_bucket_acceptance/stderr.log",
+      "sha256": "4300e67dfa4b4a41ecb0686dd0627159b3dce69ef646389e07eea61ff8246455",
+      "size": 1179
+    },
+    {
+      "path": "external/accepted/sqlglot/evidence/seed-hidden-00-timestamp_bucket_acceptance/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/accepted/sqlglot/readiness.json",
+      "sha256": "ffad89995e31aa9b456748f97a5875f57ecf32dc4fc1de617628a893ec9da49d",
+      "size": 8074
+    },
+    {
+      "path": "external/failed/commons-lang-marker-initial/evidence/baseline-public-00-commons-public-comparable-regressions/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/failed/commons-lang-marker-initial/evidence/baseline-public-00-commons-public-comparable-regressions/stdout.log",
+      "sha256": "67a8ebbb842154ff434d91f5d6f07fe4b5ba664fa2446b41f5a552b0aaea0ed7",
+      "size": 9563
+    },
+    {
+      "path": "external/failed/commons-lang-marker-initial/evidence/runtime-baseline-00-commons-copy-prepared-maven-cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/failed/commons-lang-marker-initial/evidence/runtime-baseline-00-commons-copy-prepared-maven-cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/failed/commons-lang-marker-initial/evidence/runtime-baseline-01-commons-resolve-dependencies-offline/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/failed/commons-lang-marker-initial/evidence/runtime-baseline-01-commons-resolve-dependencies-offline/stdout.log",
+      "sha256": "90725efa1df6a27214efbca9aa072e3cec803d0686a2bc6101984b88f03ae751",
+      "size": 76453
+    },
+    {
+      "path": "external/failed/commons-lang-marker-initial/evidence/runtime-baseline-02-commons-surefire-provider-offline-cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/failed/commons-lang-marker-initial/evidence/runtime-baseline-02-commons-surefire-provider-offline-cache/stdout.log",
+      "sha256": "6b9ca2f587195979be0ecfc7aee528da964b92bf5c4445da84c65190828fb3be",
+      "size": 996
+    },
+    {
+      "path": "external/failed/commons-lang-marker-initial/readiness.json",
+      "sha256": "a80918ae4b3a506d9f10655ae3e1352fa2ae98b9d47643a0f67d9a6fdcd24908",
+      "size": 4328
+    },
+    {
+      "path": "external/superseded/minijinja-drifted-cache/evidence/baseline-public-00-minijinja_cli_regressions/stderr.log",
+      "sha256": "26b4547df190683b1d5ee4c40ba04cbba4dc7d490116a9469b962199cefac3e8",
+      "size": 2280
+    },
+    {
+      "path": "external/superseded/minijinja-drifted-cache/evidence/baseline-public-00-minijinja_cli_regressions/stdout.log",
+      "sha256": "ac578354ed494bb9060739a122671b5faa94467a414e83718aee88096e5604e5",
+      "size": 1382
+    },
+    {
+      "path": "external/superseded/minijinja-drifted-cache/evidence/reference-bundle/blobs/178a620aa2bca872415375fcb7f01fd012074ba5924fc6a4b6f3862a5b6abdcd",
+      "sha256": "178a620aa2bca872415375fcb7f01fd012074ba5924fc6a4b6f3862a5b6abdcd",
+      "size": 11523
+    },
+    {
+      "path": "external/superseded/minijinja-drifted-cache/evidence/reference-bundle/blobs/439ad36eb6b7c7e21648367790b70a66a6f87f3b95f5946b8194980e76ddd4a7",
+      "sha256": "439ad36eb6b7c7e21648367790b70a66a6f87f3b95f5946b8194980e76ddd4a7",
+      "size": 20612
+    },
+    {
+      "path": "external/superseded/minijinja-drifted-cache/evidence/reference-bundle/blobs/e700bb1620d0c36a0810f5878a8608e5275f6345f3282a3836a92e68adc4dec8",
+      "sha256": "e700bb1620d0c36a0810f5878a8608e5275f6345f3282a3836a92e68adc4dec8",
+      "size": 1338
+    },
+    {
+      "path": "external/superseded/minijinja-drifted-cache/evidence/reference-bundle/bundle.json",
+      "sha256": "76a3869558bdffdb318d669d4ba58561ed51d500042be8a4e16f7d18f93e9de4",
+      "size": 1641
+    },
+    {
+      "path": "external/superseded/minijinja-drifted-cache/evidence/reference-hidden-00-autoescape_suffix_acceptance/stderr.log",
+      "sha256": "989f60e08b63d395582ef7c7ff347f99e2e1551046ec2e38fea1eef5fe34c899",
+      "size": 2207
+    },
+    {
+      "path": "external/superseded/minijinja-drifted-cache/evidence/reference-hidden-00-autoescape_suffix_acceptance/stdout.log",
+      "sha256": "04d2b6cb76bb233dfcd6b277b1fb78a85c13530544bc00aa08e723e0fd718895",
+      "size": 310
+    },
+    {
+      "path": "external/superseded/minijinja-drifted-cache/evidence/reference-public-00-minijinja_cli_regressions/stderr.log",
+      "sha256": "bcb8f3b455ff828db25560d92f1a1846f1cf75327bb3cf17769e365b25eb0301",
+      "size": 2280
+    },
+    {
+      "path": "external/superseded/minijinja-drifted-cache/evidence/reference-public-00-minijinja_cli_regressions/stdout.log",
+      "sha256": "37631ba4f4a68b1c60cbe77238076326c7d4c1ece05d6d748af0f419b65cd0a4",
+      "size": 1382
+    },
+    {
+      "path": "external/superseded/minijinja-drifted-cache/evidence/runtime-baseline-00-restore_cargo_cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/superseded/minijinja-drifted-cache/evidence/runtime-baseline-00-restore_cargo_cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/superseded/minijinja-drifted-cache/evidence/runtime-reference-hidden-00-restore_cargo_cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/superseded/minijinja-drifted-cache/evidence/runtime-reference-hidden-00-restore_cargo_cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/superseded/minijinja-drifted-cache/evidence/runtime-reference-public-00-restore_cargo_cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/superseded/minijinja-drifted-cache/evidence/runtime-reference-public-00-restore_cargo_cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/superseded/minijinja-drifted-cache/evidence/runtime-seed-00-restore_cargo_cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/superseded/minijinja-drifted-cache/evidence/runtime-seed-00-restore_cargo_cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/superseded/minijinja-drifted-cache/evidence/seed-hidden-00-autoescape_suffix_acceptance/stderr.log",
+      "sha256": "cb29d64fac76c21cb1bdc33742fe6fde4157ca15eb1006b7a08b35f52adc4be7",
+      "size": 2288
+    },
+    {
+      "path": "external/superseded/minijinja-drifted-cache/evidence/seed-hidden-00-autoescape_suffix_acceptance/stdout.log",
+      "sha256": "11ec08c8dab53f808013cc8d27149c0306841f0b5cca5f14091596f131317da3",
+      "size": 13519
+    },
+    {
+      "path": "external/superseded/minijinja-drifted-cache/readiness.json",
+      "sha256": "1c2fa3b96f6eef709f068eac8c48c5cbf5b32342f7a81ff7a63284b5bb763afe",
+      "size": 8290
+    },
+    {
+      "path": "external/superseded/nodatime-original-oracle/evidence/baseline-public-00-nodatime-public-local-date-regressions/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/superseded/nodatime-original-oracle/evidence/baseline-public-00-nodatime-public-local-date-regressions/stdout.log",
+      "sha256": "51e958a50ba298bb97f2c6bb575d167771ce398b84636cc8dfdf2578c14b8c27",
+      "size": 12867
+    },
+    {
+      "path": "external/superseded/nodatime-original-oracle/evidence/reference-bundle/blobs/21b8ab1979394c02cec8556350b77e9cb9964e72c8a310cdd4b998a737e1c399",
+      "sha256": "21b8ab1979394c02cec8556350b77e9cb9964e72c8a310cdd4b998a737e1c399",
+      "size": 52946
+    },
+    {
+      "path": "external/superseded/nodatime-original-oracle/evidence/reference-bundle/blobs/ca15d3d2e7a614aa8e84ffa7fbb773b2b39c4cd0301b0cf68f8b8feccb8852a0",
+      "sha256": "ca15d3d2e7a614aa8e84ffa7fbb773b2b39c4cd0301b0cf68f8b8feccb8852a0",
+      "size": 47131
+    },
+    {
+      "path": "external/superseded/nodatime-original-oracle/evidence/reference-bundle/bundle.json",
+      "sha256": "8052ef34252cb37b76d3b2c14de8db584e258751f0dd56fce650143af8d49247",
+      "size": 1280
+    },
+    {
+      "path": "external/superseded/nodatime-original-oracle/evidence/reference-hidden-00-nodatime-calendar-neutral-contract/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/superseded/nodatime-original-oracle/evidence/reference-hidden-00-nodatime-calendar-neutral-contract/stdout.log",
+      "sha256": "83e1eb7c2df3cf97c50e1e423a9bd6b58140ff624de123b69e8053a10c2680c1",
+      "size": 1554
+    },
+    {
+      "path": "external/superseded/nodatime-original-oracle/evidence/reference-public-00-nodatime-public-local-date-regressions/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/superseded/nodatime-original-oracle/evidence/reference-public-00-nodatime-public-local-date-regressions/stdout.log",
+      "sha256": "59e01275487a5003bde4af28cf1b9ed26230d63b6b25b317016a2c07e789c5b1",
+      "size": 12867
+    },
+    {
+      "path": "external/superseded/nodatime-original-oracle/evidence/runtime-baseline-00-nodatime-copy-prepared-nuget-cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/superseded/nodatime-original-oracle/evidence/runtime-baseline-00-nodatime-copy-prepared-nuget-cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/superseded/nodatime-original-oracle/evidence/runtime-baseline-01-nodatime-restore-from-local-cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/superseded/nodatime-original-oracle/evidence/runtime-baseline-01-nodatime-restore-from-local-cache/stdout.log",
+      "sha256": "f0c0c2e0271576b1df3be221debdf5da4e8cd1fe2ee81a47e7bee2a57c598021",
+      "size": 279
+    },
+    {
+      "path": "external/superseded/nodatime-original-oracle/evidence/runtime-reference-hidden-00-nodatime-copy-prepared-nuget-cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/superseded/nodatime-original-oracle/evidence/runtime-reference-hidden-00-nodatime-copy-prepared-nuget-cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/superseded/nodatime-original-oracle/evidence/runtime-reference-hidden-01-nodatime-restore-from-local-cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/superseded/nodatime-original-oracle/evidence/runtime-reference-hidden-01-nodatime-restore-from-local-cache/stdout.log",
+      "sha256": "a5f67b2d410a3cbbdddd7528268b6a711508a108bd21228e92ad16354d401084",
+      "size": 279
+    },
+    {
+      "path": "external/superseded/nodatime-original-oracle/evidence/runtime-reference-public-00-nodatime-copy-prepared-nuget-cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/superseded/nodatime-original-oracle/evidence/runtime-reference-public-00-nodatime-copy-prepared-nuget-cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/superseded/nodatime-original-oracle/evidence/runtime-reference-public-01-nodatime-restore-from-local-cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/superseded/nodatime-original-oracle/evidence/runtime-reference-public-01-nodatime-restore-from-local-cache/stdout.log",
+      "sha256": "ab3fa054432b5cf25bdb7835be40902eba6e0e867ec7080ecf58a3aba8b6b085",
+      "size": 279
+    },
+    {
+      "path": "external/superseded/nodatime-original-oracle/evidence/runtime-seed-00-nodatime-copy-prepared-nuget-cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/superseded/nodatime-original-oracle/evidence/runtime-seed-00-nodatime-copy-prepared-nuget-cache/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/superseded/nodatime-original-oracle/evidence/runtime-seed-01-nodatime-restore-from-local-cache/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/superseded/nodatime-original-oracle/evidence/runtime-seed-01-nodatime-restore-from-local-cache/stdout.log",
+      "sha256": "54cfae58e3f90c611e86a5cbbed3b939573a731d1983ac9a234e25121be6b0de",
+      "size": 279
+    },
+    {
+      "path": "external/superseded/nodatime-original-oracle/evidence/seed-hidden-00-nodatime-calendar-neutral-contract/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "external/superseded/nodatime-original-oracle/evidence/seed-hidden-00-nodatime-calendar-neutral-contract/stdout.log",
+      "sha256": "9f991e19840cd12b3f4206869cd5eae77675ffe86fff4f38871e6ecbc5197c05",
+      "size": 3015
+    },
+    {
+      "path": "external/superseded/nodatime-original-oracle/readiness.json",
+      "sha256": "0c1db9584cb09512a057ccbf79acfd94bb26612273b5d288897e40389fef30b9",
+      "size": 11925
+    },
+    {
+      "path": "worktree/results/case-corrections/fresh-readiness-summary-v2-restored-cache.json",
+      "sha256": "bc45d784f483d28bf9e6328aa5024252395afb2c656d8cb4e0c7ee74fee3da3f",
+      "size": 9484
+    },
+    {
+      "path": "worktree/results/case-corrections/fresh-readiness-summary-v2.json",
+      "sha256": "b6a1aa24f38842e2d9e8a6c3ab99adb2c7dc6898be5005582432512a791b1b26",
+      "size": 8193
+    },
+    {
+      "path": "worktree/results/case-corrections/minijinja-cargo-cache-restoration-v2.json",
+      "sha256": "207f2acc121f0c8445ab5289ee727a679e07c33e1a4a5002e3bc869700d3697b",
+      "size": 3845
+    },
+    {
+      "path": "worktree/results/case-corrections/minijinja-checker-design.md",
+      "sha256": "fa34adb7010f2d048f53c5b47464c1eee55a6acdb165548e4e6c64e7cd757580",
+      "size": 1980
+    },
+    {
+      "path": "worktree/results/case-corrections/minijinja-matcher-v2-verification.json",
+      "sha256": "f4f487d3feb8e09b1a9d8268add4f72f206057a710a5eda4f206cf212bba28fe",
+      "size": 5071
+    },
+    {
+      "path": "worktree/results/case-corrections/nodatime-purity-correction.json",
+      "sha256": "d3ab35f37554ff95b2fa48f3c44f9d29f18dc947705e5b720e6f86762323de44",
+      "size": 4253
+    },
+    {
+      "path": "worktree/results/case-corrections/preparation.json",
+      "sha256": "d8290e10ff1eb68abb21445575b56f32c48f58b94e22921655f393326529f780",
+      "size": 6817
+    },
+    {
+      "path": "worktree/results/case-corrections/readiness-v2/commons-lang-maven-marker-fix/readiness.json",
+      "sha256": "01c8138090933411806aff09bad6f23d94e86d79ac5241678963afc9ae2b301b",
+      "size": 15942
+    },
+    {
+      "path": "worktree/results/case-corrections/readiness-v2/commons-lang/baseline-public-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "worktree/results/case-corrections/readiness-v2/commons-lang/baseline-public-stdout.log",
+      "sha256": "67a8ebbb842154ff434d91f5d6f07fe4b5ba664fa2446b41f5a552b0aaea0ed7",
+      "size": 9563
+    },
+    {
+      "path": "worktree/results/case-corrections/readiness-v2/commons-lang/readiness.json",
+      "sha256": "a80918ae4b3a506d9f10655ae3e1352fa2ae98b9d47643a0f67d9a6fdcd24908",
+      "size": 4328
+    },
+    {
+      "path": "worktree/results/case-corrections/readiness-v2/nodatime-purity-corrected/baseline-purity-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "worktree/results/case-corrections/readiness-v2/nodatime-purity-corrected/baseline-purity-stdout.log",
+      "sha256": "d932c0a105c1728a44fe49343df5df1d91fd88b097e124e919f7e061ed53cb0a",
+      "size": 973
+    },
+    {
+      "path": "worktree/results/case-corrections/readiness-v2/nodatime-purity-corrected/readiness.json",
+      "sha256": "fa9b28f61f9738723cf135a62f7fc9b67088a4a8e0698b5ffa71d9317b5859f1",
+      "size": 14040
+    },
+    {
+      "path": "worktree/results/case-corrections/readiness-v2/nodatime-purity-corrected/reference-purity-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "worktree/results/case-corrections/readiness-v2/nodatime-purity-corrected/reference-purity-stdout.log",
+      "sha256": "80a9c778ca4caf3b8907a0731266df2d9a220a64276f6eb97ebcae1eb818f32b",
+      "size": 973
+    },
+    {
+      "path": "worktree/results/case-corrections/seed-equivalence-v2-before-restored-cache.json",
+      "sha256": "cea587614db16273cd527cd6fc8c584c155e9a5f46f55bc95b94d0b892279de8",
+      "size": 6322
+    },
+    {
+      "path": "worktree/results/case-corrections/seed-equivalence-v2.json",
+      "sha256": "432103e7ed2d4e8c6137b5e127e63e499415da69f2e1fba0fc10ee0d78d1c7a4",
+      "size": 7387
+    },
+    {
+      "path": "worktree/results/readiness-v2/approved-cases-before-minijinja-restoration.json",
+      "sha256": "9674e605faa3df0043da4c632ef7aa824529aa3b1f29e601d9551394a1b5454f",
+      "size": 2772
+    },
+    {
+      "path": "worktree/results/readiness-v2/approved-cases.json",
+      "sha256": "837a14b8f2f0cd220fca37eaab903ab37d16fe7d402f123ab933af93c94884dd",
+      "size": 2787
+    },
+    {
+      "path": "worktree/results/readiness-v2/commons-lang/readiness.json",
+      "sha256": "834438f10e754a417e977cac6dd37d3d1e824c0982a2d6dd74033f36e91603c7",
+      "size": 16712
+    },
+    {
+      "path": "worktree/results/readiness-v2/commons-lang/source-review.json",
+      "sha256": "9e2fe9541256045d5d056fc0b7e2cc51087a99c0a933792a2b08179f64db58cd",
+      "size": 1433
+    },
+    {
+      "path": "worktree/results/readiness-v2/date-fns/readiness.json",
+      "sha256": "c3e7aaf804d35d22510dfe81008301d8652b22025792346fe64148ecddbc8143",
+      "size": 12207
+    },
+    {
+      "path": "worktree/results/readiness-v2/date-fns/source-review.json",
+      "sha256": "2c3c93de952df41c33ec36ca094be4d2f8a9761fb40143580f8ac3c37b36750d",
+      "size": 1423
+    },
+    {
+      "path": "worktree/results/readiness-v2/hcl/readiness.json",
+      "sha256": "aa0b7bc63a3731e2078871981bf80c134d8352c69a09e7390bc8a0e71cab9817",
+      "size": 11875
+    },
+    {
+      "path": "worktree/results/readiness-v2/hcl/source-review.json",
+      "sha256": "b5bef43ceaa5cc54067e4d5c36245ccb595276f8b220e1458640759018e1fb8e",
+      "size": 1408
+    },
+    {
+      "path": "worktree/results/readiness-v2/minijinja-restored-cache/readiness.json",
+      "sha256": "dbe0b1efaec597f4ce8f53daac091e737d60c0b51d09519d71127de2702a0cb0",
+      "size": 9407
+    },
+    {
+      "path": "worktree/results/readiness-v2/minijinja-restored-cache/source-review.json",
+      "sha256": "505a07b88c7333bec51d3fec1995f0f2222ea3ab35d6dd6f02dbaef23de8a082",
+      "size": 2900
+    },
+    {
+      "path": "worktree/results/readiness-v2/minijinja/readiness.json",
+      "sha256": "f5dcda236686b21264b9a640ae88addbda535ff1fc19ba99b64bf2de7dec977c",
+      "size": 9014
+    },
+    {
+      "path": "worktree/results/readiness-v2/minijinja/source-review.json",
+      "sha256": "cd155ce12a5a3e682b220b561360533b6433b38b8a77d4d2ba79d01920228206",
+      "size": 1447
+    },
+    {
+      "path": "worktree/results/readiness-v2/nodatime/readiness.json",
+      "sha256": "361d4f00171ec7a47cf8545b90f1632708a7b912add79da19226ffce978c20d0",
+      "size": 14794
+    },
+    {
+      "path": "worktree/results/readiness-v2/nodatime/source-review.json",
+      "sha256": "2636f01d9d9062857eed0958deaf90a28b15a51b45d2c220d456bc79f0291e1a",
+      "size": 1440
+    },
+    {
+      "path": "worktree/results/readiness-v2/sqlglot/readiness.json",
+      "sha256": "c58a76315e905d27cdcd53d63014d6f10461e09597e0277ddfb2b4198ad15846",
+      "size": 8790
+    },
+    {
+      "path": "worktree/results/readiness-v2/sqlglot/source-review.json",
+      "sha256": "e1e98b40c73df11236d1d01a3ea4469da45779ded22a2d28a1e6e012348a486e",
+      "size": 1401
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "case_id": "date-fns",
+  "source_review": "passed",
+  "basis": "Original accepted reference implementation and task are unchanged. Lead reviewed bounded configuration/oracle corrections, live readiness and seed-source equivalence.",
+  "changed_case_files": [
+    "case.json"
+  ],
+  "original_approved_readiness": "results/readiness/date-fns/readiness.json",
+  "original_approved_readiness_sha256": "38225008adb7e0a00771837f4a805449a9f3b8a26b935027ef075f3f1c099654",
+  "raw_fresh_readiness": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/corrections/readiness-v2/date-fns/readiness.json",
+  "raw_fresh_readiness_sha256": "9620f245c4c2090918fe772de0cc9fddf1b135d8ecacb634e75a4b15b889bc2f",
+  "case_sha256": "4244c3c81603a09b13264f2f5b04d60047f60c1d5139c3f84a707ccbb576f62d",
+  "request_sha256": "fd586e2ce8ae6d85a594a898d31170e397159b020150d7c0eba4d4fab65607d4",
+  "seed_patch_sha256": "2e85d8f2d5a32d7e5da2382d5e75dcea336945d8c7ef8420676201fc7503e310",
+  "reference_patch_sha256": "c30943b965ef568af533db79a26dde9cf2182428a62b48062f0084f964191625",
+  "source_only_digest": "7d127ae0a19a3b8f6968683e464b6049a2ca928fb47163dac3b3cf7493a3d9a5",
+  "source_bytes_unchanged": true,
+  "negative_checks": "Mini matcher positive/negative and exact suffix-boundary verification retained; Noda existing purity test passes upstream/reference; generated-root changes hide no source/protected paths."
+}

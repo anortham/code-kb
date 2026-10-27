@@ -1,12 +1,15 @@
-# Completed-edit readiness
+# Completed-edit comparison
 
 Six pinned public repositories have source-reviewed reference repairs, passing upstream regression checks, an intended seed failure, and passing fresh patch replay. The cases cover Python, Rust, Go, TypeScript, Java and C#. Code-kb's product contract remains all 42 pinned Julie language IDs.
 
-Three non-task calibration calls are retained: the first found a missing Codex companion executable, and both arms passed after that runtime fix. No scored coding-agent trial has run yet. The original 72-run navigation pilot is preserved separately.
+The original 24-slot schedule is complete: 20 model trials finished, and four TypeScript slots stopped during setup before model exposure. Three non-task calibration calls are also retained: the first found a missing Codex companion executable, and both arms passed after that runtime fix. The original 72-run navigation pilot is preserved separately.
+
+[Protocol corrections](protocol-v2.md) document generated outputs, test-summary counts, the MiniJinja help checker and the existing NodaTime purity check. Corrected grades remain separate from the original grades. Only the four previously unexposed TypeScript cells will receive supplemental model calls; the 20 completed model trials will not be rerun.
 
 - [Protocol and case schema](protocol.md) define isolation, patch capture, behavioral checks, source review and reproducibility controls.
 - [Corpus](corpus.json) records exact source pins and prior-corpus exclusions.
 - [Frozen campaign](manifest.json) binds the 24 scored cells, model, timeout, executable, extractor, profiles, guidance, evaluator, readiness archive and prepared tool/dependency hashes.
+- [Amended campaign](manifest-v2.json) binds the base protocol and corrections separately, with verified readiness and source-equivalent seeds. Only TypeScript slots 7, 8, 19 and 20 are selected for supplemental dispatch.
 - [Frozen inputs](frozen-inputs.json) records tool/dependency hashes and durable seed snapshots. Task-owned prepared inputs live under `/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0`; installed toolchain roots are recorded individually. The finalized engine and extractor are retained in that cache under `tools/intelligence/`.
 - [Readiness evidence](results/readiness/artifact-map.json) maps 899 verified raw archive members. Each case directory under `results/readiness/` contains its reviewed readiness summary and source-review receipt.
 - [Curation evidence](results/curation/artifact-map.json) preserves earlier setup failures and repairs. The raw archive remains unchanged when later source review adds evidence.

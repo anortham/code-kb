@@ -1,0 +1,194 @@
+{
+  "created_utc": "2026-10-27T22:10:30Z",
+  "hash_algorithm": "edit_evaluation.hash_tree for directories; SHA-256 bytes for files",
+  "inputs": {
+    "base_bubblewrap_binary": {
+      "host_path": "/usr/bin/bwrap",
+      "kind": "file",
+      "sha256": "6da06f152b0865172d73348c34cb88487c326ce2f21cd980fc25ff10c4dbcdfb"
+    },
+    "base_go_toolchain": {
+      "host_path": "/usr/lib/golang",
+      "kind": "directory",
+      "sha256": "7d4a3654d14009f7cdf70507c6badf16fc40f2ffccf2be04d8c792edffdaebcd"
+    },
+    "base_python_binary": {
+      "host_path": "/usr/bin/python3.14",
+      "kind": "file",
+      "sha256": "df5a95e6119c051c43ab78993af48f8a53c54a25a475dacd1428c322251eb8b0"
+    },
+    "dependencies_commons-lang_commons-m2": {
+      "host_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_commons-lang_commons-m2",
+      "kind": "directory",
+      "original_host_path": "/tmp/code-kb-task5-20261027/dependencies/commons-m2",
+      "sha256": "cd2d5dbf77c5e1e38296de7e5393ae46743b745775eb15c898ddec17c5504f65"
+    },
+    "dependencies_date-fns_pnpm-store": {
+      "host_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_date-fns_pnpm-store",
+      "kind": "directory",
+      "original_host_path": "/tmp/task4-sandbox-task4-readiness-20261027T143138Z/dependencies/pnpm-store",
+      "sha256": "4a003414047840a0b33c95de11e151be9ab0bc694b9a739eb44a2464e629c21f"
+    },
+    "dependencies_hcl_go-mod-cache": {
+      "host_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_hcl_go-mod-cache",
+      "kind": "directory",
+      "original_host_path": "/tmp/task4-dependencies-task4-readiness-20261027T142308Z/go-mod-cache",
+      "sha256": "d5786c23facd1162171bb5462cb4b01fbd4003ab8cddedbecc6beb2aa70bd3c6"
+    },
+    "dependencies_minijinja_cargo-cache": {
+      "host_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_minijinja_cargo-cache",
+      "kind": "directory",
+      "original_host_path": "/tmp/code-kb-edit-python-rust-20261027/inputs/cargo-cache",
+      "sha256": "eac88f77d5490563112b892dcb38a804d9fdb32e52de2624bd5c0738faef538a"
+    },
+    "dependencies_nodatime_nodatime-nuget": {
+      "host_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_nodatime_nodatime-nuget",
+      "kind": "directory",
+      "original_host_path": "/tmp/code-kb-task5-20261027/dependencies/nodatime-nuget",
+      "sha256": "b33c5d38a4b9541a64ea5105150e5bbcd49ba2b5a7cd583b7cdee8faf9cb11dd"
+    },
+    "dependencies_sqlglot_python-packages": {
+      "host_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_sqlglot_python-packages",
+      "kind": "directory",
+      "original_host_path": "/tmp/code-kb-edit-python-rust-20261027/inputs/python-packages",
+      "sha256": "47cb32636d3296545e7e40015bf2a8189c6ce4cc9d647c62ae12714c4d2e92f3"
+    },
+    "tools_commons-lang_java": {
+      "host_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/tools_commons-lang_java",
+      "kind": "directory",
+      "original_host_path": "/tmp/code-kb-task5-20261027/tools/java",
+      "sha256": "08ebc2d440a5cad30907e51ce2fb7ee250ed5e322a7a63c002b3cfabf7dae9ec"
+    },
+    "tools_commons-lang_maven": {
+      "host_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/tools_commons-lang_maven",
+      "kind": "directory",
+      "original_host_path": "/tmp/code-kb-task5-20261027/tools/maven",
+      "sha256": "5ba787b31abbbe574c3bc55d8fabd2588174f9360f9aab7bc359c24e719d7d44"
+    },
+    "tools_date-fns_node": {
+      "host_path": "/home/murphy/.local/share/mise/installs/node/24.18.1",
+      "kind": "directory",
+      "sha256": "ad67e7c81e8c0c123b6616e5d17ef5f4efa9390a25d724b15292e4f13579c156"
+    },
+    "tools_minijinja_rust": {
+      "host_path": "/home/murphy/.rustup/toolchains/stable-x86_64-unknown-linux-gnu",
+      "kind": "directory",
+      "sha256": "9bb3ada2e04cf6c70356f9fddee8f03d47a485cdece85ca8d06c920aaf913779"
+    },
+    "tools_nodatime_dotnet": {
+      "host_path": "/usr/lib64/dotnet",
+      "kind": "directory",
+      "sha256": "2be7a815b5bd470fc51789d9c6e510be8df7bf322c81656c24d497ee9fc4bdf4"
+    }
+  },
+  "persistent_cache": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0",
+  "provider_calls": 0,
+  "runner_sha256": "a8107d69595a23d25aa00447ff38a69738188ce9ddea5ed846580f3d9bf72100",
+  "runtime": {
+    "binary": {
+      "host_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/tools/intelligence/code-kb",
+      "sha256": "d50d77812c0b9aad04b38b31c63b71df7768d0c44273b6d97a7e4a15a37b2127"
+    },
+    "codex": {
+      "host_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/tools/codex-runtime/codex",
+      "sdk_origin": "/home/murphy/.local/share/mise/installs/node/24.18.1/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex",
+      "sha256": "b93f6811d3f653f0fb83be4050d857fb9abbb111dfa2ce160563327daff7f306"
+    },
+    "codex_code_mode_host": {
+      "host_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/tools/codex-runtime/codex-code-mode-host",
+      "sha256": "8ee4f472e92ac226a189e98998633b2d07f989f208515750764db660369f2926"
+    },
+    "extractor": {
+      "host_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/tools/intelligence/julie-extract",
+      "sha256": "777fe822a0eddbdfd9f357c018c7a1a881907bedc698f913736a30ffc0ce0d12"
+    }
+  },
+  "schema": 1,
+  "seeds": {
+    "sqlglot": {
+      "seed_project": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds-v2/sqlglot",
+      "seed_digest": "495821034999b04d914bcb1ee64b3ffa84e33a7d6f519ac9df84b804efd594a2",
+      "source_pin": "feb0e08aba28a29590596bb3f5761fbaeb0e98b9"
+    },
+    "minijinja": {
+      "seed_project": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds-v2/minijinja-restored-cargo",
+      "seed_digest": "01c0e239f0d4d956d7fcae86e4f7a53fbf925486ca4f47965291e345866f9292",
+      "source_pin": "81787c4eab656f3a4f4e92dea53f303a36f1685c"
+    },
+    "hcl": {
+      "seed_project": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds-v2/hcl",
+      "seed_digest": "1c58dd1a8dc827c1564e2c30b3e9fac02a284a94f9dbd0036beeff22aee94e9d",
+      "source_pin": "4a347c448ee961e556dde0fad522a996e04c00c0"
+    },
+    "date-fns": {
+      "seed_project": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds-v2/date-fns",
+      "seed_digest": "e0d8d6c9700a1bf4660aa8d759cf31858197e14b937ca93c8c2cca0732fe796f",
+      "source_pin": "a9739fb3e5384a810e90d7376446f6d84ecc5029"
+    },
+    "commons-lang": {
+      "seed_project": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds-v2/commons-lang",
+      "seed_digest": "1b27eddcb69508862613b2feb40aecfec803b98c58b67d5946c386b68f4b763d",
+      "source_pin": "a5d6c5ed8847b2b14dacf062b646f94d6cc61a10"
+    },
+    "nodatime": {
+      "seed_project": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/seeds-v2/nodatime",
+      "seed_digest": "d3b4d1e76ec36f1587f992d7360fb591dab6aada4b7dcd0f41e25926d6208be5",
+      "source_pin": "649ce5a1c8ddf439eaed7b3bf9157882363cb937"
+    }
+  },
+  "system": {
+    "bubblewrap": "bubblewrap 0.12.0",
+    "platform": "Linux-7.2.11-200.fc44.x86_64-x86_64-with-glibc2.43",
+    "python": "3.14.8 (main, Oct  1 2026, 00:00:00) [GCC 16.2.1 20260819 (Red Hat 16.2.1-2)]",
+    "python_sqlite": "3.51.2"
+  },
+  "update_reason": "Version 2 preserves the six corpus pins and the original 24-call schedule. It binds the corrected HCL, date-fns, MiniJinja, and NodaTime case copies plus the two unchanged cases, fresh accepted readiness, the restored frozen MiniJinja Cargo cache, a versioned MiniJinja seed with identical source-only bytes, the unchanged base protocol, and its explicit v2 amendment.",
+  "updated_utc": "2026-10-27T20:09:22.706137+00:00",
+  "lineage": {
+    "base_manifest": "manifest.json",
+    "base_manifest_sha256": "2ec7fad27dfb508efdefb6a1190d32eb8d4587a16594d3948e63328d562072e8",
+    "base_protocol": "protocol.md",
+    "base_protocol_sha256": "2276518f5622e43b1bf538e3c0d91e5caedb7be2acdd1a90594b3b3681b59b3f",
+    "protocol_amendment": "protocol-v2.md",
+    "protocol_amendment_sha256": "c8cc39b42c8b071e8fc718849f4646922e3fec792607c3facc2056ed0d9a4165",
+    "approved_cases": "results/readiness-v2/approved-cases.json",
+    "approved_cases_sha256": "837a14b8f2f0cd220fca37eaab903ab37d16fe7d402f123ab933af93c94884dd",
+    "seed_equivalence": "results/case-corrections/seed-equivalence-v2.json",
+    "seed_equivalence_sha256": "432103e7ed2d4e8c6137b5e127e63e499415da69f2e1fba0fc10ee0d78d1c7a4",
+    "runtime_bindings_v2": "target/edit-evaluation/lead/runtime-bindings-v2.json",
+    "runtime_bindings_v2_sha256": "f1ee11ebea367e55e8f0808ee90ba11116a9b3f7ae6f1d6495881a41305d719e",
+    "cache_restoration_receipt": "results/case-corrections/minijinja-cargo-cache-restoration-v2.json",
+    "cache_restoration_receipt_sha256": "207f2acc121f0c8445ab5289ee727a679e07c33e1a4a5002e3bc869700d3697b",
+    "readiness_archive_identity": "results/readiness-v2/archive-identity-v2.json",
+    "readiness_archive_identity_sha256": "d3963cace31d5e72d9ddd417aa477868be45810fcab7a12dc78820bed0d36b81",
+    "readiness_archive_sha256": "1985720b9b2b848ebcd9c6265f1ee329b636060852902de73c2a7acedd4afa20",
+    "supplemental_dispatch_indices_one_based": [
+      7,
+      8,
+      19,
+      20
+    ],
+    "supplemental_dispatch_cells": [
+      {
+        "case_id": "date-fns",
+        "arm": "native",
+        "repeat": 1
+      },
+      {
+        "case_id": "date-fns",
+        "arm": "code-kb",
+        "repeat": 1
+      },
+      {
+        "case_id": "date-fns",
+        "arm": "code-kb",
+        "repeat": 2
+      },
+      {
+        "case_id": "date-fns",
+        "arm": "native",
+        "repeat": 2
+      }
+    ]
+  }
+}

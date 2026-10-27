@@ -27,6 +27,50 @@ from scripts.edit_evaluation import (
 
 
 class EditEvaluationOutputTests(unittest.TestCase):
+    def _grade_output(self, argv, expected_output, captured_output, *, exit_status=0, timed_out=False):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = root / "project"
+            project.mkdir()
+            stdout = root / "stdout.log"
+            stderr = root / "stderr.log"
+            stdout.write_text(captured_output)
+            stderr.write_text("")
+            sandbox_result = {
+                "exit_status": exit_status,
+                "timed_out": timed_out,
+                "elapsed_seconds": 0.1,
+                "process_cleanup": {"attempted": False, "complete": True, "signal": None},
+                "stdout_log": str(stdout),
+                "stderr_log": str(stderr),
+            }
+            command = {
+                "id": "baseline",
+                "argv": argv,
+                "cwd": ".",
+                "timeout_seconds": 10,
+                "expected_output": expected_output,
+            }
+            with patch("scripts.edit_evaluation.edit_sandbox.run", return_value=sandbox_result):
+                return _run_command(command, project, root / "state", root / "evidence", "grade", {}, {})
+
+    @staticmethod
+    def _nunit_output(
+        *, discovered=296, available=296, total=296, passed=296, failed=0, skipped=0,
+        include_status_counts=False, include_named_marker=True, status="Test Run Successful.",
+    ):
+        lines = [
+            f"NUnit3TestExecutor discovered {discovered} of {available} NUnit test cases using Current Discovery mode, Non-Explicit run",
+            status,
+            f"Total tests: {total}",
+            f"Passed: {passed}",
+        ]
+        if include_status_counts:
+            lines.extend((f"Failed: {failed}", f"Skipped: {skipped}"))
+        if include_named_marker:
+            lines.append("Passed CompareTo_DifferentCalendars_Throws")
+        return "\n".join(lines)
+
     def test_colored_vitest_summary_is_detected_but_empty_run_is_not(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -64,6 +108,175 @@ class EditEvaluationOutputTests(unittest.TestCase):
             self.assertEqual(stdout.read_text(), captured_output)
             empty_run = "\x1b[2m Test Files \x1b[22m \x1b[1m\x1b[33m0 passed\x1b[39m\x1b[22m\x1b[90m (0)\x1b[39m\n"
             self.assertFalse(_expected_test_execution(command, empty_run))
+
+    def test_nunit_summary_accepts_additional_tests_above_baseline(self):
+        expected_output = [
+            "NUnit3TestExecutor discovered 248 of 248 NUnit test cases",
+            "Passed CompareTo_DifferentCalendars_Throws",
+            "Test Run Successful.",
+            "Total tests: 248",
+        ]
+
+        for count in (296, 266):
+            with self.subTest(count=count):
+                result = self._grade_output(
+                    ["/tools/dotnet/dotnet", "test"],
+                    expected_output,
+                    self._nunit_output(discovered=count, available=count, total=count, passed=count),
+                )
+                self.assertEqual(result["expected_output_missing"], [])
+                self.assertTrue(result["test_execution_observed"])
+                self.assertTrue(result["passed"])
+
+    def test_nunit_summary_requires_full_discovery_baseline_passes_and_zero_failures_or_skips(self):
+        expected_output = [
+            "NUnit3TestExecutor discovered 248 of 248 NUnit test cases",
+            "Passed CompareTo_DifferentCalendars_Throws",
+            "Test Run Successful.",
+            "Total tests: 248",
+        ]
+        cases = (
+            self._nunit_output(discovered=296, available=300),
+            self._nunit_output(discovered=247, available=247, total=247, passed=247),
+            self._nunit_output(total=296, passed=295, failed=1, include_status_counts=True, status="Test Run Failed."),
+            self._nunit_output(total=296, passed=295, skipped=1, include_status_counts=True),
+        )
+
+        for output in cases:
+            with self.subTest(output=output):
+                result = self._grade_output(["/tools/dotnet/dotnet", "test"], expected_output, output)
+                self.assertFalse(result["passed"])
+
+    def test_nunit_execution_rejects_empty_and_all_skipped_runs(self):
+        command = {"argv": ["/tools/dotnet/dotnet", "test"]}
+        all_skipped = self._nunit_output(total=296, passed=0, skipped=296, include_status_counts=True)
+
+        self.assertFalse(_expected_test_execution(command, ""))
+        self.assertFalse(_expected_test_execution(command, all_skipped))
+
+    def test_nunit_failed_run_is_observed_but_not_accepted(self):
+        result = self._grade_output(
+            ["/tools/dotnet/dotnet", "test"],
+            ["Test Run Successful.", "Total tests: 248"],
+            self._nunit_output(
+                total=296,
+                passed=295,
+                failed=1,
+                include_status_counts=True,
+                status="Test Run Failed.",
+            ),
+        )
+
+        self.assertTrue(result["test_execution_observed"])
+        self.assertFalse(result["passed"])
+
+    def test_nunit_count_floors_keep_named_markers_and_arbitrary_numbers_literal(self):
+        expected_output = [
+            "NUnit3TestExecutor discovered 248 of 248 NUnit test cases",
+            "Passed CompareTo_DifferentCalendars_Throws",
+            "Test Run Successful.",
+            "Total tests: 248",
+        ]
+        missing_name = self._grade_output(
+            ["/tools/dotnet/dotnet", "test"],
+            expected_output,
+            self._nunit_output(include_named_marker=False),
+        )
+        arbitrary_number = self._grade_output(
+            ["/tools/dotnet/dotnet", "test"],
+            ["required baseline 248"],
+            self._nunit_output(),
+        )
+
+        self.assertEqual(missing_name["expected_output_missing"], ["Passed CompareTo_DifferentCalendars_Throws"])
+        self.assertFalse(missing_name["passed"])
+        self.assertEqual(arbitrary_number["expected_output_missing"], ["required baseline 248"])
+        self.assertFalse(arbitrary_number["passed"])
+
+    def test_vitest_full_tests_summary_allows_more_passes_but_bare_counts_stay_literal(self):
+        output = "Test Files 4 passed (4)\nTests 48 passed (48)\n"
+        expanded = self._grade_output(["pnpm", "vitest", "run"], ["Tests 34 passed"], output)
+        bare_count = self._grade_output(["pnpm", "vitest", "run"], ["2 passed"], output)
+
+        self.assertEqual(expanded["expected_output_missing"], [])
+        self.assertTrue(expanded["passed"])
+        self.assertEqual(bare_count["expected_output_missing"], ["2 passed"])
+        self.assertFalse(bare_count["passed"])
+
+    def test_unittest_summary_allows_more_passing_tests_and_keeps_success_status_strict(self):
+        command = ["/usr/bin/python3", "-m", "unittest", "tests.example"]
+        expected_output = ["Ran 64 tests", "OK"]
+        extra_passes = self._grade_output(command, expected_output, "Ran 70 tests in 0.2s\n\nOK\n")
+        skipped = self._grade_output(command, expected_output, "Ran 70 tests in 0.2s\n\nOK (skipped=1)\n")
+
+        self.assertEqual(extra_passes["expected_output_missing"], [])
+        self.assertTrue(extra_passes["passed"])
+        self.assertFalse(skipped["passed"])
+
+    def test_cargo_summary_floors_require_distinct_results_in_any_order(self):
+        expected_output = ["test result: ok. 4 passed", "test result: ok. 30 passed"]
+        argv = ["/tools/rust/bin/cargo", "test"]
+        reversed_summaries = self._grade_output(
+            argv,
+            expected_output,
+            "test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.1s\n"
+            "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.1s\n",
+        )
+        one_summary = self._grade_output(
+            argv,
+            expected_output,
+            "test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.1s\n",
+        )
+
+        self.assertEqual(reversed_summaries["expected_output_missing"], [])
+        self.assertTrue(reversed_summaries["passed"])
+        self.assertFalse(one_summary["passed"])
+
+    def test_maven_summary_floor_preserves_failure_error_and_skip_counts(self):
+        argv = ["/tools/maven/bin/mvn", "test"]
+        marker = "Tests run: 130, Failures: 0, Errors: 0, Skipped: 0"
+        extra_passes = self._grade_output(
+            argv,
+            [marker],
+            "[INFO] Tests run: 144, Failures: 0, Errors: 0, Skipped: 0\n",
+        )
+        rejected = (
+            "[INFO] Tests run: 144, Failures: 1, Errors: 0, Skipped: 0\n",
+            "[INFO] Tests run: 144, Failures: 0, Errors: 1, Skipped: 0\n",
+            "[INFO] Tests run: 144, Failures: 0, Errors: 0, Skipped: 1\n",
+            "[INFO] Tests run: 129, Failures: 0, Errors: 0, Skipped: 0\n",
+            "[DEBUG] Tests run: 144, Failures: 0, Errors: 0, Skipped: 0\n",
+        )
+
+        self.assertEqual(extra_passes["expected_output_missing"], [])
+        self.assertTrue(extra_passes["passed"])
+        for output in rejected:
+            with self.subTest(output=output):
+                result = self._grade_output(argv, [marker], output)
+                self.assertFalse(result["passed"])
+
+    def test_go_test_names_remain_exact_markers(self):
+        result = self._grade_output(
+            ["/usr/lib/golang/bin/go", "test", "-v", "./gohcl"],
+            ["=== RUN   TestDecodeBody", "--- PASS: TestDecodeBody", "PASS"],
+            "=== RUN   TestAddedCoverage\n--- PASS: TestAddedCoverage\nPASS\n",
+        )
+
+        self.assertEqual(
+            result["expected_output_missing"],
+            ["=== RUN   TestDecodeBody", "--- PASS: TestDecodeBody"],
+        )
+        self.assertFalse(result["passed"])
+
+    def test_nonzero_exit_and_timeout_still_reject_complete_summary(self):
+        argv = ["pnpm", "vitest", "run"]
+        markers = ["Tests 34 passed"]
+        output = "Tests 48 passed (48)\n"
+        nonzero = self._grade_output(argv, markers, output, exit_status=1)
+        timeout = self._grade_output(argv, markers, output, timed_out=True)
+
+        self.assertFalse(nonzero["passed"])
+        self.assertFalse(timeout["passed"])
 
 
 class EditEvaluationCaseTests(unittest.TestCase):

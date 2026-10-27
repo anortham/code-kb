@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "schedule_index": 8,
+  "case_id": "date-fns",
+  "arm": "code-kb",
+  "repeat": 1,
+  "raw_attempt_sha256": "28ab95604dc4b28bd0c2f5855d3a5fcc3958014c355d04fbbe7321b4051e963c",
+  "bundle_json_sha256": null,
+  "source_review": "failed",
+  "disposition": "incomplete",
+  "findings": [
+    {
+      "severity": "blocker",
+      "finding": "Runtime preparation changed the trial source before agent dispatch, so this attempt has no patch or behavioral grade to review.",
+      "evidence": [
+        "attempt.json status is runtime_changed_source; dispatch_started is false; trial_completed is false.",
+        "acceptance_status is not_dispatched, and bundle_path and grade_path are null.",
+        "No agent run or test command is recorded."
+      ]
+    }
+  ],
+  "changed_production_files": [],
+  "added_test_files": [],
+  "grade_evidence": null
+}

@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "schedule_index": 17,
+  "case_id": "hcl",
+  "arm": "code-kb",
+  "repeat": 2,
+  "raw_attempt_sha256": "1d1b4ee9d3fe6fdb6d439a69881704f3af490154e7683c68a36c1f6dcf7ffba0",
+  "bundle_json_sha256": "5dabaf7c42eea60a15e2bafe35f166adbfc24e312bb4e341d1f1e2888511756a",
+  "source_review": "passed",
+  "findings": [],
+  "behavior_review": "The production change makes hcl.Expression-compatible attributes optional in ImpliedBodySchema and fills an omitted expression with a non-nil StaticExpr containing a dynamic null and the missing-item range. The existing scalar-required and pointer-optional rules remain intact. The seeded TestImpliedBodySchema and TestDecodeBody cases cover these behaviors.",
+  "changed_production_files": [
+    "gohcl/schema.go",
+    "gohcl/decode.go"
+  ],
+  "added_test_files": [],
+  "grade_evidence": {
+    "public": {
+      "exit_status": 0,
+      "test_execution_observed": true,
+      "stdout_log": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/frozen-2ec7fad2/attempts/017-hcl-code-kb-r2/evidence/grade/grade-008-stdout_log.log"
+    },
+    "hidden": {
+      "exit_status": 0,
+      "test_execution_observed": true
+    },
+    "protection_status": "unchanged",
+    "patch_valid": true,
+    "replay_valid": true
+  },
+  "evidence": [
+    "The frozen request requires omitted expression fields to be optional and assigned a non-nil expression that evaluates to null, while scalar fields remain required and pointer fields remain optional.",
+    "The bundle contains only gohcl/schema.go and gohcl/decode.go. Their before hashes match the public replay source; their after hashes match the immutable bundle blobs.",
+    "ImpliedBodySchema checks exprType.AssignableTo(field.Type) before the existing scalar requiredness branch. decodeBodyToStruct assigns hcl.StaticExpr(cty.NullVal(cty.DynamicPseudoType), body.MissingItemRange()) when the expression attribute is absent.",
+    "StaticExpr stores and returns the supplied cty.Value. The resulting expression is non-nil and evaluates to the dynamic null value.",
+    "The existing TestImpliedBodySchema case expects an hcl.Expression attribute to be not required, with ordinary scalar attributes required and pointer attributes optional. TestDecodeBody checks that an omitted expression is non-nil and evaluates to null.",
+    "The retained public gohcl_regressions command exited 0 and observed TestDecodeBody and TestImpliedBodySchema passing. Attempt metadata records the hidden acceptance command passing, unchanged protection, valid patch, and valid replay.",
+    "The attempt bundle has no changes to protected paths and no generated outputs."
+  ]
+}
