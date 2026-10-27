@@ -842,7 +842,6 @@ mod tests {
     use std::path::Path;
     use std::time::Instant;
 
-    #[cfg(target_os = "linux")]
     static ROOT_WATCH_FAULT_TEST_LOCK: Mutex<()> = Mutex::new(());
 
     #[cfg(target_os = "linux")]
