@@ -3,7 +3,7 @@ id: accuracy-pivot-callers-answers-an-agent-can-trust
 title: "Accuracy pivot: callers answers an agent can trust"
 status: active
 created: 2026-10-17T17:10:13.294Z
-updated: 2026-10-27T00:04:53.811Z
+updated: 2026-10-27T00:40:40.637Z
 tags:
   - project-direction
   - accuracy
@@ -21,9 +21,9 @@ Every language supported by the pinned Julie extractor is in scope. Build common
 
 The owner approved docs/reviews/2026-10-26-project-direction.md fixes. Initial repairs are committed on main at aeebe72: stale-index failures are surfaced/retried, unknown tools rejected before preparation, lookup suggestions filtered correctly, and benchmarks/graders/CI repaired.
 
-The broader slice is implemented in /home/murphy/.codex/worktrees/1e6f/code-kb on fix/cross-language-review, starting at aeebe72; foundation HEAD19cc584 precedes the pending coherent runtime commit. The plan is docs/plans/2026-10-26-cross-language-review-fixes.md. Real-extractor fixtures cover all42 pinned Julie3.9.1 IDs and detect language-set drift. Advanced argument, construction, removed-member, callable-value, CSS/HTML navigation, bounded paging, broader test-command fallback, and release-evidence binding have real regressions. Callback values remain advisory without an invocation contract. Separate dataclass constructor deltas avoid confusing ClassVar/unannotated class members with constructor fields.
+The broader slice is implemented in /home/murphy/.codex/worktrees/1e6f/code-kb on fix/cross-language-review, starting at aeebe72; runtime commit2104bad and test-portability commitde67a39 are local and verified on Linux. The plan is docs/plans/2026-10-26-cross-language-review-fixes.md. Real-extractor fixtures cover all42 pinned Julie3.9.1 IDs and detect language-set drift. Advanced argument, construction, removed-member, callable-value, CSS/HTML navigation, bounded paging, broader test-command fallback, and release-evidence binding have real regressions. Callback values remain advisory without an invocation contract. Separate dataclass constructor deltas avoid confusing ClassVar/unannotated class members with constructor fields.
 
-Linux verification passes:1818 Rust tests,172 Python tests,20 plugin tests, workspace Clippy, formatting, release build, whitespace, and guidance synchronization. Final lint-equivalent private helper refactors receive focused checks. Live same-root20-call MCP comparison retained23.64MiB before/24.46MiB after. Clean-source commit and Windows verification remain before the final evidence commit. No push/release/paid model session is authorized.
+Linux verification passes:1818 Rust tests,172 Python tests,20 plugin tests, workspace Clippy, formatting, release build, whitespace, and guidance synchronization. Final lint-equivalent private helper refactors passed391 focused checks; two final portability fixture checks also passed. Live same-root20-call MCP comparison retained23.64MiB before/24.46MiB after. Windows NTFS full gate passes1794 Rust tests across34 suites on de67a398db6b1e92d3bb244d6f758fce789abd17, including all42-language conformance. Both real npm fixtures and59 repaired argument cases passed first. Plugin tests passed12 with8 declared platform skips. Windows Clippy, formatting, and the locked release build also pass; the native executable started successfully. Initial Windows runtime/conformance suites passed, with only fixture setup/launcher failures corrected. The VM is shut off. All planned local implementation and verification are complete; final evidence is recorded in the review, plan, and this brief. No push/release/paid model session is authorized.
 
 ## Remaining evidence and limits
 

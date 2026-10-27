@@ -285,13 +285,17 @@ was 23.64 MiB before and 24.46 MiB after; anonymous memory was 13.86 and
 These small local measurements do not establish large-repository performance
 or an agent-task outcome.
 
-The initial Windows run used clean commit `2104bad09903a3708dd8c620cd75eb379ad7d286`
-on NTFS with the checksum-verified Julie 3.9.1 Windows binary. All 42-language
-conformance cases passed. It exposed two fixture defects: missing local Git
-identity and direct execution of `npm` rather than Windows `npm.cmd`. Those
-fixtures are repaired; the nested runner fixture now executes on Windows too.
-The exact emitted POSIX command runs under `sh` on Linux; Windows derives the
-runner arguments and working directory from the two supported fixture forms
-and executes them with `cmd.exe`. Product output retains its declared POSIX
-shell syntax. The plugin suite passed 12 tests and skipped eight
-platform-specific fixtures. Final Windows Rust and build gates are pending.
+**Cross-language Windows verification:** Source commit
+`de67a398db6b1e92d3bb244d6f758fce789abd17` passed all 1,794 Rust tests across
+34 suites on NTFS, using the checksum-verified Julie 3.9.1 Windows binary.
+The plugin suite passed 12 tests and skipped eight platform-specific fixtures.
+The initial run exposed fixture reliance on global Git identity and direct
+execution of `npm` instead of Windows `npm.cmd`; both were repaired. The nested
+runner fixture now executes on Windows too. Linux executes the exact emitted
+POSIX command with `sh`; Windows derives the runner arguments and working
+directory from the two supported fixture forms and executes them with
+`cmd.exe`. Product output retains its declared POSIX shell syntax.
+Windows Clippy with denied warnings, formatting, and the locked release build
+also passed. The final evidence commit changes documentation and memory only;
+production code remains the verified runtime slice. The built Windows executable
+started successfully, and the VM was shut down after verification.

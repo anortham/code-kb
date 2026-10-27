@@ -239,8 +239,8 @@ Commit mode: `parallel-lead-commit` for every task. Workers do not stage, commit
 **Acceptance criteria:**
 - [x] Both guidance files explicitly require all pinned languages and stay byte-identical; docs match verified behavior.
 - [x] Every identified applicable gap is fixed or has a genuine externally blocked dependency with a concrete repro and required action.
-- [ ] Branch gates and post-edit checks pass, and live memory/output evidence is recorded without overstating agent outcomes.
-- [ ] Intentional local commits include plan/docs/memory; all task state is reconciled and no push/release occurs.
+- [x] Branch gates and post-edit checks pass, and live memory/output evidence is recorded without overstating agent outcomes.
+- [x] Intentional local commits include plan/docs/memory; all task state is reconciled and no push/release occurs.
 
 
 ### Task 8: Extractor fact compatibility
@@ -266,3 +266,11 @@ Commit mode: `parallel-lead-commit` for every task. Workers do not stage, commit
 - [x] Source body spans and ordinary selectors/properties/at-rules remain correct; ambiguous/unsupported forms are not guessed.
 - [x] Existing-index and incremental update tests prove correction is repeatable and survives rewrites without stale names.
 - [x] Dedicated tests pass; verified diff and evidence are handed to the lead.
+
+## Execution result
+
+- Runtime implementation: `2104bad09903a3708dd8c620cd75eb379ad7d286`; Windows test-fixture portability: `de67a398db6b1e92d3bb244d6f758fce789abd17`.
+- Linux: 1,818 Rust, 172 Python, and 20 plugin tests passed; 391 post-lint edit tests and two final fixture checks passed. Clippy, formatting, release build, whitespace, guidance synchronization, and post-edit review passed.
+- Windows NTFS: 1,794 Rust tests across 34 suites passed, including all 42-language conformance cases. Plugin tests: 12 passed, eight platform-specific skips. The 59 previously failing argument cases and both real runner fixtures passed before the full rerun. Windows Clippy with denied warnings, formatting, and the locked release build also passed.
+- Same-root live MCP retained RSS: 23.64 MiB before, 24.46 MiB after, for 20 calls per fresh process. This is local memory evidence, not an agent outcome.
+- Remaining dependencies are recorded with reproductions in `docs/language-support.md`: missing CSS call/formal facts, lossy Unicode declaration spelling, and a dialect-safe SQL argument contract. Curried F# and framework invocation remain conservative. Eight controlled comparison tasks are prepared; no paid model run, push, PR publication, or release was performed.
