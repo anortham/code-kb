@@ -1,0 +1,20 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.1 [39m[90m/workspace/project/pkgs/core[39m
+
+ [32m✓[39m [30m[45m main [49m[39m src/addBusinessDays/context/test.ts[2m > [22maddBusinessDays timezone context[2m > [22mshifts 2024-08-20T16:00:00Z by 3 business days in Asia/Singapore[32m 13[2mms[22m[39m
+ [32m✓[39m [30m[45m main [49m[39m src/addBusinessDays/context/test.ts[2m > [22maddBusinessDays timezone context[2m > [22mshifts 2024-08-21T03:59:00Z by -3 business days in America/New_York[32m 12[2mms[22m[39m
+ [32m✓[39m [30m[45m main [49m[39m src/addBusinessDays/context/test.ts[2m > [22maddBusinessDays timezone context[2m > [22mshifts 2024-08-23T16:00:00Z by 5 business days in Asia/Singapore[32m 12[2mms[22m[39m
+ [32m✓[39m [30m[45m main [49m[39m src/addBusinessDays/context/test.ts[2m > [22maddBusinessDays timezone context[2m > [22mshifts 2024-08-23T16:00:00Z by -5 business days in Asia/Singapore[32m 12[2mms[22m[39m
+ [32m✓[39m [30m[45m main [49m[39m src/addBusinessDays/context/test.ts[2m > [22maddBusinessDays timezone context[2m > [22mshifts 2024-08-23T16:00:00Z by 0 business days in Asia/Singapore[32m 12[2mms[22m[39m
+ [32m✓[39m [30m[45m main [49m[39m src/addBusinessDays/context/test.ts[2m > [22maddBusinessDays timezone context[2m > [22mshifts 2024-03-09T04:30:00Z by 1 business days in America/New_York[32m 0[2mms[22m[39m
+ [32m✓[39m [30m[45m main [49m[39m src/differenceInBusinessDays/context/test.ts[2m > [22mdifferenceInBusinessDays timezone context[2m > [22mcompares 2024-08-21T03:59:00Z and 2024-08-21T04:00:00Z as calendar days in America/New_York[32m 17[2mms[22m[39m
+ [32m✓[39m [30m[45m main [49m[39m src/differenceInBusinessDays/context/test.ts[2m > [22mdifferenceInBusinessDays timezone context[2m > [22mcompares 2024-08-20T15:59:00Z and 2024-08-20T16:00:00Z as calendar days in Asia/Singapore[32m 17[2mms[22m[39m
+ [32m✓[39m [30m[45m main [49m[39m src/differenceInBusinessDays/context/test.ts[2m > [22mdifferenceInBusinessDays timezone context[2m > [22mcompares 2024-08-20T04:00:00Z and 2024-08-21T03:59:00Z as calendar days in America/New_York[32m 17[2mms[22m[39m
+ [32m✓[39m [30m[45m main [49m[39m src/differenceInBusinessDays/context/test.ts[2m > [22mdifferenceInBusinessDays timezone context[2m > [22mcompares 2024-08-20T16:00:00Z and 2024-08-21T00:01:00Z as calendar days in Asia/Singapore[32m 17[2mms[22m[39m
+ [32m✓[39m [30m[45m main [49m[39m src/differenceInBusinessDays/context/test.ts[2m > [22mdifferenceInBusinessDays timezone context[2m > [22mcompares 2024-08-14T03:59:00Z and 2024-08-21T04:00:00Z as calendar days in America/New_York[32m 17[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m2 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[32m11 passed[39m[22m[90m (11)[39m
+[2m   Start at [22m 00:04:53
+[2m   Duration [22m 119ms[2m (transform 38%, tests 33%, import 23%, worker 5%)[22m
+

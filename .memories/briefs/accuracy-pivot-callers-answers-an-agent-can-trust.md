@@ -3,7 +3,7 @@ id: accuracy-pivot-callers-answers-an-agent-can-trust
 title: "Accuracy pivot: callers answers an agent can trust"
 status: active
 created: 2026-10-17T17:10:13.294Z
-updated: 2026-10-27T23:47:12.767Z
+updated: 2026-10-28T00:14:40.996Z
 tags:
   - project-direction
   - accuracy
@@ -11,18 +11,20 @@ tags:
   - ground-truth-gate
 ---
 
-# Goal and authority
+## Goal
 
-Deliver reliable code intelligence for all42 pinned Julie language IDs, seven MCP tools with CLI parity, explicit project_root, bounded SQLite memory and first-class Windows. AGENTS/CLAUDE stay identical. Owner removed all financial approvals/caps/receipts in repo and installed tool guidance; necessary evaluation is authorized. Local commits authorized; no push, release or global routing changes. Commit memories.
+Give coding agents reliable navigation and edit evidence across all 42 pinned Julie language IDs. Preserve seven MCP tools and CLI parity, explicit project_root, bounded SQLite memory, first-class Windows and synchronized AGENTS/CLAUDE.
 
-# Status
+## Completed work
 
-Cross-language and consumer corrections are implemented. The watcher backport at89991f0 preserves removals that debouncer0.7 canceled during concurrent scans, matching upstream PR902 without changing backend versions. Linux1906 and Windows1878 Rust tests pass, all42 conformance IDs, Clippy/fmt/release; Python301 reusable. Windows10 move/delete repeats pass. Live handles stay112 across20 churn cycles; Linux3watches on1000ignored leaves. Final Windows wrapper exceeded its shutdown wait, but follow-up confirms off; passing scopes and shutdown limitation are retained separately. The verified runtime-backport archive is be079b57, with 200 safe members; original archives are unchanged.
+The project review, cross-language and consumer corrections, watcher fixes and completed-edit study are implemented and verified. Runtime source 89991f0 passes 1,906 Linux and 1,878 Windows Rust tests, all-language conformance, Clippy, formatting and release builds. Python 301 remains applicable. Windows handle count stays 112 through 20 churn cycles; VM is confirmed off. Current runtime evidence is in evals/edit-2026-10-27/results/controls/runtime-backport/.
 
-# Outcome evidence
+The study has 24 actual trials, with 22 accepted patches: native 10/12 and code-kb 12/12. Both native failures are C# purity omissions. Code-kb uses more total and uncached input and takes a mean 66.67 seconds longer across eleven complete pairs. Slot 15 timing remains unknown. Preserve original strict grades, setup stops, corrected regrades, source receipts and separate archives. See evals/edit-2026-10-27/results/report.md and docs/reviews/2026-10-26-project-direction.md.
 
-Original24 schedule produced20 model trials plus4TS setup stops before exposure. Corrected source/behavior acceptance18/20 vs strict13/20; two native C# patches omit Pure. Original time/token totals favor native; no task-wide token saving is established. Slot15 timing is unknown. Preserve originals and recoveredv3, corrected regrades and all source reviews.
+## Recommended direction
 
-# Next decision
+Reduce repeated navigation and context overhead while preserving accepted edits. These six cases become development/regression evidence after tuning; use untouched tasks, including configuration and framework work, for confirmation. This is a recommendation, not a new dispatched experiment. No task-wide token savings or global routing change is established.
 
-Finish the amended four TS cells7/8/19/20 under manifest542016a1 and unchanged study engine d50d778, then complete independent source/added-test/trace reviews and the combined24-trial report. The report draft currently covers original20. Use measured completed-edit results to set the next product priority, retaining full-workflow attribution and no routing change. Execution details are in docs/plans/2026-10-27-completed-edit-dispatch.md.
+## Authority
+
+The owner removed financial approval gates, caps and receipts from project tools and installed Codex/Claude guidance. Necessary model evaluation and spending are authorized. Local commits are authorized; no push, release or global routing change. Commit memories. All task work remains in /home/murphy/.codex/worktrees/1e6f/code-kb on fix/cross-language-review; main is untouched.

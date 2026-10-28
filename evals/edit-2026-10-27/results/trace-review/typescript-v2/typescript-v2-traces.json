@@ -1,0 +1,2394 @@
+{
+  "schema_version": 1,
+  "scope": {
+    "cohort": "Four amended TypeScript/date-fns model trials only.",
+    "slots": [
+      7,
+      8,
+      19,
+      20
+    ],
+    "model_trials": 4,
+    "model": "gpt-6.1-sol",
+    "fallback_definition": "A genuine fallback requires related native source navigation after an empty, capped, ambiguous, or operational-error MCP answer. Literal configuration searches and unrelated terminal commands are excluded.",
+    "repair_definition": "A failing test before the first production edit is a preproduction/test-first sequence, not a repair of an attempted implementation.",
+    "source_text_policy": "No raw source, command strings, answers, or model reasoning are copied. The exact operational freshness result is retained because it determines the error classification."
+  },
+  "worktree": {
+    "path": "/home/murphy/.codex/worktrees/1e6f/code-kb",
+    "branch": "fix/cross-language-review",
+    "head": "26a0f630d41b615b33f88a63bddfce760a1bb304",
+    "dirty_at_capture": true
+  },
+  "amended_campaign": {
+    "attempt_root": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/amended-542016a1/attempts",
+    "campaign_json": {
+      "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/amended-542016a1/campaign.json",
+      "sha256": "d761af9a427627f8937b9dcf11259db178104fd4cb8e4e153f1a607d796ed08e"
+    },
+    "manifest_v2": {
+      "path": "evals/edit-2026-10-27/manifest-v2.json",
+      "sha256": "542016a1019cb60786a6b41d3eca4802bf34cadc11fe377e0cd60aec2cb4e049"
+    },
+    "frozen_inputs_v2": {
+      "path": "evals/edit-2026-10-27/frozen-inputs-v2.json",
+      "sha256": "f73d04e8a7399849a8c558a05706d499de1c6cb02bf2147efa0a42c3bda41000"
+    },
+    "campaign_runner": {
+      "path": "scripts/completed_edit_campaign.py",
+      "sha256": "9dc440ce952cf622bfc77275bbf97d6a2fd02c6ad238d9f933bfab2e3a91f594"
+    },
+    "runtime_bindings_sha256": "f1ee11ebea367e55e8f0808ee90ba11116a9b3f7ae6f1d6495881a41305d719e"
+  },
+  "method": {
+    "evidence": "Sanitized ordered evidence/agent/stdout.log, effective attempt.json trace_metrics, final source-review receipts, and retained runtime-control evidence.",
+    "trace_integrity": "Every completed command_execution and MCP tool-call item is counted once; item IDs and trace_metrics counts are checked.",
+    "outcomes": "Transport errors, operational result errors, empty misses, caps, and expected ambiguity selections are separate categories.",
+    "native_action_classes": "direct_native_structural_lookup, permitted_literal_search, genuine_fallback, non_navigation_edit_test_build, non_navigation_other, unknown."
+  },
+  "per_trial_counts": [
+    {
+      "slot": 7,
+      "trial_id": "007-date-fns-native-r1",
+      "case_id": "date-fns",
+      "arm": "native",
+      "repeat": 1,
+      "model": "gpt-6.1-sol",
+      "attempt_status": "completed",
+      "behavioral_pass": true,
+      "source_acceptance": "accepted",
+      "source_review_status": "passed",
+      "protection_status": "unchanged",
+      "adopted_code_kb": false,
+      "mcp_call_count": 0,
+      "command_count": 13,
+      "trace_error_count_non_mcp": 3,
+      "tool_counts": {},
+      "mcp_outcome_counts": {},
+      "mcp_status_failed_events": 0,
+      "mcp_events": [],
+      "source_backed_mcp_events": [],
+      "classification_counts": {
+        "direct_native_structural_lookup": 4,
+        "non_navigation_edit_test_build": 6,
+        "unknown": 3
+      },
+      "genuine_fallback_count": 0,
+      "actions": [
+        {
+          "item_id": "item_2",
+          "action_kind": "initial_file_discovery",
+          "classification": "direct_native_structural_lookup",
+          "preceding_mcp_item_ids": [],
+          "basis": "Initial project and target-file discovery before any tool evidence.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_4",
+          "action_kind": "source_file_read",
+          "classification": "direct_native_structural_lookup",
+          "preceding_mcp_item_ids": [],
+          "basis": "Reads implementation and related source files directly.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_3",
+          "action_kind": "mixed_setup_and_file_discovery",
+          "classification": "unknown",
+          "preceding_mcp_item_ids": [],
+          "basis": "Combines instruction/status inspection with source-path discovery; no single navigation class is established.",
+          "exit_code": 1
+        },
+        {
+          "item_id": "item_5",
+          "action_kind": "test_source_read",
+          "classification": "direct_native_structural_lookup",
+          "preceding_mcp_item_ids": [],
+          "basis": "Reads existing target tests directly.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_6",
+          "action_kind": "mixed_config_source_and_literal_search",
+          "classification": "unknown",
+          "preceding_mcp_item_ids": [],
+          "basis": "Combines package/config/source reads with a targeted call-site search.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_8",
+          "action_kind": "related_source_read",
+          "classification": "direct_native_structural_lookup",
+          "preceding_mcp_item_ids": [],
+          "basis": "Reads related implementation and test files directly.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_7",
+          "action_kind": "test_execution",
+          "classification": "non_navigation_edit_test_build",
+          "preceding_mcp_item_ids": [],
+          "basis": "Baseline test execution; failure precedes all file changes.",
+          "exit_code": 1
+        },
+        {
+          "item_id": "item_11",
+          "action_kind": "test_execution",
+          "classification": "non_navigation_edit_test_build",
+          "preceding_mcp_item_ids": [],
+          "basis": "Fails after test-only additions and before the first production edit.",
+          "exit_code": 1
+        },
+        {
+          "item_id": "item_13",
+          "action_kind": "formatting",
+          "classification": "non_navigation_edit_test_build",
+          "preceding_mcp_item_ids": [],
+          "basis": "Formatting command; excluded from implementation repair assessment.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_15",
+          "action_kind": "test_execution",
+          "classification": "non_navigation_edit_test_build",
+          "preceding_mcp_item_ids": [],
+          "basis": "Focused test execution after the production edit.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_14",
+          "action_kind": "test_execution",
+          "classification": "non_navigation_edit_test_build",
+          "preceding_mcp_item_ids": [],
+          "basis": "Focused test execution after the production edit.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_16",
+          "action_kind": "test_execution",
+          "classification": "non_navigation_edit_test_build",
+          "preceding_mcp_item_ids": [],
+          "basis": "Focused test execution after the production edit.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_17",
+          "action_kind": "mixed_final_review",
+          "classification": "unknown",
+          "preceding_mcp_item_ids": [],
+          "basis": "Combines diff, status, and selected source/test inspection.",
+          "exit_code": 0
+        }
+      ],
+      "repair_assessment": {
+        "classification": "preproduction_test_failure_sequence",
+        "implementation_repair_count": 0,
+        "evidence": {
+          "preproduction_test_only_change_item_ids": [
+            "item_10"
+          ],
+          "failing_check_item_ids": [
+            "item_7",
+            "item_11"
+          ],
+          "first_production_edit_item_id": "item_12",
+          "later_passing_check_item_ids": [
+            "item_14",
+            "item_15",
+            "item_16"
+          ]
+        },
+        "basis": "Both failing checks precede the first production edit; later checks pass after it. The trace does not show a failed attempted production solution being repaired."
+      },
+      "timing": {
+        "agent_wall_seconds": 65.125447,
+        "index_wall_seconds": null,
+        "index_inclusive_wall_seconds": 65.125447,
+        "billing": "unknown"
+      },
+      "tokens": {
+        "input_tokens": 261062,
+        "cached_input_tokens": 230400,
+        "uncached_input_tokens": 30662,
+        "output_tokens": 3657
+      },
+      "trace_consistency": {
+        "log_event_lines": 37,
+        "metrics_event_count": 37,
+        "mcp_completed_items_in_log": 0,
+        "metrics_mcp_call_count": 0,
+        "command_completed_items_in_log": 13,
+        "metrics_command_count": 13,
+        "invalid_json_lines": 0,
+        "all_started_items_completed": true
+      },
+      "input_hash_checks": {
+        "attempt_raw_sha256_matches_source_review": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "878f0e912e332b3112f6925760362ef69ae398d6ee3746b1214a893ab70b3254",
+          "recorded_sha256": "878f0e912e332b3112f6925760362ef69ae398d6ee3746b1214a893ab70b3254"
+        },
+        "bundle_json_sha256_matches_metadata_and_source_review": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "024097ea7571b2845cea6e06226bf62dbc08d7989ec9fef3d87af2cba4d03487",
+          "metadata_sha256": "024097ea7571b2845cea6e06226bf62dbc08d7989ec9fef3d87af2cba4d03487",
+          "source_review_sha256": "024097ea7571b2845cea6e06226bf62dbc08d7989ec9fef3d87af2cba4d03487"
+        },
+        "prompt_sha256_matches_outbound_prompt": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "f1dafaebbb3a0103e13108eccaf833f967f800fda084b2a9e7875b9568e0b5b5",
+          "recorded_sha256": "f1dafaebbb3a0103e13108eccaf833f967f800fda084b2a9e7875b9568e0b5b5"
+        },
+        "manifest_sha256_matches_campaign_and_review": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "542016a1019cb60786a6b41d3eca4802bf34cadc11fe377e0cd60aec2cb4e049",
+          "attempt_sha256": "542016a1019cb60786a6b41d3eca4802bf34cadc11fe377e0cd60aec2cb4e049",
+          "campaign_sha256": "542016a1019cb60786a6b41d3eca4802bf34cadc11fe377e0cd60aec2cb4e049",
+          "receipt_sha256": "542016a1019cb60786a6b41d3eca4802bf34cadc11fe377e0cd60aec2cb4e049"
+        },
+        "campaign_runner_sha256_matches_retained_script": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "9dc440ce952cf622bfc77275bbf97d6a2fd02c6ad238d9f933bfab2e3a91f594",
+          "recorded_sha256": "9dc440ce952cf622bfc77275bbf97d6a2fd02c6ad238d9f933bfab2e3a91f594"
+        },
+        "runtime_bindings_hash_records_match": {
+          "checked": true,
+          "matches": true,
+          "recorded_sha256": "f1ee11ebea367e55e8f0808ee90ba11116a9b3f7ae6f1d6495881a41305d719e",
+          "frozen_inputs_sha256": "f1ee11ebea367e55e8f0808ee90ba11116a9b3f7ae6f1d6495881a41305d719e",
+          "retained_file_actual_sha256": "f1ee11ebea367e55e8f0808ee90ba11116a9b3f7ae6f1d6495881a41305d719e"
+        },
+        "grade_sha256_matches_source_review": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "faad92beea871248ba2f5131b6e3da08d3b6eb5529f0fb1e4976834b06b324f5",
+          "receipt_sha256": "faad92beea871248ba2f5131b6e3da08d3b6eb5529f0fb1e4976834b06b324f5"
+        },
+        "seed_digest_matches_source_review_and_unchanged_flag": {
+          "checked": true,
+          "matches": true,
+          "seed_digest": "e0d8d6c9700a1bf4660aa8d759cf31858197e14b937ca93c8c2cca0732fe796f",
+          "receipt_seed_digest": "e0d8d6c9700a1bf4660aa8d759cf31858197e14b937ca93c8c2cca0732fe796f",
+          "seed_unchanged": true
+        },
+        "agent_log_hash_retained": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "03e68b46e269d1d569d267526873f6a6a243f1f13c81480de21f86e613a4450e"
+        },
+        "answer_hash_retained": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "3b20fa328de33c8880eb63c053d713db52a68f4299d8f4d891824e22e65a8c06"
+        }
+      },
+      "artifact_refs": {
+        "attempt_json": {
+          "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/amended-542016a1/attempts/007-date-fns-native-r1/attempt.json",
+          "sha256": "878f0e912e332b3112f6925760362ef69ae398d6ee3746b1214a893ab70b3254"
+        },
+        "bundle_json": {
+          "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/amended-542016a1/attempts/007-date-fns-native-r1/bundle/bundle.json",
+          "sha256": "024097ea7571b2845cea6e06226bf62dbc08d7989ec9fef3d87af2cba4d03487"
+        },
+        "outbound_prompt": {
+          "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/amended-542016a1/attempts/007-date-fns-native-r1/outbound_prompt.txt",
+          "sha256": "f1dafaebbb3a0103e13108eccaf833f967f800fda084b2a9e7875b9568e0b5b5"
+        },
+        "answer": {
+          "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/amended-542016a1/attempts/007-date-fns-native-r1/evidence/answer.txt",
+          "sha256": "3b20fa328de33c8880eb63c053d713db52a68f4299d8f4d891824e22e65a8c06"
+        },
+        "grade_json": {
+          "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/amended-542016a1/attempts/007-date-fns-native-r1/grade/grade.json",
+          "sha256": "faad92beea871248ba2f5131b6e3da08d3b6eb5529f0fb1e4976834b06b324f5"
+        },
+        "agent_stdout_log": {
+          "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/amended-542016a1/attempts/007-date-fns-native-r1/evidence/agent/stdout.log",
+          "sha256": "03e68b46e269d1d569d267526873f6a6a243f1f13c81480de21f86e613a4450e"
+        },
+        "source_review_receipt": {
+          "path": "evals/edit-2026-10-27/results/source-review/date-fns-v2/007-date-fns-native-r1.json",
+          "sha256": "2e7bb86478486bda6a8fccdc2a91b811fbf38f4dc8b6e13ccd14fa8870173a5b"
+        }
+      },
+      "source_review_independent_tests": {
+        "status": "passed",
+        "test_files_passed": 2,
+        "tests_passed": 17,
+        "exit_status": 0,
+        "stdout": {
+          "path": "logs/007-date-fns-native-r1-added-tests.stdout.log",
+          "sha256": "4fefc5ae772ce98f7928a56c526cfee4b0f8e5864154047d2331aee3f3830f2f"
+        }
+      }
+    },
+    {
+      "slot": 8,
+      "trial_id": "008-date-fns-code-kb-r1",
+      "case_id": "date-fns",
+      "arm": "code-kb",
+      "repeat": 1,
+      "model": "gpt-6.1-sol",
+      "attempt_status": "completed",
+      "behavioral_pass": true,
+      "source_acceptance": "accepted",
+      "source_review_status": "passed",
+      "protection_status": "unchanged",
+      "adopted_code_kb": true,
+      "mcp_call_count": 28,
+      "command_count": 10,
+      "trace_error_count_non_mcp": 2,
+      "tool_counts": {
+        "blast_radius": 4,
+        "check_edit": 1,
+        "file_skeleton": 9,
+        "find_references": 2,
+        "get_symbol_body": 9,
+        "get_symbol_context": 2,
+        "lookup_symbol": 1
+      },
+      "mcp_outcome_counts": {
+        "ambiguous_selection": 2,
+        "capped_response": 4,
+        "empty_miss": 2,
+        "ordinary_result": 20
+      },
+      "mcp_status_failed_events": 4,
+      "mcp_events": [
+        {
+          "item_id": "item_4",
+          "tool": "file_skeleton",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_5",
+          "tool": "file_skeleton",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_6",
+          "tool": "file_skeleton",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_7",
+          "tool": "file_skeleton",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_8",
+          "tool": "get_symbol_context",
+          "tool_status": "completed",
+          "outcome": "capped_response",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Explicit result limit notice."
+        },
+        {
+          "item_id": "item_9",
+          "tool": "get_symbol_context",
+          "tool_status": "completed",
+          "outcome": "capped_response",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Explicit result limit notice."
+        },
+        {
+          "item_id": "item_10",
+          "tool": "find_references",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_11",
+          "tool": "find_references",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_12",
+          "tool": "lookup_symbol",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_14",
+          "tool": "file_skeleton",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_15",
+          "tool": "file_skeleton",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_16",
+          "tool": "file_skeleton",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_17",
+          "tool": "file_skeleton",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_18",
+          "tool": "file_skeleton",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_19",
+          "tool": "get_symbol_body",
+          "tool_status": "failed",
+          "outcome": "empty_miss",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Requested test-suite symbol was not indexed by that name; this is a result miss, not a transport error."
+        },
+        {
+          "item_id": "item_20",
+          "tool": "blast_radius",
+          "tool_status": "failed",
+          "outcome": "ambiguous_selection",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Expected ambiguous selection response; MCP transport error flag is absent."
+        },
+        {
+          "item_id": "item_21",
+          "tool": "get_symbol_body",
+          "tool_status": "failed",
+          "outcome": "empty_miss",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Requested test-suite symbol was not indexed by that name; this is a result miss, not a transport error."
+        },
+        {
+          "item_id": "item_22",
+          "tool": "blast_radius",
+          "tool_status": "failed",
+          "outcome": "ambiguous_selection",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Expected ambiguous selection response; MCP transport error flag is absent."
+        },
+        {
+          "item_id": "item_23",
+          "tool": "get_symbol_body",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_24",
+          "tool": "get_symbol_body",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_25",
+          "tool": "get_symbol_body",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_26",
+          "tool": "get_symbol_body",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_27",
+          "tool": "get_symbol_body",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_28",
+          "tool": "blast_radius",
+          "tool_status": "completed",
+          "outcome": "capped_response",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Explicit result limit notice."
+        },
+        {
+          "item_id": "item_29",
+          "tool": "get_symbol_body",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_30",
+          "tool": "blast_radius",
+          "tool_status": "completed",
+          "outcome": "capped_response",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Explicit result limit notice."
+        },
+        {
+          "item_id": "item_31",
+          "tool": "get_symbol_body",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_39",
+          "tool": "check_edit",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        }
+      ],
+      "source_backed_mcp_events": [
+        {
+          "item_id": "item_8",
+          "tool": "get_symbol_context",
+          "tool_status": "completed",
+          "outcome": "capped_response",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Explicit result limit notice."
+        },
+        {
+          "item_id": "item_9",
+          "tool": "get_symbol_context",
+          "tool_status": "completed",
+          "outcome": "capped_response",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Explicit result limit notice."
+        },
+        {
+          "item_id": "item_19",
+          "tool": "get_symbol_body",
+          "tool_status": "failed",
+          "outcome": "empty_miss",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Requested test-suite symbol was not indexed by that name; this is a result miss, not a transport error."
+        },
+        {
+          "item_id": "item_20",
+          "tool": "blast_radius",
+          "tool_status": "failed",
+          "outcome": "ambiguous_selection",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Expected ambiguous selection response; MCP transport error flag is absent."
+        },
+        {
+          "item_id": "item_21",
+          "tool": "get_symbol_body",
+          "tool_status": "failed",
+          "outcome": "empty_miss",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Requested test-suite symbol was not indexed by that name; this is a result miss, not a transport error."
+        },
+        {
+          "item_id": "item_22",
+          "tool": "blast_radius",
+          "tool_status": "failed",
+          "outcome": "ambiguous_selection",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Expected ambiguous selection response; MCP transport error flag is absent."
+        },
+        {
+          "item_id": "item_28",
+          "tool": "blast_radius",
+          "tool_status": "completed",
+          "outcome": "capped_response",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Explicit result limit notice."
+        },
+        {
+          "item_id": "item_30",
+          "tool": "blast_radius",
+          "tool_status": "completed",
+          "outcome": "capped_response",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Explicit result limit notice."
+        }
+      ],
+      "classification_counts": {
+        "direct_native_structural_lookup": 1,
+        "non_navigation_edit_test_build": 4,
+        "non_navigation_other": 3,
+        "permitted_literal_search": 1,
+        "unknown": 1
+      },
+      "genuine_fallback_count": 0,
+      "actions": [
+        {
+          "item_id": "item_2",
+          "action_kind": "initial_file_discovery",
+          "classification": "direct_native_structural_lookup",
+          "preceding_mcp_item_ids": [],
+          "basis": "Initial project and target-file discovery before MCP calls.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_3",
+          "action_kind": "repository_state",
+          "classification": "non_navigation_other",
+          "preceding_mcp_item_ids": [],
+          "basis": "Instruction and working-tree status inspection.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_13",
+          "action_kind": "configuration_read",
+          "classification": "non_navigation_other",
+          "preceding_mcp_item_ids": [
+            "item_4",
+            "item_5",
+            "item_6",
+            "item_7",
+            "item_8",
+            "item_9",
+            "item_10",
+            "item_11",
+            "item_12"
+          ],
+          "basis": "Reads package configuration without source searching.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_33",
+          "action_kind": "test_config_file_discovery",
+          "classification": "unknown",
+          "preceding_mcp_item_ids": [
+            "item_4",
+            "item_5",
+            "item_6",
+            "item_7",
+            "item_8",
+            "item_9",
+            "item_10",
+            "item_11",
+            "item_12",
+            "item_14",
+            "item_15",
+            "item_16",
+            "item_17",
+            "item_18",
+            "item_19",
+            "item_20",
+            "item_21",
+            "item_22",
+            "item_23",
+            "item_24",
+            "item_25",
+            "item_26",
+            "item_27",
+            "item_28",
+            "item_29",
+            "item_30",
+            "item_31"
+          ],
+          "basis": "Runs file discovery after mixed successful MCP results and earlier expected selection/miss responses; a specific fallback relationship is not established.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_34",
+          "action_kind": "literal_configuration_search",
+          "classification": "permitted_literal_search",
+          "preceding_mcp_item_ids": [
+            "item_4",
+            "item_5",
+            "item_6",
+            "item_7",
+            "item_8",
+            "item_9",
+            "item_10",
+            "item_11",
+            "item_12",
+            "item_14",
+            "item_15",
+            "item_16",
+            "item_17",
+            "item_18",
+            "item_19",
+            "item_20",
+            "item_21",
+            "item_22",
+            "item_23",
+            "item_24",
+            "item_25",
+            "item_26",
+            "item_27",
+            "item_28",
+            "item_29",
+            "item_30",
+            "item_31"
+          ],
+          "basis": "Searches literal test/configuration settings only.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_36",
+          "action_kind": "test_execution",
+          "classification": "non_navigation_edit_test_build",
+          "preceding_mcp_item_ids": [
+            "item_4",
+            "item_5",
+            "item_6",
+            "item_7",
+            "item_8",
+            "item_9",
+            "item_10",
+            "item_11",
+            "item_12",
+            "item_14",
+            "item_15",
+            "item_16",
+            "item_17",
+            "item_18",
+            "item_19",
+            "item_20",
+            "item_21",
+            "item_22",
+            "item_23",
+            "item_24",
+            "item_25",
+            "item_26",
+            "item_27",
+            "item_28",
+            "item_29",
+            "item_30",
+            "item_31"
+          ],
+          "basis": "New tests fail after test-only additions and before the first production edit.",
+          "exit_code": 1
+        },
+        {
+          "item_id": "item_38",
+          "action_kind": "format_and_test_execution",
+          "classification": "non_navigation_edit_test_build",
+          "preceding_mcp_item_ids": [
+            "item_4",
+            "item_5",
+            "item_6",
+            "item_7",
+            "item_8",
+            "item_9",
+            "item_10",
+            "item_11",
+            "item_12",
+            "item_14",
+            "item_15",
+            "item_16",
+            "item_17",
+            "item_18",
+            "item_19",
+            "item_20",
+            "item_21",
+            "item_22",
+            "item_23",
+            "item_24",
+            "item_25",
+            "item_26",
+            "item_27",
+            "item_28",
+            "item_29",
+            "item_30",
+            "item_31"
+          ],
+          "basis": "Formats the added tests and runs focused checks.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_40",
+          "action_kind": "test_execution",
+          "classification": "non_navigation_edit_test_build",
+          "preceding_mcp_item_ids": [
+            "item_4",
+            "item_5",
+            "item_6",
+            "item_7",
+            "item_8",
+            "item_9",
+            "item_10",
+            "item_11",
+            "item_12",
+            "item_14",
+            "item_15",
+            "item_16",
+            "item_17",
+            "item_18",
+            "item_19",
+            "item_20",
+            "item_21",
+            "item_22",
+            "item_23",
+            "item_24",
+            "item_25",
+            "item_26",
+            "item_27",
+            "item_28",
+            "item_29",
+            "item_30",
+            "item_31",
+            "item_39"
+          ],
+          "basis": "Full package test execution.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_41",
+          "action_kind": "test_execution",
+          "classification": "non_navigation_edit_test_build",
+          "preceding_mcp_item_ids": [
+            "item_4",
+            "item_5",
+            "item_6",
+            "item_7",
+            "item_8",
+            "item_9",
+            "item_10",
+            "item_11",
+            "item_12",
+            "item_14",
+            "item_15",
+            "item_16",
+            "item_17",
+            "item_18",
+            "item_19",
+            "item_20",
+            "item_21",
+            "item_22",
+            "item_23",
+            "item_24",
+            "item_25",
+            "item_26",
+            "item_27",
+            "item_28",
+            "item_29",
+            "item_30",
+            "item_31",
+            "item_39"
+          ],
+          "basis": "Focused timezone test execution.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_42",
+          "action_kind": "test_log_read",
+          "classification": "non_navigation_other",
+          "preceding_mcp_item_ids": [
+            "item_4",
+            "item_5",
+            "item_6",
+            "item_7",
+            "item_8",
+            "item_9",
+            "item_10",
+            "item_11",
+            "item_12",
+            "item_14",
+            "item_15",
+            "item_16",
+            "item_17",
+            "item_18",
+            "item_19",
+            "item_20",
+            "item_21",
+            "item_22",
+            "item_23",
+            "item_24",
+            "item_25",
+            "item_26",
+            "item_27",
+            "item_28",
+            "item_29",
+            "item_30",
+            "item_31",
+            "item_39"
+          ],
+          "basis": "Reads a test summary log.",
+          "exit_code": 0
+        }
+      ],
+      "repair_assessment": {
+        "classification": "preproduction_test_failure_sequence",
+        "implementation_repair_count": 0,
+        "evidence": {
+          "preproduction_test_only_change_item_ids": [
+            "item_35"
+          ],
+          "failing_check_item_ids": [
+            "item_36"
+          ],
+          "first_production_edit_item_id": "item_37",
+          "later_passing_check_item_ids": [
+            "item_38",
+            "item_40",
+            "item_41"
+          ]
+        },
+        "basis": "The failing added-test check precedes the first production edit; later checks pass after it. No failed attempted production solution is observed."
+      },
+      "timing": {
+        "agent_wall_seconds": 83.740803,
+        "index_wall_seconds": 3.27431,
+        "index_inclusive_wall_seconds": 87.015113,
+        "billing": "unknown"
+      },
+      "tokens": {
+        "input_tokens": 362503,
+        "cached_input_tokens": 322560,
+        "uncached_input_tokens": 39943,
+        "output_tokens": 4098
+      },
+      "trace_consistency": {
+        "log_event_lines": 87,
+        "metrics_event_count": 87,
+        "mcp_completed_items_in_log": 28,
+        "metrics_mcp_call_count": 28,
+        "command_completed_items_in_log": 10,
+        "metrics_command_count": 10,
+        "invalid_json_lines": 0,
+        "all_started_items_completed": true
+      },
+      "input_hash_checks": {
+        "attempt_raw_sha256_matches_source_review": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "2965ef268b1a0720eb15aacd16410c63e7f60a0702c6b7c7fdacb02aac057242",
+          "recorded_sha256": "2965ef268b1a0720eb15aacd16410c63e7f60a0702c6b7c7fdacb02aac057242"
+        },
+        "bundle_json_sha256_matches_metadata_and_source_review": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "06d944fa937614b80ad47f16535088d4d0452b62042dbddda4a808380bae7a2e",
+          "metadata_sha256": "06d944fa937614b80ad47f16535088d4d0452b62042dbddda4a808380bae7a2e",
+          "source_review_sha256": "06d944fa937614b80ad47f16535088d4d0452b62042dbddda4a808380bae7a2e"
+        },
+        "prompt_sha256_matches_outbound_prompt": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "0980c16f1f0c7bc4be2f5a0c5c69b8a2f258d9549b1b98ca0153b8eecd67eedf",
+          "recorded_sha256": "0980c16f1f0c7bc4be2f5a0c5c69b8a2f258d9549b1b98ca0153b8eecd67eedf"
+        },
+        "manifest_sha256_matches_campaign_and_review": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "542016a1019cb60786a6b41d3eca4802bf34cadc11fe377e0cd60aec2cb4e049",
+          "attempt_sha256": "542016a1019cb60786a6b41d3eca4802bf34cadc11fe377e0cd60aec2cb4e049",
+          "campaign_sha256": "542016a1019cb60786a6b41d3eca4802bf34cadc11fe377e0cd60aec2cb4e049",
+          "receipt_sha256": "542016a1019cb60786a6b41d3eca4802bf34cadc11fe377e0cd60aec2cb4e049"
+        },
+        "campaign_runner_sha256_matches_retained_script": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "9dc440ce952cf622bfc77275bbf97d6a2fd02c6ad238d9f933bfab2e3a91f594",
+          "recorded_sha256": "9dc440ce952cf622bfc77275bbf97d6a2fd02c6ad238d9f933bfab2e3a91f594"
+        },
+        "runtime_bindings_hash_records_match": {
+          "checked": true,
+          "matches": true,
+          "recorded_sha256": "f1ee11ebea367e55e8f0808ee90ba11116a9b3f7ae6f1d6495881a41305d719e",
+          "frozen_inputs_sha256": "f1ee11ebea367e55e8f0808ee90ba11116a9b3f7ae6f1d6495881a41305d719e",
+          "retained_file_actual_sha256": "f1ee11ebea367e55e8f0808ee90ba11116a9b3f7ae6f1d6495881a41305d719e"
+        },
+        "grade_sha256_matches_source_review": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "8853bab1dedc27e48dc402d49ee009ac15d9ef656fbc9194971bb2562b1607bd",
+          "receipt_sha256": "8853bab1dedc27e48dc402d49ee009ac15d9ef656fbc9194971bb2562b1607bd"
+        },
+        "seed_digest_matches_source_review_and_unchanged_flag": {
+          "checked": true,
+          "matches": true,
+          "seed_digest": "e0d8d6c9700a1bf4660aa8d759cf31858197e14b937ca93c8c2cca0732fe796f",
+          "receipt_seed_digest": "e0d8d6c9700a1bf4660aa8d759cf31858197e14b937ca93c8c2cca0732fe796f",
+          "seed_unchanged": true
+        },
+        "agent_log_hash_retained": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "6672a81da8c4e2c3cf5a064d6791647247a01b81d342c4a4d9cda0dd7658908b"
+        },
+        "answer_hash_retained": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "14dfb0e0fae9fb018df8ff2ecd85babc49eae14bae7f2f0bc86bd06e13504d5a"
+        }
+      },
+      "artifact_refs": {
+        "attempt_json": {
+          "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/amended-542016a1/attempts/008-date-fns-code-kb-r1/attempt.json",
+          "sha256": "2965ef268b1a0720eb15aacd16410c63e7f60a0702c6b7c7fdacb02aac057242"
+        },
+        "bundle_json": {
+          "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/amended-542016a1/attempts/008-date-fns-code-kb-r1/bundle/bundle.json",
+          "sha256": "06d944fa937614b80ad47f16535088d4d0452b62042dbddda4a808380bae7a2e"
+        },
+        "outbound_prompt": {
+          "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/amended-542016a1/attempts/008-date-fns-code-kb-r1/outbound_prompt.txt",
+          "sha256": "0980c16f1f0c7bc4be2f5a0c5c69b8a2f258d9549b1b98ca0153b8eecd67eedf"
+        },
+        "answer": {
+          "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/amended-542016a1/attempts/008-date-fns-code-kb-r1/evidence/answer.txt",
+          "sha256": "14dfb0e0fae9fb018df8ff2ecd85babc49eae14bae7f2f0bc86bd06e13504d5a"
+        },
+        "grade_json": {
+          "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/amended-542016a1/attempts/008-date-fns-code-kb-r1/grade/grade.json",
+          "sha256": "8853bab1dedc27e48dc402d49ee009ac15d9ef656fbc9194971bb2562b1607bd"
+        },
+        "agent_stdout_log": {
+          "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/amended-542016a1/attempts/008-date-fns-code-kb-r1/evidence/agent/stdout.log",
+          "sha256": "6672a81da8c4e2c3cf5a064d6791647247a01b81d342c4a4d9cda0dd7658908b"
+        },
+        "source_review_receipt": {
+          "path": "evals/edit-2026-10-27/results/source-review/date-fns-v2/008-date-fns-code-kb-r1.json",
+          "sha256": "b1813d459fabc00eb933066e529c2b8472e798893ee115d4a54fbf947c1ba50c"
+        }
+      },
+      "source_review_independent_tests": {
+        "status": "passed",
+        "test_files_passed": 1,
+        "tests_passed": 16,
+        "exit_status": 0,
+        "stdout": {
+          "path": "logs/008-date-fns-code-kb-r1-added-tests.stdout.log",
+          "sha256": "bd397739c0bdda34357c402363bed783f9e68ff27238000506aa2ed5bbef1a2c"
+        }
+      }
+    },
+    {
+      "slot": 19,
+      "trial_id": "019-date-fns-code-kb-r2",
+      "case_id": "date-fns",
+      "arm": "code-kb",
+      "repeat": 2,
+      "model": "gpt-6.1-sol",
+      "attempt_status": "completed",
+      "behavioral_pass": true,
+      "source_acceptance": "accepted",
+      "source_review_status": "passed",
+      "protection_status": "unchanged",
+      "adopted_code_kb": true,
+      "mcp_call_count": 31,
+      "command_count": 11,
+      "trace_error_count_non_mcp": 3,
+      "tool_counts": {
+        "blast_radius": 4,
+        "check_edit": 3,
+        "file_skeleton": 10,
+        "find_references": 2,
+        "get_symbol_body": 8,
+        "get_symbol_context": 2,
+        "lookup_symbol": 2
+      },
+      "mcp_outcome_counts": {
+        "ambiguous_selection": 2,
+        "capped_response": 3,
+        "freshness_refusal": 1,
+        "ordinary_result": 25
+      },
+      "mcp_status_failed_events": 3,
+      "mcp_events": [
+        {
+          "item_id": "item_3",
+          "tool": "lookup_symbol",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_5",
+          "tool": "lookup_symbol",
+          "tool_status": "completed",
+          "outcome": "capped_response",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Explicit result limit notice."
+        },
+        {
+          "item_id": "item_6",
+          "tool": "file_skeleton",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_7",
+          "tool": "file_skeleton",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_8",
+          "tool": "file_skeleton",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_9",
+          "tool": "file_skeleton",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_10",
+          "tool": "get_symbol_context",
+          "tool_status": "completed",
+          "outcome": "capped_response",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Explicit result limit notice."
+        },
+        {
+          "item_id": "item_11",
+          "tool": "get_symbol_context",
+          "tool_status": "completed",
+          "outcome": "capped_response",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Explicit result limit notice."
+        },
+        {
+          "item_id": "item_12",
+          "tool": "find_references",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_13",
+          "tool": "find_references",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_14",
+          "tool": "file_skeleton",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_16",
+          "tool": "file_skeleton",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_17",
+          "tool": "file_skeleton",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_18",
+          "tool": "get_symbol_body",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_19",
+          "tool": "file_skeleton",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_20",
+          "tool": "get_symbol_body",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_21",
+          "tool": "file_skeleton",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_22",
+          "tool": "file_skeleton",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_23",
+          "tool": "get_symbol_body",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_24",
+          "tool": "get_symbol_body",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_25",
+          "tool": "get_symbol_body",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_26",
+          "tool": "get_symbol_body",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_27",
+          "tool": "get_symbol_body",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_28",
+          "tool": "get_symbol_body",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_29",
+          "tool": "blast_radius",
+          "tool_status": "failed",
+          "outcome": "ambiguous_selection",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Expected ambiguous selection response; MCP transport error flag is absent."
+        },
+        {
+          "item_id": "item_30",
+          "tool": "blast_radius",
+          "tool_status": "failed",
+          "outcome": "ambiguous_selection",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Expected ambiguous selection response; MCP transport error flag is absent."
+        },
+        {
+          "item_id": "item_32",
+          "tool": "blast_radius",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_33",
+          "tool": "blast_radius",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_39",
+          "tool": "check_edit",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        },
+        {
+          "item_id": "item_45",
+          "tool": "check_edit",
+          "tool_status": "failed",
+          "outcome": "freshness_refusal",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Operational freshness refusal; the next check_edit call succeeds.",
+          "result_text": "Could not establish a fresh index for '/workspace/project': another watcher refresh failed during recovery (Failed to reconcile workspace watches: Failed to initialize notify watcher: No path was found. about [\"/workspace/project/.codex\"]); it will be retried on the next tool call. Run `code-kb scan --root /workspace/project` to rebuild the index."
+        },
+        {
+          "item_id": "item_47",
+          "tool": "check_edit",
+          "tool_status": "completed",
+          "outcome": "ordinary_result",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Completed tool result with no classified miss, cap, ambiguity, or operational refusal."
+        }
+      ],
+      "source_backed_mcp_events": [
+        {
+          "item_id": "item_5",
+          "tool": "lookup_symbol",
+          "tool_status": "completed",
+          "outcome": "capped_response",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Explicit result limit notice."
+        },
+        {
+          "item_id": "item_10",
+          "tool": "get_symbol_context",
+          "tool_status": "completed",
+          "outcome": "capped_response",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Explicit result limit notice."
+        },
+        {
+          "item_id": "item_11",
+          "tool": "get_symbol_context",
+          "tool_status": "completed",
+          "outcome": "capped_response",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Explicit result limit notice."
+        },
+        {
+          "item_id": "item_29",
+          "tool": "blast_radius",
+          "tool_status": "failed",
+          "outcome": "ambiguous_selection",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Expected ambiguous selection response; MCP transport error flag is absent."
+        },
+        {
+          "item_id": "item_30",
+          "tool": "blast_radius",
+          "tool_status": "failed",
+          "outcome": "ambiguous_selection",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Expected ambiguous selection response; MCP transport error flag is absent."
+        },
+        {
+          "item_id": "item_45",
+          "tool": "check_edit",
+          "tool_status": "failed",
+          "outcome": "freshness_refusal",
+          "json_rpc_or_transport_error": false,
+          "result_is_error": false,
+          "basis": "Operational freshness refusal; the next check_edit call succeeds.",
+          "result_text": "Could not establish a fresh index for '/workspace/project': another watcher refresh failed during recovery (Failed to reconcile workspace watches: Failed to initialize notify watcher: No path was found. about [\"/workspace/project/.codex\"]); it will be retried on the next tool call. Run `code-kb scan --root /workspace/project` to rebuild the index."
+        }
+      ],
+      "classification_counts": {
+        "direct_native_structural_lookup": 1,
+        "non_navigation_edit_test_build": 7,
+        "non_navigation_other": 3
+      },
+      "genuine_fallback_count": 0,
+      "actions": [
+        {
+          "item_id": "item_2",
+          "action_kind": "initial_file_discovery",
+          "classification": "direct_native_structural_lookup",
+          "preceding_mcp_item_ids": [],
+          "basis": "Initial project and configuration file discovery before MCP calls.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_4",
+          "action_kind": "repository_state",
+          "classification": "non_navigation_other",
+          "preceding_mcp_item_ids": [
+            "item_3"
+          ],
+          "basis": "Instruction and working-tree status inspection.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_15",
+          "action_kind": "configuration_read",
+          "classification": "non_navigation_other",
+          "preceding_mcp_item_ids": [
+            "item_3",
+            "item_5",
+            "item_6",
+            "item_7",
+            "item_8",
+            "item_9",
+            "item_10",
+            "item_11",
+            "item_12",
+            "item_13",
+            "item_14"
+          ],
+          "basis": "Reads package configuration without source searching.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_34",
+          "action_kind": "test_execution",
+          "classification": "non_navigation_edit_test_build",
+          "preceding_mcp_item_ids": [
+            "item_3",
+            "item_5",
+            "item_6",
+            "item_7",
+            "item_8",
+            "item_9",
+            "item_10",
+            "item_11",
+            "item_12",
+            "item_13",
+            "item_14",
+            "item_16",
+            "item_17",
+            "item_18",
+            "item_19",
+            "item_20",
+            "item_21",
+            "item_22",
+            "item_23",
+            "item_24",
+            "item_25",
+            "item_26",
+            "item_27",
+            "item_28",
+            "item_29",
+            "item_30",
+            "item_32",
+            "item_33"
+          ],
+          "basis": "Baseline test failure before added tests and production edits.",
+          "exit_code": 1
+        },
+        {
+          "item_id": "item_36",
+          "action_kind": "test_execution",
+          "classification": "non_navigation_edit_test_build",
+          "preceding_mcp_item_ids": [
+            "item_3",
+            "item_5",
+            "item_6",
+            "item_7",
+            "item_8",
+            "item_9",
+            "item_10",
+            "item_11",
+            "item_12",
+            "item_13",
+            "item_14",
+            "item_16",
+            "item_17",
+            "item_18",
+            "item_19",
+            "item_20",
+            "item_21",
+            "item_22",
+            "item_23",
+            "item_24",
+            "item_25",
+            "item_26",
+            "item_27",
+            "item_28",
+            "item_29",
+            "item_30",
+            "item_32",
+            "item_33"
+          ],
+          "basis": "Added-test failure before the first production edit.",
+          "exit_code": 1
+        },
+        {
+          "item_id": "item_38",
+          "action_kind": "formatting",
+          "classification": "non_navigation_edit_test_build",
+          "preceding_mcp_item_ids": [
+            "item_3",
+            "item_5",
+            "item_6",
+            "item_7",
+            "item_8",
+            "item_9",
+            "item_10",
+            "item_11",
+            "item_12",
+            "item_13",
+            "item_14",
+            "item_16",
+            "item_17",
+            "item_18",
+            "item_19",
+            "item_20",
+            "item_21",
+            "item_22",
+            "item_23",
+            "item_24",
+            "item_25",
+            "item_26",
+            "item_27",
+            "item_28",
+            "item_29",
+            "item_30",
+            "item_32",
+            "item_33"
+          ],
+          "basis": "Formats added test files.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_40",
+          "action_kind": "test_execution",
+          "classification": "non_navigation_edit_test_build",
+          "preceding_mcp_item_ids": [
+            "item_3",
+            "item_5",
+            "item_6",
+            "item_7",
+            "item_8",
+            "item_9",
+            "item_10",
+            "item_11",
+            "item_12",
+            "item_13",
+            "item_14",
+            "item_16",
+            "item_17",
+            "item_18",
+            "item_19",
+            "item_20",
+            "item_21",
+            "item_22",
+            "item_23",
+            "item_24",
+            "item_25",
+            "item_26",
+            "item_27",
+            "item_28",
+            "item_29",
+            "item_30",
+            "item_32",
+            "item_33",
+            "item_39"
+          ],
+          "basis": "Focused test execution after the production edit.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_42",
+          "action_kind": "test_execution",
+          "classification": "non_navigation_edit_test_build",
+          "preceding_mcp_item_ids": [
+            "item_3",
+            "item_5",
+            "item_6",
+            "item_7",
+            "item_8",
+            "item_9",
+            "item_10",
+            "item_11",
+            "item_12",
+            "item_13",
+            "item_14",
+            "item_16",
+            "item_17",
+            "item_18",
+            "item_19",
+            "item_20",
+            "item_21",
+            "item_22",
+            "item_23",
+            "item_24",
+            "item_25",
+            "item_26",
+            "item_27",
+            "item_28",
+            "item_29",
+            "item_30",
+            "item_32",
+            "item_33",
+            "item_39"
+          ],
+          "basis": "Focused timezone test execution.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_41",
+          "action_kind": "test_execution",
+          "classification": "non_navigation_edit_test_build",
+          "preceding_mcp_item_ids": [
+            "item_3",
+            "item_5",
+            "item_6",
+            "item_7",
+            "item_8",
+            "item_9",
+            "item_10",
+            "item_11",
+            "item_12",
+            "item_13",
+            "item_14",
+            "item_16",
+            "item_17",
+            "item_18",
+            "item_19",
+            "item_20",
+            "item_21",
+            "item_22",
+            "item_23",
+            "item_24",
+            "item_25",
+            "item_26",
+            "item_27",
+            "item_28",
+            "item_29",
+            "item_30",
+            "item_32",
+            "item_33",
+            "item_39"
+          ],
+          "basis": "Full package test execution.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_43",
+          "action_kind": "formatting_check",
+          "classification": "non_navigation_edit_test_build",
+          "preceding_mcp_item_ids": [
+            "item_3",
+            "item_5",
+            "item_6",
+            "item_7",
+            "item_8",
+            "item_9",
+            "item_10",
+            "item_11",
+            "item_12",
+            "item_13",
+            "item_14",
+            "item_16",
+            "item_17",
+            "item_18",
+            "item_19",
+            "item_20",
+            "item_21",
+            "item_22",
+            "item_23",
+            "item_24",
+            "item_25",
+            "item_26",
+            "item_27",
+            "item_28",
+            "item_29",
+            "item_30",
+            "item_32",
+            "item_33",
+            "item_39"
+          ],
+          "basis": "Formatting check after implementation.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_44",
+          "action_kind": "test_log_read",
+          "classification": "non_navigation_other",
+          "preceding_mcp_item_ids": [
+            "item_3",
+            "item_5",
+            "item_6",
+            "item_7",
+            "item_8",
+            "item_9",
+            "item_10",
+            "item_11",
+            "item_12",
+            "item_13",
+            "item_14",
+            "item_16",
+            "item_17",
+            "item_18",
+            "item_19",
+            "item_20",
+            "item_21",
+            "item_22",
+            "item_23",
+            "item_24",
+            "item_25",
+            "item_26",
+            "item_27",
+            "item_28",
+            "item_29",
+            "item_30",
+            "item_32",
+            "item_33",
+            "item_39"
+          ],
+          "basis": "Reads a test summary log.",
+          "exit_code": 0
+        }
+      ],
+      "repair_assessment": {
+        "classification": "preproduction_test_failure_sequence",
+        "implementation_repair_count": 0,
+        "evidence": {
+          "preproduction_test_only_change_item_ids": [
+            "item_35"
+          ],
+          "failing_check_item_ids": [
+            "item_34",
+            "item_36"
+          ],
+          "first_production_edit_item_id": "item_37",
+          "later_passing_check_item_ids": [
+            "item_40",
+            "item_41",
+            "item_42"
+          ]
+        },
+        "basis": "The baseline and added-test failures precede the first production edit; later checks pass after it. No failed attempted production solution is observed."
+      },
+      "timing": {
+        "agent_wall_seconds": 84.047792,
+        "index_wall_seconds": 3.272413,
+        "index_inclusive_wall_seconds": 87.320205,
+        "billing": "unknown"
+      },
+      "tokens": {
+        "input_tokens": 476751,
+        "cached_input_tokens": 441088,
+        "uncached_input_tokens": 35663,
+        "output_tokens": 4826
+      },
+      "trace_consistency": {
+        "log_event_lines": 96,
+        "metrics_event_count": 96,
+        "mcp_completed_items_in_log": 31,
+        "metrics_mcp_call_count": 31,
+        "command_completed_items_in_log": 11,
+        "metrics_command_count": 11,
+        "invalid_json_lines": 0,
+        "all_started_items_completed": true
+      },
+      "input_hash_checks": {
+        "attempt_raw_sha256_matches_source_review": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "03c1a2db5cf143370c6bc4973a859ddeaf965dbedd86e87986c5f6e7725aacb0",
+          "recorded_sha256": "03c1a2db5cf143370c6bc4973a859ddeaf965dbedd86e87986c5f6e7725aacb0"
+        },
+        "bundle_json_sha256_matches_metadata_and_source_review": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "7dab281d5f44ed6f04991ee40f944fb4de9fde97fd79c83939acf8b60e8b7865",
+          "metadata_sha256": "7dab281d5f44ed6f04991ee40f944fb4de9fde97fd79c83939acf8b60e8b7865",
+          "source_review_sha256": "7dab281d5f44ed6f04991ee40f944fb4de9fde97fd79c83939acf8b60e8b7865"
+        },
+        "prompt_sha256_matches_outbound_prompt": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "0980c16f1f0c7bc4be2f5a0c5c69b8a2f258d9549b1b98ca0153b8eecd67eedf",
+          "recorded_sha256": "0980c16f1f0c7bc4be2f5a0c5c69b8a2f258d9549b1b98ca0153b8eecd67eedf"
+        },
+        "manifest_sha256_matches_campaign_and_review": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "542016a1019cb60786a6b41d3eca4802bf34cadc11fe377e0cd60aec2cb4e049",
+          "attempt_sha256": "542016a1019cb60786a6b41d3eca4802bf34cadc11fe377e0cd60aec2cb4e049",
+          "campaign_sha256": "542016a1019cb60786a6b41d3eca4802bf34cadc11fe377e0cd60aec2cb4e049",
+          "receipt_sha256": "542016a1019cb60786a6b41d3eca4802bf34cadc11fe377e0cd60aec2cb4e049"
+        },
+        "campaign_runner_sha256_matches_retained_script": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "9dc440ce952cf622bfc77275bbf97d6a2fd02c6ad238d9f933bfab2e3a91f594",
+          "recorded_sha256": "9dc440ce952cf622bfc77275bbf97d6a2fd02c6ad238d9f933bfab2e3a91f594"
+        },
+        "runtime_bindings_hash_records_match": {
+          "checked": true,
+          "matches": true,
+          "recorded_sha256": "f1ee11ebea367e55e8f0808ee90ba11116a9b3f7ae6f1d6495881a41305d719e",
+          "frozen_inputs_sha256": "f1ee11ebea367e55e8f0808ee90ba11116a9b3f7ae6f1d6495881a41305d719e",
+          "retained_file_actual_sha256": "f1ee11ebea367e55e8f0808ee90ba11116a9b3f7ae6f1d6495881a41305d719e"
+        },
+        "grade_sha256_matches_source_review": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "5665947d968fb27001947e464c9588f07f50f470deba7f30099f54f1fb354ec6",
+          "receipt_sha256": "5665947d968fb27001947e464c9588f07f50f470deba7f30099f54f1fb354ec6"
+        },
+        "seed_digest_matches_source_review_and_unchanged_flag": {
+          "checked": true,
+          "matches": true,
+          "seed_digest": "e0d8d6c9700a1bf4660aa8d759cf31858197e14b937ca93c8c2cca0732fe796f",
+          "receipt_seed_digest": "e0d8d6c9700a1bf4660aa8d759cf31858197e14b937ca93c8c2cca0732fe796f",
+          "seed_unchanged": true
+        },
+        "agent_log_hash_retained": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "2671171002499c4d1a407f9f320537ae9cdac316562ddaaaa5ad0902d5693135"
+        },
+        "answer_hash_retained": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "676c6b652bd68117f3c481b792782d4b03936b77491a9f4ce65853fb4d32d03c"
+        }
+      },
+      "artifact_refs": {
+        "attempt_json": {
+          "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/amended-542016a1/attempts/019-date-fns-code-kb-r2/attempt.json",
+          "sha256": "03c1a2db5cf143370c6bc4973a859ddeaf965dbedd86e87986c5f6e7725aacb0"
+        },
+        "bundle_json": {
+          "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/amended-542016a1/attempts/019-date-fns-code-kb-r2/bundle/bundle.json",
+          "sha256": "7dab281d5f44ed6f04991ee40f944fb4de9fde97fd79c83939acf8b60e8b7865"
+        },
+        "outbound_prompt": {
+          "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/amended-542016a1/attempts/019-date-fns-code-kb-r2/outbound_prompt.txt",
+          "sha256": "0980c16f1f0c7bc4be2f5a0c5c69b8a2f258d9549b1b98ca0153b8eecd67eedf"
+        },
+        "answer": {
+          "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/amended-542016a1/attempts/019-date-fns-code-kb-r2/evidence/answer.txt",
+          "sha256": "676c6b652bd68117f3c481b792782d4b03936b77491a9f4ce65853fb4d32d03c"
+        },
+        "grade_json": {
+          "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/amended-542016a1/attempts/019-date-fns-code-kb-r2/grade/grade.json",
+          "sha256": "5665947d968fb27001947e464c9588f07f50f470deba7f30099f54f1fb354ec6"
+        },
+        "agent_stdout_log": {
+          "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/amended-542016a1/attempts/019-date-fns-code-kb-r2/evidence/agent/stdout.log",
+          "sha256": "2671171002499c4d1a407f9f320537ae9cdac316562ddaaaa5ad0902d5693135"
+        },
+        "source_review_receipt": {
+          "path": "evals/edit-2026-10-27/results/source-review/date-fns-v2/019-date-fns-code-kb-r2.json",
+          "sha256": "3d10dedcd10e2dda381658bf1d21a8aa1e91d63f60886be6782b90f5ead89315"
+        }
+      },
+      "source_review_independent_tests": {
+        "status": "passed",
+        "test_files_passed": 2,
+        "tests_passed": 15,
+        "exit_status": 0,
+        "stdout": {
+          "path": "logs/019-date-fns-code-kb-r2-added-tests.stdout.log",
+          "sha256": "16e09c19a5331772eea0dac352f93b246fd9fccd0e20ba0a37ef45d3b84132b0"
+        }
+      }
+    },
+    {
+      "slot": 20,
+      "trial_id": "020-date-fns-native-r2",
+      "case_id": "date-fns",
+      "arm": "native",
+      "repeat": 2,
+      "model": "gpt-6.1-sol",
+      "attempt_status": "completed",
+      "behavioral_pass": true,
+      "source_acceptance": "accepted",
+      "source_review_status": "passed",
+      "protection_status": "unchanged",
+      "adopted_code_kb": false,
+      "mcp_call_count": 0,
+      "command_count": 15,
+      "trace_error_count_non_mcp": 4,
+      "tool_counts": {},
+      "mcp_outcome_counts": {},
+      "mcp_status_failed_events": 0,
+      "mcp_events": [],
+      "source_backed_mcp_events": [],
+      "classification_counts": {
+        "direct_native_structural_lookup": 6,
+        "non_navigation_edit_test_build": 6,
+        "non_navigation_other": 1,
+        "unknown": 2
+      },
+      "genuine_fallback_count": 0,
+      "actions": [
+        {
+          "item_id": "item_2",
+          "action_kind": "initial_file_discovery",
+          "classification": "direct_native_structural_lookup",
+          "preceding_mcp_item_ids": [],
+          "basis": "Initial project and target-file discovery.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_3",
+          "action_kind": "repository_state",
+          "classification": "non_navigation_other",
+          "preceding_mcp_item_ids": [],
+          "basis": "Working-tree status inspection.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_4",
+          "action_kind": "mixed_setup_and_file_discovery",
+          "classification": "unknown",
+          "preceding_mcp_item_ids": [],
+          "basis": "Combines instruction/status context with file discovery and exits nonzero.",
+          "exit_code": 1
+        },
+        {
+          "item_id": "item_5",
+          "action_kind": "source_file_read",
+          "classification": "direct_native_structural_lookup",
+          "preceding_mcp_item_ids": [],
+          "basis": "Reads implementation and related source files directly.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_7",
+          "action_kind": "test_source_read",
+          "classification": "direct_native_structural_lookup",
+          "preceding_mcp_item_ids": [],
+          "basis": "Reads existing target tests directly.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_6",
+          "action_kind": "test_source_read",
+          "classification": "direct_native_structural_lookup",
+          "preceding_mcp_item_ids": [],
+          "basis": "Reads existing target tests directly.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_8",
+          "action_kind": "mixed_source_config_and_literal_search",
+          "classification": "unknown",
+          "preceding_mcp_item_ids": [],
+          "basis": "Combines source/test/config reads and literal reference search.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_9",
+          "action_kind": "test_execution",
+          "classification": "non_navigation_edit_test_build",
+          "preceding_mcp_item_ids": [],
+          "basis": "Baseline test failure before any file edits.",
+          "exit_code": 1
+        },
+        {
+          "item_id": "item_10",
+          "action_kind": "related_source_and_test_discovery",
+          "classification": "direct_native_structural_lookup",
+          "preceding_mcp_item_ids": [],
+          "basis": "Reads related helper/test material and lists nearby tests.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_13",
+          "action_kind": "test_execution",
+          "classification": "non_navigation_edit_test_build",
+          "preceding_mcp_item_ids": [],
+          "basis": "Added-test failure before the first production edit.",
+          "exit_code": 1
+        },
+        {
+          "item_id": "item_15",
+          "action_kind": "test_execution",
+          "classification": "non_navigation_edit_test_build",
+          "preceding_mcp_item_ids": [],
+          "basis": "Focused test execution after the production edit.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_16",
+          "action_kind": "test_execution",
+          "classification": "non_navigation_edit_test_build",
+          "preceding_mcp_item_ids": [],
+          "basis": "Focused test execution after the production edit.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_17",
+          "action_kind": "formatting_check",
+          "classification": "non_navigation_edit_test_build",
+          "preceding_mcp_item_ids": [],
+          "basis": "Formatting check; excluded from implementation repair assessment.",
+          "exit_code": 1
+        },
+        {
+          "item_id": "item_18",
+          "action_kind": "formatting",
+          "classification": "non_navigation_edit_test_build",
+          "preceding_mcp_item_ids": [],
+          "basis": "Formats added tests.",
+          "exit_code": 0
+        },
+        {
+          "item_id": "item_19",
+          "action_kind": "final_source_read",
+          "classification": "direct_native_structural_lookup",
+          "preceding_mcp_item_ids": [],
+          "basis": "Reads selected source and test ranges for final review.",
+          "exit_code": 0
+        }
+      ],
+      "repair_assessment": {
+        "classification": "preproduction_test_failure_sequence",
+        "implementation_repair_count": 0,
+        "evidence": {
+          "preproduction_test_only_change_item_ids": [
+            "item_12"
+          ],
+          "failing_check_item_ids": [
+            "item_9",
+            "item_13"
+          ],
+          "first_production_edit_item_id": "item_14",
+          "later_passing_check_item_ids": [
+            "item_15",
+            "item_16"
+          ]
+        },
+        "basis": "The baseline and added-test failures precede the first production edit; later checks pass after it. The formatting-check failure is excluded."
+      },
+      "timing": {
+        "agent_wall_seconds": 79.120998,
+        "index_wall_seconds": null,
+        "index_inclusive_wall_seconds": 79.120998,
+        "billing": "unknown"
+      },
+      "tokens": {
+        "input_tokens": 271838,
+        "cached_input_tokens": 237568,
+        "uncached_input_tokens": 34270,
+        "output_tokens": 3769
+      },
+      "trace_consistency": {
+        "log_event_lines": 41,
+        "metrics_event_count": 41,
+        "mcp_completed_items_in_log": 0,
+        "metrics_mcp_call_count": 0,
+        "command_completed_items_in_log": 15,
+        "metrics_command_count": 15,
+        "invalid_json_lines": 0,
+        "all_started_items_completed": true
+      },
+      "input_hash_checks": {
+        "attempt_raw_sha256_matches_source_review": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "c9ee40de6e8c94bda83ca76dd0a3b6a7ede3e42d519ca2914525ff9147a1675a",
+          "recorded_sha256": "c9ee40de6e8c94bda83ca76dd0a3b6a7ede3e42d519ca2914525ff9147a1675a"
+        },
+        "bundle_json_sha256_matches_metadata_and_source_review": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "e335b0c86441892aa0c966bb19b1ea24cf460459c5b1291d119d3ef1337dc09d",
+          "metadata_sha256": "e335b0c86441892aa0c966bb19b1ea24cf460459c5b1291d119d3ef1337dc09d",
+          "source_review_sha256": "e335b0c86441892aa0c966bb19b1ea24cf460459c5b1291d119d3ef1337dc09d"
+        },
+        "prompt_sha256_matches_outbound_prompt": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "f1dafaebbb3a0103e13108eccaf833f967f800fda084b2a9e7875b9568e0b5b5",
+          "recorded_sha256": "f1dafaebbb3a0103e13108eccaf833f967f800fda084b2a9e7875b9568e0b5b5"
+        },
+        "manifest_sha256_matches_campaign_and_review": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "542016a1019cb60786a6b41d3eca4802bf34cadc11fe377e0cd60aec2cb4e049",
+          "attempt_sha256": "542016a1019cb60786a6b41d3eca4802bf34cadc11fe377e0cd60aec2cb4e049",
+          "campaign_sha256": "542016a1019cb60786a6b41d3eca4802bf34cadc11fe377e0cd60aec2cb4e049",
+          "receipt_sha256": "542016a1019cb60786a6b41d3eca4802bf34cadc11fe377e0cd60aec2cb4e049"
+        },
+        "campaign_runner_sha256_matches_retained_script": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "9dc440ce952cf622bfc77275bbf97d6a2fd02c6ad238d9f933bfab2e3a91f594",
+          "recorded_sha256": "9dc440ce952cf622bfc77275bbf97d6a2fd02c6ad238d9f933bfab2e3a91f594"
+        },
+        "runtime_bindings_hash_records_match": {
+          "checked": true,
+          "matches": true,
+          "recorded_sha256": "f1ee11ebea367e55e8f0808ee90ba11116a9b3f7ae6f1d6495881a41305d719e",
+          "frozen_inputs_sha256": "f1ee11ebea367e55e8f0808ee90ba11116a9b3f7ae6f1d6495881a41305d719e",
+          "retained_file_actual_sha256": "f1ee11ebea367e55e8f0808ee90ba11116a9b3f7ae6f1d6495881a41305d719e"
+        },
+        "grade_sha256_matches_source_review": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "510786d8461acef80fd7d10219ed34f6b2980588ca520e10f2a76d63ab51c999",
+          "receipt_sha256": "510786d8461acef80fd7d10219ed34f6b2980588ca520e10f2a76d63ab51c999"
+        },
+        "seed_digest_matches_source_review_and_unchanged_flag": {
+          "checked": true,
+          "matches": true,
+          "seed_digest": "e0d8d6c9700a1bf4660aa8d759cf31858197e14b937ca93c8c2cca0732fe796f",
+          "receipt_seed_digest": "e0d8d6c9700a1bf4660aa8d759cf31858197e14b937ca93c8c2cca0732fe796f",
+          "seed_unchanged": true
+        },
+        "agent_log_hash_retained": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "3070f966171433708371c9f66532259913b0079b72ce38a1876680441bc56ddb"
+        },
+        "answer_hash_retained": {
+          "checked": true,
+          "matches": true,
+          "actual_sha256": "6c719dab74b2504aa060bc76205ae98c1390cc31247e6c0617b1259d05e93d01"
+        }
+      },
+      "artifact_refs": {
+        "attempt_json": {
+          "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/amended-542016a1/attempts/020-date-fns-native-r2/attempt.json",
+          "sha256": "c9ee40de6e8c94bda83ca76dd0a3b6a7ede3e42d519ca2914525ff9147a1675a"
+        },
+        "bundle_json": {
+          "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/amended-542016a1/attempts/020-date-fns-native-r2/bundle/bundle.json",
+          "sha256": "e335b0c86441892aa0c966bb19b1ea24cf460459c5b1291d119d3ef1337dc09d"
+        },
+        "outbound_prompt": {
+          "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/amended-542016a1/attempts/020-date-fns-native-r2/outbound_prompt.txt",
+          "sha256": "f1dafaebbb3a0103e13108eccaf833f967f800fda084b2a9e7875b9568e0b5b5"
+        },
+        "answer": {
+          "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/amended-542016a1/attempts/020-date-fns-native-r2/evidence/answer.txt",
+          "sha256": "6c719dab74b2504aa060bc76205ae98c1390cc31247e6c0617b1259d05e93d01"
+        },
+        "grade_json": {
+          "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/amended-542016a1/attempts/020-date-fns-native-r2/grade/grade.json",
+          "sha256": "510786d8461acef80fd7d10219ed34f6b2980588ca520e10f2a76d63ab51c999"
+        },
+        "agent_stdout_log": {
+          "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/amended-542016a1/attempts/020-date-fns-native-r2/evidence/agent/stdout.log",
+          "sha256": "3070f966171433708371c9f66532259913b0079b72ce38a1876680441bc56ddb"
+        },
+        "source_review_receipt": {
+          "path": "evals/edit-2026-10-27/results/source-review/date-fns-v2/020-date-fns-native-r2.json",
+          "sha256": "227279f2a1338943b484042da776d7b5db09cb963725ac1f3266c940d5a5d8d8"
+        }
+      },
+      "source_review_independent_tests": {
+        "status": "passed",
+        "test_files_passed": 2,
+        "tests_passed": 11,
+        "exit_status": 0,
+        "stdout": {
+          "path": "logs/020-date-fns-native-r2-added-tests.stdout.log",
+          "sha256": "f71e91002b7b5117c42e7e370b0d45af08df0c77bcb0687e4422662ea02b9c9a"
+        }
+      }
+    }
+  ],
+  "watcher_freshness_refusal_review": {
+    "trial": {
+      "slot": 19,
+      "item_id": "item_45",
+      "tool": "check_edit"
+    },
+    "observed_tool_status": "failed",
+    "json_rpc_or_transport_error": false,
+    "result_error_flag": false,
+    "exact_result_text": "Could not establish a fresh index for '/workspace/project': another watcher refresh failed during recovery (Failed to reconcile workspace watches: Failed to initialize notify watcher: No path was found. about [\"/workspace/project/.codex\"]); it will be retried on the next tool call. Run `code-kb scan --root /workspace/project` to rebuild the index.",
+    "recovery": {
+      "next_check_edit_item_id": "item_47",
+      "next_tool_status": "completed",
+      "basis": "The next check_edit call returned normally and reported no symbol-shape changes."
+    },
+    "cause_assessment": "The missing non-root .codex watch path is consistent with the known vanished-directory registration race. The trace has no raw filesystem event timing, so it does not prove the exact trigger; no debouncer-cancellation cause is inferred.",
+    "frozen_study_runtime": {
+      "source_commit": "70a2c9b3769ceeb7c4f442a19cb410375168b6c0",
+      "binary_sha256": "d50d77812c0b9aad04b38b31c63b71df7768d0c44273b6d97a7e4a15a37b2127",
+      "watcher_source_sha256": "85f04abb9669ce6ed9a147fc2ca6569f5c201b35d584b4282fb229582dabdf2e",
+      "identity_path": "evals/edit-2026-10-27/results/controls/runtime/identity.json",
+      "watcher_source_sha256_at_frozen_commit": "85f04abb9669ce6ed9a147fc2ca6569f5c201b35d584b4282fb229582dabdf2e",
+      "registration_rewalk_retry_present": false
+    },
+    "current_runtime_source": {
+      "source_commit": "89991f034ac2635d43eca2ccd41fd51247661c80",
+      "worktree_head": "26a0f630d41b615b33f88a63bddfce760a1bb304",
+      "registration_rewalk_retry_present": true,
+      "change_summary": "A failed watch registration for a discovered non-root directory is retried once after metadata confirms the directory disappeared, then registrations are walked again.",
+      "targeted_regression": "registration_rewalks_when_a_discovered_directory_disappears",
+      "source": {
+        "path": "crates/code-kb-core/src/watcher.rs",
+        "line": 1099,
+        "sha256_at_runtime_commit": "7bbb3b736e966096dfa7d2793d8e7dfad9496b04d3b2194408845cf7c7acdaaa"
+      },
+      "linux_pass_evidence": {
+        "path": ".razorback/completed-edit-dispatch/task4-code-kb-core.log",
+        "sha256": "ab6e6a1cbb3f895d6410cbc4345f99a7de69dece8576947933f6ff294877e67b",
+        "line": 519
+      },
+      "windows_pass_evidence": {
+        "path": ".razorback/completed-edit-dispatch/windows-backport-final-rust.log",
+        "sha256": "f4f08959eacbf9235ccab7646d4d85fe4b00c129595a79c66560c4d4b4862275",
+        "line": 722,
+        "source_commit": "89991f034ac2635d43eca2ccd41fd51247661c80",
+        "recorded_rust_passed": 1878
+      }
+    }
+  },
+  "summary": {
+    "completed_trials": 4,
+    "command_count": 49,
+    "mcp_call_count": 59,
+    "code_kb_adopted_trials": 2,
+    "tool_counts": {
+      "blast_radius": 8,
+      "check_edit": 4,
+      "file_skeleton": 19,
+      "find_references": 4,
+      "get_symbol_body": 17,
+      "get_symbol_context": 4,
+      "lookup_symbol": 3
+    },
+    "mcp_outcome_counts": {
+      "ambiguous_selection": 4,
+      "capped_response": 7,
+      "empty_miss": 2,
+      "freshness_refusal": 1,
+      "ordinary_result": 45
+    },
+    "json_rpc_or_transport_error_events": 0,
+    "operational_result_error_events": 1,
+    "ambiguous_selection_responses": 4,
+    "truly_empty_or_no_result_responses": 2,
+    "capped_responses": 7,
+    "genuine_fallback_count": 0,
+    "shell_command_classifications": {
+      "direct_native_structural_lookup": 12,
+      "non_navigation_edit_test_build": 23,
+      "non_navigation_other": 7,
+      "permitted_literal_search": 1,
+      "unknown": 6
+    },
+    "confirmed_implementation_repair_count": 0,
+    "source_acceptance": {
+      "accepted": 4
+    },
+    "independent_added_tests": {
+      "status": "passed",
+      "test_files_passed": 7,
+      "tests_passed": 59
+    }
+  }
+}

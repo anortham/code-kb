@@ -312,6 +312,9 @@ Windows NTFS at `f355247` passes 1,865 Rust tests across 37 suites, all 42 langu
 
 ## Completed-edit preparation
 
+This section records the controls before scored dispatch. The completed results
+are reported in the [comparison report](../../evals/edit-2026-10-27/results/report.md).
+
 The next evaluation now has six pinned, larger repositories: SQLGlot (Python),
 MiniJinja (Rust), HCL (Go), date-fns (TypeScript), Commons Lang (Java), and
 Noda Time (C#). Each case requires changes in at least two production files.
@@ -388,3 +391,54 @@ records 266 passing Python tests, a real validator run without spending fields,
 and 73 fake-provider dispatches without an approval file. The 24-cell manifest
 has updated evaluator/protocol hashes and explicit lineage; original scored
 results and raw runtime evidence are unchanged.
+
+
+## Completed-edit results and current direction
+
+The [24-trial comparison](../../evals/edit-2026-10-27/results/report.md) is complete,
+including four TypeScript cells that originally stopped before provider
+exposure. No completed trial was rerun. Independent source review and corrected
+behavioral checks accept 12/12 code-kb patches and 10/12 native patches. Both
+native rejections omit existing C# purity annotations; all four TypeScript
+patches pass, including 59 independently executed added tests. This small,
+case-concentrated difference does not establish a general success-rate gain.
+
+The code-kb workflow uses more tokens: 8,506,310 input tokens versus 3,883,381,
+including cached input, and 673,094 versus 383,221 excluding cached input.
+Across eleven complete pairs it takes a mean 66.67 seconds longer including
+indexing, with a median difference of 31.83 seconds. The complete workflow and
+guidance are the treatment. These results do not establish task-wide savings
+or justify a global routing change. The README now distinguishes smaller
+individual responses from completed-task measurements.
+
+The next product priority is reducing repeated navigation and context overhead
+while preserving accepted edits. Use these traces for development, then test
+lighter guidance on untouched tasks across language families. Include literal
+and configuration changes and framework entry points that this sample does
+not cover. Keep the seven-tool interface and all 42 language IDs; add a tool
+only when a failed workflow shows the missing capability. The existing cases
+become regression evidence after tuning, rather than a fresh holdout.
+
+Verification also closed two watcher defects. A discovered non-root directory
+can disappear before registration; a metadata-confirmed missing path now
+triggers one bounded rewalk regardless of the backend's error variant. Native
+Windows events also proved that the pinned debouncer canceled rapid creation
+and removal even after a concurrent scan indexed the file. A narrow upstream
+backport preserves the removal without upgrading the backend or adding polling.
+Both fixes apply to every scanned language.
+
+At source `89991f0`, Linux passes 1,906 Rust tests and Windows passes 1,878,
+including all 42 language fixtures, plus Clippy, formatting and locked release.
+The unchanged Python suite passes 301. Ten consecutive Windows move/delete
+regressions pass, and the live server holds 112 handles through 20 subtree
+churn cycles. Linux retains three watches for the 1,000-ignored-directory
+fixture. The [runtime archive](../../evals/edit-2026-10-27/results/controls/runtime-backport/identity.json)
+retains failed attempts and passing verification separately. Shutdown exceeded
+the wrapper's wait period; the recorded follow-up confirms the VM is off.
+The frozen study engine is unchanged by these later runtime fixes.
+
+Financial approval gates, caps and receipts are removed from the project
+evaluators and installed Codex/Claude guidance. The paired project guidance
+explicitly forbids reintroducing them. Experimental schedules, timeouts and
+input-isolation checks remain. All task commits are local; no push, release or
+global routing change was made.

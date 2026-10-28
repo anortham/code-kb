@@ -1,0 +1,63 @@
+{
+  "after_blob_entries": 15,
+  "after_blob_unique_hashes": 9,
+  "archive_bytes": 205649,
+  "archive_path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/supplemental-attempts-542016a1-ba529ee7d4185b1d.tar.gz",
+  "archive_sha256": "ba529ee7d4185b1dd5021d5f32e0a37adc904504f7ed1cd21a7dfef88e5ff0b4",
+  "attempt_ids": [
+    "007-date-fns-native-r1",
+    "008-date-fns-code-kb-r1",
+    "019-date-fns-code-kb-r2",
+    "020-date-fns-native-r2"
+  ],
+  "attempts_finished": 4,
+  "before_blob_unique_hashes": 2,
+  "before_file_references": 8,
+  "campaign_root": "cache campaign/amended-542016a1",
+  "campaign_runner_sha256": "9dc440ce952cf622bfc77275bbf97d6a2fd02c6ad238d9f933bfab2e3a91f594",
+  "capture_bundle_count": 4,
+  "classification": "curated local supplemental TypeScript attempts and replayable file captures",
+  "created_utc": "2026-10-28T00:06:47+00:00",
+  "dirty_readme_excluded": true,
+  "file_level_capture_replayable": true,
+  "final_controller_log_member": "evidence/controller/supplemental-typescript-campaign.log",
+  "frozen_inputs_sha256": "f73d04e8a7399849a8c558a05706d499de1c6cb02bf2147efa0a42c3bda41000",
+  "index_path": "evals/edit-2026-10-27/results/controls/supplemental-attempts/index.json",
+  "index_sha256": "ace989b89b0032330b92c0703bb5a1ef9eb4f2fb28378dd0d7d8ea7832bad56d",
+  "manifest_sha256": "542016a1019cb60786a6b41d3eca4802bf34cadc11fe377e0cd60aec2cb4e049",
+  "member_count": 120,
+  "omissions": [
+    "outbound_prompt.txt snapshots",
+    "attempt worktrees and grade/work hidden project copies",
+    "agent-project and canonical seed trees",
+    "credentials, private raw data, profiles, auth files, dependency/build caches",
+    "source-review and metrics evidence owned by another worker"
+  ],
+  "pre_provider_setup_failure_member": "evidence/setup/supplemental-typescript-preflight-relative-path.log",
+  "preserved_existing_archives": [
+    {
+      "path": "evals/edit-2026-10-27/results/controls/runtime/raw.tar.gz",
+      "sha256": "ac3145c50b8fed29412c0f2770f7109da110deb7073b866d4bb34d01ca942b77"
+    },
+    {
+      "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/original-attempts-2ec7fad2-v2.tar.gz",
+      "sha256": "97883246a802432d015f5a2adffbbf89727cc97630746baa47fad1b47a6437d6"
+    }
+  ],
+  "provider_calls_during_archive": 0,
+  "redactor_changed_input_count": 1,
+  "redactor_delta_disposition": {
+    "credential_url_match": false,
+    "disposition": "Exact public runner source retained. Generic assignment matching rewrites the Python dict-comprehension mapping token key: at line 385. The line is code, not a credential assignment.",
+    "original_sha256": "9dc440ce952cf622bfc77275bbf97d6a2fd02c6ad238d9f933bfab2e3a91f594",
+    "path": "scripts/completed_edit_campaign.py",
+    "private_key_match": false,
+    "provider_token_match": false,
+    "redactor_output_sha256": "bceb92a22c35cccbdf561d78bf36b51200bd398dc9597ac872dea5c163a43b3a"
+  },
+  "redactor_input_count": 120,
+  "redactor_sha256": "09c521c0f39bf83c1f877edf7fd1799b9eb7df3780e9c99c52707d6d3620c36f",
+  "repository_head": "26a0f630d41b615b33f88a63bddfce760a1bb304",
+  "runtime_bindings_sha256": "f1ee11ebea367e55e8f0808ee90ba11116a9b3f7ae6f1d6495881a41305d719e",
+  "schema": 1
+}

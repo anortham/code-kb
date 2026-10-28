@@ -1,0 +1,132 @@
+{
+  "schema": 1,
+  "schedule_index": 8,
+  "case_id": "date-fns",
+  "arm": "code-kb",
+  "repeat": 1,
+  "raw_attempt_sha256": "2965ef268b1a0720eb15aacd16410c63e7f60a0702c6b7c7fdacb02aac057242",
+  "bundle_json_sha256": "06d944fa937614b80ad47f16535088d4d0452b62042dbddda4a808380bae7a2e",
+  "replay_digest": "f26f0f9a2710798b480abfdae13438d62e544e53880b7f31bdbb14b0e22c3d69",
+  "seed_digest": "e0d8d6c9700a1bf4660aa8d759cf31858197e14b937ca93c8c2cca0732fe796f",
+  "source_review": "passed",
+  "disposition": null,
+  "findings": [
+    {
+      "finding": "The production patch applies the requested timezone context to both business-day helpers. All four patches have identical production content: addBusinessDays parses with options?.in and differenceInBusinessDays normalizes both inputs with that context before counting calendar days. Passing no context preserves the original paths.",
+      "evidence": [
+        "A fresh public replay matched the captured bundle final digest; the frozen trial seed matched its seed digest.",
+        "code-kb skeleton/body review of both production functions on the fresh replay showed the context passed at the input-construction/normalization boundary, before weekday and calendar-day logic.",
+        "All four bundles have the same before/after SHA-256 values for both production files; their only production changes are those two parameter additions."
+      ]
+    },
+    {
+      "finding": "The added tests cover timezone-local midnight boundaries in Singapore and New York, forward and backward business-day shifts, full workweeks and zero offsets, input forms, reversed difference order, weekend transitions, and a daylight-saving boundary. Each patch\u2019s added test files pass independently.",
+      "evidence": [
+        "Added files: pkgs/core/src/businessDayContext/test.ts.",
+        "Fresh offline public replay ran 16 tests in 1 Vitest test file(s); command exit status 0 and no expected output markers were missing.",
+        "Verbose output SHA-256: bd397739c0bdda34357c402363bed783f9e68ff27238000506aa2ed5bbef1a2c; retained at logs/008-date-fns-code-kb-r1-added-tests.stdout.log.",
+        "Offline dependency materialization exited 0 for each of its two frozen setup commands: [{\"command_id\":\"materialize_pnpm_store\",\"exit_status\":0,\"passed\":true},{\"command_id\":\"materialize_workspace_dependencies\",\"exit_status\":0,\"passed\":true}]."
+      ],
+      "verification_status": "independent added public tests passed"
+    },
+    {
+      "finding": "Protected inputs are unchanged in both replay and after the independent test run.",
+      "evidence": [
+        "The canonical protected-path snapshot contains 4267 entries and has matching before/after SHA-256 11677a14ca8a2498426a82e665846ae22b3f8a2fb627188f7d038180c94219ba.",
+        "The trusted behavioral grade also reports unchanged protection and passing public and hidden checks; no hidden test source was opened during this source review."
+      ]
+    }
+  ],
+  "changed_production_files": [
+    "pkgs/core/src/addBusinessDays/index.ts",
+    "pkgs/core/src/differenceInBusinessDays/index.ts"
+  ],
+  "added_test_files": [
+    "pkgs/core/src/businessDayContext/test.ts"
+  ],
+  "grade_evidence": {
+    "path": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/campaign/amended-542016a1/attempts/008-date-fns-code-kb-r1/grade/grade.json",
+    "sha256": "8853bab1dedc27e48dc402d49ee009ac15d9ef656fbc9194971bb2562b1607bd",
+    "behavioral_pass": true,
+    "source_review_before_this_receipt": "pending",
+    "protection_status": "unchanged",
+    "public_passed": true,
+    "hidden_passed": true
+  },
+  "independent_added_test_run": {
+    "status": "passed",
+    "command": {
+      "id": "independent_added_public_tests_final",
+      "argv": [
+        "/usr/bin/env",
+        "PATH=/tools/node/bin:/usr/bin:/bin",
+        "/tools/node/bin/pnpm",
+        "vitest",
+        "run",
+        "--project",
+        "main",
+        "--reporter",
+        "verbose",
+        "src/businessDayContext/test.ts"
+      ],
+      "cwd": "pkgs/core",
+      "timeout_seconds": 600,
+      "network": false
+    },
+    "runtime_setup": [
+      {
+        "command_id": "materialize_pnpm_store",
+        "exit_status": 0,
+        "passed": true
+      },
+      {
+        "command_id": "materialize_workspace_dependencies",
+        "exit_status": 0,
+        "passed": true
+      }
+    ],
+    "test_files_passed": 1,
+    "tests_passed": 16,
+    "exit_status": 0,
+    "expected_output_missing": [],
+    "stdout": {
+      "path": "logs/008-date-fns-code-kb-r1-added-tests.stdout.log",
+      "sha256": "bd397739c0bdda34357c402363bed783f9e68ff27238000506aa2ed5bbef1a2c"
+    },
+    "stderr": {
+      "path": "logs/008-date-fns-code-kb-r1-added-tests.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "initial_marker_check": {
+      "command_id": "independent_added_public_tests",
+      "exit_status": 0,
+      "process_passed": true,
+      "wrapper_passed": false,
+      "expected_output": [
+        "adds in %s from %s by %i days",
+        "compares calendar days in %s: %s and %s",
+        "forwards the subtraction context",
+        "Test Files",
+        "1 passed"
+      ],
+      "expected_output_missing": [
+        "adds in %s from %s by %i days",
+        "compares calendar days in %s: %s and %s"
+      ],
+      "test_files_passed": 1,
+      "tests_passed": 16,
+      "stdout": {
+        "path": "logs/008-date-fns-code-kb-r1-initial-marker-check.stdout.log",
+        "sha256": "d106c5db138fd48c177929cb8557a0169c69239b41c53717ee54ce2fa9228d6c"
+      },
+      "stderr": {
+        "path": "logs/008-date-fns-code-kb-r1-initial-marker-check.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "reason": "The initial wrapper expected literal parameterized test-name templates. Vitest expanded those templates with concrete values, so marker checks missed them although the selected tests all passed and the process exited 0. A later summary-marker run passed."
+    }
+  },
+  "manifest_sha256": "542016a1019cb60786a6b41d3eca4802bf34cadc11fe377e0cd60aec2cb4e049",
+  "runtime_bindings_sha256": "f1ee11ebea367e55e8f0808ee90ba11116a9b3f7ae6f1d6495881a41305d719e",
+  "case_sha256": "4244c3c81603a09b13264f2f5b04d60047f60c1d5139c3f84a707ccbb576f62d"
+}

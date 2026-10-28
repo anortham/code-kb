@@ -53,9 +53,9 @@
 **What to build:** The actual comparison report, not a readiness-only claim.
 
 - [x] Real non-task calibration proves private command denial, project/state writes, expected trace and cleanup without task leakage. Three calls are retained in `results/controls/calibration/`: one missing-companion startup failure, then a passing native and code-kb call. There were no scored task exposures.
-- [ ] All 24 scheduled trials complete or retain classified actual blockers/outcomes; no result replacement.
-- [ ] Every patch is independently graded and source-reviewed before acceptance; compare paired acceptance/time/token outcomes honestly.
-- [ ] Report, raw evidence, brief and local commits are complete and reconciled; no push/release/global routing change.
+- [x] All 24 scheduled trials complete or retain classified actual blockers/outcomes; no result replacement.
+- [x] Every patch is independently graded and source-reviewed before acceptance; compare paired acceptance/time/token outcomes honestly.
+- [x] Report, raw evidence, brief and local commits are complete and reconciled; no push/release/global routing change.
 
 ## Source-redactor correction before calibration
 
@@ -86,7 +86,7 @@ Compiler/test work below waits until the original timed schedule finishes. Finis
 - [x] Recovery metadata survives a grader interruption; failed sanitization does not delete the only retained logs. Redactor selection uses the validated artifact rather than a private versioned plugin path.
 - [x] A deterministic watcher regression covers disappearance between discovery and registration. Confirm `NotFound`, retry the walk once, and preserve root/permission/repeated-churn failures. Verify the affected Rust scope and final Linux/Windows checks; keep the frozen trial engine unchanged.
 - [x] All-six fresh readiness, affected tests and full Python suite pass before a v2 freeze. Regrade all four MiniJinja and four C# patches uniformly, with no model calls.
-- [ ] Execute only four previously unexposed TypeScript cells with v2 inputs; retain original setup failures and disclose amended order. Complete all source/new-test reviews, original/corrected reporting and local commits.
+- [x] Execute only four previously unexposed TypeScript cells with v2 inputs; retain original setup failures and disclose amended order. Complete all source/new-test reviews, original/corrected reporting and local commits.
 
 ## Task 4: Preserve removals during concurrent scans
 
@@ -123,3 +123,17 @@ The [runtime archive](../../evals/edit-2026-10-27/results/controls/runtime-backp
 retains failed attempts, source and binary hashes, cleanup evidence, all passing
 checks and confirmed VM shutdown. The wrapper exceeded its 120-second shutdown
 wait after every check passed; the separate follow-up confirms the VM is off.
+
+## Completed comparison
+
+The original 20 trials and four supplemental TypeScript cells are complete.
+All four new patches pass source review and their 59 added tests. Effective
+acceptance is 10/12 native and 12/12 code-kb. Both rejected native patches omit
+C# purity annotations. The original strict grades and setup stops remain intact.
+The [report](../../evals/edit-2026-10-27/results/report.md) records higher token
+use and mean 66.67-second indexing-inclusive overhead for code-kb across eleven
+complete pairs. Slot 15 timing remains unknown. The supplemental trace review
+retains six mixed/unknown shell classifications and one recovered freshness
+refusal; its exact race trigger is unproven. The separate supplemental archive
+contains 120 verified members. No further model calls, push, release or routing
+change is part of this completed slice.

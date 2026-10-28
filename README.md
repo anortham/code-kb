@@ -2,9 +2,17 @@
 
 > **Interactive Showcase & Benchmarks:** [https://anortham.github.io/code-kb/](https://anortham.github.io/code-kb/)
 
-`code-kb` is a fast, lightweight code-intelligence engine and Model Context Protocol (MCP) server designed specifically for AI coding agents. 
+`code-kb` is a code-intelligence engine and Model Context Protocol (MCP) server for AI coding agents.
 
-Backed by the rich AST fact tables produced by [`julie-extractors`](https://github.com/anortham/julie-extractors), `code-kb` provides progressive disclosure, semantic symbol navigation, and surgical context slicing—enabling agents to navigate and understand codebases with responses **61–99% smaller than a full-file read** in [measured examples](docs/reviews/2026-09-26-project-evaluation.md#what-the-token-measurements-establish), without burning context on full file reads or noisy text grep. Agents edit with their native filesystem tools; code-kb automatically refreshes indexed files after filesystem changes.
+Backed by [`julie-extractors`](https://github.com/anortham/julie-extractors),
+code-kb returns file outlines, symbol bodies, reference evidence and edit checks.
+Individual responses are **61–99% smaller than a full-file read** in
+[measured examples](docs/reviews/2026-09-26-project-evaluation.md#what-the-token-measurements-establish).
+Those comparisons measure response size. The
+[completed-edit comparison](evals/edit-2026-10-27/results/report.md) measures
+accepted patches, observed tokens and time against native tools.
+Agents edit with their native filesystem tools; code-kb automatically refreshes
+indexed files after filesystem changes.
 
 Support covers every language reported by the pinned Julie extractor, currently 42 code, markup,
 configuration, and data languages. Real-extractor fixtures check each language; advanced checks
@@ -15,9 +23,10 @@ for the fixture inventory and remaining limits.
 
 ## Why code-kb?
 
-Traditional AI coding agents burn massive amounts of context loading entire source files into their prompt windows just to inspect a single type signature or implementation detail. 
+When a task needs one signature or implementation, a file outline or symbol body can supply that context without loading the whole file.
 
-`code-kb` solves this with a **progressive disclosure** architecture:
+`code-kb` exposes progressively more detail:
+
 1. **Repository Orientation (`file_skeleton` on a folder):** Understand directory structures and key exports in a few hundred tokens.
 2. **File Skeletons (`file_skeleton`):** Inspect function signatures, types, traits, and docstrings with implementation bodies stripped.
 3. **Symbol Lookup & Discovery (`lookup_symbol`):** Instant exact/prefix identifier lookups. A query that names no symbol exactly also gets ranked conceptual matches over names, signatures, and docstrings; substrings inside identifiers are found (`sha256` finds `parseSha256Sidecar`).

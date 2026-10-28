@@ -1,0 +1,241 @@
+{
+  "schema": 1,
+  "case_id": "date-fns",
+  "manifest_sha256": "542016a1019cb60786a6b41d3eca4802bf34cadc11fe377e0cd60aec2cb4e049",
+  "case_sha256": "4244c3c81603a09b13264f2f5b04d60047f60c1d5139c3f84a707ccbb576f62d",
+  "runtime_bindings_sha256": "f1ee11ebea367e55e8f0808ee90ba11116a9b3f7ae6f1d6495881a41305d719e",
+  "runtime_tools": {
+    "node": "/home/murphy/.local/share/mise/installs/node/24.18.1"
+  },
+  "dependency_inputs": {
+    "pnpm-store": "/home/murphy/.cache/code-kb-completed-edit/2026-10-27-fe7ede0/inputs/dependencies_date-fns_pnpm-store"
+  },
+  "shared_production_changes": {
+    "pkgs/core/src/addBusinessDays/index.ts": {
+      "before_sha256": "a82b1d728f08c0d7d722bdd7d49df90613d9d8011e9147952482b1886843cfd7",
+      "after_sha256": "ca1a5e6356c42b354b696683daa12334fff438ba2650026700956d313fcc2caa",
+      "review": "The only behavior change is constructing the input with options?.in. With no context, the argument remains undefined and matches the original toDate(date) behavior."
+    },
+    "pkgs/core/src/differenceInBusinessDays/index.ts": {
+      "before_sha256": "c3454012b49cdf0e9ee15be1598d6a14eaff412f6398647b22d7d7b39343010e",
+      "after_sha256": "21388be3c82415c3a7df6de3fd01595593d4c60af75cadd1ab80d6ea71899ad1",
+      "review": "The only behavior change is normalizing both inputs with options?.in before calendar-day comparison. Without a context, this is equivalent to the original normalizeDates(undefined, ...)."
+    }
+  },
+  "protected_entries": 4267,
+  "protected_before_sha256": "11677a14ca8a2498426a82e665846ae22b3f8a2fb627188f7d038180c94219ba",
+  "protected_after_sha256": "11677a14ca8a2498426a82e665846ae22b3f8a2fb627188f7d038180c94219ba",
+  "results": [
+    {
+      "schedule_index": 7,
+      "slot": "007-date-fns-native-r1",
+      "arm": "native",
+      "repeat": 1,
+      "source_review": "passed",
+      "bundle_final_digest": "890e7fe40c1b525f164bcb0d826976f7b3835311b102a026db20e88d45db40b9",
+      "production_file_sha256": {
+        "pkgs/core/src/addBusinessDays/index.ts": "ca1a5e6356c42b354b696683daa12334fff438ba2650026700956d313fcc2caa",
+        "pkgs/core/src/differenceInBusinessDays/index.ts": "21388be3c82415c3a7df6de3fd01595593d4c60af75cadd1ab80d6ea71899ad1"
+      },
+      "seed_matches": true,
+      "bundle_matches": true,
+      "protected_path_count": 4267,
+      "protected_before_sha256": "11677a14ca8a2498426a82e665846ae22b3f8a2fb627188f7d038180c94219ba",
+      "protected_after_sha256": "11677a14ca8a2498426a82e665846ae22b3f8a2fb627188f7d038180c94219ba",
+      "runtime_setup_passed": true,
+      "test_command_exit_status": 0,
+      "test_files_passed": 2,
+      "tests_passed": 17,
+      "stdout_path": "logs/007-date-fns-native-r1-added-tests.stdout.log",
+      "stdout_sha256": "4fefc5ae772ce98f7928a56c526cfee4b0f8e5864154047d2331aee3f3830f2f",
+      "stderr_path": "logs/007-date-fns-native-r1-added-tests.stderr.log",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "initial_marker_check": {
+        "command_id": "independent_added_public_tests",
+        "exit_status": 0,
+        "process_passed": true,
+        "wrapper_passed": false,
+        "expected_output": [
+          "shifts %s local days from %s by %i",
+          "compares %s calendar days between",
+          "Test Files",
+          "2 passed"
+        ],
+        "expected_output_missing": [
+          "shifts %s local days from %s by %i",
+          "compares %s calendar days between"
+        ],
+        "test_files_passed": 2,
+        "tests_passed": 17,
+        "stdout": {
+          "path": "logs/007-date-fns-native-r1-initial-marker-check.stdout.log",
+          "sha256": "040c23c7db4aec8e404385f08785d5c28583085cb4a38734a19c7130adad849c"
+        },
+        "stderr": {
+          "path": "logs/007-date-fns-native-r1-initial-marker-check.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "reason": "The initial wrapper expected literal parameterized test-name templates. Vitest expanded those templates with concrete values, so marker checks missed them although the selected tests all passed and the process exited 0. A later summary-marker run passed."
+      }
+    },
+    {
+      "schedule_index": 8,
+      "slot": "008-date-fns-code-kb-r1",
+      "arm": "code-kb",
+      "repeat": 1,
+      "source_review": "passed",
+      "bundle_final_digest": "f26f0f9a2710798b480abfdae13438d62e544e53880b7f31bdbb14b0e22c3d69",
+      "production_file_sha256": {
+        "pkgs/core/src/addBusinessDays/index.ts": "ca1a5e6356c42b354b696683daa12334fff438ba2650026700956d313fcc2caa",
+        "pkgs/core/src/differenceInBusinessDays/index.ts": "21388be3c82415c3a7df6de3fd01595593d4c60af75cadd1ab80d6ea71899ad1"
+      },
+      "seed_matches": true,
+      "bundle_matches": true,
+      "protected_path_count": 4267,
+      "protected_before_sha256": "11677a14ca8a2498426a82e665846ae22b3f8a2fb627188f7d038180c94219ba",
+      "protected_after_sha256": "11677a14ca8a2498426a82e665846ae22b3f8a2fb627188f7d038180c94219ba",
+      "runtime_setup_passed": true,
+      "test_command_exit_status": 0,
+      "test_files_passed": 1,
+      "tests_passed": 16,
+      "stdout_path": "logs/008-date-fns-code-kb-r1-added-tests.stdout.log",
+      "stdout_sha256": "bd397739c0bdda34357c402363bed783f9e68ff27238000506aa2ed5bbef1a2c",
+      "stderr_path": "logs/008-date-fns-code-kb-r1-added-tests.stderr.log",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "initial_marker_check": {
+        "command_id": "independent_added_public_tests",
+        "exit_status": 0,
+        "process_passed": true,
+        "wrapper_passed": false,
+        "expected_output": [
+          "adds in %s from %s by %i days",
+          "compares calendar days in %s: %s and %s",
+          "forwards the subtraction context",
+          "Test Files",
+          "1 passed"
+        ],
+        "expected_output_missing": [
+          "adds in %s from %s by %i days",
+          "compares calendar days in %s: %s and %s"
+        ],
+        "test_files_passed": 1,
+        "tests_passed": 16,
+        "stdout": {
+          "path": "logs/008-date-fns-code-kb-r1-initial-marker-check.stdout.log",
+          "sha256": "d106c5db138fd48c177929cb8557a0169c69239b41c53717ee54ce2fa9228d6c"
+        },
+        "stderr": {
+          "path": "logs/008-date-fns-code-kb-r1-initial-marker-check.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "reason": "The initial wrapper expected literal parameterized test-name templates. Vitest expanded those templates with concrete values, so marker checks missed them although the selected tests all passed and the process exited 0. A later summary-marker run passed."
+      }
+    },
+    {
+      "schedule_index": 19,
+      "slot": "019-date-fns-code-kb-r2",
+      "arm": "code-kb",
+      "repeat": 2,
+      "source_review": "passed",
+      "bundle_final_digest": "e853107b74c453d1812502c341d131db25670df79f05b9026749493311a3183e",
+      "production_file_sha256": {
+        "pkgs/core/src/addBusinessDays/index.ts": "ca1a5e6356c42b354b696683daa12334fff438ba2650026700956d313fcc2caa",
+        "pkgs/core/src/differenceInBusinessDays/index.ts": "21388be3c82415c3a7df6de3fd01595593d4c60af75cadd1ab80d6ea71899ad1"
+      },
+      "seed_matches": true,
+      "bundle_matches": true,
+      "protected_path_count": 4267,
+      "protected_before_sha256": "11677a14ca8a2498426a82e665846ae22b3f8a2fb627188f7d038180c94219ba",
+      "protected_after_sha256": "11677a14ca8a2498426a82e665846ae22b3f8a2fb627188f7d038180c94219ba",
+      "runtime_setup_passed": true,
+      "test_command_exit_status": 0,
+      "test_files_passed": 2,
+      "tests_passed": 15,
+      "stdout_path": "logs/019-date-fns-code-kb-r2-added-tests.stdout.log",
+      "stdout_sha256": "16e09c19a5331772eea0dac352f93b246fd9fccd0e20ba0a37ef45d3b84132b0",
+      "stderr_path": "logs/019-date-fns-code-kb-r2-added-tests.stderr.log",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "initial_marker_check": {
+        "command_id": "independent_added_public_tests",
+        "exit_status": 0,
+        "process_passed": true,
+        "wrapper_passed": false,
+        "expected_output": [
+          "shifts %s input %s by %i business days",
+          "compares calendar days in %s between %s and %s",
+          "Test Files",
+          "2 passed"
+        ],
+        "expected_output_missing": [
+          "shifts %s input %s by %i business days",
+          "compares calendar days in %s between %s and %s"
+        ],
+        "test_files_passed": 2,
+        "tests_passed": 15,
+        "stdout": {
+          "path": "logs/019-date-fns-code-kb-r2-initial-marker-check.stdout.log",
+          "sha256": "a0d0309cebd15389291b466fe1a958bf3848446f160e871cf5de42f297cdcedc"
+        },
+        "stderr": {
+          "path": "logs/019-date-fns-code-kb-r2-initial-marker-check.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "reason": "The initial wrapper expected literal parameterized test-name templates. Vitest expanded those templates with concrete values, so marker checks missed them although the selected tests all passed and the process exited 0. A later summary-marker run passed."
+      }
+    },
+    {
+      "schedule_index": 20,
+      "slot": "020-date-fns-native-r2",
+      "arm": "native",
+      "repeat": 2,
+      "source_review": "passed",
+      "bundle_final_digest": "4557c887bd048be8419caf75e4c55a815022b9610f44c943597c03dc6af0afa3",
+      "production_file_sha256": {
+        "pkgs/core/src/addBusinessDays/index.ts": "ca1a5e6356c42b354b696683daa12334fff438ba2650026700956d313fcc2caa",
+        "pkgs/core/src/differenceInBusinessDays/index.ts": "21388be3c82415c3a7df6de3fd01595593d4c60af75cadd1ab80d6ea71899ad1"
+      },
+      "seed_matches": true,
+      "bundle_matches": true,
+      "protected_path_count": 4267,
+      "protected_before_sha256": "11677a14ca8a2498426a82e665846ae22b3f8a2fb627188f7d038180c94219ba",
+      "protected_after_sha256": "11677a14ca8a2498426a82e665846ae22b3f8a2fb627188f7d038180c94219ba",
+      "runtime_setup_passed": true,
+      "test_command_exit_status": 0,
+      "test_files_passed": 2,
+      "tests_passed": 11,
+      "stdout_path": "logs/020-date-fns-native-r2-added-tests.stdout.log",
+      "stdout_sha256": "f71e91002b7b5117c42e7e370b0d45af08df0c77bcb0687e4422662ea02b9c9a",
+      "stderr_path": "logs/020-date-fns-native-r2-added-tests.stderr.log",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "initial_marker_check": {
+        "command_id": "independent_added_public_tests",
+        "exit_status": 0,
+        "process_passed": true,
+        "wrapper_passed": false,
+        "expected_output": [
+          "shifts $date by $amount business days in $zone",
+          "compares $earlier and $later as calendar days in $zone",
+          "Test Files",
+          "2 passed"
+        ],
+        "expected_output_missing": [
+          "shifts $date by $amount business days in $zone",
+          "compares $earlier and $later as calendar days in $zone"
+        ],
+        "test_files_passed": 2,
+        "tests_passed": 11,
+        "stdout": {
+          "path": "logs/020-date-fns-native-r2-initial-marker-check.stdout.log",
+          "sha256": "0b39395a331bb7958123418aedbdedf2ba794c3e2b9b8f08b9ddaa0b8bff00cb"
+        },
+        "stderr": {
+          "path": "logs/020-date-fns-native-r2-initial-marker-check.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "reason": "The initial wrapper expected literal parameterized test-name templates. Vitest expanded those templates with concrete values, so marker checks missed them although the selected tests all passed and the process exited 0. A later summary-marker run passed."
+      }
+    }
+  ],
+  "aggregate_test_files_passed": 7,
+  "aggregate_tests_passed": 59
+}
