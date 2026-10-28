@@ -1,0 +1,22 @@
+   Compiling code-kb-core v2.9.1 (C:\work\code-kb\crates\code-kb-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 15.20s
+     Running unittests src\lib.rs (target\debug\deps\code_kb_core-59337428d2b7c646.exe)
+log: /home/murphy/.local/share/win-test/logs/20261028T010201Z-code-kb-2806452.log
+
+running 13 tests
+test watcher::tests::full_event_queue_sets_the_coalesced_reconciliation_signal ... ok
+test watcher::tests::ordinary_index_failure_keeps_existing_acknowledgement_behavior ... ok
+test watcher::tests::registration_failure_cannot_be_acknowledged_by_index_reconciliation ... ok
+test watcher::tests::missing_root_walker_errors_are_not_recoverable ... ok
+test watcher::tests::registration_path_equality_and_hash_share_windows_identity ... ok
+test watcher::tests::file_renames_and_accesses_do_not_trigger_full_reconciliation ... ok
+test watcher::tests::allowed_directory_changes_reconcile_and_ignored_changes_do_not ... ok
+test watcher::tests::registration_rewalks_after_a_registered_walker_entry_disappears ... ok
+test watcher::tests::test_child_files_query_pattern_escaped ... ok
+test watcher::tests::test_drive_root_leading_slash_trimmed ... ok
+test watcher::tests::registration_rewalks_when_a_discovered_directory_disappears ... ok
+test watcher::tests::registration_walker_errors_outside_the_missing_registered_directory_race_stay_errors ... ok
+test watcher::tests::registration_walker_race_shares_the_single_retry_with_watch_failures ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 503 filtered out; finished in 0.05s
+

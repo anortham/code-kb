@@ -442,3 +442,19 @@ evaluators and installed Codex/Claude guidance. The paired project guidance
 explicitly forbids reintroducing them. Experimental schedules, timeouts and
 input-isolation checks remain. All task commits are local; no push, release or
 global routing change was made.
+
+
+## Claude review follow-up
+
+The requested [Claude review](2026-10-27-claude-branch-review.md) reported one
+medium watcher finding. Lead verification confirmed a narrower queued-error
+case for an already-registered directory and fixed it. It preserves the single
+shared retry and continues to surface root, permission, partial, foreign,
+pathless and still-present-path errors. The review's immediate post-watch
+deletion scenario passes on real Linux and Windows native watchers.
+
+At fix source `8b4ca9b`, all 1,910 Linux Rust tests and 103 affected Windows tests
+pass, including all 42 language fixtures, plus Clippy, formatting and locked
+release builds on both platforms. The VM is off. Claude's coverage was selective;
+most semantic rules and evaluation evidence were not reviewed line by line.
+The completed-edit study and its frozen binaries are unchanged.

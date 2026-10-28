@@ -1,0 +1,64 @@
+from pathlib import Path
+import json
+import subprocess
+import sys
+import time
+
+root = Path(__file__).resolve().parents[2]
+expected = sys.argv[1]
+out = Path(__file__).resolve().parent / "windows-fix-attempt-1"
+if out.exists():
+    raise SystemExit("Windows verification output already exists")
+assert subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip() == expected
+assert not subprocess.check_output(["git", "status", "--porcelain"], cwd=root, text=True).strip()
+out.mkdir()
+rows = []
+
+def run(scope, args, check=True):
+    log = out / (scope + ".log")
+    start = time.monotonic()
+    with log.open("w") as stream:
+        result = subprocess.run(["win-test", *args], cwd=root, stdout=stream, stderr=subprocess.STDOUT)
+    row = {"scope": scope, "argv": args, "exit_status": result.returncode, "elapsed_seconds": round(time.monotonic()-start, 6), "log": log.name}
+    rows.append(row)
+    (out / "verification.json").write_text(json.dumps({"schema": 1, "source_commit": expected, "commands": rows}, indent=2) + "\n")
+    print(json.dumps(row), flush=True)
+    if check and result.returncode:
+        raise RuntimeError(scope + " failed")
+    return result.returncode == 0
+
+try:
+    run("up", ["up"])
+    for attempt in range(12):
+        if run("ready-"+str(attempt), ["run", str(root), "--", "git", "rev-parse", "HEAD"], False):
+            break
+        time.sleep(5)
+    else:
+        raise RuntimeError("Windows guest unavailable")
+    run("preserve-before", ["run", str(root), "--", "powershell", "-NoProfile", "-Command", "git status --short --branch; if (Test-Path test.log) { Get-FileHash test.log -Algorithm SHA256 | Select-Object Path,Hash | ConvertTo-Json }"])
+    run("sync", ["sync", str(root), expected])
+    run("source", ["run", str(root), "--", "git", "rev-parse", "HEAD"])
+    checks = [
+        ("watcher-unit", ["cargo", "test", "-p", "code-kb-core", "--lib", "watcher::tests::", "--locked"]),
+        ("watcher-and-languages", ["cargo", "test", "-p", "code-kb-core", "--test", "watcher_test", "--test", "watcher_registration_test", "--test", "debouncer_removal_test", "--test", "language_conformance_test", "--locked"]),
+        ("mcp-and-recovery", ["cargo", "test", "-p", "code-kb-cli", "--test", "mcp_test", "--test", "report_recovery_test", "--locked"]),
+        ("clippy", ["cargo", "clippy", "--workspace", "--all-targets", "--", "-D", "warnings"]),
+        ("fmt", ["cargo", "fmt", "--all", "--", "--check"]),
+        ("release", ["cargo", "build", "--release", "--locked"]),
+        ("hashes", ["powershell", "-NoProfile", "-Command", "Get-FileHash target/release/code-kb.exe,crates/code-kb-core/src/watcher.rs,.tools/julie-extract.exe,test.log -Algorithm SHA256 | Select-Object Path,Hash | ConvertTo-Json; git status --short --branch"]),
+    ]
+    for scope, command in checks:
+        run(scope, ["run", str(root), "--", *command])
+finally:
+    run("down", ["down"], False)
+    for attempt in range(90):
+        status = subprocess.run(["win-test", "status"], cwd=root, capture_output=True, text=True)
+        if status.returncode == 0 and "shut off" in status.stdout:
+            (out / "off.log").write_text(status.stdout + status.stderr)
+            print("Windows VM confirmed off", flush=True)
+            break
+        if attempt == 45:
+            run("down-retry", ["down"], False)
+        time.sleep(2)
+    else:
+        raise RuntimeError("VM shutdown not confirmed")

@@ -2,7 +2,7 @@
 
 Claude returned one medium-severity watcher finding. Lead verification accepts
 a narrower queued-error case and preserves the existing bounded retry policy.
-The patch is undergoing final platform verification.
+The confirmed case is fixed and verified on Linux and Windows.
 
 ## Scope and method
 
@@ -41,7 +41,7 @@ Two parts of Claude's explanation were not accepted:
 - Increasing the retry count would change the deliberate bounded-churn policy.
   The fix instead extends the existing retry to the proven missing branch.
 
-The [pinned iterator source](https://docs.rs/walkdir/2.5.0/src/walkdir/lib.rs.html)
+The [pinned iterator source](https://github.com/BurntSushi/walkdir/blob/4f26be4d450910916ea11533b2efc52b9a6483bc/src/lib.rs)
 and [pinned error API](https://docs.rs/ignore/0.4.33/ignore/enum.Error.html)
 explain the queued-error ordering and wrappers. The regression injects that
 external error shape into the real registration handler deterministically;
@@ -55,8 +55,31 @@ and confirms stale registration removal. Guard tests preserve real errors and
 the shared retry ceiling. A single-element partial I/O error has separate
 coverage because `ignore::Error::io_error()` can expose its inner I/O error.
 
-Linux passes all 1,910 Rust tests, Clippy with warnings denied, formatting and
-the locked release build. Windows verification of the fix is pending. The
+At fix source `8b4ca9b`, Linux passes all 1,910 Rust tests. Windows passes 103
+affected tests: 13 watcher units, 15 watcher/language integration tests and
+75 MCP/recovery tests. Both platforms pass Clippy with warnings denied,
+formatting and locked release builds. All 42 Julie language fixtures pass.
+The Windows VM is confirmed off, and its pre-existing `test.log` is unchanged. The
 [evidence identity](2026-10-27-claude-branch-review/identity.json) binds source,
 reviewer output, probes and test/build logs. The completed-edit study's
 frozen binaries and results are unchanged.
+
+
+Lead confirmation closes the accepted medium finding. The original Claude
+verdict remains `needs-attention` in the retained output; Claude did not run a
+second approval pass. No accepted finding remains open from this review.
+Coverage remains selective as described above. No push, release or routing
+change was made.
+
+
+```text
+REVIEW CAMPAIGN STATUS
+state: clean
+evidence: external-reviewed
+round: 2/2
+external_invocations: 1/1
+open_critical_high: 0
+open_medium_low: 0
+open_above_floor: 0
+campaign_closed: yes
+```

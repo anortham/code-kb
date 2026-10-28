@@ -89,13 +89,16 @@ evidence. It is not a silently successful stale answer.
 
 ## Runtime and scope
 
-The product contract remains all 42 pinned Julie language IDs. Linux passes
-1,906 Rust tests and Windows passes 1,878, including the language conformance
-suite, plus Clippy, formatting and locked release builds. The unchanged Python
+The product contract remains all 42 pinned Julie language IDs. At runtime
+source `89991f0`, Linux passed 1,906 Rust tests and Windows passed 1,878,
+including language conformance, Clippy, formatting and locked release builds. The unchanged Python
 suite passes 301. The later watcher correction has ten passing Windows
 move/delete/recreate repetitions and a live 20-cycle churn probe with 112
 handles before and after. The Windows VM is confirmed off. The study binaries
-were not replaced by this later runtime build.
+were not replaced by this later runtime build. A subsequent
+[Claude review follow-up](../../../docs/reviews/2026-10-27-claude-branch-review.md)
+fixes a queued directory-walk error; its fresh verification passes 1,910 Linux
+tests and 103 affected Windows tests, including all 42 language fixtures.
 
 The fixture suite checks extraction, navigation, references, impact and refresh
 across all 42 IDs. Six selected tasks with two repeats cannot establish agent
@@ -125,4 +128,4 @@ an efficiency claim.
 - [Supplemental replayable captures](controls/supplemental-attempts/identity.json)
 - [Amended input freeze](../manifest-v2.json)
 - [Readiness archive](readiness-v2/archive-identity-v2.json)
-- [Current runtime verification](controls/runtime-backport/identity.json)
+- [Debouncer runtime verification](controls/runtime-backport/identity.json)

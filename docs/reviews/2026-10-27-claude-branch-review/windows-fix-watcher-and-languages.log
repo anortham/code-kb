@@ -1,0 +1,42 @@
+   Compiling code-kb-core v2.9.1 (C:\work\code-kb\crates\code-kb-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.74s
+     Running tests\debouncer_removal_test.rs (target\debug\deps\debouncer_removal_test-0b15cdf1c269d508.exe)
+     Running tests\language_conformance_test.rs (target\debug\deps\language_conformance_test-784e0a0e278cd84b.exe)
+     Running tests\watcher_registration_test.rs (target\debug\deps\watcher_registration_test-3b88c7c4daba97d7.exe)
+     Running tests\watcher_test.rs (target\debug\deps\watcher_test-b9554320b2c11b55.exe)
+log: /home/murphy/.local/share/win-test/logs/20261028T010219Z-code-kb-2806565.log
+
+running 1 test
+test debouncer_emits_remove_after_create_for_an_indexed_path ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.58s
+
+
+running 3 tests
+test language_fixture_directories_cover_the_installed_julie_languages ... ok
+test css_custom_function_call_evidence_agrees_and_missing_identifier_stays_unresolved ... ok
+test real_extractor_fixtures_cover_navigation_slices_references_impact_and_refresh ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 19.73s
+
+
+running 5 tests
+test watcher_indexes_atomic_file_replacements_incrementally ... ok
+test watcher_reconciles_edits_made_before_startup_registration ... ok
+test watcher_reconciles_new_moved_deleted_and_recreated_subtrees ... ok
+test watcher_reconciles_ignore_file_transitions ... ok
+test watcher_recovers_a_large_file_event_storm ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.53s
+
+
+running 6 tests
+test test_watcher_refreshes_a_native_header_edit ... ok
+test test_watcher_refreshes_a_header_batch ... ok
+test test_watcher_does_not_reindex_on_reads ... ok
+test test_background_watcher_incremental_sync ... ok
+test test_watcher_respects_nested_ignore_files ... ok
+test test_watcher_updates_directory_named_targeted ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.04s
+

@@ -1,0 +1,5 @@
+From C:\Users\agent\win-test.bundle
+ * branch              refs/win-test-sync/2806394-1793149317450863514 -> FETCH_HEAD
+Previous HEAD position was 89991f0 Preserve removal events in the pinned debouncer
+HEAD is now at 8b4ca9b Recover queued watcher errors for vanished registered directories
+8b4ca9bd3e2f0f2c71aa263fe3624679aaa5424b

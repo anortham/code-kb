@@ -43,7 +43,7 @@
         "Deleting after successful watch/yield is too late to cause initial read_dir failure; Linux and Windows real native-watcher probes pass.",
         "Increasing retry count is not accepted; repeated churn must remain bounded."
       ],
-      "status": "fix_in_progress"
+      "status": "addressed"
     }
   ],
   "fix_watcher_sha256": "ae5e61323eda27059bd66aa0c29af9d72aae1802b428f59a10728442faa8640a",
@@ -56,7 +56,53 @@
     "release": "passed",
     "release_sha256": "271fc5bee15134240810cba1a4ce81681bc3c5903b664d2e5c23b959d57081c4"
   },
-  "windows_fix_verification": "pending",
+  "windows_fix_verification": {
+    "status": "passed",
+    "source_commit": "8b4ca9bd3e2f0f2c71aa263fe3624679aaa5424b",
+    "test_scopes": {
+      "watcher-unit": {
+        "passed": 13,
+        "failed": 0,
+        "result_blocks": 1
+      },
+      "watcher-and-languages": {
+        "passed": 15,
+        "failed": 0,
+        "result_blocks": 4
+      },
+      "mcp-and-recovery": {
+        "passed": 75,
+        "failed": 0,
+        "result_blocks": 2
+      }
+    },
+    "total_passed": 103,
+    "all_julie_language_ids_checked": 42,
+    "clippy": "passed",
+    "format": "passed",
+    "release": "passed",
+    "release_sha256": "1eaea0735063ad4543ceb133b1987601d82d97316bce45a0c295dd504b63010d",
+    "watcher_sha256": "ae5e61323eda27059bd66aa0c29af9d72aae1802b428f59a10728442faa8640a",
+    "extractor_sha256": "e9eb3fc6e08feaa20d8758a81fd0746683fe08ad79daada36ad71b0dca8e1e79",
+    "unrelated_guest_test_log_hash_unchanged": "cb3e25fe7580ad53a368380ae0295ecbc41f294604990df16929b27eed40a4d8",
+    "vm_final_state": "shut off",
+    "startup_probe_failures": [
+      {
+        "scope": "ready-0",
+        "argv": [
+          "run",
+          "/home/murphy/.codex/worktrees/1e6f/code-kb",
+          "--",
+          "git",
+          "rev-parse",
+          "HEAD"
+        ],
+        "exit_status": 1,
+        "elapsed_seconds": 19.04451,
+        "log": "ready-0.log"
+      }
+    ]
+  },
   "characterization_probes": {
     "linux": "post-watch deletion:0 walker errors, stable sibling visited",
     "windows": "post-watch deletion:0 walker errors, stable sibling visited",
@@ -140,7 +186,137 @@
       "bytes": 1295,
       "sha256": "c0a4ed2054651a60487c3a79b85470d092bf36674ff2e99147ccc046c338a825",
       "redactor_changed": false
+    },
+    {
+      "path": "windows-fix-clippy.log",
+      "bytes": 294,
+      "sha256": "f5ab48279a6876a05f210292d896909c116433983a316b213072036f4a97735a",
+      "redactor_changed": false
+    },
+    {
+      "path": "windows-fix-down.log",
+      "bytes": 37,
+      "sha256": "1d2bce6626125a69290567f2ac07d73a993c9bc03bf6d5693848cee74e386d28",
+      "redactor_changed": false
+    },
+    {
+      "path": "windows-fix-fmt.log",
+      "bytes": 82,
+      "sha256": "34df31d066bf18c73a0af7f14a3e4a0e8855f919e0dff1c05b7ef58d2f387c4b",
+      "redactor_changed": false
+    },
+    {
+      "path": "windows-fix-hashes.log",
+      "bytes": 763,
+      "sha256": "8fab173d6665a24af72fdf44e59dfd67e24ca69db3757bb2a97e13c7346a0bc8",
+      "redactor_changed": false
+    },
+    {
+      "path": "windows-fix-mcp-and-recovery.log",
+      "bytes": 6441,
+      "sha256": "446ddadee8dc0494ef904be43690be831718076bcfabfe5de08fdaddd5d23a62",
+      "redactor_changed": false
+    },
+    {
+      "path": "windows-fix-off.log",
+      "bytes": 10,
+      "sha256": "fcd0e285e488cb37a042511417db2ac1209ef9656fbfef67d97cad27ae72ab90",
+      "redactor_changed": false
+    },
+    {
+      "path": "windows-fix-preserve-before.log",
+      "bytes": 242,
+      "sha256": "bc7db51099f87c707df91307e698b156d6125da146e06a59229f35383f39ca98",
+      "redactor_changed": false
+    },
+    {
+      "path": "windows-fix-ready-0.log",
+      "bytes": 37,
+      "sha256": "1503f1b9a209e75712b728b74ee9d0799daf3004479befbef53b54284a922f89",
+      "redactor_changed": false
+    },
+    {
+      "path": "windows-fix-ready-1.log",
+      "bytes": 123,
+      "sha256": "f16bebb4033a985ae8ceb6d5e2594fb29eee8ed3f29337bd156ffafe0e51c6d6",
+      "redactor_changed": false
+    },
+    {
+      "path": "windows-fix-release.log",
+      "bytes": 285,
+      "sha256": "0b07896bd0bf61ecf3dc12e5db9797b62c6e7c448e121d83c6760c90a541829a",
+      "redactor_changed": false
+    },
+    {
+      "path": "windows-fix-source.log",
+      "bytes": 123,
+      "sha256": "a37129d104b535c40708fc4c7040e2f9199017e40f5d56a7a2c7e49b5ab0bba1",
+      "redactor_changed": false
+    },
+    {
+      "path": "windows-fix-sync.log",
+      "bytes": 333,
+      "sha256": "5b27676c24976cc0240e0c3e4670137593c91d99ab0db27d251caf5c9607ccb5",
+      "redactor_changed": false
+    },
+    {
+      "path": "windows-fix-up.log",
+      "bytes": 27,
+      "sha256": "258d562dc010f0deaac57251722d4ca12edc8b93f3fef07e83c80f4bfa5279ec",
+      "redactor_changed": false
+    },
+    {
+      "path": "windows-fix-verification.json",
+      "bytes": 4832,
+      "sha256": "89e46ecdabcda53edc1d4310a99c1d4208db7dca15ec0b8feb3fdf5d162822d4",
+      "redactor_changed": false
+    },
+    {
+      "path": "windows-fix-watcher-and-languages.log",
+      "bytes": 2074,
+      "sha256": "20a0b1fa075c0fef9a53e3a34902d49e4af2d060f358d8dcfca4350e8d5c4fde",
+      "redactor_changed": false
+    },
+    {
+      "path": "windows-fix-watcher-unit.log",
+      "bytes": 1570,
+      "sha256": "2806ac80a6c6f9a753b742ba08e8a4271fe81840b959761bad14a15de1bd05cc",
+      "redactor_changed": false
+    },
+    {
+      "path": "windows-verification-driver.txt",
+      "bytes": 3440,
+      "sha256": "1bb44752d9759a54d6fcc6fae5b91024590443688bb873b65f3637fc05ade0dd",
+      "redactor_changed": false
     }
   ],
-  "evidence_whitespace_policy": "Only raw .log evidence in this folder bypasses Git whitespace checks; source and docs retain normal checks."
+  "evidence_whitespace_policy": "Only raw .log evidence in this folder bypasses Git whitespace checks; source and docs retain normal checks.",
+  "fix_source_commit": "8b4ca9bd3e2f0f2c71aa263fe3624679aaa5424b",
+  "campaign_status": {
+    "state": "clean",
+    "evidence": "external-reviewed",
+    "round": "2/2",
+    "external_invocations": "1/1",
+    "open_critical_high": 0,
+    "open_medium_low": 0,
+    "open_above_floor": 0,
+    "campaign_closed": true,
+    "coverage_qualification": "Lead closed the confirmed finding; Claude coverage remains selective and is not an exhaustive branch signoff."
+  },
+  "raw_envelope_removed_after_validation": true,
+  "retained_log_mapping": {
+    "windows_fix_verification": "Each original log name in windows-fix-verification.json is retained here with the windows-fix- prefix.",
+    "windows_characterization": {
+      "windows-probe-run.log": "windows-after-watch-probe.log",
+      "windows-probe-off.log": "windows-probe-off.log"
+    },
+    "linux_characterization": {
+      "after-watch-walk-probe.log": "linux-after-watch-probe.log"
+    }
+  },
+  "omissions": [
+    "Outbound prompt and isolated review tree removed by skill cleanup.",
+    "Raw Claude envelope removed after validation; normalized reviewer output retained.",
+    "Characterization startup/chunk-transfer logs remain task-local; retained characterization logs prove native watch/deletion outcome and shutdown."
+  ]
 }

@@ -1,0 +1,218 @@
+{
+  "schema": 1,
+  "source_commit": "8b4ca9bd3e2f0f2c71aa263fe3624679aaa5424b",
+  "commands": [
+    {
+      "scope": "up",
+      "argv": [
+        "up"
+      ],
+      "exit_status": 0,
+      "elapsed_seconds": 0.94903,
+      "log": "up.log"
+    },
+    {
+      "scope": "ready-0",
+      "argv": [
+        "run",
+        "/home/murphy/.codex/worktrees/1e6f/code-kb",
+        "--",
+        "git",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit_status": 1,
+      "elapsed_seconds": 19.04451,
+      "log": "ready-0.log"
+    },
+    {
+      "scope": "ready-1",
+      "argv": [
+        "run",
+        "/home/murphy/.codex/worktrees/1e6f/code-kb",
+        "--",
+        "git",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit_status": 0,
+      "elapsed_seconds": 2.134213,
+      "log": "ready-1.log"
+    },
+    {
+      "scope": "preserve-before",
+      "argv": [
+        "run",
+        "/home/murphy/.codex/worktrees/1e6f/code-kb",
+        "--",
+        "powershell",
+        "-NoProfile",
+        "-Command",
+        "git status --short --branch; if (Test-Path test.log) { Get-FileHash test.log -Algorithm SHA256 | Select-Object Path,Hash | ConvertTo-Json }"
+      ],
+      "exit_status": 0,
+      "elapsed_seconds": 1.690342,
+      "log": "preserve-before.log"
+    },
+    {
+      "scope": "sync",
+      "argv": [
+        "sync",
+        "/home/murphy/.codex/worktrees/1e6f/code-kb",
+        "8b4ca9bd3e2f0f2c71aa263fe3624679aaa5424b"
+      ],
+      "exit_status": 0,
+      "elapsed_seconds": 2.444054,
+      "log": "sync.log"
+    },
+    {
+      "scope": "source",
+      "argv": [
+        "run",
+        "/home/murphy/.codex/worktrees/1e6f/code-kb",
+        "--",
+        "git",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit_status": 0,
+      "elapsed_seconds": 1.636744,
+      "log": "source.log"
+    },
+    {
+      "scope": "watcher-unit",
+      "argv": [
+        "run",
+        "/home/murphy/.codex/worktrees/1e6f/code-kb",
+        "--",
+        "cargo",
+        "test",
+        "-p",
+        "code-kb-core",
+        "--lib",
+        "watcher::tests::",
+        "--locked"
+      ],
+      "exit_status": 0,
+      "elapsed_seconds": 17.615355,
+      "log": "watcher-unit.log"
+    },
+    {
+      "scope": "watcher-and-languages",
+      "argv": [
+        "run",
+        "/home/murphy/.codex/worktrees/1e6f/code-kb",
+        "--",
+        "cargo",
+        "test",
+        "-p",
+        "code-kb-core",
+        "--test",
+        "watcher_test",
+        "--test",
+        "watcher_registration_test",
+        "--test",
+        "debouncer_removal_test",
+        "--test",
+        "language_conformance_test",
+        "--locked"
+      ],
+      "exit_status": 0,
+      "elapsed_seconds": 34.631227,
+      "log": "watcher-and-languages.log"
+    },
+    {
+      "scope": "mcp-and-recovery",
+      "argv": [
+        "run",
+        "/home/murphy/.codex/worktrees/1e6f/code-kb",
+        "--",
+        "cargo",
+        "test",
+        "-p",
+        "code-kb-cli",
+        "--test",
+        "mcp_test",
+        "--test",
+        "report_recovery_test",
+        "--locked"
+      ],
+      "exit_status": 0,
+      "elapsed_seconds": 45.642768,
+      "log": "mcp-and-recovery.log"
+    },
+    {
+      "scope": "clippy",
+      "argv": [
+        "run",
+        "/home/murphy/.codex/worktrees/1e6f/code-kb",
+        "--",
+        "cargo",
+        "clippy",
+        "--workspace",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_status": 0,
+      "elapsed_seconds": 4.704699,
+      "log": "clippy.log"
+    },
+    {
+      "scope": "fmt",
+      "argv": [
+        "run",
+        "/home/murphy/.codex/worktrees/1e6f/code-kb",
+        "--",
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit_status": 0,
+      "elapsed_seconds": 2.73002,
+      "log": "fmt.log"
+    },
+    {
+      "scope": "release",
+      "argv": [
+        "run",
+        "/home/murphy/.codex/worktrees/1e6f/code-kb",
+        "--",
+        "cargo",
+        "build",
+        "--release",
+        "--locked"
+      ],
+      "exit_status": 0,
+      "elapsed_seconds": 111.61065,
+      "log": "release.log"
+    },
+    {
+      "scope": "hashes",
+      "argv": [
+        "run",
+        "/home/murphy/.codex/worktrees/1e6f/code-kb",
+        "--",
+        "powershell",
+        "-NoProfile",
+        "-Command",
+        "Get-FileHash target/release/code-kb.exe,crates/code-kb-core/src/watcher.rs,.tools/julie-extract.exe,test.log -Algorithm SHA256 | Select-Object Path,Hash | ConvertTo-Json; git status --short --branch"
+      ],
+      "exit_status": 0,
+      "elapsed_seconds": 1.658714,
+      "log": "hashes.log"
+    },
+    {
+      "scope": "down",
+      "argv": [
+        "down"
+      ],
+      "exit_status": 0,
+      "elapsed_seconds": 0.071574,
+      "log": "down.log"
+    }
+  ]
+}

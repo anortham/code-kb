@@ -3,7 +3,7 @@ id: accuracy-pivot-callers-answers-an-agent-can-trust
 title: "Accuracy pivot: callers answers an agent can trust"
 status: active
 created: 2026-10-17T17:10:13.294Z
-updated: 2026-10-28T00:14:40.996Z
+updated: 2026-10-28T01:08:17.449Z
 tags:
   - project-direction
   - accuracy
@@ -13,18 +13,20 @@ tags:
 
 ## Goal
 
-Give coding agents reliable navigation and edit evidence across all 42 pinned Julie language IDs. Preserve seven MCP tools and CLI parity, explicit project_root, bounded SQLite memory, first-class Windows and synchronized AGENTS/CLAUDE.
+Give coding agents reliable navigation and edit evidence across all 42 pinned Julie language IDs. Preserve seven MCP tools with CLI parity, explicit project_root, bounded SQLite memory, first-class Windows and synchronized AGENTS/CLAUDE.
 
-## Completed work
+## Current verified state
 
-The project review, cross-language and consumer corrections, watcher fixes and completed-edit study are implemented and verified. Runtime source 89991f0 passes 1,906 Linux and 1,878 Windows Rust tests, all-language conformance, Clippy, formatting and release builds. Python 301 remains applicable. Windows handle count stays 112 through 20 churn cycles; VM is confirmed off. Current runtime evidence is in evals/edit-2026-10-27/results/controls/runtime-backport/.
+The requested Claude review reported one medium watcher issue. Lead verification confirmed and fixed a narrower queued-error case for registered directories, preserving the single shared retry and fail-closed handling. Fix source 8b4ca9b passes all 1,910 Linux Rust tests and 103 affected Windows tests, including all 42 language fixtures. Clippy, formatting and locked release builds pass on both. VM is confirmed off. Claude's coverage was selective, not an exhaustive signoff. See docs/reviews/2026-10-27-claude-branch-review.md. Earlier full Windows verification at 89991f0 passed 1,878 tests; do not present that old full run as a fresh full run of the later fix.
 
-The study has 24 actual trials, with 22 accepted patches: native 10/12 and code-kb 12/12. Both native failures are C# purity omissions. Code-kb uses more total and uncached input and takes a mean 66.67 seconds longer across eleven complete pairs. Slot 15 timing remains unknown. Preserve original strict grades, setup stops, corrected regrades, source receipts and separate archives. See evals/edit-2026-10-27/results/report.md and docs/reviews/2026-10-26-project-direction.md.
+## Completed-edit evidence
+
+The unchanged study has 24 actual trials and 22 accepted patches: native 10/12 and code-kb 12/12. Both native failures are C# purity omissions. Code-kb uses more total and uncached input and takes a mean 66.67 seconds longer across eleven complete pairs. Slot 15 timing remains unknown. Preserve originals, corrected grades, reviews and separate archives. See evals/edit-2026-10-27/results/report.md.
 
 ## Recommended direction
 
-Reduce repeated navigation and context overhead while preserving accepted edits. These six cases become development/regression evidence after tuning; use untouched tasks, including configuration and framework work, for confirmation. This is a recommendation, not a new dispatched experiment. No task-wide token savings or global routing change is established.
+Reduce repeated navigation and context overhead while preserving accepted edits. Use these six cases for development/regression after tuning; reserve untouched configuration/framework tasks across language families for confirmation. No new experiment is dispatched, no task-wide savings claim or routing change is established.
 
-## Authority
+## Authority and operation
 
-The owner removed financial approval gates, caps and receipts from project tools and installed Codex/Claude guidance. Necessary model evaluation and spending are authorized. Local commits are authorized; no push, release or global routing change. Commit memories. All task work remains in /home/murphy/.codex/worktrees/1e6f/code-kb on fix/cross-language-review; main is untouched.
+All financial approval gates/caps/receipts are removed from project tools and installed Codex/Claude guidance. Necessary evaluation/spending and local commits are authorized; no push, release or global routing change. Commit memories. Worktree remains /home/murphy/.codex/worktrees/1e6f/code-kb, branch fix/cross-language-review; main is untouched. Avoid rebinding the old installed MCP here: it recursively watches ignored task trees and hits limits. Use the freshly built CLI with explicit --root for navigation and check_edit.

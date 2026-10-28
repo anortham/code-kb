@@ -1,0 +1,21 @@
+log: /home/murphy/.local/share/win-test/logs/20261028T010538Z-code-kb-2807684.log
+[
+    {
+        "Path":  "C:\\work\\code-kb\\target\\release\\code-kb.exe",
+        "Hash":  "1EAEA0735063AD4543CEB133B1987601D82D97316BCE45A0C295DD504B63010D"
+    },
+    {
+        "Path":  "C:\\work\\code-kb\\crates\\code-kb-core\\src\\watcher.rs",
+        "Hash":  "AE5E61323EDA27059BD66AA0C29AF9D72AAE1802B428F59A10728442FAA8640A"
+    },
+    {
+        "Path":  "C:\\work\\code-kb\\.tools\\julie-extract.exe",
+        "Hash":  "E9EB3FC6E08FEAA20D8758A81FD0746683FE08AD79DAADA36AD71B0DCA8E1E79"
+    },
+    {
+        "Path":  "C:\\work\\code-kb\\test.log",
+        "Hash":  "CB3E25FE7580AD53A368380AE0295ECBC41F294604990DF16929B27EED40A4D8"
+    }
+]
+## HEAD (no branch)
+?? test.log

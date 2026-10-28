@@ -1,0 +1,91 @@
+   Compiling code-kb-core v2.9.1 (C:\work\code-kb\crates\code-kb-core)
+   Compiling code-kb-cli v2.9.1 (C:\work\code-kb\crates\code-kb-cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 14.57s
+     Running tests\mcp_test.rs (target\debug\deps\mcp_test-bc247ab5cf2577d8.exe)
+     Running tests\report_recovery_test.rs (target\debug\deps\report_recovery_test-cf6f45a7cf00fd52.exe)
+log: /home/murphy/.local/share/win-test/logs/20261028T010254Z-code-kb-2806766.log
+
+running 52 tests
+test blast_radius_without_a_target_outside_a_git_repository_is_the_check_edit_error ... ok
+test lookup_symbol_reports_actionable_candidates_for_qualified_path_scoped_symbols ... ok
+test mcp_and_cli_name_a_revision_that_does_not_exist ... ok
+test cli_check_json_prints_the_whole_check ... ok
+test mcp_and_cli_print_byte_identical_callers_text_for_the_same_call ... ok
+test receiver_reference_labels_match_the_mcp_contract ... ok
+test mcp_read_tool_handlers_validate_selectors_and_preserve_git_discovery ... ok
+test test_cli_stats_scoped_errors_no_cross_workspace_leak ... ok
+test test_first_tool_call_sees_files_changed_while_no_server_ran ... ok
+test test_mcp_call_without_project_root_asks_for_the_absolute_project_path ... ok
+test test_mcp_absolute_path_outside_project_root_is_an_error_that_changes_nothing ... ok
+test test_mcp_check_edit_is_described_and_takes_an_optional_base ... ok
+test test_mcp_blast_radius_stdio_handshake_and_tools ... ok
+test test_mcp_file_uri_project_root_answers_from_that_project ... ok
+test test_mcp_filesystem_root_project_root_is_refused ... ok
+test mcp_and_cli_print_byte_identical_check_text_for_the_same_call ... ok
+test test_mcp_find_references_description_names_the_labels_and_keeps_its_schema ... ok
+test test_mcp_get_symbol_context_description_names_the_overload_cap ... ok
+test test_mcp_find_references_counts_sites_as_its_result_count ... ok
+test test_mcp_home_directory_project_root_is_refused_without_creating_an_index ... ok
+test test_mcp_file_written_after_an_unwaited_prepare_reaches_the_index ... ok
+test test_mcp_first_call_rebuilds_an_index_that_is_not_a_database ... ok
+test test_mcp_indexing_answer_records_no_token_savings ... ok
+test test_mcp_initialize_roots_are_ignored_and_file_uri_project_roots_resolve ... ok
+test test_mcp_invalid_project_root_or_path_does_not_poison_later_calls ... ok
+test test_mcp_lookup_baseline_counts_only_the_files_its_answer_shows ... ok
+test test_mcp_launch_root_indexed_during_the_session_is_reconciled_on_first_use ... ok
+test test_mcp_lookup_symbol_is_described_as_the_one_tool_for_a_name_or_a_concept ... ok
+test test_mcp_markerless_launch_root_without_a_pinned_db_is_refused ... ok
+test test_mcp_lookup_symbol_accepts_symbol_name_and_symbol_aliases ... ok
+test test_mcp_lookup_symbol_reports_a_broken_search_index ... ok
+test test_mcp_pinned_db_is_the_index_of_a_markerless_launch_root ... ok
+test test_mcp_path_in_a_nested_worktree_is_refused_without_indexing_it ... ok
+test test_mcp_project_root_drive_casing_and_trailing_slash_variants_reach_the_same_index ... ok
+test test_mcp_pinned_db_serves_only_the_launch_root ... ok
+test test_mcp_project_root_subfolder_answers_from_the_enclosing_project ... ok
+test test_mcp_relative_project_root_is_an_error ... ok
+test test_mcp_project_root_switches_between_main_checkout_and_worktree ... ok
+test test_mcp_records_a_known_baseline_for_references_and_none_for_a_folder_skeleton ... ok
+test test_mcp_removed_tool_call_does_not_switch_the_active_root_or_create_an_index ... ok
+test test_mcp_serve_launched_in_a_project_under_a_dotfiles_home_prewarms_that_project ... ok
+test test_mcp_serve_launched_in_a_folder_that_is_not_a_project_logs_to_the_global_folder ... ok
+test test_mcp_serve_launched_in_the_home_directory_does_not_index_it ... ok
+test test_mcp_server_start_creates_missing_index ... ok
+test test_mcp_startup_rebuilds_an_index_that_is_not_a_database ... ok
+test test_mcp_tools_list_asks_claude_to_load_every_code_tool_at_start ... ok
+test test_mcp_tools_list_requires_project_root_on_every_tool ... ok
+test test_mcp_symbol_id_from_lookup_resolves_in_get_symbol_body_for_the_same_project_root ... ok
+test test_mcp_telemetry_records_the_launch_root_for_a_refused_call_and_the_resolved_root_otherwise ... ok
+test test_mcp_unknown_tool_without_project_root_is_reported_as_unknown ... ok
+test test_mcp_unindexed_project_root_starts_indexing_and_answers_later ... ok
+test test_mcp_worktree_auto_copy_fast_path ... ok
+
+test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 19.81s
+
+
+running 23 tests
+test blast_radius_names_missing_runner_evidence_when_no_broader_command_is_known ... ok
+test broader_scope_does_not_borrow_a_foreign_root_runner ... ok
+test broader_scope_does_not_claim_one_package_covers_another ... ok
+test broader_scope_uses_the_open_end_language_and_folder ... ok
+test caller_reference_pages_past_200_are_retrievable_over_cli_and_mcp ... ok
+test callee_pages_past_200_are_bounded_and_retrievable_by_name_and_id ... ok
+test css_call_identifiers_supply_context_and_impact_through_cli_and_mcp ... ok
+test css_callee_identifier_pages_past_200_work_by_path_and_symbol_id ... ok
+test css_context_uses_one_real_site_when_same_callee_has_multiple_columns ... ok
+test css_callee_references_include_proven_call_identifiers_over_cli_and_mcp ... ok
+test css_context_with_a_large_callee_body_keeps_only_the_signature_prefix ... ok
+test broader_commands_quote_nested_runner_paths_and_keep_the_runner_working_directory ... ok
+test blast_radius_recommends_and_runs_a_configured_broader_test_command ... ok
+test impact_pages_retrieve_folded_symbols_with_cli_and_mcp_parity ... ok
+test low_signal_impact_rows_are_retrievable_over_cli_and_mcp ... ok
+test edit_check_pages_past_200_are_retrievable_over_cli_and_mcp ... ok
+test low_signal_recovery_does_not_turn_candidate_identifiers_into_impact_edges ... ok
+test one_line_xml_targets_are_visible_through_cli_and_mcp_skeletons ... ok
+test qualified_callee_pages_resolve_by_path_and_current_index_id ... ok
+test report_tools_describe_bounded_pages_and_keep_project_root_required ... ok
+test reference_pages_retrieve_folded_rows_with_cli_and_mcp_parity ... ok
+test edit_check_pages_retrieve_folded_sites_with_cli_and_mcp_parity ... ok
+test report_page_controls_allow_large_offsets_and_reject_overflow_over_cli_and_mcp ... ok
+
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.49s
+
