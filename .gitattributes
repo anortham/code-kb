@@ -1,1 +1,2 @@
 *.cjs text eol=lf
+evals/languages/** text eol=lf
