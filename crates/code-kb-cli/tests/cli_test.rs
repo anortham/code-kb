@@ -2426,7 +2426,18 @@ fn test_cli_scan_rebuilds_an_index_the_extractor_must_migrate() {
 
     let args = std::fs::read_to_string(&args_log).expect("scan must rebuild the index");
     assert!(args.lines().any(|arg| arg == "--level"), "{args}");
-    assert!(!db.exists(), "the old index must be removed");
+    let side_file = args
+        .lines()
+        .skip_while(|arg| *arg != "--db")
+        .nth(1)
+        .unwrap_or_default();
+    assert!(side_file.contains("artifact.db.rescan-"), "{args}");
+    assert!(!std::path::Path::new(side_file).exists());
+    assert_eq!(
+        std::fs::read(&db).unwrap(),
+        b"schema 7",
+        "a rebuild that writes no index must keep the old file"
+    );
 }
 
 #[cfg(unix)]

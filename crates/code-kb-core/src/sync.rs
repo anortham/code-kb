@@ -361,8 +361,8 @@ pub fn scan_workspace(workspace: &Workspace, db_path: &Path, force: bool) -> Res
             if needs_new_artifact(&stderr) && db_path.exists() =>
         {
             warn!("Extractor cannot use the existing artifact; rebuilding from scratch");
-            remove_artifact_files(db_path)?;
-            execute_julie_extract(&scan_args(true))?;
+            let side_file = PathBuf::from(format!("{}.rescan-{own_pid}", db_path.display()));
+            return scan_into_side_file(workspace, db_path, &side_file);
         }
         Err(SyncError::ExtractionFailed(_, stderr))
             if is_fingerprint_mismatch(&stderr) && !force && db_path.exists() =>
@@ -480,21 +480,39 @@ fn other_writer(db_path: &Path, extractor_version: &str) -> Option<(String, Stri
 fn rebuild_index(workspace: &Workspace, db_path: &Path) -> Result<(), SyncError> {
     crate::watcher::wait_for_stopped_watchers(&workspace.canonical_root);
     let rebuilt = PathBuf::from(format!("{}.rebuild", db_path.display()));
-    remove_artifact_files(&rebuilt)?;
-    let scanned = scan_workspace(workspace, &rebuilt, true).and_then(|()| {
-        let conn = crate::db::open_read_write(&rebuilt)?;
+    scan_into_side_file(workspace, db_path, &rebuilt)
+}
+
+/// Scans a new artifact into `side_file` and moves it over `db_path`. The index file stays in
+/// place while the scan runs, so readers and the project-root check never find it missing.
+fn scan_into_side_file(
+    workspace: &Workspace,
+    db_path: &Path,
+    side_file: &Path,
+) -> Result<(), SyncError> {
+    remove_artifact_files(side_file)?;
+    let scanned = scan_workspace(workspace, side_file, true).and_then(|()| {
+        let conn = crate::db::open_read_write(side_file)?;
         crate::db::checkpoint_truncate(&conn)?;
         Ok(())
     });
     if let Err(e) = scanned {
-        let _ = remove_artifact_files(&rebuilt);
+        let _ = remove_artifact_files(side_file);
         return Err(e);
     }
-    remove_artifact_files(db_path)?;
     for suffix in ["-wal", "-shm"] {
-        let _ = std::fs::remove_file(format!("{}{suffix}", rebuilt.display()));
+        let _ = std::fs::remove_file(format!("{}{suffix}", side_file.display()));
+        match std::fs::remove_file(format!("{}{suffix}", db_path.display())) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.into()),
+        }
     }
-    std::fs::rename(&rebuilt, db_path)?;
+    if std::fs::rename(side_file, db_path).is_err() {
+        // Windows refuses to replace a file that another handle holds open.
+        remove_artifact_files(db_path)?;
+        std::fs::rename(side_file, db_path)?;
+    }
     Ok(())
 }
 
@@ -697,6 +715,23 @@ impl ReconcileFailures {
     }
 }
 
+/// The index file and its SQLite sidecars. An index that `--db` puts inside the project is
+/// never a project file.
+fn is_index_file(path: &Path, index: &Path) -> bool {
+    path == index
+        || (path.parent() == index.parent()
+            && path
+                .file_name()
+                .zip(index.file_name())
+                .is_some_and(|(name, index_name)| {
+                    ["-wal", "-shm", "-journal"].iter().any(|suffix| {
+                        let mut sidecar = index_name.to_os_string();
+                        sidecar.push(suffix);
+                        name == sidecar
+                    })
+                }))
+}
+
 fn retain_unreadable_path(
     path: &Path,
     root: &Path,
@@ -889,6 +924,7 @@ fn reconcile_offline_edits_inner(
         None
     };
 
+    let index_path = dunce::canonicalize(db_path).unwrap_or_else(|_| db_path.to_path_buf());
     let mut walker = ignore::WalkBuilder::new(&workspace.canonical_root);
     walker
         .standard_filters(true)
@@ -964,6 +1000,9 @@ fn reconcile_offline_edits_inner(
         if file_type.is_file() {
             let path = entry.path();
             let norm_path = dunce::simplified(path);
+            if is_index_file(norm_path, &index_path) {
+                continue;
+            }
             if let Some(rel) =
                 crate::workspace::strip_prefix_lossy(norm_path, &workspace.canonical_root)
             {
@@ -1267,6 +1306,83 @@ mod tests {
         let db_path = temp.path().join("test.db");
         ensure_index_dir(&db_path).unwrap();
         assert!(!temp.path().join(".gitignore").exists());
+    }
+
+    #[test]
+    fn an_index_the_extractor_cannot_use_stays_on_disk_while_it_is_rebuilt() {
+        crate::find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+        let temp = crate::safe_tempdir();
+        let root = temp.path().to_path_buf();
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        for index in 0..200 {
+            std::fs::write(
+                root.join(format!("src/m{index}.rs")),
+                format!("pub fn f{index}() {{}}\n"),
+            )
+            .unwrap();
+        }
+        let db_path = root.join(".code-kb").join("artifact.db");
+        std::fs::create_dir_all(db_path.parent().unwrap()).unwrap();
+        rusqlite::Connection::open(&db_path)
+            .unwrap()
+            .execute_batch("CREATE TABLE files (path TEXT);")
+            .unwrap();
+        let workspace = Workspace::new(root.clone());
+        let done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let watcher = {
+            let (db_path, done) = (db_path.clone(), std::sync::Arc::clone(&done));
+            std::thread::spawn(move || {
+                let mut missing = 0;
+                while !done.load(std::sync::atomic::Ordering::Acquire) {
+                    missing += usize::from(!db_path.exists());
+                }
+                missing
+            })
+        };
+
+        let scanned = scan_workspace(&workspace, &db_path, false);
+        done.store(true, std::sync::atomic::Ordering::Release);
+
+        scanned.unwrap();
+        assert_eq!(watcher.join().unwrap(), 0);
+        let conn = crate::db::open_read_only(&db_path).unwrap();
+        let files: i64 = conn
+            .query_row("SELECT COUNT(*) FROM files", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(files, 200);
+        let leftovers = std::fs::read_dir(db_path.parent().unwrap())
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_name().to_string_lossy().contains(".rescan-"))
+            .count();
+        assert_eq!(leftovers, 0);
+    }
+
+    #[test]
+    fn reconcile_never_indexes_an_index_file_inside_the_root() {
+        let temp = tempfile::tempdir().unwrap();
+        let db_path = temp.path().join("index.db");
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE files (
+                file_id TEXT PRIMARY KEY,
+                path TEXT NOT NULL,
+                language TEXT,
+                content_hash TEXT,
+                content_bytes INTEGER,
+                line_count INTEGER,
+                indexed_at TEXT
+            );
+            PRAGMA journal_mode = WAL;",
+        )
+        .unwrap();
+        std::fs::write(temp.path().join("index.db-journal"), "").unwrap();
+
+        let report =
+            reconcile_offline_edits(&Workspace::new(temp.path().to_path_buf()), &db_path, &conn)
+                .unwrap();
+
+        assert!(report.added.is_empty(), "{:?}", report.added);
     }
 
     #[test]

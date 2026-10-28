@@ -1234,6 +1234,12 @@ mod tests {
     use std::path::Path;
     use std::time::Instant;
 
+    /// The temp folder through its symlinks (macOS `/var` is `/private/var`), so that a test names
+    /// the paths that the walk and the events name.
+    fn canonical_temp(temp_dir: &tempfile::TempDir) -> PathBuf {
+        dunce::canonicalize(temp_dir.path()).unwrap()
+    }
+
     static ROOT_WATCH_FAULT_TEST_LOCK: Mutex<()> = Mutex::new(());
 
     fn debounced_event(kind: EventKind, paths: &[&Path]) -> DebouncedEvent {
@@ -1288,7 +1294,8 @@ mod tests {
     #[test]
     fn allowed_directory_changes_reconcile_and_ignored_changes_do_not() {
         let temp_dir = crate::safe_tempdir();
-        let root = temp_dir.path().to_path_buf();
+        let root = canonical_temp(&temp_dir);
+        std::fs::create_dir_all(root.join(".git")).unwrap();
         std::fs::write(root.join(".gitignore"), "ignored/\n").unwrap();
         std::fs::create_dir_all(root.join("src")).unwrap();
         std::fs::create_dir_all(root.join("ignored")).unwrap();
@@ -1396,7 +1403,7 @@ mod tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let temp_dir = crate::safe_tempdir();
-        let root = temp_dir.path().join("project");
+        let root = canonical_temp(&temp_dir).join("project");
         let kept = root.join("kept");
         let removed_tree = root.join("removed/deep");
         std::fs::create_dir_all(&kept).unwrap();
@@ -1435,7 +1442,7 @@ mod tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let temp_dir = crate::safe_tempdir();
-        let root = temp_dir.path().join("project");
+        let root = canonical_temp(&temp_dir).join("project");
         let folder = root.join("folder");
         std::fs::create_dir_all(&folder).unwrap();
         let workspace = Workspace::new(root);
@@ -1476,7 +1483,7 @@ mod tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let temp_dir = crate::safe_tempdir();
-        let root = temp_dir.path().join("project");
+        let root = canonical_temp(&temp_dir).join("project");
         std::fs::create_dir_all(root.join("sources")).unwrap();
         std::fs::write(root.join("main.rs"), "pub fn lost_events_seed() {}\n").unwrap();
         let canonical_root = Workspace::new(root.clone()).canonical_root;
@@ -1549,7 +1556,7 @@ mod tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let temp_dir = crate::safe_tempdir();
-        let root = temp_dir.path().join("project");
+        let root = canonical_temp(&temp_dir).join("project");
         for folder in ["a/b", "ab", "a-b"] {
             std::fs::create_dir_all(root.join(folder)).unwrap();
         }
@@ -1581,7 +1588,7 @@ mod tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let temp_dir = crate::safe_tempdir();
-        let root = temp_dir.path().join("project");
+        let root = canonical_temp(&temp_dir).join("project");
         std::fs::create_dir_all(&root).unwrap();
         std::fs::write(root.join("main.rs"), "pub fn held_seed() {}\n").unwrap();
         let (workspace, db_path, watcher) = indexed_watcher(&root, "held_reconcile.db");
@@ -1624,7 +1631,7 @@ mod tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let temp_dir = crate::safe_tempdir();
-        let root = temp_dir.path().join("project");
+        let root = canonical_temp(&temp_dir).join("project");
         std::fs::create_dir_all(&root).unwrap();
         std::fs::write(root.join("main.rs"), "pub fn rebuild_seed() {}\n").unwrap();
         let (workspace, db_path, watcher) = indexed_watcher(&root, "rebuild_wait.db");
@@ -1659,10 +1666,11 @@ mod tests {
     #[test]
     fn a_recursive_root_watch_keeps_only_events_of_watched_folders() {
         let temp_dir = crate::safe_tempdir();
-        let root = temp_dir.path().join("project");
+        let root = canonical_temp(&temp_dir).join("project");
         std::fs::create_dir_all(root.join("src/deep")).unwrap();
         std::fs::create_dir_all(root.join("ignored/inner")).unwrap();
         std::fs::create_dir_all(root.join("target/debug")).unwrap();
+        std::fs::create_dir_all(root.join(".git")).unwrap();
         std::fs::write(root.join(".gitignore"), "ignored/\n").unwrap();
         let root = Workspace::new(root).canonical_root;
         let kept = [
@@ -1705,7 +1713,7 @@ mod tests {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let _fault_reset = WalkerFaultReset;
         let temp_dir = crate::safe_tempdir();
-        let root = temp_dir.path().join("project");
+        let root = canonical_temp(&temp_dir).join("project");
         let unreadable = root.join("unreadable");
         std::fs::create_dir_all(unreadable.join("inner")).unwrap();
         std::fs::create_dir_all(root.join("readable")).unwrap();
@@ -1743,7 +1751,7 @@ mod tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let temp_dir = crate::safe_tempdir();
-        let root = temp_dir.path().join("project");
+        let root = canonical_temp(&temp_dir).join("project");
         let locked = root.join("locked");
         std::fs::create_dir_all(locked.join("inner")).unwrap();
         std::fs::create_dir_all(root.join("open")).unwrap();
@@ -1773,6 +1781,8 @@ mod tests {
         assert!(registrations.contains(&RegistrationPath::new(
             workspace.canonical_root.join("open")
         )));
+        // inotify needs read permission to watch a folder; FSEvents does not.
+        #[cfg(target_os = "linux")]
         assert!(!registrations.contains(&RegistrationPath::new(
             workspace.canonical_root.join("locked")
         )));
@@ -1785,7 +1795,7 @@ mod tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let temp_dir = crate::safe_tempdir();
-        let root = temp_dir.path().join("project");
+        let root = canonical_temp(&temp_dir).join("project");
         let disappearing = root.join("disappearing");
         std::fs::create_dir_all(&disappearing).unwrap();
         let workspace = Workspace::new(root);
@@ -1875,7 +1885,7 @@ mod tests {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let _fault_reset = WalkerFaultReset;
         let temp_dir = crate::safe_tempdir();
-        let root = temp_dir.path().join("project");
+        let root = canonical_temp(&temp_dir).join("project");
         let disappearing = root.join("disappearing");
         std::fs::create_dir_all(&disappearing).unwrap();
         let (workspace, mut debouncer, mut registrations) = registered_watcher(root);
@@ -1917,7 +1927,7 @@ mod tests {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let _fault_reset = WalkerFaultReset;
         let temp_dir = crate::safe_tempdir();
-        let root = temp_dir.path().join("project");
+        let root = canonical_temp(&temp_dir).join("project");
         let registered = root.join("registered");
         std::fs::create_dir_all(&registered).unwrap();
         let (workspace, mut debouncer, mut registrations) = registered_watcher(root.clone());
@@ -1990,7 +2000,7 @@ mod tests {
     #[test]
     fn missing_root_walker_errors_are_not_recoverable() {
         let temp_dir = crate::safe_tempdir();
-        let root = temp_dir.path().join("project");
+        let root = canonical_temp(&temp_dir).join("project");
         std::fs::create_dir(&root).unwrap();
         let root_registration = RegistrationPath::new(&root);
         let mut registrations = RegisteredDirectories::default();
@@ -2013,7 +2023,7 @@ mod tests {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let _fault_reset = WalkerFaultReset;
         let temp_dir = crate::safe_tempdir();
-        let root = temp_dir.path().join("project");
+        let root = canonical_temp(&temp_dir).join("project");
         let registered = root.join("z_registered");
         let removed_before_watch = root.join("a_unregistered");
         std::fs::create_dir_all(&registered).unwrap();
