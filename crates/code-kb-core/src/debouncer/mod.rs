@@ -23,7 +23,7 @@ mod file_id_map;
 
 use std::{
     cmp::Reverse,
-    collections::{BinaryHeap, HashMap, VecDeque},
+    collections::{BTreeMap, BinaryHeap, HashMap, VecDeque},
     path::{Path, PathBuf},
     sync::{
         Arc, Mutex,
@@ -127,7 +127,7 @@ impl Queue {
 #[derive(Debug)]
 pub(crate) struct DebounceDataInner<T> {
     queues: HashMap<PathBuf, Queue>,
-    roots: Vec<(PathBuf, RecursiveMode)>,
+    roots: BTreeMap<PathBuf, RecursiveMode>,
     cache: T,
     rename_event: Option<(DebouncedEvent, Option<FileId>)>,
     rescan_event: Option<DebouncedEvent>,
@@ -139,7 +139,7 @@ impl<T: FileIdCache> DebounceDataInner<T> {
     pub(crate) fn new(cache: T, timeout: Duration) -> Self {
         Self {
             queues: HashMap::new(),
-            roots: Vec::new(),
+            roots: BTreeMap::new(),
             cache,
             rename_event: None,
             rescan_event: None,
@@ -279,17 +279,39 @@ impl<T: FileIdCache> DebounceDataInner<T> {
         }
     }
 
+    fn add_root(&mut self, path: PathBuf, recursive_mode: RecursiveMode) {
+        if self.roots.contains_key(&path) {
+            return;
+        }
+        self.cache.add_path(&path, recursive_mode);
+        self.roots.insert(path, recursive_mode);
+    }
+
+    /// Removes `path` and every root below it. `PathBuf` orders by components, so the roots
+    /// below `path` follow it directly in the map.
+    fn remove_root(&mut self, path: &Path) {
+        let covered = self
+            .roots
+            .range::<Path, _>((std::ops::Bound::Included(path), std::ops::Bound::Unbounded))
+            .map(|(root, _)| root)
+            .take_while(|root| root.starts_with(path))
+            .cloned()
+            .collect::<Vec<_>>();
+        for root in covered {
+            self.roots.remove(&root);
+        }
+        self.cache.remove_path(path);
+    }
+
     fn recursive_mode(&mut self, path: &Path) -> RecursiveMode {
-        self.roots
-            .iter()
-            .find_map(|(root, recursive_mode)| {
-                if path.starts_with(root) {
-                    Some(*recursive_mode)
-                } else {
-                    None
-                }
-            })
-            .unwrap_or(RecursiveMode::NonRecursive)
+        if path
+            .ancestors()
+            .any(|ancestor| self.roots.get(ancestor) == Some(&RecursiveMode::Recursive))
+        {
+            RecursiveMode::Recursive
+        } else {
+            RecursiveMode::NonRecursive
+        }
     }
 
     fn handle_rename_from(&mut self, event: Event) {
@@ -509,26 +531,14 @@ impl<T: Watcher, C: FileIdCache> Debouncer<T, C> {
     pub fn cache(&mut self) {}
 
     fn add_root(&mut self, path: impl Into<PathBuf>, recursive_mode: RecursiveMode) {
-        let path = path.into();
-
-        let mut data = self.data.lock().unwrap();
-
-        // skip, if the root has already been added
-        if data.roots.iter().any(|(p, _)| p == &path) {
-            return;
-        }
-
-        data.roots.push((path.clone(), recursive_mode));
-
-        data.cache.add_path(&path, recursive_mode);
+        self.data
+            .lock()
+            .unwrap()
+            .add_root(path.into(), recursive_mode);
     }
 
     fn remove_root(&mut self, path: impl AsRef<Path>) {
-        let mut data = self.data.lock().unwrap();
-
-        data.roots.retain(|(root, _)| !root.starts_with(&path));
-
-        data.cache.remove_path(path.as_ref());
+        self.data.lock().unwrap().remove_root(path.as_ref());
     }
 
     pub fn watch(
@@ -541,10 +551,22 @@ impl<T: Watcher, C: FileIdCache> Debouncer<T, C> {
         Ok(())
     }
 
+    /// Stops watching `path`. When the backend has already dropped the watch, or the path is
+    /// gone, the roots under `path` are forgotten too and the backend error is returned.
     pub fn unwatch(&mut self, path: impl AsRef<Path>) -> notify::Result<()> {
-        self.watcher.unwatch(path.as_ref())?;
-        self.remove_root(path);
-        Ok(())
+        let path = path.as_ref();
+        match self.watcher.unwatch(path) {
+            Ok(()) => {
+                self.remove_root(path);
+                Ok(())
+            }
+            Err(error) => {
+                if matches!(error.kind, ErrorKind::WatchNotFound) || !path.exists() {
+                    self.remove_root(path);
+                }
+                Err(error)
+            }
+        }
     }
 
     pub fn configure(&mut self, option: notify::Config) -> notify::Result<bool> {
@@ -776,7 +798,7 @@ mod tests {
         MockTime::set_time(time);
 
         let mut state = test_case.state.into_debounce_data_inner(time);
-        state.roots = vec![(PathBuf::from("/"), RecursiveMode::Recursive)];
+        state.roots = BTreeMap::from([(PathBuf::from("/"), RecursiveMode::Recursive)]);
 
         let mut prev_event_time = Duration::default();
 
@@ -855,6 +877,127 @@ mod tests {
                 "debounced events after a `{delay}` delay"
             );
         }
+    }
+
+    fn root_paths<T>(state: &DebounceDataInner<T>) -> Vec<PathBuf> {
+        state.roots.keys().cloned().collect()
+    }
+
+    #[test]
+    fn root_bookkeeping_stays_fast_for_many_directories() {
+        let mut state = DebounceDataInner::new(NoCache, Duration::from_millis(50));
+        let started = Instant::now();
+
+        for index in 0..40_000 {
+            state.add_root(
+                PathBuf::from(format!("/project/dir{index}")),
+                RecursiveMode::NonRecursive,
+            );
+        }
+        for index in 0..40_000 {
+            state.add_root(
+                PathBuf::from(format!("/project/dir{index}")),
+                RecursiveMode::NonRecursive,
+            );
+        }
+        state.remove_root(Path::new("/project/dir7"));
+
+        assert_eq!(state.roots.len(), 39_999);
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "root bookkeeping took {:?}",
+            started.elapsed()
+        );
+    }
+
+    #[test]
+    fn removing_a_root_removes_its_descendants_and_keeps_name_prefix_siblings() {
+        let mut state = DebounceDataInner::new(NoCache, Duration::from_millis(50));
+        for path in ["/w", "/w/b", "/w/b/c", "/w/bc", "/w/b-c"] {
+            state.add_root(PathBuf::from(path), RecursiveMode::NonRecursive);
+        }
+
+        state.remove_root(Path::new("/w/b"));
+
+        assert_eq!(
+            root_paths(&state),
+            vec![
+                PathBuf::from("/w"),
+                PathBuf::from("/w/b-c"),
+                PathBuf::from("/w/bc")
+            ]
+        );
+    }
+
+    #[test]
+    fn a_path_under_any_recursive_root_is_recursive() {
+        let mut state = DebounceDataInner::new(NoCache, Duration::from_millis(50));
+        state.add_root(PathBuf::from("/w"), RecursiveMode::Recursive);
+        state.add_root(PathBuf::from("/w/x"), RecursiveMode::NonRecursive);
+        state.add_root(PathBuf::from("/n"), RecursiveMode::NonRecursive);
+
+        assert_eq!(
+            state.recursive_mode(Path::new("/w/x/y")),
+            RecursiveMode::Recursive
+        );
+        assert_eq!(
+            state.recursive_mode(Path::new("/w")),
+            RecursiveMode::Recursive
+        );
+        assert_eq!(
+            state.recursive_mode(Path::new("/n/y")),
+            RecursiveMode::NonRecursive
+        );
+        assert_eq!(
+            state.recursive_mode(Path::new("/q")),
+            RecursiveMode::NonRecursive
+        );
+    }
+
+    struct LostWatchWatcher;
+
+    impl Watcher for LostWatchWatcher {
+        fn new<F: notify::EventHandler>(
+            _handler: F,
+            _config: notify::Config,
+        ) -> notify::Result<Self> {
+            Ok(Self)
+        }
+
+        fn watch(&mut self, _path: &Path, _mode: RecursiveMode) -> notify::Result<()> {
+            Ok(())
+        }
+
+        fn unwatch(&mut self, path: &Path) -> notify::Result<()> {
+            Err(Error::watch_not_found().add_path(path.to_path_buf()))
+        }
+
+        fn kind() -> WatcherKind {
+            WatcherKind::NullWatcher
+        }
+    }
+
+    #[test]
+    fn unwatch_of_a_watch_the_backend_already_dropped_forgets_the_root() {
+        let mut debouncer = new_debouncer_opt::<_, LostWatchWatcher, NoCache>(
+            Duration::from_millis(50),
+            None,
+            |_result: DebounceEventResult| {},
+            NoCache,
+            notify::Config::default(),
+        )
+        .unwrap();
+        debouncer
+            .watch("/w/gone", RecursiveMode::NonRecursive)
+            .unwrap();
+        debouncer
+            .watch("/w/gone/child", RecursiveMode::NonRecursive)
+            .unwrap();
+
+        let error = debouncer.unwatch("/w/gone").unwrap_err();
+
+        assert!(matches!(error.kind, ErrorKind::WatchNotFound));
+        assert!(debouncer.data.lock().unwrap().roots.is_empty());
     }
 
     #[test]

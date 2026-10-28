@@ -475,8 +475,10 @@ fn other_writer(db_path: &Path, extractor_version: &str) -> Option<(String, Stri
 }
 
 /// Scans into a side file and swaps it in only after the scan succeeds, so a failed rebuild
-/// leaves the previous index in place.
+/// leaves the previous index in place. It first waits for the stopped watchers of the root,
+/// which can still scan the index or hold it open.
 fn rebuild_index(workspace: &Workspace, db_path: &Path) -> Result<(), SyncError> {
+    crate::watcher::wait_for_stopped_watchers(&workspace.canonical_root);
     let rebuilt = PathBuf::from(format!("{}.rebuild", db_path.display()));
     remove_artifact_files(&rebuilt)?;
     let scanned = scan_workspace(workspace, &rebuilt, true).and_then(|()| {
@@ -654,14 +656,21 @@ pub struct ReconcileReport {
     pub deleted: Vec<String>,
 }
 
-fn extract_error_path(err: &ignore::Error) -> Option<&Path> {
-    match err {
-        ignore::Error::WithPath { path, .. } => Some(path.as_path()),
-        ignore::Error::WithDepth { err, .. } => extract_error_path(err),
-        ignore::Error::WithLineNumber { err, .. } => extract_error_path(err),
-        ignore::Error::Loop { ancestor, .. } => Some(ancestor.as_path()),
-        _ => None,
+/// Shortens `text` to at most `max_chars` characters. A cut ends at a space and is marked with
+/// `…`, so a path in the text is either whole or left out.
+pub(crate) fn bounded_detail(text: &str, max_chars: usize) -> String {
+    if text.chars().count() <= max_chars {
+        return text.to_string();
     }
+    let head = text
+        .char_indices()
+        .nth(max_chars.saturating_sub(2))
+        .map_or(text, |(end, _)| &text[..end]);
+    let head = match head.rfind(' ') {
+        Some(space) if space > 0 => &head[..space],
+        _ => head,
+    };
+    format!("{} …", head.trim_end_matches([' ', ':', ';', ',']))
 }
 
 #[derive(Default)]
@@ -674,7 +683,7 @@ impl ReconcileFailures {
     fn record(&mut self, detail: impl Into<String>) {
         self.count += 1;
         if self.details.len() < 5 {
-            self.details.push(detail.into().chars().take(256).collect());
+            self.details.push(bounded_detail(&detail.into(), 512));
         }
     }
 
@@ -714,8 +723,10 @@ fn retain_unreadable_path(
 /// Streams disk checks and uses an in-memory SQLite index to eliminate repository-wide heap HashMaps.
 /// Creates a missing index. A git worktree copies its parent repository's index and
 /// reconciles it against the worktree files, which is much faster than a full scan;
-/// anything else runs a full scan. A copy that another `julie-extract` wrote is rebuilt.
+/// anything else runs a full scan. A copy that another `julie-extract` wrote is rebuilt. It
+/// first waits for the stopped watchers of the root.
 pub fn create_index(workspace: &Workspace, db_path: &Path) -> Result<(), SyncError> {
+    crate::watcher::wait_for_stopped_watchers(&workspace.canonical_root);
     if let Some(parent_db) = parent_repository_db(&workspace.canonical_root)
         && copy_parent_index(workspace, db_path, &parent_db)
     {
@@ -903,9 +914,22 @@ fn reconcile_offline_edits_inner(
         let entry = match result {
             Ok(e) => e,
             Err(e) => {
+                if let Some(path) = crate::workspace::permission_denied_path(&e) {
+                    let mut root_denied = false;
+                    retain_unreadable_path(
+                        path,
+                        &workspace.canonical_root,
+                        &mut unreadable_prefixes,
+                        &mut root_denied,
+                    );
+                    if !root_denied {
+                        warn!("Skipping unreadable directory '{}': {e}", path.display());
+                        continue;
+                    }
+                }
                 warn!("Reconciliation walker encountered error: {e}");
                 failures.record(format!("Workspace traversal failed: {e}"));
-                if let Some(path) = extract_error_path(&e) {
+                if let Some(path) = crate::workspace::walk_error_path(&e) {
                     retain_unreadable_path(
                         path,
                         &workspace.canonical_root,
@@ -1178,6 +1202,22 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn a_long_failure_detail_ends_at_a_whole_word() {
+        let path = format!("/{}/locked", "segment".repeat(35));
+        let detail =
+            format!("Workspace traversal failed: {path}: IO error for operation on {path}: denied");
+
+        let bounded = bounded_detail(&detail, 512);
+
+        assert!(bounded.chars().count() <= 512, "{bounded}");
+        assert_eq!(
+            bounded,
+            format!("Workspace traversal failed: {path}: IO error for operation on …")
+        );
+        assert_eq!(bounded_detail("short detail", 512), "short detail");
+    }
 
     #[cfg(unix)]
     #[test]

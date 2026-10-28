@@ -1,5 +1,6 @@
 use file_id::FileId;
 use notify::RecursiveMode;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 /// The interface of a file ID cache.
@@ -27,7 +28,7 @@ pub trait FileIdCache {
     /// The root paths are passed as argument, so the implementer doesn't have to store them.
     ///
     /// The default implementation calls `add_path` for each root path.
-    fn rescan(&mut self, root_paths: &[(PathBuf, RecursiveMode)]) {
+    fn rescan(&mut self, root_paths: &BTreeMap<PathBuf, RecursiveMode>) {
         for (path, recursive_mode) in root_paths {
             self.add_path(path, *recursive_mode);
         }

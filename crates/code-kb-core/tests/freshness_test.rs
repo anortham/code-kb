@@ -667,7 +667,7 @@ fn test_reconcile_offline_edits_added_and_deleted() {
 
 #[cfg(unix)]
 #[test]
-fn test_reconcile_offline_edits_preserves_unreadable_directory_records() {
+fn reconcile_skips_a_directory_without_read_permission_and_keeps_its_records() {
     let _extract_bin =
         find_julie_extract_binary().expect("julie-extract binary must be present for tests");
 
@@ -690,9 +690,8 @@ fn test_reconcile_offline_edits_preserves_unreadable_directory_records() {
     let result = reconcile_offline_edits(&ws, &db_path, &conn);
     fs::set_permissions(&src_dir, fs::Permissions::from_mode(0o755)).unwrap();
 
-    let error = result.unwrap_err().to_string();
-    assert!(error.contains(&root.display().to_string()), "{error}");
-    assert!(error.contains("code-kb scan --root"), "{error}");
+    let report = result.unwrap();
+    assert!(report.deleted.is_empty(), "{:?}", report.deleted);
     assert!(
         get_symbol_by_name(&conn, "top_symbol", Some("top.rs"))
             .unwrap()

@@ -409,6 +409,32 @@ pub fn is_hard_excluded(rel_path: &str) -> bool {
             .any(|suffix| p.ends_with(suffix))
 }
 
+/// The path that a directory walk error names, through its depth and line wrappers.
+pub(crate) fn walk_error_path(error: &ignore::Error) -> Option<&Path> {
+    match error {
+        ignore::Error::WithPath { path, .. } => Some(path),
+        ignore::Error::WithDepth { err, .. } | ignore::Error::WithLineNumber { err, .. } => {
+            walk_error_path(err)
+        }
+        ignore::Error::Loop { ancestor, .. } => Some(ancestor),
+        _ => None,
+    }
+}
+
+/// The path of a walk error that only says the walk may not read that path. A rescan cannot
+/// change file permissions, so callers skip the path and keep its indexed rows.
+pub(crate) fn permission_denied_path(error: &ignore::Error) -> Option<&Path> {
+    if error.is_partial()
+        || !matches!(
+            error.io_error(),
+            Some(io_error) if io_error.kind() == std::io::ErrorKind::PermissionDenied
+        )
+    {
+        return None;
+    }
+    walk_error_path(error)
+}
+
 /// Represents a bound workspace session.
 #[derive(Debug, Clone)]
 pub struct Workspace {
