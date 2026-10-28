@@ -615,3 +615,90 @@ fn primary_record_calls_bind_required_named_parameters_after_defaults() {
         assert_eq!(change.unresolved, 0, "{text}");
     }
 }
+
+fn proven_site(change: &code_kb_core::edit_check::ShapeChange, path: &str, line: usize) -> bool {
+    change
+        .proven
+        .iter()
+        .any(|site| site.path == path && site.line == line)
+}
+
+fn likely_site(change: &code_kb_core::edit_check::ShapeChange, path: &str, line: usize) -> bool {
+    change
+        .likely
+        .iter()
+        .any(|site| site.path == path && site.line == line)
+}
+
+#[test]
+fn a_removed_python_attribute_read_through_a_typed_parameter_is_proven() {
+    let repo = committed_repo(&[
+        ("pkg/__init__.py", ""),
+        (
+            "pkg/wrappers.py",
+            "class Request:\n    url_rule: str | None = None\n    routing_exception: Exception | None = None\n",
+        ),
+        (
+            "pkg/app.py",
+            "from .wrappers import Request\n\n\ndef raise_routing(request: Request) -> None:\n    raise request.routing_exception\n\n\ndef dispatch(ctx) -> None:\n    req = ctx.request\n    if req.routing_exception is not None:\n        raise_routing(req)\n",
+        ),
+        (
+            "pkg/external.py",
+            "from werkzeug.wrappers import Request\n\n\ndef raw(request: Request) -> object:\n    return request.routing_exception\n",
+        ),
+    ]);
+    write(
+        &repo.root,
+        "pkg/wrappers.py",
+        "class Request:\n    url_rule: str | None = None\n",
+    );
+
+    let check = check_of(&repo);
+    let text = format_edit_check(&check);
+    let request = field_change(&check, "pkg/wrappers.py");
+    assert!(proven_site(request, "pkg/app.py", 5), "{text}");
+    assert!(likely_site(request, "pkg/app.py", 10), "{text}");
+    assert!(!proven_site(request, "pkg/external.py", 5), "{text}");
+}
+
+#[test]
+fn a_removed_java_field_read_through_a_typed_parameter_is_proven() {
+    let repo = committed_repo(&[
+        (
+            "app/Point.java",
+            "package app;\n\npublic class Point {\n    public int x;\n    public int y;\n}\n",
+        ),
+        (
+            "app/Use.java",
+            "package app;\n\npublic class Use {\n    public int read(Point p) {\n        return p.y;\n    }\n}\n",
+        ),
+    ]);
+    write(
+        &repo.root,
+        "app/Point.java",
+        "package app;\n\npublic class Point {\n    public int x;\n}\n",
+    );
+
+    let check = check_of(&repo);
+    let text = format_edit_check(&check);
+    let point = field_change(&check, "app/Point.java");
+    assert!(proven_site(point, "app/Use.java", 5), "{text}");
+}
+
+#[test]
+fn a_removed_python_instance_attribute_read_through_self_is_proven() {
+    let repo = committed_repo(&[(
+        "tests/conftest.py",
+        "class AuthActions:\n    def __init__(self, client):\n        self._client = client\n\n    def login(self):\n        return self._client.post(\"/login\")\n",
+    )]);
+    write(
+        &repo.root,
+        "tests/conftest.py",
+        "class AuthActions:\n    def __init__(self, client):\n        pass\n\n    def login(self):\n        return self._client.post(\"/login\")\n",
+    );
+
+    let check = check_of(&repo);
+    let text = format_edit_check(&check);
+    let auth = field_change(&check, "tests/conftest.py");
+    assert!(proven_site(auth, "tests/conftest.py", 6), "{text}");
+}

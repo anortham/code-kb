@@ -1166,3 +1166,64 @@ fn a_touched_method_call_that_names_a_new_required_keyword_only_parameter_is_in_
     assert!(change.likely.is_empty(), "{change:?}");
     assert_eq!(change.unresolved, 0, "{change:?}");
 }
+
+fn renamed_method_read_through_receiver(import: &str) -> EditCheck {
+    let repo = committed_repo(&[
+        ("pyproject.toml", "[project]\nname = \"pkg\"\n"),
+        ("pkg/__init__.py", ""),
+        (
+            "pkg/a.py",
+            "class Foo:\n    def run(self):\n        return 1\n",
+        ),
+        (
+            "pkg/c.py",
+            &format!("{import}\n\n\ndef g(x: Foo):\n    cb = x.run\n    return cb\n"),
+        ),
+    ]);
+    write(
+        &repo.root,
+        "pkg/a.py",
+        "class Foo:\n    def other(self):\n        return 1\n",
+    );
+    check(&repo)
+}
+
+#[test]
+fn a_renamed_method_read_through_an_externally_typed_receiver_is_not_proven() {
+    let check = renamed_method_read_through_receiver("from ext import Foo");
+    let change = changed(&check, "Foo.run");
+
+    assert!(
+        change
+            .proven
+            .iter()
+            .all(|site| site.path != "pkg/c.py" || site.line != 5),
+        "a receiver typed by an external import proved the stale read: {change:?}"
+    );
+    assert!(
+        change
+            .likely
+            .iter()
+            .any(|site| site.path == "pkg/c.py" && site.line == 5)
+            || change.unresolved > 0,
+        "lost the stale read of the receiver typed by an external import: {change:?}"
+    );
+    assert!(
+        stop_sites(&check).is_empty(),
+        "an unproven stale read blocked the Stop hook: {check:?}"
+    );
+}
+
+#[test]
+fn a_renamed_method_read_through_a_project_typed_receiver_stays_proven() {
+    let check = renamed_method_read_through_receiver("from pkg.a import Foo");
+    let change = changed(&check, "Foo.run");
+
+    assert!(
+        change
+            .proven
+            .iter()
+            .any(|site| site.path == "pkg/c.py" && site.line == 5 && site.caller == "g"),
+        "lost the proven stale read of the project-typed receiver: {change:?}"
+    );
+}
