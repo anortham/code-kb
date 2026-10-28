@@ -7,8 +7,9 @@ after the sites are labeled. They print after the site groups and before the tex
 each only when it has rows. They never change a site's label or basis or a count, so the reach
 gate scores the same labels. A heading counts every row; `limit` caps the listed rows of a
 section, and one fold line counts the rest by file. `offset` selects the next page of each
-section independently. Counts remain complete; restart at offset 0 after edits or an index
-rebuild. CLI `--json` adds the arrays `overrides`,
+section independently. The site groups and the text-only lines page the same way: the first
+page lists up to `limit` rows of each, in report order. Counts remain complete; restart at
+offset 0 after edits or an index rebuild. CLI `--json` adds the arrays `overrides`,
 `overridden`, `constructions`, `variant_uses`, `registrations`, and `tests`, and leaves out an
 empty one. A section reads indexed rows, opens source only for the files of the sites it
 needs, and keeps nothing after the call.

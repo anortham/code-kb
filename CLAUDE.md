@@ -529,6 +529,8 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
 - Report recovery: `find_references`, `blast_radius`, and `check_edit` accept `offset` and
   `limit`, with equivalent CLI `--offset` and `--limit` flags. Each displayed section uses its
   own page window; counts describe the complete report subject to stated discovery/check cuts.
+  The first callers page lists up to `limit` rows of each label and of the text-only lines in
+  report order, so `offset` = `limit` continues every section and no row shows twice.
   Page sizes are at most 200. Restart at offset 0 after editing or rebuilding the index.
   `blast_radius` can show discovered low-signal rows with `include_low_signal` /
   `--include-low-signal`; its graph discovery ceiling remains 200. Incomplete test coverage

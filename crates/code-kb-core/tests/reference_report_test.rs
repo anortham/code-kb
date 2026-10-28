@@ -11948,3 +11948,69 @@ fn a_go_receiver_whose_package_cannot_be_the_owner_package_is_excluded() {
         assert_not_excluded(&report, "use/use.go", line_of(&repo, "use/use.go", needle));
     }
 }
+
+fn listed_rows_by_section(text: &str) -> Vec<(String, String)> {
+    let mut rows = Vec::new();
+    let mut section = String::new();
+    for line in text.lines() {
+        if let Some((title, _)) = line.split_once(" (")
+            && !line.starts_with(' ')
+            && !line.starts_with('-')
+            && !line.starts_with('…')
+        {
+            section = title.to_string();
+        } else if let Some(row) = line.strip_prefix("- ") {
+            rows.push((section.clone(), row.to_string()));
+        } else if section == "Text only"
+            && let Some((path, lines)) = line.trim_start().split_once(": ")
+            && line.starts_with("  ")
+            && !line.trim_start().starts_with("Page offset")
+        {
+            for number in lines.split(", ") {
+                rows.push((section.clone(), format!("{path}:{number}")));
+            }
+        }
+    }
+    rows
+}
+
+#[test]
+fn paging_by_the_limit_lists_every_site_and_text_line_once() {
+    let repo = scanned_repo(&[
+        ("pyproject.toml", "[project]\nname = 'r'\nversion = '0.1'\n"),
+        (
+            "util.py",
+            "class Util:\n    def helper(self):\n        return 1\n\n    def a(self):\n        return self.helper()\n\n    def b(self):\n        return self.helper()\n\n    def c(self):\n        return self.helper()\n",
+        ),
+        (
+            "other.py",
+            "class Other:\n    def helper(self):\n        return 2\n",
+        ),
+        (
+            "use.py",
+            "def d(x):\n    return x.helper()\n\n\ndef e(y):\n    return y.helper()\n",
+        ),
+        ("notes.py", "# helper one\n# helper two\n# helper three\n"),
+        ("README.md", "helper\nhelper again\nhelper three\n"),
+    ]);
+    let report = report(&repo, "Util.helper", Some("util.py"));
+    assert_eq!(report.counts.proven, 3, "{}", dump(&report));
+    assert_eq!(report.counts.unresolved, 2, "{}", dump(&report));
+    assert_eq!(report.counts.text_only_lines, 6, "{}", dump(&report));
+
+    let limit = 2;
+    let mut seen = Vec::new();
+    for offset in (0..8).step_by(limit) {
+        let text = code_kb_core::formatters::format_reference_report_page(&report, limit, offset);
+        seen.extend(listed_rows_by_section(&text));
+    }
+
+    let mut unique = seen.clone();
+    unique.sort();
+    unique.dedup();
+    assert_eq!(unique.len(), seen.len(), "a row is listed twice: {seen:#?}");
+    let count = |section: &str| seen.iter().filter(|(s, _)| s == section).count();
+    assert_eq!(count("Proven"), 3, "{seen:#?}");
+    assert_eq!(count("Unresolved"), 2, "{seen:#?}");
+    assert_eq!(count("Text only"), 6, "{seen:#?}");
+}
