@@ -1102,3 +1102,207 @@ fn an_owner_name_in_a_return_type_does_not_create_generic_parameters() {
     let site = site_at(&report, "src/Handler.cs", line);
     assert_eq!(site.label, SiteLabel::Proven, "{site:?}");
 }
+
+fn report_for_definition(repo: &Repo, name: &str, path: &str, line: usize) -> ReferenceReport {
+    let conn = open_read_only(&repo.db).unwrap();
+    let symbol_id: String = conn
+        .query_row(
+            "SELECT symbol_id FROM symbols WHERE name = ?1 AND path = ?2 AND start_line = ?3",
+            params![name, path, line as i64],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let target = code_kb_core::queries::get_symbol_by_id(&conn, &symbol_id)
+        .unwrap()
+        .unwrap();
+    reference_report(&conn, &repo.root, &target, false).unwrap()
+}
+
+const PYTHON_NESTED_TYPES: &str = "class Outer:\n    class Inner:\n        @staticmethod\n        def build():\n            return 1\n\n\nclass Other:\n    class Inner:\n        @staticmethod\n        def build():\n            return 2\n\n\ndef use():\n    return Outer.Inner.build()\n";
+
+#[test]
+fn a_python_nested_type_path_proves_its_method_and_excludes_a_same_file_decoy() {
+    let repo = scanned_repo(&[("outer.py", PYTHON_NESTED_TYPES)]);
+    let call = line_of(&repo, "outer.py", "Outer.Inner.build()");
+    let outer = line_of(&repo, "outer.py", "return 1") - 1;
+    let other = line_of(&repo, "outer.py", "return 2") - 1;
+
+    let proven = report_for_definition(&repo, "build", "outer.py", outer);
+    let site = site_at(&proven, "outer.py", call);
+    assert_eq!(site.label, SiteLabel::Proven, "{site:?}");
+    assert_eq!(site.basis, "qualified path");
+
+    let decoy = report_for_definition(&repo, "build", "outer.py", other);
+    let site = site_at(&decoy, "outer.py", call);
+    assert_eq!(site.label, SiteLabel::Excluded, "{site:?}");
+}
+
+#[test]
+fn a_java_nested_type_path_proves_its_method_and_excludes_a_decoy() {
+    let repo = scanned_repo(&[
+        (
+            "app/Outer.java",
+            "package app;\n\npublic class Outer {\n    public static class Inner {\n        public static int build() { return 1; }\n    }\n}\n",
+        ),
+        (
+            "app/Other.java",
+            "package app;\n\npublic class Other {\n    public static class Inner {\n        public static int build() { return 2; }\n    }\n}\n",
+        ),
+        (
+            "app/Use.java",
+            "package app;\n\npublic class Use {\n    int run() { return Outer.Inner.build(); }\n}\n",
+        ),
+    ]);
+    let call = line_of(&repo, "app/Use.java", "Outer.Inner.build()");
+
+    let proven = report_for_definition(&repo, "build", "app/Outer.java", 5);
+    let site = site_at(&proven, "app/Use.java", call);
+    assert_eq!(site.label, SiteLabel::Proven, "{site:?}");
+    assert_eq!(site.basis, "qualified path");
+
+    let decoy = report_for_definition(&repo, "build", "app/Other.java", 5);
+    let site = site_at(&decoy, "app/Use.java", call);
+    assert_eq!(site.label, SiteLabel::Excluded, "{site:?}");
+}
+
+#[test]
+fn a_csharp_nested_type_path_proves_its_method_and_excludes_a_same_file_decoy() {
+    let repo = scanned_repo(&[(
+        "Outer.cs",
+        "namespace App;\n\npublic class Outer {\n    public class Inner {\n        public static int Build() { return 1; }\n    }\n}\n\npublic class Other {\n    public class Inner {\n        public static int Build() { return 2; }\n    }\n}\n\npublic class Use {\n    int Run() { return Outer.Inner.Build(); }\n}\n",
+    )]);
+    let call = line_of(&repo, "Outer.cs", "Outer.Inner.Build()");
+    let outer = line_of(&repo, "Outer.cs", "return 1;");
+    let other = line_of(&repo, "Outer.cs", "return 2;");
+
+    let proven = report_for_definition(&repo, "Build", "Outer.cs", outer);
+    let site = site_at(&proven, "Outer.cs", call);
+    assert_eq!(site.label, SiteLabel::Proven, "{site:?}");
+    assert_eq!(site.basis, "qualified path");
+
+    let decoy = report_for_definition(&repo, "Build", "Outer.cs", other);
+    let site = site_at(&decoy, "Outer.cs", call);
+    assert_eq!(site.label, SiteLabel::Excluded, "{site:?}");
+}
+
+#[test]
+fn a_java_package_qualified_nested_type_path_keeps_its_qualified_path_proof() {
+    let repo = scanned_repo(&[
+        (
+            "app/Outer.java",
+            "package app;\n\npublic class Outer {\n    public static class Inner {\n        public static int build() { return 1; }\n    }\n}\n",
+        ),
+        (
+            "app/Other.java",
+            "package app;\n\npublic class Other {\n    public static class Inner {\n        public static int build() { return 2; }\n    }\n}\n",
+        ),
+        (
+            "use/Use.java",
+            "package use;\n\npublic class Use {\n    int run() { return app.Outer.Inner.build(); }\n}\n",
+        ),
+    ]);
+    let call = line_of(&repo, "use/Use.java", "app.Outer.Inner.build()");
+
+    let proven = report_for_definition(&repo, "build", "app/Outer.java", 5);
+    let site = site_at(&proven, "use/Use.java", call);
+    assert_eq!(site.label, SiteLabel::Proven, "{site:?}");
+    assert_eq!(site.basis, "qualified path");
+
+    let decoy = report_for_definition(&repo, "build", "app/Other.java", 5);
+    let site = site_at(&decoy, "use/Use.java", call);
+    assert_eq!(site.label, SiteLabel::Excluded, "{site:?}");
+}
+
+#[test]
+fn an_untyped_class_attribute_after_a_type_root_stays_unproven() {
+    let repo = scanned_repo(&[(
+        "outer.py",
+        "class Helper:\n    def run(self):\n        return 1\n\n\ndef make_helper():\n    return Helper()\n\n\nclass Outer:\n    helper = make_helper()\n\n    def run(self):\n        return 2\n\n\ndef use():\n    return Outer.helper.run()\n",
+    )]);
+    let call = line_of(&repo, "outer.py", "Outer.helper.run()");
+    for line in [2, 13] {
+        let report = report_for_definition(&repo, "run", "outer.py", line);
+        let site = site_at(&report, "outer.py", call);
+        assert!(
+            matches!(site.label, SiteLabel::Likely | SiteLabel::Unresolved),
+            "an untyped class attribute must keep the call unproven: {site:?}"
+        );
+    }
+}
+
+const PYTHON_SELF_SERVICES: &str = "class MailService:\n    def send(self):\n        return 1\n\n\nclass InviteService:\n    def send(self):\n        return 2\n\n\nclass MailHandler:\n    def __init__(self):\n        self.service = MailService()\n\n    def run(self):\n        return self.service.send()\n\n\nclass InviteHandler:\n    def __init__(self):\n        self.service: InviteService = InviteService()\n\n    def run(self):\n        return self.service.send() + 0\n";
+
+#[test]
+fn a_python_self_attribute_chain_proves_its_service_and_excludes_a_decoy() {
+    let repo = scanned_repo(&[("app.py", PYTHON_SELF_SERVICES)]);
+    let facts = type_facts(&open_read_only(&repo.db).unwrap(), "app.py");
+    assert!(
+        facts.iter().any(|(owner, name, _, resolved_type)| {
+            owner == "MailHandler" && name == "service" && resolved_type == "MailService"
+        }),
+        "MailHandler attribute fact missing: {facts:?}"
+    );
+    let mail_call = line_of(&repo, "app.py", "self.service = MailService()") + 3;
+    let invite_call = line_of(&repo, "app.py", "self.service.send() + 0");
+
+    let mail = report(&repo, "MailService.send", "app.py");
+    let site = site_at(&mail, "app.py", mail_call);
+    assert_eq!(site.label, SiteLabel::Proven, "{site:?}");
+    assert_eq!(site.basis, "receiver type");
+    assert_eq!(
+        site_at(&mail, "app.py", invite_call).label,
+        SiteLabel::Excluded
+    );
+
+    let invite = report(&repo, "InviteService.send", "app.py");
+    let site = site_at(&invite, "app.py", invite_call);
+    assert_eq!(site.label, SiteLabel::Proven, "{site:?}");
+    assert_eq!(
+        site_at(&invite, "app.py", mail_call).label,
+        SiteLabel::Excluded
+    );
+
+    let conn = open_read_only(&repo.db).unwrap();
+    let target = select_reference_target(&conn, "MailService.send", Some("app.py")).unwrap();
+    let callers =
+        find_references_for_symbol(&conn, &target.name, "callers", 20, &target.symbol_id).unwrap();
+    assert!(
+        callers
+            .iter()
+            .any(|site| site.path == "app.py" && site.start_line == Some(mail_call))
+    );
+    assert!(
+        !callers
+            .iter()
+            .any(|site| site.path == "app.py" && site.start_line == Some(invite_call))
+    );
+}
+
+#[test]
+fn a_python_self_attribute_without_a_type_fact_stays_unproven() {
+    let repo = scanned_repo(&[(
+        "app.py",
+        "class MailService:\n    def send(self):\n        return 1\n\n\nclass InviteService:\n    def send(self):\n        return 2\n\n\ndef make_service():\n    return MailService()\n\n\nclass MailHandler:\n    def __init__(self):\n        self.service = make_service()\n\n    def run(self):\n        return self.service.send()\n",
+    )]);
+    let call = line_of(&repo, "app.py", "self.service.send()");
+    for name in ["MailService.send", "InviteService.send"] {
+        let report = report(&repo, name, "app.py");
+        let site = site_at(&report, "app.py", call);
+        assert!(
+            matches!(site.label, SiteLabel::Likely | SiteLabel::Unresolved),
+            "an untyped self attribute must keep the call unproven: {site:?}"
+        );
+    }
+}
+
+#[test]
+fn a_self_chain_in_a_nested_function_does_not_bind_the_enclosing_class() {
+    let repo = scanned_repo(&[(
+        "app.py",
+        "class MailService:\n    def send(self):\n        return 1\n\n\nclass InviteService:\n    def send(self):\n        return 2\n\n\nclass MailHandler:\n    def __init__(self):\n        self.service = MailService()\n\n    def run(self):\n        def helper(self):\n            return self.service.send()\n        return helper(InviteHolder())\n\n\nclass InviteHolder:\n    def __init__(self):\n        self.service = InviteService()\n",
+    )]);
+    let call = line_of(&repo, "app.py", "return self.service.send()");
+    let report = report(&repo, "InviteService.send", "app.py");
+    let site = site_at(&report, "app.py", call);
+    assert_ne!(site.label, SiteLabel::Excluded, "{site:?}");
+}
