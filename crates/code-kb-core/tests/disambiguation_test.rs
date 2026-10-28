@@ -1743,3 +1743,36 @@ fn a_skeleton_of_script_and_reexport_files_names_their_top_level_rows() {
         "// File: node_modules/dep/index.js\n\n// Not in the index: the scan skips this path. Read the file.\n"
     );
 }
+
+#[test]
+fn a_folder_outline_names_no_python_lambda_and_keeps_a_function_named_like_one() {
+    let repo = safe_tempdir();
+    let root = repo.path();
+    fs::create_dir_all(root.join("flaskr")).unwrap();
+    fs::write(
+        root.join("flaskr/db.py"),
+        "import sqlite3\nfrom datetime import datetime\n\n\ndef get_db():\n    return 1\n\n\ndef close_db(e=None):\n    pass\n\n\ndef init_db():\n    pass\n\n\ndef init_db_command():\n    init_db()\n\n\nsqlite3.register_converter(\"timestamp\", lambda v: datetime.fromisoformat(v.decode()))\n\n\ndef init_app(app):\n    app.teardown_appcontext(close_db)\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("flaskr/named.py"),
+        "def lambda_7():\n    return 7\n",
+    )
+    .unwrap();
+    let ws = Workspace::new(root.to_path_buf());
+    let db = root.join(".code-kb/artifact.db");
+    scan_workspace(&ws, &db, true).unwrap();
+    let conn = open_read_only(&db).unwrap();
+
+    let outline = file_skeleton_op(&ws, &db, &conn, "flaskr").unwrap();
+    assert!(
+        outline.contains(
+            "db.py [function get_db, function close_db, function init_db, function init_db_command, function init_app]"
+        ),
+        "{outline}"
+    );
+    assert!(
+        outline.contains("named.py [function lambda_7]"),
+        "{outline}"
+    );
+}
