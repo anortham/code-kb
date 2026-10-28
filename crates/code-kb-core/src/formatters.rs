@@ -847,6 +847,9 @@ pub fn format_context_slice(slice: &ContextSlice) -> String {
     out
 }
 
+/// The answer of every paged or limited report, CLI and MCP alike, when its limit is 0.
+pub const ZERO_LIMIT_NOTICE: &str = "Result limit is 0; increase it to check for matches.\n";
+
 fn cap_notice(shown: usize, limit: usize) -> String {
     let advice = if limit >= crate::queries::MAX_RESULT_LIMIT {
         "narrow the query to see more"
@@ -980,7 +983,7 @@ pub fn format_references_page(
         return error;
     }
     if limit == 0 {
-        return "Result limit is 0; increase it to check for matches.\n".to_string();
+        return ZERO_LIMIT_NOTICE.to_string();
     }
     if offset == 0 {
         return format_references(target_name, refs, direction, limit);
@@ -1013,7 +1016,7 @@ pub fn format_references_window(
         return error;
     }
     if limit == 0 {
-        return "Result limit is 0; increase it to check for matches.\n".to_string();
+        return ZERO_LIMIT_NOTICE.to_string();
     }
     if offset == 0 && total <= limit {
         return format_references(target_name, refs, direction, limit.saturating_add(1));
@@ -1045,7 +1048,7 @@ pub fn format_references_window(
     }
     if offset == 0 && refs.len() < total {
         out.push_str(&format!(
-            "\n[Showing {} of {total} results; use --offset {} to see more.]\n",
+            "\n[Showing {} of {total} results; pass offset {} to see more.]\n",
             refs.len(),
             refs.len()
         ));
@@ -1130,7 +1133,7 @@ pub fn format_reference_report_page(
         return error;
     }
     if limit == 0 {
-        return "Result limit is 0; increase it to check for matches.\n".to_string();
+        return ZERO_LIMIT_NOTICE.to_string();
     }
     if offset == 0 {
         return format_reference_report(report, limit);
@@ -2402,7 +2405,7 @@ pub fn format_edit_check_page(check: &EditCheck, offset: usize, limit: usize) ->
         return error;
     }
     if limit == 0 {
-        return "Result limit is 0; increase it to check for matches.\n".to_string();
+        return ZERO_LIMIT_NOTICE.to_string();
     }
     if offset == 0 && limit == DEFAULT_EDIT_PAGE_SIZE {
         return format_edit_check(check);
@@ -2652,7 +2655,7 @@ pub fn format_blast_radius_page(
         return error;
     }
     if limit == 0 {
-        return "Result limit is 0; increase it to check for matches.".to_string();
+        return ZERO_LIMIT_NOTICE.to_string();
     }
     if offset == 0 && !include_low_signal {
         return format_blast_radius(result);

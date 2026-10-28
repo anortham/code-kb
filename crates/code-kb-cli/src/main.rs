@@ -2,6 +2,7 @@ use clap::{Args, Parser, Subcommand};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+use code_kb_core::formatters::ZERO_LIMIT_NOTICE;
 use code_kb_core::workspace::NO_PROJECT_MARKER_REASON;
 use code_kb_core::{
     SymbolSelector, Workspace, WorkspaceError, codebase_outline_op, edit_check_op,
@@ -19,7 +20,6 @@ mod logging;
 mod mcp;
 
 static DEFAULT_ROUTING_BLOCK: &str = include_str!("routing-block.md");
-const ZERO_LIMIT_NOTICE: &str = "Result limit is 0; increase it to check for matches.";
 
 fn parse_result_limit(raw: &str) -> Result<usize, String> {
     let limit = raw
@@ -612,7 +612,7 @@ fn main() -> anyhow::Result<ExitCode> {
             if cli.json {
                 println!("{}", serde_json::to_string_pretty(&lookup)?);
             } else if args.limit == 0 {
-                println!("{ZERO_LIMIT_NOTICE}");
+                print!("{ZERO_LIMIT_NOTICE}");
             } else {
                 print!(
                     "{}",
@@ -637,7 +637,7 @@ fn main() -> anyhow::Result<ExitCode> {
             if cli.json {
                 println!("{}", serde_json::to_string_pretty(&matches)?);
             } else if args.limit == 0 {
-                println!("{ZERO_LIMIT_NOTICE}");
+                print!("{ZERO_LIMIT_NOTICE}");
             } else {
                 let mut shown = matches;
                 qualify_members(&conn, shown.iter_mut().map(|hit| &mut hit.symbol))?;
@@ -727,11 +727,8 @@ fn main() -> anyhow::Result<ExitCode> {
         }
         Command::Refs(args) => {
             let page_end = queries::validate_result_page(args.offset, args.limit)?;
-            let query_limit = if cli.json {
-                args.limit
-            } else {
-                page_end.min(queries::MAX_RESULT_LIMIT)
-            };
+            let query_limit = page_end.min(queries::MAX_RESULT_LIMIT);
+            let paged = args.direction == "callees" && (cli.json || args.limit > 0);
             let selector = symbol_selector(args.symbol.as_ref(), args.symbol_id.as_ref())?;
             let (target, refs, page_total) = match selector {
                 SymbolSelector::Name(name) => {
@@ -739,7 +736,7 @@ fn main() -> anyhow::Result<ExitCode> {
                         .file
                         .as_deref()
                         .map(|path| workspace.relativize_filter(path));
-                    if !cli.json && args.direction == "callees" && args.limit > 0 {
+                    if paged {
                         let (refs, total) = queries::find_callees_page_scoped(
                             &conn,
                             &name,
@@ -769,7 +766,7 @@ fn main() -> anyhow::Result<ExitCode> {
                         &SymbolSelector::Id(id),
                         args.file.as_deref(),
                     )?;
-                    if !cli.json && args.direction == "callees" && args.limit > 0 {
+                    if paged {
                         let (refs, total) = queries::find_callees_page_for_symbol(
                             &conn,
                             &selected.name,
@@ -910,7 +907,7 @@ fn main() -> anyhow::Result<ExitCode> {
                     }
                 }
             } else if args.limit == 0 && !cli.json {
-                println!("{ZERO_LIMIT_NOTICE}");
+                print!("{ZERO_LIMIT_NOTICE}");
             } else {
                 let facts = code_kb_core::find_structural_facts_scoped(
                     &conn,

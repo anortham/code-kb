@@ -545,9 +545,10 @@ fn callee_pages_past_200_are_bounded_and_retrievable_by_name_and_id() {
         "{first_page_text}"
     );
     assert!(
-        first_page_text.contains("use --offset 1 to see more"),
+        first_page_text.contains("[Showing 1 of 220 results; pass offset 1 to see more.]"),
         "{first_page_text}"
     );
+    assert!(!first_page_text.contains("--offset"), "{first_page_text}");
 
     let output = cli(
         root,
@@ -661,6 +662,103 @@ fn callee_pages_past_200_are_bounded_and_retrievable_by_name_and_id() {
     );
     assert_ne!(past_end["isError"], true, "{past_end}");
     assert_eq!(result_text(&past_end), past_end_text);
+}
+
+fn cross_language_callee_repo() -> tempfile::TempDir {
+    let repo = code_kb_core::safe_tempdir();
+    for (path, source) in [
+        (
+            "pyproject.toml",
+            "[project]\nname = 'mixed'\nversion = '0.1.0'\n",
+        ),
+        (
+            "app.py",
+            "def caller():\n    helper()\n    local()\n    other()\n\n\ndef local():\n    pass\n\n\ndef other():\n    pass\n",
+        ),
+        ("util.js", "export function helper() {}\n"),
+    ] {
+        std::fs::write(repo.path().join(path), source).unwrap();
+    }
+    repo
+}
+
+fn json_callee_names(output: std::process::Output) -> Vec<String> {
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let rows: Value = serde_json::from_slice(&output.stdout).unwrap();
+    rows.as_array()
+        .unwrap()
+        .iter()
+        .map(|row| row["to_symbol_name"].as_str().unwrap().to_string())
+        .collect()
+}
+
+#[test]
+fn callee_json_drops_cross_language_calls_like_the_text_and_mcp_answers() {
+    let repo = cross_language_callee_repo();
+    let root = repo.path();
+    let text_output = cli(root, &["refs", "caller", "--direction", "callees"]);
+    assert!(text_output.status.success());
+    let text = String::from_utf8(text_output.stdout).unwrap();
+    assert!(text.contains("`local`"), "{text}");
+    assert!(text.contains("`other`"), "{text}");
+    assert!(!text.contains("`helper`"), "{text}");
+
+    let by_name = json_callee_names(cli(
+        root,
+        &["--json", "refs", "caller", "--direction", "callees"],
+    ));
+    assert_eq!(by_name, ["local", "other"]);
+
+    let db = rusqlite::Connection::open(root.join(".code-kb/artifact.db")).unwrap();
+    let caller_id: String = db
+        .query_row(
+            "SELECT symbol_id FROM symbols WHERE name = 'caller' AND path = 'app.py'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    drop(db);
+    let by_id = json_callee_names(cli(
+        root,
+        &[
+            "--json",
+            "refs",
+            "--symbol-id",
+            &caller_id,
+            "--direction",
+            "callees",
+        ],
+    ));
+    assert_eq!(by_id, by_name);
+
+    let second_page = json_callee_names(cli(
+        root,
+        &[
+            "--json",
+            "refs",
+            "caller",
+            "--direction",
+            "callees",
+            "--limit",
+            "1",
+            "--offset",
+            "1",
+        ],
+    ));
+    assert_eq!(second_page, ["other"]);
+
+    let mut mcp = McpSession::start(root);
+    let result = mcp.call(
+        root,
+        "find_references",
+        json!({"symbol_name": "caller", "direction": "callees"}),
+    );
+    assert_ne!(result["isError"], true, "{result}");
+    assert_eq!(result_text(&result), text);
 }
 
 #[test]
@@ -1647,6 +1745,21 @@ fn report_page_controls_allow_large_offsets_and_reject_overflow_over_cli_and_mcp
     assert!(output.status.success());
     let cli_zero_blast = String::from_utf8(output.stdout).unwrap();
 
+    let output = cli(root, &["lookup", "helper", "--limit", "0"]);
+    assert!(output.status.success());
+    let cli_zero_lookup = String::from_utf8(output.stdout).unwrap();
+    for zero_text in [
+        &cli_zero_refs,
+        &cli_zero_check,
+        &cli_zero_blast,
+        &cli_zero_lookup,
+    ] {
+        assert_eq!(
+            zero_text,
+            "Result limit is 0; increase it to check for matches.\n"
+        );
+    }
+
     let output = cli(
         root,
         &["refs", "helper", "--limit", "1", "--offset", "1000"],
@@ -1748,6 +1861,11 @@ fn report_page_controls_allow_large_offsets_and_reject_overflow_over_cli_and_mcp
             cli_zero_blast.as_str(),
         ),
         (
+            "lookup_symbol",
+            json!({"query": "helper", "limit": 0}),
+            cli_zero_lookup.as_str(),
+        ),
+        (
             "find_references",
             json!({"symbol_name": "helper", "limit": 1, "offset": 1000}),
             cli_past_refs.as_str(),
@@ -1782,11 +1900,20 @@ fn report_page_controls_allow_large_offsets_and_reject_overflow_over_cli_and_mcp
         assert!(cli_text.contains("overflows"));
     }
 
-    let invalid_offset = mcp.call(
+    let string_offset = mcp.call(
         root,
         "find_references",
-        json!({"symbol_name": "helper", "offset": "1"}),
+        json!({"symbol_name": "helper", "limit": "1", "offset": "1000"}),
     );
-    assert_eq!(invalid_offset["isError"], true, "{invalid_offset}");
-    assert!(result_text(&invalid_offset).contains("Invalid offset"));
+    assert_ne!(string_offset["isError"], true, "{string_offset}");
+    assert_eq!(result_text(&string_offset), cli_past_refs);
+    for offset in [json!("-1"), json!("one"), json!(-1)] {
+        let invalid_offset = mcp.call(
+            root,
+            "find_references",
+            json!({"symbol_name": "helper", "offset": offset}),
+        );
+        assert_eq!(invalid_offset["isError"], true, "{invalid_offset}");
+        assert!(result_text(&invalid_offset).contains("Invalid offset"));
+    }
 }

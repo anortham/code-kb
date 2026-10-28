@@ -1210,7 +1210,7 @@ fn test_mcp_blast_radius_stdio_handshake_and_tools() {
     assert_ne!(zero_blast["result"]["isError"], true, "{zero_blast}");
     assert_eq!(
         result_text(&zero_blast["result"]),
-        "Result limit is 0; increase it to check for matches."
+        "Result limit is 0; increase it to check for matches.\n"
     );
 
     // 9. Test get_symbol_context via MCP with include_external: false
