@@ -396,6 +396,12 @@ print(json.dumps(result))"""
             self.assertFalse((base / "unsupported-logs").exists())
 
     def test_broad_or_private_tool_inputs_cannot_be_mounted(self):
+        private_path = next(
+            (Path.home() / name for name in (".codex", ".ssh", ".config") if (Path.home() / name).is_dir()),
+            None,
+        )
+        if private_path is None:
+            self.skipTest("needs a private folder in HOME")
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
             project = base / "project"
@@ -414,7 +420,7 @@ print(json.dumps(result))"""
                 base / "logs-private",
                 "grade",
                 ["python3", "-c", "raise SystemExit(99)"],
-                options=("--tool", f"private={Path.home() / '.codex'}"),
+                options=("--tool", f"private={private_path}"),
             )
 
             self.assertEqual(broad.returncode, 2)

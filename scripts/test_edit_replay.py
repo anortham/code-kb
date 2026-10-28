@@ -127,7 +127,7 @@ class FakeBinaryTest(unittest.TestCase):
             'f=.code-kb/sessions/replay-1.json\n'
             'grep -q \'"base": "abc"\' "$f" || exit 0\n'
             'echo \'{"base":"abc","checked_diff":"h"}\' > "$f"\n'
-            'echo \'{"decision":"block","reason":"Before you finish: 1 sites still use the old shape of `f`.\\n'
+            'printf \'%s\\n\' \'{"decision":"block","reason":"Before you finish: 1 sites still use the old shape of `f`.\\n'
             'a.py:3  f: removed\\nEdit them or say why they need no change."}\'\n')
         got = edit_replay.run_stop_hook(self.fake(script), self.dir, "abc", "replay-1")
         self.assertTrue(got["ran"])

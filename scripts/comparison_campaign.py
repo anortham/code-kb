@@ -580,9 +580,9 @@ def run_campaign(args, *, jobs=None, auth_file=AUTH_FILE, hidden_roots=None, cap
     root, output = Path(args.root).resolve(), Path(args.output).resolve()
     if not args.run:
         return {"status": "not_run"}
+    experiment, manifest_hash, task_data, _ = validate_manifest(root, args.binary, args.julie)
     if not Path(auth_file).is_file():
         raise CampaignError("saved Codex authentication is unavailable")
-    experiment, manifest_hash, task_data, _ = validate_manifest(root, args.binary, args.julie)
     task_map = {task["id"]: task for task in task_data["tasks"]}
     generated_schedule = jobs is None
     jobs = schedule(list(task_map)) if generated_schedule else jobs

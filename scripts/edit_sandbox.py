@@ -609,7 +609,6 @@ def run(
         root_paths["private_profile"] = private_profile_path
     if auth_file_path is not None:
         root_paths["auth_file"] = auth_file_path
-    _ensure_disjoint("mount", root_paths)
     broad_roots = {Path("/"), Path("/home"), Path("/tmp"), Path("/usr"), Path("/etc"), Path("/var"), Path("/opt"), Path.home()}
     private_roots = {home_path / name for name in (".codex", ".ssh", ".aws", ".azure", ".docker", ".gnupg", ".kube", ".config")}
     if codex_home_path is not None:
@@ -630,6 +629,7 @@ def run(
                     continue
                 if _inside(private_root, root) or _inside(root, private_root):
                     raise SandboxError(f"{label} overlaps private host path: {root}")
+    _ensure_disjoint("mount", root_paths)
     if shutil.which("bwrap") is None:
         raise SandboxError("bubblewrap (bwrap) is required")
     if mode == "agent" and codex_home_path is None:

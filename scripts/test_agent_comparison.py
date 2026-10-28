@@ -63,6 +63,10 @@ class CaptureTests(unittest.TestCase):
 
 
 class ConfigurationTests(unittest.TestCase):
+    @unittest.skipUnless(
+        shutil.which("codex") and shutil.which("bwrap") and (Path.home() / ".codex").is_dir(),
+        "needs codex, bubblewrap, and a Codex profile",
+    )
     def test_codex_sandbox_cannot_read_private_profile(self):
         with tempfile.TemporaryDirectory() as name:
             root = Path(name)
@@ -73,7 +77,7 @@ class ConfigurationTests(unittest.TestCase):
             (profile / "probe.txt").write_text("private sentinel")
             authentication = root / "fake-auth.json"
             authentication.write_text("{}")
-            target = Path("/home/murphy/.codex")
+            target = Path.home() / ".codex"
             configured = agent_comparison.codex_command(
                 shutil.which("codex"), project, root / "schema", root / "answer", target, "probe",
             )
