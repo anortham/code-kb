@@ -312,7 +312,7 @@ impl RegisteredDirectories {
         );
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, not(windows)))]
     fn len(&self) -> usize {
         self.paths.len()
     }
@@ -1913,6 +1913,7 @@ mod tests {
         assert_eq!(registrations.generation, 3);
     }
 
+    #[cfg(not(windows))]
     fn wait_for_indexed_symbol(db_path: &Path, name: &str, expected: bool) {
         wait_until(
             &format!("symbol {name} reaches indexed state {expected}"),
@@ -1927,6 +1928,7 @@ mod tests {
         );
     }
 
+    #[cfg(not(windows))]
     fn wait_until(description: &str, mut predicate: impl FnMut() -> bool) {
         for _ in 0..100 {
             if predicate() {
