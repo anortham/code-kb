@@ -1071,11 +1071,11 @@ fn caller_text(site: &ReferenceSite) -> String {
 }
 
 const FOLD_FILES_NAMED: usize = 5;
-const TEXT_ONLY_FILES_LISTED: usize = 10;
-const TEXT_ONLY_LINES_PER_FILE: usize = 12;
 
-/// The callers answer: three header lines, the sites in label order up to `limit`, the text-only
-/// lines, the blind spots of the index, and the import summary. Counts are always complete.
+/// The callers answer: three header lines, up to `limit` sites of each label, the reach sections,
+/// up to `limit` text-only lines, the blind spots of the index, and the import summary. Each
+/// section lists the rows of the first page window, so `offset = limit` continues every section.
+/// Counts are always complete.
 pub fn format_reference_report(report: &ReferenceReport, limit: usize) -> String {
     let target = &report.target;
     let counts = &report.counts;
@@ -1108,7 +1108,7 @@ pub fn format_reference_report(report: &ReferenceReport, limit: usize) -> String
     body.push_str(&variant_section(&report.variant_uses, limit));
     body.push_str(&registration_section(&report.registrations, limit));
     body.push_str(&test_section(&report.tests, limit));
-    body.push_str(&text_only_section(report));
+    body.push_str(&text_only_section(report, limit));
     if !report.cannot_see.is_empty() {
         body.push_str(&format!(
             "Not visible to this index: {}.\n",
@@ -1441,39 +1441,7 @@ fn text_only_section_page(report: &ReferenceReport, limit: usize, offset: usize)
         report.counts.text_only_lines
     );
     page_caption(&mut out, total, start, end, offset);
-    let mut per_file: Vec<(&str, Vec<usize>)> = Vec::new();
-    let page = report
-        .text_only
-        .iter()
-        .flat_map(|file| {
-            file.lines
-                .iter()
-                .map(move |line| (file.path.as_str(), line))
-        })
-        .skip(start)
-        .take(end - start);
-    for (path, line) in page {
-        match per_file.last_mut() {
-            Some((previous, lines)) if *previous == path => lines.push(*line),
-            _ => per_file.push((path, vec![*line])),
-        }
-    }
-    for (path, lines) in per_file {
-        let lines = lines
-            .iter()
-            .map(usize::to_string)
-            .collect::<Vec<_>>()
-            .join(", ");
-        out.push_str(&format!("  {path}: {lines}\n"));
-    }
-    if end < total {
-        let remainder = report
-            .text_only
-            .iter()
-            .flat_map(|file| file.lines.iter().map(move |_| file.path.as_str()))
-            .skip(end);
-        out.push_str(&section_fold_with_count(remainder, total - end, "line"));
-    }
+    out.push_str(&text_only_window(report, start, limit));
     out
 }
 
@@ -1501,7 +1469,6 @@ fn text_count_line(report: &ReferenceReport) -> String {
 
 fn site_groups(sites: &[LabeledSite], limit: usize) -> String {
     let mut out = String::new();
-    let mut listed = 0;
     for label in SiteLabel::ALL {
         let group: Vec<&LabeledSite> = sites.iter().filter(|site| site.label == label).collect();
         if group.is_empty() {
@@ -1514,7 +1481,7 @@ fn site_groups(sites: &[LabeledSite], limit: usize) -> String {
             SiteLabel::Excluded => "Excluded",
         };
         out.push_str(&format!("{title} ({}):\n", group.len()));
-        let shown = limit.saturating_sub(listed).min(group.len());
+        let shown = limit.min(group.len());
         for labeled in &group[..shown] {
             let site = &labeled.site;
             let line = site.start_line.map(|l| format!(":{l}")).unwrap_or_default();
@@ -1527,7 +1494,6 @@ fn site_groups(sites: &[LabeledSite], limit: usize) -> String {
                 arg_count_text(labeled)
             ));
         }
-        listed += shown;
         if shown < group.len() {
             out.push_str(&fold_line(label, &group[shown..]));
         }
@@ -1786,7 +1752,7 @@ fn method_section(title: &str, rows: &[OverrideRow], limit: usize) -> String {
     out
 }
 
-fn text_only_section(report: &ReferenceReport) -> String {
+fn text_only_section(report: &ReferenceReport, limit: usize) -> String {
     if report.text_only.is_empty() {
         return String::new();
     }
@@ -1794,29 +1760,52 @@ fn text_only_section(report: &ReferenceReport) -> String {
         "Text only ({}): docs, comments, strings, or code the index did not record\n",
         report.counts.text_only_lines
     );
-    let mut hidden_lines = 0;
-    let mut hidden_files = 0;
-    for (index, file) in report.text_only.iter().enumerate() {
-        let listed = if index < TEXT_ONLY_FILES_LISTED {
-            file.lines.len().min(TEXT_ONLY_LINES_PER_FILE)
-        } else {
-            0
-        };
-        if listed > 0 {
-            let lines: Vec<String> = file.lines[..listed].iter().map(usize::to_string).collect();
-            out.push_str(&format!("  {}: {}\n", file.path, lines.join(", ")));
-        }
-        if listed < file.lines.len() {
-            hidden_lines += file.lines.len() - listed;
-            hidden_files += 1;
+    out.push_str(&text_only_window(report, 0, limit));
+    out
+}
+
+/// The text-only lines `start..start + limit` in report order, one row per file, and a fold line
+/// that counts the lines after them by file.
+fn text_only_window(report: &ReferenceReport, start: usize, limit: usize) -> String {
+    let total = report
+        .text_only
+        .iter()
+        .map(|file| file.lines.len())
+        .sum::<usize>();
+    let end = start + limit.min(total.saturating_sub(start));
+    let mut per_file: Vec<(&str, Vec<usize>)> = Vec::new();
+    let page = report
+        .text_only
+        .iter()
+        .flat_map(|file| {
+            file.lines
+                .iter()
+                .map(move |line| (file.path.as_str(), line))
+        })
+        .skip(start)
+        .take(end.saturating_sub(start));
+    for (path, line) in page {
+        match per_file.last_mut() {
+            Some((previous, lines)) if *previous == path => lines.push(*line),
+            _ => per_file.push((path, vec![*line])),
         }
     }
-    if hidden_lines > 0 {
-        out.push_str(&format!(
-            "  … {hidden_lines} more {} in {hidden_files} {}\n",
-            plural(hidden_lines, "line"),
-            plural(hidden_files, "file")
-        ));
+    let mut out = String::new();
+    for (path, lines) in per_file {
+        let lines = lines
+            .iter()
+            .map(usize::to_string)
+            .collect::<Vec<_>>()
+            .join(", ");
+        out.push_str(&format!("  {path}: {lines}\n"));
+    }
+    if end < total {
+        let remainder = report
+            .text_only
+            .iter()
+            .flat_map(|file| file.lines.iter().map(move |_| file.path.as_str()))
+            .skip(end);
+        out.push_str(&section_fold_with_count(remainder, total - end, "line"));
     }
     out
 }
@@ -5279,7 +5268,7 @@ mod tests {
     }
 
     #[test]
-    fn rows_past_the_limit_fold_into_one_line_per_label_with_per_file_counts() {
+    fn each_label_lists_up_to_the_limit_and_folds_the_rest_with_per_file_counts() {
         let mut sites = vec![labeled_site(
             SiteLabel::Proven,
             "a.py",
@@ -5318,9 +5307,10 @@ mod tests {
              Likely (6):\n\
              - `caller` [b.py:10] (kind: calls; name only)\n\
              - `caller` [b.py:11] (kind: calls; name only)\n\
-             … 4 more likely sites in 3 files: c.py (2), b.py (1), d.py (1)\n\
+             - `caller` [b.py:12] (kind: calls; name only)\n\
+             … 3 more likely sites in 2 files: c.py (2), d.py (1)\n\
              Excluded (1):\n\
-             … 1 more excluded site in 1 file: z.py (1)\n"
+             - `other` [z.py:1] (kind: calls; other language)\n"
         );
     }
 
@@ -5351,7 +5341,7 @@ mod tests {
     }
 
     #[test]
-    fn text_only_lines_list_per_file_and_fold_past_ten_files_and_twelve_lines() {
+    fn text_only_lines_list_the_first_limit_lines_per_file_and_fold_the_rest() {
         let mut report = report_of(Vec::new());
         report.text_only = (0..12)
             .map(|index| TextOnlyLines {
@@ -5375,11 +5365,17 @@ mod tests {
         );
         assert_eq!(
             lines.next(),
-            Some("  docs/f00.rst: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12")
+            Some("  docs/f00.rst: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15")
         );
         assert_eq!(lines.next(), Some("  docs/f01.rst: 2, 3"));
-        assert_eq!(lines.nth(7), Some("  docs/f09.rst: 10, 11"));
-        assert_eq!(lines.next(), Some("  … 7 more lines in 3 files"));
+        assert_eq!(lines.next(), Some("  docs/f02.rst: 3, 4"));
+        assert_eq!(lines.next(), Some("  docs/f03.rst: 4"));
+        assert_eq!(
+            lines.next(),
+            Some(
+                "… 17 more lines in 9 files: docs/f04.rst (2), docs/f05.rst (2), docs/f06.rst (2), docs/f07.rst (2), docs/f08.rst (2), …"
+            )
+        );
         assert_eq!(lines.next(), None);
     }
 
