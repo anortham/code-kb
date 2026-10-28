@@ -1531,6 +1531,9 @@ struct SiteRow {
 struct Claim {
     basis: Option<String>,
     typed_receiver: Option<TypedReceiverClaim>,
+    /// The basis holds only when no other definition can reach the site: a removed member that
+    /// an ancestor still defines leaves the read satisfied.
+    unless_rivals: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -2488,7 +2491,16 @@ impl<'a> Accounting<'a> {
                         shorthand_shadows.contains_key(&row.key),
                     )?
                 }
-                Some(claim) => claimed_verdict(row, claim, rivals.len(), spec.builds_class),
+                Some(claim) if !(claim.unless_rivals && !rivals.is_empty()) => {
+                    claimed_verdict(row, claim, rivals.len(), spec.builds_class)
+                }
+                Some(_) => self.decide_late(
+                    row,
+                    &spec.group,
+                    &group_definitions,
+                    &rivals,
+                    shorthand_shadows.contains_key(&row.key),
+                )?,
                 None if self.out_of_time() => {
                     unchecked.push(index);
                     continue;
@@ -3050,6 +3062,10 @@ impl<'a> Accounting<'a> {
             let receiver_chain_evidence = self.receiver_chain_owner_evidence(&pending_ids)?;
             record_receiver_chain_limit_note(cannot_see, receiver_chain_evidence.incomplete);
             for (member, resolver_ids) in spec.group.iter().zip(&resolvers) {
+                let absent_member = self
+                    .absent
+                    .as_ref()
+                    .is_some_and(|absent| absent.symbol_id == member.symbol_id);
                 let receiver_chain_statuses = self
                     .receiver_chain_target_statuses(&member.symbol_id, &receiver_chain_evidence)?;
                 let judged = self.judge(
@@ -3073,8 +3089,11 @@ impl<'a> Accounting<'a> {
                             .to_symbol_id
                             .as_deref()
                             .is_some_and(|id| id == member.symbol_id),
+                        // julie resolves no identifier to a symbol the index no longer holds,
+                        // so a removed target takes the judge's receiver and class evidence.
                         Source::Identifier
-                            if matches!(row.kind.as_str(), "type_usage" | "member_access") =>
+                            if matches!(row.kind.as_str(), "type_usage" | "member_access")
+                                && !absent_member =>
                         {
                             resolver_ids.contains(&row.key)
                         }
@@ -3106,6 +3125,7 @@ impl<'a> Accounting<'a> {
                     let entry = claims.entry(row.key.clone()).or_insert(Claim {
                         basis: None,
                         typed_receiver: None,
+                        unless_rivals: false,
                     });
                     if let Some(typed_receiver) = typed_receiver {
                         entry.typed_receiver = Some(
@@ -3115,6 +3135,9 @@ impl<'a> Accounting<'a> {
                         );
                     }
                     if claimed && entry.basis.is_none() {
+                        entry.unless_rivals = absent_member
+                            && row.source == Source::Identifier
+                            && matches!(row.kind.as_str(), "type_usage" | "member_access");
                         entry.basis = basis;
                     }
                 }
@@ -3309,6 +3332,7 @@ impl<'a> Accounting<'a> {
             return Ok(Some(verdict));
         }
         if let Some(claim) = claims.get(&row.key)
+            && !claim.unless_rivals
             && let Some(basis) = &claim.basis
         {
             let skip_proven_claim = shorthand_site.shadow_id.is_some()
@@ -3520,6 +3544,18 @@ impl<'a> Accounting<'a> {
         }))
     }
 
+    /// Whether the name of `owner`, written as a type in the file of the row, binds `owner`: the
+    /// file defines it, or an import of that file reaches its definition. A type of the same name
+    /// imported from outside the project binds another type.
+    fn type_name_binds_owner(&mut self, row: &NameRow, owner: &Symbol) -> Result<bool, QueryError> {
+        if owner.path.replace('\\', "/") == row.path.replace('\\', "/") {
+            return Ok(true);
+        }
+        Ok(self
+            .imported_definitions(&row.path, &row.language, &owner.name)?
+            .contains(&owner.symbol_id))
+    }
+
     /// A Rust path call `krate::module::Owner::name()` whose leading segments name the crate and
     /// the modules that hold the target. The resolver maps crate names to folders only for
     /// functions without an owner, so it leaves such a method call unclaimed.
@@ -3629,6 +3665,7 @@ impl<'a> Accounting<'a> {
             && owner.language == row.language
             && let Some(receiver) = row.qualifier()
             && self.receiver_type(row, receiver)?.as_deref() == Some(owner.name.as_str())
+            && self.type_name_binds_owner(row, &owner)?
         {
             return Ok(Verdict::new(SiteLabel::Proven, "receiver type", false));
         }
