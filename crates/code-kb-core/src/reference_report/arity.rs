@@ -119,8 +119,11 @@ impl Arity {
     /// the callers report, a Go call with one argument is judged: `f(g())` may spread, but the
     /// edit check still names a call that passes one.
     pub(crate) fn accepts(&self, site_language: &str, count: u32) -> Option<bool> {
-        (rule_language(site_language) == Some(self.language))
-            .then(|| count >= self.min && self.accepted_max.is_none_or(|max| count <= max))
+        (rule_language(site_language) == Some(self.language)).then(|| self.fits(count))
+    }
+
+    fn fits(&self, count: u32) -> bool {
+        count >= self.min && self.accepted_max.is_none_or(|max| count <= max)
     }
 
     /// The basis of an exclusion when `count` arguments fit no definition of the target, `None`
@@ -134,10 +137,8 @@ impl Arity {
         if rule_language(site_language) != Some(self.language) {
             return None;
         }
-        let too_few = count < self.min;
-        let too_many = self.accepted_max.is_some_and(|max| count > max);
         // `f(g())` passes every value of a Go call that returns several.
-        if (!too_few && !too_many) || (self.language == "go" && count == 1 && too_few) {
+        if self.fits(count) || (self.language == "go" && count == 1 && count < self.min) {
             return None;
         }
         let noun = if count == 1 { "arg" } else { "args" };
@@ -798,7 +799,11 @@ fn classify(segment: &str, language: &str) -> Parameter {
         "python" | "kotlin" | "cpp" | "php" | "scala" | "swift" | "gdscript" => {
             has_default(segment)
         }
-        "ruby" => has_default(segment) || ruby_keyword_default(segment),
+        "ruby" => {
+            has_default(segment)
+                || ruby_keyword_default(segment)
+                || is_ruby_block_parameter(segment, language)
+        }
         "csharp" => has_default(segment) || contains_word(segment, "Optional"),
         "fsharp" => segment.trim_start().starts_with('?'),
         "vbnet" => has_default(segment) || contains_word(segment, "Optional"),
@@ -871,9 +876,19 @@ fn formal_segments(list: &str, language: &str) -> Vec<(String, bool, bool)> {
                 continue;
             }
         }
-        segments.push((segment.to_string(), false, true));
+        segments.push((
+            segment.to_string(),
+            false,
+            !is_ruby_block_parameter(segment, language),
+        ));
     }
     segments
+}
+
+/// Whether `segment` is a Ruby `&block` parameter. Every Ruby method takes a block, and a call
+/// passes it outside the argument count.
+fn is_ruby_block_parameter(segment: &str, language: &str) -> bool {
+    language == "ruby" && segment.trim_start().starts_with('&')
 }
 
 /// Whether the type of a TypeScript parameter is `void` or a union with `void`: a call may leave
@@ -1209,6 +1224,22 @@ mod tests {
         assert_eq!(range(1, Some(1)).range_text(), "1");
         assert_eq!(range(1, Some(2)).range_text(), "1-2");
         assert_eq!(range(1, None).range_text(), "1 or more");
+    }
+
+    #[test]
+    fn a_ruby_block_parameter_is_optional_and_holds_no_argument_slot() {
+        let block = classify("&block", "ruby");
+        assert!(block.optional && !block.variadic);
+        assert_eq!(
+            formal_segments("items, &block", "ruby")
+                .into_iter()
+                .map(|(_, _, positional)| positional)
+                .collect::<Vec<_>>(),
+            [true, false]
+        );
+        assert!(!classify("name:", "ruby").optional);
+        assert!(classify("opt: 1", "ruby").optional);
+        assert!(classify("**opts", "ruby").variadic);
     }
 
     #[test]

@@ -627,6 +627,119 @@ fn ruby_splat_formals_have_an_open_ended_range() {
 }
 
 #[test]
+fn ruby_block_formals_accept_calls_with_and_without_a_block_argument() {
+    let calls = "def with_do\n  each_item([1]) do |x|\n    x\n  end\nend\ndef with_pass\n  each_item([1], &:to_s)\nend\ndef without_items\n  each_item()\nend\n";
+    let text = edited_text(
+        &[(
+            "src/lib.rb",
+            &format!("def each_item(items, &block)\n  items.each(&block)\nend\n{calls}"),
+        )],
+        "src/lib.rb",
+        &format!(
+            "def each_item(items, limit = 10, &block)\n  items.first(limit).each(&block)\nend\n{calls}"
+        ),
+    );
+    assert!(text.contains("parameters 1 → 1-2"), "{text}");
+    assert!(!text.contains("`with_do`"), "{text}");
+    assert!(!text.contains("`with_pass`"), "{text}");
+    assert!(
+        text.contains("`without_items`  passes 0 args; takes 1-2"),
+        "{text}"
+    );
+}
+
+#[test]
+fn ruby_keyword_and_block_formals_accept_valid_calls() {
+    let calls = "def required_only\n  kw(1, name: 2)\nend\ndef every_kind\n  kw(1, name: 2, opt: 3, &:to_s)\nend\ndef with_do\n  kw(1, 3, name: 2) do |x|\n    x\n  end\nend\ndef shorthand(name)\n  kw(1, name:)\nend\ndef missing_positional\n  kw(name: 2)\nend\n";
+    let text = edited_text(
+        &[(
+            "src/lib.rb",
+            &format!("def kw(a, name:, opt: 1, &block)\n  a\nend\n{calls}"),
+        )],
+        "src/lib.rb",
+        &format!("def kw(a, b = 2, name:, opt: 1, &block)\n  a + b\nend\n{calls}"),
+    );
+    assert!(text.contains("parameters 2-3 → 2-4"), "{text}");
+    assert!(!text.contains("`required_only`"), "{text}");
+    assert!(!text.contains("`every_kind`"), "{text}");
+    assert!(!text.contains("`shorthand`"), "{text}");
+    assert!(!text.contains("`with_do`"), "{text}");
+    assert!(
+        text.contains("`missing_positional`  passes 1 arg; takes 2-4"),
+        "{text}"
+    );
+}
+
+#[test]
+fn elixir_piped_calls_count_the_left_value_as_the_first_argument() {
+    let calls = "  def piped(x), do: x |> scale(2)\n  def piped_lines(x) do\n    x\n    |> scale(2)\n  end\n  def piped_trailing(x) do\n    x |>\n      scale(2)\n  end\n  def qualified(x), do: x |> Lib.scale(2)\n  def direct(x), do: scale(x, 2)\n  def captured(), do: &scale(&1, 2)\n  def empty(), do: scale()\nend\n";
+    let text = edited_text(
+        &[(
+            "src/lib.ex",
+            &format!("defmodule Lib do\n  def scale(value, factor), do: value * factor\n{calls}"),
+        )],
+        "src/lib.ex",
+        &format!(
+            "defmodule Lib do\n  def scale(value, factor, offset \\\\ 0), do: value * factor + offset\n{calls}"
+        ),
+    );
+    assert!(text.contains("parameters 2 → 2-3"), "{text}");
+    assert!(!text.contains("passes 1 arg"), "{text}");
+    assert!(!text.contains("`direct`"), "{text}");
+    assert!(!text.contains("`captured`"), "{text}");
+    assert!(text.contains("`empty`  passes 0 args; takes 2-3"), "{text}");
+}
+
+#[test]
+fn elixir_calls_to_a_fixed_arity_count_the_piped_value_exactly() {
+    let calls = "  def direct(x), do: scale(x, 2)\n  def piped(x), do: x |> scale(2)\n  def piped_trailing(x) do\n    x |>\n      Lib.scale(2)\n  end\n  def direct_stale(x), do: scale(x, 2, 3)\n  def piped_stale(x), do: x |> scale(2, 3, 4)\n  def opened(x), do: (scale(x, 2))\nend\n";
+    let text = edited_text(
+        &[(
+            "src/lib.ex",
+            &format!(
+                "defmodule Lib do\n  def scale(value, factor, offset), do: value * factor + offset\n{calls}"
+            ),
+        )],
+        "src/lib.ex",
+        &format!("defmodule Lib do\n  def scale(value, factor), do: value * factor\n{calls}"),
+    );
+    assert!(text.contains("parameters 3 → 2"), "{text}");
+    assert!(!text.contains("`direct`"), "{text}");
+    assert!(!text.contains("`piped`"), "{text}");
+    assert!(!text.contains("`piped_trailing`"), "{text}");
+    assert!(!text.contains("`opened`"), "{text}");
+    assert!(
+        text.contains("`direct_stale`  passes 3 args; takes 2"),
+        "{text}"
+    );
+    assert!(
+        text.contains("`piped_stale`  passes 4 args; takes 2"),
+        "{text}"
+    );
+}
+
+#[test]
+fn ruby_block_arguments_do_not_count_toward_a_method_without_a_block_parameter() {
+    let calls = "def with_proc(blk)\n  f(1, &blk)\nend\ndef with_symbol\n  f(1, &:to_s)\nend\ndef with_braces\n  f(1) { |x| x }\nend\ndef too_many\n  f(1, 2)\nend\n";
+    let text = edited_text(
+        &[(
+            "src/lib.rb",
+            &format!("def f(a, b = 1)\n  yield a + b\nend\n{calls}"),
+        )],
+        "src/lib.rb",
+        &format!("def f(a)\n  yield a\nend\n{calls}"),
+    );
+    assert!(text.contains("parameters 1-2 → 1"), "{text}");
+    assert!(!text.contains("`with_proc`"), "{text}");
+    assert!(!text.contains("`with_symbol`"), "{text}");
+    assert!(!text.contains("`with_braces`"), "{text}");
+    assert!(
+        text.contains("`too_many`  passes 2 args; takes 1"),
+        "{text}"
+    );
+}
+
+#[test]
 fn scala_defaulted_formals_have_an_optional_range() {
     assert_parameter_range(
         "src/Lib.scala",
@@ -995,4 +1108,21 @@ fn powershell_old_parameter_prefixes_that_still_bind_are_not_stale() {
     );
     assert!(text.contains("parameter renamed: Old → Older"), "{text}");
     assert!(!text.contains("src/lib.ps1:2"), "{text}");
+}
+
+#[test]
+fn elixir_trailing_keyword_pairs_count_as_one_keyword_list_argument() {
+    let calls = "  def keywords(), do: f(1, a: 1, b: 2)\n  def bracketed(), do: f(1, [a: 1, b: 2])\n  def atoms(), do: f(1, :a, :b)\nend\n";
+    let text = edited_text(
+        &[(
+            "src/lib.ex",
+            &format!("defmodule Lib do\n  def f(x, opts, y \\\\ nil), do: {{x, opts, y}}\n{calls}"),
+        )],
+        "src/lib.ex",
+        &format!("defmodule Lib do\n  def f(x, opts), do: {{x, opts}}\n{calls}"),
+    );
+    assert!(text.contains("parameters 2-3 → 2"), "{text}");
+    assert!(!text.contains("`keywords`"), "{text}");
+    assert!(!text.contains("`bracketed`"), "{text}");
+    assert!(text.contains("`atoms`  passes 3 args; takes 2"), "{text}");
 }

@@ -26,7 +26,18 @@ signature and the callable form is supported. The real-extractor tests in
 - Dart's positional range excludes named arguments. Required named parameters
   need their own binding check. Optional named additions impose no new requirement.
 - Ruby keyword arguments need label checks as well as argument counts. Unknown
-  `**kwargs` cannot prove that a required keyword is missing.
+  `**kwargs` cannot prove that a required keyword is missing. The count of a
+  Ruby call includes its keyword arguments, so a range counts keyword slots.
+  Every Ruby method takes a block, so the count of a call leaves out a block
+  argument (`&blk`, `&:name`), and a `&block` parameter holds no slot in the
+  range. `*rest` and `**opts` remove the maximum.
+- An Elixir pipe (`x |> f(a)`, `x |> Mod.f(a)`, or a pipe at the end of the
+  code line above the call) passes its left value as the first argument, so the
+  count of a piped call is one more than its written arguments. Trailing
+  `key: value` pairs form one keyword-list argument (`f(1, a: 1, b: 2)` passes
+  2). A pair with a quoted key still counts as its own argument. A capture with
+  placeholders (`&f(&1, 2)`) counts its written arguments; a capture by arity
+  (`&f/2`) has no count.
 - R can defer evaluating a missing argument, so count alone imposes no minimum.
 - An empty C declaration such as `int f();` supplies no count information without
   a known language standard. `int f(void)` and C++ `int f()` specify zero arguments.
