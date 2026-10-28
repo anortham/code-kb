@@ -697,6 +697,23 @@ impl ReconcileFailures {
     }
 }
 
+/// The index file and its SQLite sidecars. An index that `--db` puts inside the project is
+/// never a project file.
+fn is_index_file(path: &Path, index: &Path) -> bool {
+    path == index
+        || (path.parent() == index.parent()
+            && path
+                .file_name()
+                .zip(index.file_name())
+                .is_some_and(|(name, index_name)| {
+                    ["-wal", "-shm", "-journal"].iter().any(|suffix| {
+                        let mut sidecar = index_name.to_os_string();
+                        sidecar.push(suffix);
+                        name == sidecar
+                    })
+                }))
+}
+
 fn retain_unreadable_path(
     path: &Path,
     root: &Path,
@@ -889,6 +906,7 @@ fn reconcile_offline_edits_inner(
         None
     };
 
+    let index_path = dunce::canonicalize(db_path).unwrap_or_else(|_| db_path.to_path_buf());
     let mut walker = ignore::WalkBuilder::new(&workspace.canonical_root);
     walker
         .standard_filters(true)
@@ -964,6 +982,9 @@ fn reconcile_offline_edits_inner(
         if file_type.is_file() {
             let path = entry.path();
             let norm_path = dunce::simplified(path);
+            if is_index_file(norm_path, &index_path) {
+                continue;
+            }
             if let Some(rel) =
                 crate::workspace::strip_prefix_lossy(norm_path, &workspace.canonical_root)
             {
@@ -1267,6 +1288,33 @@ mod tests {
         let db_path = temp.path().join("test.db");
         ensure_index_dir(&db_path).unwrap();
         assert!(!temp.path().join(".gitignore").exists());
+    }
+
+    #[test]
+    fn reconcile_never_indexes_an_index_file_inside_the_root() {
+        let temp = tempfile::tempdir().unwrap();
+        let db_path = temp.path().join("index.db");
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE files (
+                file_id TEXT PRIMARY KEY,
+                path TEXT NOT NULL,
+                language TEXT,
+                content_hash TEXT,
+                content_bytes INTEGER,
+                line_count INTEGER,
+                indexed_at TEXT
+            );
+            PRAGMA journal_mode = WAL;",
+        )
+        .unwrap();
+        std::fs::write(temp.path().join("index.db-journal"), "").unwrap();
+
+        let report =
+            reconcile_offline_edits(&Workspace::new(temp.path().to_path_buf()), &db_path, &conn)
+                .unwrap();
+
+        assert!(report.added.is_empty(), "{:?}", report.added);
     }
 
     #[test]
