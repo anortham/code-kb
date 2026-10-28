@@ -228,7 +228,7 @@ fn watcher_indexes_atomic_file_replacements_incrementally() {
 
 #[cfg(unix)]
 #[test]
-fn watcher_retries_failed_directory_registration_and_watches_after_recovery() {
+fn watcher_skips_an_unreadable_directory_and_watches_it_once_readable() {
     use std::os::unix::fs::PermissionsExt;
 
     let _guard = WATCHER_TEST_LOCK
@@ -252,10 +252,17 @@ fn watcher_retries_failed_directory_registration_and_watches_after_recovery() {
     let blocked = root.join("blocked");
     fs::create_dir(&blocked).unwrap();
     fs::set_permissions(&blocked, fs::Permissions::from_mode(0o0)).unwrap();
-    let (generation, failure) = wait_for_registration_failure(&watcher);
-    assert!(failure.contains("workspace watches"));
-    assert!(!watcher.clear_failure_if_unchanged(generation));
-    assert!(watcher.pending_failure().is_some());
+    fs::write(
+        root.join("beside.rs"),
+        "pub fn beside_blocked_directory() {}\n",
+    )
+    .unwrap();
+    wait_for_symbol(&db_path, "beside_blocked_directory", true);
+    assert!(
+        watcher.pending_failure().is_none(),
+        "{:?}",
+        watcher.pending_failure()
+    );
 
     fs::set_permissions(&blocked, fs::Permissions::from_mode(0o700)).unwrap();
     let nested = blocked.join("deep");
@@ -263,11 +270,15 @@ fn watcher_retries_failed_directory_registration_and_watches_after_recovery() {
     let source = nested.join("recover.rs");
     fs::write(&source, "pub fn indexed_after_registration_recovery() {}\n").unwrap();
     wait_for_symbol(&db_path, "indexed_after_registration_recovery", true);
-    wait_for_failure_message_to_change(&watcher, &failure);
 
     fs::write(&source, "pub fn changed_after_registration_recovery() {}\n").unwrap();
     wait_for_symbol(&db_path, "indexed_after_registration_recovery", false);
     wait_for_symbol(&db_path, "changed_after_registration_recovery", true);
+    assert!(
+        watcher.pending_failure().is_none(),
+        "{:?}",
+        watcher.pending_failure()
+    );
 
     drop(watcher);
 }
@@ -325,36 +336,6 @@ fn wait_for_symbol(db_path: &Path, name: &str, expected: bool) {
     panic!("symbol '{name}' did not reach indexed state {expected}");
 }
 
-#[cfg(unix)]
-fn wait_for_registration_failure(watcher: &code_kb_core::watcher::WatcherHandle) -> (u64, String) {
-    for _ in 0..50 {
-        if let Some((generation, failure)) = watcher.pending_failure()
-            && failure.contains("workspace watches")
-        {
-            return (generation, failure);
-        }
-        sleep(Duration::from_millis(100));
-    }
-    panic!("watcher did not report the directory registration failure");
-}
-
-#[cfg(unix)]
-fn wait_for_failure_message_to_change(
-    watcher: &code_kb_core::watcher::WatcherHandle,
-    previous: &str,
-) {
-    for _ in 0..50 {
-        if watcher
-            .pending_failure()
-            .is_none_or(|(_, failure)| failure != previous)
-        {
-            return;
-        }
-        sleep(Duration::from_millis(100));
-    }
-    panic!("watcher retained the directory registration failure after recovery");
-}
-
 #[cfg(target_os = "linux")]
 fn wait_for_watch_count(expected: usize) {
     let mut actual = 0;
@@ -366,6 +347,22 @@ fn wait_for_watch_count(expected: usize) {
         sleep(Duration::from_millis(100));
     }
     panic!("inotify watch count did not reach {expected}; last count was {actual}");
+}
+
+#[cfg(target_os = "linux")]
+fn settled_inotify_instance_count() -> usize {
+    let mut count = inotify_instance_count().unwrap();
+    let mut unchanged = 0;
+    for _ in 0..100 {
+        sleep(Duration::from_millis(100));
+        let next = inotify_instance_count().unwrap();
+        unchanged = if next == count { unchanged + 1 } else { 0 };
+        count = next;
+        if unchanged == 5 {
+            break;
+        }
+    }
+    count
 }
 
 #[cfg(target_os = "linux")]
@@ -387,7 +384,7 @@ fn watcher_startup_failure_releases_notify_backend() {
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let temp_dir = safe_tempdir();
     let root = temp_dir.path().join("missing");
-    let before = inotify_instance_count().unwrap();
+    let before = settled_inotify_instance_count();
 
     assert!(start_watcher(Workspace::new(root.clone()), root.join("index.db")).is_err());
 
@@ -406,7 +403,7 @@ fn watcher_startup_reconcile_failure_releases_notify_backend() {
     fs::write(root.join("main.rs"), "pub fn startup_scan_failure() {}\n").unwrap();
     let db_path = temp_dir.path().join("index-is-a-directory");
     fs::create_dir(&db_path).unwrap();
-    let before = inotify_instance_count().unwrap();
+    let before = settled_inotify_instance_count();
 
     assert!(start_watcher(Workspace::new(root), db_path).is_err());
 
@@ -504,4 +501,88 @@ fn inotify_instance_count() -> io::Result<usize> {
         }
     }
     Ok(count)
+}
+
+#[test]
+fn watcher_keeps_watching_a_folder_deleted_and_made_again_in_one_debounce_window() {
+    let _guard = WATCHER_TEST_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+    let temp_dir = safe_tempdir();
+    let root = temp_dir.path().join("project");
+    let folder = root.join("src/foo");
+    fs::create_dir_all(&folder).unwrap();
+    fs::write(folder.join("a.rs"), "pub fn before_folder_recreate() {}\n").unwrap();
+    let workspace = Workspace::new(root.clone());
+    let db_path = temp_dir.path().join("recreated_folder.db");
+    scan_workspace(&workspace, &db_path, true).unwrap();
+    let watcher = start_watcher(workspace, db_path.clone()).unwrap();
+
+    fs::remove_dir_all(&folder).unwrap();
+    fs::create_dir(&folder).unwrap();
+    fs::write(folder.join("b.rs"), "pub fn after_folder_recreate() {}\n").unwrap();
+    wait_for_symbol(&db_path, "after_folder_recreate", true);
+    wait_for_symbol(&db_path, "before_folder_recreate", false);
+    fs::write(
+        folder.join("b.rs"),
+        "pub fn after_folder_recreate() {}\npub fn edited_in_recreated_folder() {}\n",
+    )
+    .unwrap();
+    wait_for_symbol(&db_path, "edited_in_recreated_folder", true);
+    fs::write(
+        folder.join("c.rs"),
+        "pub fn new_file_in_recreated_folder() {}\n",
+    )
+    .unwrap();
+    wait_for_symbol(&db_path, "new_file_in_recreated_folder", true);
+
+    assert!(
+        watcher.pending_failure().is_none(),
+        "{:?}",
+        watcher.pending_failure()
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn watcher_starts_beside_a_directory_without_read_permission() {
+    use std::os::unix::fs::PermissionsExt;
+    let _guard = WATCHER_TEST_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    find_julie_extract_binary().expect("julie-extract binary must be present for tests");
+    let temp_dir = safe_tempdir();
+    let root = temp_dir.path().join("project");
+    let locked = root.join("src/locked");
+    fs::create_dir_all(&locked).unwrap();
+    fs::create_dir_all(root.join("src/open")).unwrap();
+    fs::write(locked.join("b.rs"), "pub fn behind_locked_folder() {}\n").unwrap();
+    let workspace = Workspace::new(root.clone());
+    let db_path = temp_dir.path().join("locked_folder.db");
+    scan_workspace(&workspace, &db_path, true).unwrap();
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o000)).unwrap();
+    if fs::read_dir(&locked).is_ok() {
+        fs::set_permissions(&locked, fs::Permissions::from_mode(0o755)).unwrap();
+        return;
+    }
+
+    let started = start_watcher(workspace, db_path.clone());
+    let indexed = started.as_ref().ok().map(|watcher| {
+        fs::write(
+            root.join("src/open/a.rs"),
+            "pub fn beside_locked_folder() {}\n",
+        )
+        .unwrap();
+        let found = std::panic::catch_unwind(|| {
+            wait_for_symbol(&db_path, "beside_locked_folder", true);
+        });
+        (found.is_ok(), watcher.pending_failure())
+    });
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o755)).unwrap();
+
+    let (found, failure) = indexed.unwrap_or_else(|| panic!("{:?}", started.err()));
+    assert!(found);
+    assert!(failure.is_none(), "{failure:?}");
+    wait_for_symbol(&db_path, "behind_locked_folder", true);
 }

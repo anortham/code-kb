@@ -12,7 +12,10 @@ affected fixture expectations in `test_cases/` retain the removal event.
 The copy lives inside `code-kb-core` because a `[patch.crates-io]` override does not reach a
 crates.io publish, so `cargo install code-kb-cli` would build without the fix. Other changes
 from upstream: the module paths, `tracing` in place of `log`, and no `crossbeam-channel` or
-`flume` handler.
+`flume` handler. The watched roots are an ordered map, so adding a root, removing a root with
+the roots below it, and finding a path's watch mode do not scan every root. `unwatch` also
+forgets the roots when the backend has already dropped the watch (`WatchNotFound`) or the path
+is gone, and still returns the backend error.
 
-Return to the published crate after a compatible stable release includes this fix and passes
+Return to the published crate after a compatible stable release includes these changes and passes
 the project's Linux and Windows regression checks.

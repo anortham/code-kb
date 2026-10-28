@@ -267,7 +267,7 @@ impl schema::State {
 
         DebounceDataInner {
             queues,
-            roots: Vec::new(),
+            roots: std::collections::BTreeMap::new(),
             cache,
             rename_event,
             rescan_event,

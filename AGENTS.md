@@ -139,9 +139,15 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   after each tool call on Linux glibc. It is the only unsafe code; the workspace lint is `unsafe_code = "deny"`.
   Measure a live `serve` process before and after any change that could raise it.
 - File watches cover only directories accepted by the scan's ignore rules. Prune excluded
-  trees before registering nonrecursive watches. One worker owns registration and index
-  updates; its callback queue is bounded, and retained registration state contains directory
-  paths only. Reconcile after installing startup watches, directory moves, and changes to
+  trees before registering nonrecursive watches. Windows is the exception: one recursive root
+  watch (one `ReadDirectoryChangesW` handle and buffer, and no file ID cache), and the debouncer
+  callback drops each event whose folder the ignore rules exclude before it counts the batch.
+  One worker owns registration and index updates; its callback queue is bounded, and retained
+  registration state contains directory paths and their file IDs only. A removal or a move
+  away of a folder forgets its registration and the ones below it, and a registered path
+  whose file ID changed is watched again, so a folder deleted and made again is watched.
+  A removal does not register the other folders again. Reconcile after installing startup
+  watches, directory moves, and changes to
   `.gitignore`, `.ignore`, `.julieignore`, `.code-kb-ignore`, or `.codekbignore`.
   Ordinary file changes and file renames stay incremental. A failed physical registration
   stays unhealthy until registration recovers; a database scan cannot acknowledge it.
@@ -607,13 +613,19 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   and body and skeleton reads refresh their target file before answering.
 - A known reconciliation or watcher failure is an error for indexed reads, never a successful stale
   answer. Reconciliation preserves completed updates and unreadable files' existing rows, but reports
-  bounded failure details with the project root and a recovery action. MCP retries failed preparation
+  bounded failure details with the project root and a recovery action. A detail is cut at a space,
+  so a path in it is whole or left out. A subdirectory that the walk may not read
+  (`PermissionDenied`) is no failure: reconciliation and watch registration skip it with a warning,
+  keep the index rows of its files, and watch it after its permission returns. A denied project
+  root stays an error. MCP retries failed preparation
   or reconciliation on subsequent calls; a watcher failure clears only after successful reconciliation
   with no newer failure. A failed watcher start is also reported. The unreadable-index rebuild guard
   retains its no-automatic-retry rule below.
 - Only the active root keeps a watcher; a root the server switched away from loses its watcher by
   the next call. When a call switches roots, the watcher and the offline
-  reconcile restart for the new root.
+  reconcile restart for the new root. Dropping a watcher does not wait for its worker: the worker
+  stops at its next check, and a new watcher of the same root waits for it, so a root never has
+  two workers.
 - A full scan passes `HARD_EXCLUDED_DIRS` and `HARD_EXCLUDED_SUFFIXES` (`workspace.rs`) to julie
   as a temporary `--ignore-file`, so a reconcile never deletes what a scan wrote. julie's own list
   lacks `.miller`, `.agents`, and `.razorback`.
