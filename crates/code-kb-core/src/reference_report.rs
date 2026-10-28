@@ -1536,14 +1536,32 @@ struct Claim {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum TypedReceiverClaim {
     ReachesTarget,
+    ReachesTargetByPath,
     DifferentOwner,
     Unknown,
 }
 
 impl TypedReceiverClaim {
+    fn from_status(status: Option<i64>) -> Option<Self> {
+        use crate::queries::{
+            RECEIVER_CHAIN_STATUS_DIFFERENT_OWNER, RECEIVER_CHAIN_STATUS_LEGACY,
+            RECEIVER_CHAIN_STATUS_QUALIFIED_PATH, RECEIVER_CHAIN_STATUS_RECEIVER_TYPE,
+        };
+        match status {
+            Some(RECEIVER_CHAIN_STATUS_LEGACY) => None,
+            Some(RECEIVER_CHAIN_STATUS_RECEIVER_TYPE) => Some(Self::ReachesTarget),
+            Some(RECEIVER_CHAIN_STATUS_QUALIFIED_PATH) => Some(Self::ReachesTargetByPath),
+            Some(RECEIVER_CHAIN_STATUS_DIFFERENT_OWNER) => Some(Self::DifferentOwner),
+            _ => Some(Self::Unknown),
+        }
+    }
+
     fn merge(self, other: Self) -> Self {
         match (self, other) {
             (Self::ReachesTarget, _) | (_, Self::ReachesTarget) => Self::ReachesTarget,
+            (Self::ReachesTargetByPath, _) | (_, Self::ReachesTargetByPath) => {
+                Self::ReachesTargetByPath
+            }
             (Self::Unknown, _) | (_, Self::Unknown) => Self::Unknown,
             _ => Self::DifferentOwner,
         }
@@ -1552,6 +1570,10 @@ impl TypedReceiverClaim {
 
 struct ReceiverChainOwnerEvidence {
     owners: HashMap<String, Option<String>>,
+    /// Rows whose chain starts at a type, so a proof is a qualified path.
+    type_rooted: HashSet<String>,
+    /// Rows whose first name binds neither a value nor a type; the name-path rules judge them.
+    legacy: HashSet<String>,
     pending_base_owners: HashMap<String, Option<String>>,
     incomplete: Option<ReceiverChainLimit>,
     edge_rows_examined: usize,
@@ -1741,6 +1763,8 @@ impl<'a> Accounting<'a> {
     ) -> Result<ReceiverChainOwnerEvidence, QueryError> {
         let mut evidence = ReceiverChainOwnerEvidence {
             owners: HashMap::new(),
+            type_rooted: HashSet::new(),
+            legacy: HashSet::new(),
             pending_base_owners: HashMap::new(),
             incomplete: None,
             edge_rows_examined: 0,
@@ -1761,8 +1785,20 @@ impl<'a> Accounting<'a> {
                 Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
             })?
             .collect::<Result<Vec<_>, _>>()?;
-        for (row_key, owner_id) in owner_rows {
-            evidence.owners.insert(row_key, owner_id);
+        for (row_key, owner) in owner_rows {
+            let Some(owner) = owner else {
+                evidence.owners.insert(row_key, None);
+                continue;
+            };
+            if owner == crate::queries::RECEIVER_CHAIN_LEGACY_ROOT {
+                evidence.legacy.insert(row_key);
+                continue;
+            }
+            let (root_kind, owner_id) = owner.split_once(':').unwrap_or(("value", &owner));
+            if root_kind == "type" {
+                evidence.type_rooted.insert(row_key.clone());
+            }
+            evidence.owners.insert(row_key, Some(owner_id.to_string()));
         }
         self.extend_receiver_chain_ancestry(&mut evidence, ReceiverChainLimits::DEFAULT)?;
         Ok(evidence)
@@ -1875,6 +1911,28 @@ impl<'a> Accounting<'a> {
     }
 
     fn receiver_chain_target_statuses(
+        &self,
+        target_id: &str,
+        evidence: &ReceiverChainOwnerEvidence,
+    ) -> Result<HashMap<String, Option<i64>>, QueryError> {
+        let mut statuses = self.receiver_chain_owner_statuses(target_id, evidence)?;
+        for row_key in &evidence.type_rooted {
+            if let Some(status) = statuses.get_mut(row_key)
+                && *status == Some(crate::queries::RECEIVER_CHAIN_STATUS_RECEIVER_TYPE)
+            {
+                *status = Some(crate::queries::RECEIVER_CHAIN_STATUS_QUALIFIED_PATH);
+            }
+        }
+        for row_key in &evidence.legacy {
+            statuses.insert(
+                row_key.clone(),
+                Some(crate::queries::RECEIVER_CHAIN_STATUS_LEGACY),
+            );
+        }
+        Ok(statuses)
+    }
+
+    fn receiver_chain_owner_statuses(
         &self,
         target_id: &str,
         evidence: &ReceiverChainOwnerEvidence,
@@ -3004,12 +3062,8 @@ impl<'a> Accounting<'a> {
                     let judged_row = judged.get(&row.key);
                     let typed_receiver =
                         if row.typed_receiver_chain.is_some() && typed_receiver_chain_supported {
-                            Some(
-                                match receiver_chain_statuses.get(&row.key).copied().flatten() {
-                                    Some(1) => TypedReceiverClaim::ReachesTarget,
-                                    Some(0) => TypedReceiverClaim::DifferentOwner,
-                                    _ => TypedReceiverClaim::Unknown,
-                                },
+                            TypedReceiverClaim::from_status(
+                                receiver_chain_statuses.get(&row.key).copied().flatten(),
                             )
                         } else {
                             None
@@ -3146,6 +3200,9 @@ impl<'a> Accounting<'a> {
             return Ok(match typed_receiver {
                 TypedReceiverClaim::ReachesTarget => {
                     Some(Verdict::new(SiteLabel::Proven, "receiver type", false))
+                }
+                TypedReceiverClaim::ReachesTargetByPath => {
+                    Some(Verdict::new(SiteLabel::Proven, "qualified path", false))
                 }
                 TypedReceiverClaim::DifferentOwner => Some(Verdict::new(
                     SiteLabel::Excluded,
@@ -5329,8 +5386,18 @@ fn evidence_sql_with_receiver_chain_status(
     )";
     let typed_receiver_chain_supported = crate::queries::has_typed_receiver_chain_support(conn);
     let typed_receiver_chain_evidence = if typed_receiver_chain_supported {
-        let matches_target = match receiver_chain_status {
-            Some(status) => format!("({status}) = 1"),
+        let (judged_chain, matches_target) = match receiver_chain_status {
+            Some(status) => (
+                format!(
+                    "COALESCE(({status}), 0) != {}",
+                    crate::queries::RECEIVER_CHAIN_STATUS_LEGACY
+                ),
+                format!(
+                    "CASE ({status}) WHEN {} THEN 'qualified path' WHEN {} THEN 'receiver type' END",
+                    crate::queries::RECEIVER_CHAIN_STATUS_QUALIFIED_PATH,
+                    crate::queries::RECEIVER_CHAIN_STATUS_RECEIVER_TYPE
+                ),
+            ),
             None => {
                 let receiver_chain_owner = crate::queries::typed_receiver_chain_owner_id_sql(
                     "p.from_symbol_id",
@@ -5339,16 +5406,20 @@ fn evidence_sql_with_receiver_chain_status(
                     "p.language",
                     receiver_chain_json,
                 );
-                crate::queries::typed_receiver_chain_matches_target_sql(
+                let matches = crate::queries::typed_receiver_chain_matches_target_sql(
                     &receiver_chain_owner,
                     target,
+                );
+                (
+                    "1".to_string(),
+                    format!("CASE WHEN {matches} THEN 'receiver type' END"),
                 )
             }
         };
         format!(
             "WHEN (p.src = 'P' AND json_array_length({receiver_chain_json}) > 1
               AND p.target_receiver IS NOT NULL AND p.target_receiver != ''
-              ) THEN CASE WHEN {matches_target} THEN 'receiver type' END"
+              AND {judged_chain}) THEN {matches_target}"
         )
     } else {
         String::new()
@@ -5456,6 +5527,8 @@ mod tests {
     fn receiver_chain_root_evidence(owner_id: &str) -> ReceiverChainOwnerEvidence {
         ReceiverChainOwnerEvidence {
             owners: HashMap::from([("P:1".to_string(), Some(owner_id.to_string()))]),
+            type_rooted: HashSet::new(),
+            legacy: HashSet::new(),
             pending_base_owners: HashMap::new(),
             incomplete: None,
             edge_rows_examined: 0,

@@ -1102,3 +1102,354 @@ fn an_owner_name_in_a_return_type_does_not_create_generic_parameters() {
     let site = site_at(&report, "src/Handler.cs", line);
     assert_eq!(site.label, SiteLabel::Proven, "{site:?}");
 }
+
+fn report_for_definition(repo: &Repo, name: &str, path: &str, line: usize) -> ReferenceReport {
+    let conn = open_read_only(&repo.db).unwrap();
+    let symbol_id: String = conn
+        .query_row(
+            "SELECT symbol_id FROM symbols WHERE name = ?1 AND path = ?2 AND start_line = ?3",
+            params![name, path, line as i64],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let target = code_kb_core::queries::get_symbol_by_id(&conn, &symbol_id)
+        .unwrap()
+        .unwrap();
+    reference_report(&conn, &repo.root, &target, false).unwrap()
+}
+
+const PYTHON_NESTED_TYPES: &str = "class Outer:\n    class Inner:\n        @staticmethod\n        def build():\n            return 1\n\n\nclass Other:\n    class Inner:\n        @staticmethod\n        def build():\n            return 2\n\n\ndef use():\n    return Outer.Inner.build()\n";
+
+#[test]
+fn a_python_nested_type_path_proves_its_method_and_excludes_a_same_file_decoy() {
+    let repo = scanned_repo(&[("outer.py", PYTHON_NESTED_TYPES)]);
+    let call = line_of(&repo, "outer.py", "Outer.Inner.build()");
+    let outer = line_of(&repo, "outer.py", "return 1") - 1;
+    let other = line_of(&repo, "outer.py", "return 2") - 1;
+
+    let proven = report_for_definition(&repo, "build", "outer.py", outer);
+    let site = site_at(&proven, "outer.py", call);
+    assert_eq!(site.label, SiteLabel::Proven, "{site:?}");
+    assert_eq!(site.basis, "qualified path");
+
+    let decoy = report_for_definition(&repo, "build", "outer.py", other);
+    let site = site_at(&decoy, "outer.py", call);
+    assert_eq!(site.label, SiteLabel::Excluded, "{site:?}");
+}
+
+#[test]
+fn a_java_nested_type_path_proves_its_method_and_excludes_a_decoy() {
+    let repo = scanned_repo(&[
+        (
+            "app/Outer.java",
+            "package app;\n\npublic class Outer {\n    public static class Inner {\n        public static int build() { return 1; }\n    }\n}\n",
+        ),
+        (
+            "app/Other.java",
+            "package app;\n\npublic class Other {\n    public static class Inner {\n        public static int build() { return 2; }\n    }\n}\n",
+        ),
+        (
+            "app/Use.java",
+            "package app;\n\npublic class Use {\n    int run() { return Outer.Inner.build(); }\n}\n",
+        ),
+    ]);
+    let call = line_of(&repo, "app/Use.java", "Outer.Inner.build()");
+
+    let proven = report_for_definition(&repo, "build", "app/Outer.java", 5);
+    let site = site_at(&proven, "app/Use.java", call);
+    assert_eq!(site.label, SiteLabel::Proven, "{site:?}");
+    assert_eq!(site.basis, "qualified path");
+
+    let decoy = report_for_definition(&repo, "build", "app/Other.java", 5);
+    let site = site_at(&decoy, "app/Use.java", call);
+    assert_eq!(site.label, SiteLabel::Excluded, "{site:?}");
+}
+
+#[test]
+fn a_csharp_nested_type_path_proves_its_method_and_excludes_a_same_file_decoy() {
+    let repo = scanned_repo(&[(
+        "Outer.cs",
+        "namespace App;\n\npublic class Outer {\n    public class Inner {\n        public static int Build() { return 1; }\n    }\n}\n\npublic class Other {\n    public class Inner {\n        public static int Build() { return 2; }\n    }\n}\n\npublic class Use {\n    int Run() { return Outer.Inner.Build(); }\n}\n",
+    )]);
+    let call = line_of(&repo, "Outer.cs", "Outer.Inner.Build()");
+    let outer = line_of(&repo, "Outer.cs", "return 1;");
+    let other = line_of(&repo, "Outer.cs", "return 2;");
+
+    let proven = report_for_definition(&repo, "Build", "Outer.cs", outer);
+    let site = site_at(&proven, "Outer.cs", call);
+    assert_eq!(site.label, SiteLabel::Proven, "{site:?}");
+    assert_eq!(site.basis, "qualified path");
+
+    let decoy = report_for_definition(&repo, "Build", "Outer.cs", other);
+    let site = site_at(&decoy, "Outer.cs", call);
+    assert_eq!(site.label, SiteLabel::Excluded, "{site:?}");
+}
+
+#[test]
+fn a_java_package_qualified_nested_type_path_keeps_its_qualified_path_proof() {
+    let repo = scanned_repo(&[
+        (
+            "app/Outer.java",
+            "package app;\n\npublic class Outer {\n    public static class Inner {\n        public static int build() { return 1; }\n    }\n}\n",
+        ),
+        (
+            "app/Other.java",
+            "package app;\n\npublic class Other {\n    public static class Inner {\n        public static int build() { return 2; }\n    }\n}\n",
+        ),
+        (
+            "use/Use.java",
+            "package use;\n\npublic class Use {\n    int run() { return app.Outer.Inner.build(); }\n}\n",
+        ),
+    ]);
+    let call = line_of(&repo, "use/Use.java", "app.Outer.Inner.build()");
+
+    let proven = report_for_definition(&repo, "build", "app/Outer.java", 5);
+    let site = site_at(&proven, "use/Use.java", call);
+    assert_eq!(site.label, SiteLabel::Proven, "{site:?}");
+    assert_eq!(site.basis, "qualified path");
+
+    let decoy = report_for_definition(&repo, "build", "app/Other.java", 5);
+    let site = site_at(&decoy, "use/Use.java", call);
+    assert_eq!(site.label, SiteLabel::Excluded, "{site:?}");
+}
+
+#[test]
+fn an_untyped_class_attribute_after_a_type_root_stays_unproven() {
+    let repo = scanned_repo(&[(
+        "outer.py",
+        "class Helper:\n    def run(self):\n        return 1\n\n\ndef make_helper():\n    return Helper()\n\n\nclass Outer:\n    helper = make_helper()\n\n    def run(self):\n        return 2\n\n\ndef use():\n    return Outer.helper.run()\n",
+    )]);
+    let call = line_of(&repo, "outer.py", "Outer.helper.run()");
+    for line in [2, 13] {
+        let report = report_for_definition(&repo, "run", "outer.py", line);
+        let site = site_at(&report, "outer.py", call);
+        assert!(
+            matches!(site.label, SiteLabel::Likely | SiteLabel::Unresolved),
+            "an untyped class attribute must keep the call unproven: {site:?}"
+        );
+    }
+}
+
+const PYTHON_SELF_SERVICES: &str = "class MailService:\n    def send(self):\n        return 1\n\n\nclass InviteService:\n    def send(self):\n        return 2\n\n\nclass MailHandler:\n    def __init__(self):\n        self.service = MailService()\n\n    def run(self):\n        return self.service.send()\n\n\nclass InviteHandler:\n    def __init__(self):\n        self.service: InviteService = InviteService()\n\n    def run(self):\n        return self.service.send() + 0\n";
+
+#[test]
+fn a_python_self_attribute_chain_proves_its_service_and_excludes_a_decoy() {
+    let repo = scanned_repo(&[("app.py", PYTHON_SELF_SERVICES)]);
+    let facts = type_facts(&open_read_only(&repo.db).unwrap(), "app.py");
+    assert!(
+        facts.iter().any(|(owner, name, _, resolved_type)| {
+            owner == "MailHandler" && name == "service" && resolved_type == "MailService"
+        }),
+        "MailHandler attribute fact missing: {facts:?}"
+    );
+    let mail_call = line_of(&repo, "app.py", "self.service = MailService()") + 3;
+    let invite_call = line_of(&repo, "app.py", "self.service.send() + 0");
+
+    let mail = report(&repo, "MailService.send", "app.py");
+    let site = site_at(&mail, "app.py", mail_call);
+    assert_eq!(site.label, SiteLabel::Proven, "{site:?}");
+    assert_eq!(site.basis, "receiver type");
+    assert_eq!(
+        site_at(&mail, "app.py", invite_call).label,
+        SiteLabel::Excluded
+    );
+
+    let invite = report(&repo, "InviteService.send", "app.py");
+    let site = site_at(&invite, "app.py", invite_call);
+    assert_eq!(site.label, SiteLabel::Proven, "{site:?}");
+    assert_eq!(
+        site_at(&invite, "app.py", mail_call).label,
+        SiteLabel::Excluded
+    );
+
+    let conn = open_read_only(&repo.db).unwrap();
+    let target = select_reference_target(&conn, "MailService.send", Some("app.py")).unwrap();
+    let callers =
+        find_references_for_symbol(&conn, &target.name, "callers", 20, &target.symbol_id).unwrap();
+    assert!(
+        callers
+            .iter()
+            .any(|site| site.path == "app.py" && site.start_line == Some(mail_call))
+    );
+    assert!(
+        !callers
+            .iter()
+            .any(|site| site.path == "app.py" && site.start_line == Some(invite_call))
+    );
+}
+
+#[test]
+fn a_python_self_attribute_without_a_type_fact_stays_unproven() {
+    let repo = scanned_repo(&[(
+        "app.py",
+        "class MailService:\n    def send(self):\n        return 1\n\n\nclass InviteService:\n    def send(self):\n        return 2\n\n\ndef make_service():\n    return MailService()\n\n\nclass MailHandler:\n    def __init__(self):\n        self.service = make_service()\n\n    def run(self):\n        return self.service.send()\n",
+    )]);
+    let call = line_of(&repo, "app.py", "self.service.send()");
+    for name in ["MailService.send", "InviteService.send"] {
+        let report = report(&repo, name, "app.py");
+        let site = site_at(&report, "app.py", call);
+        assert!(
+            matches!(site.label, SiteLabel::Likely | SiteLabel::Unresolved),
+            "an untyped self attribute must keep the call unproven: {site:?}"
+        );
+    }
+}
+
+#[test]
+fn a_self_chain_in_a_nested_function_does_not_bind_the_enclosing_class() {
+    let repo = scanned_repo(&[(
+        "app.py",
+        "class MailService:\n    def send(self):\n        return 1\n\n\nclass InviteService:\n    def send(self):\n        return 2\n\n\nclass MailHandler:\n    def __init__(self):\n        self.service = MailService()\n\n    def run(self):\n        def helper(self):\n            return self.service.send()\n        return helper(InviteHolder())\n\n\nclass InviteHolder:\n    def __init__(self):\n        self.service = InviteService()\n",
+    )]);
+    let call = line_of(&repo, "app.py", "return self.service.send()");
+    let report = report(&repo, "InviteService.send", "app.py");
+    let site = site_at(&report, "app.py", call);
+    assert_ne!(site.label, SiteLabel::Excluded, "{site:?}");
+}
+
+fn assert_not_excluded(report: &ReferenceReport, path: &str, line: usize) {
+    let site = site_at(report, path, line);
+    assert_ne!(site.label, SiteLabel::Excluded, "{site:?}");
+}
+
+fn assert_excluded(report: &ReferenceReport, path: &str, line: usize) {
+    let site = site_at(report, path, line);
+    assert_eq!(site.label, SiteLabel::Excluded, "{site:?}");
+}
+
+fn assert_qualified_path(report: &ReferenceReport, path: &str, line: usize) {
+    let site = site_at(report, path, line);
+    assert_eq!(site.label, SiteLabel::Proven, "{site:?}");
+    assert_eq!(site.basis, "qualified path");
+}
+
+#[test]
+fn a_kotlin_type_path_does_not_exclude_a_companion_or_extension_member_of_its_type() {
+    let repo = scanned_repo(&[(
+        "Outer.kt",
+        "package app\n\nclass Outer {\n    class Nested {\n        companion object {\n            fun build(): Int = 1\n        }\n    }\n}\n\nclass Other {\n    class Nested {\n        companion object {\n            fun build(): Int = 2\n            fun make(): Int = 2\n        }\n    }\n}\n\nfun Outer.Nested.Companion.make(): Int = 3\n\nfun use(): Int = Outer.Nested.build() + Outer.Nested.make()\n",
+    )]);
+    let call = line_of(&repo, "Outer.kt", "fun use()");
+
+    let companion = report_for_definition(&repo, "build", "Outer.kt", 6);
+    assert_not_excluded(&companion, "Outer.kt", call);
+    let decoy = report_for_definition(&repo, "build", "Outer.kt", 14);
+    assert_excluded(&decoy, "Outer.kt", call);
+
+    let extension = report_for_definition(&repo, "make", "Outer.kt", 20);
+    assert_not_excluded(&extension, "Outer.kt", call);
+}
+
+#[test]
+fn a_csharp_type_path_does_not_exclude_a_member_of_another_partial_part() {
+    let repo = scanned_repo(&[
+        (
+            "A.cs",
+            "namespace App;\n\npublic partial class Outer {\n    public partial class Inner {\n        public static int Make() { return 0; }\n    }\n}\n\npublic class Use {\n    int Run() { return Outer.Inner.Build(); }\n}\n",
+        ),
+        (
+            "B.cs",
+            "namespace App;\n\npublic partial class Outer {\n    public partial class Inner {\n        public static int Build() { return 1; }\n    }\n}\n\npublic class Other {\n    public class Inner {\n        public static int Build() { return 2; }\n    }\n}\n",
+        ),
+    ]);
+    let call = line_of(&repo, "A.cs", "Outer.Inner.Build()");
+
+    let part = report_for_definition(&repo, "Build", "B.cs", 5);
+    assert_not_excluded(&part, "A.cs", call);
+    let decoy = report_for_definition(&repo, "Build", "B.cs", 11);
+    assert_excluded(&decoy, "A.cs", call);
+}
+
+#[test]
+fn a_swift_type_path_does_not_exclude_a_member_of_an_extension_of_its_type() {
+    let repo = scanned_repo(&[(
+        "Outer.swift",
+        "struct Outer {\n    struct Inner {\n        static func make() -> Int { return 0 }\n    }\n}\n\nextension Outer.Inner {\n    static func build() -> Int { return 1 }\n}\n\nstruct Other {\n    struct Inner {\n        static func build() -> Int { return 2 }\n    }\n}\n\nfunc use() -> Int { return Outer.Inner.build() }\n",
+    )]);
+    let call = line_of(&repo, "Outer.swift", "Outer.Inner.build()");
+
+    let extension = report_for_definition(&repo, "build", "Outer.swift", 8);
+    assert_not_excluded(&extension, "Outer.swift", call);
+    let decoy = report_for_definition(&repo, "build", "Outer.swift", 13);
+    assert_excluded(&decoy, "Outer.swift", call);
+}
+
+#[test]
+fn a_java_typed_constant_after_a_type_root_proves_its_type_and_excludes_a_decoy() {
+    let repo = scanned_repo(&[
+        (
+            "app/Holder.java",
+            "package app;\n\npublic class Holder {\n    public static final Holder INSTANCE = new Holder();\n    public int describe() { return 1; }\n}\n",
+        ),
+        (
+            "app/Registry.java",
+            "package app;\n\npublic class Registry {\n    public static final Registry INSTANCE = new Registry();\n    public int describe() { return 2; }\n}\n",
+        ),
+        (
+            "app/Use.java",
+            "package app;\n\npublic class Use {\n    int run() { return Holder.INSTANCE.describe(); }\n}\n",
+        ),
+    ]);
+    let call = line_of(&repo, "app/Use.java", "Holder.INSTANCE.describe()");
+
+    let holder = report_for_definition(&repo, "describe", "app/Holder.java", 5);
+    assert_qualified_path(&holder, "app/Use.java", call);
+    let decoy = report_for_definition(&repo, "describe", "app/Registry.java", 5);
+    assert_excluded(&decoy, "app/Use.java", call);
+}
+
+#[test]
+fn a_csharp_static_readonly_member_after_a_type_root_proves_its_type_and_excludes_a_decoy() {
+    let repo = scanned_repo(&[(
+        "Registry.cs",
+        "namespace App;\n\npublic class Registry {\n    public static readonly Registry Default = new Registry();\n    public int Build() { return 1; }\n}\n\npublic class Factory {\n    public static readonly Factory Default = new Factory();\n    public int Build() { return 2; }\n}\n\npublic class Use {\n    int Run() { return Registry.Default.Build(); }\n}\n",
+    )]);
+    let call = line_of(&repo, "Registry.cs", "Registry.Default.Build()");
+
+    let registry = report_for_definition(&repo, "Build", "Registry.cs", 5);
+    assert_qualified_path(&registry, "Registry.cs", call);
+    let decoy = report_for_definition(&repo, "Build", "Registry.cs", 10);
+    assert_excluded(&decoy, "Registry.cs", call);
+}
+
+#[test]
+fn a_java_enum_constant_after_a_type_root_proves_its_enum_and_keeps_a_constant_body_open() {
+    let repo = scanned_repo(&[
+        (
+            "app/Color.java",
+            "package app;\n\npublic enum Color {\n    RED,\n    BLUE {\n        @Override public int describe() { return 9; }\n    };\n    public int describe() { return 3; }\n}\n",
+        ),
+        (
+            "app/Shade.java",
+            "package app;\n\npublic enum Shade {\n    RED;\n    public int describe() { return 4; }\n}\n",
+        ),
+        (
+            "app/Use.java",
+            "package app;\n\npublic class Use {\n    int red() { return Color.RED.describe(); }\n    int blue() { return Color.BLUE.describe(); }\n}\n",
+        ),
+    ]);
+    let red = line_of(&repo, "app/Use.java", "Color.RED.describe()");
+    let blue = line_of(&repo, "app/Use.java", "Color.BLUE.describe()");
+
+    let color = report_for_definition(&repo, "describe", "app/Color.java", 8);
+    assert_qualified_path(&color, "app/Use.java", red);
+    assert_not_excluded(&color, "app/Use.java", blue);
+    let decoy = report_for_definition(&repo, "describe", "app/Shade.java", 5);
+    assert_excluded(&decoy, "app/Use.java", red);
+    let body = report_for_definition(&repo, "describe", "app/Color.java", 6);
+    assert_not_excluded(&body, "app/Use.java", blue);
+}
+
+#[test]
+fn a_python_enum_member_after_a_type_root_proves_its_enum_and_excludes_a_decoy() {
+    let repo = scanned_repo(&[(
+        "color.py",
+        "from enum import Enum\n\n\nclass Color(Enum):\n    RED = 1\n\n    def describe(self):\n        return 1\n\n\nclass Shade(Enum):\n    RED = 2\n\n    def describe(self):\n        return 2\n\n\ndef use():\n    return Color.RED.describe()\n",
+    )]);
+    let call = line_of(&repo, "color.py", "Color.RED.describe()");
+
+    let color = report_for_definition(&repo, "describe", "color.py", 7);
+    assert_qualified_path(&color, "color.py", call);
+    let decoy = report_for_definition(&repo, "describe", "color.py", 14);
+    assert_excluded(&decoy, "color.py", call);
+}

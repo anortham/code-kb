@@ -4342,7 +4342,9 @@ fn pending_target_predicate_builder(
     let typed_receiver_chain_supported = has_typed_receiver_chain_support(conn);
     let typed_receiver_chain = if typed_receiver_chain_supported && include_typed_receiver_chain {
         let matches_target = match receiver_chain_status {
-            Some(status) => format!("({status}) = 1"),
+            Some(status) => format!(
+                "({status}) IN ({RECEIVER_CHAIN_STATUS_RECEIVER_TYPE}, {RECEIVER_CHAIN_STATUS_QUALIFIED_PATH})"
+            ),
             None => {
                 let receiver_chain_owner = typed_receiver_chain_owner_id_sql(
                     "p.from_symbol_id",
@@ -4489,7 +4491,8 @@ fn pending_target_predicate_builder(
         format!(
             "CASE WHEN json_array_length({receiver_chain_json}) > 1
                        AND p.target_receiver IS NOT NULL AND p.target_receiver != ''
-                  THEN COALESCE(({status}) = 1, 0)
+                       AND COALESCE(({status}), 0) != {RECEIVER_CHAIN_STATUS_LEGACY}
+                  THEN COALESCE(({status}) IN ({RECEIVER_CHAIN_STATUS_RECEIVER_TYPE}, {RECEIVER_CHAIN_STATUS_QUALIFIED_PATH}), 0)
                   ELSE {predicate} END"
         )
     } else {
@@ -7174,12 +7177,64 @@ fn type_fact_is_generic_parameter_sql(generic_scopes: &str, resolved_type: &str)
     )
 }
 
+/// The status of a receiver chain whose owner holds the target as a member.
+pub(crate) const RECEIVER_CHAIN_STATUS_RECEIVER_TYPE: i64 = 1;
+/// The status of a receiver chain that starts at a type and whose owner holds the target.
+pub(crate) const RECEIVER_CHAIN_STATUS_QUALIFIED_PATH: i64 = 2;
+/// The status of a receiver chain whose owner does not hold the target.
+pub(crate) const RECEIVER_CHAIN_STATUS_DIFFERENT_OWNER: i64 = 0;
+/// The status of a receiver chain that the name-path rules judge ([`RECEIVER_CHAIN_LEGACY_ROOT`]).
+pub(crate) const RECEIVER_CHAIN_STATUS_LEGACY: i64 = -1;
+
+/// The receiver names that stand for the instance of the caller's class.
+const SELF_RECEIVER_NAMES: &str = "'self', 'this', 'cls'";
+
+/// Languages where an enum constant (`Color.RED`) is a value of its enum, so a receiver chain
+/// steps from the constant to the enum.
+const ENUM_INSTANCE_LANGUAGES: &str =
+    "'java', 'kotlin', 'python', 'swift', 'scala', 'dart', 'rust', 'csharp', 'vbnet', 'php'";
+
+/// What the owner query of a receiver chain returns.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ReceiverChainProjection {
+    /// The owner id, or NULL.
+    Owner,
+    /// `<root kind>:<owner id>` (root kind `value`, `self`, or `type`), [`RECEIVER_CHAIN_LEGACY_ROOT`]
+    /// when the first name binds no value and no type, or NULL when the evidence is incomplete.
+    RootAndOwner,
+}
+
+/// The owner-query value for a chain whose first name binds neither a value nor a type, such as
+/// a package or module (`app.Outer.Inner.build()`): the name-path rules judge it.
+pub(crate) const RECEIVER_CHAIN_LEGACY_ROOT: &str = "legacy";
+
+/// A scalar owner id for the receiver chain `chain_json` of a call, or SQL NULL when the index
+/// cannot bind it. The first name binds, in order, a typed value in the caller's scope, the
+/// caller's class for `self`, `this`, or `cls`, or a type that the caller's scope names.
 pub(crate) fn typed_receiver_chain_owner_id_sql(
     source_symbol_id: &str,
     source_path: &str,
     source_line: &str,
     source_language: &str,
     chain_json: &str,
+) -> String {
+    typed_receiver_chain_owner_sql(
+        source_symbol_id,
+        source_path,
+        source_line,
+        source_language,
+        chain_json,
+        ReceiverChainProjection::Owner,
+    )
+}
+
+fn typed_receiver_chain_owner_sql(
+    source_symbol_id: &str,
+    source_path: &str,
+    source_line: &str,
+    source_language: &str,
+    chain_json: &str,
+    projection: ReceiverChainProjection,
 ) -> String {
     let safe_chain = format!("CASE WHEN json_valid({chain_json}) THEN {chain_json} ELSE '[]' END");
     let scope_ctes = typed_receiver_chain_scope_ctes(
@@ -7199,7 +7254,34 @@ pub(crate) fn typed_receiver_chain_owner_id_sql(
         "member_fact.resolved_type",
         "member_fact.language",
     );
-    let member_kinds = "'field', 'property', 'variable', 'attribute'";
+    let member_kinds = "'field', 'property', 'variable', 'attribute', 'constant'";
+    let owner_value = match projection {
+        ReceiverChainProjection::Owner => "receiver_chain.owner_id",
+        ReceiverChainProjection::RootAndOwner => {
+            "receiver_chain.root_kind || ':' || receiver_chain.owner_id"
+        }
+    };
+    let resolved_owner = format!(
+        "SELECT {owner_value}
+         FROM receiver_chain
+         WHERE receiver_chain.position = (SELECT MAX(position) FROM segments)
+           AND receiver_chain.owner_id IS NOT NULL
+           AND (SELECT COUNT(*) FROM segments) = json_array_length({safe_chain})
+           AND json_array_length({safe_chain}) BETWEEN 1 AND {depth_limit_plus_one}
+         LIMIT 1",
+        depth_limit_plus_one = TYPE_RECEIVER_CHAIN_MAX_DEPTH,
+    );
+    let selected = match projection {
+        ReceiverChainProjection::Owner => resolved_owner,
+        ReceiverChainProjection::RootAndOwner => format!(
+            "SELECT COALESCE(({resolved_owner}),
+                    CASE WHEN EXISTS (SELECT 1 FROM type_root)
+                              AND NOT EXISTS (SELECT 1 FROM receiver_chain
+                                              WHERE receiver_chain.position = 0
+                                                AND receiver_chain.owner_id IS NOT NULL)
+                         THEN '{RECEIVER_CHAIN_LEGACY_ROOT}' END)"
+        ),
+    };
     let query = format!(
         "(WITH RECURSIVE {scope_ctes}, root_facts(symbol_id, resolved_type, language) AS (
              SELECT binding.symbol_id, fact.resolved_type, fact.language
@@ -7208,8 +7290,31 @@ pub(crate) fn typed_receiver_chain_owner_id_sql(
              WHERE (SELECT COUNT(*) FROM root_bindings) = 1
                AND (SELECT COUNT(*) FROM type_facts duplicate
                     WHERE duplicate.symbol_id = binding.symbol_id) = 1
-         ), receiver_chain(position, owner_id) AS (
-             SELECT 0, {root_owner} FROM root_facts root_fact
+         ), type_root(symbol_id, resolved_type, language) AS (
+             SELECT {source_symbol_id}, root.name, {source_language}
+             FROM segments root
+             WHERE root.position = 0
+               AND root.name NOT IN ({SELF_RECEIVER_NAMES})
+               AND NOT EXISTS (SELECT 1 FROM root_bindings)
+         ), self_root(owner_id) AS (
+             SELECT caller_class.symbol_id
+             FROM segments root
+             JOIN symbols caller ON caller.symbol_id = {source_symbol_id}
+             JOIN symbols caller_class ON caller_class.symbol_id = caller.parent_symbol_id
+             WHERE root.position = 0
+               AND root.name IN ({SELF_RECEIVER_NAMES})
+               AND caller.kind IN ('method', 'constructor', 'property')
+               AND caller_class.kind IN ('class', 'struct', 'record', 'object', 'enum')
+               AND caller_class.language = caller.language
+               AND NOT EXISTS (SELECT 1 FROM root_facts)
+         ), root_owner_facts(symbol_id, resolved_type, language, root_kind) AS (
+             SELECT symbol_id, resolved_type, language, 'value' FROM root_facts
+             UNION ALL
+             SELECT symbol_id, resolved_type, language, 'type' FROM type_root
+         ), receiver_chain(position, owner_id, root_kind) AS (
+             SELECT 0, {root_owner}, root_fact.root_kind FROM root_owner_facts root_fact
+             UNION ALL
+             SELECT 0, self_root.owner_id, 'self' FROM self_root
              UNION ALL
              SELECT segment.position,
                     CASE
@@ -7229,26 +7334,53 @@ pub(crate) fn typed_receiver_chain_owner_id_sql(
                                 AND member.name = segment.name
                                 AND member.kind IN ({member_kinds})
                               LIMIT 1)
+                        WHEN NOT EXISTS (SELECT 1 FROM symbols candidate
+                                         WHERE candidate.parent_symbol_id = receiver_chain.owner_id
+                                           AND candidate.name = segment.name
+                                           AND candidate.kind IN ({member_kinds}))
+                         AND EXISTS (SELECT 1 FROM symbols owner
+                                     WHERE owner.symbol_id = receiver_chain.owner_id
+                                       AND owner.kind = 'enum'
+                                       AND owner.language IN ({ENUM_INSTANCE_LANGUAGES}))
+                         AND (SELECT COUNT(*) FROM symbols constant
+                              WHERE constant.parent_symbol_id = receiver_chain.owner_id
+                                AND constant.name = segment.name
+                                AND constant.kind = 'enum_member') = 1
+                         AND NOT EXISTS (SELECT 1 FROM symbols constant
+                                         JOIN symbols body ON body.parent_symbol_id = constant.symbol_id
+                                         WHERE constant.parent_symbol_id = receiver_chain.owner_id
+                                           AND constant.name = segment.name
+                                           AND constant.kind = 'enum_member')
+                        THEN receiver_chain.owner_id
+                        WHEN NOT EXISTS (SELECT 1 FROM symbols candidate
+                                         WHERE candidate.parent_symbol_id = receiver_chain.owner_id
+                                           AND candidate.name = segment.name
+                                           AND candidate.kind IN ({member_kinds}))
+                         AND (SELECT COUNT(*) FROM symbols nested
+                              WHERE nested.parent_symbol_id = receiver_chain.owner_id
+                                AND nested.name = segment.name
+                                AND nested.kind IN ({NESTED_TYPE_KINDS})) = 1
+                        THEN (SELECT nested.symbol_id FROM symbols nested
+                              WHERE nested.parent_symbol_id = receiver_chain.owner_id
+                                AND nested.name = segment.name
+                                AND nested.kind IN ({NESTED_TYPE_KINDS})
+                              LIMIT 1)
                         ELSE NULL
-                    END
+                    END,
+                    receiver_chain.root_kind
              FROM receiver_chain
              JOIN segments segment ON segment.position = receiver_chain.position + 1
              WHERE receiver_chain.owner_id IS NOT NULL
                AND receiver_chain.position < {depth_limit}
          )
-         SELECT receiver_chain.owner_id
-         FROM receiver_chain
-         WHERE receiver_chain.position = (SELECT MAX(position) FROM segments)
-           AND receiver_chain.owner_id IS NOT NULL
-           AND (SELECT COUNT(*) FROM segments) = json_array_length({safe_chain})
-           AND json_array_length({safe_chain}) BETWEEN 1 AND {depth_limit_plus_one}
-         LIMIT 1)",
+         {selected})",
         depth_limit = TYPE_RECEIVER_CHAIN_MAX_DEPTH - 1,
-        depth_limit_plus_one = TYPE_RECEIVER_CHAIN_MAX_DEPTH,
     );
     query
 }
 
+/// Each pending row of `?1` with a receiver chain and its owner value in the form of
+/// [`ReceiverChainProjection::RootAndOwner`].
 pub(crate) fn typed_receiver_chain_owner_rows_sql() -> String {
     let receiver_chain_json = "json_insert(
         CASE WHEN json_valid(pending.target_namespace_json)
@@ -7256,12 +7388,13 @@ pub(crate) fn typed_receiver_chain_owner_rows_sql() -> String {
              THEN pending.target_namespace_json ELSE '[]' END,
         '$[#]', pending.target_receiver
     )";
-    let owner_id = typed_receiver_chain_owner_id_sql(
+    let owner_id = typed_receiver_chain_owner_sql(
         "pending.from_symbol_id",
         "pending.path",
         "pending.start_line",
         "COALESCE(source.language, source_file.language, '')",
         receiver_chain_json,
+        ReceiverChainProjection::RootAndOwner,
     );
     format!(
         "SELECT 'P:' || CAST(pending.rowid AS TEXT), {owner_id}
@@ -7469,9 +7602,56 @@ fn typed_receiver_chain_target_status_sql_with_base_owner_map(
             SELECT CASE
                 WHEN EXISTS (SELECT 1 FROM uncertain_path) THEN NULL
                 WHEN EXISTS (SELECT 1 FROM proven_path) THEN 1
+                WHEN {related_part} THEN NULL
                 ELSE 0
             END)",
         ancestry_depth = TYPE_RECEIVER_ANCESTRY_MAX_DEPTH,
+        related_part = receiver_owner_related_part_sql(target),
+    )
+}
+
+/// SQL that holds when `target` belongs to a part of a receiver owner that the index does not
+/// link to it: a Kotlin companion object or a Java enum constant body nested in the owner, another
+/// part with the owner's name (a C# or VB.NET partial type, a reopened Ruby class, a Scala
+/// companion), or an extension of a type with the owner's name. Such a target may be reached, so
+/// a receiver chain that ends at the owner does not exclude it. Reads `receiver_owners`.
+fn receiver_owner_related_part_sql(target: &str) -> String {
+    let extended_type = "CASE WHEN json_valid(target_source.metadata_json)
+                               THEN json_extract(target_source.metadata_json, '$.extendedType') END,
+                          CASE WHEN json_valid(target_owner.metadata_json)
+                               THEN json_extract(target_owner.metadata_json, '$.extendedType') END,
+                          (SELECT json_extract(parameter.metadata_json, '$.variableType')
+                           FROM symbols parameter
+                           WHERE parameter.parent_symbol_id = target_source.symbol_id
+                             AND parameter.signature LIKE 'this %'
+                             AND json_valid(parameter.metadata_json)
+                             AND json_extract(parameter.metadata_json, '$.role') = 'parameter'
+                           LIMIT 1)";
+    format!(
+        "EXISTS (
+            SELECT 1
+            FROM receiver_owners related_owner
+            JOIN symbols chain_owner ON chain_owner.symbol_id = related_owner.symbol_id
+            LEFT JOIN symbols target_source ON target_source.symbol_id = {target}.symbol_id
+            LEFT JOIN symbols target_owner ON target_owner.symbol_id = {target}.parent_symbol_id
+            WHERE (target_owner.parent_symbol_id = chain_owner.symbol_id
+                   AND (target_owner.kind = 'enum_member'
+                        OR json_valid(target_owner.metadata_json)
+                           AND json_extract(target_owner.metadata_json, '$.type') = 'companion-object'))
+               OR (target_owner.symbol_id != chain_owner.symbol_id
+                   AND target_owner.name = chain_owner.name
+                   AND target_owner.language = chain_owner.language
+                   AND COALESCE((SELECT parent.name FROM symbols parent
+                                 WHERE parent.symbol_id = target_owner.parent_symbol_id), '')
+                       = COALESCE((SELECT parent.name FROM symbols parent
+                                   WHERE parent.symbol_id = chain_owner.parent_symbol_id), '')
+                   AND (chain_owner.language IN ('ruby', 'scala')
+                        OR ' ' || lower(target_owner.signature) || ' ' LIKE '% partial %'
+                        OR ' ' || lower(chain_owner.signature) || ' ' LIKE '% partial %'))
+               OR instr('.' || replace(replace(replace(COALESCE({extended_type}, ''),
+                                                       '::', '.'), '<', '.'), '?', '') || '.',
+                        '.' || chain_owner.name || '.') > 0
+        )"
     )
 }
 
