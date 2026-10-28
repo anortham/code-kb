@@ -7189,6 +7189,11 @@ pub(crate) const RECEIVER_CHAIN_STATUS_LEGACY: i64 = -1;
 /// The receiver names that stand for the instance of the caller's class.
 const SELF_RECEIVER_NAMES: &str = "'self', 'this', 'cls'";
 
+/// Languages where an enum constant (`Color.RED`) is a value of its enum, so a receiver chain
+/// steps from the constant to the enum.
+const ENUM_INSTANCE_LANGUAGES: &str =
+    "'java', 'kotlin', 'python', 'swift', 'scala', 'dart', 'rust', 'csharp', 'vbnet', 'php'";
+
 /// What the owner query of a receiver chain returns.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ReceiverChainProjection {
@@ -7249,7 +7254,7 @@ fn typed_receiver_chain_owner_sql(
         "member_fact.resolved_type",
         "member_fact.language",
     );
-    let member_kinds = "'field', 'property', 'variable', 'attribute'";
+    let member_kinds = "'field', 'property', 'variable', 'attribute', 'constant'";
     let owner_value = match projection {
         ReceiverChainProjection::Owner => "receiver_chain.owner_id",
         ReceiverChainProjection::RootAndOwner => {
@@ -7329,6 +7334,24 @@ fn typed_receiver_chain_owner_sql(
                                 AND member.name = segment.name
                                 AND member.kind IN ({member_kinds})
                               LIMIT 1)
+                        WHEN NOT EXISTS (SELECT 1 FROM symbols candidate
+                                         WHERE candidate.parent_symbol_id = receiver_chain.owner_id
+                                           AND candidate.name = segment.name
+                                           AND candidate.kind IN ({member_kinds}))
+                         AND EXISTS (SELECT 1 FROM symbols owner
+                                     WHERE owner.symbol_id = receiver_chain.owner_id
+                                       AND owner.kind = 'enum'
+                                       AND owner.language IN ({ENUM_INSTANCE_LANGUAGES}))
+                         AND (SELECT COUNT(*) FROM symbols constant
+                              WHERE constant.parent_symbol_id = receiver_chain.owner_id
+                                AND constant.name = segment.name
+                                AND constant.kind = 'enum_member') = 1
+                         AND NOT EXISTS (SELECT 1 FROM symbols constant
+                                         JOIN symbols body ON body.parent_symbol_id = constant.symbol_id
+                                         WHERE constant.parent_symbol_id = receiver_chain.owner_id
+                                           AND constant.name = segment.name
+                                           AND constant.kind = 'enum_member')
+                        THEN receiver_chain.owner_id
                         WHEN NOT EXISTS (SELECT 1 FROM symbols candidate
                                          WHERE candidate.parent_symbol_id = receiver_chain.owner_id
                                            AND candidate.name = segment.name
@@ -7579,9 +7602,56 @@ fn typed_receiver_chain_target_status_sql_with_base_owner_map(
             SELECT CASE
                 WHEN EXISTS (SELECT 1 FROM uncertain_path) THEN NULL
                 WHEN EXISTS (SELECT 1 FROM proven_path) THEN 1
+                WHEN {related_part} THEN NULL
                 ELSE 0
             END)",
         ancestry_depth = TYPE_RECEIVER_ANCESTRY_MAX_DEPTH,
+        related_part = receiver_owner_related_part_sql(target),
+    )
+}
+
+/// SQL that holds when `target` belongs to a part of a receiver owner that the index does not
+/// link to it: a Kotlin companion object or a Java enum constant body nested in the owner, another
+/// part with the owner's name (a C# or VB.NET partial type, a reopened Ruby class, a Scala
+/// companion), or an extension of a type with the owner's name. Such a target may be reached, so
+/// a receiver chain that ends at the owner does not exclude it. Reads `receiver_owners`.
+fn receiver_owner_related_part_sql(target: &str) -> String {
+    let extended_type = "CASE WHEN json_valid(target_source.metadata_json)
+                               THEN json_extract(target_source.metadata_json, '$.extendedType') END,
+                          CASE WHEN json_valid(target_owner.metadata_json)
+                               THEN json_extract(target_owner.metadata_json, '$.extendedType') END,
+                          (SELECT json_extract(parameter.metadata_json, '$.variableType')
+                           FROM symbols parameter
+                           WHERE parameter.parent_symbol_id = target_source.symbol_id
+                             AND parameter.signature LIKE 'this %'
+                             AND json_valid(parameter.metadata_json)
+                             AND json_extract(parameter.metadata_json, '$.role') = 'parameter'
+                           LIMIT 1)";
+    format!(
+        "EXISTS (
+            SELECT 1
+            FROM receiver_owners related_owner
+            JOIN symbols chain_owner ON chain_owner.symbol_id = related_owner.symbol_id
+            LEFT JOIN symbols target_source ON target_source.symbol_id = {target}.symbol_id
+            LEFT JOIN symbols target_owner ON target_owner.symbol_id = {target}.parent_symbol_id
+            WHERE (target_owner.parent_symbol_id = chain_owner.symbol_id
+                   AND (target_owner.kind = 'enum_member'
+                        OR json_valid(target_owner.metadata_json)
+                           AND json_extract(target_owner.metadata_json, '$.type') = 'companion-object'))
+               OR (target_owner.symbol_id != chain_owner.symbol_id
+                   AND target_owner.name = chain_owner.name
+                   AND target_owner.language = chain_owner.language
+                   AND COALESCE((SELECT parent.name FROM symbols parent
+                                 WHERE parent.symbol_id = target_owner.parent_symbol_id), '')
+                       = COALESCE((SELECT parent.name FROM symbols parent
+                                   WHERE parent.symbol_id = chain_owner.parent_symbol_id), '')
+                   AND (chain_owner.language IN ('ruby', 'scala')
+                        OR ' ' || lower(target_owner.signature) || ' ' LIKE '% partial %'
+                        OR ' ' || lower(chain_owner.signature) || ' ' LIKE '% partial %'))
+               OR instr('.' || replace(replace(replace(COALESCE({extended_type}, ''),
+                                                       '::', '.'), '<', '.'), '?', '') || '.',
+                        '.' || chain_owner.name || '.') > 0
+        )"
     )
 }
 
