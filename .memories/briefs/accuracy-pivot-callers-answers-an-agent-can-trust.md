@@ -3,7 +3,7 @@ id: accuracy-pivot-callers-answers-an-agent-can-trust
 title: "Accuracy pivot: callers answers an agent can trust"
 status: active
 created: 2026-10-17T17:10:13.294Z
-updated: 2026-10-28T01:08:17.449Z
+updated: 2026-10-28T16:52:06.908Z
 tags:
   - project-direction
   - accuracy
@@ -29,4 +29,4 @@ Reduce repeated navigation and context overhead while preserving accepted edits.
 
 ## Authority and operation
 
-All financial approval gates/caps/receipts are removed from project tools and installed Codex/Claude guidance. Necessary evaluation/spending and local commits are authorized; no push, release or global routing change. Commit memories. Worktree remains /home/murphy/.codex/worktrees/1e6f/code-kb, branch fix/cross-language-review; main is untouched. Avoid rebinding the old installed MCP here: it recursively watches ignored task trees and hits limits. Use the freshly built CLI with explicit --root for navigation and check_edit.
+All financial approval gates/caps/receipts are removed from project tools and installed Codex/Claude guidance. Necessary evaluation/spending and local commits are authorized; no push, release or global routing change. Commit memories. The owner authorized merging everything into main on 2026-10-28. All 41 task commits are integrated by fast-forward at ac5f81e. The active integration workspace is /home/murphy/source/code-kb on main. The fully merged, clean task worktree /home/murphy/.codex/worktrees/1e6f/code-kb is retained to preserve local benchmark artifacts. Avoid rebinding the old installed MCP here: it recursively watches ignored task trees and hits limits. Use the freshly built CLI with explicit --root for navigation and check_edit.
