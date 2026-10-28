@@ -1013,5 +1013,139 @@ class ReleaseEvidenceTest(unittest.TestCase):
         self.assertEqual(valid.returncode, 0, valid.stderr)
 
 
+    def record_fix(self, evidence, report, commit, defect):
+        return self.command(
+            "record-fix",
+            "--repo",
+            str(self.repo),
+            "--evidence",
+            str(evidence),
+            "--report",
+            str(report),
+            "--commit",
+            commit,
+            "--defect",
+            defect,
+            "--extractor",
+            str(self.extractor),
+            "--test-command",
+            self.test_command,
+            "--exact-call-json",
+            json.dumps([str(self.code_kb), "--root", str(self.repo), "lookup", "query"]),
+        )
+
+    def test_a_package_version_bump_keeps_a_recorded_cargo_fix_current(self):
+        evidence = self.start_dogfood()
+        report = self.dogfood_report(self.base_commit)
+        self.write(
+            "crates/code-kb-core/Cargo.toml",
+            '[package]\nname = "code-kb-core"\nversion = "0.1.0"\n\n[dependencies]\nfixture-dep = "1.2.4"\n',
+        )
+        self.write(
+            "Cargo.lock",
+            (self.repo / "Cargo.lock").read_text().replace('version = "1.2.3"', 'version = "1.2.4"'),
+        )
+        self.git("add", "-A")
+        self.git("commit", "-q", "-m", "fix the dependency")
+        fix_commit = self.git("rev-parse", "HEAD")
+        recorded = self.record_fix(evidence, report, fix_commit, "dependency regression")
+        self.assertEqual(recorded.returncode, 0, recorded.stderr)
+
+        self.write("Cargo.toml", '[workspace.package]\nversion = "1.0.1"\n')
+        self.write(
+            "crates/code-kb-core/Cargo.toml",
+            (self.repo / "crates/code-kb-core/Cargo.toml").read_text().replace(
+                'version = "0.1.0"', 'version = "0.1.1"'
+            ),
+        )
+        self.write(
+            "crates/code-kb-cli/Cargo.toml",
+            (self.repo / "crates/code-kb-cli/Cargo.toml").read_text().replace(
+                'version = "0.1.0"', 'version = "0.1.1"'
+            ),
+        )
+        self.write(
+            "Cargo.lock",
+            (self.repo / "Cargo.lock").read_text().replace(
+                'name = "code-kb-core"\nversion = "0.1.0"',
+                'name = "code-kb-core"\nversion = "0.1.1"',
+            ),
+        )
+        self.git("add", "-A")
+        self.git("commit", "-q", "-m", "bump the version")
+        after_bump = self.validate_dogfood(evidence, report)
+        self.assertEqual(after_bump.returncode, 0, after_bump.stderr)
+
+        self.write(
+            "Cargo.lock",
+            (self.repo / "Cargo.lock").read_text().replace('version = "1.2.4"', 'version = "1.2.5"'),
+        )
+        self.git("add", "-A")
+        self.git("commit", "-q", "-m", "change the dependency again")
+        after_dependency = self.validate_dogfood(evidence, report)
+        self.assertEqual(after_dependency.returncode, 1)
+        self.assertIn("Cargo.lock", after_dependency.stderr)
+
+    def production_manifest(self):
+        return json.loads((SCRIPT.parents[1] / "scripts/release-evidence-inputs.json").read_text())
+
+    def test_production_inputs_cover_the_patched_debouncer_and_the_compiled_routing_block(self):
+        production = self.production_manifest()
+        fixture_path = self.repo / "scripts/release-evidence-inputs.json"
+        fixture = json.loads(fixture_path.read_text())
+        fixture["files"] = sorted(
+            {*fixture["files"], *(path for path in production["files"] if path.startswith("crates/"))}
+        )
+        fixture["globs"] = sorted(
+            {*fixture["globs"], *(glob for glob in production["globs"] if glob.startswith("crates/"))}
+        )
+        self.write(fixture_path.relative_to(self.repo), json.dumps(fixture))
+        debouncer = "crates/code-kb-core/src/debouncer"
+        self.write(f"{debouncer}/mod.rs", "pub fn debounce() {}\n")
+        self.write(f"{debouncer}/test_cases/add_create_event.hjson", "{ state: {} }\n")
+        self.write(f"{debouncer}/README.md", "Patched debouncer.\n")
+        self.write("crates/code-kb-cli/src/routing-block.md", "Use code-kb first.\n")
+        self.git("add", "-A")
+        self.git("commit", "-q", "-m", "add the debouncer and routing block")
+        baseline = self.capture()
+
+        changes = {
+            f"{debouncer}/mod.rs": "pub fn debounce() { let _ = 1; }\n",
+            f"{debouncer}/test_cases/add_create_event.hjson": "{ state: { queues: {} } }\n",
+            "crates/code-kb-cli/src/routing-block.md": "Use code-kb tools first.\n",
+        }
+        for relative, content in changes.items():
+            with self.subTest(path=relative):
+                original = (self.repo / relative).read_text()
+                self.write(relative, content)
+                changed = self.capture()
+                self.assertIn(relative, baseline["inputs"])
+                self.assertNotEqual(baseline["fingerprint"], changed["fingerprint"])
+                self.write(relative, original)
+
+        self.write(f"{debouncer}/README.md", "Patched debouncer, documented.\n")
+        docs_only = self.capture()
+        self.assertNotIn(f"{debouncer}/README.md", docs_only["inputs"])
+        self.assertEqual(baseline["fingerprint"], docs_only["fingerprint"])
+
+    def test_every_markdown_input_is_named_in_the_release_guide(self):
+        repo_root = SCRIPT.parents[1]
+        production = self.production_manifest()
+        guide = (repo_root / "docs/RELEASING.md").read_text()
+        markdown_inputs = [path for path in production["files"] if path.endswith(".md")]
+        self.assertIn("scripts/release-dogfood-prompt.md", markdown_inputs)
+        self.assertNotIn("evals/review-2026-10-26/README.md", markdown_inputs)
+        for path in markdown_inputs:
+            with self.subTest(path=path):
+                self.assertIn(f"`{path}`", guide)
+        markdown_globs = [
+            glob
+            for glob in [*production["globs"], *production.get("optional_globs", [])]
+            if glob.endswith(".md")
+        ]
+        self.assertEqual(markdown_globs, [])
+        self.assertIn("evals/languages", guide)
+
+
 if __name__ == "__main__":
     unittest.main()
