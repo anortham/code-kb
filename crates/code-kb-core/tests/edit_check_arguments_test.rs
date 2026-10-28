@@ -627,6 +627,70 @@ fn ruby_splat_formals_have_an_open_ended_range() {
 }
 
 #[test]
+fn ruby_block_formals_accept_calls_with_and_without_a_block_argument() {
+    let calls = "def with_do\n  each_item([1]) do |x|\n    x\n  end\nend\ndef with_pass\n  each_item([1], &:to_s)\nend\ndef without_items\n  each_item()\nend\n";
+    let text = edited_text(
+        &[(
+            "src/lib.rb",
+            &format!("def each_item(items, &block)\n  items.each(&block)\nend\n{calls}"),
+        )],
+        "src/lib.rb",
+        &format!(
+            "def each_item(items, limit = 10, &block)\n  items.first(limit).each(&block)\nend\n{calls}"
+        ),
+    );
+    assert!(text.contains("parameters 1-2 → 1-3"), "{text}");
+    assert!(!text.contains("`with_do`"), "{text}");
+    assert!(!text.contains("`with_pass`"), "{text}");
+    assert!(
+        text.contains("`without_items`  passes 0 args; takes 1-3"),
+        "{text}"
+    );
+}
+
+#[test]
+fn ruby_keyword_and_block_formals_accept_valid_calls() {
+    let calls = "def required_only\n  kw(1, name: 2)\nend\ndef every_kind\n  kw(1, name: 2, opt: 3, &:to_s)\nend\ndef with_do\n  kw(1, 3, name: 2) do |x|\n    x\n  end\nend\ndef shorthand(name)\n  kw(1, name:)\nend\ndef missing_positional\n  kw(name: 2)\nend\n";
+    let text = edited_text(
+        &[(
+            "src/lib.rb",
+            &format!("def kw(a, name:, opt: 1, &block)\n  a\nend\n{calls}"),
+        )],
+        "src/lib.rb",
+        &format!("def kw(a, b = 2, name:, opt: 1, &block)\n  a + b\nend\n{calls}"),
+    );
+    assert!(text.contains("parameters 2-4 → 2-5"), "{text}");
+    assert!(!text.contains("`required_only`"), "{text}");
+    assert!(!text.contains("`every_kind`"), "{text}");
+    assert!(!text.contains("`shorthand`"), "{text}");
+    assert!(!text.contains("`with_do`"), "{text}");
+    assert!(
+        text.contains("`missing_positional`  passes 1 arg; takes 2-5"),
+        "{text}"
+    );
+}
+
+#[test]
+fn elixir_piped_calls_count_the_left_value_as_the_first_argument() {
+    let calls = "  def piped(x), do: x |> scale(2)\n  def piped_lines(x) do\n    x\n    |> scale(2)\n  end\n  def piped_trailing(x) do\n    x |>\n      scale(2)\n  end\n  def qualified(x), do: x |> Lib.scale(2)\n  def direct(x), do: scale(x, 2)\n  def captured(), do: &scale(&1, 2)\n  def empty(), do: scale()\nend\n";
+    let text = edited_text(
+        &[(
+            "src/lib.ex",
+            &format!("defmodule Lib do\n  def scale(value, factor), do: value * factor\n{calls}"),
+        )],
+        "src/lib.ex",
+        &format!(
+            "defmodule Lib do\n  def scale(value, factor, offset \\\\ 0), do: value * factor + offset\n{calls}"
+        ),
+    );
+    assert!(text.contains("parameters 2 → 2-3"), "{text}");
+    assert!(!text.contains("passes 1 arg"), "{text}");
+    assert!(!text.contains("`direct`"), "{text}");
+    assert!(!text.contains("`captured`"), "{text}");
+    assert!(text.contains("`empty`  passes 0 args; takes 2-3"), "{text}");
+}
+
+#[test]
 fn scala_defaulted_formals_have_an_optional_range() {
     assert_parameter_range(
         "src/Lib.scala",

@@ -3,7 +3,7 @@
 //! accepts. A target the index cannot describe exactly gets no range, so no call is excluded.
 
 use std::fs;
-use std::ops::Range;
+use std::ops::{Range, RangeInclusive};
 use std::path::Path;
 
 use rusqlite::{Connection, OptionalExtension, params};
@@ -115,12 +115,33 @@ impl Arity {
     }
 
     /// Whether a call written in `site_language` with `count` arguments passes a number of
-    /// arguments the target takes, `None` when the arity rule does not judge that language. Unlike
-    /// the callers report, a Go call with one argument is judged: `f(g())` may spread, but the
-    /// edit check still names a call that passes one.
+    /// arguments the target takes, `None` when the arity rule does not judge that language or
+    /// when the call fits the target only under one of the counts it may pass. Unlike the callers
+    /// report, a Go call with one argument is judged: `f(g())` may spread, but the edit check
+    /// still names a call that passes one.
     pub(crate) fn accepts(&self, site_language: &str, count: u32) -> Option<bool> {
-        (rule_language(site_language) == Some(self.language))
-            .then(|| count >= self.min && self.accepted_max.is_none_or(|max| count <= max))
+        if rule_language(site_language) != Some(self.language) {
+            return None;
+        }
+        let fits = self
+            .passed_counts(count)
+            .filter(|&passed| self.fits(passed));
+        match (fits.count(), self.passed_counts(count).count()) {
+            (0, _) => Some(false),
+            (fitting, all) if fitting == all => Some(true),
+            _ => None,
+        }
+    }
+
+    fn fits(&self, count: u32) -> bool {
+        count >= self.min && self.accepted_max.is_none_or(|max| count <= max)
+    }
+
+    /// The argument counts that a call with `written` arguments between its parentheses may pass.
+    /// An Elixir pipe (`x |> f(a)`) passes its left value as the first argument, and the written
+    /// count leaves it out.
+    fn passed_counts(&self, written: u32) -> RangeInclusive<u32> {
+        written..=written.saturating_add(u32::from(self.language == "elixir"))
     }
 
     /// The basis of an exclusion when `count` arguments fit no definition of the target, `None`
@@ -134,10 +155,10 @@ impl Arity {
         if rule_language(site_language) != Some(self.language) {
             return None;
         }
-        let too_few = count < self.min;
-        let too_many = self.accepted_max.is_some_and(|max| count > max);
         // `f(g())` passes every value of a Go call that returns several.
-        if (!too_few && !too_many) || (self.language == "go" && count == 1 && too_few) {
+        if self.passed_counts(count).any(|passed| self.fits(passed))
+            || (self.language == "go" && count == 1 && count < self.min)
+        {
             return None;
         }
         let noun = if count == 1 { "arg" } else { "args" };
@@ -798,7 +819,11 @@ fn classify(segment: &str, language: &str) -> Parameter {
         "python" | "kotlin" | "cpp" | "php" | "scala" | "swift" | "gdscript" => {
             has_default(segment)
         }
-        "ruby" => has_default(segment) || ruby_keyword_default(segment),
+        "ruby" => {
+            has_default(segment)
+                || ruby_keyword_default(segment)
+                || segment.trim_start().starts_with('&')
+        }
         "csharp" => has_default(segment) || contains_word(segment, "Optional"),
         "fsharp" => segment.trim_start().starts_with('?'),
         "vbnet" => has_default(segment) || contains_word(segment, "Optional"),
@@ -1209,6 +1234,48 @@ mod tests {
         assert_eq!(range(1, Some(1)).range_text(), "1");
         assert_eq!(range(1, Some(2)).range_text(), "1-2");
         assert_eq!(range(1, None).range_text(), "1 or more");
+    }
+
+    #[test]
+    fn an_elixir_count_may_pass_one_more_argument_through_a_pipe() {
+        let range = |min, max| Arity {
+            language: "elixir",
+            min,
+            max,
+            accepted_max: max,
+        };
+        assert_eq!(range(2, Some(3)).accepts("elixir", 1), None);
+        assert_eq!(range(2, Some(3)).accepts("elixir", 2), Some(true));
+        assert_eq!(range(2, Some(3)).accepts("elixir", 3), None);
+        assert_eq!(range(2, Some(3)).accepts("elixir", 0), Some(false));
+        assert_eq!(range(2, Some(3)).accepts("elixir", 4), Some(false));
+        assert_eq!(range(2, None).accepts("elixir", 5), Some(true));
+        assert_eq!(range(2, Some(3)).exclusion_basis("f", "elixir", 1), None);
+        assert_eq!(
+            range(2, Some(3))
+                .exclusion_basis("f", "elixir", 4)
+                .as_deref(),
+            Some("4 args; `f` takes 2-3")
+        );
+        assert_eq!(
+            Arity {
+                language: "python",
+                min: 2,
+                max: Some(3),
+                accepted_max: Some(3),
+            }
+            .accepts("python", 1),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn a_ruby_block_parameter_is_optional() {
+        let block = classify("&block", "ruby");
+        assert!(block.optional && !block.variadic);
+        assert!(!classify("name:", "ruby").optional);
+        assert!(classify("opt: 1", "ruby").optional);
+        assert!(classify("**opts", "ruby").variadic);
     }
 
     #[test]
