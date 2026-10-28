@@ -1057,3 +1057,112 @@ fn removing_a_dataclass_instance_field_still_reports_its_constructor() {
         "missing removed instance field constructor in {change:?}"
     );
 }
+
+const BOX_BASE: &str = "class Box:\n    def grow(self, k):\n        return k\n";
+const BOX_USE: &str = "from a import Box\n\n\ndef use():\n    b = Box()\n    return b.grow(1)\n";
+
+fn box_repo(grown: &str, use_source: Option<&str>) -> Repo {
+    let repo = committed_repo(&[("a.py", BOX_BASE), ("b.py", BOX_USE)]);
+    write(&repo.root, "a.py", grown);
+    if let Some(source) = use_source {
+        write(&repo.root, "b.py", source);
+    }
+    repo
+}
+
+#[test]
+fn a_proven_method_call_that_omits_a_new_required_parameter_stays_proven_and_blocks() {
+    let repo = box_repo(
+        "class Box:\n    def grow(self, k, m):\n        return k\n",
+        None,
+    );
+
+    let check = check(&repo);
+    let change = changed(&check, "Box.grow");
+
+    assert!(
+        change.proven.iter().any(|site| site.path == "b.py"
+            && site.line == 6
+            && site.note.as_deref() == Some("passes 1 arg; takes 2")),
+        "missing proven stale call in {change:?}"
+    );
+    assert_eq!(change.unresolved, 0, "{change:?}");
+    assert!(
+        stop_sites(&check)
+            .iter()
+            .any(|site| site.path == "b.py" && site.line == 6),
+        "a proven stale call did not block: {check:?}"
+    );
+}
+
+#[test]
+fn a_proven_method_call_that_omits_a_new_required_keyword_only_parameter_stays_proven() {
+    let repo = box_repo(
+        "class Box:\n    def grow(self, k, *, strict):\n        return k\n",
+        None,
+    );
+
+    let check = check(&repo);
+    let change = changed(&check, "Box.grow");
+
+    assert!(
+        change
+            .proven
+            .iter()
+            .any(|site| site.path == "b.py" && site.line == 6),
+        "missing proven stale call in {change:?}"
+    );
+    assert_eq!(change.unresolved, 0, "{change:?}");
+    assert!(
+        stop_sites(&check)
+            .iter()
+            .any(|site| site.path == "b.py" && site.line == 6),
+        "a proven stale call did not block: {check:?}"
+    );
+}
+
+#[test]
+fn a_touched_method_call_that_passes_a_new_required_parameter_is_in_the_diff() {
+    let repo = box_repo(
+        "class Box:\n    def grow(self, k, m):\n        return k\n",
+        Some("from a import Box\n\n\ndef use():\n    b = Box()\n    return b.grow(1, 2)\n"),
+    );
+
+    let check = check(&repo);
+    let change = changed(&check, "Box.grow");
+
+    assert!(
+        change
+            .in_diff
+            .iter()
+            .any(|site| site.path == "b.py" && site.line == 6),
+        "missing reached call in {change:?}"
+    );
+    assert!(change.proven.is_empty(), "{change:?}");
+    assert!(change.likely.is_empty(), "{change:?}");
+    assert_eq!(change.unresolved, 0, "{change:?}");
+}
+
+#[test]
+fn a_touched_method_call_that_names_a_new_required_keyword_only_parameter_is_in_the_diff() {
+    let repo = box_repo(
+        "class Box:\n    def grow(self, k, *, strict):\n        return k\n",
+        Some(
+            "from a import Box\n\n\ndef use():\n    b = Box()\n    return b.grow(1, strict=True)\n",
+        ),
+    );
+
+    let check = check(&repo);
+    let change = changed(&check, "Box.grow");
+
+    assert!(
+        change
+            .in_diff
+            .iter()
+            .any(|site| site.path == "b.py" && site.line == 6),
+        "missing reached call in {change:?}"
+    );
+    assert!(change.proven.is_empty(), "{change:?}");
+    assert!(change.likely.is_empty(), "{change:?}");
+    assert_eq!(change.unresolved, 0, "{change:?}");
+}
