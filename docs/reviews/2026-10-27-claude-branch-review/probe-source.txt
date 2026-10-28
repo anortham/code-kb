@@ -1,0 +1,38 @@
+use ignore::WalkBuilder;
+use notify_debouncer_full::notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let root = temp.path().join("project");
+    let churn = root.join("disappearing");
+    let stable = root.join("stable");
+    std::fs::create_dir_all(&churn)?;
+    std::fs::create_dir_all(&stable)?;
+    std::fs::write(stable.join("keep.rs"), "pub fn keep() {}\n")?;
+    let mut watcher = RecommendedWatcher::new(|_| {}, Config::default())?;
+    let mut builder = WalkBuilder::new(&root);
+    builder.standard_filters(true).hidden(false)
+        .add_custom_ignore_filename(".julieignore")
+        .add_custom_ignore_filename(".code-kb-ignore")
+        .add_custom_ignore_filename(".codekbignore");
+    let mut errors = 0;
+    let mut kept = false;
+    for result in builder.build() {
+        match result {
+            Ok(entry) => {
+                println!("entry: {}", entry.path().strip_prefix(&root)?.display());
+                if entry.file_type().is_some_and(|t| t.is_dir()) {
+                    watcher.watch(entry.path(), RecursiveMode::NonRecursive)?;
+                    if entry.path() == churn {
+                        std::fs::remove_dir(&churn)?;
+                        println!("removed immediately after successful native watch");
+                    }
+                }
+                kept |= entry.path() == stable.join("keep.rs");
+            }
+            Err(error) => { errors += 1; println!("walker error: {error:?}"); }
+        }
+    }
+    println!("walker_errors={errors} stable_file_seen={kept}");
+    Ok(())
+}

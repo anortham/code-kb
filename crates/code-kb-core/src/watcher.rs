@@ -2,6 +2,8 @@ use ignore::{DirEntry, WalkBuilder};
 use notify::event::{CreateKind, EventKind, RemoveKind};
 use notify::{RecursiveMode, Watcher};
 use notify_debouncer_full::{DebouncedEvent, Debouncer, RecommendedCache, new_debouncer_opt};
+#[cfg(test)]
+use std::collections::VecDeque;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 #[cfg(test)]
@@ -30,6 +32,15 @@ static FAIL_NEXT_ROOT_WATCH: AtomicBool = AtomicBool::new(false);
 static ROOT_WATCH_FAILURE_COUNT: AtomicUsize = AtomicUsize::new(0);
 #[cfg(test)]
 static REMOVE_DIRECTORY_BEFORE_WATCH: Mutex<Option<PathBuf>> = Mutex::new(None);
+#[cfg(test)]
+struct RegistrationWalkerFault {
+    after: PathBuf,
+    error: ignore::Error,
+    remove_directory: bool,
+}
+#[cfg(test)]
+static REGISTRATION_WALKER_FAULTS: Mutex<VecDeque<RegistrationWalkerFault>> =
+    Mutex::new(VecDeque::new());
 const IGNORE_FILES: &[&str] = &[
     ".gitignore",
     ".ignore",
@@ -461,6 +472,76 @@ fn remove_directory_before_watch(path: &Path) {
     }
 }
 
+fn registration_walker(root: &Path) -> impl Iterator<Item = Result<DirEntry, ignore::Error>> {
+    let walker = workspace_walk_builder(root).build();
+    #[cfg(test)]
+    {
+        let mut walker = walker;
+        let mut pending_error = None;
+        std::iter::from_fn(move || {
+            if let Some(error) = pending_error.take() {
+                return Some(Err(error));
+            }
+            let result = walker.next()?;
+            let fault = result.as_ref().ok().and_then(|entry| {
+                let mut faults = REGISTRATION_WALKER_FAULTS
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let matches = faults.front().is_some_and(|fault| {
+                    RegistrationPath::new(&fault.after) == RegistrationPath::new(entry.path())
+                });
+                if matches { faults.pop_front() } else { None }
+            });
+            if let Some(fault) = fault {
+                if fault.remove_directory {
+                    std::fs::remove_dir(fault.after).unwrap();
+                }
+                pending_error = Some(fault.error);
+            }
+            Some(result)
+        })
+    }
+    #[cfg(not(test))]
+    {
+        walker
+    }
+}
+
+fn registration_walk_error_path(error: &ignore::Error) -> Option<&Path> {
+    match error {
+        ignore::Error::WithPath { path, .. } => Some(path),
+        ignore::Error::WithDepth { err, .. } | ignore::Error::WithLineNumber { err, .. } => {
+            registration_walk_error_path(err)
+        }
+        _ => None,
+    }
+}
+
+fn is_missing_registered_directory_error(
+    error: &ignore::Error,
+    root: &RegistrationPath,
+    registrations: &RegisteredDirectories,
+) -> bool {
+    if error.is_partial()
+        || !matches!(
+            error.io_error(),
+            Some(error) if error.kind() == std::io::ErrorKind::NotFound
+        )
+    {
+        return false;
+    }
+    let Some(path) = registration_walk_error_path(error) else {
+        return false;
+    };
+    let registration_path = RegistrationPath::new(path);
+    registration_path != *root
+        && registrations.paths.contains_key(&registration_path)
+        && matches!(
+            std::fs::metadata(&registration_path.path),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound
+        )
+}
+
 fn synchronize_registrations(
     debouncer: &mut WorkspaceDebouncer,
     workspace: &Workspace,
@@ -504,10 +585,24 @@ fn synchronize_registrations(
         {
             *registered_generation = generation;
         }
-        let mut walker = workspace_walk_builder(root).build();
+        let walker = registration_walker(root);
 
-        for result in &mut walker {
-            let entry = result.map_err(WatcherError::Ignore)?;
+        for result in walker {
+            let entry = match result {
+                Ok(entry) => entry,
+                Err(error)
+                    if directory_race_retries == 0
+                        && is_missing_registered_directory_error(
+                            &error,
+                            &root_registration,
+                            registrations,
+                        ) =>
+                {
+                    directory_race_retries += 1;
+                    continue 'registration;
+                }
+                Err(error) => return Err(error.into()),
+            };
             let file_type = entry.file_type().ok_or_else(|| {
                 notify_registration_error(format!(
                     "could not determine file type for '{}'",
@@ -1125,6 +1220,221 @@ mod tests {
         assert!(!disappearing.exists());
         assert_eq!(registrations.generation, 2);
         assert_eq!(registrations.paths.len(), 1);
+    }
+
+    fn queued_walker_io_error(path: Option<PathBuf>, kind: std::io::ErrorKind) -> ignore::Error {
+        let error = ignore::Error::Io(std::io::Error::from(kind));
+        let error = match path {
+            Some(path) => ignore::Error::WithPath {
+                path,
+                err: Box::new(error),
+            },
+            None => error,
+        };
+        ignore::Error::WithDepth {
+            depth: 1,
+            err: Box::new(error),
+        }
+    }
+
+    fn registered_watcher(root: PathBuf) -> (Workspace, WorkspaceDebouncer, RegisteredDirectories) {
+        let workspace = Workspace::new(root);
+        let mut debouncer = new_debouncer(
+            Duration::from_millis(150),
+            None,
+            |_result: Result<Vec<DebouncedEvent>, _>| {},
+        )
+        .unwrap();
+        let mut registrations = RegisteredDirectories::default();
+        synchronize_registrations(&mut debouncer, &workspace, &mut registrations).unwrap();
+        (workspace, debouncer, registrations)
+    }
+
+    struct WalkerFaultReset;
+
+    impl Drop for WalkerFaultReset {
+        fn drop(&mut self) {
+            REGISTRATION_WALKER_FAULTS
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clear();
+            *REMOVE_DIRECTORY_BEFORE_WATCH
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        }
+    }
+
+    #[test]
+    fn registration_rewalks_after_a_registered_walker_entry_disappears() {
+        let _guard = ROOT_WATCH_FAULT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _fault_reset = WalkerFaultReset;
+        let temp_dir = crate::safe_tempdir();
+        let root = temp_dir.path().join("project");
+        let disappearing = root.join("disappearing");
+        std::fs::create_dir_all(&disappearing).unwrap();
+        let (workspace, mut debouncer, mut registrations) = registered_watcher(root);
+        assert!(
+            registrations
+                .paths
+                .contains_key(&RegistrationPath::new(&disappearing))
+        );
+        REGISTRATION_WALKER_FAULTS
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push_back(RegistrationWalkerFault {
+                after: disappearing.clone(),
+                error: queued_walker_io_error(
+                    Some(disappearing.clone()),
+                    std::io::ErrorKind::NotFound,
+                ),
+                remove_directory: true,
+            });
+        let generation = registrations.generation;
+
+        let result = synchronize_registrations(&mut debouncer, &workspace, &mut registrations);
+
+        assert!(
+            result.is_ok(),
+            "a disappeared registered directory should trigger a bounded rewalk: {result:?}"
+        );
+        assert!(!disappearing.exists());
+        assert!(registrations.generation >= generation + 2);
+        assert_eq!(registrations.paths.len(), 1);
+    }
+
+    #[test]
+    fn registration_walker_errors_outside_the_missing_registered_directory_race_stay_errors() {
+        let _guard = ROOT_WATCH_FAULT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _fault_reset = WalkerFaultReset;
+        let temp_dir = crate::safe_tempdir();
+        let root = temp_dir.path().join("project");
+        let registered = root.join("registered");
+        std::fs::create_dir_all(&registered).unwrap();
+        let (workspace, mut debouncer, mut registrations) = registered_watcher(root.clone());
+
+        let partial_not_found = ignore::Error::WithDepth {
+            depth: 1,
+            err: Box::new(ignore::Error::WithPath {
+                path: registered.clone(),
+                err: Box::new(ignore::Error::Partial(vec![ignore::Error::Io(
+                    std::io::Error::from(std::io::ErrorKind::NotFound),
+                )])),
+            }),
+        };
+        let foreign = root.join("foreign");
+        for (label, after, error, remove_directory) in [
+            (
+                "root path",
+                root.clone(),
+                queued_walker_io_error(Some(root.clone()), std::io::ErrorKind::NotFound),
+                false,
+            ),
+            (
+                "permission error",
+                registered.clone(),
+                queued_walker_io_error(
+                    Some(registered.clone()),
+                    std::io::ErrorKind::PermissionDenied,
+                ),
+                false,
+            ),
+            (
+                "still-present directory",
+                registered.clone(),
+                queued_walker_io_error(Some(registered.clone()), std::io::ErrorKind::NotFound),
+                false,
+            ),
+            (
+                "pathless error",
+                registered.clone(),
+                queued_walker_io_error(None, std::io::ErrorKind::NotFound),
+                false,
+            ),
+            (
+                "foreign directory",
+                registered.clone(),
+                queued_walker_io_error(Some(foreign), std::io::ErrorKind::NotFound),
+                false,
+            ),
+            ("partial error", registered.clone(), partial_not_found, true),
+        ] {
+            REGISTRATION_WALKER_FAULTS
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push_back(RegistrationWalkerFault {
+                    after,
+                    error,
+                    remove_directory,
+                });
+            let generation = registrations.generation;
+
+            let result = synchronize_registrations(&mut debouncer, &workspace, &mut registrations);
+
+            assert!(result.is_err(), "{label} should remain an error");
+            assert_eq!(registrations.generation, generation + 1, "{label}");
+        }
+    }
+
+    #[test]
+    fn missing_root_walker_errors_are_not_recoverable() {
+        let temp_dir = crate::safe_tempdir();
+        let root = temp_dir.path().join("project");
+        std::fs::create_dir(&root).unwrap();
+        let root_registration = RegistrationPath::new(&root);
+        let mut registrations = RegisteredDirectories::default();
+        registrations.paths.insert(root_registration.clone(), 1);
+        std::fs::remove_dir(&root).unwrap();
+        let error = queued_walker_io_error(Some(root), std::io::ErrorKind::NotFound);
+
+        assert!(!is_missing_registered_directory_error(
+            &error,
+            &root_registration,
+            &registrations,
+        ));
+    }
+
+    #[test]
+    fn registration_walker_race_shares_the_single_retry_with_watch_failures() {
+        let _guard = ROOT_WATCH_FAULT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _fault_reset = WalkerFaultReset;
+        let temp_dir = crate::safe_tempdir();
+        let root = temp_dir.path().join("project");
+        let registered = root.join("z_registered");
+        let removed_before_watch = root.join("a_unregistered");
+        std::fs::create_dir_all(&registered).unwrap();
+        let (workspace, mut debouncer, mut registrations) = registered_watcher(root);
+        std::fs::create_dir(&removed_before_watch).unwrap();
+        *REMOVE_DIRECTORY_BEFORE_WATCH
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            Some(removed_before_watch.clone());
+        REGISTRATION_WALKER_FAULTS
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push_back(RegistrationWalkerFault {
+                after: registered.clone(),
+                error: queued_walker_io_error(
+                    Some(registered.clone()),
+                    std::io::ErrorKind::NotFound,
+                ),
+                remove_directory: true,
+            });
+
+        let result = synchronize_registrations(&mut debouncer, &workspace, &mut registrations);
+
+        assert!(
+            result.is_err(),
+            "two directory races should exceed the shared retry"
+        );
+        assert!(!registered.exists());
+        assert!(!removed_before_watch.exists());
+        assert_eq!(registrations.generation, 3);
     }
 
     #[cfg(target_os = "linux")]

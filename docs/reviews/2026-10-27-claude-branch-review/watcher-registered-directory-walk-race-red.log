@@ -1,0 +1,20 @@
+$ cargo test -p code-kb-core registration_rewalks_after_a_registered_walker_entry_disappears -- --nocapture
+   Compiling code-kb-core v2.9.1 (/home/murphy/.codex/worktrees/1e6f/code-kb/crates/code-kb-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.9s
+     Running unittests src/lib.rs (target/debug/deps/code_kb_core-414fe34d68250160)
+
+running 1 test
+
+thread 'watcher::tests::registration_rewalks_after_a_registered_walker_entry_disappears' (2727368) panicked at crates/code-kb-core/src/watcher.rs:1235:9:
+a disappeared registered directory should trigger a bounded rewalk: Err(Ignore(WithDepth { depth: 1, err: WithPath { path: "/home/murphy/.codex/worktrees/1e6f/code-kb/crates/code-kb-core/target/tmp/.tmpKLicie/project/disappearing", err: Io(Kind(NotFound)) } }))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test watcher::tests::registration_rewalks_after_a_registered_walker_entry_disappears ... FAILED
+
+failures:
+
+failures:
+    watcher::tests::registration_rewalks_after_a_registered_walker_entry_disappears
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 514 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p code-kb-core --lib`

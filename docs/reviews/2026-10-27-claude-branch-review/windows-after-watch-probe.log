@@ -1,0 +1,12 @@
+   Compiling code-kb-core v2.9.1 (C:\work\code-kb\crates\code-kb-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 13.24s
+     Running `target\debug\examples\claude_walk_race_probe_ba0c331da9e64cd99fc33f4b3ac174e2.exe`
+log: /home/murphy/.local/share/win-test/logs/20261028T004333Z-code-kb-2722178.log
+entry: 
+entry: disappearing
+removed immediately after successful native watch
+entry: stable
+entry: stable\keep.rs
+walker_errors=0 stable_file_seen=true
+## HEAD (no branch)
+?? test.log

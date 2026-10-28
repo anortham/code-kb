@@ -1,0 +1,146 @@
+{
+  "schema": 1,
+  "reviewed_head": "08ada49bdc5bd97c6061ede997d20e1cc92637dc",
+  "base": "aeebe72a21c9057a0b63d75b5cd9a6db3884893d",
+  "branch": "fix/cross-language-review",
+  "reviewed_commit_count": 39,
+  "changed_file_count": 740,
+  "provider": "anthropic",
+  "skill": "razorback:claude-cli 0.48.6",
+  "reviewer_cli": "Claude Code 2.1.311",
+  "reviewer_models": [
+    "claude-opus-5-5"
+  ],
+  "reviewer_output_validated": true,
+  "reviewer_completed": true,
+  "reviewer_verdict": "needs-attention",
+  "reviewer_coverage": "Selective: watcher, vendored debouncer, MCP pagination, sandbox; most semantic rules and eval evidence were not reviewed line by line.",
+  "policy_status": "no external-model policy declared \u2014 diff sent to anthropic",
+  "read_only_tools": [
+    "Read",
+    "Grep",
+    "Glob"
+  ],
+  "payload": {
+    "bytes": 7131667,
+    "sha256": "1cf6ecdca11a5e9a785901e05476ae67995d1a94b4c024ef3f98729439307bad",
+    "raw_bytes": 7131647,
+    "redactor_changed_payload": true
+  },
+  "elapsed_seconds": 150.284003,
+  "external_invocations": 1,
+  "round": 2,
+  "max_rounds": 2,
+  "temporary_review_tree_removed": true,
+  "outbound_prompts_removed": true,
+  "finding_disposition": [
+    {
+      "finding": 1,
+      "canonical_severity": "medium",
+      "classification": "partially_confirmed",
+      "accepted": "Queued non-root registered-directory IO NotFound bypasses the existing race retry.",
+      "contested": [
+        "Deleting after successful watch/yield is too late to cause initial read_dir failure; Linux and Windows real native-watcher probes pass.",
+        "Increasing retry count is not accepted; repeated churn must remain bounded."
+      ],
+      "status": "fix_in_progress"
+    }
+  ],
+  "fix_watcher_sha256": "ae5e61323eda27059bd66aa0c29af9d72aae1802b428f59a10728442faa8640a",
+  "linux": {
+    "passed": 1910,
+    "failed": 0,
+    "result_blocks": 39,
+    "clippy": "passed",
+    "format": "passed",
+    "release": "passed",
+    "release_sha256": "271fc5bee15134240810cba1a4ce81681bc3c5903b664d2e5c23b959d57081c4"
+  },
+  "windows_fix_verification": "pending",
+  "characterization_probes": {
+    "linux": "post-watch deletion:0 walker errors, stable sibling visited",
+    "windows": "post-watch deletion:0 walker errors, stable sibling visited",
+    "scope": "Native watcher/iterator timing characterization on unchanged reviewed watcher source; not a reproduction of queued-open timing."
+  },
+  "members": [
+    {
+      "path": "reviewer.json",
+      "bytes": 5781,
+      "sha256": "26bef7207c414346552584b8fefe8d9cdb59441049c89c996508ace6c2d55e6a",
+      "redactor_changed": false
+    },
+    {
+      "path": "probe-source.txt",
+      "bytes": 1652,
+      "sha256": "1008ffa5418ff488514fe235fd0bdd256a654c34134341166de8385bf6f399e0",
+      "redactor_changed": false
+    },
+    {
+      "path": "linux-after-watch-probe.log",
+      "bytes": 382,
+      "sha256": "4c960051e149f8d02387c950d000a1cd47c2a29d344adf08d3df7b39f40668e3",
+      "redactor_changed": false
+    },
+    {
+      "path": "windows-after-watch-probe.log",
+      "bytes": 507,
+      "sha256": "93d0be963227d167061c46266b22caef57a16d5cd26485035d3b4ee3bbc6aef4",
+      "redactor_changed": false
+    },
+    {
+      "path": "windows-probe.json",
+      "bytes": 1832,
+      "sha256": "c1e9ea78874c731fa89b4cd83a130dd716400c015fa9372b77755306475dca04",
+      "redactor_changed": false
+    },
+    {
+      "path": "windows-probe-off.log",
+      "bytes": 10,
+      "sha256": "fcd0e285e488cb37a042511417db2ac1209ef9656fbfef67d97cad27ae72ab90",
+      "redactor_changed": false
+    },
+    {
+      "path": "watcher-registered-directory-walk-race-red.log",
+      "bytes": 1235,
+      "sha256": "acc3c5a7df113d4be373fccf5a5cacfaa27a51d7900e5621165296c0a85de936",
+      "redactor_changed": false
+    },
+    {
+      "path": "post-edit-check.json",
+      "bytes": 192,
+      "sha256": "06b366ee442368c74c5ff05e1bc561afb561a3ba4cb761bf8392db810b566736",
+      "redactor_changed": false
+    },
+    {
+      "path": "linux-fix-rust.log",
+      "bytes": 160946,
+      "sha256": "a6f6d4e7d2a7c3db1b1883991129d35435d5f9c22b0b8316d14c604d2df65300",
+      "redactor_changed": false
+    },
+    {
+      "path": "linux-fix-clippy.log",
+      "bytes": 266,
+      "sha256": "286b7c1cc00fd32f89fca11477af35dcca77a5f8161ae1b605b87d9b93ee268d",
+      "redactor_changed": false
+    },
+    {
+      "path": "linux-fix-fmt.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "redactor_changed": false
+    },
+    {
+      "path": "linux-fix-release.log",
+      "bytes": 257,
+      "sha256": "2ca5343f84d4e5773167d7fe39d030055275353a5e60cd9ec89a02b217e00011",
+      "redactor_changed": false
+    },
+    {
+      "path": "linux-fix-verification.json",
+      "bytes": 1295,
+      "sha256": "c0a4ed2054651a60487c3a79b85470d092bf36674ff2e99147ccc046c338a825",
+      "redactor_changed": false
+    }
+  ],
+  "evidence_whitespace_policy": "Only raw .log evidence in this folder bypasses Git whitespace checks; source and docs retain normal checks."
+}

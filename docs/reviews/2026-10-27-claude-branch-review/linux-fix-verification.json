@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "source_base_commit": "08ada49bdc5bd97c6061ede997d20e1cc92637dc",
+  "watcher_sha256": "ae5e61323eda27059bd66aa0c29af9d72aae1802b428f59a10728442faa8640a",
+  "commands": [
+    {
+      "scope": "rust",
+      "argv": [
+        "cargo",
+        "test",
+        "--workspace",
+        "--locked",
+        "--no-fail-fast"
+      ],
+      "exit_status": 0,
+      "elapsed_seconds": 396.233692,
+      "log": "linux-fix-rust.log"
+    },
+    {
+      "scope": "clippy",
+      "argv": [
+        "cargo",
+        "clippy",
+        "--workspace",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_status": 0,
+      "elapsed_seconds": 2.830359,
+      "log": "linux-fix-clippy.log"
+    },
+    {
+      "scope": "fmt",
+      "argv": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit_status": 0,
+      "elapsed_seconds": 0.742951,
+      "log": "linux-fix-fmt.log"
+    },
+    {
+      "scope": "release",
+      "argv": [
+        "cargo",
+        "build",
+        "--release",
+        "--locked"
+      ],
+      "exit_status": 0,
+      "elapsed_seconds": 64.771277,
+      "log": "linux-fix-release.log"
+    }
+  ],
+  "release_sha256": "271fc5bee15134240810cba1a4ce81681bc3c5903b664d2e5c23b959d57081c4"
+}

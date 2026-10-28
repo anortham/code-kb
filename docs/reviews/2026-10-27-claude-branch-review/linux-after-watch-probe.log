@@ -1,0 +1,9 @@
+   Compiling code-kb-core v2.9.1 (/home/murphy/.codex/worktrees/1e6f/code-kb/crates/code-kb-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.25s
+     Running `target/debug/examples/claude_walk_race_probe`
+entry: 
+entry: stable
+entry: stable/keep.rs
+entry: disappearing
+removed immediately after successful native watch
+walker_errors=0 stable_file_seen=true
