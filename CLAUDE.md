@@ -284,7 +284,18 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   the package folder (`-` read as `_`), and every other segment is a file stem or folder below that
   package's `src/`; a call rooted at `std`, `core`, or `alloc` never matches.
   A `super` call matches a method of an ancestor, and a `self`, `this`, `cls`, or `super` call
-  matches only the nearest class in the chain that defines the name. A bare call matches a class
+  matches only the nearest class in the chain that defines the name.
+  A receiver chain (`a.b.f()`) starts at one of three roots: a typed value in the caller's scope;
+  the caller's class for `self`, `this`, or `cls` when that name has no type fact and the caller is
+  a method, constructor, or property of the class; or the type that the caller's scope names
+  (`Outer.Inner.build()`, proven as `qualified path`). Each later name is a member with one type
+  fact (a field, property, variable, attribute, or constant), or, when no member has the name, one
+  nested type, or an enum constant without a body, which steps to its enum where enum constants are
+  values of the enum. A chain whose first name binds neither a value nor a type (a package or
+  module, `app.Outer.Inner.build()`) keeps the name-path rules, and a chain that stops at a member
+  with no type fact stays unproven. A chain does not exclude a target in a companion object, an
+  enum-constant body, a partial or reopened part, or an extension of its owner.
+  A bare call matches a class
   or function defined inside the caller, and a definition in an enclosing function, namespace,
   or module scope, where the nearest scope that defines or imports the name wins. In Java, C#, Kotlin, Swift, C++, Scala, Dart, Ruby,
   and VB.NET a bare call also matches a method of the caller's class chain, where the nearest

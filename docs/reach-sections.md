@@ -182,13 +182,13 @@ parameters. The second argument of `matches!` is a pattern.
 The scan stops after 4096 bytes and takes the braces as a literal.
 
 Constructor calls. In C#, Kotlin, Scala, Swift, and Ruby files a `uses` site, and in Ruby also
-a `type_usage` site, counts when its source line holds a whole-word occurrence of the name that
+a `type_usage` or `member_access` site, counts when its source line holds a whole-word occurrence of the name that
 any `<…>` type arguments and then `(` follow. In C# the name must follow `new`, with only a
 namespace path between them (`new Point(…)`, `new Ns.Point(…)`, `new global::Ns.Point(…)`).
 In Scala and Swift, `.apply` or `.init` may stand before the `(` (`Point.apply(…)`,
-`Point.init(…)`), and in Ruby `.new` (`Point.new(…)`). The line is read without `//`
-comments, `/* */` comments (nested in Kotlin and Swift), `"""` strings, and single- or
-double-quoted strings. A Ruby `#` comment is not skipped.
+`Point.init(…)`), and in Ruby `.new` (`Point.new(…)`). The line is read without comments
+(`#` in Ruby; `//` and `/* */`, nested in Kotlin and Swift, elsewhere), `"""` strings, and
+single- or double-quoted strings.
 
 The edit check reads the other half: `destructurings` in `sections.rs` lists the lines of a
 Rust type use whose braces close into a pattern, one row per line, and the report prints none of

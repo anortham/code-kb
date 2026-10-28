@@ -8,12 +8,13 @@ const DECLARATION_WORDS: [&str; 8] = [
 ];
 
 /// `text` with every comment, string literal, and character literal replaced by spaces, newlines
-/// kept, so offsets and line numbers stay. Python comments start with `#`; every other language
-/// here uses `//` and `/* */` (nested in Rust, Kotlin, and Swift). A quote that does not close
-/// ends at its line, except a triple quote, and a backtick string in JavaScript, TypeScript, and
-/// Go, which run on. Rust tells a lifetime from a character literal and reads raw strings.
+/// kept, so offsets and line numbers stay. Python and Ruby comments start with `#`; every other
+/// language here uses `//` and `/* */` (nested in Rust, Kotlin, and Swift). A quote that does not
+/// close ends at its line, except a triple quote, and a backtick string in JavaScript, TypeScript,
+/// and Go, which run on. Rust tells a lifetime from a character literal and reads raw strings.
 pub(crate) fn code_only(text: &str, language: &str) -> String {
     let python = language == "python";
+    let hash = python || language == "ruby";
     let rust = language == "rust";
     let nested = matches!(language, "rust" | "kotlin" | "swift");
     let backticks = matches!(language, "javascript" | "typescript" | "tsx" | "jsx" | "go");
@@ -22,9 +23,9 @@ pub(crate) fn code_only(text: &str, language: &str) -> String {
     let mut at = 0;
     while at < bytes.len() {
         let rest = &bytes[at..];
-        let end = if (python && rest[0] == b'#') || (!python && rest.starts_with(b"//")) {
+        let end = if (hash && rest[0] == b'#') || (!hash && rest.starts_with(b"//")) {
             at + rest.iter().position(|b| *b == b'\n').unwrap_or(rest.len())
-        } else if !python && rest.starts_with(b"/*") {
+        } else if !hash && rest.starts_with(b"/*") {
             block_comment_end(bytes, at, nested)
         } else if rest.starts_with(b"\"\"\"") || (python && rest.starts_with(b"'''")) {
             let fence = &rest[..3];
@@ -271,6 +272,15 @@ mod tests {
     fn python_comments_start_with_a_hash_and_slashes_are_code() {
         let code = code_only("a = b // c  # d\n", "python");
         assert_eq!(code, "a = b // c     \n");
+    }
+
+    #[test]
+    fn ruby_comments_start_with_a_hash_outside_a_string() {
+        let code = code_only("p = Point.new(\"#{x}\") # Point.new(2)\n", "ruby");
+        assert_eq!(
+            code,
+            format!("p = Point.new({}) {}\n", " ".repeat(6), " ".repeat(14))
+        );
     }
 
     #[test]

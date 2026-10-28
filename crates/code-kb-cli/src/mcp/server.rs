@@ -104,7 +104,9 @@ fn resolve_root(
 /// Prepares the index on a background thread. The thread owns the root's watcher: it starts
 /// the watcher once the index exists, before the offline reconcile, and returns it, so an
 /// edit made after the prepare reaches the index before any call joins the thread. Drop the
-/// previous watcher before the spawn so one root never has two watchers.
+/// previous watcher before the spawn. Its worker stops at its next check, and the index
+/// rebuild, `create_index`, and `start_watcher` each wait for it, so one root never has two
+/// workers.
 fn spawn_index_prepare(workspace: &Workspace, db_path: &Path) -> Option<IndexPrepare> {
     if !db_path.exists() && !is_project_root(&workspace.canonical_root) {
         return None;

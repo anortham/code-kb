@@ -4752,27 +4752,25 @@ fn find_references_internal(
     symbol_id: Option<&str>,
     include_external: bool,
 ) -> Result<Vec<ReferenceSite>, QueryError> {
-    let mut sites = find_direct_references(
-        conn,
-        symbol_name,
-        direction,
-        limit,
-        symbol_id,
-        include_external,
-    )?;
+    if direction == "callees" {
+        return find_callees_page_internal(
+            conn,
+            symbol_name,
+            symbol_id,
+            limit,
+            0,
+            include_external,
+        )
+        .map(|(sites, _)| sites);
+    }
+    let mut sites = find_direct_references(conn, symbol_name, limit, symbol_id)?;
     let class = match symbol_id.filter(|_| direction == "callers") {
         Some(id) => constructed_class(conn, id)?,
         None => None,
     };
     if let Some((class_id, class_name)) = class.filter(|_| sites.len() < limit) {
-        let mut builds = find_direct_references(
-            conn,
-            &class_name,
-            "callers",
-            limit - sites.len(),
-            Some(&class_id),
-            include_external,
-        )?;
+        let mut builds =
+            find_direct_references(conn, &class_name, limit - sites.len(), Some(&class_id))?;
         builds.retain(|site| site.kind == "calls");
         sites.extend(builds);
         sites.sort_by(|a, b| {
@@ -5115,98 +5113,55 @@ pub(crate) fn grouped_member_access_rows(
     Ok(rows.collect::<Result<_, _>>()?)
 }
 
-fn css_call_identifier_callee_sites(
+fn find_direct_references(
     conn: &Connection,
     symbol_name: &str,
-    symbol_id: Option<&str>,
     limit: usize,
+    symbol_id: Option<&str>,
 ) -> Result<Vec<ReferenceSite>, QueryError> {
-    if limit == 0 || !has_css_call_identifier_site_schema(conn) {
-        return Ok(Vec::new());
-    }
-    let mut stmt = conn.prepare(&format!(
-        "WITH css_candidate_sites AS ({CSS_CALL_IDENTIFIER_SITES_SQL})
-         SELECT from_symbol_name, from_symbol_id, to_symbol_name, path, start_line,
-                MIN(start_column) AS start_column
-         FROM css_candidate_sites
-         WHERE from_symbol_name = ?1 AND (?3 IS NULL OR from_symbol_id = ?3)
-         GROUP BY from_symbol_name, from_symbol_id, to_symbol_name, path, start_line
-         ORDER BY path, start_line, start_column, to_symbol_name, from_symbol_id
-         LIMIT ?2"
-    ))?;
+    let mut results = Vec::new();
+
+    let mut stmt = conn.prepare(
+        "SELECT s_from.name AS from_name,
+                r.from_symbol_id,
+                s_to.name AS to_name,
+                r.kind,
+                r.path,
+                r.start_line,
+                r.start_column
+         FROM relationships r
+         JOIN symbols s_from ON r.from_symbol_id = s_from.symbol_id
+         JOIN symbols s_to ON r.to_symbol_id = s_to.symbol_id
+         WHERE s_to.name = ?1 AND (?3 IS NULL OR r.to_symbol_id = ?3)
+         LIMIT ?2",
+    )?;
+
     let rows = stmt.query_map(params![symbol_name, limit as i64, symbol_id], |row| {
         Ok(ReferenceSite {
             from_symbol_name: row.get(0)?,
             from_symbol_id: row.get(1)?,
             to_symbol_name: row.get(2)?,
-            kind: "calls".to_string(),
-            path: row.get::<_, String>(3)?.replace('\\', "/"),
-            start_line: row.get::<_, Option<i64>>(4)?.map(|line| line as usize),
-            start_column: row.get::<_, Option<i64>>(5)?.map(|column| column as usize),
+            kind: row.get(3)?,
+            path: row.get::<_, String>(4)?.replace('\\', "/"),
+            start_line: row.get::<_, Option<i64>>(5)?.map(|v| v as usize),
+            start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
             occurrences: None,
             target: None,
             enclosing_symbol_name: None,
         })
     })?;
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(QueryError::from)
-}
 
-fn find_direct_references(
-    conn: &Connection,
-    symbol_name: &str,
-    direction: &str,
-    limit: usize,
-    symbol_id: Option<&str>,
-    include_external: bool,
-) -> Result<Vec<ReferenceSite>, QueryError> {
-    let mut results = Vec::new();
+    for r in rows {
+        results.push(r?);
+    }
 
-    if direction == "callers" {
-        // Find callers: references pointing to target symbol
-        let mut stmt = conn.prepare(
-            "SELECT s_from.name AS from_name,
-                    r.from_symbol_id,
-                    s_to.name AS to_name,
-                    r.kind,
-                    r.path,
-                    r.start_line,
-                    r.start_column
-             FROM relationships r
-             JOIN symbols s_from ON r.from_symbol_id = s_from.symbol_id
-             JOIN symbols s_to ON r.to_symbol_id = s_to.symbol_id
-             WHERE s_to.name = ?1 AND (?3 IS NULL OR r.to_symbol_id = ?3)
-             LIMIT ?2",
-        )?;
-
-        let rows = stmt.query_map(params![symbol_name, limit as i64, symbol_id], |row| {
-            Ok(ReferenceSite {
-                from_symbol_name: row.get(0)?,
-                from_symbol_id: row.get(1)?,
-                to_symbol_name: row.get(2)?,
-                kind: row.get(3)?,
-                path: row.get::<_, String>(4)?.replace('\\', "/"),
-                start_line: row.get::<_, Option<i64>>(5)?.map(|v| v as usize),
-                start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
-                occurrences: None,
-                target: None,
-                enclosing_symbol_name: None,
-            })
-        })?;
-
-        for r in rows {
-            results.push(r?);
-        }
-
-        // Also query pending_relationships for callers if results < limit
-        if results.len() < limit {
-            let remaining = limit - results.len();
-            if has_pending_namespace_column(conn) {
-                if let Some(sid) = symbol_id {
-                    let pred = if pending_receiver_chain_requires_full_for_target_name(
-                        conn,
-                        symbol_name,
-                    ) {
+    // Also query pending_relationships for callers if results < limit
+    if results.len() < limit {
+        let remaining = limit - results.len();
+        if has_pending_namespace_column(conn) {
+            if let Some(sid) = symbol_id {
+                let pred =
+                    if pending_receiver_chain_requires_full_for_target_name(conn, symbol_name) {
                         pending_target_predicate(conn, "s_target", "s_target_parent")
                     } else {
                         pending_target_predicate_without_typed_receiver_chain(
@@ -5215,285 +5170,67 @@ fn find_direct_references(
                             "s_target_parent",
                         )
                     };
-                    let mut pending_stmt = conn.prepare(
-                        &format!("SELECT s_from.name AS from_name,
-                                p.from_symbol_id,
-                                p.target_terminal_name AS to_name,
-                                p.kind,
-                                p.path,
-                                p.start_line,
-                                p.start_column
-                         FROM pending_relationships p
-                         JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
-                         JOIN symbols s_target ON s_target.symbol_id = ?3
-                         LEFT JOIN symbols s_target_parent ON s_target.parent_symbol_id = s_target_parent.symbol_id
-                          WHERE p.target_terminal_name = ?1
-                            AND {pred}
-                          LIMIT ?2"),
-                    )?;
+                let mut pending_stmt = conn.prepare(
+                    &format!("SELECT s_from.name AS from_name,
+                            p.from_symbol_id,
+                            p.target_terminal_name AS to_name,
+                            p.kind,
+                            p.path,
+                            p.start_line,
+                            p.start_column
+                     FROM pending_relationships p
+                     JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
+                     JOIN symbols s_target ON s_target.symbol_id = ?3
+                     LEFT JOIN symbols s_target_parent ON s_target.parent_symbol_id = s_target_parent.symbol_id
+                      WHERE p.target_terminal_name = ?1
+                        AND {pred}
+                      LIMIT ?2"),
+                )?;
 
-                    let p_rows = pending_stmt.query_map(
-                        params![symbol_name, remaining as i64, sid],
-                        |row| {
-                            Ok(ReferenceSite {
-                                from_symbol_name: row.get(0)?,
-                                from_symbol_id: row.get(1)?,
-                                to_symbol_name: row.get(2)?,
-                                kind: row.get(3)?,
-                                path: row.get::<_, String>(4)?.replace('\\', "/"),
-                                start_line: Some(row.get::<_, i64>(5)? as usize),
-                                start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
-                                occurrences: None,
-                                target: None,
-                                enclosing_symbol_name: None,
-                            })
-                        },
-                    )?;
-                    for r in p_rows {
-                        results.push(r?);
-                    }
-                } else {
-                    let mut pending_stmt = conn.prepare(
-                        "SELECT s_from.name AS from_name,
-                                p.from_symbol_id,
-                                p.target_terminal_name AS to_name,
-                                p.kind,
-                                p.path,
-                                p.start_line,
-                                p.start_column
-                         FROM pending_relationships p
-                         JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
-                         WHERE p.target_terminal_name = ?1
-                           AND (
-                               (p.target_namespace_json IS NULL OR p.target_namespace_json = '[]')
-                               OR EXISTS (
-                                   SELECT 1 FROM symbols s_any
-                                   JOIN symbols s_any_parent ON s_any.parent_symbol_id = s_any_parent.symbol_id
-                                   WHERE s_any.name = p.target_terminal_name
-                                     AND EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END) WHERE value = s_any_parent.name)
-                               )
+                let p_rows =
+                    pending_stmt.query_map(params![symbol_name, remaining as i64, sid], |row| {
+                        Ok(ReferenceSite {
+                            from_symbol_name: row.get(0)?,
+                            from_symbol_id: row.get(1)?,
+                            to_symbol_name: row.get(2)?,
+                            kind: row.get(3)?,
+                            path: row.get::<_, String>(4)?.replace('\\', "/"),
+                            start_line: Some(row.get::<_, i64>(5)? as usize),
+                            start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
+                            occurrences: None,
+                            target: None,
+                            enclosing_symbol_name: None,
+                        })
+                    })?;
+                for r in p_rows {
+                    results.push(r?);
+                }
+            } else {
+                let mut pending_stmt = conn.prepare(
+                    "SELECT s_from.name AS from_name,
+                            p.from_symbol_id,
+                            p.target_terminal_name AS to_name,
+                            p.kind,
+                            p.path,
+                            p.start_line,
+                            p.start_column
+                     FROM pending_relationships p
+                     JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
+                     WHERE p.target_terminal_name = ?1
+                       AND (
+                           (p.target_namespace_json IS NULL OR p.target_namespace_json = '[]')
+                           OR EXISTS (
+                               SELECT 1 FROM symbols s_any
+                               JOIN symbols s_any_parent ON s_any.parent_symbol_id = s_any_parent.symbol_id
+                               WHERE s_any.name = p.target_terminal_name
+                                 AND EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(p.target_namespace_json) THEN p.target_namespace_json ELSE '[]' END) WHERE value = s_any_parent.name)
                            )
-                         LIMIT ?2",
-                    )?;
-
-                    let p_rows =
-                        pending_stmt.query_map(params![symbol_name, remaining as i64], |row| {
-                            Ok(ReferenceSite {
-                                from_symbol_name: row.get(0)?,
-                                from_symbol_id: row.get(1)?,
-                                to_symbol_name: row.get(2)?,
-                                kind: row.get(3)?,
-                                path: row.get::<_, String>(4)?.replace('\\', "/"),
-                                start_line: Some(row.get::<_, i64>(5)? as usize),
-                                start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
-                                occurrences: None,
-                                target: None,
-                                enclosing_symbol_name: None,
-                            })
-                        })?;
-                    for r in p_rows {
-                        results.push(r?);
-                    }
-                }
-            } else {
-                let is_nested = if let Some(sid) = symbol_id {
-                    conn.query_row(
-                        "SELECT 1 FROM symbols WHERE symbol_id = ?1 AND parent_symbol_id IS NOT NULL",
-                        params![sid],
-                        |_| Ok(true),
-                    )
-                    .unwrap_or(false)
-                } else {
-                    false
-                };
-
-                if !is_nested {
-                    let mut pending_stmt = conn.prepare(
-                        "SELECT s_from.name AS from_name,
-                                p.from_symbol_id,
-                                p.target_terminal_name AS to_name,
-                                p.kind,
-                                p.path,
-                                p.start_line,
-                                p.start_column
-                         FROM pending_relationships p
-                         JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
-                         WHERE p.target_terminal_name = ?1
-                         LIMIT ?2",
-                    )?;
-
-                    let p_rows =
-                        pending_stmt.query_map(params![symbol_name, remaining as i64], |row| {
-                            Ok(ReferenceSite {
-                                from_symbol_name: row.get(0)?,
-                                from_symbol_id: row.get(1)?,
-                                to_symbol_name: row.get(2)?,
-                                kind: row.get(3)?,
-                                path: row.get::<_, String>(4)?.replace('\\', "/"),
-                                start_line: Some(row.get::<_, i64>(5)? as usize),
-                                start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
-                                occurrences: None,
-                                target: None,
-                                enclosing_symbol_name: None,
-                            })
-                        })?;
-
-                    for r in p_rows {
-                        results.push(r?);
-                    }
-                }
-            }
-        }
-
-        if results.len() < limit && has_table(conn, "identifiers") {
-            let remaining = limit - results.len();
-            let identifiers = direct_identifier_rows(conn, symbol_name, symbol_id, remaining)?;
-            results.extend(identifiers.into_iter().map(|row| row.site));
-            if let Some(sid) = symbol_id.filter(|_| results.len() < limit) {
-                let remaining = limit - results.len();
-                results.extend(grouped_member_access_rows(conn, sid, remaining)?);
-            }
-        }
-    } else {
-        // Find callees: symbols called by target symbol
-        let mut stmt = conn.prepare(
-            "SELECT s_from.name AS from_name,
-                    r.from_symbol_id,
-                    s_to.name AS to_name,
-                    r.kind,
-                    r.path,
-                    r.start_line,
-                    r.start_column
-             FROM relationships r
-             JOIN symbols s_from ON r.from_symbol_id = s_from.symbol_id
-             JOIN symbols s_to ON r.to_symbol_id = s_to.symbol_id
-             WHERE s_from.name = ?1 AND (?3 IS NULL OR r.from_symbol_id = ?3)
-             LIMIT ?2",
-        )?;
-
-        let rows = stmt.query_map(params![symbol_name, limit as i64, symbol_id], |row| {
-            Ok(ReferenceSite {
-                from_symbol_name: row.get(0)?,
-                from_symbol_id: row.get(1)?,
-                to_symbol_name: row.get(2)?,
-                kind: row.get(3)?,
-                path: row.get::<_, String>(4)?.replace('\\', "/"),
-                start_line: row.get::<_, Option<i64>>(5)?.map(|v| v as usize),
-                start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
-                occurrences: None,
-                target: None,
-                enclosing_symbol_name: None,
-            })
-        })?;
-
-        for r in rows {
-            results.push(r?);
-        }
-
-        // Also query pending_relationships for callees
-        if results.len() < limit {
-            let remaining = limit - results.len();
-            let pending_receiver_chain = !include_external
-                && symbol_id.is_none_or(|source_id| {
-                    pending_receiver_chain_requires_full_for_source(conn, source_id)
-                });
-            let p_rows: Vec<ReferenceSite> = if has_pending_namespace_column(conn) {
-                let sql = if include_external {
-                    String::from("SELECT DISTINCT s_from.name AS from_name,
-                            p.from_symbol_id,
-                            COALESCE(NULLIF(p.target_display_name, ''), p.target_terminal_name) AS to_name,
-                            p.kind,
-                            p.path,
-                            p.start_line,
-                            p.start_column
-                     FROM pending_relationships p
-                     JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
-                     WHERE s_from.name = ?1 AND (?3 IS NULL OR p.from_symbol_id = ?3)
-                     LIMIT ?2")
-                } else {
-                    let predicate = if pending_receiver_chain {
-                        pending_target_predicate(conn, "s_to", "s_to_parent")
-                    } else {
-                        pending_target_predicate_without_typed_receiver_chain(
-                            conn,
-                            "s_to",
-                            "s_to_parent",
-                        )
-                    };
-                    format!("SELECT DISTINCT s_from.name AS from_name,
-                            p.from_symbol_id,
-                            p.target_terminal_name AS to_name,
-                            p.kind,
-                            p.path,
-                            p.start_line,
-                            p.start_column
-                     FROM pending_relationships p
-                     JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
-                     WHERE s_from.name = ?1 AND (?3 IS NULL OR p.from_symbol_id = ?3)
-                       AND EXISTS (
-                           SELECT 1 FROM symbols s_to
-                           LEFT JOIN symbols s_to_parent ON s_to.parent_symbol_id = s_to_parent.symbol_id
-                           WHERE s_to.name = p.target_terminal_name
-                             AND {kind}
-                             AND {pred}
                        )
-                     LIMIT ?2", kind = callee_target_kind("s_to_parent"), pred = predicate)
-                };
-                let mut pending_stmt = conn.prepare(&sql)?;
-                let rows = pending_stmt.query_map(
-                    params![symbol_name, remaining as i64, symbol_id],
-                    |row| {
-                        Ok(ReferenceSite {
-                            from_symbol_name: row.get(0)?,
-                            from_symbol_id: row.get(1)?,
-                            to_symbol_name: row.get(2)?,
-                            kind: row.get(3)?,
-                            path: row.get::<_, String>(4)?.replace('\\', "/"),
-                            start_line: Some(row.get::<_, i64>(5)? as usize),
-                            start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
-                            occurrences: None,
-                            target: None,
-                            enclosing_symbol_name: None,
-                        })
-                    },
+                     LIMIT ?2",
                 )?;
-                let mut out = Vec::new();
-                for r in rows {
-                    out.push(r?);
-                }
-                out
-            } else {
-                let sql = if include_external {
-                    "SELECT DISTINCT s_from.name AS from_name,
-                            p.from_symbol_id,
-                            p.target_terminal_name AS to_name,
-                            p.kind,
-                            p.path,
-                            p.start_line,
-                            p.start_column
-                     FROM pending_relationships p
-                     JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
-                     WHERE s_from.name = ?1 AND (?3 IS NULL OR p.from_symbol_id = ?3)
-                     LIMIT ?2"
-                } else {
-                    "SELECT DISTINCT s_from.name AS from_name,
-                            p.from_symbol_id,
-                            p.target_terminal_name AS to_name,
-                            p.kind,
-                            p.path,
-                            p.start_line,
-                            p.start_column
-                     FROM pending_relationships p
-                     JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
-                     WHERE s_from.name = ?1 AND (?3 IS NULL OR p.from_symbol_id = ?3)
-                       AND EXISTS (SELECT 1 FROM symbols s_to WHERE s_to.name = p.target_terminal_name)
-                     LIMIT ?2"
-                };
-                let mut pending_stmt = conn.prepare(sql)?;
 
-                let rows = pending_stmt.query_map(
-                    params![symbol_name, remaining as i64, symbol_id],
-                    |row| {
+                let p_rows =
+                    pending_stmt.query_map(params![symbol_name, remaining as i64], |row| {
                         Ok(ReferenceSite {
                             from_symbol_name: row.get(0)?,
                             from_symbol_id: row.get(1)?,
@@ -5506,36 +5243,69 @@ fn find_direct_references(
                             target: None,
                             enclosing_symbol_name: None,
                         })
-                    },
-                )?;
-                let mut out = Vec::new();
-                for r in rows {
-                    out.push(r?);
+                    })?;
+                for r in p_rows {
+                    results.push(r?);
                 }
-                out
+            }
+        } else {
+            let is_nested = if let Some(sid) = symbol_id {
+                conn.query_row(
+                    "SELECT 1 FROM symbols WHERE symbol_id = ?1 AND parent_symbol_id IS NOT NULL",
+                    params![sid],
+                    |_| Ok(true),
+                )
+                .unwrap_or(false)
+            } else {
+                false
             };
 
-            for r in p_rows {
-                results.push(r);
+            if !is_nested {
+                let mut pending_stmt = conn.prepare(
+                    "SELECT s_from.name AS from_name,
+                            p.from_symbol_id,
+                            p.target_terminal_name AS to_name,
+                            p.kind,
+                            p.path,
+                            p.start_line,
+                            p.start_column
+                     FROM pending_relationships p
+                     JOIN symbols s_from ON p.from_symbol_id = s_from.symbol_id
+                     WHERE p.target_terminal_name = ?1
+                     LIMIT ?2",
+                )?;
+
+                let p_rows =
+                    pending_stmt.query_map(params![symbol_name, remaining as i64], |row| {
+                        Ok(ReferenceSite {
+                            from_symbol_name: row.get(0)?,
+                            from_symbol_id: row.get(1)?,
+                            to_symbol_name: row.get(2)?,
+                            kind: row.get(3)?,
+                            path: row.get::<_, String>(4)?.replace('\\', "/"),
+                            start_line: Some(row.get::<_, i64>(5)? as usize),
+                            start_column: row.get::<_, Option<i64>>(6)?.map(|v| v as usize),
+                            occurrences: None,
+                            target: None,
+                            enclosing_symbol_name: None,
+                        })
+                    })?;
+
+                for r in p_rows {
+                    results.push(r?);
+                }
             }
         }
-        if results.len() < limit {
-            results.extend(css_call_identifier_callee_sites(
-                conn,
-                symbol_name,
-                symbol_id,
-                limit - results.len(),
-            )?);
+    }
+
+    if results.len() < limit && has_table(conn, "identifiers") {
+        let remaining = limit - results.len();
+        let identifiers = direct_identifier_rows(conn, symbol_name, symbol_id, remaining)?;
+        results.extend(identifiers.into_iter().map(|row| row.site));
+        if let Some(sid) = symbol_id.filter(|_| results.len() < limit) {
+            let remaining = limit - results.len();
+            results.extend(grouped_member_access_rows(conn, sid, remaining)?);
         }
-        results.sort_by(|a, b| {
-            a.path
-                .cmp(&b.path)
-                .then(a.start_line.cmp(&b.start_line))
-                .then(a.start_column.cmp(&b.start_column))
-        });
-        let mut sites = merge_same_site(results);
-        describe_callee_targets(conn, &mut sites)?;
-        return Ok(sites);
     }
 
     Ok(merge_same_site(results))

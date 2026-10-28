@@ -1759,9 +1759,11 @@ fn braced_language(path: &str) -> Option<BracedLanguage> {
 
 /// The lines that build a value of the target type, one row per line, files in the order of
 /// their first site. A site counts when it is a call, `new`, or the constructor step's
-/// `builds the class`, or a type use that opens an aggregate initializer in Rust, Go, C, or C++.
-/// Constructor-shaped `uses` rows are checked against source for Kotlin, Scala, Swift, and C#.
-/// Excluded sites never count.
+/// `builds the class`; a `type_usage`, `variable_ref`, or `uses` row whose line opens a literal
+/// in Rust, Go, C, C++, Zig, F#, or Elixir; or a constructor-shaped `uses` row (also a Ruby
+/// `type_usage` or `member_access` row) that the source confirms in C#, Kotlin, Scala, Swift, or
+/// Ruby. An excluded site counts only when it is a `type_usage` row that resolves to a definition
+/// of the target's name in the target's file.
 fn constructions(root: &Path, target: &Symbol, sites: &[LabeledSite]) -> Vec<ConstructionSite> {
     let name = target.name.as_str();
     let mut hits: Vec<(usize, &str, usize)> = Vec::new();
@@ -1796,7 +1798,8 @@ fn constructions(root: &Path, target: &Symbol, sites: &[LabeledSite]) -> Vec<Con
                 .or_default()
                 .push((index, line, column));
         } else if (site.kind == "uses"
-            || (site.kind == "type_usage" && constructor_call_language(&site.path) == Some("ruby")))
+            || (matches!(site.kind.as_str(), "type_usage" | "member_access")
+                && constructor_call_language(&site.path) == Some("ruby")))
             && constructor_call_language(&site.path).is_some()
         {
             calls.entry(&site.path).or_default().push((index, line));
@@ -2266,7 +2269,7 @@ fn brace_after_name(
         if names_a_type(before, language)
             || before
                 .rfind("fn ")
-                .is_some_and(|function| function > before.rfind('{').unwrap_or(0))
+                .is_some_and(|function| before.rfind('{').is_none_or(|brace| function > brace))
         {
             return None;
         }

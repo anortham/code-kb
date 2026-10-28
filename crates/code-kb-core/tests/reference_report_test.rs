@@ -8226,6 +8226,49 @@ fn a_call_that_the_report_excludes_is_not_a_construction() {
 }
 
 #[test]
+fn a_zig_return_type_at_the_start_of_a_line_is_not_a_construction() {
+    let repo = scanned_repo(&[(
+        "src/point.zig",
+        "pub const Point = struct {\n    x: i32,\n};\n\nfn make() Point {\n    return Point{ .x = 1 };\n}\n\npub fn origin() Point {\n    return Point{ .x = 0 };\n}\n",
+    )]);
+
+    let point = report(&repo, "Point", None);
+
+    assert_eq!(
+        constructed(&point),
+        [
+            at(&repo, "src/point.zig", "Point{ .x = 1 }"),
+            at(&repo, "src/point.zig", "Point{ .x = 0 }"),
+        ],
+        "{}",
+        dump(&point)
+    );
+}
+
+#[test]
+fn a_ruby_comment_that_calls_new_is_not_a_construction() {
+    let repo = scanned_repo(&[
+        (
+            "point.rb",
+            "class Point\n  def initialize(x)\n    @x = x\n  end\nend\n",
+        ),
+        (
+            "use.rb",
+            "def make\n  Point.new(1)\nend\n\ndef kind\n  Point # Point.new(2)\nend\n",
+        ),
+    ]);
+
+    let point = report(&repo, "Point", Some("point.rb"));
+
+    assert_eq!(
+        constructed(&point),
+        [at(&repo, "use.rb", "Point.new(1)")],
+        "{}",
+        dump(&point)
+    );
+}
+
+#[test]
 fn constructions_print_one_line_with_the_lines_folded_per_file() {
     let repo = scanned_repo(&[
         ("pkg/models.py", "class Foo:\n    pass\n"),
