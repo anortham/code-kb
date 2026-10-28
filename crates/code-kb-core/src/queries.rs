@@ -262,6 +262,15 @@ fn outline_level(alias: &str) -> String {
 const OUTLINE_KINDS: &str =
     "('function', 'method', 'struct', 'enum', 'trait', 'class', 'interface', 'type')";
 
+/// SQL mirror of `is_generated_lambda_name`: a Python lambda that julie names after its line.
+fn generated_lambda_predicate(alias: &str) -> String {
+    format!(
+        "({alias}.language = 'python' AND {alias}.kind = 'function'
+          AND {alias}.name GLOB 'lambda_[0-9]*' AND substr({alias}.name, 8) NOT GLOB '*[^0-9]*'
+          AND COALESCE({alias}.signature, '') GLOB 'lambda*')"
+    )
+}
+
 /// Load up to `limit_per_file` top-level definitions for each file the outline lists by name.
 /// Files deeper than `depth` are filtered out in SQLite to keep memory strictly bounded. The
 /// unary `+` keeps the overload check on the name index: the parent index would walk every
@@ -288,6 +297,7 @@ pub fn load_scoped_outline_symbols(
             JOIN outline_files bf ON s.path = bf.path
             WHERE s.kind IN {OUTLINE_KINDS}
               AND {top}
+              AND NOT {lambda}
               AND NOT EXISTS (SELECT 1 FROM symbols overload
                               WHERE +overload.path = s.path AND overload.name = s.name
                                 AND overload.kind = s.kind
@@ -304,6 +314,7 @@ pub fn load_scoped_outline_symbols(
         ORDER BY path ASC, start_line ASC",
         files = outline_files_cte(conn),
         top = outline_level("s"),
+        lambda = generated_lambda_predicate("s"),
     );
 
     let mut stmt = conn.prepare(&sql)?;
@@ -352,7 +363,7 @@ pub fn load_outline_counts(
         "WITH {files}
          SELECT replace(s.path, '\\', '/'),
                 COUNT(DISTINCT CASE WHEN {top} AND s.is_test = 0 AND s.test_container = 0
-                    AND s.kind IN {OUTLINE_KINDS}
+                    AND s.kind IN {OUTLINE_KINDS} AND NOT {lambda}
                     THEN s.kind || ' ' || s.name END),
                 SUM(s.is_test = 1 AND NOT {lifecycle}),
                 SUM(s.is_test = 1 AND {lifecycle})
@@ -361,6 +372,7 @@ pub fn load_outline_counts(
          GROUP BY replace(s.path, '\\', '/')",
         files = outline_files_cte(conn),
         top = outline_level("s"),
+        lambda = generated_lambda_predicate("s"),
     ))?;
     let rows = stmt.query_map(&scope.params()[..], |row| {
         Ok((
