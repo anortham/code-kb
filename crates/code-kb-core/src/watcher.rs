@@ -1,7 +1,7 @@
+use crate::debouncer::{DebouncedEvent, Debouncer, RecommendedCache, new_debouncer_opt};
 use ignore::{DirEntry, WalkBuilder};
 use notify::event::{CreateKind, EventKind, RemoveKind};
 use notify::{RecursiveMode, Watcher};
-use notify_debouncer_full::{DebouncedEvent, Debouncer, RecommendedCache, new_debouncer_opt};
 #[cfg(test)]
 use std::collections::VecDeque;
 use std::hash::{Hash, Hasher};
@@ -85,7 +85,7 @@ impl Watcher for TracingWatcher {
     }
 }
 
-fn new_debouncer<F: notify_debouncer_full::DebounceEventHandler>(
+fn new_debouncer<F: crate::debouncer::DebounceEventHandler>(
     timeout: Duration,
     tick_rate: Option<Duration>,
     event_handler: F,

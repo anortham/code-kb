@@ -1,4 +1,8 @@
-//! A debouncer for [notify] that is optimized for ease of use.
+//! A debouncer for [notify], copied from `notify-debouncer-full` 0.7.0 with one fix.
+//!
+//! The copy carries the removal fix that crates.io does not publish yet. See `README.md` in this
+//! folder for the source, the patch, and when to return to the published crate. The original
+//! license files are in this folder.
 //!
 //! * Only emits a single `Rename` event if the rename `From` and `To` events can be matched
 //! * Merges multiple `Rename` events
@@ -7,59 +11,6 @@
 //! * Emits only one `Remove` event when deleting a directory (inotify)
 //! * Doesn't emit duplicate create events
 //! * Doesn't emit `Modify` events after a `Create` event
-//!
-//! # Installation
-//!
-//! ```toml
-//! [dependencies]
-//! notify-debouncer-full = "0.7.0"
-//! ```
-//!
-//! In case you want to select specific features of notify,
-//! specify notify as dependency explicitly in your dependencies.
-//! Otherwise you can just use the re-export of notify from debouncer-full.
-//!
-//! ```toml
-//! notify-debouncer-full = "0.7.0"
-//! notify = { version = "..", features = [".."] }
-//! ```
-//!
-//! # Examples
-//!
-//! ```rust,no_run
-//! # use std::path::Path;
-//! # use std::time::Duration;
-//! use notify_debouncer_full::{notify::*, new_debouncer, DebounceEventResult};
-//!
-//! // Select recommended watcher for debouncer.
-//! // Using a callback here, could also be a channel.
-//! let mut debouncer = new_debouncer(Duration::from_secs(2), None, |result: DebounceEventResult| {
-//!     match result {
-//!         Ok(events) => events.iter().for_each(|event| println!("{event:?}")),
-//!         Err(errors) => errors.iter().for_each(|error| println!("{error:?}")),
-//!     }
-//! }).unwrap();
-//!
-//! // Add a path to be watched. All files and directories at that path and
-//! // below will be monitored for changes.
-//! debouncer.watch(".", RecursiveMode::Recursive).unwrap();
-//! ```
-//!
-//! # Features
-//!
-//! The following crate features can be turned on or off in your cargo dependency config:
-//!
-//! - `serde` passed down to notify-types, off by default
-//! - `web-time` passed down to notify-types, off by default
-//! - `crossbeam-channel` passed down to notify, off by default
-//! - `flume` passed down to notify, off by default
-//! - `macos_fsevent` passed down to notify, off by default
-//! - `macos_kqueue` passed down to notify, off by default
-//! - `serialization-compat-6` passed down to notify, off by default
-//!
-//! # Caveats
-//!
-//! As all file events are sourced from notify, the [known problems](https://docs.rs/notify/latest/notify/#known-problems) section applies here too.
 
 mod cache;
 mod time;
@@ -75,8 +26,8 @@ use std::{
     collections::{BinaryHeap, HashMap, VecDeque},
     path::{Path, PathBuf},
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
     },
     time::{Duration, Instant},
 };
@@ -94,8 +45,8 @@ pub use notify_types::debouncer_full::DebouncedEvent;
 
 use file_id::FileId;
 use notify::{
-    event::{ModifyKind, RemoveKind, RenameMode},
     Error, ErrorKind, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher, WatcherKind,
+    event::{ModifyKind, RemoveKind, RenameMode},
 };
 
 /// The set of requirements for watcher debounce event handling functions.
@@ -104,7 +55,7 @@ use notify::{
 ///
 /// ```rust,no_run
 /// # use notify::{Event, Result, EventHandler};
-/// # use notify_debouncer_full::{DebounceEventHandler, DebounceEventResult};
+/// # use code_kb_core::debouncer::{DebounceEventHandler, DebounceEventResult};
 ///
 /// /// Prints received events
 /// struct EventPrinter;
@@ -129,20 +80,6 @@ where
 {
     fn handle_event(&mut self, event: DebounceEventResult) {
         (self)(event);
-    }
-}
-
-#[cfg(feature = "crossbeam-channel")]
-impl DebounceEventHandler for crossbeam_channel::Sender<DebounceEventResult> {
-    fn handle_event(&mut self, event: DebounceEventResult) {
-        let _ = self.send(event);
-    }
-}
-
-#[cfg(feature = "flume")]
-impl DebounceEventHandler for flume::Sender<DebounceEventResult> {
-    fn handle_event(&mut self, event: DebounceEventResult) {
-        let _ = self.send(event);
     }
 }
 
@@ -219,7 +156,7 @@ impl<T: FileIdCache> DebounceDataInner<T> {
 
         if let Some(event) = self.rescan_event.take() {
             if now.saturating_duration_since(event.time) >= self.timeout {
-                log::trace!("debounced event: {event:?}");
+                tracing::trace!("debounced event: {event:?}");
                 events_expired.push(event);
             } else {
                 self.rescan_event = Some(event);
@@ -270,14 +207,14 @@ impl<T: FileIdCache> DebounceDataInner<T> {
 
     /// Add an error entry to re-send later on
     pub fn add_error(&mut self, error: Error) {
-        log::trace!("raw error: {error:?}");
+        tracing::trace!("raw error: {error:?}");
 
         self.errors.push(error);
     }
 
     /// Add new event to debouncer cache
     pub fn add_event(&mut self, event: Event) {
-        log::trace!("raw event: {event:?}");
+        tracing::trace!("raw event: {event:?}");
 
         if event.need_rescan() {
             self.cache.rescan(&self.roots);
@@ -288,7 +225,7 @@ impl<T: FileIdCache> DebounceDataInner<T> {
         let path = match event.paths.first() {
             Some(path) => path,
             None => {
-                log::info!("skipping event with no paths: {event:?}");
+                tracing::info!("skipping event with no paths: {event:?}");
                 return;
             }
         };
@@ -664,23 +601,25 @@ pub fn new_debouncer_opt<F: DebounceEventHandler, T: Watcher, C: FileIdCache + S
     let stop_c = stop.clone();
     let thread = std::thread::Builder::new()
         .name("notify-rs debouncer loop".to_string())
-        .spawn(move || loop {
-            if stop_c.load(Ordering::Acquire) {
-                break;
-            }
-            std::thread::sleep(tick);
-            let send_data;
-            let errors;
-            {
-                let mut lock = data_c.lock().unwrap();
-                send_data = lock.debounced_events();
-                errors = lock.errors();
-            }
-            if !send_data.is_empty() {
-                event_handler.handle_event(Ok(send_data));
-            }
-            if !errors.is_empty() {
-                event_handler.handle_event(Err(errors));
+        .spawn(move || {
+            loop {
+                if stop_c.load(Ordering::Acquire) {
+                    break;
+                }
+                std::thread::sleep(tick);
+                let send_data;
+                let errors;
+                {
+                    let mut lock = data_c.lock().unwrap();
+                    send_data = lock.debounced_events();
+                    errors = lock.errors();
+                }
+                if !send_data.is_empty() {
+                    event_handler.handle_event(Ok(send_data));
+                }
+                if !errors.is_empty() {
+                    event_handler.handle_event(Err(errors));
+                }
             }
         })?;
 
@@ -760,10 +699,8 @@ fn sort_events(events: Vec<DebouncedEvent>) -> Vec<DebouncedEvent> {
             push_next = true;
         }
 
-        if push_next {
-            if let Some(event) = events.front() {
-                min_time_heap.push(Reverse((event.time, path)));
-            }
+        if push_next && let Some(event) = events.front() {
+            min_time_heap.push(Reverse((event.time, path)));
         }
     }
 
@@ -828,8 +765,11 @@ mod tests {
         )]
         file_name: &str,
     ) {
-        let file_content =
-            fs::read_to_string(Path::new(&format!("./test_cases/{file_name}.hjson"))).unwrap();
+        let file_content = fs::read_to_string(Path::new(&format!(
+            "{}/src/debouncer/test_cases/{file_name}.hjson",
+            env!("CARGO_MANIFEST_DIR")
+        )))
+        .unwrap();
         let mut test_case = deser_hjson::from_str::<TestCase>(&file_content).unwrap();
 
         let time = now();

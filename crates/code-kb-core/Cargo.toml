@@ -23,7 +23,9 @@ memchr = { workspace = true }
 tracing = { workspace = true }
 dunce = { workspace = true }
 notify = { workspace = true }
-notify-debouncer-full = { workspace = true }
+notify-types = { workspace = true }
+file-id = { workspace = true }
+walkdir = { workspace = true }
 which = { workspace = true }
 blake3 = { workspace = true }
 tempfile = { workspace = true }
@@ -33,4 +35,7 @@ rust-stemmers = { workspace = true }
 [dev-dependencies]
 rusqlite = { workspace = true, features = ["hooks"] }
 tracing-subscriber = { workspace = true }
+deser-hjson = { workspace = true }
+pretty_assertions = { workspace = true }
+rstest = { workspace = true }
 

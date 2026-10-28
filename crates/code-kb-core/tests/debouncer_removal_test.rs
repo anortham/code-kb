@@ -7,24 +7,24 @@ use std::{
     time::Duration,
 };
 
-use code_kb_core::{
-    db::open_read_only,
-    queries::search_symbols,
-    sync::{find_julie_extract_binary, scan_workspace},
-    workspace::Workspace,
-};
-use notify_debouncer_full::{
+use code_kb_core::debouncer::{
     NoCache, new_debouncer_opt,
     notify::{
         Config, Event, EventHandler, EventKind, RecursiveMode, Watcher, WatcherKind,
         event::{CreateKind, RemoveKind},
     },
 };
+use code_kb_core::{
+    db::open_read_only,
+    queries::search_symbols,
+    sync::{find_julie_extract_binary, scan_workspace},
+    workspace::Workspace,
+};
 
-fn raw_event_sender() -> &'static Mutex<Option<Sender<notify_debouncer_full::notify::Result<Event>>>>
-{
+fn raw_event_sender()
+-> &'static Mutex<Option<Sender<code_kb_core::debouncer::notify::Result<Event>>>> {
     static RAW_EVENT_SENDER: OnceLock<
-        Mutex<Option<Sender<notify_debouncer_full::notify::Result<Event>>>>,
+        Mutex<Option<Sender<code_kb_core::debouncer::notify::Result<Event>>>>,
     > = OnceLock::new();
     RAW_EVENT_SENDER.get_or_init(|| Mutex::new(None))
 }
@@ -35,7 +35,7 @@ impl Watcher for SyntheticWatcher {
     fn new<F: EventHandler>(
         mut event_handler: F,
         _config: Config,
-    ) -> notify_debouncer_full::notify::Result<Self> {
+    ) -> code_kb_core::debouncer::notify::Result<Self> {
         let (sender, receiver) = mpsc::channel();
         std::thread::spawn(move || {
             for event in receiver {
@@ -50,20 +50,20 @@ impl Watcher for SyntheticWatcher {
         &mut self,
         _path: &Path,
         _recursive_mode: RecursiveMode,
-    ) -> notify_debouncer_full::notify::Result<()> {
+    ) -> code_kb_core::debouncer::notify::Result<()> {
         Ok(())
     }
 
-    fn unwatch(&mut self, _path: &Path) -> notify_debouncer_full::notify::Result<()> {
+    fn unwatch(&mut self, _path: &Path) -> code_kb_core::debouncer::notify::Result<()> {
         Ok(())
     }
 
-    fn configure(&mut self, _config: Config) -> notify_debouncer_full::notify::Result<bool> {
+    fn configure(&mut self, _config: Config) -> code_kb_core::debouncer::notify::Result<bool> {
         Ok(true)
     }
 
     fn kind() -> WatcherKind {
-        notify_debouncer_full::notify::RecommendedWatcher::kind()
+        code_kb_core::debouncer::notify::RecommendedWatcher::kind()
     }
 }
 

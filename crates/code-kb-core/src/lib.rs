@@ -6,6 +6,8 @@ macro_rules! js_family_sql {
 }
 
 pub mod db;
+#[doc(hidden)]
+pub mod debouncer;
 pub mod edit_check;
 pub mod formatters;
 pub mod models;
