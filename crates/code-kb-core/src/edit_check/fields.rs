@@ -1198,7 +1198,10 @@ pub(super) fn written_arguments_on_line(
     let mut calls = Vec::new();
     let mut unknown = false;
     for at in word_starts(first_line, name) {
-        if let Some(call) = written_arguments_at_offset(&text, &code, at, name, language) {
+        if let Some(mut call) = written_arguments_at_offset(&text, &code, at, name, language) {
+            if language == "elixir" && elixir_piped(lines, line, &code[..at]) {
+                call.positional_count += 1;
+            }
             unknown |= call.has_unknown_spread;
             calls.push((at, call));
         } else if written_call_is_unclosed(&code, at, name, language) {
@@ -1206,6 +1209,46 @@ pub(super) fn written_arguments_on_line(
         }
     }
     (calls, unknown)
+}
+
+/// Whether an Elixir pipe passes its left value as the first argument of the call whose name
+/// follows `before` on `line`: `x |> f(a)`, `x |> Mod.f(a)`, or a pipe that ends the code line
+/// above.
+fn elixir_piped(lines: &[String], line: usize, before: &str) -> bool {
+    let before = without_elixir_qualifier(elixir_code(before));
+    if !before.trim().is_empty() {
+        return before.ends_with("|>");
+    }
+    lines[..line.saturating_sub(1)]
+        .iter()
+        .rev()
+        .map(|text| code_only(text, "elixir"))
+        .find(|code| !elixir_code(code).trim().is_empty())
+        .is_some_and(|code| elixir_code(&code).trim_end().ends_with("|>"))
+}
+
+/// The code of an Elixir line before its `#` comment. `code_only` already blanked the strings.
+fn elixir_code(code: &str) -> &str {
+    code.split('#').next().unwrap_or_default()
+}
+
+/// Whether an Elixir argument is a `key: value` pair. Trailing pairs form one keyword list.
+fn is_elixir_keyword_pair(argument: &str) -> bool {
+    argument.split_once(':').is_some_and(|(key, value)| {
+        let key = key.trim_end_matches(['?', '!']);
+        !key.is_empty()
+            && key.chars().all(is_identifier_char)
+            && value.starts_with(char::is_whitespace)
+    })
+}
+
+fn without_elixir_qualifier(before: &str) -> &str {
+    let mut rest = before.trim_end();
+    while let Some(qualifier) = rest.strip_suffix('.') {
+        let module = qualifier.trim_end_matches(is_identifier_char);
+        rest = module.strip_suffix(':').unwrap_or(module).trim_end();
+    }
+    rest
 }
 
 fn written_call_is_unclosed(code: &str, at: usize, name: &str, language: &str) -> bool {
@@ -1276,7 +1319,20 @@ fn written_arguments_at_offset(
         .iter()
         .filter_map(|argument| named_argument_label(argument, language))
         .collect();
-    let argument_count = written_argument_count(inner, written, language);
+    let uncounted = match language {
+        "ruby" => arguments
+            .iter()
+            .filter(|argument| argument.starts_with('&'))
+            .count(),
+        "elixir" => arguments
+            .iter()
+            .rev()
+            .take_while(|argument| is_elixir_keyword_pair(argument))
+            .count()
+            .saturating_sub(1),
+        _ => 0,
+    };
+    let argument_count = written_argument_count(inner, written, language).saturating_sub(uncounted);
     let positional_count = if language == "dart" {
         argument_count
     } else {
