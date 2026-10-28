@@ -135,20 +135,25 @@ def input_path_matches(path, config):
     return any(glob_matches(path, pattern) for pattern in patterns)
 
 
+def manifest_package_names(text):
+    names = set()
+    section = None
+    for line in text.splitlines():
+        section_match = re.match(r"^\s*\[([^\]]+)\]\s*(?:#.*)?$", line)
+        if section_match:
+            section = section_match.group(1)
+        elif section == "package":
+            name_match = re.match(r'^\s*name\s*=\s*"([^"]+)"\s*(?:#.*)?$', line)
+            if name_match:
+                names.add(name_match.group(1))
+    return names
+
+
 def cargo_package_names(root, manifest_paths):
     names = set()
     for relative in manifest_paths:
-        if Path(relative).name != "Cargo.toml":
-            continue
-        section = None
-        for line in (root / relative).read_text().splitlines():
-            section_match = re.match(r"^\s*\[([^\]]+)\]\s*(?:#.*)?$", line)
-            if section_match:
-                section = section_match.group(1)
-            elif section == "package":
-                name_match = re.match(r'^\s*name\s*=\s*"([^"]+)"\s*(?:#.*)?$', line)
-                if name_match:
-                    names.add(name_match.group(1))
+        if Path(relative).name == "Cargo.toml":
+            names |= manifest_package_names((root / relative).read_text())
     return names
 
 
@@ -236,7 +241,10 @@ def normalize_cargo_lock(contents, package_names):
 
 
 def normalized_input_bytes(root, relative, package_names, config):
-    contents = (root / relative).read_bytes()
+    return normalize_input_contents((root / relative).read_bytes(), relative, package_names, config)
+
+
+def normalize_input_contents(contents, relative, package_names, config):
     if not config.get("normalize_cargo_package_versions", False):
         return contents
     if Path(relative).name == "Cargo.toml":
@@ -465,12 +473,72 @@ def commit_paths(repo, commit):
     return sorted({PurePosixPath(path).as_posix() for path in result.stdout.splitlines() if path})
 
 
+def is_normalized_cargo_input(relative, config):
+    return config.get("normalize_cargo_package_versions", False) and Path(relative).name in {
+        "Cargo.toml",
+        "Cargo.lock",
+    }
+
+
+def blob_at(repo, revision, relative):
+    result = subprocess.run(
+        ["git", "cat-file", "blob", f"{revision}:{relative}"],
+        cwd=repo,
+        capture_output=True,
+        check=False,
+    )
+    return result.stdout if result.returncode == 0 else None
+
+
+def package_names_at(repo, revision, config, cache):
+    if revision not in cache:
+        listing = git(repo, "ls-tree", "-r", "--name-only", "-z", revision).stdout.split("\0")
+        names = set()
+        for relative in listing:
+            if Path(relative).name != "Cargo.toml" or not input_path_matches(relative, config):
+                continue
+            contents = blob_at(repo, revision, relative)
+            if contents is not None:
+                names |= manifest_package_names(contents.decode("utf-8"))
+        cache[revision] = names
+    return cache[revision]
+
+
+def normalized_blob_at(repo, revision, relative, config, cache):
+    contents = blob_at(repo, revision, relative)
+    if contents is None:
+        return None
+    names = package_names_at(repo, revision, config, cache)
+    return normalize_input_contents(contents, relative, names, config)
+
+
+def commit_changes_input(repo, commit, relative, config, cache):
+    """Whether `commit` changes the normalized content of `relative` against any parent."""
+    if not is_normalized_cargo_input(relative, config):
+        return True
+    parents = git(repo, "rev-list", "--parents", "-n", "1", commit).stdout.split()[1:]
+    if not parents:
+        return True
+    after = normalized_blob_at(repo, commit, relative, config, cache)
+    return any(
+        normalized_blob_at(repo, parent, relative, config, cache) != after for parent in parents
+    )
+
+
 def latest_input_commits(repo, base_commit, config):
+    """The last commit after `base_commit` that changes each input, and each commit's changed
+    inputs. A commit that changes only package versions does not change a Cargo input."""
     history = git(repo, "rev-list", "--reverse", f"{base_commit}..HEAD").stdout.splitlines()
     latest = {}
     paths_by_commit = {}
+    package_names = {}
     for commit in history:
-        paths = [path for path in commit_paths(repo, commit) if input_path_matches(path, config)]
+        paths = [
+            path
+            for path in commit_paths(repo, commit)
+            if input_path_matches(path, config)
+            and commit_changes_input(repo, commit, path, config, package_names)
+        ]
         paths_by_commit[commit] = paths
         for path in paths:
             latest[path] = commit

@@ -95,7 +95,9 @@ Run the automated pre-flight script, or execute each check manually:
    under 0.98. Fix a wrong proven or excluded site on a dev symbol only, and adjudicate a holdout
    disagreement without a fix for it. `scripts/reach_gate.py disagreements --repo R` lists them.
    `evals/reach/README.md` has the scoring rules. The JSON report records a source-input fingerprint
-   covering the Rust code, Cargo manifests and lockfile, build workflow, and any tracked
+   covering the Rust code (including the patched watcher debouncer in
+   `crates/code-kb-core/src/debouncer/` and its `test_cases/*.hjson` expected-event tables, which
+   `cargo test --workspace --locked` checks), Cargo manifests and lockfile, build workflow, and any tracked
    `.cargo/config`, `.cargo/config.toml`, `rust-toolchain`, or `rust-toolchain.toml` file, the pinned
    extractor binary and level, grading code, frozen cases, local evaluation fixtures (including
    the `evals/languages` inventory), and configured test commands. Optional build-config patterns
@@ -106,7 +108,12 @@ Run the automated pre-flight script, or execute each check manually:
    `code-kb-core` path-dependency version are normalized. Dependency and build-configuration
    changes still invalidate the evidence. Preflight compares it with current inputs; an ancestor
    PASS does not cover changed inputs. Documentation and package-version-only changes do not
-   change this fingerprint. A semantic change needs a fresh local reach run.
+   change this fingerprint. `scripts/release-evidence-inputs.json` is the whole input list. Two
+   Markdown files in it are not documentation and are the exceptions to that rule:
+   `crates/code-kb-cli/src/routing-block.md`, which the build compiles into `code-kb` as the hook
+   routing text, and `scripts/release-dogfood-prompt.md`, the prompt of the dogfood sessions. The
+   Markdown samples under `evals/languages` are language fixtures, not documentation. A semantic
+   change needs a fresh local reach run.
 8. **Harness Dogfood Round (preflight step 11 requires it): one round per release.**
    The corpus check finds only output that changed since the previous release, so a defect that
    both releases share passes it. The dogfood round finds those wrong answers. Run exactly one
@@ -147,7 +154,10 @@ Run the automated pre-flight script, or execute each check manually:
    Later source fixes are covered only by their explicit regression and exact-call evidence; an
    arbitrary semantic commit is not covered just because the original round is its ancestor.
    Extractor identity or level changes need a new full round. Documentation and package-version-only
-   commits need no new round. Preflight fails when the report is not `PASS`, lists an `[open]`
+   commits need no new round (the two Markdown inputs named in step 7 are not documentation). A
+   commit that changes only package versions in a Cargo manifest or the lockfile does not count as
+   the latest change of that file, so the version bump does not make a recorded fix of it stale.
+   Preflight fails when the report is not `PASS`, lists an `[open]`
    defect, or tested a commit that is not an ancestor of `HEAD`.
 9. **New julie-extract version:** Do not tag it in `julie-extractors` first. Copy the local
    release build to `.tools/julie-extract`, set the version in `scripts/julie-pins.json` and

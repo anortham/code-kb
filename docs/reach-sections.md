@@ -117,26 +117,60 @@ record reach methods this list does not show``), because Go records `implements`
 ## Constructions
 
 `Constructions (N): path: line, line · path: line` applies to a class, struct, or record
-target. N counts lines, and the lines fold per file, files in the order of their first site. A
-line counts when it holds a site that is not `excluded` and is a call, a `new`
-(`instantiates`), or a site that the constructor step labels `builds the class`. In Rust and
-Go files it also counts a `type_usage` or `variable_ref` site whose source text, after the
-name and any generic arguments (`<…>` or `::<…>` in Rust, `[…]` in Go), starts with `{`:
-julie writes `Foo { a: 1 }` as a type use, and `Foo` inside `vec![…]` or as a field value as a
-variable read. The report keeps one site for a caller, a name, and a line, and that site can be
-a pattern (`|Foo { a }| Foo { a: a + 1 }`, `Foo { a } => Foo { a: 1 }`). So the test covers
-every whole-word occurrence of the name on the line of a site, in code only. The scan skips
-a `//` comment to the end of the line, a `/* */` comment (Rust nests them, Go does not), a
-double-quoted string, a Go backtick string, a Rust raw string (`r#"…"#`), and a character or
-rune literal (`'"'`, `'\''`); a Rust lifetime (`'a`) is not one. Any of them that does not
-close on the line runs to its end. The line counts when any occurrence opens a literal. Such
-a literal does not count when the token before the name is `->`, `impl`, `for`, `struct`,
-`enum`, `union`, `trait`, `type`, or `dyn`, when the name follows the generic parameters of
-an `impl` or, in Go, the parameters of a func, or, in Rust, when the braces
-close into a pattern. The scan climbs out of the groups around the braces (`(…)`, `[…]`,
-`{…}`), skipping the rest of each, and reads what follows the outermost one: `=>`, `=`, `|`,
-`:`, `if`, or `in` makes a pattern, so `Some(Foo { a, .. }) = o`, `(Foo { a, .. }, y) = p`,
-and `Outer { inner: Foo { a, .. } } = o` are patterns and `Some(Foo { a: 1 });`,
+target. N counts lines, and the lines fold per file, files in the order of their first site.
+A site that the report labels `excluded` does not count, with one exception: a `type_usage`
+site whose basis is ``resolves to `Name` (path:line)`` with the target's name and the target's
+file. That basis names another definition of the same name in the target's own file, so the
+line still names the target type. A line counts when it holds a counted site of one of three
+forms: a call, a `new` (`instantiates`), or a site that the constructor step labels
+`builds the class`; a literal of the type (below); or a constructor call that the source
+confirms (below).
+
+Literals. In Rust, Go, C, C++, Zig, F#, and Elixir files a `type_usage`, `variable_ref`, or
+`uses` site counts when its line opens a literal of the type. The site needs a column, except in
+Zig and Elixir files and for a C or C++ `uses` site; a site with no column is read from the start
+of its line. The scan looks for the target's name and, when the name has dots (`Probe.Point`),
+also for its last segment. The report keeps one site for a caller, a name, and a line, and that
+site can be a pattern (`|Foo { a }| Foo { a: a + 1 }`, `Foo { a } => Foo { a: 1 }`). So the
+test covers every whole-word occurrence of the name on the line of a site, in code only. The
+scan skips a `//` comment to the end of the line, a `/* */` comment (Rust nests them, the other
+languages do not), a double-quoted string, and a character or rune literal (`'"'`, `'\''`). It
+also skips a Go backtick string, a Rust raw string (`r#"…"#`), a C++ raw string (`R"x(…)x"`,
+also with a `u8`, `u`, `U`, or `L` prefix), an Elixir `#` comment, and an F# `(* *)` comment,
+which nests. A Rust lifetime (`'a`) is not a character literal. Any of them that does not close
+on the line runs to its end. The line counts when any occurrence opens a literal. A literal
+opens in these forms:
+
+- Rust and Go: after the name and any generic arguments (`<…>` or `::<…>` in Rust, `[…]` in
+  Go), the text starts with `{`. julie writes `Foo { a: 1 }` as a type use, and `Foo` inside
+  `vec![…]` or as a field value as a variable read.
+- C++: the same form with `<…>` arguments (`Point{.x = 1}`, `ns::Point{…}`, `Point<int>{…}`),
+  or a variable declaration: the name, any `<…>` arguments, any `*` or `&`, a variable name, an
+  optional `=`, and then `{` (`Point point{.x = 1}`, `Point point = {…}`). The declaration form
+  counts after `struct` too (`struct Point point{…}`).
+- C: a declaration with an initializer, where the text between the name and `{` holds a
+  variable name, then `=`, and no `;`, `}`, `(`, or `)` (`struct Point p = {.x = 1};`,
+  `Point p = {…};`). Or a compound literal, where the parentheses around the name hold only the
+  name and `const`, `volatile`, `struct`, `union`, or `enum`, and the `(` follows the start of
+  the line, `=`, `,`, `(`, `:`, `?`, `return`, `throw`, `sizeof`, or `_Alignof`
+  (`return (struct Point){.x = 1};`, `(Point){…}`).
+- Zig: `{` follows the name (`Point{ .x = 1 }`), and the name is not in the return type of a
+  `fn` signature on the line (`fn make() Point {`).
+- Elixir: the name follows `%` and a module path of identifier characters and dots, and `{`
+  follows the name (`%Probe.Point{x: 1}`, `%Point{…}`).
+- F#: a typed record literal. A `let`, `use`, `member`, or `val` declaration whose type
+  annotation names the type and whose value starts with `{` (`let p : Point = { X = 1 }`), or a
+  declaration whose value is braces with the type after them (`let p = { X = 1 } : Point`). A
+  copy-and-update expression (`{ p with X = 1 }`) names no type and does not count.
+
+In Rust, Go, C++, and Zig such a literal does not count when the token before the name is `->`,
+`impl`, `for`, `struct`, `enum`, `union`, `trait`, `type`, or `dyn`, when the name follows the
+generic parameters of an `impl` or, in Go, the parameters of a func, or, in Rust, when the
+braces close into a pattern. The C++ declaration form above counts after these words too.
+The scan climbs out of the groups around the braces (`(…)`, `[…]`, `{…}`), skipping
+the rest of each, and reads what follows the outermost one: `=>`, `=`, `|`, `:`, `if`, or `in`
+makes a pattern, so `Some(Foo { a, .. }) = o`, `(Foo { a, .. }, y) = p`, and
+`Outer { inner: Foo { a, .. } } = o` are patterns and `Some(Foo { a: 1 });`,
 `(Foo { a: 1 }, y);`, and `f(Foo { a: 1 }) == y` are literals. The name stands in the
 parameters of a closure when the nearest single `|` before it, at its level, comes where a
 closure can start: at the start of the text, after `(`, `[`, `{`, `,`, `;`, `:`, `=`, `=>`, or
@@ -146,6 +180,16 @@ the pattern of an arm never counts (`1 | 2 => Foo { a: 1 },` followed by `3 | 4 
 literal). In the parameters of a closure with more than one parameter, a single `|` ends the
 parameters. The second argument of `matches!` is a pattern.
 The scan stops after 4096 bytes and takes the braces as a literal.
+
+Constructor calls. In C#, Kotlin, Scala, Swift, and Ruby files a `uses` site, and in Ruby also
+a `type_usage` site, counts when its source line holds a whole-word occurrence of the name that
+any `<…>` type arguments and then `(` follow. In C# the name must follow `new`, with only a
+namespace path between them (`new Point(…)`, `new Ns.Point(…)`, `new global::Ns.Point(…)`).
+In Scala and Swift, `.apply` or `.init` may stand before the `(` (`Point.apply(…)`,
+`Point.init(…)`), and in Ruby `.new` (`Point.new(…)`). The line is read without `//`
+comments, `/* */` comments (nested in Kotlin and Swift), `"""` strings, and single- or
+double-quoted strings. A Ruby `#` comment is not skipped.
+
 The edit check reads the other half: `destructurings` in `sections.rs` lists the lines of a
 Rust type use whose braces close into a pattern, one row per line, and the report prints none of
 them (`docs/edit-check.md`, "Fields: which constructions break").
