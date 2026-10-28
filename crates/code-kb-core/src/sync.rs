@@ -475,8 +475,10 @@ fn other_writer(db_path: &Path, extractor_version: &str) -> Option<(String, Stri
 }
 
 /// Scans into a side file and swaps it in only after the scan succeeds, so a failed rebuild
-/// leaves the previous index in place.
+/// leaves the previous index in place. It first waits for the stopped watchers of the root,
+/// which can still scan the index or hold it open.
 fn rebuild_index(workspace: &Workspace, db_path: &Path) -> Result<(), SyncError> {
+    crate::watcher::wait_for_stopped_watchers(&workspace.canonical_root);
     let rebuilt = PathBuf::from(format!("{}.rebuild", db_path.display()));
     remove_artifact_files(&rebuilt)?;
     let scanned = scan_workspace(workspace, &rebuilt, true).and_then(|()| {
@@ -721,8 +723,10 @@ fn retain_unreadable_path(
 /// Streams disk checks and uses an in-memory SQLite index to eliminate repository-wide heap HashMaps.
 /// Creates a missing index. A git worktree copies its parent repository's index and
 /// reconciles it against the worktree files, which is much faster than a full scan;
-/// anything else runs a full scan. A copy that another `julie-extract` wrote is rebuilt.
+/// anything else runs a full scan. A copy that another `julie-extract` wrote is rebuilt. It
+/// first waits for the stopped watchers of the root.
 pub fn create_index(workspace: &Workspace, db_path: &Path) -> Result<(), SyncError> {
+    crate::watcher::wait_for_stopped_watchers(&workspace.canonical_root);
     if let Some(parent_db) = parent_repository_db(&workspace.canonical_root)
         && copy_parent_index(workspace, db_path, &parent_db)
     {

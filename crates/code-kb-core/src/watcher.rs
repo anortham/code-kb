@@ -36,6 +36,10 @@ static WATCH_CALLS: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
 #[cfg(test)]
 static HOLD_RECONCILE: Mutex<Option<(SyncSender<()>, mpsc::Receiver<()>)>> = Mutex::new(None);
 #[cfg(test)]
+static REUSED_FILE_ID_ROOT: Mutex<Option<PathBuf>> = Mutex::new(None);
+#[cfg(test)]
+static LOST_EVENTS_ROOT: Mutex<Option<PathBuf>> = Mutex::new(None);
+#[cfg(test)]
 static REMOVE_DIRECTORY_BEFORE_WATCH: Mutex<Option<PathBuf>> = Mutex::new(None);
 #[cfg(test)]
 struct RegistrationWalkerFault {
@@ -181,6 +185,12 @@ impl Drop for WatcherHandle {
     }
 }
 
+/// Waits for the stopped watcher workers of `root`, so an index rebuild or a new index never
+/// runs beside a worker that still scans or holds the old index open.
+pub(crate) fn wait_for_stopped_watchers(root: &Path) {
+    join_retired_workers(&RegistrationPath::new(root).identity);
+}
+
 fn join_retired_workers(root: &str) {
     let workers = {
         let mut retired = RETIRED_WORKERS
@@ -284,10 +294,14 @@ pub fn start_watcher(
 
 /// The watched folders by path identity, each with the registration pass that last saw it and
 /// the file ID it had then, so a folder made again at a known path is watched again.
+/// `watch_again` makes the next complete pass watch every known folder again, after events
+/// were lost: ext4 and XFS often give a folder made again the inode number of the old one, so a
+/// file ID cannot show that the native watch is gone.
 #[derive(Default)]
 struct RegisteredDirectories {
     paths: BTreeMap<String, RegisteredDirectory>,
     generation: u64,
+    watch_again: bool,
 }
 
 struct RegisteredDirectory {
@@ -338,7 +352,25 @@ impl RegisteredDirectories {
 }
 
 fn directory_file_id(path: &Path) -> Option<FileId> {
+    #[cfg(test)]
+    if REUSED_FILE_ID_ROOT
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .as_deref()
+        .is_some_and(|root| path.starts_with(root))
+    {
+        return Some(FileId::new_inode(0, 0));
+    }
     get_file_id(path).ok()
+}
+
+#[cfg(test)]
+fn events_are_lost(root: &Path) -> bool {
+    LOST_EVENTS_ROOT
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .as_deref()
+        == Some(root)
 }
 
 #[derive(Clone, Debug)]
@@ -390,6 +422,11 @@ fn watcher_worker(
         None,
         move |result: Result<Vec<DebouncedEvent>, _>| match result {
             Ok(mut events) => {
+                #[cfg(test)]
+                if events_are_lost(&callback_root) {
+                    callback_overflow.store(true, Ordering::Release);
+                    return;
+                }
                 if RECURSIVE_ROOT_WATCH {
                     retain_watched_events(&mut events, &callback_root);
                 }
@@ -495,6 +532,7 @@ fn watcher_worker(
         }
         if overflow.swap(false, Ordering::AcqRel) {
             debug!("Watcher event queue overflowed; reconciling workspace");
+            registrations.watch_again = true;
             reconcile_workspace(
                 &mut debouncer,
                 &workspace,
@@ -780,17 +818,21 @@ fn synchronize_registrations(
             let path = normalize_path(dunce::simplified(entry.path()));
             let registration_path = RegistrationPath::new(path.clone());
             let file_id = directory_file_id(&path);
-            if let Some(registered) = registrations.paths.get_mut(&registration_path.identity) {
-                if file_id.is_none() || registered.file_id == file_id {
+            let watch_again = registrations.watch_again;
+            match registrations.paths.get_mut(&registration_path.identity) {
+                Some(registered) if file_id.is_some() && registered.file_id != file_id => {
+                    debug!(
+                        "Folder '{}' was made again; watching it again",
+                        path.display()
+                    );
+                    registrations.paths.remove(&registration_path.identity);
+                    let _ = debouncer.unwatch(&path);
+                }
+                Some(registered) if !watch_again => {
                     registered.generation = generation;
                     continue;
                 }
-                debug!(
-                    "Folder '{}' was made again; watching it again",
-                    path.display()
-                );
-                registrations.paths.remove(&registration_path.identity);
-                let _ = debouncer.unwatch(&path);
+                _ => {}
             }
             #[cfg(test)]
             remove_directory_before_watch(&path);
@@ -823,6 +865,7 @@ fn synchronize_registrations(
             }
             registrations.insert(registration_path, generation, file_id);
         }
+        registrations.watch_again = false;
 
         let stale = registrations
             .paths
@@ -1413,7 +1456,7 @@ mod tests {
         synchronize_registrations(&mut debouncer, &workspace, &mut registrations, &shutdown)
             .unwrap();
 
-        std::fs::remove_dir(&folder).unwrap();
+        std::fs::rename(&folder, temp_dir.path().join("aside")).unwrap();
         std::fs::create_dir(&folder).unwrap();
         wait_for_event(&receiver, |event| {
             matches!(event.kind, EventKind::Create(_)) && event.paths == [folder.clone()]
@@ -1424,6 +1467,63 @@ mod tests {
         std::fs::write(&new_file, "pub fn made_again() {}\n").unwrap();
 
         wait_for_event(&receiver, |event| event.paths == [new_file.clone()]);
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn a_folder_made_again_while_events_were_lost_is_watched_again() {
+        let _guard = ROOT_WATCH_FAULT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let temp_dir = crate::safe_tempdir();
+        let root = temp_dir.path().join("project");
+        std::fs::create_dir_all(root.join("sources")).unwrap();
+        std::fs::write(root.join("main.rs"), "pub fn lost_events_seed() {}\n").unwrap();
+        let canonical_root = Workspace::new(root.clone()).canonical_root;
+        let _reset = LostEventsReset;
+        *REUSED_FILE_ID_ROOT
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(canonical_root.clone());
+        let (_workspace, db_path, watcher) = indexed_watcher(&root, "lost_events.db");
+        *LOST_EVENTS_ROOT
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(canonical_root.clone());
+
+        std::fs::remove_dir(canonical_root.join("sources")).unwrap();
+        std::fs::create_dir(canonical_root.join("sources")).unwrap();
+        std::fs::write(
+            canonical_root.join("during.rs"),
+            "pub fn written_while_events_were_lost() {}\n",
+        )
+        .unwrap();
+        wait_for_indexed_symbol(&db_path, "written_while_events_were_lost", true);
+        thread::sleep(Duration::from_millis(500));
+        LOST_EVENTS_ROOT
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+        std::fs::write(
+            canonical_root.join("sources/after.rs"),
+            "pub fn written_after_lost_events() {}\n",
+        )
+        .unwrap();
+
+        wait_for_indexed_symbol(&db_path, "written_after_lost_events", true);
+        assert!(watcher.pending_failure().is_none());
+    }
+
+    #[cfg(not(windows))]
+    struct LostEventsReset;
+
+    #[cfg(not(windows))]
+    impl Drop for LostEventsReset {
+        fn drop(&mut self) {
+            for hook in [&REUSED_FILE_ID_ROOT, &LOST_EVENTS_ROOT] {
+                hook.lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .take();
+            }
+        }
     }
 
     #[cfg(not(windows))]
@@ -1516,6 +1616,44 @@ mod tests {
 
         assert!(waited_for_old_worker);
         drop(next);
+    }
+
+    #[test]
+    fn an_index_rebuild_waits_for_a_stopped_watcher_of_its_root() {
+        let _guard = ROOT_WATCH_FAULT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let temp_dir = crate::safe_tempdir();
+        let root = temp_dir.path().join("project");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("main.rs"), "pub fn rebuild_seed() {}\n").unwrap();
+        let (workspace, db_path, watcher) = indexed_watcher(&root, "rebuild_wait.db");
+        let (entered_sender, entered) = mpsc::sync_channel(1);
+        let (release, release_receiver) = mpsc::sync_channel(1);
+        *HOLD_RECONCILE
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            Some((entered_sender, release_receiver));
+        std::fs::create_dir(workspace.canonical_root.join("new_folder")).unwrap();
+        entered.recv_timeout(Duration::from_secs(10)).unwrap();
+        drop(watcher);
+
+        let (rebuilt_sender, rebuilt) = mpsc::channel();
+        thread::spawn(move || {
+            let _ = rebuilt_sender.send(crate::sync::ensure_index_matches_extractor(
+                &workspace, &db_path, "999.0.0",
+            ));
+        });
+        let rebuilt_while_held = rebuilt.recv_timeout(Duration::from_millis(500)).ok();
+        let _ = release.send(());
+
+        assert!(rebuilt_while_held.is_none());
+        assert!(
+            rebuilt
+                .recv_timeout(Duration::from_secs(60))
+                .unwrap()
+                .unwrap()
+        );
     }
 
     #[test]

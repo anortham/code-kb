@@ -145,7 +145,9 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   One worker owns registration and index updates; its callback queue is bounded, and retained
   registration state contains directory paths and their file IDs only. A removal or a move
   away of a folder forgets its registration and the ones below it, and a registered path
-  whose file ID changed is watched again, so a folder deleted and made again is watched.
+  whose file ID changed is watched again. After lost events (a queue overflow or a rescan), the
+  next registration pass watches every registered folder again, because ext4 and XFS often give
+  a folder made again the inode number of the old one. So a folder deleted and made again is watched.
   A removal does not register the other folders again. Reconcile after installing startup
   watches, directory moves, and changes to
   `.gitignore`, `.ignore`, `.julieignore`, `.code-kb-ignore`, or `.codekbignore`.
@@ -624,8 +626,9 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
 - Only the active root keeps a watcher; a root the server switched away from loses its watcher by
   the next call. When a call switches roots, the watcher and the offline
   reconcile restart for the new root. Dropping a watcher does not wait for its worker: the worker
-  stops at its next check, and a new watcher of the same root waits for it, so a root never has
-  two workers.
+  stops at its next check. A new watcher of the same root, an index rebuild, and `create_index`
+  wait for it, so a root never has two workers and a rebuild never replaces an index that a
+  stopped worker still scans or holds open.
 - A full scan passes `HARD_EXCLUDED_DIRS` and `HARD_EXCLUDED_SUFFIXES` (`workspace.rs`) to julie
   as a temporary `--ignore-file`, so a reconcile never deletes what a scan wrote. julie's own list
   lacks `.miller`, `.agents`, and `.razorback`.
