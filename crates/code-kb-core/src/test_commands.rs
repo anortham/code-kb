@@ -75,7 +75,7 @@ impl TestFamily {
         }
     }
 
-    fn root_command(self, folder: &Folder) -> Option<String> {
+    fn root_command(self, folder: &Folder, gradle: Option<&str>) -> Option<String> {
         match self {
             Self::Rust => folder.cargo.as_ref().and_then(|cargo| {
                 if cargo.workspace {
@@ -96,9 +96,7 @@ impl TestFamily {
                 } else {
                     folder.build.map(|build| match build {
                         Build::Maven => "mvn test".to_string(),
-                        Build::Gradle => {
-                            gradle_test_command(cfg!(windows), folder.gradlew, folder.gradlew_bat)
-                        }
+                        Build::Gradle => gradle.unwrap_or("gradle test").to_string(),
                     })
                 }
             }
@@ -107,7 +105,7 @@ impl TestFamily {
         }
     }
 
-    fn scoped_command(self, folder: &Folder) -> Option<Option<String>> {
+    fn scoped_command(self, folder: &Folder, gradle: Option<&str>) -> Option<Option<String>> {
         match self {
             Self::Rust => folder.cargo.as_ref().map(|cargo| {
                 cargo.package.as_ref().map(|_| {
@@ -130,11 +128,7 @@ impl TestFamily {
                     folder.build.map(|build| {
                         Some(match build {
                             Build::Maven => "mvn test".to_string(),
-                            Build::Gradle => gradle_test_command(
-                                cfg!(windows),
-                                folder.gradlew,
-                                folder.gradlew_bat,
-                            ),
+                            Build::Gradle => gradle.unwrap_or("gradle test").to_string(),
                         })
                     })
                 }
@@ -312,13 +306,21 @@ fn is_dotnet_test_project(source: &str) -> bool {
         || normalized.contains("microsoft.net.test.sdk")
 }
 
-fn gradle_test_command(windows: bool, gradlew: bool, gradlew_bat: bool) -> String {
-    if windows && gradlew_bat {
-        "gradlew.bat test".to_string()
-    } else if gradlew {
-        "./gradlew test".to_string()
-    } else {
-        "gradle test".to_string()
+/// `gradle test` for the build in `dir` through the nearest wrapper at or above it, given the
+/// folders that hold `gradlew` and `gradlew.bat`. Windows takes `gradlew.bat` when there is one.
+fn gradle_test_command(
+    windows: bool,
+    dir: &str,
+    gradlew: Option<&str>,
+    gradlew_bat: Option<&str>,
+) -> String {
+    match (windows, gradlew_bat, gradlew) {
+        (true, Some(wrapper_dir), _) => match depth(dir) - depth(wrapper_dir) {
+            0 => "gradlew.bat test".to_string(),
+            up => format!("{}gradlew.bat test", "..\\".repeat(up)),
+        },
+        (_, _, Some(wrapper_dir)) => format!("{} test", wrapper_path(dir, wrapper_dir)),
+        _ => "gradle test".to_string(),
     }
 }
 
@@ -353,7 +355,12 @@ fn has_test_script(package_json: &str) -> bool {
                 .map(str::trim)
                 .map(str::to_string)
         })
-        .is_some_and(|script| !script.is_empty())
+        .is_some_and(|script| !script.is_empty() && !is_npm_placeholder_script(&script))
+}
+
+/// Whether `script` is the test script that `npm init` writes, which runs no test and fails.
+fn is_npm_placeholder_script(script: &str) -> bool {
+    script.contains("no test specified") && script.trim_end().ends_with("exit 1")
 }
 
 fn parent_dir(path: &str) -> &str {
@@ -781,10 +788,11 @@ impl CommandFinder {
                 .map(|(directory, command)| in_folder(&directory, command));
         }
 
-        let folder = self.folder("");
-        if folder.jvm_build_ambiguous {
+        if self.folder("").jvm_build_ambiguous {
             return None;
         }
+        let gradle = self.gradle_command("");
+        let folder = self.folder("");
         let mut command = None;
         for family in [
             TestFamily::Rust,
@@ -794,7 +802,7 @@ impl CommandFinder {
             TestFamily::Python,
             TestFamily::Dotnet,
         ] {
-            if let Some(candidate) = family.root_command(folder) {
+            if let Some(candidate) = family.root_command(folder, gradle.as_deref()) {
                 if command.is_some() {
                     return None;
                 }
@@ -811,7 +819,11 @@ impl CommandFinder {
     ) -> Option<(String, String)> {
         let mut directory = directory;
         loop {
-            if let Some(command) = family.scoped_command(self.folder(directory)) {
+            let gradle = matches!(family, TestFamily::Jvm)
+                .then(|| self.gradle_command(directory))
+                .flatten();
+            if let Some(command) = family.scoped_command(self.folder(directory), gradle.as_deref())
+            {
                 return command.map(|command| (directory.to_string(), command));
             }
             if directory.is_empty() {
@@ -819,6 +831,25 @@ impl CommandFinder {
             }
             directory = parent_dir(directory);
         }
+    }
+
+    /// The broader Gradle command for a Gradle build in `dir`, or `None` when `dir` has none.
+    fn gradle_command(&mut self, dir: &str) -> Option<String> {
+        if !matches!(self.folder(dir).build, Some(Build::Gradle)) {
+            return None;
+        }
+        let gradlew = self.nearest(dir, |folder| folder.gradlew.then_some(()));
+        let gradlew_bat = self.nearest(dir, |folder| folder.gradlew_bat.then_some(()));
+        Some(gradle_test_command(
+            cfg!(windows),
+            dir,
+            gradlew
+                .as_ref()
+                .map(|(wrapper_dir, _)| wrapper_dir.as_str()),
+            gradlew_bat
+                .as_ref()
+                .map(|(wrapper_dir, _)| wrapper_dir.as_str()),
+        ))
     }
 
     fn folder(&mut self, dir: &str) -> &Folder {
@@ -1956,6 +1987,97 @@ mod tests {
     }
 
     #[test]
+    fn a_broader_command_ignores_the_npm_init_placeholder_script() {
+        let placeholder = project(&[(
+            "package.json",
+            r#"{"name":"demo","version":"1.0.0","scripts":{"test":"echo \"Error: no test specified\" && exit 1"}}"#,
+        )]);
+        let nested_placeholder = project(&[
+            ("package.json", r#"{"scripts":{"test":"node --test"}}"#),
+            (
+                "packages/app/package.json",
+                r#"{"scripts":{"test":"echo \"Error: no test specified\" && exit 1"}}"#,
+            ),
+        ]);
+        let real_echo = project(&[(
+            "package.json",
+            r#"{"scripts":{"test":"echo start && node --test"}}"#,
+        )]);
+        assert_eq!(
+            CommandFinder::new(placeholder.path()).broader_test_command(None),
+            None
+        );
+        assert_eq!(
+            CommandFinder::new(placeholder.path()).broader_test_command(Some("src/a.js")),
+            None
+        );
+        assert_eq!(
+            CommandFinder::new(nested_placeholder.path())
+                .broader_test_command(Some("packages/app/src/a.js")),
+            None
+        );
+        assert_eq!(
+            CommandFinder::new(real_echo.path()).broader_test_command(None),
+            Some("npm test".into())
+        );
+    }
+
+    #[test]
+    fn a_broader_gradle_command_for_a_subproject_uses_the_nearest_wrapper_above_it() {
+        let root_wrapper = project(&[
+            ("gradlew", ""),
+            ("gradlew.bat", ""),
+            ("settings.gradle", ""),
+            ("app/build.gradle", ""),
+        ]);
+        let deep_wrapper = project(&[
+            ("gradlew", ""),
+            ("gradlew.bat", ""),
+            ("a/b/build.gradle.kts", ""),
+        ]);
+        let local_wrapper = project(&[
+            ("gradlew", ""),
+            ("app/gradlew", ""),
+            ("app/gradlew.bat", ""),
+            ("app/build.gradle", ""),
+        ]);
+        let bare = project(&[("app/build.gradle", "")]);
+        let (root, deep, local) = if cfg!(windows) {
+            (
+                "cd app && ..\\gradlew.bat test",
+                "cd a/b && ..\\..\\gradlew.bat test",
+                "cd app && gradlew.bat test",
+            )
+        } else {
+            (
+                "cd app && ../gradlew test",
+                "cd a/b && ../../gradlew test",
+                "cd app && ./gradlew test",
+            )
+        };
+        let broader = |project: &tempfile::TempDir, path: &str| {
+            CommandFinder::new(project.path()).broader_test_command(Some(path))
+        };
+
+        assert_eq!(
+            broader(&root_wrapper, "app/src/test/java/FooTest.java").as_deref(),
+            Some(root)
+        );
+        assert_eq!(
+            broader(&deep_wrapper, "a/b/src/test/kotlin/FooTest.kt").as_deref(),
+            Some(deep)
+        );
+        assert_eq!(
+            broader(&local_wrapper, "app/src/test/java/FooTest.java").as_deref(),
+            Some(local)
+        );
+        assert_eq!(
+            broader(&bare, "app/src/test/java/FooTest.java").as_deref(),
+            Some("cd app && gradle test")
+        );
+    }
+
+    #[test]
     fn a_broader_command_uses_the_nearest_configured_folder() {
         let project = project(&[
             ("package.json", r#"{"scripts":{"test":"node --test"}}"#),
@@ -2330,14 +2452,20 @@ mod tests {
 
     #[test]
     fn gradle_broader_command_uses_the_native_windows_wrapper() {
-        for (windows, gradlew, gradlew_bat, expected) in [
-            (false, true, true, "./gradlew test"),
-            (true, true, true, "gradlew.bat test"),
-            (true, false, true, "gradlew.bat test"),
-            (false, false, true, "gradle test"),
-            (true, false, false, "gradle test"),
+        for (windows, dir, gradlew, gradlew_bat, expected) in [
+            (false, "", Some(""), Some(""), "./gradlew test"),
+            (true, "", Some(""), Some(""), "gradlew.bat test"),
+            (true, "", None, Some(""), "gradlew.bat test"),
+            (false, "", None, Some(""), "gradle test"),
+            (true, "", None, None, "gradle test"),
+            (false, "a/b", Some(""), Some(""), "../../gradlew test"),
+            (true, "a/b", Some(""), Some("a"), "..\\gradlew.bat test"),
+            (true, "a/b", Some("a/b"), None, "./gradlew test"),
         ] {
-            assert_eq!(gradle_test_command(windows, gradlew, gradlew_bat), expected);
+            assert_eq!(
+                gradle_test_command(windows, dir, gradlew, gradlew_bat),
+                expected
+            );
         }
     }
 

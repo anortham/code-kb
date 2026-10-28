@@ -1805,6 +1805,13 @@ struct Listed {
     tests: Vec<String>,
 }
 
+enum RequiredArguments {
+    Missing(Vec<String>),
+    Passed,
+    Unknown,
+    OtherOwner,
+}
+
 struct CallContract<'a> {
     range: Option<&'a Arity>,
     typed: Option<&'a TypedOverloads>,
@@ -2002,35 +2009,40 @@ impl<'a> SiteLister<'a> {
             let verdict = range
                 .zip(count)
                 .and_then(|(range, count)| Some((range, count, range.accepts(&language, count)?)));
-            let missing_parameters =
-                match required_parameters.filter(|required| !required.is_empty()) {
-                    Some(required) => {
-                        let Some(missing) =
-                            self.required_arguments_on_line(target, labeled, required, &language)
-                        else {
-                            placed.unresolved += 1;
-                            continue;
-                        };
-                        missing
-                    }
-                    None if !required_keyword_parameters.is_empty() => {
-                        let Some(check) = self.required_keyword_arguments(
-                            labeled,
-                            first,
-                            last,
-                            required_keyword_parameters,
-                        ) else {
-                            placed.unresolved += 1;
-                            continue;
-                        };
-                        if !check.missing.is_empty() && check.has_unknown_spread {
+            let missing_parameters = match required_parameters
+                .filter(|required| !required.is_empty())
+            {
+                Some(required) => {
+                    match self.required_arguments_on_line(target, labeled, required, &language) {
+                        RequiredArguments::Missing(missing) => missing,
+                        RequiredArguments::Passed => Vec::new(),
+                        RequiredArguments::Unknown if verdict.is_some_and(|(_, _, fits)| !fits) => {
+                            Vec::new()
+                        }
+                        RequiredArguments::Unknown | RequiredArguments::OtherOwner => {
                             placed.unresolved += 1;
                             continue;
                         }
-                        check.missing
                     }
-                    _ => Vec::new(),
-                };
+                }
+                None if !required_keyword_parameters.is_empty() => {
+                    let Some(check) = self.required_keyword_arguments(
+                        labeled,
+                        first,
+                        last,
+                        required_keyword_parameters,
+                    ) else {
+                        placed.unresolved += 1;
+                        continue;
+                    };
+                    if !check.missing.is_empty() && check.has_unknown_spread {
+                        placed.unresolved += 1;
+                        continue;
+                    }
+                    check.missing
+                }
+                _ => Vec::new(),
+            };
             if !touched
                 && missing_parameters.is_empty()
                 && verdict.is_some_and(|(_, _, fits)| fits)
@@ -2152,37 +2164,38 @@ impl<'a> SiteLister<'a> {
         arguments
     }
 
+    /// What the calls of the target on the site's line pass for the new required parameters. A
+    /// call whose receiver the index cannot tie to an owner still counts when every such call
+    /// agrees, because the callers report already labels the site by that evidence; a call on
+    /// another owner never counts.
     fn required_arguments_on_line(
         &mut self,
         target: &Symbol,
         labeled: &LabeledSite,
         required: &[signatures::RequiredParameter],
         language: &str,
-    ) -> Option<Vec<String>> {
-        let line = labeled.site.start_line?;
-        let (calls, unknown) = fields::written_arguments_on_line(
-            self.source(&labeled.site.path)?,
-            line,
-            &labeled.site.to_symbol_name,
-            language,
-        );
-        if calls.is_empty() {
-            return None;
-        }
-        let mut unknown_call = unknown;
-        let mut target_calls = 0;
+    ) -> RequiredArguments {
+        let Some(line) = labeled.site.start_line else {
+            return RequiredArguments::Unknown;
+        };
+        let Some(source) = self.source(&labeled.site.path) else {
+            return RequiredArguments::Unknown;
+        };
+        let (calls, unknown_written) =
+            fields::written_arguments_on_line(source, line, &labeled.site.to_symbol_name, language);
+        let mut other_owner = false;
+        let mut owned = Vec::new();
+        let mut unowned = Vec::new();
         for (column, actual) in calls {
-            if target.parent_symbol_id.is_some() {
-                match self.call_reaches_target_owner(target, labeled, column) {
-                    Some(true) => {}
-                    Some(false) => continue,
-                    None => {
-                        unknown_call = true;
-                        continue;
-                    }
-                }
+            let reaches = if target.parent_symbol_id.is_some() {
+                self.call_reaches_target_owner(target, labeled, column)
+            } else {
+                Some(true)
+            };
+            if reaches == Some(false) {
+                other_owner = true;
+                continue;
             }
-            target_calls += 1;
             let receiver_offset = if required
                 .iter()
                 .any(|parameter| parameter.position.is_some())
@@ -2197,19 +2210,45 @@ impl<'a> SiteLister<'a> {
                 language,
                 receiver_offset,
             );
-            if check.missing.is_empty() {
-                continue;
+            let outcome = if check.missing.is_empty() {
+                Some(Vec::new())
+            } else if check.has_unknown_spread {
+                None
+            } else {
+                Some(check.missing)
+            };
+            if reaches == Some(true) {
+                owned.push(outcome);
+            } else {
+                unowned.push(outcome);
             }
-            if check.has_unknown_spread {
-                unknown_call = true;
-                continue;
-            }
-            return Some(check.missing);
         }
-        if target_calls == 0 {
-            return None;
+        if let Some(missing) = owned.iter().flatten().find(|missing| !missing.is_empty()) {
+            return RequiredArguments::Missing(missing.clone());
         }
-        (!unknown_call).then(Vec::new)
+        if owned.is_empty() && unowned.is_empty() {
+            return if other_owner {
+                RequiredArguments::OtherOwner
+            } else {
+                RequiredArguments::Unknown
+            };
+        }
+        if unknown_written {
+            return RequiredArguments::Unknown;
+        }
+        let passed = |outcome: &Option<Vec<String>>| outcome.as_ref().is_some_and(Vec::is_empty);
+        if owned.iter().chain(&unowned).all(passed) {
+            return RequiredArguments::Passed;
+        }
+        if owned.is_empty()
+            && unowned
+                .iter()
+                .all(|outcome| outcome.as_ref().is_some_and(|missing| !missing.is_empty()))
+            && let Some(Some(missing)) = unowned.first()
+        {
+            return RequiredArguments::Missing(missing.clone());
+        }
+        RequiredArguments::Unknown
     }
 
     fn call_reaches_target_owner(
