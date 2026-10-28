@@ -3,6 +3,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use code_kb_core::formatters::ZERO_LIMIT_NOTICE;
 use code_kb_core::workspace::{NO_PROJECT_MARKER_REASON, paths_equal};
 use code_kb_core::{
     Connection, MAX_CONTEXT_OVERLOADS, SymbolSelector, WatcherHandle, Workspace, WorkspaceError,
@@ -17,7 +18,6 @@ use code_kb_core::{
 
 use super::protocol::{CallToolResult, JsonRpcRequest, JsonRpcResponse, Tool};
 
-const ZERO_LIMIT_NOTICE: &str = "Result limit is 0; increase it to check for matches.";
 const PROJECT_ROOT_DESCRIPTION: &str =
     "Absolute path of the project or git worktree you work in. Change it when you move to another.";
 
@@ -151,6 +151,7 @@ fn result_offset(arguments: &Value) -> Result<usize, CallToolResult> {
         None => Ok(0),
         Some(value) => match value
             .as_u64()
+            .or_else(|| value.as_str().and_then(|s| s.parse::<u64>().ok()))
             .and_then(|offset| usize::try_from(offset).ok())
         {
             Some(offset) => Ok(offset),
@@ -1654,6 +1655,17 @@ mod tests {
         assert!(result_limit(&json!({"limit": u64::MAX}), 20).is_err());
         assert!(result_limit(&json!({"limit": -1}), 20).is_err());
         assert!(result_limit(&json!({"limit": 1.5}), 20).is_err());
+    }
+
+    #[test]
+    fn result_offset_accepts_the_integer_forms_that_limit_accepts() {
+        assert_eq!(result_offset(&json!({})).unwrap(), 0);
+        assert_eq!(result_offset(&json!({"offset": 50})).unwrap(), 50);
+        assert_eq!(result_offset(&json!({"offset": "50"})).unwrap(), 50);
+        assert!(result_offset(&json!({"offset": "-1"})).is_err());
+        assert!(result_offset(&json!({"offset": "five"})).is_err());
+        assert!(result_offset(&json!({"offset": -1})).is_err());
+        assert!(result_offset(&json!({"offset": 1.5})).is_err());
     }
 
     #[test]
