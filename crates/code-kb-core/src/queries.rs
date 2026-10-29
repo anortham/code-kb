@@ -637,8 +637,36 @@ fn inherited_write_exclusion(conn: &Connection) -> String {
     }
 }
 
-/// The ids among `ids` that [`inherited_attribute_write`] leaves out. Callers check only the rows
-/// they return, because the check walks base classes and a common word touches thousands of rows.
+/// True when `alias` is the top-level row that julie writes for an R global that a function
+/// creates (`counter <<- 0`, `v ->> last`, `assign("glob", v, envir = .GlobalEnv)`), and the
+/// global already has a definition: a top-level row of that name without such an `assignment`
+/// (`counter <- 0`), or an earlier such row by path and line. All of them name one global, so the
+/// later rows are writes to it, not definitions.
+fn r_global_write(alias: &str) -> String {
+    let created = |row: &str| {
+        format!(
+            "CASE WHEN json_valid({row}.metadata_json)
+                  THEN json_extract({row}.metadata_json, '$.assignment') END IN ('<<-', '->>', 'assign')"
+        )
+    };
+    format!(
+        "(CASE WHEN {alias}.language = 'r' AND {alias}.parent_symbol_id IS NULL
+               AND {alias}.kind IN ('variable', 'function') AND {alias_created}
+          THEN EXISTS (
+            SELECT 1 FROM symbols g
+            WHERE g.name = {alias}.name AND g.language = 'r' AND g.parent_symbol_id IS NULL
+              AND g.kind IN ('variable', 'function') AND g.symbol_id != {alias}.symbol_id
+              AND (NOT COALESCE({g_created}, 0) OR g.path < {alias}.path
+                   OR g.path = {alias}.path AND g.start_line < {alias}.start_line))
+          ELSE 0 END)",
+        alias_created = created(alias),
+        g_created = created("g"),
+    )
+}
+
+/// The ids among `ids` that [`inherited_attribute_write`] or [`r_global_write`] leaves out.
+/// Callers check only the rows they return, because the check walks base classes and a common
+/// word touches thousands of rows.
 pub fn inherited_writes_among<'a>(
     conn: &Connection,
     ids: impl Iterator<Item = &'a str>,
@@ -646,10 +674,15 @@ pub fn inherited_writes_among<'a>(
     if inherited_write_exclusion(conn).is_empty() {
         return Ok(HashSet::new());
     }
+    let r_write = if has_column(conn, "symbols", "metadata_json") {
+        format!(" OR {}", r_global_write("s"))
+    } else {
+        String::new()
+    };
     let ids = serde_json::to_string(&ids.collect::<Vec<_>>()).unwrap_or_default();
     let mut stmt = conn.prepare(&format!(
         "SELECT s.symbol_id FROM symbols s
-         WHERE s.symbol_id IN (SELECT value FROM json_each(?1)) AND {}",
+         WHERE s.symbol_id IN (SELECT value FROM json_each(?1)) AND ({}{r_write})",
         inherited_attribute_write("s")
     ))?;
     let found = stmt

@@ -3472,6 +3472,8 @@ impl<'a> Accounting<'a> {
             && !row.hidden_receiver
             && !group_ids.contains(to)
             && shorthand_site.shadow_id.as_deref() != Some(to)
+            && !(row.language == "r"
+                && inherited_writes_among(self.conn, std::iter::once(to))?.contains(to))
             && let Some(other) = self.definition_by_id(to)?
         {
             return Ok(Some(Verdict::new(
@@ -4001,7 +4003,8 @@ impl<'a> Accounting<'a> {
     }
 
     /// The first row of `sql` that `row` can name and that is not a test label
-    /// (`describe("mix")`), which julie indexes as a function but code never reads by name.
+    /// (`describe("mix")`), which julie indexes as a function but code never reads by name, nor
+    /// an R superassignment that writes a global defined elsewhere.
     fn first_real_definition(
         &self,
         sql: &'static str,
@@ -4018,9 +4021,16 @@ impl<'a> Accounting<'a> {
             })?
             .collect::<Result<Vec<_>, _>>()
         })?;
+        let writes = if row.language == "r" {
+            inherited_writes_among(self.conn, rows.iter().map(|(id, ..)| id.as_str()))?
+        } else {
+            HashSet::new()
+        };
         Ok(rows
             .into_iter()
-            .find(|(_, signature, kind)| !is_test_label(signature) && !row.is_not_named_by(kind))
+            .find(|(id, signature, kind)| {
+                !is_test_label(signature) && !row.is_not_named_by(kind) && !writes.contains(id)
+            })
             .map(|(id, ..)| id))
     }
 

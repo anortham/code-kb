@@ -2569,6 +2569,76 @@ fn a_subclass_write_to_an_inherited_property_is_a_site_not_a_definition() {
 }
 
 #[test]
+fn an_r_superassignment_to_a_global_defined_at_the_top_level_is_a_site_not_a_definition() {
+    let repo = scanned_repo(&[
+        ("R/state.R", "counter <- 0\nhandler <- function(x) x\n"),
+        (
+            "R/acc.R",
+            "bump <- function(v) {\n  counter <<- counter + v\n  v ->> counter\n  handler <<- function(x) x + 1\n}\n\nrun <- function() {\n  handler(1)\n}\n",
+        ),
+    ]);
+    let counter = report(&repo, "counter", None);
+    assert_eq!(counter.target.path, "R/state.R", "{}", dump(&counter));
+    for needle in ["counter <<- counter + v", "v ->> counter"] {
+        assert_not_excluded(&counter, "R/acc.R", line_of(&repo, "R/acc.R", needle));
+    }
+    assert_eq!(counter.counts.definition_lines, 1, "{}", dump(&counter));
+
+    let handler = report(&repo, "handler", None);
+    assert_eq!(handler.target.path, "R/state.R", "{}", dump(&handler));
+    assert_not_excluded(&handler, "R/acc.R", line_of(&repo, "R/acc.R", "handler(1)"));
+
+    let conn = open_read_only(&repo.db).unwrap();
+    let skeleton = code_kb_core::ops::file_skeleton_op(
+        &Workspace::new(repo.root.clone()),
+        &repo.db,
+        &conn,
+        "R/acc.R",
+    )
+    .unwrap();
+    assert!(!skeleton.contains("handler"), "{skeleton}");
+}
+
+#[test]
+fn the_first_r_superassignment_of_a_global_defines_it_and_later_ones_write_it() {
+    let repo = scanned_repo(&[
+        (
+            "R/acc.R",
+            "new_account <- function(initial) {\n  deposit <- function(v) {\n    counter <<- 1\n  }\n  deposit\n}\n",
+        ),
+        (
+            "R/use.R",
+            "report_count <- function() {\n  print(counter)\n  counter <<- counter + 1\n}\n",
+        ),
+    ]);
+    let counter = report(&repo, "counter", None);
+    assert_eq!(counter.target.path, "R/acc.R", "{}", dump(&counter));
+    for needle in ["print(counter)", "counter <<- counter + 1"] {
+        assert_not_excluded(&counter, "R/use.R", line_of(&repo, "R/use.R", needle));
+    }
+}
+
+#[test]
+fn an_r_superassignment_to_a_local_of_an_enclosing_function_is_a_site_of_that_local() {
+    let repo = scanned_repo(&[(
+        "R/acc.R",
+        "new_account <- function(initial) {\n  balance <- initial\n  withdraw <- function(v) balance <<- balance - v\n  list(withdraw = withdraw)\n}\n",
+    )]);
+    let balance = report(&repo, "balance", None);
+    assert_eq!(
+        balance.target.line,
+        line_of(&repo, "R/acc.R", "balance <- initial"),
+        "{}",
+        dump(&balance)
+    );
+    assert_not_excluded(
+        &balance,
+        "R/acc.R",
+        line_of(&repo, "R/acc.R", "balance <<- balance - v"),
+    );
+}
+
+#[test]
 fn a_csharp_extension_method_call_through_the_extended_type_is_not_excluded() {
     let repo = scanned_repo(&[
         (
