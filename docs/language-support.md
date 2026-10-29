@@ -199,6 +199,22 @@ covers all 42 IDs and refreshes, while
 checks the supported ASCII call across reference, context, and impact, and
 records the separate missing-identifier limitation without inventing an edge.
 
+## Calls with no static callee
+
+A call through a subscript (`environ["werkzeug.debug.preserve_context"](ctx)`,
+`handlers[key](x)`) or through a call result (`environ.get("x")(ctx)`) has no
+callee name. The index cannot know the target, so `find_references` callees and
+`get_symbol_context` list no row for it, also with `include_external`. The
+facts that julie 3.9.1 writes for such a call:
+
+| Language | Facts for `handlers[key](x)` |
+| --- | --- |
+| Python, JavaScript, TypeScript, Lua, PHP, C#, Kotlin, Swift, Dart, Elixir | No call identifier and no call relationship. The read of `handlers` stays a variable reference where the language records reads. |
+| Rust | A call identifier named with the whole callee text (`handlers[key]`), which matches no symbol. No call relationship. |
+| Ruby | `handlers[key].call(x)` is a call of the method `call`; `handlers[key].(x)` writes nothing. |
+| Go | A call of `handlers`. The grammar reads `m[k](x)` and an explicit instantiation `F[T](x)` the same way. When `handlers` is a parameter or a local, the callers report excludes the site, and the callee row has no definition. |
+| C, C++ | A call of `handlers`. This is a wrong fact. In C, when a function has the container's name, the callee row points to that function and `blast_radius` lists the caller as impacted. The callers report excludes the site in both languages. The fix is in julie (contract marker `c-cpp-subscript-callee-v1`, after 3.9.1): it writes no call for a subscript callee. |
+
 ## SQL argument contracts
 
 SQL navigation and caller fixtures pass, but strict argument checks remain an
