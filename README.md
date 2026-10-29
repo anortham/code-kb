@@ -41,7 +41,7 @@ When a task needs one signature or implementation, a file outline or symbol body
 - **Millisecond Query Latency:** Direct SQLite queries in WAL mode with zero in-memory heap bloat. On this repository a warm symbol body or small skeleton takes 1–4 ms, and most other calls take 10–50 ms; a concept search or a callers report can take up to about 100 ms.
 - **One `project_root` on Every Call:** Every tool takes `project_root`, the absolute path of the project or git worktree the agent works in (`lookup_symbol(project_root="/path/to/project", query="...")`). A root in every call cannot go stale, so a move to a worktree never answers from the old index.
 - **CLI-First Parity:** Every MCP tool has an exact 1:1 CLI command for instantaneous terminal verification and dogfooding.
-- **Continuous 3-Tier Sync:** Tool-driven updates, JIT staleness guards before reads, and a debounced background watcher with a Git storm circuit breaker.
+- **Automatic Index Sync:** No tool manages the index, and none is needed. A debounced background watcher refreshes changed files and runs one bulk scan for a Git storm. A reconcile runs at startup and when a call switches to another root. Body and skeleton reads refresh their target file first.
 
 ---
 
@@ -114,6 +114,23 @@ the call; completed updates are preserved. Pre-index a large repository before a
 ```bash
 code-kb scan
 ```
+
+No MCP tool manages the index, and none is needed. The index rebuilds itself once when a
+different `julie-extract` version or extraction level wrote it, or when SQLite cannot read it.
+The rebuild scans into a side file and then moves it into place, so reads never find the index
+missing. If a rebuild fails, the error names the command to run, `code-kb scan --root <root>`,
+with the full path of the running `code-kb` binary in place of `code-kb`, because a plugin
+install does not put `code-kb` on `PATH`. `code-kb scan --force` forces a full re-extraction.
+
+The index honors `.gitignore`, `.ignore`, `.julieignore`, `.code-kb-ignore`, and
+`.codekbignore`, and applies changes to them automatically. These folders are never indexed,
+and no ignore rule adds them back: `.git`, `.hg`, `.svn`, `.julie`, `.miller`, `.code-kb`,
+`.memories`, `.agents`, `.razorback`, `.worktrees`, `worktrees`, `.claude`, `.venv`, `venv`,
+`.env`, `.tox`, `.vs`, `node_modules`, `vendor`, `target`, `dist`, `build`, `.cache`, `obj`,
+`TestResults`, `.idea`, and `.vscode`. Files whose names end in `.min.js`, `.bundle.js`,
+`.generated.js`, `.generated.jsx`, `.generated.ts`, `.generated.tsx`, `.generated.d.ts`,
+`.tmp`, `.swp`, `~`, `.db-wal`, `.db-shm`, `.sqlite-wal`, or `.sqlite-shm` are never indexed.
+`julie-extract` skips a source file larger than 1 MiB.
 
 Launcher environment variables:
 
@@ -460,12 +477,12 @@ git worktree you work in. The table does not repeat it. `path` and `file_path` a
 
 | Tool | Purpose | Key Parameters | Aliases |
 | :--- | :--- | :--- | :--- |
-| `file_skeleton` | File outline with function & method bodies stripped (61–90% smaller than the file in measured examples); a directory returns its layout and main exports. | `file_path` (req) | `file`, `path` |
-| `lookup_symbol` | Find symbols by name, qualified name (`Type::method`), prefix, or concept. A query that names no symbol exactly also lists the ranked matches under `No exact name match; N full-text matches`. The ranking credits each query term once from its strongest field (name, signature, docstring), weighted by the term's rarity across the index, plus kind and path priors; substrings inside identifiers are found (`sha256` finds `parseSha256Sidecar`). When nothing matches, the answer names the workspace and lists up to three similar names, definitions before imports; a one-word query that no row names exactly lists them before the ranked matches too (CLI `lookup --json`: `suggestions`). Test functions, test containers, and rows from test files are hidden unless `is_test` is true, except a row whose name equals the query. | `query` (req), `path` (opt), `kind` (opt), `is_test` (opt), `limit` (opt) | `name`, `q` |
-| `get_symbol_body` | Slices the source of a symbol from disk as written, with its declaration and decorators; a name with overloads in one class returns each overload. | Exactly one `symbol_name` or current-index `symbol_id`; `file_path` (opt, a file or a folder) | `symbol`, `name`, `path` |
-| `get_symbol_context` | Surgical bundle: target body + callee signatures + parameter types + tests; up to four overloads in one class return a bundle each, and more return an error that lists each overload's id. | Exactly one `symbol_name` or current-index `symbol_id`; `file_path` (opt, a file or a folder), `include_external` (opt, def: false) | `symbol`, `name`, `path` |
-| `find_references` | Callers: every indexed site of the name, each labeled proven, likely, unresolved, or excluded with its evidence and, for a call, its argument count (a count that no definition of the target accepts excludes a `likely` or `unresolved` call in a language with a strict argument rule; [docs/argument-counts.md](docs/argument-counts.md) lists the languages and the rules), plus a whole-word text count that accounts for every line of the name. After the sites, up to six sections list what else a change may reach: `Overrides` and `Overrides of` (same-named methods in subtypes and in ancestors), `Constructions` (lines that build a class, struct, or record), `Variant uses` (functions that name variants of an enum), `Registrations` (route facts that register a function as a handler), and `Tests that call it` (each with the command that runs it). The sections never change a label or a count; CLI `refs --json` adds them as arrays. Callees: the calls a symbol makes (filters external stdlib noise). Qualify overloaded names. | Exactly one `symbol_name` or current-index `symbol_id`; `file_path` (opt), `direction` ("callers" \| "callees", def: callers), `offset` (opt, def: 0), `limit` (opt, def: 20, listed rows only), `include_external` (opt, def: false) | `symbol`, `name`, `file`, `path` |
-| `blast_radius` | Traces callers across multiple steps. Lists the tests the call graph reaches; when the walk finds none for one symbol, it lists the tests of its callers report, or the target itself when it is a test. Incomplete coverage names a broader configured test command when project files identify one; otherwise it names the broader scope to verify. A larger `depth` may find more tests. The graph discovery ceiling remains 200 rows. | `symbol` or current-index `symbol_id` (opt), `file` (opt guard for an ID), `depth` (opt, def: 2), `offset` (opt, def: 0), `limit` (opt), `include_low_signal` (opt, def: false) | `name`, `path`, `impact` |
+| `file_skeleton` | File outline with function & method bodies stripped (61–90% smaller than the file in measured examples); a directory returns its layout and main exports. | `file_path` (req) | `file`, `path` (for `file_path`) |
+| `lookup_symbol` | Find symbols by name, qualified name (`Type::method`), prefix, or concept. A query that names no symbol exactly also lists the ranked matches under `No exact name match; N full-text matches`. The ranking credits each query term once from its strongest field (name, signature, docstring), weighted by the term's rarity across the index, plus kind and path priors; substrings inside identifiers are found (`sha256` finds `parseSha256Sidecar`). When nothing matches, the answer names the workspace and lists up to three similar names, definitions before imports; a one-word query that no row names exactly lists them before the ranked matches too (CLI `lookup --json`: `suggestions`). Test functions, test containers, and rows from test files are hidden unless `is_test` is true, except a row whose name equals the query. | `query` (req), `path` (opt), `kind` (opt), `is_test` (opt, def: false), `limit` (opt, def: 20) | `name`, `q`, `symbol_name`, `symbol` (for `query`); `file_path`, `file` (for `path`); `include_tests` (for `is_test`) |
+| `get_symbol_body` | Slices the source of a symbol from disk as written, with its declaration and decorators; a name with overloads in one class returns each overload. | Exactly one `symbol_name` or current-index `symbol_id`; `file_path` (opt, a file or a folder) | `symbol`, `name`, `target` (for `symbol_name`); `file`, `path` (for `file_path`) |
+| `get_symbol_context` | Surgical bundle: target body + callee signatures + parameter types + tests; up to four overloads in one class return a bundle each, and more return an error that lists each overload's id. | Exactly one `symbol_name` or current-index `symbol_id`; `file_path` (opt, a file or a folder), `include_external` (opt, def: false) | `symbol`, `name`, `target` (for `symbol_name`); `file`, `path` (for `file_path`) |
+| `find_references` | Callers: every indexed site of the name, each labeled proven, likely, unresolved, or excluded with its evidence and, for a call, its argument count (a count that no definition of the target accepts excludes a `likely` or `unresolved` call in a language with a strict argument rule; [docs/argument-counts.md](docs/argument-counts.md) lists the languages and the rules), plus a whole-word text count that accounts for every line of the name. After the sites, up to six sections list what else a change may reach: `Overrides` and `Overrides of` (same-named methods in subtypes and in ancestors), `Constructions` (lines that build a class, struct, or record), `Variant uses` (functions that name variants of an enum), `Registrations` (route facts that register a function as a handler), and `Tests that call or use it` (each with the command that runs it). The sections never change a label or a count; CLI `refs --json` adds them as arrays. Callees: the calls a symbol makes (filters external stdlib noise). Qualify overloaded names. | Exactly one `symbol_name` or current-index `symbol_id`; `file_path` (opt), `direction` ("callers" \| "callees", def: callers), `offset` (opt, def: 0), `limit` (opt, def: 20, listed rows only), `include_external` (opt, def: false) | `symbol`, `name`, `target` (for `symbol_name`); `file`, `path` (for `file_path`) |
+| `blast_radius` | Traces callers across multiple steps. Lists the tests the call graph reaches; when the walk finds none for one symbol, it lists the tests of its callers report, or the target itself when it is a test. Incomplete coverage names a broader configured test command when project files identify one; otherwise it names the broader scope to verify. A larger `depth` may find more tests. The graph discovery ceiling remains 200 rows. With no `symbol`, `symbol_id`, or `file`, it walks the uncommitted git changes. | `symbol` or current-index `symbol_id` (opt), `file` (opt: seeds a walk from every symbol of the file, narrows a `symbol` name, or guards a `symbol_id`), `depth` (opt, def: 2, at most 5), `offset` (opt, def: 0), `limit` (opt, def: 20), `include_low_signal` (opt, def: false) | `symbol_name`, `name`, `target` (for `symbol`); `file_path`, `path` (for `file`); `max_depth` (for `depth`) |
 | `check_edit` | After you edit: the symbols whose shape changed against the session base (or `base`, or `HEAD`) and every site of each that your diff did not reach. Run it before you say a change is done. | `base` (opt, a git revision), `offset` (opt, def: 0), `limit` (opt, def: 12) | |
 
 Pages use the current index. Restart at offset 0 after editing or rebuilding. `offset` applies
@@ -557,8 +574,10 @@ code-kb facts
 code-kb facts config --path Cargo.toml
 code-kb facts route --limit 10
 
-# View active log file and recent diagnostic messages. Logs live in <project>/.code-kb/logs;
-# a server started outside a project logs to ~/.code-kb/logs.
+# Print the log folder and the latest lines of the newest log file (it does not stream).
+# A server logs to <launch root>/.code-kb/logs (the --root of `serve`, or the project of the
+# folder it started in) for every project it serves; a server started outside a project logs
+# to ~/.code-kb/logs.
 code-kb logs
 
 # Token savings, call counts, and error rates (alias: code-kb telemetry)
@@ -652,7 +671,7 @@ claude --plugin-dir .
 - [**001: Architecture & Service Model**](docs/plans/001-architecture-and-service-model.md) — Multi-project workstation scope, Git worktree deduplication, and RAG vs. AST evaluation.
 - [**002: Workspace Scoping & MCP**](docs/plans/002-workspace-scoping-and-mcp.md) — 1:1 session binding, eliminating workspace registries and `workspace_id` friction.
 - [**003: Tool Catalog & Schema**](docs/plans/003-tool-catalog-and-schema.md) — Historical tool-catalog decisions and token-minimized output formats.
-- [**004: File Synchronization & Watchers**](docs/plans/004-file-synchronization-and-watchers.md) — 3-tier sync: tool-driven updates, JIT staleness guards, and debounced background watching.
+- [**004: File Synchronization & Watchers**](docs/plans/004-file-synchronization-and-watchers.md) — The original 3-tier sync plan: tool-driven updates, JIT staleness guards, and debounced background watching. The tool-driven tier left with the source editing tools; no current tool writes files or manages the index.
 - [**005: Cold-Start Reconciliation**](docs/plans/005-startup-reconciliation.md) — Detecting and reconciling offline edits in under 50ms on startup.
 - [**006: Retrospective Lessons from Miller**](docs/plans/006-lessons-from-miller.md) — Analysis of calibration data, performance ledgers, and traps to avoid.
 - [**010: Master Implementation Plan**](docs/plans/010-master-implementation-plan.md) — The phased engineering roadmap from workspace scaffolding to release.

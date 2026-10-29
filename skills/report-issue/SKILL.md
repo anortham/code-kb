@@ -17,6 +17,8 @@ File a GitHub issue against `anortham/code-kb` with a diagnostic bundle attached
 code-kb bug-report --title "<title>" --description "<what went wrong, expected, reproduction>" --json > <scratch>/bug-report.json
 ```
 
+   If `code-kb` is not on `PATH` (a plugin install), run the same arguments through the plugin launcher: `node <plugin root>/bin/code-kb-launcher.cjs bug-report …`. The plugin root is the folder that holds `skills/`, two folders above this `SKILL.md` file. Or run the cached binary `~/.code-kb/dist/<version>/<target>/package/code-kb` (`code-kb.exe` on Windows) with the same arguments.
+
    The bundle holds the OS, both binary versions, index facts, the last 10 tool errors, and the last 40 log lines. Home directories are masked as `~`. Nothing else is masked: tokens, hostnames, or paths outside the home directory in an error or log line stay as they are.
 3. Write the `markdown_body` field to `<scratch>/bug-report.md`. That file is the only text that gets submitted.
 4. Show the user the whole file, including the error table and the log lines. Ask what must be removed. Wait for the answer. Edit the file, then show it again until the user says it is approved. Do not shorten this step.

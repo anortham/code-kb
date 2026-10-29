@@ -56,65 +56,62 @@
 
   <section class="demo" aria-label="Live example">
     <div class="demo-bar">
-      <span class="demo-file">crates/code-kb-core/src/queries.rs <span class="demo-lines">2,473 lines</span></span>
+      <span class="demo-file">crates/code-kb-core/src/telemetry.rs <span class="demo-lines">2,336 lines</span></span>
       <div class="demo-views" role="tablist" aria-label="Views">
         <button role="tab" aria-selected="true" data-view="whole">Whole file</button>
         <button role="tab" aria-selected="false" data-view="skeleton">file_skeleton</button>
         <button role="tab" aria-selected="false" data-view="context">get_symbol_context</button>
         <button role="tab" aria-selected="false" data-view="blast">blast_radius</button>
       </div>
-      <output class="demo-tokens" id="demo-tokens" aria-live="polite">≈ 25,900 tokens</output>
+      <output class="demo-tokens" id="demo-tokens" aria-live="polite">≈ 20,900 tokens</output>
     </div>
 
-    <pre class="demo-pane" id="pane-file" data-view="whole"><span class="l k" data-n="306">/// Search symbols by name query, kind filter, and test flag.</span><span class="l k" data-n="307">pub fn search_symbols(</span><span class="l k" data-n="308">    conn: &amp;Connection,</span><span class="l k" data-n="309">    query: &amp;str,</span><span class="l k" data-n="310">    kind_filter: Option&lt;&amp;str&gt;,</span><span class="l k" data-n="311">    include_tests: bool,</span><span class="l k" data-n="312">    limit: usize,</span><span class="l k" data-n="313">) -&gt; Result&lt;Vec&lt;Symbol&gt;, QueryError&gt; <b class="open">{</b><b class="fold">{ /* 3 lines hidden: L313-L315 */ }</b></span><div class="body"><div><span class="l" data-n="314">    search_symbols_scoped(conn, query, kind_filter, None, include_tests, limit)</span><span class="l" data-n="315">}</span><span class="l" data-n="316"></span></div></div><span class="l k" data-n="317">/// Search symbols with optional path scoping filter.</span><span class="l k" data-n="318">pub fn search_symbols_scoped(</span><span class="l k" data-n="319">    conn: &amp;Connection,</span><span class="l k" data-n="320">    query: &amp;str,</span><span class="l k" data-n="321">    kind_filter: Option&lt;&amp;str&gt;,</span><span class="l k" data-n="322">    path_filter: Option&lt;&amp;str&gt;,</span><span class="l k" data-n="323">    include_tests: bool,</span><span class="l k" data-n="324">    limit: usize,</span><span class="l k" data-n="325">) -&gt; Result&lt;Vec&lt;Symbol&gt;, QueryError&gt; <b class="open">{</b><b class="fold">{ /* 65 lines hidden: L325-L389 */ }</b></span><div class="body"><div><span class="l" data-n="326">    // Try get_symbol_by_name first for qualified queries (e.g. McpServer::new, Class.method)</span><span class="l" data-n="327">    if (query.contains("::") || query.contains('.'))</span><span class="l" data-n="328">        &amp;&amp; let Ok(Some(sym)) = get_symbol_by_name(conn, query, path_filter)</span><span class="l" data-n="329">    {</span><span class="l" data-n="330">        return Ok(vec![sym]);</span><span class="l" data-n="331">    }</span><span class="l" data-n="332"></span><span class="l" data-n="333">    let kind_filter = kind_filter.map(normalize_kind);</span><span class="l" data-n="334">    let like_query = format!("{}%", escape_like(query));</span><span class="l" data-n="335">    let mut sql = String::from(</span><span class="l" data-n="336">        "SELECT s.id, s.name, s.kind, s.file_path, s.start_line, s.end_line, s.signature</span><span class="l" data-n="337">         FROM symbols s WHERE s.name LIKE ?1 ESCAPE '\\'",</span><span class="l" data-n="338">    );</span><span class="l" data-n="339">    let mut params: Vec&lt;Box&lt;dyn ToSql&gt;&gt; = vec![Box::new(like_query)];</span><span class="l" data-n="340">    if let Some(kind) = kind_filter {</span><span class="l" data-n="341">        sql.push_str(" AND s.kind = ?2");</span><span class="l" data-n="342">        params.push(Box::new(kind));</span><span class="l" data-n="343">    }</span><span class="l elide" data-n="">      ⋮  45 more lines</span><span class="l" data-n="389">}</span><span class="l" data-n="390"></span></div></div><span class="l k" data-n="391">/// Sanitizes a free-form user query into `(and_query, or_query)` formatted for SQLite FTS5.</span><span class="l k" data-n="392">/// Each alphanumeric/underscore token is quoted and given a prefix wildcard: `"token"*`.</span><span class="l k" data-n="393">pub fn sanitize_fts5_query(query: &amp;str) -&gt; (String, String) <b class="open">{</b><b class="fold">{ /* 15 lines hidden: L393-L407 */ }</b></span><div class="body"><div><span class="l" data-n="394">    let words: Vec&lt;String&gt; = query</span><span class="l" data-n="395">        .split(|c: char| !c.is_alphanumeric() &amp;&amp; c != '_')</span><span class="l" data-n="396">        .filter(|s| !s.is_empty())</span><span class="l" data-n="397">        .map(|s| format!("\"{s}\"*"))</span><span class="l" data-n="398">        .collect();</span><span class="l" data-n="399"></span><span class="l" data-n="400">    if words.is_empty() {</span><span class="l" data-n="401">        return (String::new(), String::new());</span><span class="l" data-n="402">    }</span><span class="l" data-n="403"></span><span class="l" data-n="404">    let and_query = words.join(" ");</span><span class="l" data-n="405">    let or_query = words.join(" OR ");</span><span class="l" data-n="406">    (and_query, or_query)</span><span class="l" data-n="407">}</span></div></div><span class="l elide" data-n="">      ⋮  2,066 more lines to the end of the file</span></pre>
+    <pre class="demo-pane" id="pane-file" data-view="whole"><span class="l k" data-n="772">fn sanitize_error_message(msg: &amp;str) -&gt; String <b class="open">{</b><b class="fold">{ /* 4 lines hidden: L772-L775 */ }</b></span><div class="body"><div><span class="l" data-n="773">    let home_candidates = home_candidates();</span><span class="l" data-n="774">    sanitize_error_message_with_homes(msg, &amp;home_candidates)</span><span class="l" data-n="775">}</span><span class="l" data-n="776"></span></div></div><span class="l k" data-n="777">/// Replaces the user's home directory with `~` and keeps everything else, including newlines.</span><span class="l k" data-n="778">fn mask_home_paths(text: &amp;str) -&gt; String <b class="open">{</b><b class="fold">{ /* 3 lines hidden: L778-L780 */ }</b></span><div class="body"><div><span class="l" data-n="779">    mask_home_paths_with(text, &amp;home_candidates())</span><span class="l" data-n="780">}</span><span class="l" data-n="781"></span></div></div><span class="l k" data-n="782">fn home_candidates() -&gt; Vec&lt;String&gt; <b class="open">{</b><b class="fold">{ /* 18 lines hidden: L782-L799 */ }</b></span><div class="body"><div><span class="l" data-n="783">    let mut candidates = Vec::new();</span><span class="l" data-n="784">    for var in ["HOME", "USERPROFILE"] {</span><span class="l" data-n="785">        if let Ok(home) = std::env::var(var)</span><span class="l" data-n="786">            &amp;&amp; !home.trim().is_empty()</span><span class="l" data-n="787">            &amp;&amp; home != "/"</span><span class="l" data-n="788">        {</span><span class="l" data-n="789">            let simplified = dunce::simplified(Path::new(&amp;home))</span><span class="l" data-n="790">                .to_string_lossy()</span><span class="l" data-n="791">                .to_string();</span><span class="l" data-n="792">            if simplified != home {</span><span class="l" data-n="793">                candidates.push(simplified);</span><span class="l" data-n="794">            }</span><span class="l" data-n="795">            candidates.push(home);</span><span class="l" data-n="796">        }</span><span class="l" data-n="797">    }</span><span class="l" data-n="798">    candidates</span><span class="l" data-n="799">}</span><span class="l" data-n="800"></span></div></div><span class="l k" data-n="801">fn mask_home_paths_with(text: &amp;str, home_candidates: &amp;[String]) -&gt; String <b class="open">{</b><b class="fold">{ /* 15 lines hidden: L801-L815 */ }</b></span><div class="body"><div><span class="l" data-n="802">    let mut masked = text.to_string();</span><span class="l" data-n="803">    for home in home_candidates {</span><span class="l" data-n="804">        let norm_home = to_forward_slash(&amp;normalize_path(Path::new(home)));</span><span class="l" data-n="805">        masked = masked.replace(home.as_str(), "~");</span><span class="l" data-n="806">        if norm_home != *home {</span><span class="l" data-n="807">            masked = masked.replace(&amp;norm_home, "~");</span><span class="l" data-n="808">        }</span><span class="l" data-n="809">        let backslash_home = home.replace('/', "\\");</span><span class="l" data-n="810">        if backslash_home != *home {</span><span class="l" data-n="811">            masked = masked.replace(&amp;backslash_home, "~");</span><span class="l" data-n="812">        }</span><span class="l" data-n="813">    }</span><span class="l" data-n="814">    masked</span><span class="l" data-n="815">}</span><span class="l" data-n="816"></span></div></div><span class="l k" data-n="817">fn sanitize_error_message_with_homes(msg: &amp;str, home_candidates: &amp;[String]) -&gt; String <b class="open">{</b><b class="fold">{ /* 20 lines hidden: L817-L836 */ }</b></span><div class="body"><div><span class="l" data-n="818">    let mut sanitized = mask_home_paths_with(msg, home_candidates);</span><span class="l" data-n="819"></span><span class="l" data-n="820">    // Replace newlines with spaces to avoid breaking markdown tables</span><span class="l" data-n="821">    sanitized = sanitized.replace("\r\n", " ").replace(['\n', '\r'], " ");</span><span class="l" data-n="822"></span><span class="l" data-n="823">    // Escape markdown table pipe characters</span><span class="l" data-n="824">    sanitized = sanitized.replace('|', "\\|");</span><span class="l" data-n="825"></span><span class="l" data-n="826">    // Truncate message to 500 characters</span><span class="l" data-n="827">    if sanitized.chars().count() &gt; 500 {</span><span class="l" data-n="828">        let mut truncated: String = sanitized.chars().take(500).collect();</span><span class="l" data-n="829">        if truncated.ends_with('\\') &amp;&amp; !truncated.ends_with("\\\\") {</span><span class="l" data-n="830">            truncated.pop();</span><span class="l" data-n="831">        }</span><span class="l" data-n="832">        truncated</span><span class="l" data-n="833">    } else {</span><span class="l" data-n="834">        sanitized</span><span class="l" data-n="835">    }</span><span class="l" data-n="836">}</span></div></div><span class="l elide" data-n="">      ⋮  1,500 more lines to the end of the file</span></pre>
 
-    <pre class="demo-pane" id="pane-context" data-view="context" hidden>$ code-kb context search_symbols_scoped
+    <pre class="demo-pane" id="pane-context" data-view="context" hidden>$ code-kb context sanitize_error_message
 
-<span class="h">Target</span>  search_symbols_scoped  (crates/code-kb-core/src/queries.rs:318-389)
-<span class="h">Signature</span>
-pub fn search_symbols_scoped(conn: &amp;Connection, query: &amp;str, kind_filter: Option&lt;&amp;str&gt;,
-    path_filter: Option&lt;&amp;str&gt;, include_tests: bool, limit: usize) -&gt; Result&lt;Vec&lt;Symbol&gt;, QueryError&gt;
+<span class="h">### Target: `sanitize_error_message` (crates/code-kb-core/src/telemetry.rs:772-775)</span>
 
-<span class="h">Body</span>
-{
-    if (query.contains("::") || query.contains('.'))
-        &amp;&amp; let Ok(Some(sym)) = get_symbol_by_name(conn, query, path_filter)
-    {
-        return Ok(vec![sym]);
-    }
-    let kind_filter = kind_filter.map(normalize_kind);
-    let like_query = format!("{}%", escape_like(query));
-    ⋮  the full body, 65 lines
+Signature: `fn sanitize_error_message(msg: &amp;str) -&gt; String`
+
+```rust
+fn sanitize_error_message(msg: &amp;str) -&gt; String {
+    let home_candidates = home_candidates();
+    sanitize_error_message_with_homes(msg, &amp;home_candidates)
 }
+```
 
-<span class="h">Dependencies (signatures only)</span>
-- pub fn get_symbol_by_name(conn: &amp;Connection, name: &amp;str, path_filter: Option&lt;&amp;str&gt;)
-      -&gt; Result&lt;Option&lt;Symbol&gt;, QueryError&gt;   (queries.rs:685)
-- pub fn normalize_kind(kind: &amp;str) -&gt; String   (queries.rs:288)
-- pub(crate) fn escape_like(value: &amp;str) -&gt; String   (queries.rs:69)
+<span class="h">### Dependencies (Signatures):</span>
+- fn sanitize_error_message_with_homes(msg: &amp;str, home_candidates: &amp;[String]) -&gt; String (crates/code-kb-core/src/telemetry.rs:817)
+- fn home_candidates() -&gt; Vec&lt;String&gt; (crates/code-kb-core/src/telemetry.rs:782)
 
-<span class="h">Related tests</span>
-- search_symbols_treats_like_wildcards_as_literals   (queries.rs:2003)</pre>
+<span class="h">### Related Tests:</span>
+No related test was found in the index; blast_radius may find tests through callers.</pre>
 
-    <pre class="demo-pane" id="pane-blast" data-view="blast" hidden>$ code-kb blast-radius sanitize_fts5_query
+    <pre class="demo-pane" id="pane-blast" data-view="blast" hidden>$ code-kb blast-radius mask_home_paths_with
 
-<span class="h">Likely tests to run (2)</span>
-crates/code-kb-core/src/queries.rs
-  - test_sanitize_fts5_query                          line 1988   caller, depth 1
-  - test_fts_search_symbols_and_porter_stemming       line 2095   caller, depth 2
+<span class="h">## Blast Radius &amp; Test Impact (Symbol: mask_home_paths_with)</span>
 
-<span class="h">Downstream impact (5 symbols)</span>
-crates/code-kb-core/src/queries.rs
-  - depth 1  fn find_related_tests                    line 579
-  - depth 1  fn fts_search_symbols_scoped             line 410
-crates/code-kb-core/src/ops.rs
-  - depth 2  fn get_context_slice_op                  line 103
-crates/code-kb-cli/src/mcp/server.rs
-  - depth 2  method handle_call_tool_inner            line 569
-crates/code-kb-cli/src/main.rs
-  - depth 2  fn main                                  line 278
+<span class="h">### Likely Tests to Run (1 returned)</span>
+crates/code-kb-core/src/telemetry.rs:
+  - `test_bug_report_sanitization_and_no_external_exec` [line 2021] (indirect caller [depth 2])
+The walk stopped at depth 2. A `depth` of 5 lists 11 more tests.
 
-$ cargo test test_sanitize_fts5_query && cargo test test_fts_search_symbols_and_porter_stemming</pre>
+<span class="h">### Open Ends</span>
+No indexed code calls these symbols, so the walk stopped at them. The runtime, a framework, a library, or a call that the index cannot tie calls them. The list above does not show the tests that reach the target through them:
+  - function `main` (crates/code-kb-cli/src/main.rs:352)
+
+<span class="h">### Downstream Impact (5 returned)</span>
+crates/code-kb-core/src/telemetry.rs:
+  - [depth 1] function `mask_home_paths` [line 778]
+  - [depth 1] function `sanitize_error_message_with_homes` [line 817]
+  - [depth 2] function `generate_bug_report` [line 903]
+  - [depth 2] function `log_tail` [line 865]
+  - [depth 2] function `sanitize_error_message` [line 772]
+
+<span class="h">### Broader Test Scope</span>
+Broader scope: full project test suite.
+No supported runner configuration was found for every reported path; run the full suite manually.</pre>
     <p class="demo-note">Example output from this repository. Token estimates use one token per four bytes.</p>
   </section>
 
@@ -125,28 +122,28 @@ $ cargo test test_sanitize_fts5_query && cargo test test_fts_search_symbols_and_
       <div class="section-body">
         <h2>Reading a whole file adds up</h2>
         <p>
-          Reading this 2,473-line file to find one function signature adds about 26,000 tokens
+          Reading this 2,336-line file to find one function signature adds about 21,000 tokens
           to the conversation. That leaves less room for the task and earlier decisions.
           code-kb can show the signature or the function's context on its own.
         </p>
         <div class="ledger">
           <div class="ledger-col">
             <h3>Read the file</h3>
-            <pre>cat crates/code-kb-core/src/queries.rs</pre>
+            <pre>cat crates/code-kb-core/src/telemetry.rs</pre>
             <dl>
-              <dt>Lines</dt><dd>2,473</dd>
-              <dt>Tokens</dt><dd>≈ 25,900</dd>
+              <dt>Lines</dt><dd>2,336</dd>
+              <dt>Tokens</dt><dd>≈ 20,900</dd>
               <dt>Needed</dt><dd>one signature</dd>
             </dl>
           </div>
           <div class="ledger-col kept">
             <h3>Ask code-kb</h3>
-            <pre>file_skeleton("queries.rs")
-get_symbol_context("search_symbols_scoped")</pre>
+            <pre>file_skeleton("telemetry.rs")
+get_symbol_context("sanitize_error_message")</pre>
             <dl>
-              <dt>Skeleton</dt><dd>≈ 1,800 tokens, 93% less</dd>
-              <dt>Context slice</dt><dd>≈ 780 tokens, 97% less</dd>
-              <dt>Query time</dt><dd>2 ms</dd>
+              <dt>Skeleton</dt><dd>≈ 2,400 tokens, 88% less</dd>
+              <dt>Context slice</dt><dd>≈ 170 tokens, 99% less</dd>
+              <dt>Query time</dt><dd>3 ms skeleton, 69 ms context</dd>
             </dl>
           </div>
         </div>
@@ -188,7 +185,7 @@ get_symbol_context("search_symbols_scoped")</pre>
           </div>
           <div>
             <dt>Structural facts</dt>
-            <dd><a href="#languages">Find routes, queries, config keys, and more</a> alongside symbols. See which categories are indexed in your repository.</dd>
+            <dd><a href="#languages">Find routes, queries, config keys, and more</a> with the <code>code-kb facts</code> command. It lists the categories indexed in your repository.</dd>
           </div>
           <div>
             <dt>Agent hooks</dt>
@@ -202,7 +199,7 @@ get_symbol_context("search_symbols_scoped")</pre>
       <p class="margin-label">Languages</p>
       <div class="section-body">
         <h2>42 supported languages</h2>
-        <p>The bundled <code>julie-extract</code> 3.6.2 indexes these languages and file formats. What it can extract varies by language.</p>
+        <p>The bundled <code>julie-extract</code> 3.9.1 indexes these languages and file formats. What it can extract varies by language.</p>
         <dl class="features">
           <div>
             <dt>Code and scripts</dt>
@@ -219,7 +216,7 @@ get_symbol_context("search_symbols_scoped")</pre>
         </dl>
         <div class="note">
           <h3>Find more than names</h3>
-          <p>Structural facts are indexed details beyond symbol names. Examples include Express and FastAPI routes, SQL statements, TOML keys, Go module dependencies, and QML bindings. Run <code>code-kb facts</code> to see the categories found in your repository, or <code>code-kb facts route</code> to list routes. See the extractor's <a href="https://github.com/anortham/julie-extractors/blob/v3.6.2/README.md#supported-languages" target="_blank" rel="noopener">supported-language list</a> for more detail.</p>
+          <p>Structural facts are indexed details beyond symbol names. Examples include Express and FastAPI routes, SQL statements, TOML keys, Go module dependencies, and QML bindings. Run <code>code-kb facts</code> to see the categories found in your repository, or <code>code-kb facts route</code> to list routes. See the extractor's <a href="https://github.com/anortham/julie-extractors/blob/v3.9.1/README.md#supported-languages" target="_blank" rel="noopener">supported-language list</a> for more detail.</p>
         </div>
       </div>
     </section>
@@ -345,7 +342,7 @@ code-kb stats</pre>
       <div class="section-body">
         <h2>Seven tools, each with a matching command</h2>
         <p>Every MCP tool has a one-to-one CLI command, so you can check any answer from the terminal.</p>
-        <p>Every tool also requires <code>project_root</code>, the absolute path of the project or git worktree you work in. The CLI takes the same value as <code>--root</code>, which defaults to the current directory.</p>
+        <p>Every tool also requires <code>project_root</code>, the absolute path of the project or git worktree you work in. The Accepts column lists the other parameters. The CLI takes the same value as <code>--root</code>, which defaults to the current directory.</p>
         <div class="table-wrapper">
           <table class="tool-table">
             <thead>
@@ -357,17 +354,17 @@ code-kb stats</pre>
               </tr>
             </thead>
             <tbody>
-              <tr><td><code>file_skeleton</code></td><td><code>code-kb skeleton &lt;file&gt;</code><br>or <code>code-kb outline [path]</code> for a folder</td><td>File outline, bodies removed; a folder returns its layout</td><td><code>file_path</code></td></tr>
-              <tr><td><code>lookup_symbol</code></td><td><code>code-kb lookup &lt;query&gt;</code></td><td>Name, prefix, or concept; a query that names no symbol exactly also gets ranked matches; each result row includes <code>id=&lt;symbol_id&gt;</code></td><td><code>query</code>, <code>path</code></td></tr>
+              <tr><td><code>file_skeleton</code></td><td><code>code-kb skeleton &lt;file&gt;</code><br>or <code>code-kb outline [path]</code> for a folder</td><td>File outline, bodies removed; a folder returns its layout</td><td><code>file_path</code> (a file or a folder)</td></tr>
+              <tr><td><code>lookup_symbol</code></td><td><code>code-kb lookup &lt;query&gt;</code></td><td>Name, prefix, or concept; a query that names no symbol exactly also gets ranked matches; each result row includes <code>id=&lt;symbol_id&gt;</code></td><td><code>query</code>, <code>path</code>, <code>kind</code>, <code>is_test</code>, <code>limit</code></td></tr>
               <tr><td><code>get_symbol_body</code></td><td><code>code-kb body [symbol]</code><br>or <code>code-kb body --symbol-id &lt;id&gt;</code></td><td>Source of one symbol</td><td><code>symbol_name</code> or <code>symbol_id</code>, <code>file_path</code></td></tr>
-              <tr><td><code>get_symbol_context</code></td><td><code>code-kb context [symbol]</code><br>or <code>code-kb context --symbol-id &lt;id&gt;</code></td><td>Body, callee signatures, types, tests</td><td><code>symbol_name</code> or <code>symbol_id</code>, <code>file_path</code></td></tr>
-              <tr><td><code>find_references</code></td><td><code>code-kb refs [symbol]</code><br>or <code>code-kb refs --symbol-id &lt;id&gt;</code></td><td>Callers or callees, stdlib filtered</td><td><code>symbol_name</code> or <code>symbol_id</code>, <code>direction</code> (default <code>callers</code>)</td></tr>
-              <tr><td><code>blast_radius</code></td><td><code>code-kb blast-radius [target]</code><br>or <code>code-kb blast-radius --symbol-id &lt;id&gt;</code></td><td>Multi-hop callers and tests to run</td><td><code>symbol</code>, <code>symbol_id</code>, <code>file</code>; omitted target reads git changes</td></tr>
-              <tr><td><code>check_edit</code></td><td><code>code-kb check [--base REV]</code></td><td>After you edit: the symbols whose shape changed, and every site of each that your diff did not reach</td><td><code>base</code> (default: the session base, else <code>HEAD</code>)</td></tr>
+              <tr><td><code>get_symbol_context</code></td><td><code>code-kb context [symbol]</code><br>or <code>code-kb context --symbol-id &lt;id&gt;</code></td><td>Body, callee signatures, types, tests</td><td><code>symbol_name</code> or <code>symbol_id</code>, <code>file_path</code>, <code>include_external</code></td></tr>
+              <tr><td><code>find_references</code></td><td><code>code-kb refs [symbol]</code><br>or <code>code-kb refs --symbol-id &lt;id&gt;</code></td><td>Callers with each site labeled by its evidence, or callees with stdlib calls filtered</td><td><code>symbol_name</code> or <code>symbol_id</code>, <code>file_path</code>, <code>direction</code> (default <code>callers</code>), <code>include_external</code>, <code>offset</code>, <code>limit</code></td></tr>
+              <tr><td><code>blast_radius</code></td><td><code>code-kb blast-radius [symbol]</code><br>or <code>code-kb blast-radius --symbol-id &lt;id&gt;</code><br>or <code>code-kb blast-radius --file &lt;file&gt;</code></td><td>Multi-hop callers and tests to run</td><td><code>symbol</code>, <code>symbol_id</code>, or <code>file</code> (omitted target reads git changes), <code>depth</code> (default 2), <code>include_low_signal</code>, <code>offset</code>, <code>limit</code></td></tr>
+              <tr><td><code>check_edit</code></td><td><code>code-kb check [--base REV]</code></td><td>After you edit: the symbols whose shape changed, and every site of each that your diff did not reach</td><td><code>base</code> (default: the session base, else <code>HEAD</code>), <code>offset</code>, <code>limit</code></td></tr>
             </tbody>
           </table>
         </div>
-        <p>Four query commands have no MCP tool: <code>code-kb outline [path]</code> prints a folder's layout, which <code>file_skeleton</code> on a folder also returns, <code>code-kb search &lt;query&gt;</code> prints the ranked search with its score breakdown, <code>code-kb facts [category]</code> lists routes, queries, models, and config keys, and <code>code-kb stats</code> reports token savings and tool errors.</p>
+        <p>Four query commands have no MCP tool: <code>code-kb outline [path]</code> prints a folder's layout, which <code>file_skeleton</code> on a folder also returns, <code>code-kb search &lt;query&gt;</code> prints the ranked search with each row's score (<code>--explain</code> adds the score breakdown), <code>code-kb facts [category]</code> lists routes, queries, models, and config keys, and <code>code-kb stats</code> reports token savings and tool errors.</p>
       </div>
     </section>
 
@@ -490,6 +487,14 @@ grok plugin install /path/to/code-kb --trust</code></pre>
 codex plugin add code-kb@code-kb</code></pre>
             <button class="copy-btn" type="button">Copy</button>
           </div>
+          <p class="panel-sub">Run <code>codex</code>, open <code>/hooks</code>, and trust the four code-kb hooks.</p>
+          <p class="panel-sub">To update, refresh the marketplace snapshot first. <code>codex plugin remove</code> followed by <code>codex plugin add</code> reinstalls the version already in the snapshot:</p>
+          <div class="code-wrapper">
+            <pre><code>codex plugin marketplace upgrade
+codex plugin remove code-kb@code-kb
+codex plugin add code-kb@code-kb</code></pre>
+            <button class="copy-btn" type="button">Copy</button>
+          </div>
           <p class="panel-sub">Or by hand, in <code>~/.codex/config.toml</code>:</p>
           <div class="code-wrapper">
             <pre><code>[mcp_servers.code-kb]
@@ -523,7 +528,7 @@ code-kb hook PreInvocation
 code-kb hook Stop
 code-kb hook SubagentStop
 
-# hooks/claude-codex-hooks.json wires all four:
+# Manual equivalent of the plugin's hooks/claude-codex-hooks.json (code-kb on PATH):
 {
   "hooks": {
     "SessionStart": [
@@ -562,17 +567,17 @@ code-kb hook SubagentStop
     <p>
       <a href="https://github.com/anortham/code-kb" target="_blank" rel="noopener">Source on GitHub</a>,
       symbols extracted by <a href="https://github.com/anortham/julie-extractors" target="_blank" rel="noopener">julie-extractors</a>,
-      <a href="https://github.com/anortham/code-kb/blob/main/docs/RELEASING.md" target="_blank" rel="noopener">release notes</a>.
+      <a href="https://github.com/anortham/code-kb/releases" target="_blank" rel="noopener">release notes</a>.
     </p>
   </footer>
 
   <script>
     const demo = document.querySelector('.demo');
     const tokens = {
-      whole: '≈ 25,900 tokens',
-      skeleton: '≈ 1,800 tokens, 93% less',
-      context: '≈ 780 tokens, 97% less',
-      blast: '≈ 260 tokens'
+      whole: '≈ 20,900 tokens',
+      skeleton: '≈ 2,400 tokens, 88% less',
+      context: '≈ 170 tokens, 99% less',
+      blast: '≈ 280 tokens'
     };
 
     function showView(view) {

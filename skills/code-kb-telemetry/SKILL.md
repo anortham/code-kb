@@ -12,10 +12,12 @@ Summarize code-kb tool usage, token savings, and recent errors from `~/.code-kb/
 
 1. Read the arguments: an optional time window (`today`, `7d`, `30d`, `month`, `year`, `all`) and the optional word `workspace`. The window defaults to `all`. The word `workspace` adds `--workspace`; otherwise report all workspaces. `--workspace` scopes the report to the project of the current folder.
 2. Run `code-kb stats --since <window> --version all [--workspace]` in the project folder. Without `--version`, the report counts only the running code-kb version, so a window that spans a release counts too few calls. Pass one version, such as `--version 2.5.1`, only when the user asks about that version.
+   If `code-kb` is not on `PATH` (a plugin install), run the same arguments through the plugin launcher: `node <plugin root>/bin/code-kb-launcher.cjs stats --since <window> --version all [--workspace]`. The plugin root is the folder that holds `skills/`, two folders above this `SKILL.md` file. Or run the cached binary `~/.code-kb/dist/<version>/<target>/package/code-kb` (`code-kb.exe` on Windows) with the same arguments.
 3. Reply in this shape:
    - First line: scope, window, total calls, success rate, tokens served, tokens saved with its coverage.
    - Then only what needs attention: tools under 95% success, errors that repeat, calls to tool names that do not exist.
    - Skip tools with nothing notable. Do not paste the whole table.
+   - Rows for `search_symbols`, `codebase_outline`, `find_structural_facts`, and `telemetry_summary` are calls made before these tools were removed from MCP (now `lookup_symbol`, `file_skeleton` on a folder, CLI `facts`, and CLI `stats`). Do not report them as current tools or as calls to tool names that do not exist.
 4. Report tokens saved with the coverage figure beside it. The header reads `Tokens Saved, upper bound: ~N (baseline known for K of M calls; ...)`, and each tool row reads `~N (K/M)`. Never quote the number without the coverage.
 5. End with the command you ran so the user can repeat it:
 

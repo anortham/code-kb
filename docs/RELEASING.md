@@ -23,7 +23,9 @@ bundling Julie 3.9.1. See the [release notes](release-notes/v2.10.0.md) and the
   2. **Crates.io:** Library crate `code-kb-core` followed by CLI crate `code-kb-cli`.
 - **Pre-flight Invariants:**
   - `AGENTS.md` and `CLAUDE.md` must stay byte-for-byte identical (`cmp AGENTS.md CLAUDE.md`).
-  - No `workspace` parameter exposed in any MCP tool schema (`mcp_test.rs`).
+  - Every MCP tool schema requires `project_root`, and no schema exposes `workspace`,
+    `workspace_id`, `repo_path`, or `root_dir` (`mcp_test.rs`, `adversarial_m2_server_test.rs`,
+    `adversarial_m3_server_test.rs`).
   - Retained memory about 25–40 MB (50–60 MB after a large callers report), measured on a live
     `serve` process.
   - Windows NTFS compatibility validated via `win-test` or CI.
@@ -196,7 +198,10 @@ When bumping to version `X.Y.Z` (e.g. `0.5.0`):
 - **`.github/workflows/release-binaries.yml`**:
   Update default version input to `"X.Y.Z"`.
 - **`docs/site/index.html`**: the version badge in the nav (`<span class="version">vX.Y.Z</span>`)
-  and the cache-busting query on the stylesheet link (`style.css?v=X.Y.Z`).
+  and the cache-busting query on the stylesheet link (`style.css?v=X.Y.Z`). When the
+  `julie-extract` pin in `scripts/julie-pins.json` changes, also update the extractor version in
+  the languages section (`The bundled <code>julie-extract</code> A.B.C indexes …`) and its
+  link to `julie-extractors/blob/vA.B.C/README.md#supported-languages`.
 
 ### 2. Synchronize Lockfile
 ```bash
@@ -207,7 +212,7 @@ cargo check --workspace --all-targets
 Draft comprehensive markdown release notes at `docs/release-notes/vX.Y.Z.md`:
 - **Highlights & Summary:** Key theme of the release.
 - **What's Changed / New Features:** Architectural, performance, and tooling capabilities.
-- **Ergonomics & Invariants:** Agent UX improvements (parameter aliases, zero-workspace adherence).
+- **Ergonomics & Invariants:** Agent UX improvements (parameter aliases, required `project_root` adherence).
 - **Bug Fixes:** Defect resolutions and test isolation updates.
 - **Assets & Checksums:** Table of artifact archives and their SHA256 hashes.
 

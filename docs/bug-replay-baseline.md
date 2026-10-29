@@ -9,7 +9,7 @@ binaries on 2026-10-22, all with julie-extract 3.9.1:
   reports (binary `35231489`).
 
 The truth is 96 bugs that broke at least one test: cobra 39 (22 dev, 17 holdout), express 31
-(15, 16), and flask 26 (10, 16). Each answer is `blast_radius --json --limit 200` at the default
+(15, 16), and flask 26 (10, 16). Each answer is `code-kb blast-radius --json --limit 200` at the default
 depth, 2. The symbol seed is the function around the bug; the diff seed is the uncommitted bug.
 
 ## Marks

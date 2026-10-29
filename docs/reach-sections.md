@@ -280,9 +280,9 @@ parameter `list_users` of another function in the file does not either. Rows tie
 in a section uses `/`. The query skips through the distinct route pattern ids instead of
 scanning the facts.
 
-## Tests that call it
+## Tests that call or use it
 
-`Tests that call it (N):` rows are ``- `test` [path:line] run: command``, by path and line,
+`Tests that call or use it (N):` rows are ``- `test` [path:line] run: command``, by path and line,
 without ` run: …` when no command is known. The text row writes each control character of a
 test name as an escape (`\n`, `\t`); JSON and the site rows keep the name as it is. A row
 shows ` (name only)` before ` run:` when only `likely` sites with the basis `name only` tie the
