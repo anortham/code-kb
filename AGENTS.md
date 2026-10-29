@@ -568,8 +568,13 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   Scala, C#, C++, Swift, and VB.NET: each overload's own count range (a method's widened by the
   methods of its name in the base types), Kotlin and Scala `arg_names`, Swift `arg_labels`, and
   `arg_types`. A type rules an overload out only by a certain Java or Kotlin rule (`int` never
-  fills `String`); an overload whose parameter types equal the argument types binds alone, in
-  Kotlin only when no other fitting overload takes a null that it does not. A Swift argument
+  fills `String`); an overload whose parameter types name the argument types binds alone. Two
+  written types are compared by the type they name (`type_names.rs`): `App.Box` and `Box` can
+  name one type, and a simple name of two project types decides only through the imports,
+  package, or namespaces that the index records. Where julie writes a Kotlin, C#, or Swift
+  nullable value without its marker, the call binds the exact overload or one that takes that
+  value. A C# `dynamic` argument binds at run time; a VB.NET `Object` argument binds an
+  `Object` overload. A Swift argument
   with no label and no type can be a trailing closure, so it can fill a labeled parameter that
   can take a closure. A site of any label whose call binds only other overloads is `excluded`:
   ``arguments `(String)` bind only `run(String)` ``, and that basis wins over another exclusion

@@ -91,7 +91,7 @@ The facts and what each one rules out:
   conversion (a C++ `short` that promotes to `int`, a VB.NET `Integer` that
   widens to `Long`).
 
-An exact match decides alone. When every argument type equals the parameter
+An exact match decides alone. When every argument type names the parameter
 type it fills, and every parameter the call leaves out has a default value, the
 overload is exact. The language picks the one exact overload over every other
 overload the call fits, so the call binds only it: every one of these
@@ -105,29 +105,43 @@ without a default and then wins.
 julie writes some nullable arguments without their marker: `Int` for a Kotlin
 `Int?` value, `int` for a C# `int?` value (a local, a field, a property, or a
 parameter; only a cast keeps `int?`), `Pt` for a C# `Pt?` value, and `Int` for
-a Swift `Int!` value. So in these languages the exact overload decides only
-when no other fitting overload takes the nullable value where it does not:
+a Swift `Int!` value. So in these languages a call whose exact overload cannot
+take the nullable value binds that exact overload or another fitting overload
+that takes the nullable value. Every other overload stays excluded, because the
+call binds it neither with the value nor with the nullable value:
 
 - Kotlin: a parameter written with `?`, a type parameter, or a parameter with
   no type fact takes it; every other Kotlin parameter does not.
 - C#: an exact parameter can hide a nullable value unless its type is a
-  reference type (`string`, `object`, `dynamic`, an array, or a name that the
-  index defines only as a class, an interface, or a delegate). Every other
-  parameter takes the nullable value (it boxes to `object` and to an interface,
-  a generic type parameter takes it, and a user-defined conversion can take it)
-  except a value keyword (`int`, `double`, and the others), `string`, and an
-  array.
+  reference type: `string`, `object`, `dynamic`, an array, a name that the
+  index defines only as a class, an interface, or a delegate, or a name that
+  the index does not define and that names a .NET framework class or interface
+  (`Uri`, `Type`, `Stream`, `List`, `IEnumerable`, a name that ends in
+  `Exception` or `Attribute`, and the others in `CSHARP_FRAMEWORK_REFERENCES`).
+  Every other parameter takes the nullable value (it boxes to `object` and to
+  an interface, a generic type parameter takes it, and a user-defined
+  conversion can take it) except a value keyword (`int`, `double`, and the
+  others), `string`, an array, a framework class of that list, and the value
+  type of the exact parameter itself (`int?` never converts to `int`, and an
+  enum `Mode?` never to `Mode`).
 - Swift: an exact parameter that is not optional can hide an `Int!` value. A
   parameter written with `?` or `!`, a type parameter, or a type that is not a
   built-in value type or an array takes it.
 
 So `Nul(local)` with `int? local` keeps `Nul(int?)` beside `Nul(int)`, and
-`B(box)` with `Box? box` still binds only `B(Box)` over `B(object)` when `Box`
-is a class. The class test reads the simple name, so a struct outside the
-index with the name of a project class (`System.Drawing.Color` beside a project
-`class Color`) reads as a class. A C# `dynamic` argument and a VB.NET `Object` argument bind at run
-time (VB.NET late binding when `Option Strict` is off), so no overload is exact
-for such a call.
+`Lit(x)` with `int x` binds `Lit(int)` or `Lit(int?)` but never `Lit(long)`
+or `Lit(Uri)`. `B(box)` with `Box? box` still binds only `B(Box)` over
+`B(object)` when `Box` is a class, and `Ext(u)` with `Uri? u` binds only
+`Ext(Uri)` over `Ext(Uri?, int extra = 0)`. The class test reads the simple
+name, so a struct outside the index with the name of a project class
+(`System.Drawing.Color` beside a project `class Color`) reads as a class. A C#
+`dynamic` argument binds at run time, so no overload is exact for such a call.
+A VB.NET `Object` argument does not make a call late-bound when an overload
+takes `Object` there: overload resolution drops every overload that needs a
+narrowing conversion, whether `Option Strict` is on or off, so `Run(o)` with
+`o As Object` binds only `Run(Object)` beside `Run(String)`. The call binds
+late only when every overload needs a narrowing conversion from `Object`
+(`Take(Integer)` and `Take(String)`), and then it keeps every overload it fits.
 
 A type is compared by its written name without type arguments, whitespace, or
 a Kotlin trailing `?`, and without the language package (`java.lang.`,
@@ -147,6 +161,45 @@ parameter, since julie's type facts drop the `const` of `const char*` and the
 have no type to compare. julie writes null for a C# named, `ref`, `out`, or
 `in` argument and writes no types for a VB.NET call with a named argument
 (`Run(a:=1)`).
+
+Two types whose names differ without their qualifiers are different types.
+Otherwise `reference_report/type_names.rs` compares the types the names name,
+since a qualified name and a simple name can name one type (`App.Box` and
+`Box`), and one simple name can name two project types (`a.Node` and
+`b.Node`). Equal text names one type when the index has at most one project
+type of the name; rows with one dotted name (a partial type, a C++
+declaration and its definition) are one type, except in Swift, where the index
+names no module. Else the argument type is read in the caller's file and the
+parameter type in the overload's file, and they are the same type, different
+types, or unknown:
+
+- A qualified name names the one project type whose namespaces or package and
+  enclosing types end with it.
+- A simple Java, Kotlin, or Scala name names a type of the file, or the type
+  that an import of the name writes (`import a.Node`), else the one type of
+  the file's package, else the one type of a
+  package that a star import names. An import of a type that the index does not
+  have names a type outside the project.
+- A simple C# name names the one type of the innermost namespace that holds the
+  code and has such a type, else the one type of a namespace that a `using` of
+  the file or a `global using` opens.
+- Every other case is unknown: a type nested in another type or in a function
+  (an inherited nested type can take the name), a `using` alias of the name, a
+  `using` inside a namespace block that opens such a namespace, an MSBuild
+  `<Using>` item, a Kotlin import alias of the name (`import a.Other as
+  Node`), a Scala import with selectors, a static import, and every
+  simple C++, Swift, and VB.NET name of two project types.
+
+An unknown pair is neither exact nor a known difference, so the call keeps
+every overload it fits. So `R(b)` with `Box b` in namespace `App` binds
+`R(App.Box)` over `R(Box b, int extra = 0)`, and `take(other)` with `b.Node
+other` keeps `take(Object)` beside `take(a.Node)`, while a call that passes an
+`a.Node` binds only `take(Node)`.
+
+A call written on the line of its caller's definition (`string Parse(string
+json) { return Parse(json, null); }`) gets these checks too. The call
+identifier on that line is no site of its own, but it gives its argument facts
+to the call row of its line.
 
 A constructor's overloads also include the primary constructor of a Kotlin,
 Scala, or C# class, and an overload with unknown parameters when the index

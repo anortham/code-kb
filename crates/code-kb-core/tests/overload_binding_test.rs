@@ -1005,26 +1005,337 @@ fn a_vbnet_call_binds_by_types_and_keeps_named_arguments_and_unknown_types() {
     );
 }
 
+const VBNET_LATE: &str = "Public Class Late\n    Public Function Run(a As Object) As Integer\n        Return 1\n    End Function\n    Public Function Run(a As String) As Integer\n        Return 2\n    End Function\n    Public Function Take(a As Integer) As Integer\n        Return 1\n    End Function\n    Public Function Take(a As String) As Integer\n        Return 2\n    End Function\n    Public Function Go(o As Object, s As String) As Integer\n        Run(o)\n        Run(s)\n        Run(Nothing)\n        Take(o)\n        Return 0\n    End Function\nEnd Class\n";
+
 #[test]
-fn a_vbnet_object_argument_binds_late_and_keeps_every_overload_it_fits() {
+fn a_vbnet_object_argument_binds_the_object_overload_and_binds_late_only_without_one() {
     let path = "src/Late.vb";
-    let repo = scanned_repo(&[(
-        path,
-        "Public Class Late\n    Public Function Run(a As Object) As Integer\n        Return 1\n    End Function\n    Public Function Run(a As String) As Integer\n        Return 2\n    End Function\n    Public Function Go(o As Object, s As String) As Integer\n        Run(o)\n        Run(s)\n        Run(Nothing)\n        Return 0\n    End Function\nEnd Class\n",
-    )]);
+    let repo = scanned_repo(&[(path, VBNET_LATE)]);
+    let line = |needle| line_of(&repo, path, needle);
     let by_object = report_of(&repo, "Run", path, 0);
     let by_string = report_of(&repo, "Run", path, 1);
-    for line in [9, 11] {
-        assert_kept(&by_object, path, line);
-        assert_kept(&by_string, path, line);
-    }
-    assert_kept(&by_string, path, 10);
+    assert_kept(&by_object, path, line("Run(o)"));
+    assert_excluded(
+        &by_string,
+        path,
+        line("Run(o)"),
+        "arguments `(Object)` bind only `Run(Object)`",
+    );
+    assert_kept(&by_string, path, line("Run(s)"));
     assert_excluded(
         &by_object,
         path,
-        10,
+        line("Run(s)"),
         "arguments `(String)` bind only `Run(String)`",
     );
+    assert_kept(&by_object, path, line("Run(Nothing)"));
+    assert_kept(&by_string, path, line("Run(Nothing)"));
+    for nth in [0, 1] {
+        assert_kept(&report_of(&repo, "Take", path, nth), path, line("Take(o)"));
+    }
+}
+
+const CSHARP_NEVER_NULL_OV: &str = "using System;\nnamespace App {\n    public enum Mode { A, B }\n    public static class Lib {\n        public static void Lit(int x) { }\n        public static void Lit(long x) { }\n        public static void Lit(int? x) { }\n        public static void Lit(Uri u) { }\n        public static void Lit(IComparable c) { }\n        public static void Ext(Uri u) { }\n        public static void Ext(Uri? u, int extra = 0) { }\n        public static void Md(Mode m) { }\n        public static void Md(Mode m, int extra = 0) { }\n        public static void Ob(int x) { }\n        public static void Ob(object x) { }\n    }\n}\n";
+const CSHARP_NEVER_NULL_USE: &str = "#nullable enable\nusing System;\nnamespace App {\n    public class Use {\n        public void Go(Uri? maybe, Mode m) {\n            int x = 7;\n            Lib.Lit(x);\n            Lib.Ext(maybe);\n            Lib.Md(m);\n            Lib.Ob(x);\n        }\n    }\n}\n";
+
+#[test]
+fn a_csharp_overload_that_cannot_take_the_hidden_nullable_value_stays_excluded() {
+    let repo = scanned_repo(&[
+        ("Lib.cs", CSHARP_NEVER_NULL_OV),
+        ("Use.cs", CSHARP_NEVER_NULL_USE),
+    ]);
+    let path = "Use.cs";
+    let line = |needle| line_of(&repo, path, needle);
+    for nth in [0, 2, 4] {
+        assert_kept(
+            &report_of(&repo, "Lit", "Lib.cs", nth),
+            path,
+            line("Lib.Lit(x)"),
+        );
+    }
+    for nth in [1, 3] {
+        assert_excluded(
+            &report_of(&repo, "Lit", "Lib.cs", nth),
+            path,
+            line("Lib.Lit(x)"),
+            "arguments `(int)` bind only `Lit(int)`, `Lit(int?)`, or 1 more",
+        );
+    }
+
+    assert_kept(
+        &report_of(&repo, "Ext", "Lib.cs", 0),
+        path,
+        line("Lib.Ext(maybe)"),
+    );
+    assert_excluded(
+        &report_of(&repo, "Ext", "Lib.cs", 1),
+        path,
+        line("Lib.Ext(maybe)"),
+        "arguments `(Uri)` bind only `Ext(Uri)`",
+    );
+
+    assert_kept(
+        &report_of(&repo, "Md", "Lib.cs", 0),
+        path,
+        line("Lib.Md(m)"),
+    );
+    assert_excluded(
+        &report_of(&repo, "Md", "Lib.cs", 1),
+        path,
+        line("Lib.Md(m)"),
+        "arguments `(Mode)` bind only `Md(Mode)`",
+    );
+
+    for nth in [0, 1] {
+        assert_kept(
+            &report_of(&repo, "Ob", "Lib.cs", nth),
+            path,
+            line("Lib.Ob(x)"),
+        );
+    }
+}
+
+#[test]
+fn a_qualified_and_a_simple_name_of_one_type_never_bind_the_overload_with_a_default() {
+    let csharp = scanned_repo(&[(
+        "Lib.cs",
+        "namespace App {\n    public class Box { }\n    public static class Lib {\n        public static void R(App.Box b) { }\n        public static void R(Box b, int extra = 0) { }\n    }\n    public class Use {\n        public void Go(Box b) {\n            Lib.R(b);\n        }\n    }\n}\n",
+    )]);
+    let call = line_of(&csharp, "Lib.cs", "Lib.R(b)");
+    assert_kept(&report_of(&csharp, "R", "Lib.cs", 0), "Lib.cs", call);
+    assert_excluded(
+        &report_of(&csharp, "R", "Lib.cs", 1),
+        "Lib.cs",
+        call,
+        "arguments `(Box)` bind only `R(App.Box)`",
+    );
+
+    let cases = [
+        (
+            "src/ov.cpp",
+            "put",
+            "namespace ns {\nstruct Box {};\nint put(ns::Box b) { return 1; }\nint put(Box b, int extra = 0) { return 2; }\nint use() {\n    Box box;\n    return put(box);\n}\n}\n",
+            "return put(box)",
+        ),
+        (
+            "src/Ov.vb",
+            "Put",
+            "Namespace App\n    Public Class Box\n    End Class\n    Public Class Ov\n        Public Function Put(b As App.Box) As Integer\n            Return 1\n        End Function\n        Public Function Put(b As Box, Optional extra As Integer = 0) As Integer\n            Return 2\n        End Function\n        Public Function Go(box As Box) As Integer\n            Return Put(box)\n        End Function\n    End Class\nEnd Namespace\n",
+            "Return Put(box)",
+        ),
+        (
+            "src/p/Ov.kt",
+            "put",
+            "package p\n\nclass Box\n\nclass Ov {\n    fun put(b: p.Box): Int = 1\n    fun put(b: Box, extra: Int = 0): Int = 2\n    fun go(box: Box): Int {\n        return put(box)\n    }\n}\n",
+            "return put(box)",
+        ),
+    ];
+    for (path, name, source, needle) in cases {
+        let repo = scanned_repo(&[(path, source)]);
+        let call = line_of(&repo, path, needle);
+        assert_kept(&report_of(&repo, name, path, 0), path, call);
+        assert_not_bound_elsewhere(&report_of(&repo, name, path, 0), path, call);
+    }
+}
+
+#[test]
+fn a_simple_name_of_two_project_types_binds_only_the_type_its_imports_name() {
+    let cases = [
+        (
+            vec![
+                ("src/a/Node.java", "package a;\n\npublic class Node {}\n"),
+                ("src/b/Node.java", "package b;\n\npublic class Node {}\n"),
+                (
+                    "src/c/Lib.java",
+                    "package c;\n\nimport a.Node;\n\npublic class Lib {\n    public static void take(Node n) {}\n    public static void take(Object o) {}\n}\n",
+                ),
+                (
+                    "src/c/UseB.java",
+                    "package c;\n\nimport b.Node;\n\npublic class UseB {\n    public void run(Node other) {\n        Lib.take(other);\n    }\n}\n",
+                ),
+                (
+                    "src/c/UseA.java",
+                    "package c;\n\nimport a.Node;\n\npublic class UseA {\n    public void run(Node same) {\n        Lib.take(same);\n    }\n}\n",
+                ),
+            ],
+            "take",
+            "src/c/Lib.java",
+            "src/c/UseB.java",
+            "src/c/UseA.java",
+            "arguments `(Node)` bind only `take(Node)`",
+        ),
+        (
+            vec![
+                ("src/a/Node.kt", "package a\n\nclass Node\n"),
+                ("src/b/Node.kt", "package b\n\nclass Node\n"),
+                (
+                    "src/c/Lib.kt",
+                    "package c\n\nimport a.Node\n\nobject Lib {\n    fun take(n: Node) {}\n    fun take(o: Any) {}\n}\n",
+                ),
+                (
+                    "src/c/UseB.kt",
+                    "package c\n\nimport b.Node\n\nfun runB(other: Node) {\n    Lib.take(other)\n}\n",
+                ),
+                (
+                    "src/c/UseA.kt",
+                    "package c\n\nimport a.Node\n\nfun runA(same: Node) {\n    Lib.take(same)\n}\n",
+                ),
+            ],
+            "take",
+            "src/c/Lib.kt",
+            "src/c/UseB.kt",
+            "src/c/UseA.kt",
+            "arguments `(Node)` bind only `take(Node)`",
+        ),
+        (
+            vec![
+                ("src/a/Node.scala", "package a\n\nclass Node\n"),
+                ("src/b/Node.scala", "package b\n\nclass Node\n"),
+                (
+                    "src/c/Lib.scala",
+                    "package c\n\nimport a.Node\n\nobject Lib {\n  def take(n: Node): Int = 1\n  def take(o: Any): Int = 2\n}\n",
+                ),
+                (
+                    "src/c/UseB.scala",
+                    "package c\n\nimport b.Node\n\nobject UseB {\n  def run(other: Node): Int = {\n    Lib.take(other)\n  }\n}\n",
+                ),
+                (
+                    "src/c/UseA.scala",
+                    "package c\n\nimport a.Node\n\nobject UseA {\n  def run(same: Node): Int = {\n    Lib.take(same)\n  }\n}\n",
+                ),
+            ],
+            "take",
+            "src/c/Lib.scala",
+            "src/c/UseB.scala",
+            "src/c/UseA.scala",
+            "arguments `(Node)` bind only `take(Node)`",
+        ),
+        (
+            vec![
+                (
+                    "src/Types.cs",
+                    "namespace A { public class Node { } }\nnamespace B { public class Node { } }\n",
+                ),
+                (
+                    "src/Lib.cs",
+                    "using A;\n\nnamespace C\n{\n    public static class Lib\n    {\n        public static void Take(Node n) { }\n        public static void Take(object o) { }\n    }\n}\n",
+                ),
+                (
+                    "src/UseB.cs",
+                    "using B;\n\nnamespace C\n{\n    public class UseB\n    {\n        public void Run(Node other)\n        {\n            Lib.Take(other);\n        }\n    }\n}\n",
+                ),
+                (
+                    "src/UseA.cs",
+                    "using A;\n\nnamespace C\n{\n    public class UseA\n    {\n        public void Run(Node same)\n        {\n            Lib.Take(same);\n        }\n    }\n}\n",
+                ),
+            ],
+            "Take",
+            "src/Lib.cs",
+            "src/UseB.cs",
+            "src/UseA.cs",
+            "arguments `(Node)` bind only `Take(Node)`",
+        ),
+    ];
+    for (files, name, lib, use_other, use_same, basis) in cases {
+        let repo = scanned_repo(&files);
+        let by_node = report_of(&repo, name, lib, 0);
+        let by_object = report_of(&repo, name, lib, 1);
+        let other = line_of(&repo, use_other, &format!("Lib.{name}(other)"));
+        assert_kept(&by_node, use_other, other);
+        assert_kept(&by_object, use_other, other);
+        let same = line_of(&repo, use_same, &format!("Lib.{name}(same)"));
+        assert_kept(&by_node, use_same, same);
+        assert_excluded(&by_object, use_same, same, basis);
+    }
+}
+
+#[test]
+fn a_simple_name_that_two_project_types_share_keeps_the_overloads_in_cpp_and_swift() {
+    let cpp = scanned_repo(&[(
+        "src/ov.cpp",
+        "namespace a { struct Node {}; }\nnamespace b { struct Node {}; }\nnamespace lib {\nusing a::Node;\nint take(Node n) { return 1; }\ntemplate <typename T> int take(T t) { return 2; }\n}\nusing namespace b;\nint run() {\n    Node other;\n    return lib::take(other);\n}\n",
+    )]);
+    let call = line_of(&cpp, "src/ov.cpp", "lib::take(other)");
+    for nth in [0, 1] {
+        assert_kept(
+            &report_of(&cpp, "take", "src/ov.cpp", nth),
+            "src/ov.cpp",
+            call,
+        );
+    }
+
+    let swift = scanned_repo(&[
+        ("Sources/A/Node.swift", "public struct Node {}\n"),
+        (
+            "Sources/B/Node.swift",
+            "public struct Node {}\npublic func take(_ n: Node) -> Int { return 1 }\npublic func take(_ a: Any) -> Int { return 2 }\n",
+        ),
+        (
+            "Sources/C/Use.swift",
+            "import A\nimport B\nfunc run(other: A.Node) -> Int {\n    let copy: Node = other\n    return take(copy)\n}\n",
+        ),
+    ]);
+    let path = "Sources/C/Use.swift";
+    let call = line_of(&swift, path, "take(copy)");
+    for nth in [0, 1] {
+        assert_kept(
+            &report_of(&swift, "take", "Sources/B/Node.swift", nth),
+            path,
+            call,
+        );
+    }
+}
+
+#[test]
+fn a_call_on_the_line_of_its_callers_definition_gets_the_overload_check() {
+    let cases = [
+        (
+            "Api.cs",
+            "Parse",
+            "#nullable enable\npublic class Settings {}\npublic class Api {\n    public static string Parse(string json) { return Parse(json, null); }\n    public static string Parse(string json, Settings? settings) { return json; }\n}\n",
+            "arguments `(string, ?)` bind only `Parse(string, Settings?)`",
+        ),
+        (
+            "src/p/Ov.java",
+            "one",
+            "package p;\n\nclass Ov {\n    static int one(int a) { return one(\"x\"); }\n    static int one(String s) { return 1; }\n}\n",
+            "arguments `(String)` bind only `one(String)`",
+        ),
+        (
+            "src/ov.kt",
+            "one",
+            "fun one(a: Int): Int = one(\"x\")\nfun one(s: String): Int = 1\n",
+            "arguments `(String)` bind only `one(String)`",
+        ),
+        (
+            "src/Ov.scala",
+            "one",
+            "object Ov {\n  def one(a: Int): Int = one(\"x\")\n  def one(s: String): Int = 1\n}\n",
+            "arguments `(String)` bind only `one(String)`",
+        ),
+        (
+            "src/ov.cpp",
+            "one",
+            "int one(int a) { return one(\"x\"); }\nint one(const char* s) { return 1; }\n",
+            "arguments `(const char*)` bind only `one(const char*)`",
+        ),
+        (
+            "src/ov.swift",
+            "one",
+            "class Ov {\n    func one(_ a: Int) -> Int { return one(\"x\") }\n    func one(_ s: String) -> Int { return 1 }\n}\n",
+            "arguments `(String)` bind only `one(_: String)`",
+        ),
+    ];
+    for (path, name, source, basis) in cases {
+        let repo = scanned_repo(&[(path, source)]);
+        let first = report_of(&repo, name, path, 0);
+        let line = first
+            .sites
+            .first()
+            .map_or(0, |site| site.site.start_line.unwrap_or(0));
+        assert_excluded(&first, path, line, basis);
+        assert_kept(&report_of(&repo, name, path, 1), path, line);
+    }
 }
 
 #[test]
