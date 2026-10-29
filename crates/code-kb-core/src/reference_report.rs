@@ -24,10 +24,13 @@ use crate::text_scan::scan_word;
 pub(crate) mod arity;
 mod js_bindings;
 mod js_modules;
+mod library_types;
 mod loaded_files;
 pub(crate) mod overloads;
+mod plain_values;
 mod receiver_types;
 mod sections;
+mod type_names;
 pub(crate) mod variant_names;
 
 pub(crate) use sections::{destructurings, enum_variant_names, tests_at, uses_of_variants};
@@ -777,6 +780,9 @@ struct NameRow {
     arguments: Option<Rc<overloads::ArgumentFacts>>,
     /// julie linked the call to a member of a class that encloses the caller, the caller included.
     links_enclosing_class: bool,
+    /// A call identifier on the line of a definition of the name, which is no site of its own and
+    /// only gives its argument facts to a call row of its line (a one-line caller).
+    on_definition_line: bool,
 }
 
 impl NameRow {
@@ -2411,7 +2417,7 @@ impl<'a> Accounting<'a> {
 
         let mut rows = self.load_rows(&spec.name, &definitions, spec.scope)?;
         pair_identifiers(&mut rows);
-        rows.retain(|row| !row.consumed);
+        rows.retain(|row| !row.consumed && !row.on_definition_line);
         mark_hidden_receivers(self.root, &mut rows);
         self.mark_result_variables(&mut rows)?;
         js_modules::complete_js_chains(self.root, &mut rows);
@@ -2657,7 +2663,16 @@ impl<'a> Accounting<'a> {
             if verdict.label != SiteLabel::Excluded
                 && let Some(overloads) = &spec.overloads
                 && let Some(arguments) = &row.arguments
-                && let Some(basis) = overloads.exclusion_basis(arguments)
+                && let Some(basis) = overloads.exclusion_basis(&overloads::Call {
+                    conn: self.conn,
+                    args: arguments,
+                    path: &row.path,
+                    caller: row.caller_id.as_deref(),
+                    site: Some(overloads::Site {
+                        line: row.site_line,
+                        column: row.site_column,
+                    }),
+                })
             {
                 verdict = Verdict::new(SiteLabel::Excluded, basis, false);
                 binds_other_overload = true;
@@ -2795,6 +2810,7 @@ impl<'a> Accounting<'a> {
                 arg_count: None,
                 arguments: None,
                 links_enclosing_class: false,
+                on_definition_line: false,
             });
         }
 
@@ -2847,6 +2863,7 @@ impl<'a> Accounting<'a> {
                     arg_count: None,
                     arguments: None,
                     links_enclosing_class: row.get(10)?,
+                    on_definition_line: false,
                 });
             }
         }
@@ -2931,22 +2948,28 @@ impl<'a> Accounting<'a> {
                     arg_count: arg_count.filter(|_| !arg_spread),
                     arguments,
                     links_enclosing_class: false,
+                    on_definition_line: false,
                 });
             }
         }
 
         let import_spans = self.import_spans(name)?;
         let definition_spans = definition_spans(definitions, None);
-        rows.retain(|row| {
+        rows.retain_mut(|row| {
             if scope == RowScope::Calls && !row.is_call() {
                 return false;
             }
             if in_spans(&import_spans, &row.path, row.line) {
                 return false;
             }
-            !(row.source == Source::Identifier
+            if row.source == Source::Identifier
                 && !row.is_super_call()
-                && in_spans(&definition_spans, &row.path, row.line))
+                && in_spans(&definition_spans, &row.path, row.line)
+            {
+                row.on_definition_line = true;
+                return row.kind == "call";
+            }
+            true
         });
         Ok(rows)
     }
@@ -5347,7 +5370,8 @@ fn code_line_above<'l>(lines: &[&'l str], line: usize) -> Option<&'l str> {
 
 /// Gives each pending or relationship call the first unused call identifier of the same caller
 /// and name on or after its line and inside the caller, so a statement that starts above its
-/// call reports the line of the call.
+/// call reports the line of the call. An identifier on a definition line of the name pairs only
+/// with a call of its own line.
 fn pair_identifiers(rows: &mut [NameRow]) {
     let mut by_caller: HashMap<String, (Vec<usize>, Vec<usize>)> = HashMap::new();
     for (index, row) in rows.iter().enumerate() {
@@ -5368,11 +5392,11 @@ fn pair_identifiers(rows: &mut [NameRow]) {
         for &call in calls.iter() {
             let line = rows[call].line;
             let last = rows[call].caller_end_line.unwrap_or(usize::MAX).max(line);
-            let Some(slot) = identifiers
-                .iter()
-                .enumerate()
-                .position(|(slot, &i)| !used[slot] && (line..=last).contains(&rows[i].line))
-            else {
+            let Some(slot) = identifiers.iter().enumerate().position(|(slot, &i)| {
+                !used[slot]
+                    && (line..=last).contains(&rows[i].line)
+                    && (!rows[i].on_definition_line || rows[i].line == line)
+            }) else {
                 continue;
             };
             used[slot] = true;

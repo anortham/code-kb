@@ -418,6 +418,157 @@ fn a_csharp_call_binds_only_by_exact_types() {
     }
 }
 
+const CSHARP_NULLABLE_OV: &str = "public struct Pt {}\npublic class Box {}\npublic class Ov {\n    public void Nul(int a) {}\n    public void Nul(int? a) {}\n    public void Num(int a) {}\n    public void Num(object a) {}\n    public void Num(string a) {}\n    public void P(Pt p) {}\n    public void P(object o) {}\n    public void B(Box b) {}\n    public void B(object o) {}\n}\n";
+const CSHARP_NULLABLE_USE: &str = "public class Use {\n    private int? field;\n    public void Go(Ov ov, int? n, Pt? maybe, Box? box) {\n        int? local = null;\n        ov.Nul(local);\n        ov.Nul(field);\n        ov.Nul(n);\n        ov.Nul((int?)3);\n        ov.Num(n);\n        ov.Num(\"s\");\n        ov.P(maybe);\n        ov.B(box);\n    }\n}\n";
+
+#[test]
+fn a_csharp_nullable_value_that_julie_writes_without_its_marker_keeps_the_overloads_that_take_it() {
+    let repo = scanned_repo(&[
+        ("Ov.cs", CSHARP_NULLABLE_OV),
+        ("Use.cs", CSHARP_NULLABLE_USE),
+    ]);
+    let path = "Use.cs";
+    let line = |needle| line_of(&repo, path, needle);
+    let nul_value = report_of(&repo, "Nul", "Ov.cs", 0);
+    let nul_nullable = report_of(&repo, "Nul", "Ov.cs", 1);
+    for call in ["ov.Nul(local)", "ov.Nul(field)", "ov.Nul(n)"] {
+        assert_kept(&nul_value, path, line(call));
+        assert_kept(&nul_nullable, path, line(call));
+    }
+    assert_kept(&nul_nullable, path, line("ov.Nul((int?)3)"));
+    assert_excluded(
+        &nul_value,
+        path,
+        line("ov.Nul((int?)3)"),
+        "arguments `(int?)` bind only `Nul(int?)`",
+    );
+
+    let num_object = report_of(&repo, "Num", "Ov.cs", 1);
+    assert_kept(&num_object, path, line("ov.Num(n)"));
+    assert_excluded(
+        &num_object,
+        path,
+        line("ov.Num(\"s\")"),
+        "arguments `(string)` bind only `Num(string)`",
+    );
+
+    let p_object = report_of(&repo, "P", "Ov.cs", 1);
+    assert_kept(&p_object, path, line("ov.P(maybe)"));
+
+    let b_object = report_of(&repo, "B", "Ov.cs", 1);
+    assert_excluded(
+        &b_object,
+        path,
+        line("ov.B(box)"),
+        "arguments `(Box)` bind only `B(Box)`",
+    );
+}
+
+const CSHARP_API: &str = "#nullable enable\nusing System;\npublic class Settings {}\npublic class Base {}\npublic class Sub : Base {}\npublic class Api {\n    public static string Parse(string json)\n    {\n        return Parse(json, null);\n    }\n    public static string Parse(string json, Settings? settings) { return json; }\n    public static string Ser(object? value)\n    {\n        return Ser(value, null, (Settings?)null);\n    }\n    public static string Ser(object? value, Settings? settings)\n    {\n        return Ser(value, null, settings);\n    }\n    public static string Ser(object? value, Type? type, Settings? settings) { return \"\"; }\n    public void Run(object? a) {}\n    public void Run(string a) {}\n    public void Take(Base b) {}\n    public void Take(int a) {}\n    public void Opt(int a, int b = 0) {}\n    public void Opt(string a) {}\n    public void Par(params int[] xs) {}\n    public void Par(string a) {}\n    public void Dyn(dynamic d) {}\n    public void Dyn(string s) {}\n    public void Def(int a, int b = 0) {}\n    public void Def(in int a) {}\n    public void Gen(int a) {}\n    public void Gen<T>(int a) {}\n}\n";
+const CSHARP_API_USE: &str = "#nullable enable\npublic class Use {\n    public void Go(Api api, object? o, string? s, Sub sub, dynamic d, int x) {\n        api.Run(o);\n        api.Run(s);\n        api.Run(null);\n        api.Take(sub);\n        api.Opt(1);\n        api.Par(1, 2);\n        api.Par(1);\n        api.Dyn(d);\n        api.Def(x);\n        api.Gen(1);\n    }\n}\n";
+
+#[test]
+fn a_csharp_call_keeps_overloads_that_annotations_nulls_subtypes_params_dynamic_or_twins_leave_open()
+ {
+    let repo = scanned_repo(&[("Api.cs", CSHARP_API), ("Use.cs", CSHARP_API_USE)]);
+    let path = "Use.cs";
+    let line = |needle| line_of(&repo, path, needle);
+
+    let run_object = report_of(&repo, "Run", "Api.cs", 0);
+    let run_string = report_of(&repo, "Run", "Api.cs", 1);
+    assert_kept(&run_object, path, line("api.Run(o)"));
+    assert_excluded(
+        &run_string,
+        path,
+        line("api.Run(o)"),
+        "arguments `(object)` bind only `Run(object?)`",
+    );
+    assert_kept(&run_string, path, line("api.Run(s)"));
+    assert_excluded(
+        &run_object,
+        path,
+        line("api.Run(s)"),
+        "arguments `(string)` bind only `Run(string)`",
+    );
+    assert_kept(&run_object, path, line("api.Run(null)"));
+    assert_kept(&run_string, path, line("api.Run(null)"));
+
+    for nth in [0, 1] {
+        assert_kept(
+            &report_of(&repo, "Take", "Api.cs", nth),
+            path,
+            line("api.Take(sub)"),
+        );
+        assert_kept(
+            &report_of(&repo, "Par", "Api.cs", nth),
+            path,
+            line("api.Par(1)"),
+        );
+        assert_kept(
+            &report_of(&repo, "Dyn", "Api.cs", nth),
+            path,
+            line("api.Dyn(d)"),
+        );
+        assert_kept(
+            &report_of(&repo, "Def", "Api.cs", nth),
+            path,
+            line("api.Def(x)"),
+        );
+        assert_kept(
+            &report_of(&repo, "Gen", "Api.cs", nth),
+            path,
+            line("api.Gen(1)"),
+        );
+    }
+    assert_excluded(
+        &report_of(&repo, "Opt", "Api.cs", 1),
+        path,
+        line("api.Opt(1)"),
+        "arguments `(int)` bind only `Opt(int, int)`",
+    );
+    assert_eq!(
+        site(
+            &report_of(&repo, "Par", "Api.cs", 1),
+            path,
+            line("api.Par(1, 2)")
+        )
+        .0,
+        SiteLabel::Excluded
+    );
+}
+
+#[test]
+fn a_csharp_call_whose_argument_count_only_another_overload_takes_stays_excluded() {
+    let repo = scanned_repo(&[("Api.cs", CSHARP_API)]);
+    let path = "Api.cs";
+    let line = |needle| line_of(&repo, path, needle);
+    let parse_call = line("return Parse(json, null)");
+    assert_excluded(
+        &report_of(&repo, "Parse", path, 0),
+        path,
+        parse_call,
+        "arguments `(string, ?)` bind only `Parse(string, Settings?)`",
+    );
+    assert_kept(&report_of(&repo, "Parse", path, 1), path, parse_call);
+
+    let three = line("return Ser(value, null, (Settings?)null)");
+    let forwarded = line("return Ser(value, null, settings)");
+    for target in [0, 1] {
+        let report = report_of(&repo, "Ser", path, target);
+        for call in [three, forwarded] {
+            assert_eq!(
+                site(&report, path, call).0,
+                SiteLabel::Excluded,
+                "{}",
+                dump(&report)
+            );
+        }
+    }
+    let by_type = report_of(&repo, "Ser", path, 2);
+    assert_kept(&by_type, path, three);
+    assert_kept(&by_type, path, forwarded);
+}
+
 #[test]
 fn an_overload_lists_only_the_callers_whose_arguments_can_bind_it() {
     let cases = [
@@ -854,6 +1005,398 @@ fn a_vbnet_call_binds_by_types_and_keeps_named_arguments_and_unknown_types() {
     );
 }
 
+const VBNET_LATE: &str = "Public Class Late\n    Public Function Run(a As Object) As Integer\n        Return 1\n    End Function\n    Public Function Run(a As String) As Integer\n        Return 2\n    End Function\n    Public Function Take(a As Integer) As Integer\n        Return 1\n    End Function\n    Public Function Take(a As String) As Integer\n        Return 2\n    End Function\n    Public Function Go(o As Object, s As String) As Integer\n        Run(o)\n        Run(s)\n        Run(Nothing)\n        Take(o)\n        Return 0\n    End Function\nEnd Class\n";
+
+#[test]
+fn a_vbnet_object_argument_binds_the_object_overload_and_binds_late_only_without_one() {
+    let path = "src/Late.vb";
+    let repo = scanned_repo(&[(path, VBNET_LATE)]);
+    let line = |needle| line_of(&repo, path, needle);
+    let by_object = report_of(&repo, "Run", path, 0);
+    let by_string = report_of(&repo, "Run", path, 1);
+    assert_kept(&by_object, path, line("Run(o)"));
+    assert_excluded(
+        &by_string,
+        path,
+        line("Run(o)"),
+        "arguments `(Object)` bind only `Run(Object)`",
+    );
+    assert_kept(&by_string, path, line("Run(s)"));
+    assert_excluded(
+        &by_object,
+        path,
+        line("Run(s)"),
+        "arguments `(String)` bind only `Run(String)`",
+    );
+    assert_kept(&by_object, path, line("Run(Nothing)"));
+    assert_kept(&by_string, path, line("Run(Nothing)"));
+    for nth in [0, 1] {
+        assert_kept(&report_of(&repo, "Take", path, nth), path, line("Take(o)"));
+    }
+}
+
+const CSHARP_NEVER_NULL_OV: &str = "using System;\nnamespace App {\n    public enum Mode { A, B }\n    public static class Lib {\n        public static void Lit(int x) { }\n        public static void Lit(long x) { }\n        public static void Lit(int? x) { }\n        public static void Lit(Uri u) { }\n        public static void Lit(IComparable c) { }\n        public static void Ext(Uri u) { }\n        public static void Ext(Uri? u, int extra = 0) { }\n        public static void Md(Mode m) { }\n        public static void Md(Mode m, int extra = 0) { }\n        public static void Ob(int x) { }\n        public static void Ob(object x) { }\n    }\n}\n";
+const CSHARP_NEVER_NULL_USE: &str = "#nullable enable\nusing System;\nnamespace App {\n    public class Use {\n        public void Go(Uri? maybe, Mode m, int? x) {\n            Lib.Lit(x);\n            Lib.Ext(maybe);\n            Lib.Md(m);\n            Lib.Ob(x);\n        }\n    }\n}\n";
+
+#[test]
+fn a_csharp_overload_that_cannot_take_the_hidden_nullable_value_stays_excluded() {
+    let repo = scanned_repo(&[
+        ("Lib.cs", CSHARP_NEVER_NULL_OV),
+        ("Use.cs", CSHARP_NEVER_NULL_USE),
+    ]);
+    let path = "Use.cs";
+    let line = |needle| line_of(&repo, path, needle);
+    for nth in [0, 2, 4] {
+        assert_kept(
+            &report_of(&repo, "Lit", "Lib.cs", nth),
+            path,
+            line("Lib.Lit(x)"),
+        );
+    }
+    for nth in [1, 3] {
+        assert_excluded(
+            &report_of(&repo, "Lit", "Lib.cs", nth),
+            path,
+            line("Lib.Lit(x)"),
+            "arguments `(int)` bind only `Lit(int)`, `Lit(int?)`, or 1 more",
+        );
+    }
+
+    assert_kept(
+        &report_of(&repo, "Ext", "Lib.cs", 0),
+        path,
+        line("Lib.Ext(maybe)"),
+    );
+    assert_excluded(
+        &report_of(&repo, "Ext", "Lib.cs", 1),
+        path,
+        line("Lib.Ext(maybe)"),
+        "arguments `(Uri)` bind only `Ext(Uri)`",
+    );
+
+    assert_kept(
+        &report_of(&repo, "Md", "Lib.cs", 0),
+        path,
+        line("Lib.Md(m)"),
+    );
+    assert_excluded(
+        &report_of(&repo, "Md", "Lib.cs", 1),
+        path,
+        line("Lib.Md(m)"),
+        "arguments `(Mode)` bind only `Md(Mode)`",
+    );
+
+    for nth in [0, 1] {
+        assert_kept(
+            &report_of(&repo, "Ob", "Lib.cs", nth),
+            path,
+            line("Lib.Ob(x)"),
+        );
+    }
+}
+
+#[test]
+fn a_qualified_and_a_simple_name_of_one_type_never_bind_the_overload_with_a_default() {
+    let csharp = scanned_repo(&[(
+        "Lib.cs",
+        "namespace App {\n    public class Box { }\n    public static class Lib {\n        public static void R(App.Box b) { }\n        public static void R(Box b, int extra = 0) { }\n    }\n    public class Use {\n        public void Go(Box b) {\n            Lib.R(b);\n        }\n    }\n}\n",
+    )]);
+    let call = line_of(&csharp, "Lib.cs", "Lib.R(b)");
+    assert_kept(&report_of(&csharp, "R", "Lib.cs", 0), "Lib.cs", call);
+    assert_excluded(
+        &report_of(&csharp, "R", "Lib.cs", 1),
+        "Lib.cs",
+        call,
+        "arguments `(Box)` bind only `R(App.Box)`",
+    );
+
+    let cases = [
+        (
+            "src/ov.cpp",
+            "put",
+            "namespace ns {\nstruct Box {};\nint put(ns::Box b) { return 1; }\nint put(Box b, int extra = 0) { return 2; }\nint use() {\n    Box box;\n    return put(box);\n}\n}\n",
+            "return put(box)",
+        ),
+        (
+            "src/Ov.vb",
+            "Put",
+            "Namespace App\n    Public Class Box\n    End Class\n    Public Class Ov\n        Public Function Put(b As App.Box) As Integer\n            Return 1\n        End Function\n        Public Function Put(b As Box, Optional extra As Integer = 0) As Integer\n            Return 2\n        End Function\n        Public Function Go(box As Box) As Integer\n            Return Put(box)\n        End Function\n    End Class\nEnd Namespace\n",
+            "Return Put(box)",
+        ),
+        (
+            "src/p/Ov.kt",
+            "put",
+            "package p\n\nclass Box\n\nclass Ov {\n    fun put(b: p.Box): Int = 1\n    fun put(b: Box, extra: Int = 0): Int = 2\n    fun go(box: Box): Int {\n        return put(box)\n    }\n}\n",
+            "return put(box)",
+        ),
+    ];
+    for (path, name, source, needle) in cases {
+        let repo = scanned_repo(&[(path, source)]);
+        let call = line_of(&repo, path, needle);
+        assert_kept(&report_of(&repo, name, path, 0), path, call);
+        assert_not_bound_elsewhere(&report_of(&repo, name, path, 0), path, call);
+    }
+}
+
+#[test]
+fn a_simple_name_of_two_project_types_binds_only_the_type_its_imports_name() {
+    let cases = [
+        (
+            vec![
+                ("src/a/Node.java", "package a;\n\npublic class Node {}\n"),
+                ("src/b/Node.java", "package b;\n\npublic class Node {}\n"),
+                (
+                    "src/c/Lib.java",
+                    "package c;\n\nimport a.Node;\n\npublic class Lib {\n    public static void take(Node n) {}\n    public static void take(Object o) {}\n}\n",
+                ),
+                (
+                    "src/c/UseB.java",
+                    "package c;\n\nimport b.Node;\n\npublic class UseB {\n    public void run(Node other) {\n        Lib.take(other);\n    }\n}\n",
+                ),
+                (
+                    "src/c/UseA.java",
+                    "package c;\n\nimport a.Node;\n\npublic class UseA {\n    public void run(Node same) {\n        Lib.take(same);\n    }\n}\n",
+                ),
+            ],
+            "take",
+            "src/c/Lib.java",
+            "src/c/UseB.java",
+            "src/c/UseA.java",
+            "arguments `(Node)` bind only `take(Node)`",
+        ),
+        (
+            vec![
+                ("src/a/Node.kt", "package a\n\nclass Node\n"),
+                ("src/b/Node.kt", "package b\n\nclass Node\n"),
+                (
+                    "src/c/Lib.kt",
+                    "package c\n\nimport a.Node\n\nobject Lib {\n    fun take(n: Node) {}\n    fun take(o: Any) {}\n}\n",
+                ),
+                (
+                    "src/c/UseB.kt",
+                    "package c\n\nimport b.Node\n\nfun runB(other: Node) {\n    Lib.take(other)\n}\n",
+                ),
+                (
+                    "src/c/UseA.kt",
+                    "package c\n\nimport a.Node\n\nfun runA(same: Node) {\n    Lib.take(same)\n}\n",
+                ),
+            ],
+            "take",
+            "src/c/Lib.kt",
+            "src/c/UseB.kt",
+            "src/c/UseA.kt",
+            "arguments `(Node)` bind only `take(Node)`",
+        ),
+        (
+            vec![
+                ("src/a/Node.scala", "package a\n\nclass Node\n"),
+                ("src/b/Node.scala", "package b\n\nclass Node\n"),
+                (
+                    "src/c/Lib.scala",
+                    "package c\n\nimport a.Node\n\nobject Lib {\n  def take(n: Node): Int = 1\n  def take(o: Any): Int = 2\n}\n",
+                ),
+                (
+                    "src/c/UseB.scala",
+                    "package c\n\nimport b.Node\n\nobject UseB {\n  def run(other: Node): Int = {\n    Lib.take(other)\n  }\n}\n",
+                ),
+                (
+                    "src/c/UseA.scala",
+                    "package c\n\nimport a.Node\n\nobject UseA {\n  def run(same: Node): Int = {\n    Lib.take(same)\n  }\n}\n",
+                ),
+            ],
+            "take",
+            "src/c/Lib.scala",
+            "src/c/UseB.scala",
+            "src/c/UseA.scala",
+            "arguments `(Node)` bind only `take(Node)`",
+        ),
+        (
+            vec![
+                (
+                    "src/Types.cs",
+                    "namespace A { public class Node { } }\nnamespace B { public class Node { } }\n",
+                ),
+                (
+                    "src/Lib.cs",
+                    "using A;\n\nnamespace C\n{\n    public static class Lib\n    {\n        public static void Take(Node n) { }\n        public static void Take(object o) { }\n    }\n}\n",
+                ),
+                (
+                    "src/UseB.cs",
+                    "using B;\n\nnamespace C\n{\n    public class UseB\n    {\n        public void Run(Node other)\n        {\n            Lib.Take(other);\n        }\n    }\n}\n",
+                ),
+                (
+                    "src/UseA.cs",
+                    "using A;\n\nnamespace C\n{\n    public class UseA\n    {\n        public void Run(Node same)\n        {\n            Lib.Take(same);\n        }\n    }\n}\n",
+                ),
+            ],
+            "Take",
+            "src/Lib.cs",
+            "src/UseB.cs",
+            "src/UseA.cs",
+            "arguments `(Node)` bind only `Take(Node)`",
+        ),
+    ];
+    for (files, name, lib, use_other, use_same, basis) in cases {
+        let repo = scanned_repo(&files);
+        let by_node = report_of(&repo, name, lib, 0);
+        let by_object = report_of(&repo, name, lib, 1);
+        let other = line_of(&repo, use_other, &format!("Lib.{name}(other)"));
+        assert_kept(&by_node, use_other, other);
+        assert_kept(&by_object, use_other, other);
+        let same = line_of(&repo, use_same, &format!("Lib.{name}(same)"));
+        assert_kept(&by_node, use_same, same);
+        assert_excluded(&by_object, use_same, same, basis);
+    }
+}
+
+#[test]
+fn a_simple_name_that_two_project_types_share_keeps_the_overloads_in_cpp_and_swift() {
+    let cpp = scanned_repo(&[(
+        "src/ov.cpp",
+        "namespace a { struct Node {}; }\nnamespace b { struct Node {}; }\nnamespace lib {\nusing a::Node;\nint take(Node n) { return 1; }\ntemplate <typename T> int take(T t) { return 2; }\n}\nusing namespace b;\nint run() {\n    Node other;\n    return lib::take(other);\n}\n",
+    )]);
+    let call = line_of(&cpp, "src/ov.cpp", "lib::take(other)");
+    for nth in [0, 1] {
+        assert_kept(
+            &report_of(&cpp, "take", "src/ov.cpp", nth),
+            "src/ov.cpp",
+            call,
+        );
+    }
+
+    let swift = scanned_repo(&[
+        ("Sources/A/Node.swift", "public struct Node {}\n"),
+        (
+            "Sources/B/Node.swift",
+            "public struct Node {}\npublic func take(_ n: Node) -> Int { return 1 }\npublic func take(_ a: Any) -> Int { return 2 }\n",
+        ),
+        (
+            "Sources/C/Use.swift",
+            "import A\nimport B\nfunc run(other: A.Node) -> Int {\n    let copy: Node = other\n    return take(copy)\n}\n",
+        ),
+    ]);
+    let path = "Sources/C/Use.swift";
+    let call = line_of(&swift, path, "take(copy)");
+    for nth in [0, 1] {
+        assert_kept(
+            &report_of(&swift, "take", "Sources/B/Node.swift", nth),
+            path,
+            call,
+        );
+    }
+}
+
+#[test]
+fn a_call_on_the_line_of_its_callers_definition_gets_the_overload_check() {
+    let cases = [
+        (
+            "Api.cs",
+            "Parse",
+            "#nullable enable\npublic class Settings {}\npublic class Api {\n    public static string Parse(string json) { return Parse(json, null); }\n    public static string Parse(string json, Settings? settings) { return json; }\n}\n",
+            "arguments `(string, ?)` bind only `Parse(string, Settings?)`",
+        ),
+        (
+            "src/p/Ov.java",
+            "one",
+            "package p;\n\nclass Ov {\n    static int one(int a) { return one(\"x\"); }\n    static int one(String s) { return 1; }\n}\n",
+            "arguments `(String)` bind only `one(String)`",
+        ),
+        (
+            "src/ov.kt",
+            "one",
+            "fun one(a: Int): Int = one(\"x\")\nfun one(s: String): Int = 1\n",
+            "arguments `(String)` bind only `one(String)`",
+        ),
+        (
+            "src/Ov.scala",
+            "one",
+            "object Ov {\n  def one(a: Int): Int = one(\"x\")\n  def one(s: String): Int = 1\n}\n",
+            "arguments `(String)` bind only `one(String)`",
+        ),
+        (
+            "src/ov.cpp",
+            "one",
+            "int one(int a) { return one(\"x\"); }\nint one(const char* s) { return 1; }\n",
+            "arguments `(const char*)` bind only `one(const char*)`",
+        ),
+        (
+            "src/ov.swift",
+            "one",
+            "class Ov {\n    func one(_ a: Int) -> Int { return one(\"x\") }\n    func one(_ s: String) -> Int { return 1 }\n}\n",
+            "arguments `(String)` bind only `one(_: String)`",
+        ),
+    ];
+    for (path, name, source, basis) in cases {
+        let repo = scanned_repo(&[(path, source)]);
+        let first = report_of(&repo, name, path, 0);
+        let line = first
+            .sites
+            .first()
+            .map_or(0, |site| site.site.start_line.unwrap_or(0));
+        assert_excluded(&first, path, line, basis);
+        assert_kept(&report_of(&repo, name, path, 1), path, line);
+    }
+}
+
+#[test]
+fn a_swift_optional_that_julie_writes_without_its_marker_keeps_the_overload_that_takes_it() {
+    let path = "src/opt.swift";
+    let repo = scanned_repo(&[(
+        path,
+        "class Opt {\n    var stored: Int! = nil\n    func nul(_ a: Int) -> Int { return 1 }\n    func nul(_ a: Int?) -> Int { return 2 }\n    func name(_ a: String) -> Int { return 1 }\n    func name(_ a: Int) -> Int { return 2 }\n    func go(n: Int!, m: Int?) {\n        _ = nul(n)\n        _ = nul(stored)\n        _ = nul(m)\n        _ = name(1)\n    }\n}\n",
+    )]);
+    let by_value = report_of(&repo, "nul", path, 0);
+    let by_optional = report_of(&repo, "nul", path, 1);
+    for line in [8, 9] {
+        assert_kept(&by_value, path, line);
+        assert_kept(&by_optional, path, line);
+    }
+    assert_kept(&by_optional, path, 10);
+    assert_excluded(
+        &by_value,
+        path,
+        10,
+        "arguments `(Int?)` bind only `nul(_: Int?)`",
+    );
+    assert_excluded(
+        &report_of(&repo, "name", path, 0),
+        path,
+        11,
+        "arguments `(Int)` bind only `name(_: Int)`",
+    );
+}
+
+#[test]
+fn a_java_varargs_call_keeps_the_widening_overload_and_excludes_what_no_conversion_reaches() {
+    let path = "src/p/Sum.java";
+    let repo = scanned_repo(&[(
+        path,
+        "package p;\n\nclass Sum {\n    int sum(int... xs) { return 0; }\n    int sum(String s) { return 1; }\n    int sum(long a, long b) { return 2; }\n    int go() {\n        int one = sum(1);\n        int two = sum(1, 2);\n        int none = sum();\n        return one + two + none;\n    }\n}\n",
+    )]);
+    let varargs = report_of(&repo, "sum", path, 0);
+    let by_string = report_of(&repo, "sum", path, 1);
+    let by_long = report_of(&repo, "sum", path, 2);
+    let line = |needle| line_of(&repo, path, needle);
+    for call in ["sum(1);", "sum(1, 2)", "sum();"] {
+        assert_kept(&varargs, path, line(call));
+        assert_eq!(
+            site(&by_string, path, line(call)).0,
+            SiteLabel::Excluded,
+            "{}",
+            dump(&by_string)
+        );
+    }
+    assert_kept(&by_long, path, line("sum(1, 2)"));
+    for call in ["sum(1);", "sum();"] {
+        assert_eq!(
+            site(&by_long, path, line(call)).0,
+            SiteLabel::Excluded,
+            "{}",
+            dump(&by_long)
+        );
+    }
+}
+
 #[test]
 fn a_cpp_swift_or_vbnet_call_bound_to_another_overload_is_no_site_of_a_changed_overload() {
     let cases = [
@@ -891,4 +1434,258 @@ fn a_cpp_swift_or_vbnet_call_bound_to_another_overload_is_no_site_of_a_changed_o
         assert!(text.contains(by_int), "{path}: {text}");
         assert!(!text.contains(by_string), "{path}: {text}");
     }
+}
+
+#[test]
+fn a_simple_name_that_reaches_a_library_type_never_names_the_project_type_or_another_one() {
+    let java = scanned_repo(&[
+        (
+            "src/s/Svc.java",
+            "package s;\n\nimport java.sql.Date;\n\npublic class Svc {\n    public static void put(Date d) {}\n    public static void put(Object o) {}\n    public static void say(String s) {}\n    public static void say(Object o) {}\n}\n",
+        ),
+        (
+            "src/q/Process.java",
+            "package q;\n\npublic class Process {}\n",
+        ),
+        (
+            "src/q/Runner.java",
+            "package q;\n\npublic class Runner {\n    public static void run(Process p) {}\n    public static void run(Object o) {}\n}\n",
+        ),
+        (
+            "src/c/User.java",
+            "package c;\n\nimport java.util.*;\nimport java.util.Date;\nimport q.Runner;\nimport s.Svc;\n\npublic class User {\n    void go(String text) throws Exception {\n        Date d = new Date();\n        Svc.put(d);\n        Process p = Runtime.getRuntime().exec(\"ls\");\n        Runner.run(p);\n        Svc.say(text);\n    }\n}\n",
+        ),
+    ]);
+    let user = "src/c/User.java";
+    let line = |needle| line_of(&java, user, needle);
+    assert_kept(
+        &report_of(&java, "put", "src/s/Svc.java", 1),
+        user,
+        line("Svc.put(d)"),
+    );
+    assert_kept(
+        &report_of(&java, "run", "src/q/Runner.java", 1),
+        user,
+        line("Runner.run(p)"),
+    );
+    assert_excluded(
+        &report_of(&java, "say", "src/s/Svc.java", 1),
+        user,
+        line("Svc.say(text)"),
+        "arguments `(String)` bind only `say(String)`",
+    );
+
+    let kotlin = scanned_repo(&[
+        (
+            "src/s/Svc.kt",
+            "package s\n\nimport java.sql.Date\n\nobject Svc {\n    fun put(d: Date) {}\n    fun put(o: Any) {}\n}\n",
+        ),
+        (
+            "src/c/User.kt",
+            "package c\n\nimport java.util.Date\nimport s.Svc\n\nclass User {\n    fun run() {\n        val d: Date = Date()\n        Svc.put(d)\n    }\n}\n",
+        ),
+    ]);
+    assert_kept(
+        &report_of(&kotlin, "put", "src/s/Svc.kt", 1),
+        "src/c/User.kt",
+        line_of(&kotlin, "src/c/User.kt", "Svc.put(d)"),
+    );
+
+    let csharp = scanned_repo(&[
+        (
+            "src/Err.cs",
+            "using System;\nusing System.Text.Json;\n\nnamespace S\n{\n    public static class Err\n    {\n        public static void Handle(JsonException e) { }\n        public static void Handle(Exception e) { }\n    }\n}\n",
+        ),
+        (
+            "src/Clock.cs",
+            "namespace App\n{\n    public class Timer { }\n    public static class Clock\n    {\n        public static void Watch(Timer t) { }\n        public static void Watch(object o) { }\n    }\n}\n",
+        ),
+        (
+            "src/User.cs",
+            "using System;\nusing System.Threading;\nusing Newtonsoft.Json;\nusing S;\n\nnamespace Other\n{\n    public class User\n    {\n        public void Run(Exception error)\n        {\n            JsonException ex = new JsonException();\n            Err.Handle(ex);\n            Err.Handle(error);\n            Timer t = new Timer(null);\n            App.Clock.Watch(t);\n        }\n    }\n}\n",
+        ),
+    ]);
+    let user = "src/User.cs";
+    let line = |needle| line_of(&csharp, user, needle);
+    assert_kept(
+        &report_of(&csharp, "Handle", "src/Err.cs", 1),
+        user,
+        line("Err.Handle(ex)"),
+    );
+    assert_excluded(
+        &report_of(&csharp, "Handle", "src/Err.cs", 0),
+        user,
+        line("Err.Handle(error)"),
+        "arguments `(Exception)` bind only `Handle(Exception)`",
+    );
+    assert_kept(
+        &report_of(&csharp, "Watch", "src/Clock.cs", 1),
+        user,
+        line("App.Clock.Watch(t)"),
+    );
+
+    let vbnet = scanned_repo(&[
+        (
+            "src/Err.vb",
+            "Imports System\nImports System.Text.Json\n\nNamespace S\n    Public Module Err\n        Public Sub Handle(e As JsonException)\n        End Sub\n        Public Sub Handle(e As Exception)\n        End Sub\n    End Module\nEnd Namespace\n",
+        ),
+        (
+            "src/User.vb",
+            "Imports Newtonsoft.Json\nImports S\n\nNamespace C\n    Public Class User\n        Public Sub Go()\n            Dim ex As JsonException = New JsonException()\n            Err.Handle(ex)\n        End Sub\n    End Class\nEnd Namespace\n",
+        ),
+    ]);
+    assert_kept(
+        &report_of(&vbnet, "Handle", "src/Err.vb", 1),
+        "src/User.vb",
+        line_of(&vbnet, "src/User.vb", "Err.Handle(ex)"),
+    );
+}
+
+#[test]
+fn a_scala_exact_overload_that_needs_a_default_loses_to_one_that_applies_without_it() {
+    let repo = scanned_repo(&[
+        (
+            "src/b/Svc.scala",
+            "package b\n\nobject Svc {\n  def r(x: Any): Unit = {}\n  def r(x: Int, extra: Int = 0): Unit = {}\n}\n",
+        ),
+        (
+            "src/b/User.scala",
+            "package b\n\nobject User {\n  def other(): Unit = {\n    val i: Int = 3\n    Svc.r(i)\n  }\n}\n",
+        ),
+    ]);
+    let user = "src/b/User.scala";
+    let call = line_of(&repo, user, "Svc.r(i)");
+    assert_kept(&report_of(&repo, "r", "src/b/Svc.scala", 0), user, call);
+    assert_excluded(
+        &report_of(&repo, "r", "src/b/Svc.scala", 1),
+        user,
+        call,
+        "arguments `(Int)` bind only `r(Any)`",
+    );
+}
+
+#[test]
+fn a_scala_name_that_a_wildcard_import_and_the_package_both_reach_stays_unknown() {
+    let files = |user: &'static str| {
+        scanned_repo(&[
+            ("src/a/Node.scala", "package a\n\nclass Node\n"),
+            ("src/b/Node.scala", "package b\n\nclass Node\n"),
+            (
+                "src/b/Svc.scala",
+                "package b\n\nobject Svc {\n  def take(n: b.Node): Unit = {}\n  def take(o: AnyRef): Unit = {}\n}\n",
+            ),
+            ("src/b/User.scala", user),
+        ])
+    };
+    let user = "src/b/User.scala";
+    let imported = files(
+        "package b\n\nimport a._\n\nobject User {\n  def run(): Unit = {\n    val x: Node = new Node\n    Svc.take(x)\n  }\n}\n",
+    );
+    assert_kept(
+        &report_of(&imported, "take", "src/b/Svc.scala", 1),
+        user,
+        line_of(&imported, user, "Svc.take(x)"),
+    );
+    let local = files(
+        "package b\n\nobject User {\n  def run(): Unit = {\n    val x: Node = new Node\n    Svc.take(x)\n  }\n}\n",
+    );
+    assert_excluded(
+        &report_of(&local, "take", "src/b/Svc.scala", 1),
+        user,
+        line_of(&local, user, "Svc.take(x)"),
+        "arguments `(Node)` bind only `take(b.Node)`",
+    );
+}
+
+#[test]
+fn a_literal_a_new_object_or_a_plain_declared_value_is_no_hidden_nullable() {
+    let csharp = scanned_repo(&[(
+        "src/Svc.cs",
+        "namespace App\n{\n    public struct Pt { public int X; }\n    public static class Svc\n    {\n        public static void Nul(int x) { }\n        public static void Nul(object x) { }\n        public static void Sp(Pt p) { }\n        public static void Sp(object o) { }\n    }\n    public class User\n    {\n        public void Run(int? n)\n        {\n            Svc.Nul(5);\n            Svc.Sp(new Pt());\n            int k = 3;\n            Svc.Nul(k);\n            Svc.Nul(k + 1);\n            Svc.Nul(n);\n        }\n    }\n}\n",
+    )]);
+    let path = "src/Svc.cs";
+    let line = |needle| line_of(&csharp, path, needle);
+    let nul_object = report_of(&csharp, "Nul", path, 1);
+    for call in ["Svc.Nul(5)", "Svc.Nul(k);"] {
+        assert_excluded(
+            &nul_object,
+            path,
+            line(call),
+            "arguments `(int)` bind only `Nul(int)`",
+        );
+    }
+    for call in ["Svc.Nul(k + 1)", "Svc.Nul(n)"] {
+        assert_kept(&nul_object, path, line(call));
+    }
+    assert_excluded(
+        &report_of(&csharp, "Sp", path, 1),
+        path,
+        line("Svc.Sp(new Pt())"),
+        "arguments `(Pt)` bind only `Sp(Pt)`",
+    );
+
+    let swift = scanned_repo(&[(
+        "Sources/App/Svc.swift",
+        "struct Pt { var x: Int }\nstruct Fl {\n    var x: Int\n    init?(s: String) { return nil }\n}\n\nenum Svc {\n    static func f(_ x: Int) {}\n    static func f(_ x: Any) {}\n    static func g(_ p: Pt) {}\n    static func g(_ p: Any) {}\n    static func h(_ p: Fl) {}\n    static func h(_ p: Any) {}\n}\n\nclass Holder {\n    var stored: Int! = nil\n    func run(w: Int!) {\n        Svc.f(5)\n        let v: Int = 1\n        Svc.f(v)\n        Svc.g(Pt(x: 1))\n        Svc.f(w)\n        Svc.f(stored)\n        let u = 3\n        Svc.f(u)\n        Svc.h(Fl(s: \"a\"))\n    }\n}\n",
+    )]);
+    let path = "Sources/App/Svc.swift";
+    let line = |needle| line_of(&swift, path, needle);
+    let f_any = report_of(&swift, "f", path, 1);
+    for call in ["Svc.f(5)", "Svc.f(v)"] {
+        assert_excluded(
+            &f_any,
+            path,
+            line(call),
+            "arguments `(Int)` bind only `f(_: Int)`",
+        );
+    }
+    for call in ["Svc.f(w)", "Svc.f(stored)", "Svc.f(u)"] {
+        assert_kept(&f_any, path, line(call));
+    }
+    assert_excluded(
+        &report_of(&swift, "g", path, 1),
+        path,
+        line("Svc.g(Pt(x: 1))"),
+        "arguments `(Pt)` bind only `g(_: Pt)`",
+    );
+    assert_kept(
+        &report_of(&swift, "h", path, 1),
+        path,
+        line("Svc.h(Fl(s: \"a\"))"),
+    );
+
+    let kotlin = scanned_repo(&[(
+        "src/Num.kt",
+        "object Num {\n    fun f(x: Int) {}\n    fun f(x: Any?) {}\n}\n\nfun go(v: Int?) {\n    Num.f(5)\n    val w: Int? = v\n    Num.f(w)\n}\n",
+    )]);
+    let path = "src/Num.kt";
+    let f_nullable = report_of(&kotlin, "f", path, 1);
+    assert_excluded(
+        &f_nullable,
+        path,
+        line_of(&kotlin, path, "Num.f(5)"),
+        "arguments `(Int)` bind only `f(Int)`",
+    );
+    assert_kept(&f_nullable, path, line_of(&kotlin, path, "Num.f(w)"));
+}
+
+#[test]
+fn a_kotlin_basis_names_a_nullable_overload_with_its_marker() {
+    let repo = scanned_repo(&[
+        (
+            "src/s/Num.kt",
+            "package s\n\nobject Num {\n    fun f(x: Int) {}\n    fun f(x: Long) {}\n    fun f(x: Any) {}\n    fun f(x: Any?) {}\n}\n",
+        ),
+        (
+            "src/c/U2.kt",
+            "package c\n\nimport s.Num\n\nclass U2 {\n    fun go(v: Int?) {\n        val w: Int? = v\n        Num.f(w)\n    }\n}\n",
+        ),
+    ]);
+    let user = "src/c/U2.kt";
+    assert_excluded(
+        &report_of(&repo, "f", "src/s/Num.kt", 2),
+        user,
+        line_of(&repo, user, "Num.f(w)"),
+        "arguments `(Int)` bind only `f(Int)` or `f(Any?)`",
+    );
 }

@@ -713,7 +713,7 @@ fn python_module(path: &str) -> String {
 /// The package or type that each `import a.b.*` (Scala `import a.b._`) line of a Kotlin, Scala,
 /// or Groovy `text` names, outside comments and string and character literals. Kotlin and Scala
 /// nest block comments.
-fn star_imports(text: &str, nested_comments: bool) -> Vec<String> {
+pub(super) fn star_imports(text: &str, nested_comments: bool) -> Vec<String> {
     blank_non_code(text, nested_comments)
         .lines()
         .filter_map(|line| {
