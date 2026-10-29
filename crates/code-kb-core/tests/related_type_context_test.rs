@@ -482,3 +482,244 @@ fn java_fully_qualified_imports_use_indexed_namespaces_and_block_external_decoys
         "an external Java import selected its current-package decoy: {external:?}"
     );
 }
+
+fn assert_no_related(types: &[String], name: &str) {
+    assert!(
+        !types.iter().any(|related_type| related_type.contains(name)),
+        "{name} bound without import evidence: {types:?}"
+    );
+}
+
+#[test]
+fn python_relative_absolute_and_reexported_imports_bind_the_imported_class() {
+    let (_repo, workspace, db_path) = scanned_repo(&[
+        ("pkg/__init__.py", "from .ctx import AppContext\n"),
+        ("pkg/ctx.py", "class AppContext:\n    pass\n"),
+        ("pkg/sub/__init__.py", ""),
+        ("pkg/sub/ctx.py", "class AppContext:\n    pass\n"),
+        (
+            "pkg/app.py",
+            "from .ctx import AppContext\n\n\ndef handle(ctx: AppContext):\n    return ctx\n",
+        ),
+        (
+            "pkg/sub/view.py",
+            "from ..ctx import AppContext\n\n\ndef view(ctx: AppContext):\n    return ctx\n",
+        ),
+        (
+            "pkg/client.py",
+            "from pkg import AppContext\n\n\ndef use(ctx: AppContext):\n    return ctx\n",
+        ),
+        (
+            "pkg/absolute.py",
+            "from pkg.sub.ctx import AppContext\n\n\ndef run(ctx: AppContext):\n    return ctx\n",
+        ),
+        (
+            "pkg/external.py",
+            "from werkzeug.local import LocalProxy\n\n\ndef wrap(proxy: LocalProxy):\n    return proxy\n",
+        ),
+        ("pkg/local.py", "class LocalProxy:\n    pass\n"),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+    let related =
+        |path: &str, name: &str| related_types_for(&conn, &workspace, &db_path, path, name);
+
+    assert_related_owner(
+        &related("pkg/app.py", "handle"),
+        "AppContext",
+        "pkg/ctx.py",
+        1,
+    );
+    assert_related_owner(
+        &related("pkg/sub/view.py", "view"),
+        "AppContext",
+        "pkg/ctx.py",
+        1,
+    );
+    assert_related_owner(
+        &related("pkg/client.py", "use"),
+        "AppContext",
+        "pkg/ctx.py",
+        1,
+    );
+    assert_related_owner(
+        &related("pkg/absolute.py", "run"),
+        "AppContext",
+        "pkg/sub/ctx.py",
+        1,
+    );
+    assert_no_related(&related("pkg/external.py", "wrap"), "LocalProxy");
+}
+
+#[test]
+fn rust_use_paths_bind_the_type_of_the_named_module() {
+    let (_repo, workspace, db_path) = scanned_repo(&[
+        (
+            "crates/my-core/Cargo.toml",
+            "[package]\nname = \"my-core\"\n",
+        ),
+        (
+            "crates/my-core/src/lib.rs",
+            "pub mod db;\npub mod models;\npub mod other;\npub mod report;\npub use models::Symbol;\n",
+        ),
+        ("crates/my-core/src/models.rs", "pub struct Symbol {}\n"),
+        ("crates/my-core/src/other.rs", "pub struct Symbol {}\n"),
+        ("crates/my-core/src/db.rs", "pub struct Connection {}\n"),
+        (
+            "crates/my-core/src/report/mod.rs",
+            "pub mod arity;\npub struct Accounting {}\n",
+        ),
+        (
+            "crates/my-core/src/report/arity.rs",
+            "use crate::models::Symbol;\nuse rusqlite::Connection;\nuse super::{Accounting};\n\n\
+             pub fn count(symbol: &Symbol, accounting: &Accounting, conn: &Connection) -> usize { 0 }\n",
+        ),
+        (
+            "crates/my-core/src/report/tree.rs",
+            "use crate::{db::Connection, models::{Symbol}};\n\n\
+             pub fn tree(symbol: Symbol, conn: Connection) {}\n",
+        ),
+        ("crates/app/Cargo.toml", "[package]\nname = \"app\"\n"),
+        (
+            "crates/app/src/main.rs",
+            "use my_core::Symbol;\n\nfn run(symbol: Symbol) {}\n\nfn main() {}\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+    let related =
+        |path: &str, name: &str| related_types_for(&conn, &workspace, &db_path, path, name);
+
+    let arity = related("crates/my-core/src/report/arity.rs", "count");
+    assert_related_owner(&arity, "Symbol", "crates/my-core/src/models.rs", 1);
+    assert_related_owner(&arity, "Accounting", "crates/my-core/src/report/mod.rs", 2);
+    assert_no_related(&arity, "Connection");
+    let tree = related("crates/my-core/src/report/tree.rs", "tree");
+    assert_related_owner(&tree, "Symbol", "crates/my-core/src/models.rs", 1);
+    assert_related_owner(&tree, "Connection", "crates/my-core/src/db.rs", 1);
+    assert_related_owner(
+        &related("crates/app/src/main.rs", "run"),
+        "Symbol",
+        "crates/my-core/src/models.rs",
+        1,
+    );
+}
+
+#[test]
+fn csharp_and_razor_types_bind_through_enclosing_namespaces_and_usings() {
+    let (_repo, workspace, db_path) = scanned_repo(&[
+        (
+            "App/Rendering/Measurer.cs",
+            "using App.Data;\n\nnamespace App.Rendering\n{\n    public class Measurer\n    {\n        \
+             public bool Valid(ScaleBase scale, Row row) { return true; }\n    }\n}\n",
+        ),
+        (
+            "App/ScaleBase.cs",
+            "namespace App\n{\n    public abstract class ScaleBase {}\n}\n",
+        ),
+        (
+            "App/Data/Row.cs",
+            "namespace App.Data\n{\n    public class Row {}\n}\n",
+        ),
+        (
+            "Other/Row.cs",
+            "namespace Other\n{\n    public class Row {}\n}\n",
+        ),
+        (
+            "Other/ScaleBase.cs",
+            "namespace Other\n{\n    public abstract class ScaleBase {}\n}\n",
+        ),
+        (
+            "Other/Rendering/Plain.cs",
+            "namespace Plain\n{\n    public class Plain\n    {\n        \
+             public bool Valid(ScaleBase scale) { return true; }\n    }\n}\n",
+        ),
+        (
+            "App/Data/Reader.cs",
+            "namespace App.Data\n{\n    public partial class Reader {}\n}\n",
+        ),
+        (
+            "App/Data/Reader.Async.cs",
+            "namespace App.Data\n{\n    public partial class Reader {}\n}\n",
+        ),
+        (
+            "App/Rendering/Loader.cs",
+            "using App.Data;\n\nnamespace App.Rendering\n{\n    public class Loader\n    {\n        \
+             public void Load(Reader reader) { }\n    }\n}\n",
+        ),
+        ("Web/_Imports.razor", "@using App.Data\n"),
+        (
+            "Web/Pages/Grid.razor",
+            "<h1>Grid</h1>\n@code {\n    void Load(Row row) { }\n}\n",
+        ),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+    let related =
+        |path: &str, name: &str| related_types_for(&conn, &workspace, &db_path, path, name);
+
+    let measurer = related("App/Rendering/Measurer.cs", "Valid");
+    assert_related_owner(&measurer, "ScaleBase", "App/ScaleBase.cs", 3);
+    assert_related_owner(&measurer, "Row", "App/Data/Row.cs", 3);
+    assert_no_related(&related("Other/Rendering/Plain.cs", "Valid"), "ScaleBase");
+    assert_related_owner(
+        &related("App/Rendering/Loader.cs", "Load"),
+        "Reader",
+        "App/Data/Reader.cs",
+        3,
+    );
+    assert_related_owner(
+        &related("Web/Pages/Grid.razor", "Load"),
+        "Row",
+        "App/Data/Row.cs",
+        3,
+    );
+}
+
+#[test]
+fn c_types_bind_through_includes_and_their_includes() {
+    let (_repo, workspace, db_path) = scanned_repo(&[
+        (
+            "src/jv.h",
+            "#ifdef __cplusplus\nextern \"C\" {\n#endif\ntypedef struct { int kind; } jv;\n\
+             #ifdef __cplusplus\n}\n#endif\n",
+        ),
+        (
+            "include/lib/detail/position.h",
+            "typedef struct { int line; } position_t;\n",
+        ),
+        (
+            "tests/abi/position.h",
+            "typedef struct { int line; } position_t;\n",
+        ),
+        (
+            "src/error.c",
+            "#include <lib/detail/position.h>\n\nint where(position_t pos) { return pos.line; }\n",
+        ),
+        (
+            "src/jq.h",
+            "#include \"jv.h\"\n\njv jq_get_exit_code(void);\n",
+        ),
+        (
+            "src/main.c",
+            "#include <stdio.h>\n#include \"jq.h\"\n\njv run(jv value) { return value; }\n",
+        ),
+        ("other/jv.h", "typedef struct { int other; } jv;\n"),
+        ("other/plain.c", "jv plain(jv value) { return value; }\n"),
+    ]);
+    let conn = open_read_only(&db_path).unwrap();
+    let related =
+        |path: &str, name: &str| related_types_for(&conn, &workspace, &db_path, path, name);
+
+    assert_related_owner(
+        &related("src/jq.h", "jq_get_exit_code"),
+        "jv",
+        "src/jv.h",
+        4,
+    );
+    assert_related_owner(&related("src/main.c", "run"), "jv", "src/jv.h", 4);
+    assert_related_owner(
+        &related("src/error.c", "where"),
+        "position_t",
+        "include/lib/detail/position.h",
+        1,
+    );
+    assert_no_related(&related("other/plain.c", "plain"), "} jv");
+}

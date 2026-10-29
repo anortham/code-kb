@@ -3,6 +3,8 @@ use rust_stemmers::{Algorithm, Stemmer};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use thiserror::Error;
 
+mod import_scope;
+
 use crate::db::local_variable_predicate;
 use crate::models::{
     BlastRadiusResult, FileFact, ImpactedSymbol, LiteralFact, OpenEnd, ReferenceSite,
@@ -262,6 +264,15 @@ fn outline_level(alias: &str) -> String {
 const OUTLINE_KINDS: &str =
     "('function', 'method', 'struct', 'enum', 'trait', 'class', 'interface', 'type')";
 
+/// SQL mirror of `is_generated_lambda_name`: a Python lambda that julie names after its line.
+fn generated_lambda_predicate(alias: &str) -> String {
+    format!(
+        "({alias}.language = 'python' AND {alias}.kind = 'function'
+          AND {alias}.name GLOB 'lambda_[0-9]*' AND substr({alias}.name, 8) NOT GLOB '*[^0-9]*'
+          AND COALESCE({alias}.signature, '') GLOB 'lambda*')"
+    )
+}
+
 /// Load up to `limit_per_file` top-level definitions for each file the outline lists by name.
 /// Files deeper than `depth` are filtered out in SQLite to keep memory strictly bounded. The
 /// unary `+` keeps the overload check on the name index: the parent index would walk every
@@ -288,6 +299,7 @@ pub fn load_scoped_outline_symbols(
             JOIN outline_files bf ON s.path = bf.path
             WHERE s.kind IN {OUTLINE_KINDS}
               AND {top}
+              AND NOT {lambda}
               AND NOT EXISTS (SELECT 1 FROM symbols overload
                               WHERE +overload.path = s.path AND overload.name = s.name
                                 AND overload.kind = s.kind
@@ -304,6 +316,7 @@ pub fn load_scoped_outline_symbols(
         ORDER BY path ASC, start_line ASC",
         files = outline_files_cte(conn),
         top = outline_level("s"),
+        lambda = generated_lambda_predicate("s"),
     );
 
     let mut stmt = conn.prepare(&sql)?;
@@ -352,7 +365,7 @@ pub fn load_outline_counts(
         "WITH {files}
          SELECT replace(s.path, '\\', '/'),
                 COUNT(DISTINCT CASE WHEN {top} AND s.is_test = 0 AND s.test_container = 0
-                    AND s.kind IN {OUTLINE_KINDS}
+                    AND s.kind IN {OUTLINE_KINDS} AND NOT {lambda}
                     THEN s.kind || ' ' || s.name END),
                 SUM(s.is_test = 1 AND NOT {lifecycle}),
                 SUM(s.is_test = 1 AND {lifecycle})
@@ -361,6 +374,7 @@ pub fn load_outline_counts(
          GROUP BY replace(s.path, '\\', '/')",
         files = outline_files_cte(conn),
         top = outline_level("s"),
+        lambda = generated_lambda_predicate("s"),
     ))?;
     let rows = stmt.query_map(&scope.params()[..], |row| {
         Ok((
@@ -6550,6 +6564,20 @@ pub(crate) fn type_fact_owner_id_sql(
     resolved_type: &str,
     language: &str,
 ) -> String {
+    type_fact_owner_id_in_scope_sql(source_symbol_id, resolved_type, language, None)
+}
+
+/// `type_fact_owner_id_sql` with the import scope of the fact, as `(import_files,
+/// namespaces)`: `import_files` is a JSON array of `[path, name]` definitions that the file's
+/// imports reach, and `namespaces` a JSON array of `[namespace, rank]` pairs that it sees,
+/// where a lower rank shadows a higher one. The parts of one type in one namespace (a C#
+/// partial class) are one candidate, shown at the file named for the type.
+fn type_fact_owner_id_in_scope_sql(
+    source_symbol_id: &str,
+    resolved_type: &str,
+    language: &str,
+    scope: Option<(&str, &str)>,
+) -> String {
     let import_owner = type_fact_import_owner_sql("d", resolved_type, "p.path", "p.language");
     let go_import_owner = go_import_owner_sql("d", resolved_type, "p.path", "p.language");
     let java_import_owner = java_import_owner_sql("d", resolved_type, "p.path", "p.language");
@@ -6558,6 +6586,51 @@ pub(crate) fn type_fact_owner_id_sql(
     let same_directory = path_proximity("p.path", "d.path");
     let generic_scope_ctes = type_fact_generic_scope_ctes();
     let generic_parameter = type_fact_is_generic_parameter_sql("generic_scopes", resolved_type);
+    let module_level = module_level_type_sql("d");
+    let (scope_files, scope_namespaces, scope_case) = match scope {
+        Some((import_files, namespaces)) => (
+            format!(
+                "UNION
+             SELECT DISTINCT d.symbol_id
+             FROM fact_source p
+             CROSS JOIN json_each({import_files}) scope_file
+             JOIN symbols d
+               ON d.path = json_extract(scope_file.value, '$[0]')
+              AND d.name = json_extract(scope_file.value, '$[1]')
+              AND d.kind IN ({RELATED_TYPE_KINDS})
+              AND {module_level}
+             WHERE {language_match}"
+            ),
+            format!(
+                ", namespace_candidates(symbol_id, namespace, path, rank) AS (
+             SELECT DISTINCT d.symbol_id, namespace_row.name, d.path,
+                    json_extract(open_namespace.value, '$[1]')
+             FROM fact_source p
+             CROSS JOIN symbols d
+             CROSS JOIN symbols namespace_row
+             CROSS JOIN json_each({namespaces}) open_namespace
+             WHERE d.name = {resolved_type}
+               AND d.kind IN ({RELATED_TYPE_KINDS})
+               AND namespace_row.path = d.path
+               AND namespace_row.kind = 'namespace'
+               AND (d.parent_symbol_id = namespace_row.symbol_id OR d.parent_symbol_id IS NULL)
+               AND namespace_row.name = json_extract(open_namespace.value, '$[0]')
+               AND {language_match}
+         ), namespace_best(symbol_id, namespace, path) AS (
+             SELECT DISTINCT symbol_id, namespace, path FROM namespace_candidates
+             WHERE rank = (SELECT MIN(rank) FROM namespace_candidates)
+         )"
+            ),
+            format!(
+                "WHEN EXISTS (SELECT 1 FROM namespace_candidates) THEN
+                 CASE WHEN (SELECT COUNT(DISTINCT namespace) FROM namespace_best) = 1
+                      THEN (SELECT symbol_id FROM namespace_best
+                            ORDER BY ('/' || path) GLOB '*/' || {resolved_type} || '.cs' DESC, path
+                            LIMIT 1) END"
+            ),
+        ),
+        None => (String::new(), String::new(), String::new()),
+    };
     let lexical_owner_depth =
         "(SELECT MIN(lexical.depth) FROM lexical WHERE lexical.symbol_id = d.symbol_id)";
     let lexical_parent_depth =
@@ -6620,7 +6693,8 @@ pub(crate) fn type_fact_owner_id_sql(
               AND d.kind IN ({RELATED_TYPE_KINDS})
              WHERE {language_match}
                AND {go_import_owner}
-         ), scoped_candidates(symbol_id) AS (
+             {scope_files}
+         ){scope_namespaces}, scoped_candidates(symbol_id) AS (
              SELECT DISTINCT d.symbol_id
              FROM fact_source p JOIN symbols d
                ON d.name = {resolved_type}
@@ -6655,6 +6729,7 @@ pub(crate) fn type_fact_owner_id_sql(
                  CASE WHEN (SELECT COUNT(*) FROM imported_candidates) = 1
                       THEN (SELECT symbol_id FROM imported_candidates LIMIT 1) END
              WHEN (SELECT bound FROM import_bindings) THEN NULL
+             {scope_case}
              WHEN EXISTS (SELECT 1 FROM scoped_candidates) THEN
                  CASE WHEN (SELECT COUNT(*) FROM scoped_candidates) = 1
                       THEN (SELECT symbol_id FROM scoped_candidates LIMIT 1) END
@@ -7437,6 +7512,17 @@ pub(crate) fn typed_receiver_chain_matches_target_sql(
 
 const MAX_RELATED_TYPE_FACTS: usize = 4096;
 
+/// True when the type `alias` is declared at the level of its file: with no parent, or in a
+/// namespace, such as C's `extern "C"` block.
+fn module_level_type_sql(alias: &str) -> String {
+    format!(
+        "({alias}.parent_symbol_id IS NULL OR EXISTS (
+            SELECT 1 FROM symbols type_scope
+            WHERE type_scope.symbol_id = {alias}.parent_symbol_id
+              AND type_scope.kind = 'namespace'))"
+    )
+}
+
 /// The workspace type definitions bound by the type facts of `target` and its direct members.
 /// Unbound or ambiguous names are omitted; each owner appears once as `signature (path:line)`.
 pub fn find_related_types(
@@ -7458,7 +7544,7 @@ fn find_related_types_with_fact_limit(
     }
     let mut stmt = conn.prepare(
         "SELECT t.type_fact_id, t.symbol_id, t.language, t.resolved_type,
-                t.generic_params_json
+                t.generic_params_json, s.path
          FROM type_facts t JOIN symbols s ON s.symbol_id = t.symbol_id
          WHERE s.symbol_id = ?1 OR s.parent_symbol_id = ?1
          ORDER BY s.path, s.start_line, s.start_column, t.type_fact_id
@@ -7466,6 +7552,7 @@ fn find_related_types_with_fact_limit(
     )?;
     let mut rows = stmt.query(params![target.symbol_id, fact_limit as i64])?;
     let mut owner_statement = None;
+    let mut scopes = import_scope::ScopeReader::new(conn);
     let mut seen = HashSet::new();
     let mut types = Vec::new();
     while let Some(row) = rows.next()? {
@@ -7480,14 +7567,25 @@ fn find_related_types_with_fact_limit(
             generic_params: row.get(4)?,
         };
         if owner_statement.is_none() {
-            let owner_query = format!("SELECT {}", type_fact_owner_id_sql("?1", "?2", "?3"));
+            let owner_query = format!(
+                "SELECT {}",
+                type_fact_owner_id_in_scope_sql("?1", "?2", "?3", Some(("?4", "?5")))
+            );
             owner_statement = Some(conn.prepare(&owner_query)?);
         }
+        let path: String = row.get(5)?;
+        let scope = scopes.scope(&fact.symbol_id, &path, &fact.language, &fact.resolved_type)?;
         let owner_id = owner_statement
             .as_mut()
             .expect("owner query was just prepared")
             .query_row(
-                params![fact.symbol_id, fact.resolved_type, fact.language],
+                params![
+                    fact.symbol_id,
+                    fact.resolved_type,
+                    fact.language,
+                    scope.files,
+                    scope.namespaces
+                ],
                 |row| row.get::<_, Option<String>>(0),
             )?;
         let Some(owner) = owner_id
