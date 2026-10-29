@@ -8130,6 +8130,45 @@ fn a_java_star_import_of_an_outer_type_ties_the_class_nested_in_it() {
 }
 
 #[test]
+fn a_java_star_import_is_read_from_its_import_row_even_beside_another_import_on_its_line() {
+    let repo = scanned_repo(&[
+        (
+            "b/Base.java",
+            "package b;\n\npublic class Base {\n    public int run(int x) {\n        return -x;\n    }\n}\n",
+        ),
+        (
+            "c/Base.java",
+            "package c;\n\npublic class Base {\n    public int run(int x) {\n        return 0;\n    }\n}\n",
+        ),
+        ("x/Other.java", "package x;\n\npublic class Other {\n}\n"),
+        (
+            "q/K22.java",
+            "package q;\n\nimport x.Other; import b.*;\n\npublic class K22 extends Base {\n    public int run(int x) {\n        return 22;\n    }\n}\n",
+        ),
+        (
+            "q/K23.java",
+            "package q;\n\nimport static b.Base.*;\nimport c.*;\n\npublic class K23 extends Base {\n    public int run(int x) {\n        return 23;\n    }\n}\n",
+        ),
+    ]);
+
+    let b = first_definition_report(&repo, "run", "b/Base.java");
+    let c = first_definition_report(&repo, "run", "c/Base.java");
+
+    assert_eq!(
+        listed(&b.overrides),
+        ["K22.run q/K22.java:6"],
+        "{}",
+        dump(&b)
+    );
+    assert_eq!(
+        listed(&c.overrides),
+        ["K23.run q/K23.java:7"],
+        "{}",
+        dump(&c)
+    );
+}
+
+#[test]
 fn a_kotlin_base_is_tied_by_its_written_package_its_import_or_its_star_import() {
     let repo = scanned_repo(&[
         (

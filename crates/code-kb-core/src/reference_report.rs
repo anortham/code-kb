@@ -23,6 +23,7 @@ use crate::text_scan::scan_word;
 pub(crate) mod arity;
 mod js_bindings;
 mod js_modules;
+mod loaded_files;
 mod receiver_types;
 mod sections;
 pub(crate) mod variant_names;
@@ -511,7 +512,21 @@ const IMPORT_SOURCES_SQL: &str = "SELECT COALESCE(json_extract(metadata_json, '$
             OR json_extract(metadata_json, '$.local_name') = ?2)";
 
 const IMPORT_SIGNATURES_SQL: &str = "SELECT COALESCE(signature, '') FROM symbols
-     WHERE kind = 'import' AND path = ?1 AND name = ?2";
+     WHERE kind = 'import' AND path = ?1 AND name = ?2
+       AND CASE WHEN json_valid(metadata_json)
+                THEN json_extract(metadata_json, '$.wildcard') END IS NOT 1";
+
+/// The imports of a file that can bind the name `?2`, with what
+/// [`loaded_files::binds_name`] and [`loaded_files`] resolution read.
+const BINDING_SOURCES_SQL: &str = "SELECT COALESCE(json_extract(metadata_json, '$.source'), ''),
+            language,
+            COALESCE(json_extract(metadata_json, '$.form'), ''),
+            COALESCE(json_extract(metadata_json, '$.relative_to'), ''),
+            COALESCE(json_extract(metadata_json, '$.wildcard'), 0) IN (1, 'true')
+     FROM symbols
+     WHERE kind = 'import' AND path = ?1 AND json_valid(metadata_json)
+       AND (name = ?2 OR json_extract(metadata_json, '$.alias') = ?2
+            OR json_extract(metadata_json, '$.local_name') = ?2)";
 
 const PYTHON_IMPORT_ROWS_SQL: &str = "SELECT COALESCE(signature, ''),
             COALESCE(json_extract(metadata_json, '$.source'), ''),
@@ -1778,6 +1793,7 @@ struct Accounting<'a> {
     import_matches: HashMap<(String, String, String), Vec<ImportMatch>>,
     js: js_modules::JsCaches,
     receivers: receiver_types::ReceiverCaches,
+    loads: loaded_files::LoadCaches,
 }
 
 impl<'a> Accounting<'a> {
@@ -1805,6 +1821,7 @@ impl<'a> Accounting<'a> {
             import_matches: HashMap::new(),
             js: js_modules::JsCaches::default(),
             receivers: receiver_types::ReceiverCaches::default(),
+            loads: loaded_files::LoadCaches::default(),
         }
     }
 
@@ -3385,6 +3402,18 @@ impl<'a> Accounting<'a> {
                 )));
             }
         }
+        if let Some(verdict) = self.r_namespace_verdict(row, spec)? {
+            return Ok(Some(verdict));
+        }
+        if let Some(verdict) = self.receiver_file_verdict(row, spec)? {
+            return Ok(Some(verdict));
+        }
+        if let Some(verdict) = self.loaded_name_verdict(row, spec)? {
+            return Ok(Some(verdict));
+        }
+        if let Some(verdict) = self.dart_bare_verdict(row, spec)? {
+            return Ok(Some(verdict));
+        }
         if let Some(verdict) = self.java_static_import(row, spec)? {
             return Ok(Some(verdict));
         }
@@ -4143,7 +4172,7 @@ impl<'a> Accounting<'a> {
 
     /// The other definitions that can reach `row`; a module receiver reaches no member of a class.
     fn rivals<'d>(
-        &self,
+        &mut self,
         row: &NameRow,
         others: &[&'d Definition],
     ) -> Result<Vec<&'d Definition>, QueryError> {
@@ -4163,7 +4192,10 @@ impl<'a> Accounting<'a> {
         };
         let mut rivals = Vec::new();
         for &other in others {
-            if !row.can_reach(other) || module_receiver && other.owner_name.is_some() {
+            if !row.can_reach(other)
+                || module_receiver && other.owner_name.is_some()
+                || self.load_excludes(row, other)?
+            {
                 continue;
             }
             if let Some(type_name) = receiver_type.as_deref()
@@ -4615,12 +4647,37 @@ impl<'a> Accounting<'a> {
         if row.language == "rust" && EXTERNAL_RUST_ROOTS.contains(&qualifier) {
             return Ok(Some((qualifier.to_string(), qualifier.to_string())));
         }
-        let mut sources = self.with_statement(IMPORT_SOURCES_SQL, |stmt| {
-            stmt.query_map(params![row.path, qualifier], |r| r.get::<_, String>(0))?
-                .collect::<Result<Vec<_>, _>>()
+        let bindings = self.with_statement(BINDING_SOURCES_SQL, |stmt| {
+            stmt.query_map(params![row.path, qualifier], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                    r.get::<_, String>(3)?,
+                    r.get::<_, bool>(4)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()
         })?;
-        let has_import = !sources.is_empty();
-        sources.retain(|source| !source.is_empty());
+        let bindings: Vec<_> = bindings
+            .into_iter()
+            .filter(|(_, language, form, _, wildcard)| {
+                loaded_files::binds_name(language, form, *wildcard)
+            })
+            .collect();
+        let has_import = !bindings.is_empty();
+        let mut resolved = Vec::new();
+        let mut sources = Vec::new();
+        for (source, language, form, relative_to, _) in bindings {
+            if source.is_empty() || language == "java" {
+                continue;
+            }
+            if loaded_files::resolves_sources(&language) {
+                resolved.push((source, language, form, relative_to));
+            } else {
+                sources.push(source);
+            }
+        }
         let pending_modules = self.with_statement(PENDING_IMPORT_MODULES_SQL, |stmt| {
             stmt.query_map(params![row.path, qualifier], |r| {
                 r.get::<_, Option<String>>(0)
@@ -4633,6 +4690,16 @@ impl<'a> Accounting<'a> {
             {
                 sources.push(parts.join("::"));
             }
+        }
+        for (source, language, form, relative_to) in &resolved {
+            if !self.loaded_source_is_external(&row.path, language, source, form, relative_to)? {
+                return Ok(None);
+            }
+        }
+        if sources.is_empty()
+            && let Some((source, ..)) = resolved.first()
+        {
+            return Ok(Some((qualifier.to_string(), source.clone())));
         }
         if sources.is_empty() {
             return match has_import {
@@ -4657,8 +4724,9 @@ impl<'a> Accounting<'a> {
     }
 
     /// A Java import of the receiver from a package that no project folder holds (`Assert` after
-    /// `import org.junit.Assert;`). julie writes no source for a Java import, so the package is
-    /// read from the signature: the segments before the first capitalized one.
+    /// `import org.junit.Assert;`). julie's `source` names only the package or the class of a
+    /// static import, so the import is read from the signature: the package is the segments
+    /// before the first capitalized one. A star import binds no name.
     fn java_import_outside(
         &self,
         row: &NameRow,

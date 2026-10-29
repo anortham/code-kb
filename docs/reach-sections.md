@@ -49,9 +49,11 @@ uses for an unindexed import) ties the name outside the project, so no project c
 The callers report labels such a bare name `unresolved`; the section follows the import and
 leaves that label alone. A star import decides when no import names the name. A Python
 absolute `from M import *` counts only for a class whose module path holds `M` as whole names
-(the module, or a package above it). The Java, Kotlin, Scala, and Groovy star lines are read
-from the source file, because julie records no row for a Java one. A line inside a comment
-(`//` or `/* */`) or a string or character literal is not read. A `"""` or `'''` string spans
+(the module, or a package above it). A Java star import is the import row
+that julie marks with `wildcard: true`, whose `source` is the package or type it names
+(`import b.*;`, `import static b.Base.*;`), so two imports on one line are both read. The Kotlin,
+Scala, and Groovy star lines are read from the source file, because julie records no such row
+for them. A line inside a comment (`//` or `/* */`) or a string or character literal is not read. A `"""` or `'''` string spans
 lines; any other literal ends at its closing quote or at the end of its line. A Kotlin or Scala
 block comment nests; a Java or Groovy one ends at its first `*/`. A Groovy slashy string is not
 skipped. A type in the package of

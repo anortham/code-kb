@@ -4274,14 +4274,38 @@ fn member_receiver_match(conn: &Connection) -> String {
     )
 }
 
+/// SQL that holds when the import row `alias` binds its name or alias in code (`const math =
+/// @import(…)`, `import x as y`), and not when it only loads a file or opens its names: a C or
+/// C++ `#include`, a CSS `@import`, a Bash `source`, a PowerShell dot-source or `Import-Module`,
+/// an R `source()`, a Ruby `require`, a PHP `require` or `include`, an F# `open` or `#load`, or a
+/// Java star import. `binds_name` in `reference_report/loaded_files.rs` is the same rule.
+pub(crate) fn import_binds_name_sql(alias: &str) -> String {
+    let metadata =
+        format!("CASE WHEN json_valid({alias}.metadata_json) THEN {alias}.metadata_json END");
+    let form = format!("COALESCE(json_extract({metadata}, '$.form'), '')");
+    format!(
+        "(json_extract({metadata}, '$.wildcard') IS NOT 1
+          AND CASE {alias}.language
+              WHEN 'c' THEN 0 WHEN 'css' THEN 0 WHEN 'bash' THEN 0
+              WHEN 'powershell' THEN 0 WHEN 'fsharp' THEN 0
+              WHEN 'cpp' THEN {form} IN ('namespace', 'using', 'using namespace')
+              WHEN 'ruby' THEN {form} = 'autoload'
+              WHEN 'r' THEN {form} NOT IN ('source()', '')
+              WHEN 'php' THEN {form} NOT IN ('require', 'require_once', 'include', 'include_once')
+              ELSE 1 END)"
+    )
+}
+
 /// SQL that holds when the caller's file `p.path` binds `binding_name` through an import whose
-/// source module, or imported name, names a folder or file on the path of `target`.
+/// source module, or imported name, names a folder or file on the path of `target`. A Java import
+/// and a GDScript `preload` have rules of their own.
 pub(crate) fn module_import_binding_sql(target: &str, binding_name: &str) -> String {
     let target_path = format!("('/' || replace({target}.path, '\\', '/'))");
     let dotted = "replace(module_path.value, '/', '.')";
     let segment = format!("replace({dotted}, rtrim({dotted}, replace({dotted}, '.', '')), '')");
     let relative = is_relative_import_path("import_source.value");
     let relative_match = relative_import_matches("import_source.value", target);
+    let binds = import_binds_name_sql("module_import");
     format!(
         "EXISTS (
                         SELECT 1 FROM symbols module_import
@@ -4296,6 +4320,8 @@ pub(crate) fn module_import_binding_sql(target: &str, binding_name: &str) -> Str
                           AND module_import.path = p.path
                           AND module_import.name = {binding_name}
                           AND json_valid(module_import.metadata_json)
+                          AND module_import.language NOT IN ('java', 'gdscript')
+                          AND {binds}
                           AND CASE WHEN {relative} THEN {relative_match}
                               ELSE {segment} != ''
                                    AND ({target_path} LIKE '%/' || {segment} || '/%'
@@ -5673,6 +5699,8 @@ fn describe_callee_targets(
 
 /// The import statements of the top-level definition `name` (under `path_filter` when given): an
 /// import row with that name whose source module names a folder or file on the definition's path.
+/// A row that binds no name ([`import_binds_name_sql`]) imports none, and a Java import line is
+/// read from its signature by the edit check.
 /// A relative JavaScript or TypeScript source (`./helpers/parseUtil`) must name the definition's
 /// file, so a mirror copy elsewhere (`deno/lib/helpers/parseUtil.ts`) does not count.
 /// `find_references` lists calls and type uses, so these go in a summary line after them.
@@ -5708,8 +5736,8 @@ pub fn import_sites_of_absent(
 /// the module.
 /// The Java import lines that name `name` of the class file `path`. For the class itself:
 /// `import p.G;`, and `import static p.G.m;` or `import p.G.Inner;` of its members. For a member:
-/// `import static p.G.name;` or `import p.G.name;`. julie writes no source for a Java import, so
-/// the path is read from the signature.
+/// `import static p.G.name;` or `import p.G.name;`. julie's `source` names only the package or
+/// the class of a static import, so the path is read from the signature.
 fn java_import_lines(
     conn: &Connection,
     name: &str,
@@ -5821,6 +5849,7 @@ fn import_sites_from(
     let relative = is_relative_import_path("module_path.value");
     let relative_match =
         relative_import_matches("module_path.value", "target").replace("p.path", "i.path");
+    let binds = import_binds_name_sql("i");
     let mut stmt = conn.prepare(&format!(
         "SELECT DISTINCT replace(i.path, '\\', '/'), i.start_line
          FROM {targets} target
@@ -5833,6 +5862,8 @@ fn import_sites_from(
                 OR replace(target.path, '\\', '/') LIKE ?3 ESCAPE '\\')
            AND json_valid(i.metadata_json)
            AND i.language NOT IN ({docs})
+           AND i.language != 'java'
+           AND {binds}
            AND (
                {segment} != ''
                AND ({target_path} GLOB '*/' || {segment} || '/*'

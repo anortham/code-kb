@@ -385,10 +385,26 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   `import json as _json`) is excluded: ``receiver `_json` is imported from `json` ``. An import
   source that names a project file or folder by its path is no outside import, even when its
   first name is `std`, `core`, or `alloc`: Zig `@import("core/math.zig")` and `@import("root")`,
-  Lua `require("core.utils")` (`core/utils.lua` or `core/utils/init.lua`), and QML `import
-  "core" as Core`; a source written from the importer's folder (`../lib/widget.zig`) never is. A Java
+  Lua `require("core.utils")` (`core/utils.lua` or `core/utils/init.lua`), QML `import
+  "core" as Core`, Dart `import '…' as s`, and GDScript `preload("res://…")`; a source written
+  from the importer's folder (`../lib/widget.zig`) never is. `reference_report/loaded_files.rs`
+  resolves the `source` and `form` that julie writes for C, C++, CSS, Bash, PowerShell, R, Ruby,
+  F#, Dart, PHP, and GDScript as each language reads the path, and a path built from runtime state
+  (`$DIR/env.sh`, a PowerShell module name) proves nothing. A row that only loads a file or opens
+  its names (`#include`, Bash `source`, Ruby `require`, PHP `require`, F# `open`, a Java star
+  import) binds no receiver. A Dart import prefix reaches only the libraries it names and what
+  they export; a GDScript `preload` constant reaches its file's class and that class's bases; an
+  R `pkg::f()` reaches only the `R` folder of the project package `pkg`, else it is outside. A bare
+  Bash, PowerShell, R, PHP, or Ruby call of a top-level function that a file the caller's file
+  loads defines is proven (`import`), and another top-level definition is excluded (``the file
+  loads `greet` from `sh/lib/common.sh` ``), only when every load resolves and nothing else loads
+  the caller's file. A bare Dart call sees its own library and its parts first, then what its
+  imports without a prefix bring in; a conditional import or a Dart method of that name decides
+  nothing. In C and C++ an included header's declaration is proven, the definition in
+  the source file with that header's stem is likely, and a `static` definition in a file that is
+  not included is excluded. `docs/language-support.md` (File-path imports) has every rule. A Java
   receiver imported from a package that no project folder holds (`Assert.assertEquals()` after
-  `import org.junit.Assert;`) is excluded the same way; julie writes no source for a Java import,
+  `import org.junit.Assert;`) is excluded the same way; julie's `source` names only the package,
   so the package is the segments of the line before the first capitalized one.
   A JavaScript or TypeScript read of the name that only scope ties to the target is likely,
   because julie does not record callback parameters. A bare name never reaches a JavaScript

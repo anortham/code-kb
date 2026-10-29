@@ -86,6 +86,11 @@ const IMPORT_ROWS_SQL: &str = "SELECT COALESCE(signature, ''),
                      THEN COALESCE(json_extract(metadata_json, '$.source'), '') ELSE '' END
          FROM symbols WHERE kind = 'import' AND path = ?1
            AND (name = ?2 OR substr(name, -length(?2) - 1) = '.' || ?2)";
+const JAVA_STAR_IMPORTS_SQL: &str = "SELECT json_extract(metadata_json, '$.source') FROM symbols
+         WHERE path = ?1 AND kind = 'import' AND json_valid(metadata_json)
+           AND json_extract(metadata_json, '$.wildcard') IN (1, 'true')
+           AND json_extract(metadata_json, '$.source') IS NOT NULL
+         ORDER BY start_line";
 const JVM_PACKAGE_SQL: &str = "SELECT signature FROM symbols
              WHERE path = ?1 AND kind = 'namespace' AND parent_symbol_id IS NULL
                AND signature LIKE 'package %'
@@ -448,9 +453,10 @@ impl<'a, 'b> TypeEdges<'a, 'b> {
         }
     }
 
-    /// The rule for a Java, Kotlin, Scala, or Groovy file. julie records no source for such an
-    /// import, so an import line is read as its written package and name; it records no row for
-    /// a Java star import, so the star imports are read from the file. A qualifier written before
+    /// The rule for a Java, Kotlin, Scala, or Groovy file. An import line is read as its written
+    /// package and name. julie marks a Java star import with `wildcard` and names its package or
+    /// type as the `source`; the Kotlin, Scala, and Groovy star imports are read from the file,
+    /// because julie records no such row for them. A qualifier written before
     /// the name decides first: it must name the package and enclosing types of `base`, as written,
     /// through an import of its first name, or under the package of the file or a star import. An
     /// import of the name decides next. With star imports and no import of the name, a type of
@@ -476,7 +482,7 @@ impl<'a, 'b> TypeEdges<'a, 'b> {
                         package
                             .iter()
                             .cloned()
-                            .chain(self.star_imports(&subtype.path))
+                            .chain(self.star_imports(&subtype.path)?)
                             .map(|place| format!("{place}.{qualifier}")),
                     )
                     .collect(),
@@ -486,7 +492,7 @@ impl<'a, 'b> TypeEdges<'a, 'b> {
         if let Some(imported) = jvm_imported(self.accounting, &subtype.path, &base.name)? {
             return Ok(Some(imported == format!("{owner}.{}", base.name)));
         }
-        let stars = self.star_imports(&subtype.path);
+        let stars = self.star_imports(&subtype.path)?;
         if stars.is_empty() {
             return Ok(None);
         }
@@ -511,18 +517,26 @@ impl<'a, 'b> TypeEdges<'a, 'b> {
         Ok(owner)
     }
 
-    fn star_imports(&mut self, path: &str) -> Vec<String> {
-        self.star_imports
-            .entry(path.to_string())
-            .or_insert_with(|| {
-                let nested_comments = [".kt", ".kts", ".scala", ".sc"]
-                    .iter()
-                    .any(|extension| path.ends_with(extension));
-                std::fs::read_to_string(self.root.join(path))
-                    .map(|text| star_imports(&text, nested_comments))
-                    .unwrap_or_default()
-            })
-            .clone()
+    fn star_imports(&mut self, path: &str) -> Result<Vec<String>, QueryError> {
+        if let Some(stars) = self.star_imports.get(path) {
+            return Ok(stars.clone());
+        }
+        let stars = if path.ends_with(".java") {
+            self.accounting
+                .with_statement(JAVA_STAR_IMPORTS_SQL, |stmt| {
+                    stmt.query_map(params![path], |row| row.get::<_, String>(0))?
+                        .collect::<Result<Vec<_>, _>>()
+                })?
+        } else {
+            let nested_comments = [".kt", ".kts", ".scala", ".sc"]
+                .iter()
+                .any(|extension| path.ends_with(extension));
+            std::fs::read_to_string(self.root.join(path))
+                .map(|text| star_imports(&text, nested_comments))
+                .unwrap_or_default()
+        };
+        self.star_imports.insert(path.to_string(), stars.clone());
+        Ok(stars)
     }
 
     /// A Python qualifier of two or more names before the base (`pkg_a.base.Base`) names the
@@ -696,8 +710,9 @@ fn python_module(path: &str) -> String {
         .replace('/', ".")
 }
 
-/// The package or type that each `import a.b.*;` (Scala `import a.b._`) line of `text` names,
-/// outside comments and string and character literals. Kotlin and Scala nest block comments.
+/// The package or type that each `import a.b.*` (Scala `import a.b._`) line of a Kotlin, Scala,
+/// or Groovy `text` names, outside comments and string and character literals. Kotlin and Scala
+/// nest block comments.
 fn star_imports(text: &str, nested_comments: bool) -> Vec<String> {
     blank_non_code(text, nested_comments)
         .lines()
@@ -792,12 +807,14 @@ pub(super) fn quoted_end(bytes: &[u8], open: usize) -> usize {
 }
 
 /// The dotted name an `import a.b.C;` line writes; an aliased import (`import a.b.C as D`) binds
-/// another name and writes none.
+/// another name and writes none, and a star import (`import a.b.C.*;`, which julie names `C`)
+/// binds none.
 fn qualified_import(signature: &str) -> Option<&str> {
     let text = signature.trim().strip_prefix("import")?.trim_start();
     let text = text.strip_prefix("static ").unwrap_or(text);
     let text = text.trim().trim_end_matches(';').trim();
-    (text.contains('.') && !text.contains(" as ")).then_some(text)
+    let star = text.ends_with(".*") || text.ends_with("._");
+    (text.contains('.') && !text.contains(" as ") && !star).then_some(text)
 }
 
 /// The path a pending `extends` or `implements` row writes before the type name (the modules and
