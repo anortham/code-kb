@@ -1643,3 +1643,119 @@ fn a_file_target_lists_a_test_that_the_callers_report_ties_outside_its_construct
         "{text}"
     );
 }
+
+fn impacted(result: &code_kb_core::BlastRadiusResult) -> Vec<(&str, usize, Option<&str>)> {
+    result
+        .impacted_symbols
+        .iter()
+        .map(|s| (s.name.as_str(), s.depth, s.reason.as_deref()))
+        .collect()
+}
+
+const APP_WITH_METHOD_READS: &str = "class App:\n    def __init_subclass__(cls, **kwargs):\n        for method in (cls.handle_error,):\n            assert method\n\n    def handlers(self):\n        return [self.handle_error]\n\n    def handle_error(self, error):\n        return error\n\n    def dispatch(self):\n        return self.handle_error(1)\n\n    def run(self):\n        return self.handlers()\n";
+
+#[test]
+fn a_method_read_that_the_walk_cannot_follow_is_a_depth_one_impacted_symbol() {
+    let (_temp, workspace, conn) = scanned(&[
+        ("pyproject.toml", "[project]\nname = \"pkg\"\n"),
+        ("src/pkg/__init__.py", ""),
+        ("src/pkg/app.py", APP_WITH_METHOD_READS),
+        (
+            "tests/test_app.py",
+            "from pkg.app import App\n\n\ndef test_dispatch():\n    app = App()\n    assert app.dispatch() == 1\n",
+        ),
+    ]);
+
+    let result = blast_radius_op(&workspace, &conn, Some("App.handle_error"), None, 2, 20).unwrap();
+
+    let text = format_blast_radius(&result);
+    assert_eq!(
+        impacted(&result),
+        [
+            ("dispatch", 1, None),
+            (
+                "__init_subclass__",
+                1,
+                Some("direct caller (find_references)")
+            ),
+            ("handlers", 1, Some("direct caller (find_references)")),
+            ("run", 2, None),
+        ],
+        "{text}"
+    );
+    assert_eq!(
+        reasons(&result),
+        [("test_dispatch", "indirect caller [depth 2]")],
+        "{text}"
+    );
+}
+
+#[test]
+fn a_method_read_joins_the_callers_the_walk_found_when_no_test_reaches_the_target() {
+    let (_temp, workspace, conn) = scanned(&[
+        ("pyproject.toml", "[project]\nname = \"pkg\"\n"),
+        ("src/pkg/__init__.py", ""),
+        ("src/pkg/app.py", APP_WITH_METHOD_READS),
+    ]);
+
+    let result = blast_radius_op(&workspace, &conn, Some("App.handle_error"), None, 2, 20).unwrap();
+
+    let text = format_blast_radius(&result);
+    assert_eq!(
+        impacted(&result),
+        [
+            ("dispatch", 1, None),
+            (
+                "__init_subclass__",
+                1,
+                Some("direct caller (find_references)")
+            ),
+            ("handlers", 1, Some("direct caller (find_references)")),
+            ("run", 2, None),
+        ],
+        "{text}"
+    );
+    assert!(result.likely_tests.is_empty(), "{text}");
+}
+
+#[test]
+fn a_method_read_of_a_function_the_diff_changed_is_a_depth_one_impacted_symbol() {
+    let (_temp, workspace, conn) = changed_after_commit(
+        &[
+            ("pyproject.toml", "[project]\nname = \"pkg\"\n"),
+            ("src/pkg/__init__.py", ""),
+            ("src/pkg/app.py", APP_WITH_METHOD_READS),
+            (
+                "tests/test_app.py",
+                "from pkg.app import App\n\n\ndef test_dispatch():\n    app = App()\n    assert app.dispatch() == 1\n",
+            ),
+        ],
+        &[(
+            "src/pkg/app.py",
+            &APP_WITH_METHOD_READS.replace("return error", "return None"),
+        )],
+    );
+
+    let result = blast_radius_op(&workspace, &conn, None, None, 2, 20).unwrap();
+
+    let text = format_blast_radius(&result);
+    assert_eq!(
+        impacted(&result),
+        [
+            ("dispatch", 1, None),
+            (
+                "__init_subclass__",
+                1,
+                Some("direct caller (find_references)")
+            ),
+            ("handlers", 1, Some("direct caller (find_references)")),
+            ("run", 2, None),
+        ],
+        "{text}"
+    );
+    assert_eq!(
+        reasons(&result),
+        [("test_dispatch", "indirect caller [depth 2]")],
+        "{text}"
+    );
+}

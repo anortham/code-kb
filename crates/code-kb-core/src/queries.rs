@@ -8514,6 +8514,37 @@ fn seed_spans(
     Ok(spans.collect::<Result<Vec<_>, _>>()?)
 }
 
+/// Whether a member read of `target`'s name (`cls.handle_error` with no call) sits outside
+/// `target` and outside every symbol that starts at a `listed` path and line. The walk follows
+/// calls only, so only the callers report can tie such a read to the target.
+pub(crate) fn has_member_read_outside(
+    conn: &Connection,
+    target: &Symbol,
+    listed: &HashSet<(String, usize)>,
+) -> Result<bool, QueryError> {
+    if !has_column(conn, "identifiers", "containing_symbol_id") {
+        return Ok(false);
+    }
+    let mut stmt = conn.prepare(
+        "SELECT replace(c.path, '\\', '/'), c.start_line
+         FROM identifiers i
+         LEFT JOIN symbols c ON c.symbol_id = i.containing_symbol_id
+         WHERE i.name = ?1 AND i.kind = 'member_access'
+           AND (i.containing_symbol_id IS NULL OR i.containing_symbol_id != ?2)",
+    )?;
+    let mut rows = stmt.query(params![target.name, target.symbol_id])?;
+    while let Some(row) = rows.next()? {
+        let holder = row
+            .get::<_, Option<String>>(0)?
+            .zip(row.get::<_, Option<i64>>(1)?)
+            .map(|(path, line)| (path, line as usize));
+        if !holder.is_some_and(|holder| listed.contains(&holder)) {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 /// Diffs that change more functions than this get no callers report for each one.
 const MAX_DIFF_TARGETS: usize = 5;
 

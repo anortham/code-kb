@@ -1,5 +1,5 @@
 use rusqlite::Connection;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
 use thiserror::Error;
 
@@ -11,7 +11,7 @@ use crate::formatters::{
 };
 use crate::models::{
     BlastRadiusResult, CallersReportSites, CallingTest, ContextSlice, ImpactedSymbol, LabeledSite,
-    OpenEnd, ReferenceReport, SiteLabel, Symbol, SymbolSearchResult, TestTarget,
+    OpenEnd, ReferenceReport, ReferenceTarget, SiteLabel, Symbol, SymbolSearchResult, TestTarget,
     is_generated_lambda_name,
 };
 use crate::queries::{self, QueryError};
@@ -855,7 +855,16 @@ pub fn blast_radius_selected_op_with_options(
                 include_low_signal,
             )?;
             let targets = queries::diff_targets(conn, &changes)?;
-            return with_report_tests(workspace, conn, targets, res, limit);
+            return with_report_tests(
+                workspace,
+                conn,
+                targets,
+                &changes,
+                res,
+                depth,
+                limit,
+                include_low_signal,
+            );
         }
     };
 
@@ -986,14 +995,20 @@ fn report_test(test: CallingTest) -> TestTarget {
 
 /// Adds, after the walk's tests, the tests in the callers report of each function that a diff
 /// changed, and drops such a function from the open ends when its report has a proven or likely
-/// site. The walk follows resolved and pending rows by name; the report also ties a call through a
-/// receiver's type or by name alone.
+/// site. The callers of its proven and likely sites that the walk did not list, and that hold no
+/// changed line, join as depth-1 rows, and the walk goes on from them. The walk follows resolved
+/// and pending rows by name; the report also ties a call through a receiver's type, a read of a
+/// member, or a name alone.
+#[allow(clippy::too_many_arguments)]
 fn with_report_tests(
     workspace: &Workspace,
     conn: &Connection,
     targets: Vec<Symbol>,
+    changes: &BTreeMap<String, Vec<(usize, usize)>>,
     mut res: BlastRadiusResult,
+    depth: usize,
     limit: usize,
+    include_low_signal: bool,
 ) -> Result<BlastRadiusResult, OpError> {
     if targets.is_empty() || res.traversal_ceiling_reached || res.likely_tests_truncated {
         return Ok(res);
@@ -1003,6 +1018,9 @@ fn with_report_tests(
         .iter()
         .map(|test| (test.path.clone(), test.line))
         .collect();
+    let joins_callers = !res.impacted_symbols_truncated;
+    let walked_callers = !res.impacted_symbols.is_empty();
+    let mut added = Vec::new();
     for target in &targets {
         let Ok(report) = reference_report_for_impact(conn, &workspace.root, target) else {
             continue;
@@ -1012,11 +1030,56 @@ fn with_report_tests(
             res.open_ends
                 .retain(|end| end.path != path || end.line != target.start_line);
         }
+        if joins_callers {
+            let mut callers = Vec::new();
+            for (id, row) in report_callers(conn, &report, walked_callers)? {
+                if !holds_changed_line(conn, id.as_deref(), &row, changes)? {
+                    callers.push((id, row));
+                }
+            }
+            let joined = join_report_callers(std::mem::take(&mut res.impacted_symbols), callers);
+            res.impacted_symbols = joined.rows;
+            added.extend(joined.added);
+        }
         for test in report.tests {
             if seen.insert((test.path.clone(), test.line)) {
                 res.likely_tests.push(report_test(test));
             }
         }
+    }
+    if depth > 1 && !added.is_empty() {
+        let ids: Vec<&str> = added.iter().map(String::as_str).collect();
+        let deeper = queries::compute_blast_radius_from_callers_with_low_signal(
+            conn,
+            &ids,
+            depth - 1,
+            limit,
+            include_low_signal,
+        )?;
+        let mut listed: HashSet<(String, usize)> = res
+            .impacted_symbols
+            .iter()
+            .map(|row| (row.path.clone(), row.line))
+            .collect();
+        for row in &deeper.impacted_symbols {
+            if listed.insert((row.path.clone(), row.line)) {
+                res.impacted_symbols.push(ImpactedSymbol {
+                    depth: row.depth + 1,
+                    ..row.clone()
+                });
+            }
+        }
+        follow_deeper(&mut res, &deeper, depth);
+        seen.extend(
+            res.likely_tests
+                .iter()
+                .map(|test| (test.path.clone(), test.line)),
+        );
+    }
+    if joins_callers {
+        res.impacted_symbols_found = res.impacted_symbols.len();
+        res.impacted_symbols_truncated = res.impacted_symbols.len() > limit;
+        res.impacted_symbols.truncate(limit);
     }
     if res.tests_past_depth.is_some() {
         res.past_depth_tests.retain(|key| !seen.contains(key));
@@ -1051,7 +1114,13 @@ fn with_calling_tests(
     }
     let needs_tests = res.likely_tests.is_empty() && !res.likely_tests_truncated;
     let needs_callers = res.impacted_symbols.is_empty() && !res.impacted_symbols_truncated;
-    if !needs_tests && !needs_callers {
+    let joins_callers = !res.impacted_symbols_truncated;
+    let reads_unlisted = !needs_tests
+        && !needs_callers
+        && joins_callers
+        && !res.likely_tests_truncated
+        && queries::has_member_read_outside(conn, &target, &listed_rows(&res))?;
+    if !needs_tests && !needs_callers && !reads_unlisted {
         return Ok(res);
     }
     // The walk's answer stands alone; an index too old for the report keeps it.
@@ -1064,9 +1133,12 @@ fn with_calling_tests(
             .retain(|end| end.path != path || end.line != target.start_line);
     }
     let mut deeper = None;
-    if needs_callers {
-        let callers = report_callers(conn, &report)?;
-        let ids: Vec<&str> = callers.iter().filter_map(|(id, _)| id.as_deref()).collect();
+    if joins_callers {
+        let callers = report_callers(conn, &report, !needs_callers)?
+            .into_iter()
+            .filter(|(id, _)| needs_callers || id.as_deref() != Some(target.symbol_id.as_str()));
+        let joined = join_report_callers(std::mem::take(&mut res.impacted_symbols), callers);
+        let ids: Vec<&str> = joined.added.iter().map(String::as_str).collect();
         if depth > 1 && !ids.is_empty() {
             deeper = Some(if include_low_signal {
                 queries::compute_blast_radius_from_callers_with_low_signal(
@@ -1080,7 +1152,7 @@ fn with_calling_tests(
                 queries::compute_blast_radius_from_callers(conn, &ids, depth - 1, limit)?
             });
         }
-        res.impacted_symbols = callers.into_iter().map(|(_, row)| row).collect();
+        res.impacted_symbols = joined.rows;
         if let Some(deeper) = &deeper {
             let mut seen: HashSet<(String, usize)> = res
                 .impacted_symbols
@@ -1099,13 +1171,15 @@ fn with_calling_tests(
         res.impacted_symbols_found = res.impacted_symbols.len();
         res.impacted_symbols_truncated = res.impacted_symbols.len() > limit;
         res.impacted_symbols.truncate(limit);
-        res.callers_report = Some(CallersReportSites {
-            sites: report.counts.sites,
-            proven: report.counts.proven,
-            likely: report.counts.likely,
-            unresolved: report.counts.unresolved,
-            excluded: report.counts.excluded,
-        });
+        if needs_callers {
+            res.callers_report = Some(CallersReportSites {
+                sites: report.counts.sites,
+                proven: report.counts.proven,
+                likely: report.counts.likely,
+                unresolved: report.counts.unresolved,
+                excluded: report.counts.excluded,
+            });
+        }
     }
     if let Some(deeper) = &deeper {
         follow_deeper(&mut res, deeper, depth);
@@ -1182,17 +1256,97 @@ fn follow_deeper(res: &mut BlastRadiusResult, deeper: &BlastRadiusResult, depth:
         res.stopped_at_depth = Some(depth);
     }
     if deeper.tests_past_depth.is_some() {
-        res.past_depth_tests = deeper
-            .past_depth_tests
-            .iter()
-            .filter(|key| !tests.contains(*key))
-            .cloned()
+        let mut past: HashSet<(String, usize)> = HashSet::new();
+        res.past_depth_tests = std::mem::take(&mut res.past_depth_tests)
+            .into_iter()
+            .chain(deeper.past_depth_tests.iter().cloned())
+            .filter(|key| !tests.contains(key) && past.insert(key.clone()))
             .collect();
         res.tests_past_depth = Some(res.past_depth_tests.len());
-        res.tests_past_depth_cut = deeper.tests_past_depth_cut;
+        res.tests_past_depth_cut |= deeper.tests_past_depth_cut;
     }
     res.traversal_ceiling_reached |= deeper.traversal_ceiling_reached;
     res.likely_tests_truncated |= deeper.likely_tests_truncated;
+}
+
+/// Whether a caller of the report holds a line that the diff changed, which makes it a seed of
+/// the walk rather than a symbol the change reaches.
+fn holds_changed_line(
+    conn: &Connection,
+    id: Option<&str>,
+    row: &ImpactedSymbol,
+    changes: &BTreeMap<String, Vec<(usize, usize)>>,
+) -> Result<bool, OpError> {
+    let Some(hunks) = changes.get(&row.path) else {
+        return Ok(false);
+    };
+    let (first, last) = match id {
+        Some(id) => match queries::get_symbol_by_id(conn, id)? {
+            Some(symbol) => (symbol.start_line, symbol.end_line),
+            None => return Ok(false),
+        },
+        None => (row.line, row.line),
+    };
+    Ok(hunks
+        .iter()
+        .any(|&(start, end)| start <= last && first <= end))
+}
+
+/// The path and line of every impacted symbol and test that the walk listed.
+fn listed_rows(res: &BlastRadiusResult) -> HashSet<(String, usize)> {
+    res.impacted_symbols
+        .iter()
+        .map(|row| (row.path.clone(), row.line))
+        .chain(
+            res.likely_tests
+                .iter()
+                .map(|test| (test.path.clone(), test.line)),
+        )
+        .collect()
+}
+
+/// The walk's impacted rows with the report's callers joined, and the ids of the callers that
+/// the walk did not list, so a walk can go on from them.
+struct JoinedCallers {
+    rows: Vec<ImpactedSymbol>,
+    added: Vec<String>,
+}
+
+/// Joins the report's callers to the walk's rows as depth-1 rows: a caller that the walk listed
+/// deeper moves to depth 1, and a caller that the walk did not list follows the walk's depth-1
+/// rows.
+fn join_report_callers(
+    mut rows: Vec<ImpactedSymbol>,
+    callers: impl IntoIterator<Item = (Option<String>, ImpactedSymbol)>,
+) -> JoinedCallers {
+    let mut at = rows.iter().take_while(|row| row.depth <= 1).count();
+    let mut added = Vec::new();
+    for (id, caller) in callers {
+        match rows
+            .iter()
+            .position(|row| row.path == caller.path && row.line == caller.line)
+        {
+            Some(index) if rows[index].depth > 1 => {
+                let row = rows.remove(index);
+                rows.insert(
+                    at,
+                    ImpactedSymbol {
+                        depth: 1,
+                        reason: caller.reason,
+                        ..row
+                    },
+                );
+                at += 1;
+            }
+            Some(_) => {}
+            None => {
+                added.extend(id);
+                rows.insert(at, caller);
+                at += 1;
+            }
+        }
+    }
+    JoinedCallers { rows, added }
 }
 
 /// The reason of a test row one call further from the target: `direct caller` becomes
@@ -1216,11 +1370,23 @@ fn one_level_deeper(reason: &str) -> String {
     reason.replacen("direct caller", "indirect caller [depth 2]", 1)
 }
 
+/// A member access of a callable target that only its name ties to the target: no receiver
+/// evidence supports it.
+fn is_candidate_member_access(target: &ReferenceTarget, labeled: &LabeledSite) -> bool {
+    matches!(target.kind.as_str(), "function" | "method" | "constructor")
+        && labeled.site.kind.starts_with("member_access")
+        && labeled.label == SiteLabel::Likely
+        && (labeled.basis.starts_with("receiver not typed")
+            || labeled.basis.starts_with("name only"))
+}
+
 /// The callers of the report's proven and likely sites that are not tests, as depth-1 rows in
-/// report order. A site outside any symbol is a row of its own at the site's line.
+/// report order. A site outside any symbol is a row of its own at the site's line. When the rows
+/// join callers that the walk found, a candidate member access adds no row.
 fn report_callers(
     conn: &Connection,
     report: &ReferenceReport,
+    joins_walk: bool,
 ) -> Result<Vec<(Option<String>, ImpactedSymbol)>, OpError> {
     let tests: HashSet<&str> = report
         .tests
@@ -1229,11 +1395,10 @@ fn report_callers(
         .collect();
     let mut callers: Vec<(&str, Vec<&LabeledSite>)> = Vec::new();
     let mut positions: HashMap<&str, usize> = HashMap::new();
-    for labeled in report
-        .sites
-        .iter()
-        .filter(|labeled| matches!(labeled.label, SiteLabel::Proven | SiteLabel::Likely))
-    {
+    for labeled in report.sites.iter().filter(|labeled| {
+        matches!(labeled.label, SiteLabel::Proven | SiteLabel::Likely)
+            && !(joins_walk && is_candidate_member_access(&report.target, labeled))
+    }) {
         let caller = labeled.site.from_symbol_id.as_str();
         match positions.get(caller).filter(|_| !caller.is_empty()) {
             Some(&position) => callers[position].1.push(labeled),
