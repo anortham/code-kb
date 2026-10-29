@@ -383,7 +383,10 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   above it, is the first segment of the import (`import json` does not reach `src/flask/json/`),
   so a receiver bound by an absolute import that reaches no project file (`_json.dumps()` after
   `import json as _json`) is excluded: ``receiver `_json` is imported from `json` ``. An import
-  source that names a project file by its path (Zig `@import("widget.zig")`) is no outside import. A Java
+  source that names a project file or folder by its path is no outside import, even when its
+  first name is `std`, `core`, or `alloc`: Zig `@import("core/math.zig")` and `@import("root")`,
+  Lua `require("core.utils")` (`core/utils.lua` or `core/utils/init.lua`), and QML `import
+  "core" as Core`; a source written from the importer's folder (`../lib/widget.zig`) never is. A Java
   receiver imported from a package that no project folder holds (`Assert.assertEquals()` after
   `import org.junit.Assert;`) is excluded the same way; julie writes no source for a Java import,
   so the package is the segments of the line before the first capitalized one.
@@ -427,10 +430,12 @@ schema exposes `workspace`, `workspace_id`, `repo_path`, or `root_dir`.**
   or interface, from the first 600 bytes of its source.
   julie names a test call after its label (`test("strictObject", …)`); such a label is not a
   definition, and when the target is a label every site is excluded: ``res` is a test label,
-  which code never names``. A function defined inside a Python, Rust, Kotlin, C#, Swift, Scala,
-  or Dart function, and a class, struct, enum, interface, trait, union, or type alias defined
-  inside a Python, Rust, Kotlin, Swift, Scala, Java, C++, C, Go, or Zig function, method, or
-  constructor, is local to it, so a site outside that function is excluded:
+  which code never names``. A function defined inside a Python, Rust, Kotlin, C#, Swift, Dart,
+  or F# function (not a Kotlin `override fun` of an object expression), a class, struct, enum,
+  interface, trait, union, or type alias defined inside a Python, Rust, Kotlin, Swift, Scala,
+  Java, C++, C, Go, or Zig function, method, or constructor, and a TypeScript, TSX, or Vue
+  interface or type alias defined inside a function, is local to it, so a site outside that
+  function is excluded:
   ``read` is local to `test_session_cookie_setting``; such a function or type is no other
   definition of a site outside that function either. A Java member access, written without
   parentheses, never reaches a method, because julie writes a method reference (`parser::next`)

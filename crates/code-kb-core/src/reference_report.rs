@@ -519,8 +519,8 @@ const SOURCE_FILES_SQL: &str = "SELECT 1 FROM files
         OR '/' || replace(replace(path, '\\', '/'), '-', '_') LIKE ?2 ESCAPE '\\'
      LIMIT 1";
 
-/// An indexed file whose path ends with the import source, which names a file
-/// (`@import("widget.zig")`) rather than a module path.
+/// An indexed file whose path matches a pattern of [`import_path_patterns`]: an import source
+/// that names a file or folder (`@import("widget.zig")`) rather than a module path.
 const SOURCE_PATH_SQL: &str = "SELECT 1 FROM files
      WHERE '/' || replace(path, '\\', '/') LIKE ?1 ESCAPE '\\'
      LIMIT 1";
@@ -846,18 +846,27 @@ const STATIC_TYPE_LANGUAGES: &[&str] = &[
     "csharp", "java", "kotlin", "scala", "swift", "dart", "rust", "go", "cpp", "c", "vbnet",
 ];
 
-/// Languages where a function defined inside a function is named only inside it. JavaScript is
-/// not one here: such a function can be placed on an object the outer function returns.
+/// Languages where a function defined inside a function is named only inside it. JavaScript,
+/// Lua, and R are not: the outer function can return an object that holds the function
+/// (`return { inc = inc }`), and a call through that object names it. A PowerShell function
+/// sees the functions of the function that calls it; a Ruby `def` defines a method of the class,
+/// and a Bash or PHP function is global once the outer function runs. julie writes a Scala local
+/// `def` as a method, the same as a member of an anonymous class there, so Scala is not one.
 const LOCAL_FUNCTION_LANGUAGES: &[&str] = &[
-    "python", "rust", "kotlin", "csharp", "swift", "scala", "dart",
+    "python", "rust", "kotlin", "csharp", "swift", "dart", "fsharp",
 ];
 
-/// Languages where a type defined inside a function is named only inside it. C#, Dart, and
+/// Languages where a type defined inside a function is named only inside it. C#, Dart, F#, and
 /// VB.NET have no such type; a PHP class declared in a function is global once the function
-/// runs; JavaScript and TypeScript are left out for the reason of [`LOCAL_FUNCTION_LANGUAGES`].
+/// runs; a JavaScript-family class or enum is a value, left out for the reason of
+/// [`LOCAL_FUNCTION_LANGUAGES`], and [`TYPE_ONLY_KINDS`] covers that family.
 const LOCAL_TYPE_LANGUAGES: &[&str] = &[
     "python", "rust", "kotlin", "swift", "scala", "java", "cpp", "c", "go", "zig",
 ];
+
+/// A JavaScript-family interface or type alias: a type and never a value, so no object the
+/// function returns can hold it.
+const TYPE_ONLY_KINDS: &[&str] = &["interface", "type"];
 
 const TYPE_KINDS: &[&str] = &[
     "class",
@@ -871,9 +880,23 @@ const TYPE_KINDS: &[&str] = &[
 
 /// Whether a symbol of `kind` in `language`, defined directly inside a function, method, or
 /// constructor, is named only inside it.
-fn is_local_kind(kind: &str, language: &str) -> bool {
-    kind == "function" && LOCAL_FUNCTION_LANGUAGES.contains(&language)
+fn is_local_kind(kind: &str, language: &str, signature: &str) -> bool {
+    kind == "function"
+        && LOCAL_FUNCTION_LANGUAGES.contains(&language)
+        && !is_object_expression_member(language, signature)
         || TYPE_KINDS.contains(&kind) && LOCAL_TYPE_LANGUAGES.contains(&language)
+        || TYPE_ONLY_KINDS.contains(&kind) && language_family(language) == "js"
+}
+
+/// A Kotlin `override fun` that julie hangs on the function around it: a member of an object
+/// expression (`object : Task { override fun run() … }`), which a caller of the object reaches.
+/// A local function cannot override.
+fn is_object_expression_member(language: &str, signature: &str) -> bool {
+    language == "kotlin"
+        && signature
+            .split_whitespace()
+            .take_while(|word| *word != "fun")
+            .any(|word| word == "override")
 }
 
 /// The function, method, or constructor that holds every member of `group` when each one is a
@@ -886,8 +909,11 @@ fn enclosing_function(conn: &Connection, group: &[Symbol]) -> Result<Option<Symb
         return Ok(None);
     };
     let local = group.iter().all(|member| {
-        is_local_kind(&member.kind, &member.language)
-            && member.parent_symbol_id.as_deref() == Some(parent)
+        is_local_kind(
+            &member.kind,
+            &member.language,
+            member.signature.as_deref().unwrap_or(""),
+        ) && member.parent_symbol_id.as_deref() == Some(parent)
     });
     if !local {
         return Ok(None);
@@ -2105,7 +2131,9 @@ impl<'a> Accounting<'a> {
                 row.get::<_, Option<i64>>(16)?,
                 row.get::<_, Option<i64>>(17)?,
             ) {
-                (Some(start), Some(end)) if in_function && is_local_kind(&kind, &language) => {
+                (Some(start), Some(end))
+                    if in_function && is_local_kind(&kind, &language, &signature) =>
+                {
                     Some((start as usize, end as usize))
                 }
                 _ => None,
@@ -4599,7 +4627,7 @@ impl<'a> Accounting<'a> {
             } else if row.language == "python" {
                 self.python_source_is_external(source)?
             } else {
-                self.source_is_external(source)?
+                self.source_is_external(&row.language, source)?
             };
             if !external {
                 return Ok(None);
@@ -4661,29 +4689,36 @@ impl<'a> Accounting<'a> {
             stmt.query_map(params![head], |r| r.get::<_, String>(0))?
                 .collect::<Result<Vec<_>, _>>()
         })?;
-        if kinds.is_empty() && self.source_is_external(head)? {
+        if kinds.is_empty() && self.source_is_external(&row.language, head)? {
             return Ok(Some((head.clone(), head.clone())));
         }
         Ok(None)
     }
 
-    fn source_is_external(&mut self, source: &str) -> Result<bool, QueryError> {
-        if let Some(known) = self.external_sources.get(source) {
+    /// Whether the import `source` of a `language` file reaches no file of the project. A source
+    /// that names a project file or folder by its path (`@import("core/math.zig")`, Lua
+    /// `require("core.utils")`, QML `import "core"`) reaches the project before a runtime library
+    /// of the same first name does.
+    fn source_is_external(&mut self, language: &str, source: &str) -> Result<bool, QueryError> {
+        let key = format!("{language}:{source}");
+        if let Some(known) = self.external_sources.get(&key) {
             return Ok(*known);
         }
-        let runtime_library = !source.starts_with('.')
+        let mut names_a_path = language == "zig" && source.trim() == "root";
+        for pattern in import_path_patterns(language, source) {
+            if names_a_path {
+                break;
+            }
+            names_a_path =
+                self.with_statement(SOURCE_PATH_SQL, |stmt| stmt.exists(params![pattern]))?;
+        }
+        let runtime_library = !names_a_path
+            && !source.starts_with('.')
             && matches!(
                 source.split([':', '.', '/']).find(|part| !part.is_empty()),
                 Some("std" | "core" | "alloc")
             );
-        let path = source.trim().replace('\\', "/");
-        let names_a_file = !runtime_library
-            && path.contains('.')
-            && !path.contains("::")
-            && self.with_statement(SOURCE_PATH_SQL, |stmt| {
-                stmt.exists(params![format!("%/{}", crate::queries::escape_like(&path))])
-            })?;
-        let external = match import_segment(source).filter(|_| !runtime_library && !names_a_file) {
+        let external = match import_segment(source).filter(|_| !runtime_library && !names_a_path) {
             None => false,
             Some(segment) => {
                 let escaped = crate::queries::escape_like(&segment);
@@ -4694,7 +4729,7 @@ impl<'a> Accounting<'a> {
             }
         };
         let external = external || runtime_library;
-        self.external_sources.insert(source.to_string(), external);
+        self.external_sources.insert(key, external);
         Ok(external)
     }
 
@@ -5341,6 +5376,55 @@ fn import_segment(source: &str) -> Option<String> {
         .rsplit('.')
         .find(|segment| !segment.is_empty())
         .map(str::to_string)
+}
+
+/// The `LIKE` patterns, over `'/' || path`, of the project files or folders that an import
+/// source names by its path. A source written from the importer's folder (`./x`, `../x`) gets
+/// none, since it never names a place outside the project, and neither does a URL or a module
+/// path. Lua reads `a.b` as `a/b.lua` or `a/b/init.lua`, QML reads a quoted source as a file or
+/// a folder, and another source names a file when its last segment has an extension.
+fn import_path_patterns(language: &str, source: &str) -> Vec<String> {
+    let source = source.trim();
+    if source.starts_with('.') || source.contains(':') {
+        return Vec::new();
+    }
+    let path = normalized_import_path(source);
+    if path.is_empty() {
+        return Vec::new();
+    }
+    match language {
+        "lua" => {
+            let module = crate::queries::escape_like(&path.replace('.', "/"));
+            vec![format!("%/{module}.lua"), format!("%/{module}/init.lua")]
+        }
+        "qml" => {
+            let path = crate::queries::escape_like(&path);
+            vec![format!("%/{path}"), format!("%/{path}/%")]
+        }
+        _ if path
+            .rsplit('/')
+            .next()
+            .is_some_and(|name| name.contains('.')) =>
+        {
+            vec![format!("%/{}", crate::queries::escape_like(&path))]
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// An import path with `\` read as `/`, and its `.` and `name/..` segments removed.
+fn normalized_import_path(source: &str) -> String {
+    let mut parts: Vec<&str> = Vec::new();
+    for part in source.split(['/', '\\']) {
+        match part {
+            "" | "." => {}
+            ".." if parts.last().is_some_and(|last| *last != "..") => {
+                parts.pop();
+            }
+            _ => parts.push(part),
+        }
+    }
+    parts.join("/")
 }
 
 /// SQL that returns, for every pending or identifier row with the name `?1`, whether the

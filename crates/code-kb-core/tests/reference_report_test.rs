@@ -1006,6 +1006,51 @@ const LOCAL_TYPE_CASES: &[LocalTypeCase] = &[
         outside: ("src/widget.zig", "const a = Widget"),
         inside: "const b = Widget",
     },
+    LocalTypeCase {
+        files: &[
+            (
+                "src/widget.ts",
+                "export interface Widget {\n  size: number;\n}\n",
+            ),
+            (
+                "src/use.ts",
+                "import { Widget } from \"./widget\";\n\nexport function outside(): number {\n  const a: Widget = { size: 1 };\n  return a.size;\n}\n\nexport function inside(): number {\n  interface Widget {\n    size: number;\n  }\n  const b: Widget = { size: 2 };\n  return b.size;\n}\n",
+            ),
+        ],
+        module_path: "src/widget.ts",
+        local_path: "src/use.ts",
+        outside: ("src/use.ts", "const a: Widget"),
+        inside: "const b: Widget",
+    },
+    LocalTypeCase {
+        files: &[
+            ("src/widget.tsx", "export type Widget = { size: number };\n"),
+            (
+                "src/use.tsx",
+                "import { Widget } from \"./widget\";\n\nexport function outside(): number {\n  const a: Widget = { size: 1 };\n  return a.size;\n}\n\nexport function inside(): number {\n  type Widget = { size: number };\n  const b: Widget = { size: 2 };\n  return b.size;\n}\n",
+            ),
+        ],
+        module_path: "src/widget.tsx",
+        local_path: "src/use.tsx",
+        outside: ("src/use.tsx", "const a: Widget"),
+        inside: "const b: Widget",
+    },
+    LocalTypeCase {
+        files: &[
+            (
+                "src/widget.ts",
+                "export interface Widget {\n  size: number;\n}\n",
+            ),
+            (
+                "src/Use.vue",
+                "<script lang=\"ts\">\nimport { Widget } from \"./widget\";\n\nexport function outside(): number {\n  const a: Widget = { size: 1 };\n  return a.size;\n}\n\nexport function inside(): number {\n  interface Widget {\n    size: number;\n  }\n  const b: Widget = { size: 2 };\n  return b.size;\n}\n</script>\n",
+            ),
+        ],
+        module_path: "src/widget.ts",
+        local_path: "src/Use.vue",
+        outside: ("src/Use.vue", "const a: Widget"),
+        inside: "const b: Widget",
+    },
 ];
 
 #[test]
@@ -1041,6 +1086,435 @@ fn a_type_defined_inside_a_function_is_local_to_it() {
             dump(&module)
         );
     }
+}
+
+const LOCAL_FUNCTION_CASES: &[LocalTypeCase] = &[
+    LocalTypeCase {
+        files: &[
+            (
+                "src/util.rs",
+                "pub fn helper() -> i32 {\n    1\n}\n\npub fn outside() -> i32 {\n    return helper();\n}\n",
+            ),
+            (
+                "src/lib.rs",
+                "mod util;\n\npub fn inside() -> i32 {\n    fn helper() -> i32 {\n        2\n    }\n    return helper();\n}\n",
+            ),
+        ],
+        module_path: "src/util.rs",
+        local_path: "src/lib.rs",
+        outside: ("src/util.rs", "return helper()"),
+        inside: "return helper()",
+    },
+    LocalTypeCase {
+        files: &[
+            (
+                "src/p/Util.kt",
+                "package p\n\nfun helper(): Int = 1\n\nfun outside(): Int {\n    return helper()\n}\n",
+            ),
+            (
+                "src/p/Use.kt",
+                "package p\n\nfun inside(): Int {\n    fun helper(): Int = 2\n    return helper()\n}\n",
+            ),
+        ],
+        module_path: "src/p/Util.kt",
+        local_path: "src/p/Use.kt",
+        outside: ("src/p/Util.kt", "return helper()"),
+        inside: "return helper()",
+    },
+    LocalTypeCase {
+        files: &[
+            (
+                "src/Util.cs",
+                "static class Util {\n  public static int helper() => 1;\n\n  public static int Outside() {\n    return helper();\n  }\n}\n",
+            ),
+            (
+                "src/Use.cs",
+                "class Use {\n  int inside() {\n    int helper() => 2;\n    return helper();\n  }\n}\n",
+            ),
+        ],
+        module_path: "src/Util.cs",
+        local_path: "src/Use.cs",
+        outside: ("src/Util.cs", "return helper()"),
+        inside: "return helper()",
+    },
+    LocalTypeCase {
+        files: &[
+            (
+                "Sources/App/Util.swift",
+                "func helper() -> Int { return 1 }\n\nfunc outside() -> Int {\n    return helper()\n}\n",
+            ),
+            (
+                "Sources/App/Use.swift",
+                "func inside() -> Int {\n    func helper() -> Int { return 2 }\n    return helper()\n}\n",
+            ),
+        ],
+        module_path: "Sources/App/Util.swift",
+        local_path: "Sources/App/Use.swift",
+        outside: ("Sources/App/Util.swift", "return helper()"),
+        inside: "return helper()",
+    },
+    LocalTypeCase {
+        files: &[
+            (
+                "lib/util.dart",
+                "int helper() => 1;\n\nint outside() {\n  return helper();\n}\n",
+            ),
+            (
+                "lib/use.dart",
+                "import 'util.dart';\n\nint inside() {\n  int helper() => 2;\n  return helper();\n}\n",
+            ),
+        ],
+        module_path: "lib/util.dart",
+        local_path: "lib/use.dart",
+        outside: ("lib/util.dart", "return helper()"),
+        inside: "return helper()",
+    },
+    LocalTypeCase {
+        files: &[
+            (
+                "src/Util.fs",
+                "module Util\n\nlet helper () = 1\n\nlet outside () =\n    helper ()\n",
+            ),
+            (
+                "src/Use.fs",
+                "module Use\n\nopen Util\n\nlet inside () =\n    let helper () = 2\n    helper ()\n",
+            ),
+        ],
+        module_path: "src/Util.fs",
+        local_path: "src/Use.fs",
+        outside: ("src/Util.fs", "    helper ()"),
+        inside: "    helper ()",
+    },
+];
+
+#[test]
+fn a_function_defined_inside_a_function_is_local_to_it() {
+    for case in LOCAL_FUNCTION_CASES {
+        let repo = scanned_repo(case.files);
+        let module = report(&repo, "helper", Some(case.module_path));
+        let local = report(&repo, "helper", Some(case.local_path));
+        let outside = line_of(&repo, case.outside.0, case.outside.1);
+        let inside = line_of(&repo, case.local_path, case.inside);
+
+        assert_site(
+            &local,
+            case.outside.0,
+            outside,
+            SiteLabel::Excluded,
+            "`helper` is local to `inside`",
+        );
+        assert_not_excluded(&local, case.local_path, inside);
+        let module_site = site_at(&module, case.outside.0, outside);
+        assert!(
+            !(module_site.label == SiteLabel::Unresolved
+                || module_site.basis.contains("definitions")),
+            "{}:{outside} counts the local function: {}\n{}",
+            case.outside.0,
+            module_site.basis,
+            dump(&module)
+        );
+        assert_eq!(
+            site_at(&module, case.local_path, inside).label,
+            SiteLabel::Excluded,
+            "{}",
+            dump(&module)
+        );
+    }
+}
+
+struct NotLocalCase {
+    files: &'static [(&'static str, &'static str)],
+    name: &'static str,
+    path: &'static str,
+    outside: (&'static str, &'static str),
+}
+
+const NOT_LOCAL_CASES: &[NotLocalCase] = &[
+    NotLocalCase {
+        files: &[
+            (
+                "lib/c.rb",
+                "class C\n  def outer\n    def inner\n      1\n    end\n  end\nend\n",
+            ),
+            (
+                "lib/d.rb",
+                "class D\n  def use(c)\n    c.inner\n  end\nend\n",
+            ),
+        ],
+        name: "inner",
+        path: "lib/c.rb",
+        outside: ("lib/d.rb", "c.inner"),
+    },
+    NotLocalCase {
+        files: &[
+            ("lib.sh", "outer() {\n  inner() { echo 1; }\n}\n"),
+            ("main.sh", "use() {\n  inner\n}\n"),
+        ],
+        name: "inner",
+        path: "lib.sh",
+        outside: ("main.sh", "  inner"),
+    },
+    NotLocalCase {
+        files: &[
+            (
+                "src/lib.php",
+                "<?php\nfunction outer() {\n  function inner() { return 1; }\n}\n",
+            ),
+            (
+                "src/main.php",
+                "<?php\nfunction use_it() {\n  return inner();\n}\n",
+            ),
+        ],
+        name: "inner",
+        path: "src/lib.php",
+        outside: ("src/main.php", "return inner()"),
+    },
+    NotLocalCase {
+        files: &[
+            (
+                "lib.lua",
+                "function outer()\n  function glob() return 2 end\nend\n",
+            ),
+            ("main.lua", "function use()\n  return glob()\nend\n"),
+        ],
+        name: "glob",
+        path: "lib.lua",
+        outside: ("main.lua", "return glob()"),
+    },
+    NotLocalCase {
+        files: &[(
+            "acc.lua",
+            "local function newAccount(initial)\n  local balance = initial\n  local function withdraw(v) balance = balance - v end\n  return { withdraw = withdraw }\nend\n\nlocal function use()\n  local acc = newAccount(100)\n  acc.withdraw(40)\nend\n",
+        )],
+        name: "withdraw",
+        path: "acc.lua",
+        outside: ("acc.lua", "acc.withdraw(40)"),
+    },
+    NotLocalCase {
+        files: &[(
+            "R/acc.R",
+            "new_account <- function(initial) {\n  balance <- initial\n  withdraw <- function(v) balance <<- balance - v\n  list(withdraw = withdraw)\n}\n\nuse <- function() {\n  acc <- new_account(100)\n  acc$withdraw(40)\n}\n",
+        )],
+        name: "withdraw",
+        path: "R/acc.R",
+        outside: ("R/acc.R", "acc$withdraw(40)"),
+    },
+    NotLocalCase {
+        files: &[(
+            "scripts/run.ps1",
+            "function Outer {\n  function Inner { 1 }\n  Helper\n}\n\nfunction Helper {\n  Inner\n}\n",
+        )],
+        name: "Inner",
+        path: "scripts/run.ps1",
+        outside: ("scripts/run.ps1", "  Inner"),
+    },
+    NotLocalCase {
+        files: &[
+            (
+                "src/p/Task.kt",
+                "package p\n\ninterface Task {\n    fun run(): Int\n}\n",
+            ),
+            (
+                "src/p/Make.kt",
+                "package p\n\nfun make(): Task {\n    return object : Task { override fun run(): Int = 1 }\n}\n",
+            ),
+            (
+                "src/p/Use.kt",
+                "package p\n\nfun use(): Int {\n    val t = make()\n    return t.run()\n}\n",
+            ),
+        ],
+        name: "run",
+        path: "src/p/Make.kt",
+        outside: ("src/p/Use.kt", "t.run()"),
+    },
+    NotLocalCase {
+        files: &[
+            (
+                "src/p/Task.scala",
+                "package p\n\ntrait Task {\n  def run(): Int\n}\n",
+            ),
+            (
+                "src/p/Make.scala",
+                "package p\n\nobject Make {\n  def make(): Task = {\n    new Task { def run(): Int = 1 }\n  }\n}\n",
+            ),
+            (
+                "src/p/Use.scala",
+                "package p\n\nobject Use {\n  def use(): Int = {\n    val t = Make.make()\n    t.run()\n  }\n}\n",
+            ),
+        ],
+        name: "run",
+        path: "src/p/Make.scala",
+        outside: ("src/p/Use.scala", "t.run()"),
+    },
+    NotLocalCase {
+        files: &[
+            (
+                "src/counter.js",
+                "export function make() {\n  function inc() { return 1; }\n  return { inc };\n}\n",
+            ),
+            (
+                "src/use.js",
+                "import { make } from \"./counter\";\n\nexport function use() {\n  const c = make();\n  return c.inc();\n}\n",
+            ),
+        ],
+        name: "inc",
+        path: "src/counter.js",
+        outside: ("src/use.js", "c.inc()"),
+    },
+];
+
+#[test]
+fn a_function_that_code_outside_its_function_can_reach_is_not_local() {
+    for case in NOT_LOCAL_CASES {
+        let repo = scanned_repo(case.files);
+        let report = report(&repo, case.name, Some(case.path));
+        let line = line_of(&repo, case.outside.0, case.outside.1);
+
+        assert_not_excluded(&report, case.outside.0, line);
+    }
+}
+
+struct FileImportCase {
+    files: &'static [(&'static str, &'static str)],
+    name: &'static str,
+    path: &'static str,
+    kept: (&'static str, &'static str),
+}
+
+const FILE_IMPORT_CASES: &[FileImportCase] = &[
+    FileImportCase {
+        files: &[
+            (
+                "src/core/math.zig",
+                "pub const Vec = struct {\n    x: u32,\n};\n",
+            ),
+            (
+                "src/main.zig",
+                "const math = @import(\"core/math.zig\");\n\npub fn main() void {\n    const v = math.Vec{ .x = 1 };\n    _ = v;\n}\n",
+            ),
+        ],
+        name: "Vec",
+        path: "src/core/math.zig",
+        kept: ("src/main.zig", "math.Vec"),
+    },
+    FileImportCase {
+        files: &[
+            (
+                "src/lib/widget.zig",
+                "pub const Widget = struct {\n    size: u32,\n};\n",
+            ),
+            (
+                "src/app/main.zig",
+                "const widget = @import(\"../lib/widget.zig\");\n\npub fn main() void {\n    const w = widget.Widget{ .size = 1 };\n    _ = w;\n}\n",
+            ),
+        ],
+        name: "Widget",
+        path: "src/lib/widget.zig",
+        kept: ("src/app/main.zig", "widget.Widget"),
+    },
+    FileImportCase {
+        files: &[
+            (
+                "src/main.zig",
+                "pub const Config = struct {\n    debug: bool,\n};\n\npub fn main() void {}\n",
+            ),
+            (
+                "src/lib.zig",
+                "const root = @import(\"root\");\n\npub fn use() void {\n    const c = root.Config{ .debug = true };\n    _ = c;\n}\n",
+            ),
+        ],
+        name: "Config",
+        path: "src/main.zig",
+        kept: ("src/lib.zig", "root.Config"),
+    },
+    FileImportCase {
+        files: &[
+            ("core/Widget.qml", "import QtQuick\n\nItem {\n}\n"),
+            (
+                "Top.qml",
+                "import QtQuick\nimport \"core\" as Core\n\nItem {\n    Core.Widget {}\n}\n",
+            ),
+        ],
+        name: "Widget",
+        path: "core/Widget.qml",
+        kept: ("Top.qml", "Core.Widget"),
+    },
+    FileImportCase {
+        files: &[
+            ("core/Widget.qml", "import QtQuick\n\nItem {\n}\n"),
+            (
+                "app/Main.qml",
+                "import QtQuick\nimport \"../core\" as Core\n\nItem {\n    Core.Widget {}\n}\n",
+            ),
+        ],
+        name: "Widget",
+        path: "core/Widget.qml",
+        kept: ("app/Main.qml", "Core.Widget"),
+    },
+    FileImportCase {
+        files: &[
+            (
+                "core/utils.lua",
+                "local M = {}\n\nfunction M.go()\n  return 1\nend\n\nreturn M\n",
+            ),
+            (
+                "main.lua",
+                "local utils = require(\"core.utils\")\n\nlocal function run()\n  return utils.go()\nend\n",
+            ),
+        ],
+        name: "go",
+        path: "core/utils.lua",
+        kept: ("main.lua", "utils.go()"),
+    },
+    FileImportCase {
+        files: &[
+            (
+                "net/init.lua",
+                "local M = {}\n\nfunction M.fetch()\n  return 1\nend\n\nreturn M\n",
+            ),
+            (
+                "main.lua",
+                "local net = require(\"net\")\n\nlocal function run()\n  return net.fetch()\nend\n",
+            ),
+        ],
+        name: "fetch",
+        path: "net/init.lua",
+        kept: ("main.lua", "net.fetch()"),
+    },
+];
+
+#[test]
+fn a_receiver_imported_from_a_project_file_by_its_path_is_not_outside() {
+    for case in FILE_IMPORT_CASES {
+        let repo = scanned_repo(case.files);
+        let report = report(&repo, case.name, Some(case.path));
+        let line = line_of(&repo, case.kept.0, case.kept.1);
+
+        assert_not_excluded(&report, case.kept.0, line);
+    }
+}
+
+#[test]
+fn a_lua_receiver_required_from_a_module_that_no_project_file_holds_is_outside() {
+    let repo = scanned_repo(&[
+        (
+            "core/json.lua",
+            "local M = {}\n\nfunction M.encode()\n  return 1\nend\n\nreturn M\n",
+        ),
+        (
+            "main.lua",
+            "local cjson = require(\"cjson\")\n\nlocal function run()\n  return cjson.encode({})\nend\n",
+        ),
+    ]);
+    let report = report(&repo, "encode", Some("core/json.lua"));
+
+    assert_site(
+        &report,
+        "main.lua",
+        line_of(&repo, "main.lua", "cjson.encode"),
+        SiteLabel::Excluded,
+        "receiver `cjson` is imported from `cjson`",
+    );
 }
 
 #[test]

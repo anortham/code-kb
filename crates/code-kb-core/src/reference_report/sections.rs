@@ -567,7 +567,7 @@ impl<'a, 'b> TypeEdges<'a, 'b> {
         let named = import_rows(self.accounting, &subtype.path, &base.name)?;
         if !named.is_empty() {
             for (_, source) in &named {
-                if !self.accounting.source_is_external(source)? {
+                if !self.accounting.source_is_external("python", source)? {
                     return Ok(None);
                 }
             }

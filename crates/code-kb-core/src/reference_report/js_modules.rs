@@ -853,7 +853,7 @@ impl Accounting<'_> {
         Ok(!alias
             && !self.js_is_workspace_package(specifier)?
             && self.js_aliases(importer, specifier)?.is_none()
-            && (builtin || self.source_is_external(specifier)?))
+            && (builtin || self.source_is_external("javascript", specifier)?))
     }
 
     pub(super) fn js_binds_import(&self, path: &str, name: &str) -> Result<bool, QueryError> {
