@@ -851,3 +851,36 @@ fn a_heading_that_names_the_query_is_still_found() {
     );
     assert!(rows[0].score < 0.0);
 }
+
+const BLOG_VIEWS: &str = r#"@bp.route("/create", methods=("GET", "POST"))
+@login_required
+def create():
+    """Create a new post for the current user."""
+    return render_template("blog/create.html")
+
+
+@bp.route("/<int:id>/update", methods=("GET", "POST"))
+@login_required
+def update(id):
+    """Update a post if the current user is the author."""
+    post = get_post(id)
+    return render_template("blog/update.html", post=post)
+"#;
+
+#[test]
+fn a_query_word_that_names_the_example_file_keeps_its_view_in_the_top_twenty() {
+    let mut helpers = String::new();
+    for index in 0..25 {
+        helpers.push_str(&format!(
+            "def open_resource_{index}(path):\n    \"\"\"Open an existing resource.\"\"\"\n    return path\n\n\n"
+        ));
+    }
+    let (_dir, db) = scanned_repo(&[
+        ("src/flask/helpers.py", helpers.as_str()),
+        ("examples/tutorial/flaskr/blog.py", BLOG_VIEWS),
+    ]);
+
+    let names = searched_names(&db, "view that edits an existing blog post");
+
+    assert!(names.contains(&"update".to_string()), "{names:?}");
+}

@@ -1790,6 +1790,8 @@ const DISTINCTIVE_NAME_IDF_FACTOR: f64 = 1.1;
 /// A word that names the class a member belongs to: `Flask init` means `Flask.__init__`.
 const OWNER_CREDIT: f64 = 3.0;
 const OWNER_CONTEXT_CREDIT: f64 = 0.5;
+/// A word that names the row's module, as `blog` names `flaskr/blog.py` and `blog/__init__.py`.
+const PATH_CREDIT: f64 = 0.5;
 const TEXT_HEAD_BYTES: usize = 400;
 const DOC_HEAD_BYTES: usize = 640;
 
@@ -1806,6 +1808,8 @@ pub const DEFINITION_KINDS: &[&str] = &[
 ];
 const MEMBER_KINDS: &[&str] = &["enum_member", "field", "property", "constant", "variable"];
 const DEMOTED_PATH_SEGMENTS: &[&str] = &["scripts", "examples", "benchmarks", "fixtures", "vendor"];
+/// Folders whose rows never earn a path word credit, so a query cannot lift copied code.
+const UNCREDITED_PATH_SEGMENTS: &[&str] = &["fixtures", "vendor", "vendored", "third_party"];
 const TEST_INTENT_WORDS: &[&str] = &["test", "tests", "spec", "specs"];
 
 struct QueryWord {
@@ -1833,6 +1837,7 @@ struct Hits {
     signature: Vec<bool>,
     doc: Vec<bool>,
     owner_context: Vec<bool>,
+    path: Vec<bool>,
 }
 
 /// Symbols a query word may be counted in before it is called common: the count walks the
@@ -1874,7 +1879,8 @@ fn document_frequency(stmt: &mut rusqlite::Statement<'_>, term: &str) -> Option<
 
 /// The field that credits each query term and the credit it is worth: a name whole token 3,
 /// a name stem 2, the owning class `OWNER_CREDIT`, a signature or doc hit `TEXT_CREDIT`, a name
-/// substring 1, weak owner context 0.5 for an otherwise unmatched term, nothing 0.
+/// substring 1, then for an otherwise unmatched term weak owner context 0.5 or a path word
+/// `PATH_CREDIT`, nothing 0.
 fn term_credits(hits: &Hits, words: &[QueryWord]) -> Vec<(String, String, f64)> {
     words
         .iter()
@@ -1888,6 +1894,7 @@ fn term_credits(hits: &Hits, words: &[QueryWord]) -> Vec<(String, String, f64)> 
                 _ if hits.doc[i] => ("doc", TEXT_CREDIT),
                 1 => ("name", 1.0),
                 _ if hits.owner_context[i] => ("owner_context", OWNER_CONTEXT_CREDIT),
+                _ if hits.path[i] => ("path", PATH_CREDIT),
                 _ => ("none", 0.0),
             };
             (w.word.clone(), field.to_string(), credit)
@@ -1957,17 +1964,18 @@ fn holds_a_query_word(explain: &SearchExplain) -> bool {
     explain
         .terms
         .iter()
-        .any(|(word, _, credit)| *credit > 0.0 && !is_digit_word(word))
+        .any(|(word, field, credit)| *credit > 0.0 && field != "path" && !is_digit_word(word))
         || explain
             .branches
             .iter()
             .any(|branch| WORD_PROOF_BRANCHES.contains(&branch.as_str()))
 }
 
+/// Query words the row itself matches; a path word credits the file, not the row, so it does not count.
 fn covered_query_term_count(terms: &[(String, String, f64)]) -> usize {
     terms
         .iter()
-        .filter(|(_, _, credit)| *credit > 0.0)
+        .filter(|(_, field, credit)| *credit > 0.0 && field != "path")
         .map(|(word, _, _)| word.as_str())
         .collect::<HashSet<_>>()
         .len()
@@ -2129,7 +2137,64 @@ fn kind_prior(kind: &str) -> f64 {
     }
 }
 
-fn path_role(path: &str, words: &[QueryWord], stemmer: &Stemmer) -> f64 {
+fn is_path_segment_in(segment: &str, list: &[&str]) -> bool {
+    list.iter().any(|entry| entry.eq_ignore_ascii_case(segment))
+}
+
+/// File stems that take the name of their folder: `blog/mod.rs`, `blog/__init__.py`, `blog/index.ts`.
+const MODULE_INDEX_STEMS: &[&str] = &["mod", "__init__", "index"];
+
+/// The name of the row's module: the file name without its extensions, or the folder of a
+/// module index file. A test path and a path through a vendored or fixture folder have none.
+fn module_name(path: &str) -> Option<&str> {
+    let segments: Vec<&str> = path.split(['/', '\\']).filter(|s| !s.is_empty()).collect();
+    let (file, folders) = segments.split_last()?;
+    if is_test_path(path)
+        || folders
+            .iter()
+            .any(|folder| is_path_segment_in(folder, UNCREDITED_PATH_SEGMENTS))
+    {
+        return None;
+    }
+    let stem = file.trim_start_matches('.').split('.').next().unwrap_or("");
+    if MODULE_INDEX_STEMS.contains(&stem) {
+        folders.last().copied()
+    } else {
+        Some(stem)
+    }
+}
+
+/// Per query word, whether it names the row's module: a run of words whose letters spell the
+/// whole name (`release corpus check` for `release-corpus-check.py`), or one word with the name's
+/// stem (`view` for `views.py`).
+fn path_hits(path: &str, words: &[QueryWord], stemmer: &Stemmer) -> Vec<bool> {
+    let mut marks = vec![false; words.len()];
+    let Some(module) = module_name(path).map(collapse).filter(|m| !m.is_empty()) else {
+        return marks;
+    };
+    let module_stem = stemmer.stem(&module);
+    for start in 0..words.len() {
+        if words[start].stem == module_stem {
+            marks[start] = true;
+            continue;
+        }
+        let mut joined = String::new();
+        for end in start..words.len() {
+            joined.push_str(&words[end].word);
+            if joined.len() >= module.len() {
+                if joined == module {
+                    marks[start..=end].fill(true);
+                }
+                break;
+            }
+        }
+    }
+    marks
+}
+
+/// Demotes a row under a role folder such as `scripts` or `examples` unless the query names that
+/// folder or the row's module, so `blog` keeps `examples/tutorial/flaskr/blog.py`.
+fn path_role(path: &str, words: &[QueryWord], stemmer: &Stemmer, names_module: bool) -> f64 {
     let Some(segment) = path.split(['/', '\\']).find(|seg| {
         DEMOTED_PATH_SEGMENTS
             .iter()
@@ -2142,7 +2207,11 @@ fn path_role(path: &str, words: &[QueryWord], stemmer: &Stemmer) -> f64 {
     let named = words.iter().any(|w| {
         w.word == segment || w.word == segment_stem || w.stem == segment || w.stem == segment_stem
     });
-    if named { 0.0 } else { W_PATH_ROLE }
+    if named || names_module {
+        0.0
+    } else {
+        W_PATH_ROLE
+    }
 }
 
 fn bracket_longest_term(name: &str, terms: &[String]) -> String {
@@ -2233,6 +2302,7 @@ fn rerank_with(
                     &mut tokens,
                 ),
                 owner_context: text_hits(candidate.owner_context.as_deref(), &words, &mut tokens),
+                path: path_hits(&symbol.path, &words, &stemmer),
             }
         })
         .collect();
@@ -2261,6 +2331,7 @@ fn rerank_with(
             } else {
                 "none"
             };
+            let names_module = hits.path.contains(&true);
             let terms = term_credits(&hits, &words);
             let field_diversity_bonus = if matches!(symbol.kind.as_str(), "function" | "method") {
                 credited_field_bonus(&terms)
@@ -2294,7 +2365,7 @@ fn rerank_with(
                     _ => 0.0,
                 },
                 kind_prior: kind_prior(&symbol.kind),
-                path_role: path_role(&symbol.path, &words, &stemmer),
+                path_role: path_role(&symbol.path, &words, &stemmer, names_module),
                 documentation: if candidate.documentation {
                     W_DOCUMENTATION_ROW
                 } else {
@@ -11956,8 +12027,12 @@ mod tests {
         assert!(named.iter().all(|(_, e)| e.path_role == 0.0));
 
         let only_launcher = rows("launcher verify checksum");
-        assert_eq!(only_launcher[0].0.symbol.path, "src/archive.rs");
-        assert_eq!(only_launcher[1].1.path_role, W_PATH_ROLE);
+        assert_eq!(only_launcher[0].0.symbol.path, "scripts/launcher.ts");
+        assert!(only_launcher.iter().all(|(_, e)| e.path_role == 0.0));
+
+        let other_file = rows("archive verify checksum");
+        assert_eq!(other_file[0].0.symbol.path, "src/archive.rs");
+        assert_eq!(other_file[1].1.path_role, W_PATH_ROLE);
 
         let windows = ranked(
             vec![plain_candidate(
@@ -11968,6 +12043,94 @@ mod tests {
             "verify checksum",
         );
         assert_eq!(windows[0].1.path_role, W_PATH_ROLE);
+    }
+
+    fn credit_of<'a>(explain: &'a SearchExplain, word: &str) -> (&'a str, f64) {
+        explain
+            .terms
+            .iter()
+            .find(|(term, _, _)| term == word)
+            .map(|(_, field, credit)| (field.as_str(), *credit))
+            .unwrap()
+    }
+
+    #[test]
+    fn a_word_that_names_the_module_credits_less_than_a_signature_match() {
+        let mut signed = plain_candidate("render", "function", "src/view.rs");
+        signed.result.symbol.signature = Some("fn render(blog: &Blog)".into());
+        let rows = ranked(
+            vec![
+                plain_candidate("render", "function", "src/blogs/mod.rs"),
+                plain_candidate("render", "function", "src/blog.rs"),
+                plain_candidate("render", "function", "src/blog_post.rs"),
+                plain_candidate("render", "function", "src/blog/render.rs"),
+                signed,
+            ],
+            "render blog",
+        );
+        let row = |path: &str| {
+            &rows
+                .iter()
+                .find(|(result, _)| result.symbol.path == path)
+                .unwrap()
+                .1
+        };
+
+        assert_eq!(rows[0].0.symbol.path, "src/view.rs");
+        assert_eq!(credit_of(&rows[0].1, "blog"), ("signature", TEXT_CREDIT));
+        for path in ["src/blogs/mod.rs", "src/blog.rs"] {
+            assert_eq!(credit_of(row(path), "blog"), ("path", PATH_CREDIT));
+            assert_eq!(covered_query_term_count(&row(path).terms), 1);
+        }
+        for path in ["src/blog_post.rs", "src/blog/render.rs"] {
+            assert_eq!(credit_of(row(path), "blog"), ("none", 0.0));
+        }
+
+        let spelled = ranked(
+            vec![plain_candidate("render", "function", "src/blog_post.rs")],
+            "render blog post",
+        );
+        assert_eq!(credit_of(&spelled[0].1, "blog"), ("path", PATH_CREDIT));
+        assert_eq!(credit_of(&spelled[0].1, "post"), ("path", PATH_CREDIT));
+    }
+
+    #[test]
+    fn a_path_word_lifts_a_role_folder_but_never_credits_a_test_or_vendored_path() {
+        let rows = ranked(
+            vec![
+                plain_candidate("update", "function", "examples/tutorial/flaskr/blog.py"),
+                plain_candidate("update", "function", "tests/blog.rs"),
+                plain_candidate("update", "function", "vendor/blog/lib.rs"),
+                plain_candidate("update", "function", "src/fixtures/blog.rs"),
+            ],
+            "update blog",
+        );
+        let row = |path: &str| {
+            &rows
+                .iter()
+                .find(|(result, _)| result.symbol.path == path)
+                .unwrap()
+                .1
+        };
+
+        let example = row("examples/tutorial/flaskr/blog.py");
+        assert_eq!(credit_of(example, "blog"), ("path", PATH_CREDIT));
+        assert_eq!(example.path_role, 0.0);
+        assert_eq!(credit_of(row("tests/blog.rs"), "blog"), ("none", 0.0));
+        for copied in ["vendor/blog/lib.rs", "src/fixtures/blog.rs"] {
+            assert_eq!(credit_of(row(copied), "blog"), ("none", 0.0));
+            assert_eq!(row(copied).path_role, W_PATH_ROLE);
+        }
+
+        let unnamed = ranked(
+            vec![plain_candidate(
+                "update",
+                "function",
+                "examples\\tutorial\\flaskr\\blog.py",
+            )],
+            "update post",
+        );
+        assert_eq!(unnamed[0].1.path_role, W_PATH_ROLE);
     }
 
     #[test]
